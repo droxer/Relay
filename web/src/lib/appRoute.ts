@@ -81,6 +81,13 @@ const PUBLIC_PAGE_PATHS: Record<string, PublicPage> = {
   "/join": "join",
 };
 
+/** The bare origin. Signed out, it is the landing page that says what Relay
+    is; signed in, it is the app's home. It is not a PublicPage because the
+    same address means both — App decides by whether anyone is signed in. */
+export function isLandingPath(pathname: string): boolean {
+  return pathname === "/" || pathname === "";
+}
+
 function decodeSegment(segment: string | undefined): string | null {
   if (!segment) return null;
   try {

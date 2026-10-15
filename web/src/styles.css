@@ -57,6 +57,7 @@
 @import "./styles/pills.css" layer(relay);
 
 @import "./styles/login.css" layer(relay);
+@import "./styles/landing.css" layer(relay);
 @import "./styles/workspace.css" layer(relay);
 @import "./styles/workspace-files.css" layer(relay);
 @import "./styles/workspace-dossier.css" layer(relay);

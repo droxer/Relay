@@ -15,6 +15,7 @@ import {
 import {
   APP_NAVIGATION_EVENT,
   canonicalBrowserUrl,
+  isLandingPath,
   hrefForRoute as buildHrefForRoute,
   parseAppPath,
   syncAppStateToUrl,
@@ -59,8 +60,9 @@ export function useAppRouter({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.location.pathname === "/") window.history.replaceState(window.history.state, "", "/threads");
-    else {
+    // The bare origin is left alone: signed out it is the landing page, and
+    // App moves a signed-in visitor on to /threads once auth resolves.
+    if (!isLandingPath(window.location.pathname)) {
       const canonicalUrl = canonicalBrowserUrl(window.location.pathname, window.location.search);
       if (`${window.location.pathname}${window.location.search}` !== canonicalUrl) {
         window.history.replaceState(window.history.state, "", canonicalUrl);

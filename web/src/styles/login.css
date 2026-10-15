@@ -108,11 +108,14 @@
   animation: rise var(--t-slow) var(--ease);
 }
 
+/* The brand is the link home to the landing page — a name, not an
+   underlined text link. */
 .login-brand {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   color: var(--lg-ink);
+  text-decoration: none;
 }
 
 .login-wordmark {
@@ -535,7 +538,7 @@
     animation: rise var(--t-slow) var(--ease) both;
   }
 
-  .login-cover > .login-brand { animation-delay: calc(var(--t-stagger) * 1); }
+  .login-cover > header { animation-delay: calc(var(--t-stagger) * 1); }
   .login-cover > .login-intro { animation-delay: calc(var(--t-stagger) * 2); }
   .login-cover > .login-points { animation-delay: calc(var(--t-stagger) * 3); }
   .login-panel-inner { animation-delay: calc(var(--t-stagger) * 3); }

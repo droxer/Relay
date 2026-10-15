@@ -4,11 +4,13 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RelayMark } from "./RelayMark";
 import { ICON } from "./icons";
+import { PublicLink } from "./waitlist/PublicLink";
 
 /* The double-chevron geometry, shared by the bled watermark and the proof
    marks so the cover is signed by one shape at two sizes. `size` is omitted
-   for the watermark, which CSS sizes against the viewport instead. */
-function Chevrons({ size, className }: { size?: number; className?: string }) {
+   for the watermark, which CSS sizes against the viewport instead. The
+   landing page signs itself with the same shape. */
+export function Chevrons({ size, className }: { size?: number; className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -57,9 +59,13 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
 
       {/* Left half: the cover. It says what Relay is; it holds no controls. */}
       <section className="login-cover">
-        <header className="login-brand">
-          <RelayMark size={ICON.xl} />
-          <span className="login-wordmark">Relay</span>
+        {/* The brand leads home: the landing page is the way back for a
+            visitor who arrived at the gate before knowing what Relay is. */}
+        <header>
+          <PublicLink href="/" className="login-brand">
+            <RelayMark size={ICON.xl} />
+            <span className="login-wordmark">Relay</span>
+          </PublicLink>
         </header>
 
         <div className="login-intro">
