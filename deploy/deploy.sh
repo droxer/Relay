@@ -3,8 +3,8 @@
 #
 #   deploy/deploy.sh up          railway → cloudflare → release → verify
 #   deploy/deploy.sh railway     project, Postgres, services, variables, domains
-#   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache rules
-#   deploy/deploy.sh release     deploy the backend and web services, wait
+#   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache, speed settings
+#   deploy/deploy.sh release     deploy the backend and the web UI, wait
 #   deploy/deploy.sh verify      check the live hostnames
 #
 # Every step is idempotent: re-running converges instead of duplicating.
@@ -19,6 +19,8 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/railway.sh"
 # shellcheck source=lib/cloudflare.sh
 . "$DEPLOY_DIR/lib/cloudflare.sh"
+# shellcheck source=lib/workers.sh
+. "$DEPLOY_DIR/lib/workers.sh"
 # shellcheck source=lib/verify.sh
 . "$DEPLOY_DIR/lib/verify.sh"
 
@@ -37,12 +39,15 @@ config_path() {
   fi
 }
 
-# Looks up the context and the two app services; `railway` creates them.
+# Looks up the context and the app services; `railway` creates them. The web
+# service exists only when Railway hosts the UI (WEB_HOSTING=railway).
 resolve_services() {
   railway_resolve_context
   BACKEND_ID=$(railway_service_id "$BACKEND_SERVICE")
+  [ -n "$BACKEND_ID" ] || die "service $BACKEND_SERVICE not found — run 'deploy.sh railway' first"
+  workers_enabled && return
   WEB_ID=$(railway_service_id "$WEB_SERVICE")
-  [ -n "$BACKEND_ID" ] && [ -n "$WEB_ID" ] || die "services $BACKEND_SERVICE/$WEB_SERVICE not found — run 'deploy.sh railway' first"
+  [ -n "$WEB_ID" ] || die "service $WEB_SERVICE not found — run 'deploy.sh railway' first"
 }
 
 # The backend variables from deployment.md § 1 and deployment-cloudflare.md
@@ -90,14 +95,20 @@ phase_railway() {
   railway_resolve_context
   railway_ensure_postgres
   railway_ensure_service "$BACKEND_SERVICE" backend
-  railway_ensure_service "$WEB_SERVICE" web
   BACKEND_ID=$(railway_service_id "$BACKEND_SERVICE")
-  WEB_ID=$(railway_service_id "$WEB_SERVICE")
-
   railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
   info "backend variables set"
-  railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api}')"
-  info "web variables set"
+  if workers_enabled; then
+    info "the web UI is a Cloudflare Worker (WEB_HOSTING=workers); no Railway web service"
+    if [ -n "$(railway_service_id "$WEB_SERVICE")" ]; then
+      info "$WEB_SERVICE is unused now; delete it in Railway once 'deploy.sh verify' passes"
+    fi
+  else
+    railway_ensure_service "$WEB_SERVICE" web
+    WEB_ID=$(railway_service_id "$WEB_SERVICE")
+    railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api}')"
+    info "web variables set"
+  fi
   if r2_enabled; then
     info "R2 holds skill bundles and artifact snapshots; no volume needed"
   else
@@ -105,7 +116,7 @@ phase_railway() {
   fi
 
   railway_ensure_custom_domain "$BACKEND_ID" "$API_DOMAIN"
-  railway_ensure_custom_domain "$WEB_ID" "$WEB_DOMAIN"
+  workers_enabled || railway_ensure_custom_domain "$WEB_ID" "$WEB_DOMAIN"
 }
 
 # cloudflare_dns <zone-id> <service-id> <domain>
@@ -130,9 +141,14 @@ phase_cloudflare() {
   local zone secret
   zone=$(cf_zone_id)
   cloudflare_dns "$zone" "$BACKEND_ID" "$API_DOMAIN"
-  cloudflare_dns "$zone" "$WEB_ID" "$WEB_DOMAIN"
+  if workers_enabled; then
+    cf_ensure_worker_host "$zone" "$WEB_DOMAIN"
+  else
+    cloudflare_dns "$zone" "$WEB_ID" "$WEB_DOMAIN"
+  fi
   cf_zone_setting "$zone" ssl strict
   cf_zone_setting "$zone" always_use_https on
+  cf_performance_settings "$zone"
 
   # The backend accepts every secret in its comma-separated list; the edge
   # sends the newest (last), which is how a rotation is staged.
@@ -145,7 +161,7 @@ phase_cloudflare() {
 
 phase_release() {
   log "Release: $GITHUB_REPO@$GITHUB_BRANCH"
-  local postgres_id backend_deployment web_deployment failures=0
+  local postgres_id
   RELEASE_COMMIT=$(railway_release_commit)
   info "release commit $RELEASE_COMMIT (GitHub source; local edits are not uploaded)"
   railway_validate_release
@@ -153,6 +169,33 @@ phase_release() {
   postgres_id=$(railway_service_id "$POSTGRES_SERVICE")
   [ -n "$postgres_id" ] || die "service $POSTGRES_SERVICE not found — run 'deploy.sh railway' first"
   railway_wait_deployment "$POSTGRES_SERVICE" "$postgres_id"
+  if workers_enabled; then
+    release_backend_and_worker
+  else
+    release_backend_and_web_service
+  fi
+}
+
+# The UI builds locally (in Docker) while Railway builds the backend, and is
+# published only once the backend it calls is live.
+release_backend_and_worker() {
+  local backend_deployment zone build
+  require_cmd docker python3
+  zone=$(cf_zone_id)
+  backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
+  build=$(mktemp -d)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$build'" EXIT
+  info "building $BACKEND_SERVICE on Railway and the web export locally (this takes a few minutes)"
+  workers_build_export "$build/out"
+  railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment" \
+    || die "backend deployment failed for commit $RELEASE_COMMIT ($backend_deployment); the web UI was not published"
+  info "publishing the web UI to Worker $WORKERS_SCRIPT"
+  workers_publish "$zone" "$build/out"
+}
+
+release_backend_and_web_service() {
+  local backend_deployment web_deployment failures=0
   backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
   web_deployment=$(railway_deploy_service "$WEB_SERVICE" "$WEB_ID")
   info "building $BACKEND_SERVICE and $WEB_SERVICE (this takes a few minutes)"
