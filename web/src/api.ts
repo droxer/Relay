@@ -1113,7 +1113,7 @@ export function getRuntimeRefresh(nodeId: string, commandId: string): Promise<{ 
 }
 
 export interface ComputerAuthorizationDetails { displayName: string; workspacePath: string; status: string }
-export function getComputerSetupCommand(): Promise<{ installCommand: string }> {
+export function getComputerSetupCommand(): Promise<{ installCommand: string; windowsInstallCommand?: string }> {
   return apiJson("/computer-authorizations/setup-command");
 }
 export function getComputerAuthorization(code: string): Promise<ComputerAuthorizationDetails> {

@@ -128,9 +128,9 @@ newer and `uv` are required for the backend.
   for every daemon it launches so supervisor logs stay lifecycle-only; output
   still streams to the backend and the daemon's JSONL run logs.
 - Stop backend, daemon, and BoxLite processes: `make stop`.
-- Deploy to Railway behind Cloudflare: `deploy/deploy.sh up` (config in
-  git-ignored `deploy/.env`; see `deploy/README.md`). Test it against mock APIs
-  with `deploy/tests/run.sh`.
+- Deploy to Railway behind Cloudflare, with the web UI as a Cloudflare Worker:
+  `deploy/deploy.sh up` (config in git-ignored `deploy/.env`; see
+  `deploy/README.md`). Test it against mock APIs with `deploy/tests/run.sh`.
 - Install pre-commit hooks: `make pre-commit-install`.
 - Run pre-commit hooks on all files: `make pre-commit-run`.
 - Rebuild/export the devbox image only when the image changes: `make run-fresh`.
@@ -228,7 +228,10 @@ migration.
     lifecycle) or `none` (manual/local; agents run as processes in the
     daemon's current host environment, using that user's existing agent home
     by default). The host environment may be a user workstation or an
-    already-isolated agent box.
+    already-isolated agent box. A Windows computer runs in `none` mode only:
+    host commands go through Git Bash (`local-shell.ts`, never WSL) and the
+    installer registers a Task Scheduler logon task (`windows-service.ts`,
+    `windows-service-host.ts`) in place of a LaunchAgent or systemd unit.
   - `box.ts` / `execution.ts` / `sandbox-session.ts` — BoxLite VM setup,
     `BoxLiteExecutionManager`, `startOrchestratorSession`/`withOrchestratorSession`,
     sandbox session lifecycle, and agent readiness preflight

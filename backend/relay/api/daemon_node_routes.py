@@ -25,7 +25,7 @@ from ..services.node_agents import (
     remove_node_agents,
     sync_node_agents,
 )
-from .computer_installer_routes import computer_install_command
+from .computer_installer_routes import computer_install_command, computer_windows_install_command
 from .deps import AppContextDep
 from .helpers import (
     USER_DEVICE_SANDBOX_MODE,
@@ -370,6 +370,7 @@ def create_local_device_enrollment(
         ),
         "reused": reused,
         "installCommand": computer_install_command(request, node),
+        "windowsInstallCommand": computer_windows_install_command(request, node),
     }
     if node.get("sandboxToken"):
         response["sandboxToken"] = node["sandboxToken"]
@@ -410,6 +411,7 @@ def _token_response(request: Request, node: dict[str, Any], token: str) -> dict[
         and node.get("workspacePath")
     ):
         response["installCommand"] = computer_install_command(request, node)
+        response["windowsInstallCommand"] = computer_windows_install_command(request, node)
     return response
 
 

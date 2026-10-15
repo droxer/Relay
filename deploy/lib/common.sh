@@ -33,6 +33,8 @@ load_config() {
   : "${GITHUB_BRANCH:=main}"
   : "${BACKEND_SERVICE:=relay-backend}"
   : "${WEB_SERVICE:=relay-web}"
+  : "${WEB_HOSTING:=workers}"
+  : "${WORKERS_SCRIPT:=relay-web}"
   : "${POSTGRES_SERVICE:=Postgres}"
   : "${CLOUDFLARE_ZONE:=get-relay.cc}"
   : "${WEB_DOMAIN:=get-relay.cc}"
@@ -53,6 +55,12 @@ validate_config() {
   in_zone "$WEB_DOMAIN" || die "WEB_DOMAIN ($WEB_DOMAIN) is not inside CLOUDFLARE_ZONE ($CLOUDFLARE_ZONE)"
   in_zone "$API_DOMAIN" || die "API_DOMAIN ($API_DOMAIN) is not inside CLOUDFLARE_ZONE ($CLOUDFLARE_ZONE)"
   [ "$WEB_DOMAIN" != "$API_DOMAIN" ] || die "WEB_DOMAIN and API_DOMAIN must differ"
+  case $WEB_HOSTING in
+    workers | railway) ;;
+    *) die "WEB_HOSTING must be workers or railway, not $WEB_HOSTING" ;;
+  esac
+  printf '%s' "$WORKERS_SCRIPT" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' \
+    || die "WORKERS_SCRIPT must be a lowercase Worker name: $WORKERS_SCRIPT"
   case $COOKIE_DOMAIN in
     ".$CLOUDFLARE_ZONE") ;;
     *) die "COOKIE_DOMAIN must be .$CLOUDFLARE_ZONE so the web and API hosts share the session cookie" ;;

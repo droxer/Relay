@@ -1,6 +1,9 @@
 /** The computers this account already installed, read back from the service files the installer wrote. */
 import { readFileSync, unlinkSync } from 'node:fs';
-import { installedServices, type InstalledService } from './control.js';
+import { installedServices, serviceArguments, type InstalledService } from './control.js';
+import { decodeServiceFile, deleteWindowsTask, stopWindowsTask } from './windows-service.js';
+
+export { serviceArguments };
 
 export interface InstalledComputer extends InstalledService {
   backendUrl: string;
@@ -9,24 +12,7 @@ export interface InstalledComputer extends InstalledService {
 }
 
 export interface ServiceRunner {
-  run(command: string, args: string[]): { status: number | null; stdout: string };
-}
-
-const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
-const SYSTEMD_ESCAPES: Record<string, string> = { n: '\n', r: '\r' };
-
-/** Inverse of `serviceDefinition`: the argv a launchd plist or systemd unit runs. */
-export function serviceArguments(platform: string, content: string): string[] {
-  if (platform === 'darwin') {
-    const array = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(content)?.[1] ?? '';
-    return [...array.matchAll(/<string>([\s\S]*?)<\/string>/g)]
-      .map(match => match[1]!.replace(/&(lt|gt|amp|quot|apos);/g, (_, name: string) => XML_ENTITIES[name]!));
-  }
-  const exec = /^ExecStart=(.*)$/m.exec(content)?.[1] ?? '';
-  return [...exec.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => match[1]!
-    .replace(/\\(.)/g, (_, char: string) => SYSTEMD_ESCAPES[char] ?? char)
-    .replace(/%%/g, '%')
-    .replace(/\$\$/g, '$'));
+  run(command: string, args: string[], options?: { inherit?: boolean }): { status: number | null; stdout: string };
 }
 
 function option(argv: string[], name: string): string | undefined {
@@ -38,7 +24,7 @@ function option(argv: string[], name: string): string | undefined {
 export function installedComputers(platform: string, home: string): InstalledComputer[] {
   return installedServices(platform, home).flatMap(service => {
     let argv: string[];
-    try { argv = serviceArguments(platform, readFileSync(service.file, 'utf8')); } catch { return []; }
+    try { argv = serviceArguments(platform, decodeServiceFile(readFileSync(service.file))); } catch { return []; }
     const backendUrl = option(argv, '--backend-url');
     const userId = option(argv, '--user-id') ?? option(argv, '--employee-id');
     const workspace = option(argv, '--workspace');
@@ -64,6 +50,8 @@ export function stopService(platform: string, uid: number, service: InstalledSer
     // An already unloaded service can reject bootout; print must prove the label is absent.
     runner.run('launchctl', ['bootout', target]);
     if (runner.run('launchctl', ['print', target]).status !== 113) throw failure();
+  } else if (platform === 'win32') {
+    if (!stopWindowsTask(runner, service.name)) throw failure();
   } else {
     const unit = `${service.name}.service`;
     if (runner.run('systemctl', ['--user', 'disable', '--now', unit]).status !== 0) throw failure();
@@ -75,5 +63,6 @@ export function stopService(platform: string, uid: number, service: InstalledSer
 /** Stops and deletes a superseded service so `relay status` lists only the live install. */
 export function removeService(platform: string, uid: number, service: InstalledService, runner: ServiceRunner): void {
   stopService(platform, uid, service, runner);
+  if (platform === 'win32') deleteWindowsTask(runner, service.name);
   unlinkSync(service.file);
 }

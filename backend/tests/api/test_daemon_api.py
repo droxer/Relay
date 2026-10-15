@@ -4340,6 +4340,7 @@ def test_deleted_computer_can_be_enrolled_again(monkeypatch) -> None:
 def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root), base_url="http://backend.internal:8790")
         _bootstrap_admin(client)
@@ -4350,7 +4351,7 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
         )
         assert enrolled.status_code == 201
         install = enrolled.json()["installCommand"]
-        assert install.startswith("curl -fsSL https://api.example.com/install.sh | sudo bash -s -- ")
+        assert install.startswith("curl -fsSL https://api.example.com/install.sh | bash -s -- ")
         assert enrolled.json()["nodeToken"] not in install
         assert "backend.internal" not in install
         node_id = enrolled.json()["node"]["id"]

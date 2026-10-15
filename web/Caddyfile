@@ -29,6 +29,13 @@
 	@hashed path /_next/static/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 
+	# The published install command names this origin. The API serves the script,
+	# which pins its bundle and backend on the API origin, so send curl there.
+	handle /install.sh {
+		header Cache-Control "no-store"
+		redir {$RELAY_API_ORIGIN}/install.sh 302
+	}
+
 	# A pathname with a file suffix is an asset request, never a client route: a
 	# missing script or image is a 404, not the app shell (the backend's
 	# web_ui_asset_response draws the same line).

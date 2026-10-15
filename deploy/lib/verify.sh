@@ -47,12 +47,31 @@ verify_edge_cache() {
     warn "could not find a /_next/static asset on $WEB_ORIGIN/ to check edge caching"
     return
   fi
+  if workers_enabled; then
+    verify_worker_assets "$asset"
+    return
+  fi
   curl -sS -o /dev/null --max-time 30 "$WEB_ORIGIN$asset" 2>/dev/null || true
   status=$(curl -sS -I --max-time 30 "$WEB_ORIGIN$asset" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1) == "cf-cache-status" {print $2}')
   case $status in
     HIT) info "ok    static assets are served from the edge cache" ;;
     *) warn "static asset cf-cache-status is '${status:-missing}', expected HIT once the edge is warm" ;;
   esac
+}
+
+# Worker assets come from Cloudflare's asset store, not the zone cache, so
+# there is no cf-cache-status to read; check what the Worker promises instead.
+verify_worker_assets() {
+  local cache_control
+  cache_control=$(curl -sS -I --max-time 30 "$WEB_ORIGIN$1" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1) == "cache-control" {print $2}')
+  case $cache_control in
+    *immutable*) info "ok    static assets are served immutable from the Worker" ;;
+    *)
+      info "FAIL  static asset Cache-Control is '${cache_control:-missing}', expected immutable (check deploy/workers/_headers)"
+      VERIFY_FAILURES=$((VERIFY_FAILURES + 1))
+      ;;
+  esac
+  expect_code "a missing asset is a 404, not the app shell" 404 "$(http_code "$WEB_ORIGIN/_next/static/relay-verify-missing.js")"
 }
 
 # verify_deployment <backend-service-id>

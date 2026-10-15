@@ -932,17 +932,24 @@ consultations are permitted per request. See
 
 `GET /api/v1/computer-authorizations/setup-command` returns the browser-approved
 setup command, which takes no arguments because the served script carries its
-own backend origin:
+own backend origin. It names `RELAY_PUBLIC_WEB_URL` when set, whose host
+forwards `/install.sh` to the backend:
 
 ```sh
-curl -fsSL https://relay.example.com/install.sh | sudo bash
+curl -fsSL https://relay.example.com/install.sh | bash
 ```
 
 `POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
 the same pipeline with shell-quoted arguments scoped to the enrolled computer
-(`… | sudo bash -s -- --sandbox-id … --user-id … --workspace …`). It
+(`… | bash -s -- --sandbox-id … --user-id … --workspace …`). It
 contains no token; the installer reads the existing node token from `/dev/tty`.
 `daemonCommand` and `daemonEnv` remain available for compatibility.
+
+Both responses also carry `windowsInstallCommand`, the PowerShell twin. Setup is
+`irm https://relay.example.com/install.ps1 | iex`; the enrollment form quotes
+its arguments (`& ([scriptblock]::Create((irm '…/install.ps1'))) '--sandbox-id' …`)
+because PowerShell would otherwise read `--sandbox-id` as a parameter name. It
+needs no elevation and prompts for the node token with `Read-Host -AsSecureString`.
 
 Public non-JSON download routes at the backend origin:
 
@@ -950,6 +957,9 @@ Public non-JSON download routes at the backend origin:
   checksum and to this backend's origin, `Cache-Control: no-store`; 503 if the
   client was not built. `GET /computer/install.sh` serves the same script for
   commands copied before the root path existed.
+- `GET /install.ps1` (and `/computer/install.ps1`): the Windows PowerShell
+  installer, pinned the same way and served as `text/plain; charset=utf-8` so
+  `irm` returns a string.
 - `GET /computer/daemon-{sha256}.tar.gz`: compiled client archive, immutable
   caching; 404 if the requested digest is not the deployed release.
 

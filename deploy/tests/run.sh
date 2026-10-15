@@ -8,6 +8,7 @@ TESTS_DIR=$(cd "$(dirname "$0")" && pwd)
 bash "$TESTS_DIR/transport.sh"
 python3 "$TESTS_DIR/dockerfile.py"
 python3 "$TESTS_DIR/source.py"
+python3 "$TESTS_DIR/workers.py"
 bash "$TESTS_DIR/release.sh"
 DEPLOY=$TESTS_DIR/../deploy.sh
 WORK=$(mktemp -d)
@@ -43,6 +44,34 @@ done
 exec "$REAL_GIT" "${args[@]}"
 GIT_STUB
 chmod +x "$WORK/bin/git"
+# Stands in for the Docker build of the web export: records the build, and
+# `docker cp` yields a small export with a page, a hashed asset and a font.
+DOCKER_LOG=$WORK/docker.log
+export DOCKER_LOG
+cat > "$WORK/bin/docker" <<'DOCKER_STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+case $1 in
+  build)
+    printf '%s\n' "$*" >> "$DOCKER_LOG"
+    tar -tf - | grep -qx 'web/Dockerfile' || { echo 'build context lacks web/Dockerfile' >&2; exit 1; }
+    while [ $# -gt 0 ]; do
+      [ "$1" = --iidfile ] && printf 'sha256:test-image' > "$2"
+      shift
+    done
+    ;;
+  create) echo ctr-test ;;
+  cp)
+    mkdir -p "$3/_next/static/chunks"
+    printf '<html><script src="/_next/static/chunks/app-1.js"></script></html>' > "$3/index.html"
+    printf 'console.log(1)' > "$3/_next/static/chunks/app-1.js"
+    printf 'wOF2' > "$3/_next/static/chunks/font.woff2"
+    ;;
+  rm) ;;
+  *) echo "unexpected docker $*" >&2; exit 1 ;;
+esac
+DOCKER_STUB
+chmod +x "$WORK/bin/docker"
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 MOCK_PID=
 FAILURES=0
@@ -117,7 +146,7 @@ run_phases() {
   deploy railway && deploy cloudflare && deploy release
 }
 
-echo "--- first run provisions everything"
+echo "--- first run provisions everything (web UI on Workers)"
 start_mock
 write_config
 run_phases 2>"$WORK/first.log" || { cat "$WORK/first.log"; exit 1; }
@@ -129,27 +158,25 @@ BACKEND=$(svc relay-backend)
 WEB=$(svc relay-web)
 
 check "one project named relay" '.projects | length == 1 and ([.[] | .name] == ["relay"])'
-check "three services" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-web"]'
+check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend"]'
 
 check "backend Dockerfile, migration, healthcheck and one replica" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\"] and .healthcheckPath == \"/healthz\" and .numReplicas == 1 and .sleepApplication == false"
-check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"web/Dockerfile\" and .healthcheckPath == \"/healthz\" and .preDeployCommand == []"
-check "both services track droxer/Relay@main" "[$BACKEND, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
-check "both deployments pin the requested commit" "[$BACKEND, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
-check "both services deployed once" "[$BACKEND, $WEB] | all(.deployments | length == 1)"
+check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
+check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
+check "backend deployed once" "$BACKEND | .deployments | length == 1"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
 check "no R2 variables without R2 config" "$BACKEND | .variables | has(\"RELAY_BLOB_STORE\") | not"
-check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
 check "backend volume at /data" "[.volumes[] | select(.mountPath == \"/data\")] | length == 1"
 check "api domain on the backend" "$BACKEND | [.domains[].domain] == [\"api.get-relay.cc\"]"
-check "apex domain on the web service" "$WEB | [.domains[].domain] == [\"get-relay.cc\"]"
-check "apex CNAME proxied" '[.dns[] | select(.name == "get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'
+check "apex is a proxied Worker-only record" '[.dns[] | select(.name == "get-relay.cc")] | length == 1 and .[0].type == "AAAA" and .[0].content == "100::" and .[0].proxied'
 check "api CNAME proxied" '[.dns[] | select(.name == "api.get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'
-check "ACME challenges stay DNS-only" '[.dns[] | select(.name | startswith("_acme-challenge.")) | .proxied] == [false, false]'
-check "ownership TXT records" '[.dns[] | select(.type == "TXT") | .name] | sort == ["_railway-verify.api.get-relay.cc", "_railway-verify.get-relay.cc"]'
+check "ACME challenge stays DNS-only" '[.dns[] | select(.name | startswith("_acme-challenge.")) | .proxied] == [false]'
+check "ownership TXT record for the API" '[.dns[] | select(.type == "TXT") | .name] == ["_railway-verify.api.get-relay.cc"]'
 check "TLS Full (strict) and Always Use HTTPS" '.settings.ssl == "strict" and .settings.always_use_https == "on"'
+check "HTTP/3, 0-RTT, Early Hints and Smart Tiered Cache" '.settings | .http3 == "on" and .["0rtt"] == "on" and .early_hints == "on" and .tiered_cache_smart_topology_enable == "on"'
 check "edge rule sends the backend's secret to the API host only" "
   ($BACKEND | .variables.RELAY_EDGE_SECRET) as \$secret |
   [.rulesets.http_request_late_transform[] | select(.ref == \"relay_edge_secret\")] |
@@ -157,17 +184,79 @@ check "edge rule sends the backend's secret to the API host only" "
   and .[0].expression == \"(http.host eq \\\"api.get-relay.cc\\\")\""
 check "someone else's transform rule is kept" '[.rulesets.http_request_late_transform[] | select(.id == "foreign-1")] | length == 1'
 check "five Relay cache rules" '[.rulesets.http_request_cache_settings[] | select(.ref | startswith("relay_cache_"))] | length == 5'
+check "Worker relay-web serves the export through the assets binding" '.workers["relay-web"] | .metadata.main_module == "worker.js" and .metadata.bindings == [{"type": "assets", "name": "ASSETS"}] and (.module | contains("env.ASSETS.fetch"))'
+check "Worker falls through to worker.js on a miss and carries _headers" '.workers["relay-web"].metadata.assets.config | .not_found_handling == "none" and (._headers | contains("immutable"))'
+check "Worker manifest holds the export" '.workers["relay-web"].manifest | keys == ["/_next/static/chunks/app-1.js", "/_next/static/chunks/font.woff2", "/index.html"]'
+check "assets upload with their content types" '[.assets[] | .type] | sort == ["font/woff2", "text/html", "text/javascript"]'
+check "web host routes to the Worker" '.routes == [.routes[0]] and .routes[0].pattern == "get-relay.cc/*" and .routes[0].script == "relay-web"'
+if grep -q -- '--build-arg NEXT_PUBLIC_RELAY_API_ORIGIN=https://api.get-relay.cc' "$DOCKER_LOG" \
+  && grep -q -- '-f web/Dockerfile --target build' "$DOCKER_LOG"; then
+  echo "ok    web export builds in Docker from the release source, pointed at the API"
+else
+  echo "FAIL  web export build arguments: $(cat "$DOCKER_LOG")"
+  FAILURES=$((FAILURES + 1))
+fi
 
 echo "--- second run changes nothing"
 run_phases 2>"$WORK/second.log" || { cat "$WORK/second.log"; exit 1; }
 STATE=$(jq -n --argjson a "$FIRST" --argjson b "$(state)" '{a: $a, b: $b}')
 for op in ProjectCreate ServiceCreate TemplateDeploy VolumeCreate DomainCreate Connect cf.dns.create cf.dns.update \
-  cf.settings.ssl cf.settings.always_use_https cf.rules.http_request_late_transform cf.rules.http_request_cache_settings; do
+  cf.settings.ssl cf.settings.always_use_https cf.settings.http3 cf.settings.0rtt cf.settings.early_hints \
+  cf.settings.tiered_cache_smart_topology_enable cf.rules.http_request_late_transform cf.rules.http_request_cache_settings \
+  cf.routes.create cf.routes.update cf.workers.upload; do
   check "no new $op" ".a.calls[\"$op\"] == .b.calls[\"$op\"]"
 done
 check "secrets are not rotated" "(.a | $BACKEND | .variables) == (.b | $BACKEND | .variables)"
 check "DNS records are not duplicated" '(.a.dns | length) == (.b.dns | length)'
-check "each service deployed again" "[.b | $BACKEND, $WEB] | all(.deployments | length == 2)"
+check "backend deployed again" ".b | $BACKEND | .deployments | length == 2"
+check "Worker republished" '.b.calls["cf.workers.script"] == 2'
+
+echo "--- a failed backend release does not publish the web UI"
+curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" -d '{"relay-backend":"FAILED"}' >/dev/null
+BEFORE=$(state | jq '.calls["cf.workers.script"]')
+expect_failure "backend failure stops the release" "the web UI was not published" deploy release
+STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
+check "no Worker upload after a failed backend" '.before == .after'
+
+echo "--- moving an existing Railway-hosted UI to Workers"
+start_mock
+write_config 'WEB_HOSTING=railway'
+deploy railway 2>/dev/null && deploy cloudflare 2>/dev/null
+write_config
+run_phases 2>"$WORK/move.log" || { cat "$WORK/move.log"; exit 1; }
+STATE=$(state)
+check "the Railway CNAME stays as the rollback path" '[.dns[] | select(.name == "get-relay.cc") | .type] == ["CNAME"]'
+check "the route answers in front of it" '.routes[0].pattern == "get-relay.cc/*" and .routes[0].script == "relay-web"'
+if grep -q "relay-web is unused now" "$WORK/move.log"; then
+  echo "ok    the old web service is flagged for deletion, not deleted"
+else
+  echo "FAIL  no note about the unused relay-web service"
+  FAILURES=$((FAILURES + 1))
+fi
+check "the old web service is left in place" "[$WEB] | length == 1"
+
+echo "--- a route held by another Worker is never taken over"
+start_mock
+write_config
+deploy railway 2>/dev/null && deploy cloudflare 2>/dev/null
+curl -s -X POST -H 'Content-Type: application/json' \
+  "http://127.0.0.1:$PORT/__seed_route" -d '{"pattern": "get-relay.cc/*", "script": "marketing-site"}' >/dev/null
+expect_failure "a foreign Worker route is refused" "already serves Worker marketing-site" deploy release
+
+echo "--- web UI on Railway (WEB_HOSTING=railway)"
+start_mock
+write_config 'WEB_HOSTING=railway'
+run_phases 2>"$WORK/railway.log" || { cat "$WORK/railway.log"; exit 1; }
+STATE=$(state)
+check "three services" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-web"]'
+check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"web/Dockerfile\" and .healthcheckPath == \"/healthz\" and .preDeployCommand == []"
+check "both services track droxer/Relay@main" "[$BACKEND, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
+check "both deployments pin the requested commit" "[$BACKEND, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
+check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
+check "apex domain on the web service" "$WEB | [.domains[].domain] == [\"get-relay.cc\"]"
+check "apex CNAME proxied" '[.dns[] | select(.name == "get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'
+check "ACME challenges stay DNS-only" '[.dns[] | select(.name | startswith("_acme-challenge.")) | .proxied] == [false, false]'
+check "no Worker or route" '(.workers | length == 0) and (.routes | length == 0)'
 
 echo "--- R2 config replaces the volume"
 start_mock
@@ -187,14 +276,18 @@ write_config 'WEB_DOMAIN=relay.example.com'
 expect_failure "domain outside the zone is refused" "is not inside CLOUDFLARE_ZONE" deploy railway
 write_config 'RAILWAY_API_TOKEN=wrong'
 expect_failure "a rejected Railway token stops the run" "Not Authorized" deploy railway
-write_config
+write_config 'WEB_HOSTING=pages'
+expect_failure "unknown web hosting is refused" "WEB_HOSTING must be workers or railway" deploy railway
+write_config 'WEB_HOSTING=railway'
 deploy railway 2>/dev/null
 curl -s -X POST -H 'Authorization: Bearer test-cloudflare-token' -H 'Content-Type: application/json' \
   "http://127.0.0.1:$PORT/client/v4/zones/zone-1/dns_records" \
   -d '{"type": "A", "name": "get-relay.cc", "content": "192.0.2.1"}' >/dev/null
 expect_failure "an existing apex A record is never overwritten" "get-relay.cc already has A 192.0.2.1" deploy cloudflare
-start_mock
 write_config
+expect_failure "a DNS-only web record is refused for Workers" "get-relay.cc has DNS-only A 192.0.2.1" deploy cloudflare
+start_mock
+write_config 'WEB_HOSTING=railway'
 deploy railway 2>/dev/null
 curl -s -X POST -H 'Authorization: Bearer test-cloudflare-token' -H 'Content-Type: application/json' \
   "http://127.0.0.1:$PORT/client/v4/zones/zone-1/dns_records" \
@@ -217,7 +310,7 @@ BEFORE=$(state | jq '.calls.Deploy')
 expect_failure "unfixed selected commit is rejected" "missing required build input: web/Dockerfile" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls.Deploy')" '{before: $before, after: $after}')
 check "invalid source creates no deployments" '.before == .after'
-write_config
+write_config 'WEB_HOSTING=railway'
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" \
   -d '{"relay-backend":"FAILED","relay-web":"CRASHED"}' >/dev/null
 if deploy release > "$WORK/failure.out" 2>&1; then

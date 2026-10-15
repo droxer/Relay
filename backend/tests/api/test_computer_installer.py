@@ -21,7 +21,7 @@ def test_installer_is_public_and_pins_the_archive(monkeypatch, tmp_path):
     assert digest in response.text
     assert f"https://api.example.com/computer/daemon-{digest}.tar.gz" in response.text
     assert "@@" not in response.text
-    # `| sudo bash` is the published form; commands copied before it piped to sh.
+    # `| bash` is the published form; `| sh` and older `| sudo bash` copies also work.
     for shell in ("bash", "sh"):
         assert subprocess.run([shell, "-n"], input=response.text, text=True).returncode == 0
     assert client.get("/computer/install.sh").text == response.text
@@ -42,8 +42,20 @@ def test_setup_command_is_the_bare_installer_pipeline(monkeypatch):
     from relay.api.computer_installer_routes import computer_setup_command
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://eveland.ai")
+    monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
-    assert computer_setup_command(request) == "curl -fsSL https://eveland.ai/install.sh | sudo bash"
+    assert computer_setup_command(request) == "curl -fsSL https://eveland.ai/install.sh | bash"
+
+
+def test_setup_command_names_the_web_origin_when_split(monkeypatch):
+    from starlette.requests import Request
+    from relay.api.computer_installer_routes import computer_setup_command
+
+    # The web host redirects /install.sh to the API, so people see one domain.
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.get-relay.cc")
+    monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://get-relay.cc")
+    request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
+    assert computer_setup_command(request) == "curl -fsSL https://get-relay.cc/install.sh | bash"
 
 
 def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
@@ -51,11 +63,12 @@ def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
     from relay.api.computer_installer_routes import computer_install_command
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
     workspace = "/Users/alice/a project/$(touch pwned)'"
     command = computer_install_command(request, {"id": "node-1", "userId": "alice", "workspacePath": workspace})
-    assert command.startswith("curl -fsSL https://api.example.com/install.sh | sudo bash -s -- ")
-    args = shlex.split(command.split(" | sudo bash -s -- ")[1])
+    assert command.startswith("curl -fsSL https://api.example.com/install.sh | bash -s -- ")
+    args = shlex.split(command.split(" | bash -s -- ")[1])
     assert args == ["--sandbox-id", "node-1", "--user-id", "alice", "--workspace", workspace]
 
 
@@ -81,7 +94,7 @@ def _shell_fixture(tmp_path):
         # `id -u` reports root only while FAKE_ROOT is set; `id -u <name>` never does.
         "id": '#!/bin/sh\n[ "${FAKE_ROOT:-}" = 1 ] && [ "$#" = 1 ] && { printf "0\\n"; exit; }\nprintf "501\\n"\n',
         # Records the hand-off, then runs it as the (already unprivileged) test user.
-        "sudo": '#!/bin/sh\nprintf "%s\\n" "$@" > "$FIXTURE_SUDO"\nwhile [ "$1" != bash ]; do shift; done\nunset FAKE_ROOT\nexec "$@"\n',
+        "su": '#!/bin/sh\nprintf "%s\\n" "$@" > "$FIXTURE_SU"\nunset FAKE_ROOT\nexec sh -c "$4"\n',
     }
     for name, contents in scripts.items():
         path = bin_dir / name
@@ -91,7 +104,7 @@ def _shell_fixture(tmp_path):
     home.mkdir()
     env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}",
            "RELAY_DAEMON_NODE_TOKEN": "test-token", "FIXTURE_ARCHIVE": str(archive),
-           "FIXTURE_ARGS": str(tmp_path / "args"), "FIXTURE_SUDO": str(tmp_path / "sudo")}
+           "FIXTURE_ARGS": str(tmp_path / "args"), "FIXTURE_SU": str(tmp_path / "su")}
     env.pop("SUDO_USER", None)
     source = (Path(__file__).parents[2] / "relay/computer/install.sh").read_text()
     source = source.replace("@@BUNDLE_URL@@", "https://relay.example.com/client.tar.gz")
@@ -127,7 +140,7 @@ def test_sudo_installs_for_the_invoking_user_not_root(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "INSTALL_STARTED" in result.stdout
     # Root never runs the client: it hands the install to alice's login shell.
-    assert (tmp_path / "sudo").read_text().splitlines() == ["-i", "-u", "alice", "bash", "-s"]
+    assert (tmp_path / "su").read_text().splitlines() == ["-l", "alice", "-c", "exec bash -s"]
     assert (tmp_path / "args").read_text().splitlines()[1:] == ["--backend-url", "https://relay.example.com", *args]
     assert "test-token" not in result.stdout + result.stderr
 
@@ -152,7 +165,7 @@ def test_root_without_an_invoking_user_is_refused(tmp_path):
         result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True)
         assert result.returncode != 0
         assert "normal user" in result.stderr
-        assert not (tmp_path / "sudo").exists()
+        assert not (tmp_path / "su").exists()
         assert not (tmp_path / "args").exists()
 
 
@@ -342,3 +355,47 @@ def test_token_response_only_offers_installer_for_complete_personal_computers(mo
         response = _token_response(request, {**node, **overrides}, "fixture-token")
         assert "installCommand" not in response
         assert "daemonCommand" in response
+
+
+def test_windows_installer_is_public_pinned_and_ascii(monkeypatch, tmp_path):
+    bundle = tmp_path / "daemon.tar.gz"
+    bundle.write_bytes(b"release fixture")
+    monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(bundle))
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    client = TestClient(create_app(str(tmp_path / "state")))
+    response = client.get("/install.ps1")
+    assert response.status_code == 200
+    # `irm` returns a string only for a textual content type.
+    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    assert response.headers["cache-control"] == "no-store"
+    digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
+    assert f"Get-RelayFile 'https://api.example.com/computer/daemon-{digest}.tar.gz' $bundle" in response.text
+    assert "@('--backend-url', 'https://api.example.com')" in response.text
+    assert f"Test-RelaySha256 $bundle '{digest}'" in response.text
+    assert "@@" not in response.text
+    # Windows PowerShell may decode the download as Latin-1.
+    assert response.text.isascii()
+    # It runs inside the user's own session: `exit` would close their window.
+    assert not any(line.strip().startswith("exit") for line in response.text.splitlines())
+    assert client.get("/computer/install.ps1").text == response.text
+
+
+def test_windows_installer_missing_build_fails_explicitly(monkeypatch, tmp_path):
+    monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(tmp_path / "missing"))
+    client = TestClient(create_app(str(tmp_path / "state")))
+    assert client.get("/install.ps1").status_code == 503
+
+
+def test_windows_commands_quote_every_argument_for_powershell(monkeypatch):
+    from starlette.requests import Request
+    from relay.api.computer_installer_routes import computer_windows_install_command, computer_windows_setup_command
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
+    assert computer_windows_setup_command(request) == "irm 'https://api.example.com/install.ps1' | iex"
+    workspace = "C:\\Users\\o'brien\\My Work $(evil)"
+    command = computer_windows_install_command(request, {"id": "node-1", "userId": "alice", "workspacePath": workspace})
+    assert command == (
+        "& ([scriptblock]::Create((irm 'https://api.example.com/install.ps1'))) "
+        "'--sandbox-id' 'node-1' '--user-id' 'alice' '--workspace' 'C:\\Users\\o''brien\\My Work $(evil)'"
+    )

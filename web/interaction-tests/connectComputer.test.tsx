@@ -5,7 +5,7 @@ import zhCN from "../src/i18n/locales/zh-CN/translation.json";
 import { ConnectComputerDrawer } from "../src/components/computer/ConnectComputerDrawer";
 import { createLocalDeviceEnrollment } from "../src/api";
 
-vi.mock("../src/api", () => ({ createLocalDeviceEnrollment: vi.fn(), getComputerSetupCommand: vi.fn().mockResolvedValue({ installCommand: "setup-command" }) }));
+vi.mock("../src/api", () => ({ createLocalDeviceEnrollment: vi.fn(), getComputerSetupCommand: vi.fn().mockResolvedValue({ installCommand: "setup-command", windowsInstallCommand: "irm 'https://relay.example/install.ps1' | iex" }) }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: vi.fn() }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({
   t: (key: string) => key.split(".").reduce<any>((value, part) => value?.[part], en) ?? key,
@@ -13,17 +13,26 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({
 
 beforeEach(() => { vi.mocked(createLocalDeviceEnrollment).mockReset(); });
 
+it("offers the Windows command beside the macOS / Linux one and lists Windows as supported", async () => {
+  render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
+  expect(await screen.findByText("irm 'https://relay.example/install.ps1' | iex")).toBeTruthy();
+  expect(screen.getByText("Install command · macOS / Linux")).toBeTruthy();
+  expect(screen.getByText("Install command · Windows")).toBeTruthy();
+  expect(screen.getByText(/^Supported · x64 \/ ARM64 · Requires Git for Windows$/)).toBeTruthy();
+});
+
 it("explains installation before generating a command", () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   expect(screen.getByRole("button", { name: "Generate install command" })).toBeTruthy();
-  expect(screen.getByText(/No Git or npm required/)).toBeTruthy();
+  expect(screen.getByText(/No npm required/)).toBeTruthy();
 });
 
 it("guides command and token steps without claiming registration means connected", async () => {
   vi.mocked(createLocalDeviceEnrollment).mockResolvedValue({
     node: { id: "computer-1" }, daemonEnv: {}, reused: true, nodeToken: "fixture-token",
-    installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash -s -- --sandbox-id computer-1",
+    installCommand: "curl -fsSL https://relay.example/install.sh | bash -s -- --sandbox-id computer-1",
+    windowsInstallCommand: "& ([scriptblock]::Create((irm 'https://relay.example/install.ps1'))) '--sandbox-id' 'computer-1'",
     daemonCommand: "old-daemon-command",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>);
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
@@ -36,6 +45,8 @@ it("guides command and token steps without claiming registration means connected
   expect(screen.getByRole("status").textContent).toContain("Waiting for connection");
   expect(screen.queryByText(/already connected/)).toBeNull();
   expect(screen.queryByText("old-daemon-command")).toBeNull();
+  expect(screen.getByText("Install command · Windows")).toBeTruthy();
+  expect(screen.getByText(/\[scriptblock\]::Create/)).toBeTruthy();
 });
 
 it("does not retain the repository-install instructions in Simplified Chinese", () => {
@@ -47,7 +58,7 @@ it("only reports connected after a fresh online status and copies the installer 
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   const response = {
     node: { id: "computer-1", online: true }, daemonEnv: {}, nodeToken: "fixture-token",
-    installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash",
+    installCommand: "curl -fsSL https://relay.example/install.sh | bash",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>;
   vi.mocked(createLocalDeviceEnrollment).mockResolvedValue(response);
   const props = { open: true, onClose: vi.fn(), onConnected: vi.fn() };

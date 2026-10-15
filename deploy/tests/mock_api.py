@@ -2,13 +2,17 @@
 
 Serves Railway at /graphql/v2 and Cloudflare at /client/v4, keyed on the
 operation names deploy/lib/railway.sh sends. GET /__state dumps everything,
-including per-operation call counts, for tests/run.sh to assert on.
+including per-operation call counts, for tests/run.sh to assert on; POST
+/__seed_route adds a Worker route someone else owns.
 
     python3 mock_api.py <port>
 """
 
+import base64
 import json
 import re
+from email import policy
+from email.parser import BytesParser
 import sys
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,7 +28,12 @@ STATE = {
     "projects": {},
     "volumes": [],
     "dns": [],
-    "settings": {"ssl": "flexible", "always_use_https": "off"},
+    "settings": {"ssl": "flexible", "always_use_https": "off", "http3": "off", "0rtt": "off",
+                 "early_hints": "off", "tiered_cache_smart_topology_enable": "off"},
+    "routes": [],
+    # Worker scripts by name, and asset contents by hash, as uploaded.
+    "workers": {},
+    "assets": {},
     # A rule someone else owns; the deploy script must leave it in place.
     "rulesets": {
         "http_request_late_transform": [
@@ -178,7 +187,9 @@ def cloudflare(method, path, query, body):
     parts = path.split("/")[3:]  # after /client/v4
     if parts == ["zones"]:
         count("cf.zones")
-        return 200, [{"id": "zone-1", "name": ZONE}] if query.get("name") == [ZONE] else []
+        return 200, [{"id": "zone-1", "name": ZONE, "account": {"id": "acct-1"}}] if query.get("name") == [ZONE] else []
+    if parts[0] == "accounts":
+        return workers(method, parts[1], parts[2:], body)
     zone_id, rest = parts[1], parts[2:]
     assert zone_id == "zone-1"
     if rest == ["dns_records"] and method == "GET":
@@ -196,6 +207,24 @@ def cloudflare(method, path, query, body):
         record = next(r for r in STATE["dns"] if r["id"] == rest[1])
         record.update(body)
         return 200, record
+    if rest == ["cache", "tiered_cache_smart_topology_enable"]:
+        if method == "PATCH":
+            count("cf.settings.tiered_cache_smart_topology_enable")
+            STATE["settings"][rest[1]] = body["value"]
+        return 200, {"id": rest[1], "value": STATE["settings"][rest[1]]}
+    if rest == ["workers", "routes"] and method == "GET":
+        return 200, STATE["routes"]
+    if rest == ["workers", "routes"] and method == "POST":
+        count("cf.routes.create")
+        assert body["script"] in STATE["workers"], "route to a Worker that does not exist"
+        route = {"id": new_id("route"), **body}
+        STATE["routes"].append(route)
+        return 200, route
+    if rest[:2] == ["workers", "routes"] and method == "PUT":
+        count("cf.routes.update")
+        route = next(r for r in STATE["routes"] if r["id"] == rest[2])
+        route.update(body)
+        return 200, route
     if rest[0] == "settings":
         if method == "PATCH":
             count(f"cf.settings.{rest[1]}")
@@ -214,6 +243,48 @@ def cloudflare(method, path, query, body):
     raise ValueError(f"unhandled Cloudflare call {method} {path}")
 
 
+def form_parts(content_type, raw):
+    message = BytesParser(policy=policy.default).parsebytes(
+        f"Content-Type: {content_type}\r\n\r\n".encode() + raw)
+    return list(message.iter_parts())
+
+
+def workers(method, account, rest, body):
+    """Workers static-assets direct upload: session, buckets, script."""
+    assert account == "acct-1"
+    if rest[:2] == ["workers", "scripts"] and rest[3:] == ["assets-upload-session"]:
+        count("cf.workers.session")
+        manifest = body["manifest"]
+        missing = sorted({e["hash"] for e in manifest.values()} - set(STATE["assets"]))
+        STATE["manifest"] = manifest
+        return 200, {"jwt": "upload-jwt" if missing else "completion-jwt", "buckets": [missing] if missing else []}
+    if rest == ["workers", "scripts", rest[2]] and method == "PUT":
+        count("cf.workers.script")
+        content_type, raw = body
+        parts = {part.get_param("name", header="content-disposition"): part for part in form_parts(content_type, raw)}
+        metadata = json.loads(parts["metadata"].get_content())
+        assert metadata["assets"]["jwt"] == "completion-jwt", "script upload without the completion token"
+        STATE["workers"][rest[2]] = {
+            "metadata": metadata,
+            "module": parts[metadata["main_module"]].get_payload(decode=True).decode(),
+            "manifest": STATE.get("manifest"),
+        }
+        return 200, {"id": rest[2]}
+    raise ValueError(f"unhandled Workers call {method} {rest}")
+
+
+def asset_upload(auth, content_type, raw):
+    assert auth == "Bearer upload-jwt", "asset upload needs the session JWT"
+    count("cf.workers.upload")
+    for part in form_parts(content_type, raw):
+        name = part.get_param("name", header="content-disposition")
+        STATE["assets"][name] = {
+            "type": part.get_content_type(),
+            "content": base64.b64decode(part.get_payload(decode=True)).decode(errors="replace"),
+        }
+    return {"jwt": "completion-jwt"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -228,12 +299,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def body(self):
         length = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(length)) if length else None
+        raw = self.rfile.read(length) if length else b""
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.startswith("multipart/"):
+            return content_type, raw
+        return json.loads(raw) if raw else None
 
     def handle_any(self, method):
         url = urlparse(self.path)
         if url.path == "/__scenario" and method == "POST":
             STATE["deployment_status"] = self.body()
+            return self.send(200, {})
+        if url.path == "/__seed_route" and method == "POST":
+            STATE["routes"].append({"id": new_id("route"), **self.body()})
             return self.send(200, {})
         if url.path == "/__state":
             return self.send(200, STATE)
@@ -245,6 +323,9 @@ class Handler(BaseHTTPRequestHandler):
                 req = self.body()
                 op = re.match(r"\s*(?:query|mutation)\s+(\w+)", req["query"]).group(1)
                 return self.send(200, {"data": railway(op, req.get("variables") or {})})
+            if url.path == "/client/v4/accounts/acct-1/workers/assets/upload":
+                content_type, raw = self.body()
+                return self.send(201, {"success": True, "errors": [], "result": asset_upload(auth, content_type, raw)})
             if url.path.startswith("/client/v4/"):
                 if auth != f"Bearer {CLOUDFLARE_TOKEN}":
                     return self.send(403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]})

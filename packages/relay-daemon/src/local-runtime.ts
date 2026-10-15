@@ -4,6 +4,7 @@ import type { DaemonExecutionEnvironment } from "./index.js";
 import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { localExitProven } from "./exit-proof.js";
+import { localBash } from "./local-shell.js";
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
 export function createLocalRuntime(): DaemonExecutionEnvironment {
@@ -22,8 +23,13 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
   };
 }
 
-export const localProcessExecStream: typeof superviseLocalProcess = (cmd, args = [], options = {}) =>
-  superviseLocalProcess(cmd, args, { ...options, env: { ...localAgentSubprocessEnv(), ...options.env } as Record<string, string> });
+export const localProcessExecStream: typeof superviseLocalProcess = async (cmd, args = [], options = {}) => {
+  let program = cmd;
+  // Agent scripts are written for bash; on Windows that is Git Bash, never WSL.
+  try { if (cmd === "bash") program = localBash(); }
+  catch (error) { return { exit_code: -1, stdout: "", stderr: "", error_message: (error as Error).message }; }
+  return superviseLocalProcess(program, args, { ...options, env: { ...localAgentSubprocessEnv(), ...options.env } as Record<string, string> });
+};
 
 async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
   const def = getAgent(agent);

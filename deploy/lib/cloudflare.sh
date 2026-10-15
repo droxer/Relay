@@ -26,6 +26,14 @@ cf_zone_id() {
   printf '%s' "$id"
 }
 
+# The account that owns the zone, where the web UI's Worker lives.
+cf_zone_account_id() {
+  local id
+  id=$(cf GET "/zones?name=$CLOUDFLARE_ZONE" | jq -r '.[0].account.id // empty')
+  [ -n "$id" ] || die "cannot read the account of zone $CLOUDFLARE_ZONE; check the token's zone access"
+  printf '%s' "$id"
+}
+
 # Lowercase, without a trailing dot or the quotes Cloudflare adds to TXT values.
 cf_normalize() {
   printf '%s' "$1" | tr 'A-Z' 'a-z' | sed -e 's/\.$//' -e 's/^"//' -e 's/"$//'
@@ -76,14 +84,32 @@ cf_ensure_record() {
 }
 
 cf_zone_setting() {
-  local zone=$1 setting=$2 value=$3 current
-  current=$(cf GET "/zones/$zone/settings/$setting" | jq -r '.value')
+  cf_zone_value "$2" "/zones/$1/settings/$2" "$3"
+}
+
+# cf_zone_value <label> <path> <value>, for {value} settings that live outside
+# /settings, such as Smart Tiered Cache.
+cf_zone_value() {
+  local label=$1 path=$2 value=$3 current
+  current=$(cf GET "$path" | jq -r '.value')
   if [ "$current" = "$value" ]; then
-    info "$setting is already $value"
+    info "$label is already $value"
     return
   fi
-  cf PATCH "/zones/$zone/settings/$setting" "$(jq -nc --arg v "$value" '{value: $v}')" >/dev/null
-  info "$setting: $current -> $value"
+  cf PATCH "$path" "$(jq -nc --arg v "$value" '{value: $v}')" >/dev/null
+  info "$label: $current -> $value"
+}
+
+# Free speed-ups that are safe for the API's SSE streams: HTTP/3 and 0-RTT
+# shorten connection setup, Early Hints preloads assets while HTML is still
+# in flight, and Smart Tiered Cache sends edge misses to a regional Cloudflare
+# cache before the origin (deployment-cloudflare.md § 3).
+cf_performance_settings() {
+  local zone=$1
+  cf_zone_setting "$zone" http3 on
+  cf_zone_setting "$zone" 0rtt on
+  cf_zone_setting "$zone" early_hints on
+  cf_zone_value tiered_cache_smart_topology "/zones/$zone/cache/tiered_cache_smart_topology_enable" on
 }
 
 # Rules of a phase entrypoint, or [] when the zone has none yet (404).
@@ -142,11 +168,53 @@ cf_cache_rules() {
       rule("relay_cache_api"; "Relay: never cache the API or SSE"; api_path("/api/"); {cache: false}),
       rule("relay_cache_profile_images"; "Relay: per-user profile images"; api_path("/profile-images/"); {cache: false}),
       rule("relay_cache_install_script"; "Relay: install script pins the current bundle";
-        "(http.host eq \"\($api)\" and http.request.uri.path in {\"/install.sh\" \"/computer/install.sh\"})"; {cache: false}),
+        "(http.host eq \"\($api)\" and http.request.uri.path in {\"/install.sh\" \"/computer/install.sh\" \"/install.ps1\" \"/computer/install.ps1\"})"; {cache: false}),
       rule("relay_cache_next_static"; "Relay: content-hashed web assets";
         "(http.host eq \"\($web)\" and starts_with(http.request.uri.path, \"/_next/static/\"))";
         {cache: true, edge_ttl: {mode: "override_origin", default: 31536000}}),
       rule("relay_cache_daemon_bundles"; "Relay: digest-named daemon bundles"; api_path("/computer/daemon-");
         {cache: true, edge_ttl: {mode: "respect_origin"}})
     ]'
+}
+
+# cf_ensure_worker_host <zone-id> <domain>. A Worker route only sees proxied
+# traffic, so the web host needs a proxied record. An existing one (such as
+# the old Railway CNAME) is kept: the route answers in front of it, which
+# makes the switch zero-downtime and deleting the route a rollback.
+cf_ensure_worker_host() {
+  local zone=$1 name=$2 existing routing unproxied
+  existing=$(cf GET "/zones/$zone/dns_records?name=$name&per_page=100")
+  routing=$(jq '[.[] | select(.type == "A" or .type == "AAAA" or .type == "CNAME")]' <<<"$existing")
+  if [ "$(jq length <<<"$routing")" -eq 0 ]; then
+    # 100:: is the discard prefix Cloudflare documents for Worker-only hosts.
+    cf POST "/zones/$zone/dns_records" \
+      "$(jq -nc --arg n "$name" '{type: "AAAA", name: $n, content: "100::", proxied: true, ttl: 1}')" >/dev/null
+    info "created AAAA $name -> 100:: (proxied, served by the Worker)"
+    return
+  fi
+  unproxied=$(jq -r '[.[] | select(.proxied | not) | "\(.type) \(.content)"] | join(", ")' <<<"$routing")
+  [ -z "$unproxied" ] || die "$name has DNS-only $unproxied; proxy it in Cloudflare so the Worker route can serve it"
+  info "$name keeps its proxied record; the Worker route answers in front of it"
+}
+
+# cf_ensure_worker_route <zone-id> <pattern> <script>. Never takes over a
+# route that serves another Worker.
+cf_ensure_worker_route() {
+  local zone=$1 pattern=$2 script=$3 route current body
+  route=$(cf GET "/zones/$zone/workers/routes" | jq -c --arg p "$pattern" '[.[] | select(.pattern == $p)][0] // empty')
+  current=$(jq -r '.script // empty' <<<"${route:-null}")
+  if [ -n "$route" ] && [ "$current" = "$script" ]; then
+    info "route $pattern -> $script is up to date"
+    return
+  fi
+  [ -z "$current" ] || die "route $pattern already serves Worker $current; delete that route, then re-run"
+  body=$(jq -nc --arg p "$pattern" --arg s "$script" '{pattern: $p, script: $s}')
+  if [ -n "$route" ]; then
+    # A route with no Worker disables Workers on the pattern; point it at ours.
+    cf PUT "/zones/$zone/workers/routes/$(jq -r .id <<<"$route")" "$body" >/dev/null
+    info "updated route $pattern -> $script"
+  else
+    cf POST "/zones/$zone/workers/routes" "$body" >/dev/null
+    info "created route $pattern -> $script"
+  fi
 }

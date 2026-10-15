@@ -94,6 +94,16 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
                   copied={copiedField === "command"}
                   onCopy={() => void copy("command", credentials.installCommand ?? credentials.daemonCommand!)}
                 />
+                {credentials.windowsInstallCommand ? (
+                  <CredCopyRow
+                    label={t("computer.connect_setup_windows_label")}
+                    hint={t("computer.connect_setup_windows_hint")}
+                    value={credentials.windowsInstallCommand}
+                    copyLabel={t("computer.connect_setup_windows_copy")}
+                    copied={copiedField === "command-windows"}
+                    onCopy={() => void copy("command-windows", credentials.windowsInstallCommand!)}
+                  />
+                ) : null}
               </>
             ) : null}
             <CredCopyRow
