@@ -932,15 +932,16 @@ consultations are permitted per request. See
 
 `GET /api/v1/computer-authorizations/setup-command` returns the browser-approved
 setup command, which takes no arguments because the served script carries its
-own backend origin:
+own backend origin. It names `RELAY_PUBLIC_WEB_URL` when set, whose host
+forwards `/install.sh` to the backend:
 
 ```sh
-curl -fsSL https://relay.example.com/install.sh | sudo bash
+curl -fsSL https://relay.example.com/install.sh | bash
 ```
 
 `POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
 the same pipeline with shell-quoted arguments scoped to the enrolled computer
-(`… | sudo bash -s -- --sandbox-id … --employee-id … --workspace …`). It
+(`… | bash -s -- --sandbox-id … --employee-id … --workspace …`). It
 contains no token; the installer reads the existing node token from `/dev/tty`.
 `daemonCommand` and `daemonEnv` remain available for compatibility.
 

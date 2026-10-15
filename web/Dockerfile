@@ -32,5 +32,8 @@ ENV NEXT_PUBLIC_RELAY_API_ORIGIN=$NEXT_PUBLIC_RELAY_API_ORIGIN \
 RUN npm run build -w web
 
 FROM caddy:2-alpine
+# The Caddyfile redirects /install.sh to the API origin baked into the bundle.
+ARG NEXT_PUBLIC_RELAY_API_ORIGIN
+ENV RELAY_API_ORIGIN=$NEXT_PUBLIC_RELAY_API_ORIGIN
 COPY web/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /build/web/out /srv
