@@ -44,16 +44,19 @@ export function WaitlistScreen() {
 
   return (
     <AuthCanvas mode="waitlist">
-      <h2 className="login-panel-title" id="waitlist-title">
-        {submitted ? t("waitlist.confirm_title") : t("waitlist.title")}
-      </h2>
-      {submitted ? (
-        <p className="login-note" role="status">{t("waitlist.confirm_body")}</p>
-      ) : enabled === false ? (
-        <p className="login-note">{t("waitlist.error_unavailable")}</p>
-      ) : (
-        <WaitlistForm onSubmitted={() => setSubmitted(true)} />
-      )}
+      <div className="login-panel-head">
+        <h2 className="login-panel-title" id="waitlist-title">
+          {submitted ? t("waitlist.confirm_title") : t("waitlist.title")}
+        </h2>
+        {submitted ? (
+          <p className="login-note" role="status">{t("waitlist.confirm_body")}</p>
+        ) : enabled === false ? (
+          <p className="login-note">{t("waitlist.error_unavailable")}</p>
+        ) : (
+          <p className="login-note">{t("waitlist.lede")}</p>
+        )}
+      </div>
+      {submitted || enabled === false ? null : <WaitlistForm onSubmitted={() => setSubmitted(true)} />}
       <p className="login-alt">
         {t("waitlist.have_account")} <PublicLink href="/login">{t("login.sign_in")}</PublicLink>
       </p>
@@ -107,7 +110,6 @@ function WaitlistForm({ onSubmitted }: { onSubmitted: () => void }) {
 
   return (
     <form className="login-form" aria-labelledby="waitlist-title" noValidate onSubmit={(event) => void handleSubmit(event)}>
-      <p className="login-note">{t("waitlist.lede")}</p>
       <Field className="login-field" label={t("waitlist.email")} error={problemText("email")} errorId="waitlist-email-error">
         <Input
           className="login-input"

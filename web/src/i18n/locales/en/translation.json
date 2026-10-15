@@ -2595,7 +2595,7 @@
     "join_expires": "Invite valid until {{date}}.",
     "join_dead_title": "This invite link has expired",
     "join_dead_body": "The link may have been used already, replaced by a newer invite, or expired. Request access again and we’ll send a fresh one when there’s room.",
-    "handle": "Handle",
+    "handle": "Username",
     "handle_invalid": "Use 2–64 lowercase letters, numbers, dots, dashes, or underscores, starting with a letter or number.",
     "password_problem_short": "Use at least {{min}} characters.",
     "password_problem_long": "Use at most {{max}} characters.",

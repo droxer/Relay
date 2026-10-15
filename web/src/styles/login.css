@@ -225,6 +225,14 @@
   width: min(100%, 340px);
 }
 
+/* A title with its supporting sentence: they read as one heading, so they
+   sit closer together than the panel's step to the form. */
+.login-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
 .login-panel-title {
   margin: 0;
   font: var(--type-display);
@@ -249,6 +257,12 @@
 /* Field primitive renders the label text as a plain <span> inside the
    <label> wrapper; keep the screen's mono-caps label skin on it. */
 .login-field > span:first-child {
+  /* Block, not the primitive's inline-flex: a label long enough to wrap
+     (the use-case question) must flow its "(optional)" marker inline after
+     the last word instead of parking it in a second flex column, and its
+     lines need real leading rather than the primitive's leading-none. */
+  display: block;
+  line-height: var(--leading-normal);
   font-family: var(--font-mono);
   font-size: var(--fs-2);
   letter-spacing: var(--track-caps);
@@ -300,6 +314,18 @@
   border-color: var(--lg-err);
   outline: var(--focus-w) dashed var(--lg-err);
   outline-offset: var(--focus-offset);
+}
+
+/* A read-only field (the invited address) is a fact, not a well to type
+   into: no fill and muted ink, so it does not read as editable. */
+.login-input[readonly] {
+  background: transparent;
+  color: var(--lg-muted);
+  cursor: default;
+}
+
+.login-input[readonly]:hover {
+  border-color: var(--lg-hairline);
 }
 
 .login-input:-webkit-autofill {
@@ -561,7 +587,7 @@
   }
 
   .login-foot {
-    padding: 0 var(--sp-6) var(--sp-6);
+    padding: var(--sp-5) var(--sp-6) var(--sp-6);
   }
 }
 
@@ -574,7 +600,13 @@
     padding: var(--sp-5) var(--sp-4);
   }
 
+  /* A phone is narrower than the 340px column plus padding allows to
+     centre cleanly; fill it so the gate shares the cover's left edge. */
+  .login-panel-inner {
+    width: 100%;
+  }
+
   .login-foot {
-    padding: 0 var(--sp-4) var(--sp-5);
+    padding: var(--sp-4) var(--sp-4) var(--sp-5);
   }
 }
