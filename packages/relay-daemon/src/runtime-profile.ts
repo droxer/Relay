@@ -66,6 +66,13 @@ export function loadRuntimeProfile(path: string): Record<string, string> {
   return runtimeProfileEnvironment(readPrivateJson(path));
 }
 
+/** Retain captured settings and the live credentials reference when upgrading an installed service. */
+export function readRuntimeProfile(path: string): RuntimeProfile {
+  const value = readPrivateJson(path);
+  runtimeProfileEnvironment(value);
+  return value as RuntimeProfile;
+}
+
 export function runtimeProfileEnvironment(value: unknown): Record<string, string> {
   const raw = value as Partial<RuntimeProfile> | null;
   if (!raw || raw.version !== 1 || Object.keys(raw).some(key => !["version", "environment", "environmentFile"].includes(key))) throw new Error("Unsupported runtime profile.");

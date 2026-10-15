@@ -95,6 +95,7 @@ import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
+import { acknowledgeUpdatePause } from "./update-pause.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { watchExecutionExit } from "./execution-capture.js";
 import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
@@ -608,6 +609,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     const cancellationTerminalEventSignal = (): AbortSignal | undefined =>
       stopping ? AbortSignal.timeout(SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS) : undefined;
     while (!stopping) {
+      if (acknowledgeUpdatePause(stateDir)) {
+        await delay(100, runtimeSignal);
+        continue;
+      }
       let completedEmptyLongPoll = false;
       let commandPollStartedAt = performance.now();
       let leaseObservationStartedAt = commandPollStartedAt;

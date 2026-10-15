@@ -4,11 +4,13 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pendingRunCount, updateCommand } from './update.js';
+import { requestUpdatePause } from './update-pause.js';
 import { WINDOWS_SERVICE_SUFFIX, decodeServiceFile, windowsTaskArguments, startWindowsTask, stopWindowsTask, windowsLogTail, windowsServiceDirectory, windowsTaskState } from './windows-service.js';
 
 export const SERVICE_PREFIX = 'build.relay.computer.';
 const LOG_LINES = '100';
-const COMMANDS = ['start', 'stop', 'restart', 'status', 'logs'];
+const COMMANDS = ['start', 'stop', 'restart', 'status', 'logs', 'update'];
 
 export interface InstalledService { id: string; name: string; file: string }
 
@@ -46,10 +48,12 @@ Commands:
   restart   Restart ${product} (for example after changing agent CLI settings).
   status    Show whether ${product} is running.
   logs      Show recent ${product} output. Add --follow to keep streaming.
+  update    Install the latest ${product} release from your backend and restart.
 
 Options:
   --computer <id>   Act on one connected computer when several are installed.
   --follow          With "logs", stream new output until Ctrl+C.
+  --force           With "update", restart even while runs are in progress.
   --help            Show this help message.
 `;
 
@@ -106,16 +110,18 @@ function serviceBrand(platform: string, service: InstalledService): RelayBrand {
   }
 }
 
-interface ControlArgs { command: string; computer?: string; follow: boolean }
+interface ControlArgs { command: string; computer?: string; follow: boolean; force?: boolean }
 
 export function parseControlArgs(args: string[]): ControlArgs {
   let command = '';
   let computer: string | undefined;
   let follow = false;
+  let force = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === '--help' || arg === '-h' || arg === 'help') return { command: 'help', follow };
     if (arg === '--follow' || arg === '-f') { follow = true; continue; }
+    if (arg === '--force') { force = true; continue; }
     if (arg === '--computer') {
       const value = args[++i];
       if (!value || value.startsWith('-')) throw new Error('--computer requires a computer id.');
@@ -125,7 +131,7 @@ export function parseControlArgs(args: string[]): ControlArgs {
     if (arg.startsWith('-') || command) throw new Error(`Unknown argument: ${arg}`);
     command = arg;
   }
-  return { command: command || 'help', follow, ...(computer ? { computer } : {}) };
+  return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}) };
 }
 
 /** Whether a service is running, as reported by launchd or systemd. */
@@ -205,6 +211,41 @@ function applyCommand(deps: ControlDeps, command: string, service: InstalledServ
   return { ok, message: ok ? `${product} ${verb}.` : `${product} could not be ${verb}. Run "${cli} logs" for details.` };
 }
 
+/** Re-runs the installer for each computer; refuses while one has runs in flight unless forced. */
+function update(deps: ControlDeps, services: InstalledService[], force: boolean): boolean {
+  const { product } = deps.brand ?? RELAY_BRAND;
+  const busy = services.map(service => [service.id, pendingRunCount(deps.home, service.id)] as const).filter(([, count]) => count > 0);
+  if (busy.length && !force) {
+    throw new Error(`${product} has runs in progress (${busy.map(([id, count]) => `${id}: ${count}`).join(', ')}). Updating restarts it and interrupts them; wait for them to finish or add --force.`);
+  }
+  let ok = true;
+  for (const service of services) {
+    // Validate saved settings before asking the daemon to pause.
+    const { command, args } = updateCommand(deps.platform, serviceArguments(deps.platform, decodeServiceFile(readFileSync(service.file))));
+    deps.log(services.length > 1 ? `${service.id}: updating ${product}…` : `Updating ${product}…`);
+    const state = force ? undefined : serviceState(deps, service);
+    const pause = state && !['stopped', 'failed'].includes(state.detail)
+      ? requestUpdatePause(join(deps.home, '.relay', 'daemon-nodes', service.id)) : undefined;
+    try {
+      if (pause) {
+        let acknowledged = false;
+        for (let attempt = 0; attempt < 900; attempt++) {
+          if (pause.acknowledged()) { acknowledged = true; break; }
+          if (deps.sleep) deps.sleep(100);
+          else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+        }
+        if (!acknowledged) throw new Error('Cannot pause daemon admission safely. Update aborted; use --force only if interrupting runs is acceptable.');
+      }
+      const pending = pendingRunCount(deps.home, service.id);
+      if (!force && pending > 0) throw new Error(`${product} has runs in progress (${service.id}: ${pending}). Wait for them to finish or add --force.`);
+      const updated = deps.run(command, args, { inherit: true }).status === 0;
+      if (!updated) deps.log(`${product} could not be updated${services.length > 1 ? ` (${service.id})` : ''}. Run "${(deps.brand ?? RELAY_BRAND).command} status" to check the service.`);
+      ok &&= updated;
+    } finally { pause?.release(); }
+  }
+  return ok;
+}
+
 /** Runs one control command and returns the process exit code. */
 export function runControl(args: string[], deps: ControlDeps): number {
   const options = parseControlArgs(args);
@@ -216,6 +257,7 @@ export function runControl(args: string[], deps: ControlDeps): number {
     if (services.length > 1) throw new Error(`Several computers are installed; choose one with --computer <id>: ${services.map(service => service.id).join(', ')}`);
     return logs(deps, services[0]!, options.follow) ? 0 : 1;
   }
+  if (options.command === 'update') return update(deps, services, options.force ?? false) ? 0 : 1;
   let ok = true;
   for (const service of services) {
     const result = applyCommand(deps, options.command, service);

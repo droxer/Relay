@@ -37,6 +37,7 @@ after(() => {
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
+import { requestUpdatePause } from "../src/update-pause.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
 import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
@@ -135,6 +136,56 @@ function runCommand(id = "cmd_1"): DaemonNodeRunCommand {
 function isInventoryProbe(args: string[] | undefined): boolean {
   return Boolean(args?.[1]?.includes("printf 'SKILL") || args?.[1]?.includes("emit()"));
 }
+
+test("update pause accounts for an in-flight poll before acknowledging and stops further polls", { timeout: 10_000 }, async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'relay-update-admission-'));
+  const stop = new AbortController();
+  let pause: ReturnType<typeof requestUpdatePause> | undefined;
+  let polls = 0;
+  let runs = 0;
+  let finish!: () => void;
+  const running = new Promise<void>(resolve => { finish = resolve; });
+  const command = runCommand('update-race');
+  const daemon = runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'update-race', userId: 'alice', token: 'fixture',
+    workspacePath: process.cwd(), stateDir, signal: stop.signal, logger: testLogger(),
+    pollIntervalMs: 1, shutdownGraceMs: 50,
+    environment: fakeEnvironment({ exec: async (_cmd, args) => {
+      if (!isInventoryProbe(args)) { runs++; await running; }
+      return { exit_code: 0, stdout: '', stderr: '' };
+    } }),
+    fetchFn: async url => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/commands')) {
+        polls++;
+        if (polls === 1) {
+          pause = requestUpdatePause(stateDir);
+          return jsonResponse({ commands: [command] });
+        }
+        return jsonResponse({ commands: [] });
+      }
+      return jsonResponse({ ok: true });
+    },
+  });
+  try {
+    const deadline = Date.now() + 5000;
+    while (!pause?.acknowledged() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(pause?.acknowledged(), true);
+    assert.equal(runs, 1);
+    assert.equal(new ExecutionJournal(join(stateDir, 'executions')).pending().length, 1);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(polls, 1);
+    pause!.release();
+    while (polls === 1 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.ok(polls > 1);
+  } finally {
+    pause?.release();
+    finish();
+    stop.abort();
+    await daemon;
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+});
 
 test("relay daemon recognizes an npm-style symlink as its CLI entrypoint", () => {
   const root = mkdtempSync(join(tmpdir(), "relay-daemon-cli-"));
