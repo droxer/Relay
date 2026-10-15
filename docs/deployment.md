@@ -272,9 +272,12 @@ calls the backend origin directly with `credentials: "include"`.
 
 3. **Connect a computer.** Open *Computers → Connect this computer*, register
    the workspace, and copy the **Install and connect** command to that computer.
-   The browser-approved setup is a bare `curl -fsSL <origin>/install.sh | sudo bash`;
+   The browser-approved setup is a bare `curl -fsSL <origin>/install.sh | bash`,
+   where `<origin>` is `RELAY_PUBLIC_WEB_URL` when set (the web host must answer
+   `/install.sh`: the proxy build rewrites it and the standalone web image
+   redirects it to the API) and the backend origin otherwise;
    a command for an already enrolled computer appends its computer ID, owner ID
-   and workspace path (`… | sudo bash -s -- …`) and asks for the node token at a
+   and workspace path (`… | bash -s -- …`) and asks for the node token at a
    hidden terminal prompt. Credentials are never embedded in the copied command.
    Configure `RELAY_PUBLIC_BACKEND_URL` to your public HTTPS API origin; keep
    the web build's `NEXT_PUBLIC_*` settings aligned. Loopback HTTP is supported
@@ -287,15 +290,14 @@ calls the backend origin directly with `credentials: "include"`.
    It requires curl, tar, and shasum or sha256sum. Agent CLIs and their login
    credentials must already be installed separately.
 
-   `sudo` is only the entry point: nothing is installed as root or system-wide.
-   The script hands the whole install to the invoking account (`$SUDO_USER`)
-   through that account's login shell, so every file and the service below
-   belong to that user. A root shell with no invoking user is refused, and the
-   hand-off needs bash — hence `| sudo bash`. Piping to a shell without `sudo`
-   installs for the current user exactly the same way. Because sudo resets the
-   environment, the service sees what the login shell exports (plus the PATH
-   sudo kept); agent settings exported only from an interactive rc file need
-   `… | sudo bash -s -- --runtime-env-file <private JSON file>`.
+   Nothing is installed as root or system-wide, so the command needs no `sudo`:
+   every file and the service below belong to the account that runs it, and the
+   service sees that terminal's environment. Commands copied while the published
+   form was `| sudo bash` still work: the script hands the install to the
+   invoking account (`$SUDO_USER`) through `su -l` (a nested `sudo` would garble
+   the terminal output), a root shell with no invoking user is refused, and that
+   hand-off needs bash. Agent settings exported only from an interactive rc file
+   need `… | bash -s -- --runtime-env-file <private JSON file>`.
 
    After checking backend registration and the workspace, the installer creates
    a per-computer LaunchAgent (macOS) or systemd user service (Linux). The service

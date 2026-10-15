@@ -871,7 +871,7 @@
     "platform_linux": "Supported · ARM64 / x64 · Requires systemd user services",
     "platform_windows": "Supported · x64 / ARM64 · Requires Git for Windows",
     "platform_shell_hint": "Run the macOS / Linux command in Bash or zsh, and the Windows command in PowerShell. Neither runs in Command Prompt.",
-    "connect_requirements": "No npm required. The installer sets Relay up for your own account: it adds Node.js if needed and starts a background service that runs at login. On macOS and Linux it asks for this computer’s password (sudo); on Windows it needs no administrator rights, but Git for Windows must be installed.",
+    "connect_requirements": "No npm required. The installer sets Relay up for your own account: it adds Node.js if needed and starts a background service that runs at login. It needs no password or administrator rights; on Windows, Git for Windows must be installed.",
     "connect_workspace_hint": "Enter an existing folder on the target computer, such as /Users/alice/project or /home/alice/project.",
     "connect_command_step": "Run the install command",
     "connect_token_step": "Enter your computer token",

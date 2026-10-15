@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
+from ..core.deploy_config import public_web_url
 from .helpers import backend_base_url
 
 router = APIRouter()
@@ -18,8 +19,13 @@ ASSETS = Path(__file__).resolve().parents[1] / "computer"
 
 
 def computer_setup_command(request: Request) -> str:
-    """The whole browser-approved setup: the served script knows its own backend."""
-    return f"curl -fsSL {shlex.quote(backend_base_url(request) + '/install.sh')} | sudo bash"
+    """The whole browser-approved setup: the served script knows its own backend.
+
+    It names the web origin people already know; that host hands /install.sh to
+    the API. No sudo: Relay installs for the current account, never as root.
+    """
+    origin = public_web_url() or backend_base_url(request)
+    return f"curl -fsSL {shlex.quote(origin + '/install.sh')} | bash"
 
 
 def _install_args(node: dict[str, Any]) -> list[str]:

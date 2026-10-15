@@ -1,8 +1,8 @@
 #!/bin/sh
 # Served with a release URL, digest and backend origin injected by the Relay backend.
 # Keep all work inside functions: a truncated download must not run half a script.
-# Published as `curl … | sudo bash`. POSIX sh throughout, so commands copied
-# before that (`| sh`) keep working; only the sudo hand-off needs bash.
+# Published as `curl … | bash`. POSIX sh throughout, so `| sh` works too; only
+# the hand-off for commands copied while it was `| sudo bash` needs bash.
 set -eu
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
@@ -15,6 +15,9 @@ download() { curl --fail --silent --show-error --location --retry 3 --connect-ti
 # Relay is per-user: the client, its service and the agent logins all live in
 # the invoking account. Root therefore installs nothing itself and only hands
 # the install to that account's login shell, which restores the PATH sudo reset.
+# The hand-off uses su, not a nested `sudo -i`: a second sudo relays through its
+# own pty, and when the workspace prompt reads /dev/tty it resumes by copying the
+# outer sudo's raw-mode settings, so every later line loses its carriage return.
 install_as_invoking_user() {
     relay_user=${SUDO_USER:-}
     [ -n "$relay_user" ] && [ "$(id -u "$relay_user")" != 0 ] || fail 'Relay installs for your own account. Run this command with sudo from your normal user, not from a root shell.'
@@ -27,7 +30,7 @@ install_as_invoking_user() {
         printf 'RELAY_SUDO_PATH=%q\ninstall_relay' "$PATH"
         [ "$#" -eq 0 ] || printf ' %q' "$@"
         printf '\n'
-    } | sudo -i -u "$relay_user" bash -s
+    } | su -l "$relay_user" -c 'exec bash -s'
 }
 
 install_relay() {

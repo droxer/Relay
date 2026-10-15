@@ -855,7 +855,7 @@
     "platform_linux": "已支持 · ARM64 / x64 · 需要 systemd 用户服务",
     "platform_windows": "已支持 · x64 / ARM64 · 需要 Git for Windows",
     "platform_shell_hint": "macOS / Linux 命令请在 Bash 或 zsh 中运行，Windows 命令请在 PowerShell 中运行。两者都不适用于命令提示符。",
-    "connect_requirements": "无需 npm。安装程序会为你自己的账户安装 Relay：按需安装 Node.js，并设置登录时自动运行的后台服务。在 macOS 和 Linux 上会要求输入这台电脑的密码（sudo）；在 Windows 上无需管理员权限，但需要先安装 Git for Windows。",
+    "connect_requirements": "无需 npm。安装程序会为你自己的账户安装 Relay：按需安装 Node.js，并设置登录时自动运行的后台服务。无需密码或管理员权限；在 Windows 上需要先安装 Git for Windows。",
     "connect_workspace_hint": "输入目标电脑上的现有文件夹，例如 /Users/alice/project 或 /home/alice/project。",
     "connect_command_step": "运行安装命令",
     "connect_token_step": "输入电脑令牌",
