@@ -95,6 +95,12 @@
   color: var(--ld-ink);
 }
 
+.landing-nav-github {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+}
+
 /* ---------- Buttons --------------------------------------------------- */
 
 /* Links that look like the app's buttons: the neutral inverted plate for
@@ -132,6 +138,11 @@
 .landing-button-secondary:hover {
   border-color: color-mix(in srgb, var(--ld-ink) 40%, var(--ld-canvas));
   background: var(--ld-surface);
+}
+
+/* The GitHub door carries the mark beside its label. */
+.landing-button-icon {
+  gap: var(--sp-2);
 }
 
 .landing-nav .landing-button {
@@ -179,6 +190,33 @@
   gap: var(--sp-4);
   max-width: 48rem;
   text-align: center;
+}
+
+/* "Open source on GitHub" — a capsule above the headline, the first thing a
+   developer visitor checks. A capsule is a pill shape, so --r-full is
+   legitimate here; the hairline and surface keep it quieter than the CTA. */
+.landing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border: 0.5px solid var(--ld-hairline);
+  border-radius: var(--r-full);
+  background: var(--ld-surface);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ld-ink);
+  text-decoration: none;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.landing-badge:hover {
+  border-color: color-mix(in srgb, var(--ld-ink) 40%, var(--ld-canvas));
+  background: var(--ld-elevated);
+}
+
+.landing-runtimes {
+  margin-top: var(--sp-2);
 }
 
 .landing-kicker {
@@ -365,6 +403,59 @@
   color: var(--ld-muted);
 }
 
+/* Open source: the pitch beside the one command that gets the code. */
+.landing-oss {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+.landing-oss-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.landing-oss-copy .landing-section-head {
+  margin-bottom: 0;
+}
+
+.landing-ctas-start {
+  justify-content: flex-start;
+}
+
+.landing-terminal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-5) var(--sp-6);
+  border: 0.5px solid var(--ld-hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--ld-surface);
+}
+
+.landing-terminal-label {
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ld-muted);
+}
+
+.landing-terminal-command {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  letter-spacing: var(--type-code-track);
+  white-space: nowrap;
+  color: var(--ld-ink);
+}
+
+.landing-terminal-command::before {
+  content: "$ ";
+  color: var(--ld-muted);
+}
+
 /* Principles: four cards on a two-by-two grid. */
 .landing-principles {
   display: grid;
@@ -424,8 +515,18 @@
   color: var(--ld-muted);
 }
 
-.landing-foot-meta {
+.landing-foot-github {
+  display: inline-flex;
   margin-left: auto;
+  color: var(--ld-muted);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.landing-foot-github:hover {
+  color: var(--ld-ink);
+}
+
+.landing-foot-meta {
   font-family: var(--font-mono);
   font-size: var(--fs-1);
   letter-spacing: var(--type-code-track);
@@ -444,7 +545,7 @@
 
   .landing-hero-copy > :nth-child(2) { animation-delay: calc(var(--t-stagger) * 1); }
   .landing-hero-copy > :nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
-  .landing-hero-copy > :nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+  .landing-hero-copy > :nth-child(n + 4) { animation-delay: calc(var(--t-stagger) * 3); }
   .landing-hero-shot { animation-delay: calc(var(--t-stagger) * 4); }
 }
 
@@ -467,6 +568,11 @@
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-6);
   }
+
+  .landing-oss {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-6);
+  }
 }
 
 /* The app-wide phone tier: the in-page links leave the bar (the hero's own
@@ -479,6 +585,17 @@
 
   .landing-nav-links {
     display: none;
+  }
+
+  /* The mark alone carries the GitHub door on a phone bar; its label stays
+     in the accessibility tree. */
+  .landing-nav-github > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .landing-hero {
@@ -505,7 +622,7 @@
     align-self: stretch;
   }
 
-  .landing-foot-meta {
+  .landing-foot-github {
     margin-left: 0;
   }
 }

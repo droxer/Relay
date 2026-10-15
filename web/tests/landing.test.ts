@@ -9,6 +9,8 @@ import {
   LANDING_PRINCIPLES,
   LANDING_STEPS,
   LANDING_TOUR,
+  RELAY_GITHUB_URL,
+  RELAY_CLONE_COMMAND,
   landingCtas,
   landingShotSrc,
 } from "../src/lib/landing.js";
@@ -79,5 +81,12 @@ describe("landing copy", () => {
         assert.equal(typeof landing[leaf], "string", `${locale} is missing ${key}`);
       }
     }
+  });
+});
+
+describe("open source links", () => {
+  it("points at the public repository over https", () => {
+    assert.equal(RELAY_GITHUB_URL, "https://github.com/droxer/Relay");
+    assert.equal(RELAY_CLONE_COMMAND, "git clone https://github.com/droxer/Relay.git");
   });
 });
