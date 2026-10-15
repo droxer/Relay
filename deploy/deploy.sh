@@ -115,7 +115,8 @@ phase_railway() {
   else
     railway_ensure_service "$WEB_SERVICE" web
     WEB_ID=$(railway_service_id "$WEB_SERVICE")
-    railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api}')"
+    railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" \
+      '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}')"
     info "web variables set"
   fi
   if r2_enabled; then
