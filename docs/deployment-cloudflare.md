@@ -379,7 +379,8 @@ and confirm the stream stays live for several minutes, and connect a daemon to
 
 ## 10. Waitlist invite email (optional)
 
-With `RELAY_WAITLIST_ENABLED=1`, the backend emails waitlist invites and "you're
+`deploy/deploy.sh` turns the waitlist on (`RELAY_WAITLIST_ENABLED=1`) unless
+`deploy/.env` sets it to `0`. With it on, the backend emails waitlist invites and "you're
 on the list" confirmations through [Cloudflare Email
 Service](https://developers.cloudflare.com/email-service/) (Email Sending is in
 beta). It calls the REST API from Railway; no Worker is involved. Without the
@@ -397,7 +398,6 @@ link instead.
 4. Set, in `deploy/.env`, then run `deploy/deploy.sh railway`:
 
    ```bash
-   RELAY_WAITLIST_ENABLED=1
    RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=<account id>
    RELAY_MAIL_CLOUDFLARE_API_TOKEN=<send-only token>
    RELAY_MAIL_FROM=Relay <invites@mail.get-relay.cc>

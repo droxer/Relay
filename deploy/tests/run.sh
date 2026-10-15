@@ -168,6 +168,7 @@ check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_UR
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
+check "waitlist on by default" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\""
 check "no R2 variables without R2 config" "$BACKEND | .variables | has(\"RELAY_BLOB_STORE\") | not"
 check "backend volume at /data" "[.volumes[] | select(.mountPath == \"/data\")] | length == 1"
 check "api domain on the backend" "$BACKEND | [.domains[].domain] == [\"api.get-relay.cc\"]"
@@ -278,6 +279,13 @@ RELAY_MAIL_FROM=invites@mail.get-relay.cc'
 deploy railway 2>/dev/null
 STATE=$(state)
 check "waitlist and mail variables set" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\" and .variables.RELAY_MAIL_FROM == \"invites@mail.get-relay.cc\" and .variables.RELAY_MAIL_CLOUDFLARE_API_TOKEN == \"send-only\""
+
+echo "--- the waitlist can be turned off"
+start_mock
+write_config 'RELAY_WAITLIST_ENABLED=0'
+deploy railway 2>/dev/null
+STATE=$(state)
+check "waitlist off when opted out" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"0\""
 
 echo "--- failures stop the run"
 write_config 'RELAY_R2_BUCKET=relay-artifacts'
