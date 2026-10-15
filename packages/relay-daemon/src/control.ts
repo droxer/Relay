@@ -1,6 +1,6 @@
 /** `relay` — start, stop and inspect the background services the computer installer created. */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,19 @@ const LOG_LINES = '100';
 const COMMANDS = ['start', 'stop', 'restart', 'status', 'logs'];
 
 export interface InstalledService { id: string; name: string; file: string }
+
+/** What the installed client calls itself: a computer connected to a local dev backend is "Relay Dev". */
+export interface RelayBrand { product: string; command: string }
+export const RELAY_BRAND: RelayBrand = { product: 'Relay', command: 'relay' };
+export const RELAY_DEV_BRAND: RelayBrand = { product: 'Relay Dev', command: 'relay-dev' };
+export const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+/** Set by the `relay-dev` launcher so the control CLI names itself after the command that ran it. */
+export const BRAND_ENV = 'RELAY_BRAND';
+
+export function brandForBackend(backendUrl: string): RelayBrand {
+  return LOOPBACK_HOSTS.includes(new URL(backendUrl).hostname) ? RELAY_DEV_BRAND : RELAY_BRAND;
+}
+
 export interface CommandResult { status: number | null; stdout: string }
 export interface ControlDeps {
   platform: string;
@@ -17,18 +30,19 @@ export interface ControlDeps {
   uid: number;
   run(command: string, args: string[], options?: { inherit?: boolean }): CommandResult;
   log(line: string): void;
+  brand?: RelayBrand;
 }
 
-const HELP = `relay <command> [--computer <id>]
+const help = ({ product, command }: RelayBrand): string => `${command} <command> [--computer <id>]
 
-Control the Relay service installed on this computer.
+Control the ${product} service installed on this computer.
 
 Commands:
-  start     Start Relay now and at every login.
-  stop      Stop Relay and keep it stopped, also after login, until "relay start".
-  restart   Restart Relay (for example after changing agent CLI settings).
-  status    Show whether Relay is running.
-  logs      Show recent Relay output. Add --follow to keep streaming.
+  start     Start ${product} now and at every login.
+  stop      Stop ${product} and keep it stopped, also after login, until "${command} start".
+  restart   Restart ${product} (for example after changing agent CLI settings).
+  status    Show whether ${product} is running.
+  logs      Show recent ${product} output. Add --follow to keep streaming.
 
 Options:
   --computer <id>   Act on one connected computer when several are installed.
@@ -53,6 +67,34 @@ export function installedServices(platform: string, home: string): InstalledServ
       const name = file.slice(0, -suffix.length);
       return { id: name.slice(SERVICE_PREFIX.length), name, file: join(directory, file) };
     });
+}
+
+const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+const SYSTEMD_ESCAPES: Record<string, string> = { n: '\n', r: '\r' };
+
+/** Inverse of `serviceDefinition` (install.ts): the argv a launchd plist or systemd unit runs. */
+export function serviceArguments(platform: string, content: string): string[] {
+  if (platform === 'darwin') {
+    const array = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(content)?.[1] ?? '';
+    return [...array.matchAll(/<string>([\s\S]*?)<\/string>/g)]
+      .map(match => match[1]!.replace(/&(lt|gt|amp|quot|apos);/g, (_, name: string) => XML_ENTITIES[name]!));
+  }
+  const exec = /^ExecStart=(.*)$/m.exec(content)?.[1] ?? '';
+  return [...exec.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => match[1]!
+    .replace(/\\(.)/g, (_, char: string) => SYSTEMD_ESCAPES[char] ?? char)
+    .replace(/%%/g, '%')
+    .replace(/\$\$/g, '$'));
+}
+
+/** Which command owns a service: the one matching its backend. Unreadable services stay with `relay`. */
+function serviceBrand(platform: string, service: InstalledService): RelayBrand {
+  try {
+    const argv = serviceArguments(platform, readFileSync(service.file, 'utf8'));
+    const index = argv.indexOf('--backend-url');
+    return index >= 0 && argv[index + 1] ? brandForBackend(argv[index + 1]!) : RELAY_BRAND;
+  } catch {
+    return RELAY_BRAND;
+  }
 }
 
 interface ControlArgs { command: string; computer?: string; follow: boolean }
@@ -116,15 +158,18 @@ function stop(deps: ControlDeps, service: InstalledService): boolean {
 function logs(deps: ControlDeps, service: InstalledService, follow: boolean): boolean {
   if (deps.platform === 'darwin') {
     const file = join(deps.home, '.relay', 'daemon-nodes', service.id, 'logs', 'service.log');
-    if (!existsSync(file)) { deps.log('No Relay logs yet.'); return true; }
+    if (!existsSync(file)) { deps.log(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`); return true; }
     return deps.run('tail', ['-n', LOG_LINES, ...(follow ? ['-f'] : []), file], { inherit: true }).status === 0;
   }
   return deps.run('journalctl', ['--user', '-u', `${service.name}.service`, '-n', LOG_LINES, '--no-pager', ...(follow ? ['-f'] : [])], { inherit: true }).status === 0;
 }
 
 function selectServices(deps: ControlDeps, computer: string | undefined): InstalledService[] {
-  const services = installedServices(deps.platform, deps.home);
-  if (!services.length) throw new Error('Relay is not installed on this computer. Run the install command from Relay first.');
+  const brand = deps.brand ?? RELAY_BRAND;
+  const { product } = brand;
+  // `relay` and `relay-dev` each act only on the computers connected to their own backends.
+  const services = installedServices(deps.platform, deps.home).filter(service => serviceBrand(deps.platform, service) === brand);
+  if (!services.length) throw new Error(`${product} is not installed on this computer. Run the install command from Relay first.`);
   if (!computer) return services;
   const match = services.filter(service => service.id === computer);
   if (!match.length) throw new Error(`No installed computer "${computer}". Installed: ${services.map(service => service.id).join(', ')}`);
@@ -132,21 +177,23 @@ function selectServices(deps: ControlDeps, computer: string | undefined): Instal
 }
 
 function applyCommand(deps: ControlDeps, command: string, service: InstalledService): { ok: boolean; message: string } {
-  if (command === 'status') return { ok: true, message: `Relay is ${serviceState(deps, service).detail}.` };
+  const { product, command: cli } = deps.brand ?? RELAY_BRAND;
+  if (command === 'status') return { ok: true, message: `${product} is ${serviceState(deps, service).detail}.` };
   if (command === 'stop') {
     const ok = stop(deps, service);
-    return { ok, message: ok ? 'Relay stopped. Run "relay start" to start it again.' : 'Relay could not be stopped.' };
+    return { ok, message: ok ? `${product} stopped. Run "${cli} start" to start it again.` : `${product} could not be stopped.` };
   }
   const ok = start(deps, service, command === 'restart');
   const verb = command === 'restart' ? 'restarted' : 'started';
-  return { ok, message: ok ? `Relay ${verb}.` : `Relay could not be ${verb}. Run "relay logs" for details.` };
+  return { ok, message: ok ? `${product} ${verb}.` : `${product} could not be ${verb}. Run "${cli} logs" for details.` };
 }
 
 /** Runs one control command and returns the process exit code. */
 export function runControl(args: string[], deps: ControlDeps): number {
   const options = parseControlArgs(args);
-  if (options.command === 'help') { deps.log(HELP); return 0; }
-  if (!COMMANDS.includes(options.command)) throw new Error(`Unknown command: ${options.command}. Run "relay --help".`);
+  const brand = deps.brand ?? RELAY_BRAND;
+  if (options.command === 'help') { deps.log(help(brand)); return 0; }
+  if (!COMMANDS.includes(options.command)) throw new Error(`Unknown command: ${options.command}. Run "${brand.command} --help".`);
   const services = selectServices(deps, options.computer);
   if (options.command === 'logs') {
     if (services.length > 1) throw new Error(`Several computers are installed; choose one with --computer <id>: ${services.map(service => service.id).join(', ')}`);
@@ -173,6 +220,7 @@ export function systemControlDeps(): ControlDeps {
       return { status: result.status, stdout: result.stdout ?? '' };
     },
     log: line => console.log(line),
+    brand: process.env[BRAND_ENV] === 'dev' ? RELAY_DEV_BRAND : RELAY_BRAND,
   };
 }
 
