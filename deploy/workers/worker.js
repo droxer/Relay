@@ -11,7 +11,9 @@ export default {
     if (ASSET_SUFFIX.test(url.pathname)) {
       return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain" } });
     }
-    // Everything else is a client route of the single-page app.
-    return env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+    // Everything else is a client route of the single-page app. Ask for "/",
+    // not "/index.html": html_handling "auto-trailing-slash" answers the latter
+    // with a 307 to "/", which would bounce every deep link to the home page.
+    return env.ASSETS.fetch(new Request(new URL("/", url), request));
   },
 };
