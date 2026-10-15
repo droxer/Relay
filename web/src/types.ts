@@ -606,6 +606,8 @@ export interface CreateLocalDeviceEnrollmentInput {
 export interface CreateLocalDeviceEnrollmentResponse extends CreateControlPanelDaemonNodeResponse {
   /** Downloads the client and starts a per-user service; contains no credential. */
   installCommand?: string;
+  /** The PowerShell equivalent of `installCommand` for a Windows computer. */
+  windowsInstallCommand?: string;
   /** True when an existing computer was adopted instead of a new one created. */
   reused?: boolean;
 }
@@ -615,6 +617,7 @@ export interface CreateLocalDeviceEnrollmentResponse extends CreateControlPanelD
 export interface ComputerTokenResponse {
   /** Install or reconnect a personal computer without an existing daemon executable. */
   installCommand?: string;
+  windowsInstallCommand?: string;
   nodeToken: string;
   daemonEnv: Record<string, string>;
   daemonCommand?: string;

@@ -22,9 +22,32 @@ def computer_setup_command(request: Request) -> str:
     return f"curl -fsSL {shlex.quote(backend_base_url(request) + '/install.sh')} | sudo bash"
 
 
+def _install_args(node: dict[str, Any]) -> list[str]:
+    return ["--sandbox-id", node["id"], "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
+
+
 def computer_install_command(request: Request, node: dict[str, Any]) -> str:
-    args = ["--sandbox-id", node["id"], "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
-    return f"{computer_setup_command(request)} -s -- {shlex.join(args)}"
+    return f"{computer_setup_command(request)} -s -- {shlex.join(_install_args(node))}"
+
+
+def powershell_literal(value: str) -> str:
+    """A single-quoted PowerShell string: nothing inside is expanded."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _windows_installer_url(request: Request) -> str:
+    return backend_base_url(request) + "/install.ps1"
+
+
+def computer_windows_setup_command(request: Request) -> str:
+    """The PowerShell twin of `computer_setup_command`; it needs no elevation."""
+    return f"irm {powershell_literal(_windows_installer_url(request))} | iex"
+
+
+def computer_windows_install_command(request: Request, node: dict[str, Any]) -> str:
+    # Quoted arguments, because PowerShell would read a bare `--sandbox-id` as a parameter name.
+    args = " ".join(powershell_literal(arg) for arg in _install_args(node))
+    return f"& ([scriptblock]::Create((irm {powershell_literal(_windows_installer_url(request))}))) {args}"
 
 
 def _bundle() -> tuple[Path, str]:
@@ -36,17 +59,32 @@ def _bundle() -> tuple[Path, str]:
     return path, digest
 
 
+def _render(template: str, origin: str, digest: str, quote: Any) -> str:
+    source = (ASSETS / template).read_text()
+    source = source.replace("@@BUNDLE_URL@@", quote(f"{origin}/computer/daemon-{digest}.tar.gz"))
+    source = source.replace("@@BACKEND_URL@@", quote(origin))
+    return source.replace("@@BUNDLE_SHA256@@", digest)
+
+
+_NO_STORE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+
+
 # `/computer/install.sh` is where commands copied before the root path point.
 @router.get("/install.sh", include_in_schema=False)
 @router.get("/computer/install.sh", include_in_schema=False)
 def installer(request: Request) -> Response:
     _, digest = _bundle()
-    origin = backend_base_url(request)
-    source = (ASSETS / "install.sh").read_text()
-    source = source.replace("@@BUNDLE_URL@@", shlex.quote(f"{origin}/computer/daemon-{digest}.tar.gz"))
-    source = source.replace("@@BACKEND_URL@@", shlex.quote(origin))
-    source = source.replace("@@BUNDLE_SHA256@@", digest)
-    return Response(source, media_type="text/x-shellscript", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    source = _render("install.sh", backend_base_url(request), digest, shlex.quote)
+    return Response(source, media_type="text/x-shellscript", headers=_NO_STORE)
+
+
+# text/plain with a charset, so `irm` hands PowerShell a string rather than bytes.
+@router.get("/install.ps1", include_in_schema=False)
+@router.get("/computer/install.ps1", include_in_schema=False)
+def windows_installer(request: Request) -> Response:
+    _, digest = _bundle()
+    source = _render("install.ps1", backend_base_url(request), digest, powershell_literal)
+    return Response(source, media_type="text/plain; charset=utf-8", headers=_NO_STORE)
 
 
 @router.get("/computer/daemon-{digest}.tar.gz", include_in_schema=False)

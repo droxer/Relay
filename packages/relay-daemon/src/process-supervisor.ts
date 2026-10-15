@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
 import { RELEASED_EXIT_MESSAGE, exitHooksFor } from "./execution-capture.js";
@@ -36,6 +36,7 @@ export async function superviseLocalProcess(
       env: options.env,
       stdio: ["ignore", "pipe", "pipe"],
       detached,
+      windowsHide: true,
     });
     if (detached && child.pid) hooks?.onSpawn?.(child.pid);
     const stdoutCapture = new BoundedTextCapture();
@@ -86,6 +87,11 @@ export async function superviseLocalProcess(
         } catch {
           // Fall back to the direct child below if the process group is gone.
         }
+      }
+      // Windows has no process groups and no signals; only taskkill /T reaches
+      // the agent CLIs a bash script started.
+      if (process.platform === "win32" && child.pid && child.exitCode === null) {
+        if (spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).status === 0) return;
       }
       child.kill(signal);
     };

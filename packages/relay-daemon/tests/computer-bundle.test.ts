@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -13,6 +13,8 @@ test("standalone computer bundle includes all direct-execution dependencies", ()
       cwd: directory, env: { PATH: process.env.PATH, HOME: directory }, encoding: "utf8",
     });
     assert.match(output, /relay-daemon/);
+    // The Windows logon task runs this host beside cli.js.
+    assert.ok(existsSync(join(directory, "node_modules/relay-daemon/dist/windows-service-host.js")));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

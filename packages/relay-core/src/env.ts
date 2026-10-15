@@ -211,11 +211,24 @@ export function requirePiConfig(): void {
 
 /** Exclude values Relay loaded from .env while retaining the user's launch environment. */
 export function localRuntimeEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+  const env = canonicalPathKey({ ...process.env });
   for (const [key, value] of DOT_ENV_VALUES) {
     if (env[key] === value) delete env[key];
   }
   return env;
+}
+
+/**
+ * Windows spells it `Path`, and a copied environment loses process.env's
+ * case-insensitive lookup; keep one `PATH` so readers and spawned children agree.
+ */
+export function canonicalPathKey(env: NodeJS.ProcessEnv, platform = process.platform): NodeJS.ProcessEnv {
+  if (platform !== "win32") return env;
+  const keys = Object.keys(env).filter((key) => key.toUpperCase() === "PATH");
+  if (keys.length === 1 && keys[0] === "PATH") return env;
+  const value = keys.map((key) => env[key]).find((item) => item !== undefined);
+  const result = Object.fromEntries(Object.entries(env).filter(([key]) => key.toUpperCase() !== "PATH"));
+  return value === undefined ? result : { ...result, PATH: value };
 }
 
 /** Explicit runtime profiles take precedence over automatically loaded Relay dotenv values. */

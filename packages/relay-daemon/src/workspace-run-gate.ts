@@ -213,7 +213,8 @@ function ensurePrivateDirectory(path: string, label: string): void {
     throw new Error(`${label} is owned by another user: ${path}.`);
   }
   chmodSync(path, 0o700);
-  if ((lstatSync(path).mode & 0o077) !== 0) {
+  // Windows reports no POSIX permission bits; the per-user temp directory's ACL is what keeps it private.
+  if (process.platform !== "win32" && (lstatSync(path).mode & 0o077) !== 0) {
     throw new Error(`${label} permissions are too broad: ${path}.`);
   }
 }

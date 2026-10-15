@@ -11,11 +11,16 @@ import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
 export function ComputerDeviceSetup({ onManual }: { onManual: () => void }) {
   const { t } = useTranslation();
   const [command, setCommand] = useState<string>();
+  const [windowsCommand, setWindowsCommand] = useState<string>();
   const [error, setError] = useState(false);
   const { copy, copiedField } = useCopyFeedback();
   useEffect(() => {
     let active = true;
-    void getComputerSetupCommand().then(result => { if (active) setCommand(result.installCommand); })
+    void getComputerSetupCommand().then(result => {
+      if (!active) return;
+      setCommand(result.installCommand);
+      setWindowsCommand(result.windowsInstallCommand);
+    })
       .catch(() => { if (active) setError(true); });
     return () => { active = false; };
   }, []);
@@ -23,9 +28,14 @@ export function ComputerDeviceSetup({ onManual }: { onManual: () => void }) {
     <ComputerPlatformSupport />
     <p>{t("computer.connect_requirements")}</p>
     <ol className="computer-install-steps">
-      <li>{command ? <CredCopyRow label={t("computer.connect_command_step")} value={command}
+      <li><h3>{t("computer.connect_command_step")}</h3>
+        {command ? <CredCopyRow label={t("computer.connect_setup_label")} value={command}
+        hint={t("computer.connect_setup_unix_hint")}
         copyLabel={t("computer.connect_setup_copy")} copied={copiedField === "device-setup"}
-        onCopy={() => { void copy("device-setup", command); }} /> : <p>{t("computer.device_loading")}</p>}</li>
+        onCopy={() => { void copy("device-setup", command); }} /> : <p>{t("computer.device_loading")}</p>}
+        {windowsCommand && <CredCopyRow label={t("computer.connect_setup_windows_label")} value={windowsCommand}
+          hint={t("computer.connect_setup_windows_hint")} copyLabel={t("computer.connect_setup_windows_copy")}
+          copied={copiedField === "device-setup-windows"} onCopy={() => { void copy("device-setup-windows", windowsCommand); }} />}</li>
       <li>{t("computer.device_choose_directory")}</li>
       <li>{t("computer.device_confirm_browser")}</li>
     </ol>

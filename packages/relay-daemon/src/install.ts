@@ -2,7 +2,7 @@
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
@@ -11,6 +11,8 @@ import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnviro
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
+import { localBash } from './local-shell.js';
+import { encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
 interface InstallOptions {
   backendUrl: string;
@@ -63,8 +65,13 @@ const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&
 const systemd = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%').replace(/\$/g, () => '$$').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
 const shell = (value: string): string => `'${value.replace(/'/g, "'\\''")}'`;
 
-export function serviceDefinition(platform: string, id: string, argv: string[], logDir: string, path: string, brand: RelayBrand = RELAY_BRAND): { name: string; content: string } {
+export function serviceDefinition(platform: string, id: string, argv: string[], logDir: string, path: string, brand: RelayBrand = RELAY_BRAND, account = windowsAccount()): { name: string; content: string } {
   const name = `build.relay.computer.${id}`;
+  if (platform === 'win32') {
+    // The service host sits beside cli.js in the same release.
+    const hostScript = join(dirname(argv[1] ?? ''), 'windows-service-host.js');
+    return { name, content: windowsTaskDefinition({ id, argv, hostScript, logFile: join(logDir, 'service.log'), stateDir: dirname(logDir), path, account, product: brand.product }) };
+  }
   // Deleted nodes exit successfully. Recover crashes without restarting an
   // intentional shutdown and repeatedly contacting a deleted registration.
   if (platform === 'darwin') {
@@ -80,7 +87,7 @@ export function serviceDefinition(platform: string, id: string, argv: string[], 
 <key>StandardErrorPath</key><string>${xml(join(logDir, 'service.log'))}</string>
 </dict></plist>\n` };
   }
-  if (platform !== 'linux') throw new Error('Only macOS and Linux services are supported.');
+  if (platform !== 'linux') throw new Error('Only macOS, Linux and Windows services are supported.');
   return { name, content: `[Unit]
 Description=${brand.product} personal computer ${id}
 After=network-online.target
@@ -99,18 +106,44 @@ WantedBy=default.target
 
 const LAUNCHER_MARKER = '# Managed by Relay computer installer';
 
+/** The launcher file a platform runs: a POSIX shell script, or a batch file on Windows. */
+export function launcherScript(platform: string, node: string, script: string, brand: RelayBrand = RELAY_BRAND): string {
+  const dev = brand === RELAY_DEV_BRAND;
+  // cmd expands %…% even inside quotes; %% is a literal percent sign.
+  const batch = (value: string) => `"${value.replace(/%/g, '%%')}"`;
+  if (platform === 'win32') {
+    // setlocal keeps the brand variable out of the calling console.
+    return `@echo off\r\nrem ${LAUNCHER_MARKER}\r\nsetlocal\r\n${dev ? `set ${BRAND_ENV}=dev\r\n` : ''}${batch(node)} ${batch(script)} %*\r\n`;
+  }
+  return `#!/bin/sh\n${LAUNCHER_MARKER}\n${dev ? `${BRAND_ENV}=dev ` : ''}exec ${shell(node)} ${shell(script)} "$@"\n`;
+}
+
 /** Writes `<binDir>/<name>` to run `script`, unless an unrelated executable already owns that name. */
 function installLauncher(binDir: string, name: string, script: string, brand: RelayBrand): string | undefined {
   mkdirSync(binDir, { recursive: true });
-  const launcher = join(binDir, name);
+  const launcher = join(binDir, process.platform === 'win32' ? `${name}.cmd` : name);
   if (existsSync(launcher) && !readFileSync(launcher, 'utf8').includes(LAUNCHER_MARKER)) {
     console.log(`Preserving existing executable: ${launcher}`);
     return undefined;
   }
-  const env = brand === RELAY_DEV_BRAND ? `${BRAND_ENV}=dev ` : '';
-  writeFileSync(launcher, `#!/bin/sh\n${LAUNCHER_MARKER}\n${env}exec ${shell(process.execPath)} ${shell(script)} "$@"\n`, { mode: 0o755 });
+  writeFileSync(launcher, launcherScript(process.platform, process.execPath, script, brand), { mode: 0o755 });
   chmodSync(launcher, 0o755);
   return launcher;
+}
+
+function openBrowser(url: string): void {
+  console.log(`Confirm this computer in your browser:\n${url}`);
+  const [command, args] = process.platform === 'darwin' ? ['open', [url]]
+    : process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
+    : ['xdg-open', [url]];
+  const browser = spawn(command as string, args as string[], { stdio: 'ignore', detached: true, windowsHide: true });
+  browser.on('error', () => { console.log('Open the URL above in a browser to continue.'); });
+  browser.unref();
+}
+
+/** How to run the control CLI in the shell the user installed from. */
+function controlCommand(control: string): string {
+  return process.platform === 'win32' ? `& ${powershellLiteral(control)}` : shell(control);
 }
 
 /**
@@ -140,8 +173,8 @@ async function reusableComputer(installed: InstalledComputer[], backendUrl: stri
 
 function serviceRunner(): ServiceRunner {
   return {
-    run: (command, args) => {
-      const result = spawnSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    run: (command, args, options?: { inherit?: boolean }) => {
+      const result = spawnSync(command, args, { encoding: 'utf8', stdio: options?.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'], windowsHide: true });
       return { status: result.status, stdout: result.stdout ?? '' };
     },
   };
@@ -160,7 +193,9 @@ function removeSupersededServices(installed: InstalledComputer[], options: Insta
 
 async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
-  if (!['darwin', 'linux'].includes(process.platform)) throw new Error('Only macOS and Linux are supported.');
+  if (!['darwin', 'linux', 'win32'].includes(process.platform)) throw new Error('Only macOS, Linux and Windows are supported.');
+  // Agent scripts run in bash; fail before authorizing a computer that could never run one.
+  if (process.platform === 'win32') localBash();
   if (!options.foreground && process.platform === 'linux') {
     const probe = spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' });
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
@@ -184,12 +219,7 @@ async function install(): Promise<void> {
   } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
       backendUrl: options.backendUrl, workspace: options.workspace, displayName: brand === RELAY_DEV_BRAND ? brand.product : hostname().slice(0, 80),
-      openBrowser: url => {
-        console.log(`Confirm this computer in your browser:\n${url}`);
-        const browser = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true });
-        browser.on('error', () => { console.log('Open the URL above in a browser to continue.'); });
-        browser.unref();
-      },
+      openBrowser,
     });
     options.sandboxId = authorized.sandboxId;
     options.employeeId = authorized.employeeId;
@@ -200,7 +230,7 @@ async function install(): Promise<void> {
   process.env.RELAY_DAEMON_STATE_DIR = stateDir;
   const nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
   const runtimeEnv = localRuntimeEnvironment();
-  runtimeEnv.PATH = `${dirname(process.execPath)}:${runtimeEnv.PATH ?? '/usr/bin:/bin'}`;
+  runtimeEnv.PATH = [dirname(process.execPath), runtimeEnv.PATH ?? '/usr/bin:/bin'].join(delimiter);
   const profile = !options.foreground || options.runtimeEnvFile
     ? captureRuntimeProfile(runtimeEnv, options.runtimeEnvFile) : undefined;
   const installerEnvironment = process.env;
@@ -255,7 +285,7 @@ async function install(): Promise<void> {
   }
   const logDir = join(stateDir, 'logs');
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
-  const path = `${dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}`;
+  const path = [dirname(process.execPath), process.env.PATH ?? '/usr/bin:/bin'].join(delimiter);
   const service = serviceDefinition(process.platform, options.sandboxId, argv, logDir, path, brand);
   if (process.platform === 'darwin') {
     const directory = join(homedir(), 'Library', 'LaunchAgents');
@@ -267,6 +297,15 @@ async function install(): Promise<void> {
     // Reconnecting overrides an earlier `relay stop`, which disables the label.
     spawnSync('launchctl', ['enable', `${domain}/${service.name}`], { stdio: 'ignore' });
     execFileSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' });
+    if (options.verbose) {
+      console.log(`Logs: ${join(logDir, 'service.log')}`);
+    }
+  } else if (process.platform === 'win32') {
+    const directory = windowsServiceDirectory(homedir());
+    mkdirSync(directory, { recursive: true });
+    const file = join(directory, `${service.name}.xml`);
+    writeFileSync(file, encodeTaskFile(service.content));
+    registerWindowsTask(serviceRunner(), service.name, file);
     if (options.verbose) {
       console.log(`Logs: ${join(logDir, 'service.log')}`);
     }
@@ -286,7 +325,7 @@ async function install(): Promise<void> {
   console.log(`Connected to ${brand.product}. You can close this terminal.`);
   console.log(`${brand.product} runs in the background and starts automatically when you log in.`);
   if (control) {
-    const relay = shell(control);
+    const relay = controlCommand(control);
     console.log(`Control ${brand.product} with:`);
     console.log(`  Stop: ${relay} stop`);
     console.log(`  Start: ${relay} start`);
