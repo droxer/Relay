@@ -8,7 +8,9 @@ describe("root layout bootstrap script", () => {
     const inlineScript = readFileSync("web/src/components/InlineScript.tsx", "utf8");
 
     assert.match(layout, /<InlineScript html=\{themeScript\}\s*\/>/);
-    assert.doesNotMatch(layout, /<script(?:\s|>)/);
+    // Executable inline code goes through InlineScript; a JSON-LD block is
+    // inert data, so it may stay a plain <script type="application/ld+json">.
+    assert.doesNotMatch(layout, /<script(?![^>]*type="application\/ld\+json")(?:\s|>)/);
     assert.match(inlineScript, /type=\{typeof window === ["']undefined["'] \? ["']text\/javascript["'] : ["']text\/plain["']\}/);
     assert.match(inlineScript, /suppressHydrationWarning/);
   });
