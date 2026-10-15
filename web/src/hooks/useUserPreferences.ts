@@ -11,6 +11,7 @@ import {
   type Language,
   type Theme,
 } from "../lib/appStorage";
+import { isLandingPath } from "../lib/appRoute";
 import { useKeyChange } from "./useKeyChange";
 
 /**
@@ -115,7 +116,9 @@ export function useUserPreferences({
     if (!mounted) return;
     writeLanguage(language);
     document.documentElement.lang = language;
-    document.title = i18n.t("app.title");
+    // The landing page titles itself (LandingScreen) so search results carry
+    // what Relay is, not just its name.
+    if (!isLandingPath(window.location.pathname)) document.title = i18n.t("app.title");
     if (i18n.language !== language) {
       void i18n.changeLanguage(language);
     }

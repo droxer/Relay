@@ -23,6 +23,7 @@ workers_build_export() (
   git --git-dir="$temporary/source.git" archive --format=tar "$RELEASE_COMMIT" \
     | docker build --quiet -f web/Dockerfile --target build \
       --build-arg "NEXT_PUBLIC_RELAY_API_ORIGIN=$API_ORIGIN" \
+      --build-arg "NEXT_PUBLIC_RELAY_SITE_URL=$WEB_ORIGIN" \
       --iidfile "$temporary/image" - >&2 \
     || die "web export build failed for $RELEASE_COMMIT"
   image=$(cat "$temporary/image")

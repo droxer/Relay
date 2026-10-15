@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
 import { useResolvedTheme } from "../../hooks/useResolvedTheme";
@@ -128,6 +128,15 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
   const { t } = useTranslation();
   const ctas = landingCtas(useWaitlistEnabled());
   const year = new Date().getFullYear();
+
+  /* The page names what Relay does, in the visitor's language; signing in
+     hands the tab back to the app's own title. */
+  useEffect(() => {
+    document.title = t("landing.page_title");
+    return () => {
+      document.title = t("app.title");
+    };
+  }, [t]);
 
   return (
     <div className="landing">

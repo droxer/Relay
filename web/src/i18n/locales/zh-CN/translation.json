@@ -1559,6 +1559,7 @@
     "theme_to_light": "切换到浅色主题",
     "theme_to_dark": "切换到深色主题",
     "eyebrow": "Claude Code · Codex · Pi · Kimi",
+    "page_title": "Relay — 让 AI 智能体在你自己的电脑上工作",
     "headline": "让 AI 智能体在你自己的电脑上工作",
     "lede": "Relay 为编程智能体赋予名字、角色和共享记录。把对话、任务和自动化交给它们，实时查看每一条命令，由你决定最终交付什么。",
     "cta_secondary": "了解工作方式",

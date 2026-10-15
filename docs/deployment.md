@@ -447,6 +447,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_BACKEND_URL` | `http://127.0.0.1:8790` | Proxy target for `RELAY_WEB_HOST=proxy` and for `next dev`. |
 | `NEXT_PUBLIC_RELAY_API_ORIGIN` | unset (same-origin) | Backend origin the browser calls directly. |
 | `NEXT_PUBLIC_RELAY_BACKEND_ORIGIN` | unset | Backend origin shown in copy-out values under proxied mode. |
+| `NEXT_PUBLIC_RELAY_SITE_URL` | unset (not indexable) | Public origin of a site meant for search engines, e.g. `https://get-relay.cc`. Adds canonical, Open Graph, and JSON-LD tags and a robots.txt/sitemap.xml that admit crawlers; unset, robots.txt disallows everything. |
 
 ### Daemon credential and transport upgrade
 

@@ -116,8 +116,10 @@ deploy/deploy.sh verify
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,
 `RELAY_EDGE_SECRET`, `RELAY_CLIENT_IP_HEADER=CF-Connecting-IP`,
 `RELAY_ADMIN_TOKEN`, and the R2 keys when configured. **Web:**
-`NEXT_PUBLIC_RELAY_API_ORIGIN` is baked into the export at build time (a build
-argument for the Worker, a service variable with `WEB_HOSTING=railway`).
+`NEXT_PUBLIC_RELAY_API_ORIGIN` and `NEXT_PUBLIC_RELAY_SITE_URL` (the web
+origin, which makes the landing page indexable) are baked into the export at
+build time (build arguments for the Worker, service variables with
+`WEB_HOSTING=railway`).
 
 **Cloudflare:** a proxied CNAME for the API host and a proxied record plus
 Worker route for the web host, DNS-only ACME and ownership records, SSL *Full

@@ -27,6 +27,14 @@ it("says what Relay is and shows the real product", () => {
   expect(screen.getByRole("heading", { name: en.landing.tour_automations_title })).toBeTruthy();
 });
 
+it("titles the tab with what Relay does, and hands it back on leaving", () => {
+  vi.mocked(useWaitlistEnabled).mockReturnValue(null);
+  const { unmount } = render(<LandingScreen />);
+  expect(document.title).toBe(en.landing.page_title);
+  unmount();
+  expect(document.title).toBe(en.app.title);
+});
+
 it("leads with request access while the waitlist takes requests", () => {
   vi.mocked(useWaitlistEnabled).mockReturnValue(true);
   render(<LandingScreen />);

@@ -1590,6 +1590,7 @@
     "theme_to_light": "Switch to light theme",
     "theme_to_dark": "Switch to dark theme",
     "eyebrow": "Claude Code · Codex · Pi · Kimi",
+    "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
     "lede": "Relay gives coding agents names, roles, and a shared record. Hand them threads, tasks, and automations, watch every command as it runs, and decide what ships.",
     "cta_secondary": "See how it works",

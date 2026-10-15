@@ -191,6 +191,7 @@ check "Worker manifest holds the export" '.workers["relay-web"].manifest | keys 
 check "assets upload with their content types" '[.assets[] | .type] | sort == ["font/woff2", "text/html", "text/javascript"]'
 check "web host routes to the Worker" '.routes == [.routes[0]] and .routes[0].pattern == "get-relay.cc/*" and .routes[0].script == "relay-web"'
 if grep -q -- '--build-arg NEXT_PUBLIC_RELAY_API_ORIGIN=https://api.get-relay.cc' "$DOCKER_LOG" \
+  && grep -q -- '--build-arg NEXT_PUBLIC_RELAY_SITE_URL=https://get-relay.cc' "$DOCKER_LOG" \
   && grep -q -- '-f web/Dockerfile --target build' "$DOCKER_LOG"; then
   echo "ok    web export builds in Docker from the release source, pointed at the API"
 else
@@ -254,6 +255,7 @@ check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\
 check "both services track droxer/Relay@main" "[$BACKEND, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
 check "both deployments pin the requested commit" "[$BACKEND, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
 check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
+check "web build declares its public address" "$WEB | .variables.NEXT_PUBLIC_RELAY_SITE_URL == \"https://get-relay.cc\""
 check "apex domain on the web service" "$WEB | [.domains[].domain] == [\"get-relay.cc\"]"
 check "apex CNAME proxied" '[.dns[] | select(.name == "get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'
 check "ACME challenges stay DNS-only" '[.dns[] | select(.name | startswith("_acme-challenge.")) | .proxied] == [false, false]'

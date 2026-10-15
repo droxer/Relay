@@ -25,9 +25,14 @@ COPY web/ ./web/
 # Without an API origin the export would call /api on this host, which serves
 # no API, so refuse to build one.
 ARG NEXT_PUBLIC_RELAY_API_ORIGIN
+# The public address of this site (e.g. https://get-relay.cc). Optional: only a
+# build that sets it is indexable — it gets canonical links, Open Graph tags,
+# and a robots.txt that admits crawlers. Left unset, robots.txt disallows all.
+ARG NEXT_PUBLIC_RELAY_SITE_URL=""
 RUN test -n "$NEXT_PUBLIC_RELAY_API_ORIGIN" \
     || { echo "NEXT_PUBLIC_RELAY_API_ORIGIN is required (e.g. https://api.example.com)" >&2; exit 1; }
 ENV NEXT_PUBLIC_RELAY_API_ORIGIN=$NEXT_PUBLIC_RELAY_API_ORIGIN \
+    NEXT_PUBLIC_RELAY_SITE_URL=$NEXT_PUBLIC_RELAY_SITE_URL \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build -w web
 
