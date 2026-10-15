@@ -1,11 +1,20 @@
 # Shared helpers for deploy.sh: logging, configuration, and secrets.
 # Sourced, never executed. Written for bash 3.2 (macOS) as well as bash 5.
 
-log() { printf '\033[1m==>\033[0m %s\n' "$*" >&2; }
+# Color only a terminal, and never under NO_COLOR (https://no-color.org), so
+# piped logs and the test harness's pattern matches stay plain text.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
+  C_RESET=$'\033[0m' C_BOLD=$'\033[1m' C_DIM=$'\033[2m'
+  C_RED=$'\033[31m' C_GREEN=$'\033[32m' C_YELLOW=$'\033[33m'
+else
+  C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN='' C_YELLOW=''
+fi
+
+log() { printf '%s==> %s%s\n' "$C_BOLD" "$*" "$C_RESET" >&2; }
 info() { printf '    %s\n' "$*" >&2; }
-warn() { printf '\033[33mwarning:\033[0m %s\n' "$*" >&2; }
+warn() { printf '%swarning:%s %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; }
 die() {
-  printf '\033[31merror:\033[0m %s\n' "$*" >&2
+  printf '%serror:%s %s\n' "$C_RED" "$C_RESET" "$*" >&2
   exit 1
 }
 
