@@ -29,6 +29,18 @@
 	@hashed path /_next/static/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 
+	# Fixed-name files (favicon, images, index.html) change with a deploy. Without
+	# this the edge keeps them for hours by extension.
+	@unhashed {
+		path_regexp \.[A-Za-z0-9]+$
+		not path /_next/static/* /landing/*
+	}
+	header @unhashed Cache-Control "no-cache"
+
+	# Landing screenshots: a day saves revalidations; a replacement shows within it.
+	@landing path /landing/*
+	header @landing Cache-Control "public, max-age=86400"
+
 	# The published install command names this origin. The API serves the script,
 	# which pins its bundle and backend on the API origin, so send curl there.
 	handle /install.sh {

@@ -109,7 +109,12 @@ def test_user_updates_and_removes_agent_and_team_profile_images(
         team_url = team_update.json()["team"]["profileImageUrl"]
         assert agent_url.startswith(f"/profile-images/agents/{agent['id']}?v=")
         assert team_url.startswith(f"/profile-images/teams/{team['id']}?v=")
-        assert client.get(agent_url).content == PNG_BYTES
+        image = client.get(agent_url)
+        assert image.content == PNG_BYTES
+        revalidated = client.get(agent_url, headers={"If-None-Match": image.headers["etag"]})
+        assert revalidated.status_code == 304
+        assert revalidated.headers["etag"] == image.headers["etag"]
+        assert revalidated.headers["cache-control"] == image.headers["cache-control"]
         assert client.get(team_url).headers["content-type"] == "image/png"
         assert (
             client.get("/api/v1/agents").json()["agents"][0]["profileImageUrl"]

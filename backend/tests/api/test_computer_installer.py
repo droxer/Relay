@@ -27,7 +27,12 @@ def test_installer_is_public_and_pins_the_archive(monkeypatch, tmp_path):
     assert client.get("/computer/install.sh").text == response.text
     archive = client.get(f"/computer/daemon-{digest}.tar.gz")
     assert archive.content == bundle.read_bytes()
-    assert client.get(f"/computer/daemon-{'0' * 64}.tar.gz").status_code == 404
+    assert "immutable" in archive.headers["cache-control"]
+    # The edge caches this path, so a miss must never be kept there.
+    for missing in (f"/computer/daemon-{'0' * 64}.tar.gz", "/computer/daemon-not-a-digest.tar.gz"):
+        response = client.get(missing)
+        assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store"
 
 
 def test_installer_missing_build_fails_explicitly(monkeypatch, tmp_path):
