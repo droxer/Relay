@@ -139,11 +139,11 @@ async def submit_thread_message(
     supplied_address_agent_ids = _address_agent_ids(body)
     session = get_session_for_actor(ctx.session_store, thread_id, actor)
     mention_owner_id = (
-        session.get("ownerEmployeeId") if actor["isAdmin"] else actor["employeeId"]
+        session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
     )
     mentioned_agent_ids = _leading_mention_agent_ids(
         text,
-        ctx.agent_store.list_agents(supervisor_employee_id=mention_owner_id),
+        ctx.agent_store.list_agents(supervisor_user_id=mention_owner_id),
     )
     address_agent_ids = mentioned_agent_ids or supplied_address_agent_ids
     address_team_id = string_field(body, "addressTeamId") or None

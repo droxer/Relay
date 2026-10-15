@@ -19,8 +19,8 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     description: input.description ?? "",
     priority: input.priority ?? "normal",
     status: input.status ?? "backlog",
-    ownerEmployeeId: input.ownerEmployeeId ?? "alice",
-    assigneeEmployeeId: input.assigneeEmployeeId,
+    ownerUserId: input.ownerUserId ?? "alice",
+    assigneeUserId: input.assigneeUserId,
     dueDate: input.dueDate,
     isRoutine: input.isRoutine ?? false,
     routineTriggers: input.routineTriggers,
@@ -52,9 +52,9 @@ function automation(id: string, extra: Partial<RelayTask> = {}): RelayTask {
 describe("filterRoutineTasks", () => {
   it("keeps only routine tasks and filters by routine metadata", () => {
     const tasks = [
-      automation("a", { title: "Daily health check", routineNextRunAt: PAST, assignedAgent: "codex", assignedAgentId: "agent_health", assigneeEmployeeId: "alice" }),
-      automation("b", { title: "Weekly report", assignedAgent: "claude", assigneeEmployeeId: "bob" }),
-      task({ id: "c", title: "Plain backlog item", isRoutine: false, assignedAgent: "codex", assigneeEmployeeId: "alice" }),
+      automation("a", { title: "Daily health check", routineNextRunAt: PAST, assignedAgent: "codex", assignedAgentId: "agent_health", assigneeUserId: "alice" }),
+      automation("b", { title: "Weekly report", assignedAgent: "claude", assigneeUserId: "bob" }),
+      task({ id: "c", title: "Plain backlog item", isRoutine: false, assignedAgent: "codex", assigneeUserId: "alice" }),
     ];
 
     const result = filterRoutineTasks(tasks, {

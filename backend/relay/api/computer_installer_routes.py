@@ -29,7 +29,7 @@ def computer_setup_command(request: Request) -> str:
 
 
 def _install_args(node: dict[str, Any]) -> list[str]:
-    return ["--sandbox-id", node["id"], "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
+    return ["--sandbox-id", node["id"], "--user-id", node["userId"], "--workspace", node["workspacePath"]]
 
 
 def computer_install_command(request: Request, node: dict[str, Any]) -> str:

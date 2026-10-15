@@ -14,7 +14,7 @@ export type DerivedMessage =
       id: string;
       timestamp: string;
       agent: AgentName;
-      /** Logical (employee) agent that produced the turn. `agent` is only the
+      /** Logical (user) agent that produced the turn. `agent` is only the
        * executor kind, which several named agents can share. */
       agentId?: string;
       runId: string;

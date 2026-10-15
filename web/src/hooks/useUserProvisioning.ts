@@ -9,38 +9,38 @@ import { useRelayStore } from "../lib/store";
 // straight from the Zustand store; the server-state pieces it can't own
 // (authenticated nodes, the sandbox list setter, and the refresh callbacks)
 // are injected by the host.
-export function useEmployeeProvisioning({ nodes, setSandboxes, refreshLocalDaemonNodes, refreshWithToken }: {
+export function useUserProvisioning({ nodes, setSandboxes, refreshLocalDaemonNodes, refreshWithToken }: {
   nodes: DaemonNodeMonitorRecord[];
   setSandboxes: Dispatch<SetStateAction<SandboxRecord[]>>;
   refreshLocalDaemonNodes: () => Promise<ControlPanelDaemonNodeRecord[]>;
   refreshWithToken: (tokenOverride?: string) => Promise<void>;
 }): {
-  provisionEmployeeSandbox: (employeeId: string, preferredToken?: string) => Promise<{ sandbox: SandboxRecord; token?: string }>;
-  rememberSandboxToken: (employeeId: string, sandbox: SandboxRecord, token?: string) => void;
+  provisionUserSandbox: (userId: string, preferredToken?: string) => Promise<{ sandbox: SandboxRecord; token?: string }>;
+  rememberSandboxToken: (userId: string, sandbox: SandboxRecord, token?: string) => void;
   adoptLocalDaemonNodes: () => Promise<void>;
 } {
   const tokens = useRelayStore((s) => s.tokens);
-  const selectedEmployee = useRelayStore((s) => s.selectedEmployee);
+  const selectedUser = useRelayStore((s) => s.selectedUser);
   const setTokens = useRelayStore((s) => s.setTokens);
 
-  async function provisionEmployeeSandbox(
-    employeeId: string,
+  async function provisionUserSandbox(
+    userId: string,
     preferredToken?: string,
   ): Promise<{ sandbox: SandboxRecord; token?: string }> {
     const token = preferredToken?.trim() || undefined;
     const controlPanelNodes = (await refreshLocalDaemonNodes()) ?? [];
-    const localNode = preferLocalControlPanelNode(employeeId, controlPanelNodes);
+    const localNode = preferLocalControlPanelNode(userId, controlPanelNodes);
 
     const claimLocalNode = async () => {
       if (!localNode?.nodeToken) return undefined;
       const nextToken = newBrowserSandboxToken();
-      const sandbox = await provisionSandbox(employeeId, nextToken, localNode.nodeToken);
+      const sandbox = await provisionSandbox(userId, nextToken, localNode.nodeToken);
       return { sandbox, token: nextToken };
     };
 
     if (token) {
       try {
-        const sandbox = await provisionSandbox(employeeId, token);
+        const sandbox = await provisionSandbox(userId, token);
         return { sandbox, token: sandbox.token ?? token };
       } catch (error) {
         if (error instanceof RelayApiError && error.status === 401) {
@@ -54,13 +54,13 @@ export function useEmployeeProvisioning({ nodes, setSandboxes, refreshLocalDaemo
     const claimed = await claimLocalNode();
     if (claimed) return claimed;
 
-    const sandbox = await provisionSandbox(employeeId, token);
+    const sandbox = await provisionSandbox(userId, token);
     return { sandbox, token: sandbox.token ?? token };
   }
 
-  function rememberSandboxToken(employeeId: string, sandbox: SandboxRecord, token?: string): void {
+  function rememberSandboxToken(userId: string, sandbox: SandboxRecord, token?: string): void {
     if (token) {
-      setTokens({ ...tokens, [employeeId]: token, [sandbox.id]: token });
+      setTokens({ ...tokens, [userId]: token, [sandbox.id]: token });
     }
     setSandboxes((cur) => [sandbox, ...cur.filter((s) => s.id !== sandbox.id)]);
   }
@@ -73,11 +73,11 @@ export function useEmployeeProvisioning({ nodes, setSandboxes, refreshLocalDaemo
     const nextTokens = { ...tokens };
     const adoptedSandboxes: SandboxRecord[] = [];
     for (const node of claimable) {
-      if (!node.employeeId || !node.nodeToken) continue;
+      if (!node.userId || !node.nodeToken) continue;
       const uiToken = newBrowserSandboxToken();
       try {
-        const sandbox = await provisionSandbox(node.employeeId, uiToken, node.nodeToken);
-        nextTokens[node.employeeId] = uiToken;
+        const sandbox = await provisionSandbox(node.userId, uiToken, node.nodeToken);
+        nextTokens[node.userId] = uiToken;
         nextTokens[sandbox.id] = uiToken;
         adoptedSandboxes.push(sandbox);
       } catch {
@@ -91,8 +91,8 @@ export function useEmployeeProvisioning({ nodes, setSandboxes, refreshLocalDaemo
       ...adoptedSandboxes,
       ...cur.filter((sandbox) => !adoptedSandboxes.some((adopted) => adopted.id === sandbox.id)),
     ]);
-    await refreshWithToken(nextTokens[selectedEmployee] ?? nextTokens[adoptedSandboxes[0].id]);
-  }, [nodes, refreshLocalDaemonNodes, refreshWithToken, selectedEmployee, setSandboxes, setTokens, tokens]);
+    await refreshWithToken(nextTokens[selectedUser] ?? nextTokens[adoptedSandboxes[0].id]);
+  }, [nodes, refreshLocalDaemonNodes, refreshWithToken, selectedUser, setSandboxes, setTokens, tokens]);
 
-  return { provisionEmployeeSandbox, rememberSandboxToken, adoptLocalDaemonNodes };
+  return { provisionUserSandbox, rememberSandboxToken, adoptLocalDaemonNodes };
 }

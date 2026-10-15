@@ -42,19 +42,19 @@ export function mergeVisibleDaemonNodes(
   authenticatedNodes: DaemonNodeMonitorRecord[],
   controlPanelNodes: ControlPanelDaemonNodeRecord[],
 ): DaemonNodeMonitorRecord[] {
-  const byEmployee = new Map<string, DaemonNodeMonitorRecord>();
+  const byUser = new Map<string, DaemonNodeMonitorRecord>();
   for (const node of authenticatedNodes) {
-    if (!node.employeeId) continue;
-    const existing = byEmployee.get(node.employeeId);
-    byEmployee.set(node.employeeId, existing ? preferDaemonNode(existing, node) : node);
+    if (!node.userId) continue;
+    const existing = byUser.get(node.userId);
+    byUser.set(node.userId, existing ? preferDaemonNode(existing, node) : node);
   }
   for (const controlPanelNode of controlPanelNodes) {
     const node = stripControlPanelToken(controlPanelNode);
-    if (!node.employeeId) continue;
-    const existing = byEmployee.get(node.employeeId);
-    byEmployee.set(node.employeeId, existing ? preferDaemonNode(existing, node) : node);
+    if (!node.userId) continue;
+    const existing = byUser.get(node.userId);
+    byUser.set(node.userId, existing ? preferDaemonNode(existing, node) : node);
   }
-  return [...byEmployee.values()].sort((a, b) => (a.employeeId ?? "").localeCompare(b.employeeId ?? ""));
+  return [...byUser.values()].sort((a, b) => (a.userId ?? "").localeCompare(b.userId ?? ""));
 }
 
 /** Preserve each physical computer for runtime selection while coalescing the
@@ -68,12 +68,12 @@ export function mergeThreadRuntimeNodes(
     ...authenticatedNodes,
     ...controlPanelNodes.map(stripControlPanelToken),
   ]) {
-    if (!candidate.employeeId) continue;
+    if (!candidate.userId) continue;
     const existing = byId.get(candidate.id);
     byId.set(candidate.id, existing ? preferDaemonNode(existing, candidate) : candidate);
   }
   return [...byId.values()].sort((a, b) => (
-    (a.employeeId ?? "").localeCompare(b.employeeId ?? "")
+    (a.userId ?? "").localeCompare(b.userId ?? "")
       || a.id.localeCompare(b.id)
   ));
 }
@@ -96,9 +96,9 @@ export function shouldClaimLocalDaemonNode(
   controlPanelNode: ControlPanelDaemonNodeRecord,
   authenticatedNodes: DaemonNodeMonitorRecord[],
 ): boolean {
-  if (!controlPanelNode.employeeId || !controlPanelNode.nodeToken || !controlPanelNode.online || controlPanelNode.stale) return false;
+  if (!controlPanelNode.userId || !controlPanelNode.nodeToken || !controlPanelNode.online || controlPanelNode.stale) return false;
   return !authenticatedNodes.some((node) =>
-    (node.id === controlPanelNode.id || node.employeeId === controlPanelNode.employeeId) &&
+    (node.id === controlPanelNode.id || node.userId === controlPanelNode.userId) &&
     node.online &&
     !node.stale
   );

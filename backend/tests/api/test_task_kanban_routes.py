@@ -93,6 +93,6 @@ def test_policy_locks_after_work_starts_and_rework_preserves_age(client):
     )
 
 
-def test_flow_policy_is_visible_without_exposing_other_employees_tasks(client):
+def test_flow_policy_is_visible_without_exposing_other_users_tasks(client):
     response = client.get("/api/v1/tasks?view=summary").json()
-    assert response["flowPolicy"] == {"wipLimit": 5, "scope": "employee"}
+    assert response["flowPolicy"] == {"wipLimit": 5, "scope": "user"}

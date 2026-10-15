@@ -60,8 +60,8 @@ def _readable_project(
     project = ctx.project_store.get_project(project_id)
     if not project:
         raise HTTPException(404, "Project not found.")
-    if not actor["isAdmin"] and project.get("ownerEmployeeId") != actor["employeeId"]:
-        raise HTTPException(403, "Project belongs to another employee.")
+    if not actor["isAdmin"] and project.get("ownerUserId") != actor["userId"]:
+        raise HTTPException(403, "Project belongs to another user.")
     return project
 
 
@@ -95,7 +95,7 @@ def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     return {
         "projects": ctx.project_store.list_projects(
-            actor["employeeId"], include_archived=True
+            actor["userId"], include_archived=True
         )
     }
 
@@ -108,13 +108,13 @@ def create_project(
     body = _request_body
     try:
         payload = create_project_payload(
-            actor["employeeId"],
+            actor["userId"],
             body,
             registry=ctx.registry,
             agent_store=ctx.agent_store,
             placement_store=ctx.agent_placement_store,
         )
-        project = ctx.project_store.create_project(actor["employeeId"], payload)
+        project = ctx.project_store.create_project(actor["userId"], payload)
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     return {"project": project}
@@ -190,14 +190,14 @@ def update_project(
     project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    current = project_for_owner(ctx, project_id, actor["employeeId"])
+    current = project_for_owner(ctx, project_id, actor["userId"])
     body = _request_body
     try:
         target_node_id = resolve_target_node_id(
             ctx.registry.monitor_nodes(), current["computerId"]
         )
         patch, expected_version = update_project_payload(
-            actor["employeeId"],
+            actor["userId"],
             current,
             body,
             agent_store=ctx.agent_store,
@@ -221,7 +221,7 @@ def get_project_setup(
     """The project's agent-drafted setup, with each proposed member's current
     eligibility, and the agents a setup could staff."""
     actor = request_actor(request, ctx.auth_store)
-    project = project_for_owner(ctx, project_id, actor["employeeId"])
+    project = project_for_owner(ctx, project_id, actor["userId"])
     return {
         "setup": annotate_setup(
             project,
@@ -246,7 +246,7 @@ async def start_project_setup(
     and the owner's note; otherwise a fresh setup thread starts.
     """
     actor = request_actor(request, ctx.auth_store)
-    project = project_for_owner(ctx, project_id, actor["employeeId"])
+    project = project_for_owner(ctx, project_id, actor["userId"])
     body = _request_body
     if code := project_work_error(project):
         raise HTTPException(409, code)
@@ -353,7 +353,7 @@ def archive_project(
     project_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    project_for_owner(ctx, project_id, actor["employeeId"])
+    project_for_owner(ctx, project_id, actor["userId"])
     raw_version = request.query_params.get("expectedVersion")
     try:
         expected_version = int(raw_version) if raw_version is not None else None
@@ -376,8 +376,8 @@ def archive_project(
 def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     project = _readable_project(ctx, request, project_id)
-    if project["ownerEmployeeId"] != actor["employeeId"]:
-        raise HTTPException(403, "Project belongs to another employee.")
+    if project["ownerUserId"] != actor["userId"]:
+        raise HTTPException(403, "Project belongs to another user.")
     try:
         expected_version = int(request.query_params.get("expectedVersion", ""))
     except ValueError as error:
@@ -385,7 +385,7 @@ def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dic
     try:
         return delete_project_record(
             ctx, project_id, expected_version=expected_version,
-            employee_id=actor["employeeId"],
+            user_id=actor["userId"],
             lifecycle=request.app.state.execution_lifecycle,
         )
     except KeyError as error:

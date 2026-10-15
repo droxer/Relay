@@ -2,11 +2,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { groupAgentsByComputer } from "../lib/agentGroups";
 import { agentMatchesQuery } from "../lib/agentSearch";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
-import type { AgentName, CurrentUser, EmployeeAgent, LogicalAgentAvailability } from "../types";
+import type { AgentName, CurrentUser, UserAgent, LogicalAgentAvailability } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
@@ -26,8 +26,8 @@ import { CreateAgentDialog } from "./agents/CreateAgentDialog";
 interface AgentsPageProps {
   currentUser: CurrentUser;
   /** The agent currently inspected in the detail pane, driven by the pathname. */
-  detailAgent: EmployeeAgent | null;
-  onOpenAgent: (agent: EmployeeAgent) => void;
+  detailAgent: UserAgent | null;
+  onOpenAgent: (agent: UserAgent) => void;
   onBackToAgents: () => void;
   onOpenThread: (sessionId: string) => void;
 }
@@ -99,7 +99,7 @@ function RosterFilterBar({
 /** "available" is the healthy default and stays silent — only the three
     unusable bindings get a badge, so the roster surfaces a defect instead
     of quietly leaving an agent unreachable. */
-function BindingStatusBadge({ status }: { status: EmployeeAgent["bindingStatus"] }) {
+function BindingStatusBadge({ status }: { status: UserAgent["bindingStatus"] }) {
   const { t } = useTranslation();
   if (!status || status === "available") return null;
   return (
@@ -112,9 +112,9 @@ function RosterRow({
   selected,
   onSelect,
 }: {
-  agent: EmployeeAgent;
+  agent: UserAgent;
   selected: boolean;
-  onSelect: (agent: EmployeeAgent) => void;
+  onSelect: (agent: UserAgent) => void;
 }) {
   const { t } = useTranslation();
   const ready = agent.enabled && agent.availability === "ready";
@@ -186,7 +186,7 @@ export function AgentsPage({
   onOpenThread,
 }: AgentsPageProps) {
   const { t } = useTranslation();
-  const { agents, isFetching, error, refetch } = useEmployeeAgents(currentUser.employeeId);
+  const { agents, isFetching, error, refetch } = useUserAgents(currentUser.userId);
   const descriptors = useMemo(() => agentDescriptors(t), [t]);
   const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
   const [availability, setAvailability] = useUrlSearchState(
@@ -205,7 +205,7 @@ export function AgentsPage({
       .filter((agent) => availability === "all" || agent.availability === availability)
       .filter((agent) => agentMatchesQuery(agent, descriptors[agent.executorKind].blurb, query))
       .sort((left, right) => {
-        const rank = (agent: EmployeeAgent) => {
+        const rank = (agent: UserAgent) => {
           if (agent.availability === "ready") return 0;
           if (agent.availability === "busy") return 1;
           if (agent.availability === "pending") return 2;
@@ -224,7 +224,7 @@ export function AgentsPage({
 
   // All route changes share the editor's navigation guard, including the
   // mobile Back button, sidebar, and browser history.
-  const handleSelectAgent = useCallback((agent: EmployeeAgent) => {
+  const handleSelectAgent = useCallback((agent: UserAgent) => {
     if (agent.id !== detailAgent?.id) onOpenAgent(agent);
   }, [detailAgent?.id, onOpenAgent]);
   const handleBackToAgents = onBackToAgents;
@@ -248,7 +248,7 @@ export function AgentsPage({
           layout="stacked"
           topbarActions={detailAgent ? "inactive" : true}
           actions={
-            currentUser.employeeId ? (
+            currentUser.userId ? (
               // The shared list-header create affordance, same as the
               // projects/threads rail.
               <Button
@@ -285,7 +285,7 @@ export function AgentsPage({
           <RelayEmptyState feature="agents"
             title={activeAgents.length === 0 ? t("agents_page.empty_title") : t("agents_page.empty_filtered_title")}
             body={activeAgents.length === 0 ? t("agents_page.empty_body") : t("agents_page.empty_filtered_body")}
-            actions={activeAgents.length === 0 && currentUser.employeeId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
+            actions={activeAgents.length === 0 && currentUser.userId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
           />
         ) : (
           // Banded by the computer each agent runs on — the infrastructure is
@@ -358,11 +358,11 @@ export function AgentsPage({
         )}
       </div>
 
-      {currentUser.employeeId ? (
+      {currentUser.userId ? (
         <CreateAgentDialog
           open={createOpen}
           onClose={() => setCreateOpen(false)}
-          employeeId={currentUser.employeeId}
+          userId={currentUser.userId}
           onCreated={onOpenAgent}
         />
       ) : null}

@@ -26,7 +26,7 @@ vi.mock("@/components/reui/filters/filters", () => ({
     })}
   </div>,
 }));
-vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents: [] }) }));
+vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ startTaskMutation: {}, updateTaskMutation: {}, deleteTaskMutation: {}, deleteTasksMutation: {} }) }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn(), confirm: vi.fn(), prompt: vi.fn() }) }));
@@ -42,12 +42,12 @@ let nextNumber = 0;
 /* Each row links its ref (#n) and its title to the record; these assertions
    are about which rows show, so they read the title links. */
 const titleLinks = (links: HTMLElement[]) => links.filter((link) => !link.classList.contains("task-ref-link"));
-const task = (id: string, projectId: string, status = "backlog") => ({ id, number: ++nextNumber, title: id, projectId, status, priority: "normal", description: "", ownerEmployeeId: "u", linkedSessionIds: [], createdAt: "2026-09-01", updatedAt: "2026-09-01" }) as RelayTaskListItem;
+const task = (id: string, projectId: string, status = "backlog") => ({ id, number: ++nextNumber, title: id, projectId, status, priority: "normal", description: "", ownerUserId: "u", linkedSessionIds: [], createdAt: "2026-09-01", updatedAt: "2026-09-01" }) as RelayTaskListItem;
 const tasks = [task("Ship", "p"), task("Review", "p", "review"), task("Answer", "q"), task("Old", "a")];
 function Workspace({ initialRecord = null, work = tasks, projectsStatus = "ready" }: { projectsStatus?: "ready" | "error" | "loading"; initialRecord?: string | null; work?: RelayTaskListItem[] }) {
   const [record, setRecord] = useState(initialRecord);
   return <TasksWorkspace projects={projects} projectsStatus={projectsStatus} tasks={work} sessions={[]} nodes={[]}
-    currentUser={{ employeeId: "u", username: "u" } as CurrentUser} recordTaskId={record}
+    currentUser={{ userId: "u", username: "u" } as CurrentUser} recordTaskId={record}
     onOpenRecord={setRecord} onOpenThread={vi.fn()} isRefreshing={false} onRefresh={vi.fn()} />;
 }
 function show(initialRecord?: string, work?: RelayTaskListItem[]) {

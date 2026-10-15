@@ -4,23 +4,23 @@ import { useTranslation } from "react-i18next";
 import { useDashboardSessions } from "../../../hooks/useDashboardSessions";
 import { useTokenUsage } from "../../../hooks/useTokenUsage";
 import type { NodeMetrics } from "../../../hooks/useNodeMetrics";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../../../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../../types";
 import { ActivityChart } from "./ActivityChart";
 import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
-import { TopEmployees } from "./TopEmployees";
+import { TopUsers } from "./TopUsers";
 import { formatCompact } from "../../../lib/compactNumber";
 
 interface DashboardViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
-  employees: EmployeeRecord[];
+  users: UserRecord[];
   metrics: NodeMetrics;
   onManageNodes: () => void;
 }
 
 export function DashboardView({
-  nodes, employees, metrics, onManageNodes,
+  nodes, users, metrics, onManageNodes,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
   const sessionsQuery = useDashboardSessions(true);
@@ -28,7 +28,7 @@ export function DashboardView({
 
   const sessionsReady = !sessionsQuery.isLoading && !sessionsQuery.error;
   const sessions = sessionsQuery.data;
-  const nodesReady = nodes.length > 0 || employees.length > 0;
+  const nodesReady = nodes.length > 0 || users.length > 0;
 
   const dash = "—";
   const showTokens = tokens.available || tokens.isError;
@@ -68,13 +68,13 @@ export function DashboardView({
             eyebrow={t("admin.v2.dash_kpi_nodes")}
             value={nodesReady ? formatCompact(metrics.total, i18n.language) : dash}
           />
-          {/* No hint: it printed employees.length, which IS the value above
-              whenever there are employees ("3" over "3 employees"), and
+          {/* No hint: it printed users.length, which IS the value above
+              whenever there are users ("3" over "3 users"), and
               contradicted it when there were none. */}
           <KpiTile
-            slot="employees"
-            eyebrow={t("admin.v2.dash_kpi_employees")}
-            value={nodesReady ? formatCompact(metrics.employeeTotal, i18n.language) : dash}
+            slot="users"
+            eyebrow={t("admin.v2.dash_kpi_users")}
+            value={nodesReady ? formatCompact(metrics.userTotal, i18n.language) : dash}
           />
           {showTokens ? (
             <KpiTile
@@ -111,10 +111,10 @@ export function DashboardView({
             onManageNodes={onManageNodes}
             className="adm-dash-panel"
           />
-          <TopEmployees
+          <TopUsers
             className="adm-dash-panel"
-            employees={employees}
-            ranked={sessions.topEmployees}
+            users={users}
+            ranked={sessions.topUsers}
             error={sessionsQuery.error}
           />
         </div>

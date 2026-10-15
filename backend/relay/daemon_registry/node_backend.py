@@ -73,7 +73,7 @@ class ServerDaemonNodeBackend:
     def idempotent_run(
         self,
         idempotency_key: str,
-        actor_employee_id: str | None,
+        actor_user_id: str | None,
         *,
         actor_is_admin: bool = False,
         expected_fingerprint: str | None = None,
@@ -92,19 +92,19 @@ class ServerDaemonNodeBackend:
             if request.get("status") == "prepared":
                 return None
             session = self.registry.store.get_session(request["sessionId"])
-            if actor_employee_id and not actor_is_admin:
-                assert_session_owned_by_employee(
-                    self.registry.store, session["id"], actor_employee_id
+            if actor_user_id and not actor_is_admin:
+                assert_session_owned_by_user(
+                    self.registry.store, session["id"], actor_user_id
                 )
             self._raise_rejected_recovery(request)
             return self._reconcile_idempotent_participants(
-                request, session, actor_employee_id
+                request, session, actor_user_id
             )
 
     def idempotent_session_run(
         self,
         session_id: str,
-        actor_employee_id: str | None,
+        actor_user_id: str | None,
         *,
         actor_is_admin: bool = False,
         expected_fingerprint: str | None = None,
@@ -124,19 +124,19 @@ class ServerDaemonNodeBackend:
             if request.get("status") == "prepared":
                 return None
             session = self.registry.store.get_session(request["sessionId"])
-            if actor_employee_id and not actor_is_admin:
-                assert_session_owned_by_employee(
-                    self.registry.store, session["id"], actor_employee_id
+            if actor_user_id and not actor_is_admin:
+                assert_session_owned_by_user(
+                    self.registry.store, session["id"], actor_user_id
                 )
             return self._reconcile_idempotent_participants(
-                request, session, actor_employee_id
+                request, session, actor_user_id
             )
 
     def _reconcile_idempotent_participants(
         self,
         run_request: dict[str, Any],
         session: dict[str, Any],
-        actor_employee_id: str | None,
+        actor_user_id: str | None,
     ) -> dict[str, Any]:
         """Repair room admission if dispatch committed before that event did."""
         manifest = (run_request.get("state") or {}).get(
@@ -154,7 +154,7 @@ class ServerDaemonNodeBackend:
         if not agent_ids:
             return session
         return SessionController(self.registry.store).record_participants_joined(
-            session["id"], agent_ids, actor_employee_id
+            session["id"], agent_ids, actor_user_id
         )
 
     def _validate_logical_assignment(self, assignment: dict[str, Any]) -> None:
@@ -184,8 +184,8 @@ class ServerDaemonNodeBackend:
         )
         if (
             placement.get("agentId") != agent.get("id")
-            or placement.get("supervisorEmployeeId")
-            != agent.get("supervisorEmployeeId")
+            or placement.get("supervisorUserId")
+            != agent.get("supervisorUserId")
             or not current_node
             or current_node["id"] != assignment.get("daemonNodeId")
             or placement.get("executorKind") != agent.get("executorKind")
@@ -199,15 +199,15 @@ class ServerDaemonNodeBackend:
         existing = (
             self.registry.get(requested_sandbox_id)
             if requested_sandbox_id
-            else self.registry.find_by_employee(
-                payload["employeeId"], payload.get("workspacePath")
+            else self.registry.find_by_user(
+                payload["userId"], payload.get("workspacePath")
             )
         )
         if existing:
-            if payload.get("actorEmployeeId"):
+            if payload.get("actorUserId"):
                 if (
                     not payload.get("actorIsAdmin")
-                    and existing.get("employeeId") != payload["actorEmployeeId"]
+                    and existing.get("userId") != payload["actorUserId"]
                 ):
                     raise PermissionError("Sandbox access denied.")
                 return existing
@@ -216,11 +216,11 @@ class ServerDaemonNodeBackend:
                 return existing
             node_error = sandbox_node_auth_error(existing, payload.get("nodeToken"))
             if not node_error and payload.get("token"):
-                employee_id = existing.get("employeeId") or payload["employeeId"]
+                user_id = existing.get("userId") or payload["userId"]
                 return self.registry.register(
                     {
                         "sandboxId": existing["id"],
-                        "employeeId": employee_id,
+                        "userId": user_id,
                         "token": payload.get("nodeToken", ""),
                         "workspacePath": existing.get("workspacePath"),
                         "workspaceId": existing.get("workspaceId"),
@@ -246,7 +246,7 @@ class ServerDaemonNodeBackend:
         now = now_iso()
         sandbox = {
             "id": sandbox_id,
-            "employeeId": payload["employeeId"],
+            "userId": payload["userId"],
             **(
                 {"workspacePath": payload["workspacePath"]}
                 if payload.get("workspacePath")
@@ -263,7 +263,7 @@ class ServerDaemonNodeBackend:
         self.registry.register(
             {
                 "sandboxId": sandbox_id,
-                "employeeId": payload["employeeId"],
+                "userId": payload["userId"],
                 "token": payload["nodeToken"],
                 "workspacePath": payload.get("workspacePath"),
                 "protocolVersion": DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS[0],
@@ -271,7 +271,7 @@ class ServerDaemonNodeBackend:
                 "status": "stopped",
             },
             payload["token"],
-            authorized_node_location="employee-device",
+            authorized_node_location="user-device",
         )
         stored = self.registry.get(sandbox_id) or {}
         return {**sandbox, **stored, "token": payload["token"]}
@@ -284,7 +284,7 @@ class ServerDaemonNodeBackend:
 
     def provision_daemon_node(self, payload: dict[str, Any]) -> dict[str, Any]:
         sandbox, ui_token, node_token = self.registry.provision_pending(
-            payload.get("employeeId"),
+            payload.get("userId"),
             payload.get("workspacePath"),
             payload.get("sandboxMode") or "boxlite",
             payload.get("nodeLocation"),
@@ -356,12 +356,12 @@ class ServerDaemonNodeBackend:
                 request,
                 active_runs_by_node,
             )
-            actor_employee_id, owner_agent_id, owner_employee_id = self._run_owner(
+            actor_user_id, owner_agent_id, owner_user_id = self._run_owner(
                 request, sandbox
             )
             self._validate_existing_session(
                 request,
-                owner_employee_id,
+                owner_user_id,
                 run_request_id=(prepared_request or {}).get("id") or run_request_id,
             )
             if request.get("_workspaceBinding") and self.registry.task_store:
@@ -388,7 +388,7 @@ class ServerDaemonNodeBackend:
                 sandbox_id,
                 sandbox,
                 request,
-                owner_employee_id,
+                owner_user_id,
                 owner_agent_id,
             )
             session_id = self._run_session_id(
@@ -429,7 +429,7 @@ class ServerDaemonNodeBackend:
                 session_id,
                 existing_session,
                 request,
-                actor_employee_id,
+                actor_user_id,
             )
             self.registry.activate_run_request(
                 run_request["id"],
@@ -450,14 +450,14 @@ class ServerDaemonNodeBackend:
         if not request.get("taskId") or not self.registry.task_store:
             return request
         task = self.registry.task_store.get_task(request["taskId"])
-        actor = request.get("actorEmployeeId")
+        actor = request.get("actorUserId")
         if (
             actor
             and not request.get("actorIsAdmin")
             and actor
-            not in (task.get("ownerEmployeeId"), task.get("assigneeEmployeeId"))
+            not in (task.get("ownerUserId"), task.get("assigneeUserId"))
         ):
-            raise PermissionError("Task belongs to another employee.")
+            raise PermissionError("Task belongs to another user.")
         binding = recorded_task_workspace(
             task, self.registry.store, self.registry.monitor_nodes()
         )
@@ -556,10 +556,10 @@ class ServerDaemonNodeBackend:
         if existing_request.get("status") == "prepared":
             return None
         session = self.registry.store.get_session(existing_request["sessionId"])
-        actor_employee_id = request.get("actorEmployeeId")
-        if actor_employee_id and request.get("actorIsAdmin") is not True:
-            assert_session_owned_by_employee(
-                self.registry.store, session["id"], actor_employee_id
+        actor_user_id = request.get("actorUserId")
+        if actor_user_id and request.get("actorIsAdmin") is not True:
+            assert_session_owned_by_user(
+                self.registry.store, session["id"], actor_user_id
             )
         self._raise_rejected_recovery(existing_request)
         return session
@@ -641,9 +641,9 @@ class ServerDaemonNodeBackend:
         sandbox = self.registry.get(sandbox_id)
         if not sandbox:
             raise KeyError(f"Sandbox {sandbox_id} has no registered daemon node.")
-        if not sandbox.get("employeeId") and request.get("agentFirst") is not True:
+        if not sandbox.get("userId") and request.get("agentFirst") is not True:
             raise ValueError(
-                f"Sandbox {sandbox_id} daemon node is not assigned to an employee."
+                f"Sandbox {sandbox_id} daemon node is not assigned to a user."
             )
         assignment_nodes = {
             assignment.get("daemonNodeId") or sandbox_id
@@ -747,7 +747,7 @@ class ServerDaemonNodeBackend:
     def _run_owner(
         self, request: dict[str, Any], sandbox: dict[str, Any]
     ) -> tuple[str | None, str | None, str | None]:
-        actor_employee_id = request.get("actorEmployeeId")
+        actor_user_id = request.get("actorUserId")
         owner_agent_id = next(
             (
                 assignment.get("agentId")
@@ -756,29 +756,29 @@ class ServerDaemonNodeBackend:
             ),
             None,
         )
-        owner_employee_id = (
+        owner_user_id = (
             (self.agent_store.get_agent(owner_agent_id) or {}).get(
-                "supervisorEmployeeId"
+                "supervisorUserId"
             )
             if owner_agent_id and self.agent_store
-            else actor_employee_id or sandbox.get("employeeId")
+            else actor_user_id or sandbox.get("userId")
         )
-        return actor_employee_id, owner_agent_id, owner_employee_id
+        return actor_user_id, owner_agent_id, owner_user_id
 
     def _validate_existing_session(
         self,
         request: dict[str, Any],
-        owner_employee_id: str | None,
+        owner_user_id: str | None,
         *,
         run_request_id: str | None = None,
     ) -> None:
         session_id = request.get("sessionId")
         if not session_id:
             return
-        if not owner_employee_id:
+        if not owner_user_id:
             raise PermissionError("Logical agent has no supervisor.")
-        assert_session_owned_by_employee(
-            self.registry.store, session_id, owner_employee_id
+        assert_session_owned_by_user(
+            self.registry.store, session_id, owner_user_id
         )
         active = self.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
@@ -791,7 +791,7 @@ class ServerDaemonNodeBackend:
         sandbox_id: str,
         sandbox: dict[str, Any],
         request: dict[str, Any],
-        owner_employee_id: str | None,
+        owner_user_id: str | None,
         owner_agent_id: str | None,
     ) -> SessionController:
         if sandbox["status"] in ("stopped", "failed", "provisioning"):
@@ -816,7 +816,7 @@ class ServerDaemonNodeBackend:
             task_store=self.registry.task_store,
             task_id=task_id,
             workspace_path=sandbox.get("workspacePath") or "/workspace",
-            owner_employee_id=owner_employee_id,
+            owner_user_id=owner_user_id,
             owner_agent_id=owner_agent_id,
             team_id=team_id,
             project_id=project_id,
@@ -887,7 +887,7 @@ class ServerDaemonNodeBackend:
         session_id: str,
         existing_session: dict[str, Any] | None,
         request: dict[str, Any],
-        actor_employee_id: str | None,
+        actor_user_id: str | None,
     ) -> str:
         collaboration = request.get("collaboration")
         manifest = (
@@ -945,7 +945,7 @@ class ServerDaemonNodeBackend:
                 controller.record_user_message(
                     session_id,
                     request["taskGoal"],
-                    actor_employee_id=actor_employee_id,
+                    actor_user_id=actor_user_id,
                     message_id=message_id,
                 )
             controller.continue_session(session_id)
@@ -956,7 +956,7 @@ class ServerDaemonNodeBackend:
                 decision,
                 request["assignments"],
                 round_id=(round_id if manifest and manifest.get("handoffContext") else request.get("_admissionId") or round_id),
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
         if manifest:
             controller.record_collaboration_round_started(session_id, manifest)
@@ -970,7 +970,7 @@ class ServerDaemonNodeBackend:
         assignments: list[dict[str, Any]],
         *,
         round_id: str | None = None,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> None:
         kind = decision.get("kind")
         note = decision.get("note") if isinstance(decision.get("note"), str) else None
@@ -983,7 +983,7 @@ class ServerDaemonNodeBackend:
                 note,
                 target_agent,
                 decision_id=decision_id,
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
         elif kind == "handoff" and target_agent:
             controller.handoff_session(
@@ -993,7 +993,7 @@ class ServerDaemonNodeBackend:
                 note,
                 decision.get("targetAgentId"),
                 decision_id=decision_id,
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
 
     def _prepare_run_request(
@@ -1038,7 +1038,7 @@ class ServerDaemonNodeBackend:
         sandbox_id: str,
         session_id: str,
         reason: str,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
         *, actor_is_admin: bool = False,
     ) -> dict[str, Any] | None:
         """Cancel the session's active daemon run.
@@ -1052,9 +1052,9 @@ class ServerDaemonNodeBackend:
         sandbox = self.registry.get(sandbox_id)
         if not sandbox:
             raise KeyError(f"Sandbox {sandbox_id} has no registered daemon node.")
-        if actor_employee_id and not actor_is_admin:
-            assert_session_owned_by_employee(
-                self.registry.store, session_id, actor_employee_id
+        if actor_user_id and not actor_is_admin:
+            assert_session_owned_by_user(
+                self.registry.store, session_id, actor_user_id
             )
         request = self.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
@@ -1062,7 +1062,7 @@ class ServerDaemonNodeBackend:
         if request:
             self.registry.cancel_run_request_before_delivery(request["id"], reason)
         active = self.registry.cancel_active_run(
-            sandbox_id, session_id, reason, actor_employee_id=actor_employee_id,
+            sandbox_id, session_id, reason, actor_user_id=actor_user_id,
         )
         if not active:
             session = self.registry.store.get_session(session_id)
@@ -1088,22 +1088,22 @@ def _idempotent_run_request_id(idempotency_key: str) -> str:
     return str(uuid5(_IDEMPOTENT_RUN_REQUEST_NAMESPACE, idempotency_key))
 
 
-def assert_session_owned_by_employee(
-    store: SessionStore, session_id: str, employee_id: str
+def assert_session_owned_by_user(
+    store: SessionStore, session_id: str, user_id: str
 ) -> None:
     try:
         session = store.get_session(session_id)
     except Exception as exc:
         raise PermissionError(
-            f"Session {session_id} could not be verified for {employee_id}."
+            f"Session {session_id} could not be verified for {user_id}."
         ) from exc
-    if not session.get("ownerEmployeeId"):
+    if not session.get("ownerUserId"):
         raise PermissionError(
-            f"Session {session_id} has no owner; {employee_id} is not authorized to run it."
+            f"Session {session_id} has no owner; {user_id} is not authorized to run it."
         )
-    if session["ownerEmployeeId"] != employee_id:
+    if session["ownerUserId"] != user_id:
         raise PermissionError(
-            f"Session {session_id} is owned by {session['ownerEmployeeId']}; {employee_id} is not authorized to run it."
+            f"Session {session_id} is owned by {session['ownerUserId']}; {user_id} is not authorized to run it."
         )
 
 

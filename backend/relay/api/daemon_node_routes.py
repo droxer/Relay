@@ -28,10 +28,10 @@ from ..services.node_agents import (
 from .computer_installer_routes import computer_install_command, computer_windows_install_command
 from .deps import AppContextDep
 from .helpers import (
-    EMPLOYEE_DEVICE_SANDBOX_MODE,
+    USER_DEVICE_SANDBOX_MODE,
     JsonBodyDep,
     actor_can_access_sandbox,
-    assert_employee_device_runtime,
+    assert_user_device_runtime,
     authorized_sandbox_for_token,
     bearer_token,
     daemon_node_event,
@@ -41,7 +41,7 @@ from .helpers import (
     request_actor,
     request_actor_or_none,
     string_field,
-    valid_employee_workspace_path,
+    valid_user_workspace_path,
 )
 
 router = APIRouter()
@@ -51,7 +51,7 @@ WORKSPACE_EVENT_TYPES = frozenset(
 
 # A self-enrolled personal computer is direct-run only; the rule is shared with
 # the admin create route, so it lives in helpers rather than here.
-LOCAL_ENROLLMENT_SANDBOX_MODE = EMPLOYEE_DEVICE_SANDBOX_MODE
+LOCAL_ENROLLMENT_SANDBOX_MODE = USER_DEVICE_SANDBOX_MODE
 
 MAX_COMMAND_POLL_WAIT_SECONDS = 30.0
 MAX_COMMAND_POLL_LIMIT = 50
@@ -206,7 +206,7 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         managed_nodes = [
             node
             for node in ctx.managed_node_store.list_nodes()
-            if actor["isAdmin"] or node.get("employeeId") == actor["employeeId"]
+            if actor["isAdmin"] or node.get("userId") == actor["userId"]
         ]
         return {"nodes": visible_computers(nodes, managed_nodes)}
     raise HTTPException(401, "Authentication required.")
@@ -217,7 +217,7 @@ def update_daemon_node(
     sandbox_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     body = _request_body
     if set(body) != {"displayName"}:
@@ -268,7 +268,7 @@ def update_daemon_node_disabled_agents(
 
 def _runtime_refresh_node(request: Request, ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     node = ctx.registry.get(sandbox_id)
     if not node or node.get("status") == "deleted":
@@ -309,11 +309,11 @@ def create_local_device_enrollment(
     actor = request_actor(request, ctx.auth_store)
     # Enrolling a machine is a signed-in human action; a chat-service actor
     # carries no device to connect. Matches the rename route's gate.
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     body = _request_body
     workspace_path = string_field(body, "workspacePath")
-    # An employee's own machine runs its agents directly, against the agent
+    # A user's own machine runs its agents directly, against the agent
     # installs already on it. BoxLite isolation belongs to hardware an admin
     # provisions, so this route offers no runtime choice — but it refuses a
     # caller that asks for the isolated one rather than silently substituting.
@@ -322,12 +322,12 @@ def create_local_device_enrollment(
         display_name = normalize_computer_display_name(body.get("displayName"))
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    if not valid_employee_workspace_path(workspace_path):
+    if not valid_user_workspace_path(workspace_path):
         raise HTTPException(
-            400, "An absolute workspacePath on the employee device is required."
+            400, "An absolute workspacePath on the user device is required."
         )
-    assert_employee_device_runtime("employee-device", sandbox_mode)
-    # Provisioning adopts an existing computer for this employee rather than
+    assert_user_device_runtime("user-device", sandbox_mode)
+    # Provisioning adopts an existing computer for this user rather than
     # stacking duplicates, so say which happened — the client cannot infer it,
     # and "connected" and "already connected" need different instructions.
     # Adoption can still reissue a token for an unfinished enrollment, so token
@@ -336,21 +336,21 @@ def create_local_device_enrollment(
     # the two and report a new computer as adopted.
     with ctx.registry.dispatch_lock:
         reused = (
-            ctx.registry.find_by_employee(actor["employeeId"], workspace_path)
+            ctx.registry.find_by_user(actor["userId"], workspace_path)
             is not None
         )
-        # Only a genuinely new computer consumes a slot. An employee at their
+        # Only a genuinely new computer consumes a slot. A user at their
         # limit must still be able to re-enroll a machine they already have,
         # or they could never restart their own daemon.
         if not reused:
-            assert_local_computer_allowed(ctx, actor["employeeId"])
+            assert_local_computer_allowed(ctx, actor["userId"])
         node = ctx.backend.provision_daemon_node(
             {
-                "employeeId": actor["employeeId"],
+                "userId": actor["userId"],
                 **({"displayName": display_name} if display_name else {}),
                 "workspacePath": workspace_path,
                 "sandboxMode": sandbox_mode,
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
             }
         )
         # A concurrent backend replica may have won the durable claim after
@@ -406,8 +406,8 @@ def _token_response(request: Request, node: dict[str, Any], token: str) -> dict[
 
     if (
         sandbox_mode == "none"
-        and node.get("nodeLocation") == "employee-device"
-        and node.get("employeeId")
+        and node.get("nodeLocation") == "user-device"
+        and node.get("userId")
         and node.get("workspacePath")
     ):
         response["installCommand"] = computer_install_command(request, node)
@@ -421,7 +421,7 @@ def reveal_daemon_node_token(
 ) -> dict[str, Any]:
     """Compatibility route: authenticated owners are directed to reissue."""
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     node = _owned_live_node(actor, ctx, sandbox_id)
     token = ctx.registry.reveal_node_token(sandbox_id)
@@ -443,7 +443,7 @@ def reissue_daemon_node_token(
     reissued one.
     """
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     _owned_live_node(actor, ctx, sandbox_id)
     try:
@@ -461,12 +461,12 @@ def disconnect_daemon_node(
 ) -> Response:
     """Self-service removal of a computer, scoped by the same ownership seam.
 
-    The counterpart to enrollment: an employee who can connect a machine must
+    The counterpart to enrollment: a user who can connect a machine must
     be able to take it off the roster, or a mistyped workspace leaves a row
     only an admin can clear.
     """
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     try:
         with ctx.registry.dispatch_lock:
@@ -476,7 +476,7 @@ def disconnect_daemon_node(
             if not actor_can_access_sandbox(actor, node):
                 raise HTTPException(403, "Daemon node access denied.")
             # Supervisor-provisioned hardware is torn down through the managed
-            # node lifecycle, not by the employee sitting in front of it.
+            # node lifecycle, not by the user sitting in front of it.
             if node.get("managedNodeId"):
                 raise HTTPException(
                     403, "This computer is managed by an admin and cannot be removed here."
@@ -546,7 +546,7 @@ def register_daemon_node(
             not prior
             and actor
             and actor.get("isAdmin")
-            and registration.get("employeeId")
+            and registration.get("userId")
         )
         if not prior and not (actor and actor.get("isAdmin")):
             raise PermissionError("Computer enrollment is required before daemon registration.")
@@ -554,14 +554,14 @@ def register_daemon_node(
             registration,
             bearer_token(request),
             authorized_node_location=(
-                "employee-device" if admin_authorized_ownership else None
+                "user-device" if admin_authorized_ownership else None
             ),
         )
         ownership_was_control_plane_authorized = bool(
             admin_authorized_ownership
             or (
                 prior
-                and prior.get("employeeId") == sandbox.get("employeeId")
+                and prior.get("userId") == sandbox.get("userId")
                 and (
                     prior.get("managedNodeId")
                     or prior.get("provisioningAttemptId")
@@ -580,7 +580,7 @@ def register_daemon_node(
         logger.info(
             "Daemon node registered",
             sandbox_id=sandbox["id"],
-            employee_id=sandbox.get("employeeId"),
+            user_id=sandbox.get("userId"),
             status=sandbox.get("status"),
         )
         journaled = registration.get("journaledCommandIds") or []

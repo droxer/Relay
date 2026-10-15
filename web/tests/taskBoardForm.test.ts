@@ -19,7 +19,7 @@ import { parseAppPath, pathForAppState } from "../src/lib/appRoute.js";
 import { assignmentOptionVisible } from "../src/lib/taskAssignment.js";
 
 describe("taskBoardForm", () => {
-  const user = { id: "user-alice", username: "alice", employeeId: "alice", role: "user" as const };
+  const user = { id: "user-alice", username: "alice", userId: "alice", role: "user" as const };
 
   it("detects equal backlog forms", () => {
     const a = emptyBacklogForm(user);
@@ -126,7 +126,7 @@ describe("taskBoardForm", () => {
   });
 
   it("offers ownerless assignment options to every assignee", () => {
-    // Agents and teams are not always employee-scoped: an ownerless record is
+    // Agents and teams are not always user-scoped: an ownerless record is
     // globally assignable, mirroring the backend's "ownerless legacy sessions
     // are allowed" rule. Filtering them out emptied the picker entirely.
     assert.equal(assignmentOptionVisible(undefined, "alice", false), true);

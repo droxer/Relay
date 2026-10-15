@@ -294,7 +294,7 @@ summary:focus-visible,
 
    `muted` was a second spelling of `neutral` — the two were even reconciled
    by hand at the call sites (`tone === "muted" ? "neutral" : tone` in
-   EmployeeCard/EmployeesView) — and it disagreed with itself across sheets:
+   UserCard/UsersView) — and it disagreed with itself across sheets:
    --ink-3 in admin-v2-views.css, --ink-4 in admin-v2-dashboard.css. It is
    now spelled `neutral` everywhere and nowhere else.
 

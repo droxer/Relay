@@ -2,11 +2,11 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { StateMark } from "../StateMark";
 import { availabilityPipTone } from "./availabilityTone";
-import type { AgentTeam, EmployeeAgent } from "../../types";
+import type { AgentTeam, UserAgent } from "../../types";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
-import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
+import { isUserAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
 import { isTeamRoutable, teamAvailability } from "../../lib/taskAssignment";
 import { RosterAgentItem, RosterOption, RosterTeamItem, RosterTriggerValue } from "../roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
@@ -40,15 +40,15 @@ function RoomMark({ routable, label }: { routable: boolean; label: string }) {
 }
 
 // Target picker above the composer: selects who the thread talks to —
-// one logical (employee) agent, a whole agent team, or — in a project room —
+// one logical (user) agent, a whole agent team, or — in a project room —
 // the project's whole roster. Non-routable entries stay listed (disabled) with
 // their availability spelled out so users can see why a target cannot take the
 // thread. A started thread may hand its next round to any agent or team on
 // its computer, so the picker stays live for the thread's whole life.
 export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams = [], activeTeamId = null, onTeamPicked, teamOptionsEnabled = false, room = null, roomSelected = false, onRoomPicked, running = false }: {
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
-  onLogicalAgentPicked: (agent: EmployeeAgent) => void;
+  onLogicalAgentPicked: (agent: UserAgent) => void;
   /** Full live-team list: resolves the active team chip even when picking is
    *  disabled, so a started team thread still names its team. */
   teams?: AgentTeam[];
@@ -73,7 +73,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // they go busy, offline, or disabled mid-thread — and those are exactly the
   // moments the trigger has to keep naming them, the same way the computer
   // readout keeps naming a machine that went offline. Filtering this lookup by
-  // `isEmployeeAgentRoutable` dropped the selection instead: the Select's
+  // `isUserAgentRoutable` dropped the selection instead: the Select's
   // `value` fell to null while the option stayed listed below, so the trigger
   // announced "no available agent" about an agent the thread was still pinned
   // to, and picking that agent again was a no-op because it was already the
@@ -87,7 +87,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   const activeRoom = room && roomSelected && !activeTeam ? room : null;
   // A round the whole roster cannot take is still worth offering: the project
   // reports why at dispatch. One member able to work is enough to keep it live.
-  const roomRoutable = logicalAgents.some(isEmployeeAgentRoutable);
+  const roomRoutable = logicalAgents.some(isUserAgentRoutable);
   const handleSelected = (value: string | null) => {
     if (value === ROOM_VALUE) {
       onRoomPicked?.();
@@ -100,7 +100,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
       return;
     }
     const next = logicalAgents.find((agent) => agent.id === value);
-    if (next && isEmployeeAgentRoutable(next)) onLogicalAgentPicked(next);
+    if (next && isUserAgentRoutable(next)) onLogicalAgentPicked(next);
   };
   // Agents and agent teams are two rosters, so the popup tabs between them
   // rather than stacking both into one scroll — the same picker the task
@@ -254,11 +254,11 @@ function teamOption({ team, t }: {
 }
 
 function agentOptions({ logicalAgents, t }: {
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   t: TFunction;
 }) {
   return logicalAgents.map((logicalAgent) => {
-    const isRoutable = isEmployeeAgentRoutable(logicalAgent);
+    const isRoutable = isUserAgentRoutable(logicalAgent);
     const visualAvailability = visualAvailabilityOf(logicalAgent);
     return (
       <RosterAgentItem

@@ -8,7 +8,7 @@ PORT ?= 8787
 BACKEND_PORT ?= 8790
 DATABASE_URL ?=
 RELAY_BACKEND_URL ?= http://127.0.0.1:$(BACKEND_PORT)
-EMPLOYEE_ID ?=
+USER_ID ?=
 SANDBOX_ID ?= node_$(USER)
 DAEMON_TOKEN ?=
 DAEMON_NODE_TOKEN ?=
@@ -16,7 +16,9 @@ SANDBOX_MODE ?=
 WORKSPACE ?=
 SUPERVISOR_PROVIDER ?= local
 SUPERVISOR_COMMAND ?=
-SUPERVISOR_WORKSPACE_ROOT ?= .relay/employee-workspaces
+# Unset = the supervisor default (.relay/user-workspaces, or the pre-rename
+# .relay/employee-workspaces when only that exists).
+SUPERVISOR_WORKSPACE_ROOT ?= .relay/user-workspaces
 SUPERVISOR_INTERVAL_MS ?=
 SUPERVISOR_ONCE ?=
 ADMIN_TOKEN ?=
@@ -69,7 +71,7 @@ daemon-install:
 
 daemon:
 	@echo "Starting the Relay daemon. It registers with the backend, owns the sandbox, and runs agent CLIs."
-	$(if $(filter command line environment,$(origin RELAY_BACKEND_URL)),RELAY_BACKEND_URL="$(RELAY_BACKEND_URL)" )$(if $(filter command line environment,$(origin EMPLOYEE_ID)),RELAY_EMPLOYEE_ID="$(EMPLOYEE_ID)" )$(if $(filter command line environment,$(origin DAEMON_TOKEN)),RELAY_DAEMON_TOKEN="$(DAEMON_TOKEN)" )$(if $(filter command line environment,$(origin DAEMON_NODE_TOKEN)),RELAY_DAEMON_NODE_TOKEN="$(DAEMON_NODE_TOKEN)" )$(if $(filter command line environment,$(origin WORKSPACE)),RELAY_WORKSPACE="$(WORKSPACE)" )node packages/relay-daemon/dist/cli.js --sandbox-id $(SANDBOX_ID) $(if $(filter command line environment,$(origin SANDBOX_MODE)),--sandbox $(SANDBOX_MODE),)
+	$(if $(filter command line environment,$(origin RELAY_BACKEND_URL)),RELAY_BACKEND_URL="$(RELAY_BACKEND_URL)" )$(if $(filter command line environment,$(origin EMPLOYEE_ID)),RELAY_USER_ID="$(EMPLOYEE_ID)" )$(if $(filter command line environment,$(origin USER_ID)),RELAY_USER_ID="$(USER_ID)" )$(if $(filter command line environment,$(origin DAEMON_TOKEN)),RELAY_DAEMON_TOKEN="$(DAEMON_TOKEN)" )$(if $(filter command line environment,$(origin DAEMON_NODE_TOKEN)),RELAY_DAEMON_NODE_TOKEN="$(DAEMON_NODE_TOKEN)" )$(if $(filter command line environment,$(origin WORKSPACE)),RELAY_WORKSPACE="$(WORKSPACE)" )node packages/relay-daemon/dist/cli.js --sandbox-id $(SANDBOX_ID) $(if $(filter command line environment,$(origin SANDBOX_MODE)),--sandbox $(SANDBOX_MODE),)
 
 daemon-test:
 	npm run build -w relay-core
@@ -81,7 +83,7 @@ supervisor-install:
 	npm install -w relay-supervisor
 
 supervisor:
-	@echo "Starting the Relay supervisor. It provisions employee daemon nodes and launches them through the selected provider."
+	@echo "Starting the Relay supervisor. It provisions user daemon nodes and launches them through the selected provider."
 	PATH="$(CURDIR)/node_modules/.bin:$$PATH" $(if $(filter command line environment,$(origin RELAY_BACKEND_URL)),RELAY_BACKEND_URL="$(RELAY_BACKEND_URL)" )$(if $(filter command line environment,$(origin ADMIN_TOKEN)),RELAY_ADMIN_TOKEN="$(ADMIN_TOKEN)" )$(if $(filter command line environment,$(origin SUPERVISOR_PROVIDER)),RELAY_SUPERVISOR_PROVIDER="$(SUPERVISOR_PROVIDER)" )$(if $(filter command line environment,$(origin SUPERVISOR_COMMAND)),RELAY_SUPERVISOR_COMMAND="$(SUPERVISOR_COMMAND)" )$(if $(filter command line environment,$(origin SUPERVISOR_WORKSPACE_ROOT)),RELAY_SUPERVISOR_WORKSPACE_ROOT="$(SUPERVISOR_WORKSPACE_ROOT)" )node packages/relay-supervisor/dist/cli.js $(if $(filter command line environment,$(origin SANDBOX_MODE)),--sandbox $(SANDBOX_MODE),) $(if $(filter command line environment,$(origin SUPERVISOR_INTERVAL_MS)),--interval-ms $(SUPERVISOR_INTERVAL_MS),) $(if $(SUPERVISOR_ONCE),--once,)
 
 supervisor-test:

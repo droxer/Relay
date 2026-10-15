@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { type AgentTeam, type EmployeeAgent, type TaskStatus } from "../../types";
+import { type AgentTeam, type UserAgent, type TaskStatus } from "../../types";
 import {
   ICON,
   ViewBoard,
@@ -58,7 +58,7 @@ export function BacklogFiltersBar({
   onChange,
 }: {
   filters: BacklogFilters;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   teams: AgentTeam[];
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */

@@ -11,7 +11,7 @@ test("device setup opens approval and exchanges only the device credential", asy
       requests.push({ url: String(url), init });
       return new Response(JSON.stringify(requests.length === 1
         ? { deviceCode: "device-secret", userCode: "browser-code", verificationUrl: "https://relay.test/computer?connect=browser-code", expiresIn: 600 }
-        : { sandboxId: "node-1", employeeId: "alice", token: "node-secret", workspacePath: "/work" }), { status: requests.length === 1 ? 201 : 200 });
+        : { sandboxId: "node-1", userId: "alice", token: "node-secret", workspacePath: "/work" }), { status: requests.length === 1 ? 201 : 200 });
     },
   });
   assert.equal(result.token, "node-secret");

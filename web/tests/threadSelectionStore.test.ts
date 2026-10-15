@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { activeSessionStorageKey, useRelayStore } from "../src/lib/store.js";
 
-// Minimal Storage stand-in: the store persists the opened thread per employee.
+// Minimal Storage stand-in: the store persists the opened thread per user.
 function installStorage(): Map<string, string> {
   const data = new Map<string, string>();
   (globalThis as { localStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> }).localStorage = {
@@ -20,7 +20,7 @@ describe("thread selection in the relay store", () => {
   beforeEach(() => {
     storage = installStorage();
     useRelayStore.setState(useRelayStore.getInitialState(), true);
-    useRelayStore.getState().setSelectedEmployee("emp_1");
+    useRelayStore.getState().setSelectedUser("emp_1");
   });
 
   afterEach(() => {
@@ -34,7 +34,7 @@ describe("thread selection in the relay store", () => {
     assert.equal(state.composingNew, false);
   });
 
-  it("opening a thread selects it, stops composing, and remembers it for the employee", () => {
+  it("opening a thread selects it, stops composing, and remembers it for the user", () => {
     const { startComposing, openSession } = useRelayStore.getState();
     startComposing();
     openSession("s_1");
@@ -78,8 +78,8 @@ describe("thread selection in the relay store", () => {
     assert.equal(storage.get(activeSessionStorageKey("emp_1")), "s_remembered");
   });
 
-  it("does not persist without a selected employee", () => {
-    useRelayStore.getState().setSelectedEmployee("");
+  it("does not persist without a selected user", () => {
+    useRelayStore.getState().setSelectedUser("");
     useRelayStore.getState().setActiveSessionId("s_1");
     assert.equal(useRelayStore.getState().activeSessionId, "s_1");
     assert.equal(storage.size, 0);

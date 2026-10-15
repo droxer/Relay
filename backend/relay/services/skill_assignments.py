@@ -14,19 +14,19 @@ def assign(
     skill_id: str,
     target_type: str,
     target_id: str,
-    employee_id: str,
+    user_id: str,
     *,
     mode: str = "optional",
     pin: str | dict[str, str] = "stable",
     invocation: str = "implicit",
     actor_is_admin: bool = False,
 ) -> dict[str, Any]:
-    skill = _visible_skill(ctx, skill_id, employee_id)
+    skill = _visible_skill(ctx, skill_id, user_id)
     _validate_target_owner(
         ctx,
         target_type,
         target_id,
-        employee_id,
+        user_id,
         actor_is_admin=actor_is_admin,
     )
     _validate_policy(ctx, skill_id, mode, pin, invocation)
@@ -38,7 +38,7 @@ def assign(
             mode=mode,
             pin=pin,
             invocation=invocation,
-            created_by_employee_id=employee_id,
+            created_by_user_id=user_id,
         )
     except KeyError as error:
         raise SkillAssignmentError("skill-not-found") from error
@@ -47,7 +47,7 @@ def assign(
 def revoke(
     ctx: Any,
     assignment_id: str,
-    employee_id: str,
+    user_id: str,
     *,
     actor_is_admin: bool = False,
 ) -> dict[str, Any]:
@@ -58,7 +58,7 @@ def revoke(
         ctx,
         assignment["targetType"],
         assignment["targetId"],
-        employee_id,
+        user_id,
         actor_is_admin=actor_is_admin,
     )
     try:
@@ -73,19 +73,19 @@ def effective_assignments(
     *,
     project_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    employee_id = agent.get("supervisorEmployeeId")
+    user_id = agent.get("supervisorUserId")
     agent_id = agent.get("id")
-    if not employee_id or not agent_id:
+    if not user_id or not agent_id:
         return []
-    targets = [("org", "org"), ("employee", employee_id), ("agent", agent_id)]
+    targets = [("org", "org"), ("user", user_id), ("agent", agent_id)]
     if getattr(ctx, "team_store", None) is not None:
-        for team in ctx.team_store.list_teams(owner_employee_id=employee_id):
+        for team in ctx.team_store.list_teams(owner_user_id=user_id):
             if agent_id in (team.get("memberAgentIds") or []):
                 targets.append(("team", team["id"]))
     if project_id and _agent_is_project_member(ctx, project_id, agent_id):
         targets.append(("project", project_id))
     assignments = ctx.skill_store.list_assignments(targets=targets)
-    rank = {"org": 0, "employee": 1, "team": 2, "project": 3, "agent": 4}
+    rank = {"org": 0, "user": 1, "team": 2, "project": 3, "agent": 4}
     effective: dict[str, dict[str, Any]] = {}
     for assignment in sorted(
         assignments,
@@ -101,14 +101,14 @@ def effective_assignments(
     return sorted(effective.values(), key=lambda item: (item["skillId"], item["id"]))
 
 
-def _visible_skill(ctx: Any, skill_id: str, employee_id: str) -> dict[str, Any]:
+def _visible_skill(ctx: Any, skill_id: str, user_id: str) -> dict[str, Any]:
     skill = ctx.skill_store.get_skill(skill_id)
     if (
         not skill
         or skill.get("deletedAt")
         or (
             skill.get("visibility") != "org"
-            and skill.get("ownerEmployeeId") != employee_id
+            and skill.get("ownerUserId") != user_id
         )
     ):
         raise SkillAssignmentError("skill-not-found")
@@ -119,7 +119,7 @@ def _validate_target_owner(
     ctx: Any,
     target_type: str,
     target_id: str,
-    employee_id: str,
+    user_id: str,
     *,
     actor_is_admin: bool,
 ) -> None:
@@ -127,27 +127,27 @@ def _validate_target_owner(
         if not actor_is_admin or target_id != "org":
             raise SkillAssignmentError("not-target-owner")
         return
-    if target_type == "employee":
-        if target_id != employee_id:
+    if target_type == "user":
+        if target_id != user_id:
             raise SkillAssignmentError("not-target-owner")
         return
     if target_type == "agent":
         target = ctx.agent_store.get_agent(target_id)
         unavailable = not target or target.get("deletedAt")
-        owner = target.get("supervisorEmployeeId") if target else None
+        owner = target.get("supervisorUserId") if target else None
     elif target_type == "team":
         target = ctx.team_store.get_team(target_id)
         unavailable = not target or target.get("deletedAt")
-        owner = target.get("ownerEmployeeId") if target else None
+        owner = target.get("ownerUserId") if target else None
     elif target_type == "project":
         target = ctx.project_store.get_project(target_id)
         unavailable = not target or target.get("archivedAt")
-        owner = target.get("ownerEmployeeId") if target else None
+        owner = target.get("ownerUserId") if target else None
     else:
         raise SkillAssignmentError("invalid-assignment-target")
     if unavailable:
         raise SkillAssignmentError("assignment-target-not-found")
-    if owner != employee_id and not actor_is_admin:
+    if owner != user_id and not actor_is_admin:
         raise SkillAssignmentError("not-target-owner")
 
 

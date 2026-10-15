@@ -3,17 +3,17 @@ import { describe, it } from "node:test";
 
 import {
   agentsOnNodes,
-  buildEmployeeSummaries,
-  employeeEmptyStateTranslationKey,
-  employeesByStatus,
-  employeeSummaryStatus,
+  buildUserSummaries,
+  userEmptyStateTranslationKey,
+  usersByStatus,
+  userSummaryStatus,
   formatRelativeTime,
-  EMPLOYEE_SUMMARY_STATUS_ORDER,
+  USER_SUMMARY_STATUS_ORDER,
   nodesByStatus,
   NODE_STATUS_ORDER,
   initialsOf,
   isStale,
-  matchesEmployeeQuickFilter,
+  matchesUserQuickFilter,
   matchesNodeQuickFilter,
   nodeAgentPresence,
   stableNodeOrder,
@@ -22,13 +22,13 @@ import {
   truncateId,
   visualStatus,
 } from "../src/lib/adminHelpers.js";
-import type { AgentPlacement, ControlPanelDaemonNodeRecord, EmployeeAgent, EmployeeRecord } from "../src/types.js";
+import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent, UserRecord } from "../src/types.js";
 
 function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string }): ControlPanelDaemonNodeRecord {
   return {
     id: input.id,
     displayName: input.displayName,
-    employeeId: input.employeeId,
+    userId: input.userId,
     status: input.status ?? "ready",
     online: input.online ?? true,
     stale: input.stale,
@@ -57,7 +57,7 @@ describe("stableNodeOrder", () => {
   });
 });
 
-function employee(input: Partial<EmployeeRecord> & { id: string }): EmployeeRecord {
+function user(input: Partial<UserRecord> & { id: string }): UserRecord {
   return {
     id: input.id,
     displayName: input.displayName ?? input.id,
@@ -175,16 +175,16 @@ describe("truncateId", () => {
   });
 });
 
-describe("buildEmployeeSummaries", () => {
-  it("aggregates nodes by employee and counts ready/running", () => {
-    const employees = [employee({ id: "alice", displayName: "Alice" }), employee({ id: "bob" })];
+describe("buildUserSummaries", () => {
+  it("aggregates nodes by user and counts ready/running", () => {
+    const users = [user({ id: "alice", displayName: "Alice" }), user({ id: "bob" })];
     const nodes = [
-      node({ id: "n1", employeeId: "alice", status: "ready" }),
-      node({ id: "n2", employeeId: "alice", status: "running" }),
-      node({ id: "n3", employeeId: "bob", status: "ready" }),
-      node({ id: "orphan", employeeId: undefined }),
+      node({ id: "n1", userId: "alice", status: "ready" }),
+      node({ id: "n2", userId: "alice", status: "running" }),
+      node({ id: "n3", userId: "bob", status: "ready" }),
+      node({ id: "orphan", userId: undefined }),
     ];
-    const summaries = buildEmployeeSummaries(employees, nodes);
+    const summaries = buildUserSummaries(users, nodes);
     const alice = summaries.find((s) => s.id === "alice");
     const bob = summaries.find((s) => s.id === "bob");
     assert.ok(alice, "alice summary missing");
@@ -198,40 +198,40 @@ describe("buildEmployeeSummaries", () => {
 
   it("counts failed and stale nodes so they don't hide as idle", () => {
     const nodes = [
-      node({ id: "n1", employeeId: "alice", status: "failed" }),
-      node({ id: "n2", employeeId: "alice", status: "ready", stale: true }),
-      node({ id: "n3", employeeId: "alice", status: "stopped" }),
+      node({ id: "n1", userId: "alice", status: "failed" }),
+      node({ id: "n2", userId: "alice", status: "ready", stale: true }),
+      node({ id: "n3", userId: "alice", status: "stopped" }),
     ];
-    const summaries = buildEmployeeSummaries([employee({ id: "alice" })], nodes);
+    const summaries = buildUserSummaries([user({ id: "alice" })], nodes);
     const alice = summaries.find((s) => s.id === "alice");
     assert.ok(alice, "alice summary missing");
     // failed + stale count; the stopped node is neither active nor failed.
     assert.equal(alice.failedCount, 2);
     assert.equal(alice.readyCount, 0);
     assert.equal(alice.runningCount, 0);
-    assert.equal(matchesEmployeeQuickFilter(alice, "failed"), true);
-    assert.deepEqual(employeeSummaryStatus(alice), { tone: "bad", key: "failed" });
+    assert.equal(matchesUserQuickFilter(alice, "failed"), true);
+    assert.deepEqual(userSummaryStatus(alice), { tone: "bad", key: "failed" });
   });
 
   it("reads a fleet whose only problem is a quiet computer as degraded, not failed", () => {
     // Same "Failed / stale" bucket for filtering and sorting, but the tone
     // follows the worst machine in it: a lapsed heartbeat is amber everywhere
-    // else in the app, so it must not turn the employee's card red.
-    const nodes = [node({ id: "n1", employeeId: "bob", stale: true, status: "ready" })];
-    const bob = buildEmployeeSummaries([employee({ id: "bob" })], nodes).find((s) => s.id === "bob");
+    // else in the app, so it must not turn the user's card red.
+    const nodes = [node({ id: "n1", userId: "bob", stale: true, status: "ready" })];
+    const bob = buildUserSummaries([user({ id: "bob" })], nodes).find((s) => s.id === "bob");
     assert.ok(bob, "bob summary missing");
     assert.equal(bob.failedCount, 1);
-    assert.deepEqual(employeeSummaryStatus(bob), { tone: "warn", key: "failed" });
+    assert.deepEqual(userSummaryStatus(bob), { tone: "warn", key: "failed" });
   });
 
-  it("includes employees that have no nodes", () => {
-    const summaries = buildEmployeeSummaries([employee({ id: "ghost" })], []);
+  it("includes users that have no nodes", () => {
+    const summaries = buildUserSummaries([user({ id: "ghost" })], []);
     assert.equal(summaries.length, 1);
     assert.equal(summaries[0].nodeCount, 0);
   });
 
-  it("surfaces phantom employee-ids that appear only on nodes", () => {
-    const summaries = buildEmployeeSummaries([], [node({ id: "n1", employeeId: "phantom" })]);
+  it("surfaces phantom user-ids that appear only on nodes", () => {
+    const summaries = buildUserSummaries([], [node({ id: "n1", userId: "phantom" })]);
     const phantom = summaries.find((s) => s.id === "phantom");
     assert.ok(phantom, "phantom missing");
     assert.equal(phantom.displayName, "phantom");
@@ -256,12 +256,12 @@ describe("admin quick filters", () => {
     assert.equal(matchesNodeQuickFilter(staleStopped, "stopped"), false);
     assert.equal(matchesNodeQuickFilter(staleStopped, "failed"), true);
 
-    const [employeeSummary] = buildEmployeeSummaries(
-      [employee({ id: "alice" })],
-      [{ ...staleStopped, employeeId: "alice" }],
+    const [userSummary] = buildUserSummaries(
+      [user({ id: "alice" })],
+      [{ ...staleStopped, userId: "alice" }],
     );
-    assert.equal(employeeSummary.failedCount, 1);
-    assert.equal(matchesEmployeeQuickFilter(employeeSummary, "failed"), true);
+    assert.equal(userSummary.failedCount, 1);
+    assert.equal(matchesUserQuickFilter(userSummary, "failed"), true);
   });
 
   it("keeps an authoritative non-stale stopped placeholder in the stopped slice", () => {
@@ -278,13 +278,13 @@ describe("admin quick filters", () => {
     assert.equal(matchesNodeQuickFilter(stoppedPlaceholder, "failed"), false);
   });
 
-  it("uses filter-oriented employee empty copy when there is no search query", () => {
+  it("uses filter-oriented user empty copy when there is no search query", () => {
     assert.equal(
-      employeeEmptyStateTranslationKey("", "failed"),
-      "admin.v2.no_employees_for_filter",
+      userEmptyStateTranslationKey("", "failed"),
+      "admin.v2.no_users_for_filter",
     );
     assert.equal(
-      employeeEmptyStateTranslationKey("alice", "failed"),
+      userEmptyStateTranslationKey("alice", "failed"),
       "admin.v2.no_match",
     );
   });
@@ -293,7 +293,7 @@ describe("admin quick filters", () => {
 function placement(input: Partial<AgentPlacement> & Pick<AgentPlacement, "id" | "daemonNodeId">): AgentPlacement {
   return {
     agentId: "agent",
-    employeeId: "someone",
+    userId: "someone",
     nodeDisplayName: undefined,
     executorKind: "claude",
     desiredState: "active",
@@ -308,9 +308,9 @@ function placement(input: Partial<AgentPlacement> & Pick<AgentPlacement, "id" | 
   };
 }
 
-function agent(input: Partial<EmployeeAgent> & Pick<EmployeeAgent, "id">): EmployeeAgent {
+function agent(input: Partial<UserAgent> & Pick<UserAgent, "id">): UserAgent {
   return {
-    supervisorEmployeeId: "someone",
+    supervisorUserId: "someone",
     displayName: input.id,
     executorKind: "claude",
     skillPolicy: {},
@@ -327,23 +327,23 @@ function agent(input: Partial<EmployeeAgent> & Pick<EmployeeAgent, "id">): Emplo
 }
 
 describe("agentsOnNodes", () => {
-  const alice = buildEmployeeSummaries(
-    [employee({ id: "alice" })],
-    [node({ id: "n1", employeeId: "alice" }), node({ id: "n2", employeeId: "alice" })],
+  const alice = buildUserSummaries(
+    [user({ id: "alice" })],
+    [node({ id: "n1", userId: "alice" }), node({ id: "n2", userId: "alice" })],
   )[0];
-  const agentsForEmployee = (member: typeof alice, agents: EmployeeAgent[]) =>
+  const agentsForUser = (member: typeof alice, agents: UserAgent[]) =>
     agentsOnNodes(member.nodes.map((n) => n.id), agents);
 
-  it("resolves agents through the employee's nodes, not the agent's supervisor", () => {
+  it("resolves agents through the user's nodes, not the agent's supervisor", () => {
     const agents = [
       // Placed on one of alice's nodes → hers, even though the supervisor points elsewhere.
-      agent({ id: "on-node", supervisorEmployeeId: "bob", placements: [placement({ id: "p1", daemonNodeId: "n2" })] }),
+      agent({ id: "on-node", supervisorUserId: "bob", placements: [placement({ id: "p1", daemonNodeId: "n2" })] }),
       // Supervised by alice but placed on a foreign node → not shown.
-      agent({ id: "elsewhere", supervisorEmployeeId: "alice", placements: [placement({ id: "p2", daemonNodeId: "other" })] }),
+      agent({ id: "elsewhere", supervisorUserId: "alice", placements: [placement({ id: "p2", daemonNodeId: "other" })] }),
       // No placements at all → not shown.
-      agent({ id: "unplaced", supervisorEmployeeId: "alice", placements: [] }),
+      agent({ id: "unplaced", supervisorUserId: "alice", placements: [] }),
     ];
-    assert.deepEqual(agentsForEmployee(alice, agents).map((a) => a.id), ["on-node"]);
+    assert.deepEqual(agentsForUser(alice, agents).map((a) => a.id), ["on-node"]);
   });
 
   it("ignores removed placements and deleted agents", () => {
@@ -352,7 +352,7 @@ describe("agentsOnNodes", () => {
       agent({ id: "deleted", deletedAt: "2026-01-01", placements: [placement({ id: "p2", daemonNodeId: "n1" })] }),
       agent({ id: "live", placements: [placement({ id: "p3", daemonNodeId: "n1" })] }),
     ];
-    assert.deepEqual(agentsForEmployee(alice, agents).map((a) => a.id), ["live"]);
+    assert.deepEqual(agentsForUser(alice, agents).map((a) => a.id), ["live"]);
   });
 
   it("associates agents through the Computer's current runtime node", () => {
@@ -367,7 +367,7 @@ describe("agentsOnNodes", () => {
       }),
     ];
 
-    assert.deepEqual(agentsForEmployee(alice, agents).map((a) => a.id), ["replaced-runtime"]);
+    assert.deepEqual(agentsForUser(alice, agents).map((a) => a.id), ["replaced-runtime"]);
   });
 });
 
@@ -387,37 +387,37 @@ describe("initialsOf", () => {
   });
 });
 
-describe("employeesByStatus", () => {
-  it("bands every employee under the state their own row derives", () => {
-    const employees = [
-      employee({ id: "a", displayName: "A" }),
-      employee({ id: "b", displayName: "B" }),
-      employee({ id: "c", displayName: "C" }),
-      employee({ id: "d", displayName: "D" }),
+describe("usersByStatus", () => {
+  it("bands every user under the state their own row derives", () => {
+    const users = [
+      user({ id: "a", displayName: "A" }),
+      user({ id: "b", displayName: "B" }),
+      user({ id: "c", displayName: "C" }),
+      user({ id: "d", displayName: "D" }),
     ];
     const nodes = [
-      node({ id: "n1", employeeId: "a", status: "running", activeRuns: [{ id: "r" }] as never }),
-      node({ id: "n2", employeeId: "b", status: "ready" }),
-      node({ id: "n3", employeeId: "c", status: "failed" }),
+      node({ id: "n1", userId: "a", status: "running", activeRuns: [{ id: "r" }] as never }),
+      node({ id: "n2", userId: "b", status: "ready" }),
+      node({ id: "n3", userId: "c", status: "failed" }),
     ];
-    const summaries = buildEmployeeSummaries(employees, nodes);
+    const summaries = buildUserSummaries(users, nodes);
 
-    const grouped = employeesByStatus(summaries);
-    const total = EMPLOYEE_SUMMARY_STATUS_ORDER.reduce((sum, key) => sum + grouped[key].length, 0);
+    const grouped = usersByStatus(summaries);
+    const total = USER_SUMMARY_STATUS_ORDER.reduce((sum, key) => sum + grouped[key].length, 0);
 
-    // A partition: every employee lands in exactly one band.
+    // A partition: every user lands in exactly one band.
     assert.equal(total, summaries.length);
     for (const summary of summaries) {
-      const { key } = employeeSummaryStatus(summary);
+      const { key } = userSummaryStatus(summary);
       assert.ok(grouped[key].some((member) => member.id === summary.id));
     }
-    // The employee with no computer at all is the one band nothing else fills.
+    // The user with no computer at all is the one band nothing else fills.
     assert.deepEqual(grouped.no_nodes.map((member) => member.id), ["d"]);
   });
 
   it("keeps a band for every declared state, even an empty one", () => {
-    const grouped = employeesByStatus(buildEmployeeSummaries([], []));
-    for (const key of EMPLOYEE_SUMMARY_STATUS_ORDER) assert.deepEqual(grouped[key], []);
+    const grouped = usersByStatus(buildUserSummaries([], []));
+    for (const key of USER_SUMMARY_STATUS_ORDER) assert.deepEqual(grouped[key], []);
   });
 });
 

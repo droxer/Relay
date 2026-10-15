@@ -22,7 +22,7 @@
 ## 产品与架构
 
 - [`product.md`](product.md) 负责产品方向、用户、场景和路线图。
-- [`agent-facing-product-design.md`](agent-facing-product-design.md) 负责面向员工的智能体模型和词汇边界。
+- [`agent-facing-product-design.md`](agent-facing-product-design.md) 负责面向用户的智能体模型和词汇边界。
 - [`system-architecture.md`](system-architecture.md) 负责目标架构和战略技术选择。
 - [`implementation-plan.md`](implementation-plan.md) 将目标架构转换为服务边界、数据模型、API、运行流程和实施阶段。
 - [`agent-first-runtime-design.md`](agent-first-runtime-design.md) 负责逻辑智能体运行时设计。

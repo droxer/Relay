@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
      is what the existing admin cards already used.
 
    `interactive` is for cards that are themselves a target (fleet nodes,
-   employees): the hairline strengthens on hover instead of the surface washing,
+   users): the hairline strengthens on hover instead of the surface washing,
    so a hovered card never competes with a selected row. */
 const cardVariants = cva(
   "flex min-w-0 flex-col rounded-lg border border-hairline bg-card text-card-foreground",

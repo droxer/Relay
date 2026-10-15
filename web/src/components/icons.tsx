@@ -237,7 +237,7 @@ export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
 // The org console, not a user's settings. `UserCog` put a SECOND gear in the
 // rail — directly above Preferences' `Settings` gear in the footer — and
 // framed the whole admin surface as "edit a person", when what it actually
-// holds is employees, departments, org settings and the fleet. A building is
+// holds is users, departments, org settings and the fleet. A building is
 // the organisation those belong to, and no other glyph in the app claims it.
 //
 // The obvious objection is that the rail LABELS this "Control panel", and a
@@ -249,7 +249,7 @@ export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
 //   - `Settings2` is the same shape again AND is already `AdminManageExecutors`.
 //   - `SlidersVertical` genuinely clears both — vertical faders collide with
 //     nothing here — but it describes tweaking knobs, and this destination
-//     holds employees, departments and a fleet of machines. Building2 names
+//     holds users, departments and a fleet of machines. Building2 names
 //     what the page CONTAINS; faders name what you imagine doing there.
 // If this pairing is ever revisited, the weaker half is the label, not the
 // glyph — renaming the destination is a product call, not an icon one.
@@ -281,7 +281,7 @@ export const NavRoutine = withStandardStroke(Zap, "NavRoutine");
 export const NavAgents = identityGlyph("agent", "NavAgents");
 // A team is a cluster of agent nodes — no longer *the same idea
 // as* the bespoke team IdentityMark, but that mark itself. `Users` stays with
-// employees (actual people), so the roster chip and the teams nav are not the
+// users (actual people), so the roster chip and the teams nav are not the
 // same silhouette.
 export const NavTeams = identityGlyph("team", "NavTeams");
 // The skills section: a reference manual, not a tool or a document. SideNav
@@ -468,7 +468,7 @@ export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");
 export const ActionEdit = withStandardStroke(Pencil, "ActionEdit");
 export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 
-// Admin page glyphs — node/employee management and channel setup.
+// Admin page glyphs — node/user management and channel setup.
 // Same machine as NavComputer — the admin fleet section and the computers
 // nav are one object seen from two surfaces.
 export const AdminNode = withStandardStroke(ChipGlyph, "AdminNode");
@@ -476,7 +476,7 @@ export const AdminManageExecutors = withStandardStroke(Settings2, "AdminManageEx
 export const AdminDelete = withStandardStroke(Trash2, "AdminDelete");
 export const AdminRestore = withStandardStroke(RotateCcw, "AdminRestore");
 export const AdminDashboard = withStandardStroke(LayoutDashboard, "AdminDashboard");
-export const AdminEmployees = withStandardStroke(Users, "AdminEmployees");
+export const AdminUsers = withStandardStroke(Users, "AdminUsers");
 export const AdminConnect = withStandardStroke(Link2, "AdminConnect");
 export const AdminLocked = withStandardStroke(LockKeyhole, "AdminLocked");
 // Same glyph as NavChannels — admin channel setup and the channels nav are

@@ -1,7 +1,7 @@
 {
   "name": "relay-supervisor",
   "version": "0.1.0",
-  "description": "Relay supervisor: ensures employee daemon nodes are provisioned and running",
+  "description": "Relay supervisor: ensures user daemon nodes are provisioned and running",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"

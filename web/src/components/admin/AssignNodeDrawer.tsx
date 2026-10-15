@@ -12,10 +12,10 @@ import { assignControlPanelDaemonNode, createControlPanelDaemonNode, createManag
 import type {
   AssignControlPanelDaemonNodeResponse,
   ControlPanelDaemonNodeRecord,
-  EmployeeRecord,
+  UserRecord,
 } from "../../types";
 import type { AddNodeDrawerSuccess } from "./AddNodeDrawer";
-import { employeeHandleOf } from "../../lib/employeeHandle";
+import { userHandleOf } from "../../lib/userHandle";
 import { Drawer } from "@/components/ui/Drawer";
 import { RunModeField, type RunLocation } from "./RunModeField";
 import { initialsOf, statusTone, visualStatus } from "./helpers";
@@ -43,9 +43,9 @@ const NEW_NODE_VALUE = "__new__";
 interface AssignNodeDrawerProps {
   open: boolean;
   onClose: () => void;
-  employees: EmployeeRecord[];
+  users: UserRecord[];
   unassignedNodes: ControlPanelDaemonNodeRecord[];
-  defaultEmployeeId?: string;
+  defaultUserId?: string;
   onAssignSuccess: (result: AssignControlPanelDaemonNodeResponse) => void;
   onCreateNodeSuccess: (outcome: AddNodeDrawerSuccess) => void;
 }
@@ -53,15 +53,15 @@ interface AssignNodeDrawerProps {
 export function AssignNodeDrawer({
   open,
   onClose,
-  employees,
+  users,
   unassignedNodes,
-  defaultEmployeeId,
+  defaultUserId,
   onAssignSuccess,
   onCreateNodeSuccess,
 }: AssignNodeDrawerProps) {
   const { t } = useTranslation();
-  const employeeLabelId = useId();
-  const [employeeId, setEmployeeId] = useState("");
+  const userLabelId = useId();
+  const [userId, setUserId] = useState("");
   const [nodeId, setNodeId] = useState("");
   const [createNew, setCreateNew] = useState(false);
   const [nodeLocation, setNodeLocation] = useState<RunLocation>("managed");
@@ -69,17 +69,17 @@ export function AssignNodeDrawer({
   const [workspacePath, setWorkspacePath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
-    employeeId?: string;
+    userId?: string;
     nodeId?: string;
     workspacePath?: string;
   }>({});
   const [isBusy, setIsBusy] = useState(false);
-  const employeeTriggerRef = useRef<HTMLButtonElement>(null);
+  const userTriggerRef = useRef<HTMLButtonElement>(null);
   const nodeListRef = useRef<HTMLUListElement>(null);
   const workspacePathRef = useRef<HTMLInputElement>(null);
 
   useOnOpen(open, () => {
-    setEmployeeId(defaultEmployeeId ?? "");
+    setUserId(defaultUserId ?? "");
     setNodeId("");
     setCreateNew(false);
     setNodeLocation("managed");
@@ -88,16 +88,16 @@ export function AssignNodeDrawer({
     setError(null);
     setFieldErrors({});
     setIsBusy(false);
-  }, defaultEmployeeId ?? "");
+  }, defaultUserId ?? "");
 
-  function clearFieldError(field: "employeeId" | "nodeId" | "workspacePath") {
+  function clearFieldError(field: "userId" | "nodeId" | "workspacePath") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
-  const employeeLocked = Boolean(defaultEmployeeId);
-  const selectedEmployee = useMemo(
-    () => employees.find((e) => e.id === employeeId) ?? null,
-    [employees, employeeId],
+  const userLocked = Boolean(defaultUserId);
+  const selectedUser = useMemo(
+    () => users.find((e) => e.id === userId) ?? null,
+    [users, userId],
   );
   const hasNodes = unassignedNodes.length > 0;
   // With no unassigned nodes, creating one is the only path — force it.
@@ -106,19 +106,19 @@ export function AssignNodeDrawer({
   // Nothing here can be assigned to nobody, so an empty directory blocks the
   // whole form rather than failing validation against a picker that is not
   // rendered.
-  const blockedNoEmployees = employees.length === 0 && !employeeLocked;
+  const blockedNoUsers = users.length === 0 && !userLocked;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (blockedNoEmployees) return;
-    const nextEmployeeId = employeeId.trim().replace(/^@/, "");
+    if (blockedNoUsers) return;
+    const nextUserId = userId.trim().replace(/^@/, "");
     const nextFieldErrors: typeof fieldErrors = {};
-    if (!nextEmployeeId) nextFieldErrors.employeeId = t("admin.employee_required");
+    if (!nextUserId) nextFieldErrors.userId = t("admin.user_required");
     if (!creatingNode && !nodeId) nextFieldErrors.nodeId = t("admin.node_required");
     if (creatingNode && !isManaged && !workspacePath.trim()) nextFieldErrors.workspacePath = t("admin.v2.workspace_path_required");
     setFieldErrors(nextFieldErrors);
-    const firstInvalid = nextFieldErrors.employeeId
-      ? employeeTriggerRef
+    const firstInvalid = nextFieldErrors.userId
+      ? userTriggerRef
       : nextFieldErrors.nodeId
         ? nodeListRef
         : nextFieldErrors.workspacePath
@@ -135,7 +135,7 @@ export function AssignNodeDrawer({
       if (creatingNode) {
         if (isManaged) {
           const result = await createManagedNode({
-            employeeId: nextEmployeeId,
+            userId: nextUserId,
             displayName: displayName.trim() || undefined,
             sandboxMode: "boxlite",
           });
@@ -145,17 +145,17 @@ export function AssignNodeDrawer({
           // runs agents as host processes, so the isolated runtime would hand
           // back a start command for a VM the device cannot boot.
           const result = await createControlPanelDaemonNode({
-            employeeId: nextEmployeeId,
+            userId: nextUserId,
             displayName: displayName.trim() || undefined,
             workspacePath: workspacePath.trim(),
             sandboxMode: "none",
-            nodeLocation: "employee-device",
+            nodeLocation: "user-device",
           });
           onCreateNodeSuccess({ kind: "manual", result });
         }
       } else {
         const result = await assignControlPanelDaemonNode({
-          employeeId: nextEmployeeId,
+          userId: nextUserId,
           nodeId,
         });
         onAssignSuccess(result);
@@ -171,15 +171,15 @@ export function AssignNodeDrawer({
     }
   }
 
-  const displayHandle = selectedEmployee
-    ? `@${employeeHandleOf(selectedEmployee)}`
-    : employeeId
-      ? `@${employeeId.replace(/^@/, "")}`
+  const displayHandle = selectedUser
+    ? `@${userHandleOf(selectedUser)}`
+    : userId
+      ? `@${userId.replace(/^@/, "")}`
       : "";
   const hasUnsavedChanges =
     createNew
     || Boolean(displayName || nodeId || workspacePath)
-    || employeeId !== (defaultEmployeeId ?? "");
+    || userId !== (defaultUserId ?? "");
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
   async function requestClose() {
@@ -203,20 +203,20 @@ export function AssignNodeDrawer({
         onSubmit={(event) => void handleSubmit(event)}
         noValidate
       >
-        {employeeLocked && selectedEmployee ? (
-          <section className="adm-assign-operator" aria-label={t("admin.employee")}>
+        {userLocked && selectedUser ? (
+          <section className="adm-assign-operator" aria-label={t("admin.user")}>
             <span className="adm-assign-operator-eyebrow">
-              {t("admin.employee")}
+              {t("admin.user")}
             </span>
             <div className="adm-assign-operator-card">
               <span className="adm-assign-avatar" aria-hidden="true">
-                {initialsOf(employeeHandleOf(selectedEmployee))}
+                {initialsOf(userHandleOf(selectedUser))}
               </span>
                 <div className="adm-assign-operator-text">
-                  {selectedEmployee.displayName &&
-                  selectedEmployee.displayName !== selectedEmployee.id ? (
+                  {selectedUser.displayName &&
+                  selectedUser.displayName !== selectedUser.id ? (
                     <span className="adm-assign-operator-name">
-                      {selectedEmployee.displayName}
+                      {selectedUser.displayName}
                     </span>
                   ) : null}
                   <span className="adm-assign-operator-handle code">
@@ -226,53 +226,53 @@ export function AssignNodeDrawer({
             </div>
           </section>
         ) : (
-          <section className="adm-assign-picker" aria-label={t("admin.employee")}>
-            {employees.length === 0 ? (
+          <section className="adm-assign-picker" aria-label={t("admin.user")}>
+            {users.length === 0 ? (
               <p className="adm-form-hint adm-form-hint--notice">
-                {t("admin.v2.add_node_no_employees")}
+                {t("admin.v2.add_node_no_users")}
               </p>
             ) : (
               <Field
-                label={t("admin.employee")}
-                labelId={employeeLabelId}
+                label={t("admin.user")}
+                labelId={userLabelId}
                 wrapper="div"
-                error={fieldErrors.employeeId}
-                errorId="assign-node-employee-error"
+                error={fieldErrors.userId}
+                errorId="assign-node-user-error"
               >
                 <Select
-                  value={employeeId || null}
+                  value={userId || null}
                   onValueChange={(value) => {
-                    setEmployeeId(value ?? "");
-                    clearFieldError("employeeId");
+                    setUserId(value ?? "");
+                    clearFieldError("userId");
                   }}
                 >
                   <SelectTrigger
-                    ref={employeeTriggerRef}
+                    ref={userTriggerRef}
                     data-modal-initial-focus
                     className="w-full code"
-                    aria-labelledby={employeeLabelId}
-                    aria-invalid={Boolean(fieldErrors.employeeId) || undefined}
-                    aria-describedby={fieldErrors.employeeId ? "assign-node-employee-error" : undefined}
+                    aria-labelledby={userLabelId}
+                    aria-invalid={Boolean(fieldErrors.userId) || undefined}
+                    aria-describedby={fieldErrors.userId ? "assign-node-user-error" : undefined}
                   >
-                    <SelectValue placeholder={t("admin.select_employee")}>
+                    <SelectValue placeholder={t("admin.select_user")}>
                       {(value: string | null) => {
-                        if (!value) return t("admin.select_employee");
-                        const employee = employees.find((e) => e.id === value);
-                        if (!employee) return `@${value}`;
-                        const handle = employeeHandleOf(employee);
-                        return employee.displayName && employee.displayName !== handle
-                          ? `${employee.displayName} / @${handle}`
+                        if (!value) return t("admin.select_user");
+                        const user = users.find((e) => e.id === value);
+                        if (!user) return `@${value}`;
+                        const handle = userHandleOf(user);
+                        return user.displayName && user.displayName !== handle
+                          ? `${user.displayName} / @${handle}`
                           : `@${handle}`;
                       }}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.displayName && employee.displayName !== employeeHandleOf(employee)
-                          ? `${employee.displayName} / `
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.displayName && user.displayName !== userHandleOf(user)
+                          ? `${user.displayName} / `
                           : ""}
-                        <span className="text-muted-foreground">@{employeeHandleOf(employee)}</span>
+                        <span className="text-muted-foreground">@{userHandleOf(user)}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -465,7 +465,7 @@ export function AssignNodeDrawer({
           >
             {t("admin.v2.cancel")}
           </Button>
-          <Button size="cta" type="submit" loading={isBusy} disabled={isBusy || blockedNoEmployees}>
+          <Button size="cta" type="submit" loading={isBusy} disabled={isBusy || blockedNoUsers}>
             {isBusy
               ? creatingNode
                 ? t(isManaged ? "admin.creating" : "admin.v2.generating")

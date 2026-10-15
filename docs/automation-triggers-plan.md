@@ -68,7 +68,7 @@ Regression evidence is recorded in `docs/testing/automation-triggers.tdd.md`.
 3. **Status changes come from `task.status` events**, detected by diffing the snapshot before/after a write, not from `task.updated`.
 4. **Triggered occurrences need a new store method.** `create_routine_occurrence` dedupes by date, so it would return the morning's occurrence for an afternoon event.
 5. **`fileExtension` filter dropped.** `agent.completed` carries no file list and artifact indexing order is not guaranteed; out of v1.
-6. **No `RELAY_AUTOMATION_TRIGGERS_ENABLED` flag.** It was default-on and the only capability endpoint (`GET /admin/settings`) is admin-only; employees edit automations too.
+6. **No `RELAY_AUTOMATION_TRIGGERS_ENABLED` flag.** It was default-on and the only capability endpoint (`GET /admin/settings`) is admin-only; users edit automations too.
 7. **Webhook to an unknown routine answers 401, not 404**, so the endpoint does not reveal which ids exist.
 8. **"In flight" for coalescing is `backlog | assigned | running`.** An occurrence parked in review/blocked/waiting_for_human must not hold events forever.
 9. **New routine state `listening`** for enabled non-schedule automations; otherwise every event automation shows as "Unscheduled".
@@ -526,14 +526,14 @@ def _client(monkeypatch, root: str) -> tuple[TestClient, dict]:
     monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
     client = TestClient(create_app(root))
     _bootstrap_admin(client)
-    _create_user(client, "alice", employee_id="alice")
+    _create_user(client, "alice", user_id="alice")
     return client, _create_agent(client, "alice")
 
 
 def _routine(client: TestClient, agent: dict, **extra) -> dict:
     response = client.post("/api/v1/tasks", json={
         "title": "Triage failures", "description": "Look into it.",
-        "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+        "ownerUserId": "alice", "assigneeUserId": "alice",
         "assignedAgentId": agent["id"], "isRoutine": True, "routineEnabled": True,
         "routineCadence": "weekly", **extra,
     })
@@ -678,9 +678,9 @@ def validate_trigger_scope(
             found = None
         if not found:
             raise HTTPException(400, f"routineTrigger filters.{key} does not exist.")
-    owner_actor = {"employeeId": owner, "isAdmin": False}
-    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_employee_id=owner)
-    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_employee_id=owner)
+    owner_actor = {"userId": owner, "isAdmin": False}
+    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_user_id=owner)
+    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_user_id=owner)
     project = project_for_owner(ctx, filters.get("projectId"), owner, require_enabled=True)
     if project:
         validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
@@ -688,7 +688,7 @@ def validate_trigger_scope(
 
 ```
 
-Call `validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)` in create and pass `owner=current["ownerEmployeeId"]` in PATCH, immediately after `routine_fields(...)`.
+Call `validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)` in create and pass `owner=current["ownerUserId"]` in PATCH, immediately after `routine_fields(...)`.
 
 - [ ] **Step 7: Run, expect PASS.** Then `pytest tests/api/test_tasks.py tests/unit/test_task_store.py tests/unit/test_task_scheduler.py -q` → PASS.
 - [ ] **Step 8: Commit.** `git add -A backend && git commit -m "feat(backend): persist automation triggers on routines"`
@@ -1513,9 +1513,9 @@ class AutomationMatcher:
             return [target] if trigger_kind(target) == "webhook" else []
         matched = []
         for task in automations.values():
-            owner = task.get("ownerEmployeeId")
+            owner = task.get("ownerUserId")
             subject = event.get("subject") or {}
-            if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
+            if owner and owner not in (subject.get("ownerUserId"), subject.get("assigneeUserId")):
                 continue
             try:
                 trigger = normalize_trigger(trigger_of(task))
@@ -1550,7 +1550,7 @@ class AutomationMatcher:
         run = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
         linked = [task for task in self.task_store.list_tasks_for_session(session_id) if not task.get("isRoutine")]
         task = linked[0] if linked else None
-        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerEmployeeId": session.get("ownerEmployeeId")}
+        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
         if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
             subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
         origin = task.get("sourceRoutineId") if task else None
@@ -1902,8 +1902,8 @@ def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     if not task.get("isRoutine") or trigger_kind(task) != "webhook":
         raise HTTPException(409, "automation_not_webhook")
-    editors = {task.get("ownerEmployeeId")} - {None}
-    if not actor["isAdmin"] and actor.get("employeeId") not in editors:
+    editors = {task.get("ownerUserId")} - {None}
+    if not actor["isAdmin"] and actor.get("userId") not in editors:
         raise HTTPException(403, "Only the automation's owner or an admin can manage its webhook.")
     return task
 
@@ -2240,13 +2240,13 @@ import { Input } from "../ui/Input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/Select";
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, isEventKind, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
+import type { AgentTeam, UserAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
 
 type Props = {
   trigger: RoutineTrigger;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   teams: AgentTeam[];
   projects: ProjectRecord[];
   onChange: (next: RoutineTrigger) => void;

@@ -69,7 +69,7 @@ COMMON_PASSWORDS = frozenset(
         "pass", "passpass", "test", "test123", "testtest", "testing",
         "temp123", "temporary", "demo1234", "sample123", "example",
         "relay", "relay123", "relaypass", "relayrelay", "agent123",
-        "sandbox", "sandbox1", "workspace", "employee", "employee1",
+        "sandbox", "sandbox1", "workspace", "employee", "employee1", "user", "user1",
         "companyname", "corporate", "business", "office", "manager",
         "summer2024", "summer2025", "summer2026", "winter2024",
         "winter2025", "winter2026", "spring2025", "spring2026",

@@ -23,9 +23,9 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { useKeyChange } from "../../hooks/useKeyChange";
 
-/** Org-wide defaults: how many personal computers an employee may enroll, and
+/** Org-wide defaults: how many personal computers a user may enroll, and
     how many extra rounds a task may run when it keeps reporting itself
-    unfinished. Each is a default every employee or task follows unless an admin
+    unfinished. Each is a default every user or task follows unless an admin
     pins a different value on one individually. */
 export function SettingsView() {
   const { t } = useTranslation();
@@ -58,10 +58,10 @@ export function SettingsView() {
         })}
         min={MIN_LOCAL_COMPUTERS}
         max={MAX_LOCAL_COMPUTERS_CEILING}
-        saved={settings?.maxLocalComputersPerEmployee}
+        saved={settings?.maxLocalComputersPerUser}
         isLoading={settingsQuery.isLoading}
         onSave={async (next) => {
-          await updateOrgSettings({ maxLocalComputersPerEmployee: next });
+          await updateOrgSettings({ maxLocalComputersPerUser: next });
           await settingsQuery.refetch();
         }}
       />
@@ -116,7 +116,7 @@ function AdminTokenCard({
   async function handleIssue() {
     /* Reissuing kills the current token immediately — the most destructive
        action in settings — so it goes through the themed danger confirm, not
-       native window.confirm (same pattern as CredentialsDrawer/EmployeesView).
+       native window.confirm (same pattern as CredentialsDrawer/UsersView).
        A first issue replaces nothing, so it needs no confirm. */
     if (configured) {
       const ok = await confirm({

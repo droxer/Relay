@@ -44,7 +44,7 @@ def test_dashboard_sessions_returns_shape(monkeypatch) -> None:
         assert isinstance(body["dailyCounts"], list)
         assert len(body["dailyCounts"]) == 14
         assert all({"date", "count", "completed", "failed"} <= set(row) for row in body["dailyCounts"])
-        assert isinstance(body["topEmployees"], list)
+        assert isinstance(body["topUsers"], list)
         assert isinstance(body["statusCounts"], dict)
 
 
@@ -157,7 +157,7 @@ def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
         assert body["unreportedRuns"] == []
         assert len(body["daily"]) == 14
         assert "recentSessions" not in body
-        assert "byEmployee" not in body
+        assert "byUser" not in body
 
 
 def test_dashboard_tokens_headline_excludes_cache_reads(monkeypatch) -> None:

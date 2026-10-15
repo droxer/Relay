@@ -164,7 +164,7 @@
 }
 
 /* ── Instrument panels ────────────────────────────────────────────────
-   Fleet health and top employees are live readouts: their rows arrive, change
+   Fleet health and top users are live readouts: their rows arrive, change
    count, and rank themselves as sessions land. Given a content height the rail
    would grow and shrink under the reader while they were reading it, so the
    panel holds a fixed frame and the list inside it scrolls. */
@@ -469,7 +469,7 @@
 /* The running count is the one numeral allowed to carry --live. */
 .adm-dash-stat.tone-live .adm-dash-stat-value { color: var(--tone); }
 
-/* ── Top employees ────────────────────────────────────────────────── */
+/* ── Top users ────────────────────────────────────────────────── */
 .adm-dash-top-list {
   list-style: none;
   margin: 0;
@@ -537,7 +537,7 @@
   .adm-dash-kpis--lean .adm-dash-tile:last-child { grid-column: 1 / -1; }
   /* The floor exists so a desktop row holds one height while readings load.
      Stacked, each row is its own height, and the floor only padded the
-     foot-less Computers / Employees pair into two tall empty boxes. */
+     foot-less Computers / Users pair into two tall empty boxes. */
   .adm-dash-tile { min-height: 0; }
 }
 

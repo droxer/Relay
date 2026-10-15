@@ -6,8 +6,8 @@ Accepted, strengthened by Architecture Design V2.0.
 
 ## Context
 
-Relay's product direction is employee amplification, not agent theatrics or
-employee replacement. Enterprise customers need permission boundaries,
+Relay's product direction is user amplification, not agent theatrics or
+user replacement. Enterprise customers need permission boundaries,
 traceability, human approval, and auditability before they can trust agents with
 business workflow execution.
 

@@ -9,7 +9,7 @@ import type { RelaySession } from "../src/types.js";
 
 function session(id: string, status: RelaySession["status"] = "completed"): RelaySession {
   return {
-    id, workspacePath: "/w", ownerEmployeeId: "alice", taskGoal: id, participants: ["human"],
+    id, workspacePath: "/w", ownerUserId: "alice", taskGoal: id, participants: ["human"],
     status, phase: status, createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-01T00:00:00Z",
     agentRuns: [], artifacts: [], decisions: [], events: [],
   } as unknown as RelaySession;

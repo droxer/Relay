@@ -19,7 +19,7 @@ These corrections are recorded in the plan for the next continuation.
 | Plan task | Guarantee | Tests |
 | --- | --- | --- |
 | 6 | Task override wins over team style; absent override inherits; unstyled tasks default to Build → Review | `test_team_dispatch.py` task assignment tests |
-| 6 | Style resolution precedes placement and preserves execution employee scoping | `test_task_dispatch_resolves_style_before_placement` |
+| 6 | Style resolution precedes placement and preserves execution user scoping | `test_task_dispatch_resolves_style_before_placement` |
 | 6 | Project team tasks preserve their project snapshot and required computer while honoring style | `test_project_team_task_preserves_style_and_workspace` |
 | 6 | Routine occurrences inherit Solo/Pipeline overrides and freeze them in manifests; absent style uses Build → Review | `test_scheduler_promotes_team_routine_into_team_owned_thread` |
 | 7 | Reviewer findings repair the builder, then revalidate; two failed repairs require human attention; unused members do not block success | `test_build_review_repairs_findings_and_bounds_review_cycles` |

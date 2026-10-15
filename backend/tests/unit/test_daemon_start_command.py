@@ -14,7 +14,7 @@ def command(*, prompt: bool = True) -> str:
     request = Request({"type": "http", "scheme": "https", "server": ("relay.example", 443), "path": "/", "root_path": "", "headers": []})
     return daemon_start_command(
         request,
-        {"id": "node-test", "employeeId": "alice", "workspacePath": "/tmp/alice's project; $(false)"},
+        {"id": "node-test", "userId": "alice", "workspacePath": "/tmp/alice's project; $(false)"},
         "none",
         prompt_for_token=prompt,
     )

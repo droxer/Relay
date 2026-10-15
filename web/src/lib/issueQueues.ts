@@ -28,7 +28,7 @@ export const DEFAULT_ISSUE_GROUPING: IssueGroupBy = "project";
 export const NO_GROUP = "none";
 
 interface IssueQueueContext {
-  employeeId: string;
+  userId: string;
   today: string;
 }
 
@@ -50,15 +50,15 @@ export function issueNeedsProject(task: Pick<RelayTaskListItem, "projectId" | "i
   return !(task.projectId || task.isRoutine || task.sourceRoutineId);
 }
 
-function responsibleEmployee(task: RelayTaskListItem): string | undefined {
-  return task.assigneeEmployeeId ?? task.ownerEmployeeId;
+function responsibleUser(task: RelayTaskListItem): string | undefined {
+  return task.assigneeUserId ?? task.ownerUserId;
 }
 
-function inQueue(task: RelayTaskListItem, queue: IssueQueue, { employeeId, today }: IssueQueueContext): boolean {
+function inQueue(task: RelayTaskListItem, queue: IssueQueue, { userId, today }: IssueQueueContext): boolean {
   const done = task.status === "done";
   switch (queue) {
     case "needs_me":
-      return HUMAN_GATED.has(task.status) && responsibleEmployee(task) === employeeId;
+      return HUMAN_GATED.has(task.status) && responsibleUser(task) === userId;
     case "untriaged":
       return !done && issueNeedsProject(task);
     case "blocked":

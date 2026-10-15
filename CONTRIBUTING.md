@@ -22,7 +22,7 @@ backend/                  Python / FastAPI control plane
 packages/                 TypeScript (npm workspaces)
   relay-core/             Shared protocol and pure helpers: agent registry, CLI commands, prompts, renderers
   relay-daemon/           Execution plane: registers a computer, polls for commands, runs agent CLIs
-  relay-supervisor/       Keeps employee daemons provisioned and running
+  relay-supervisor/       Keeps user daemons provisioned and running
 web/                      Next.js web UI, exported statically and served by the backend
   src/components/         Pages and UI, grouped by surface
   src/lib/                Routing, derivations, and other pure helpers

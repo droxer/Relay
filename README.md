@@ -11,9 +11,9 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay helps employees work with AI agents across threads, tasks, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
+Relay helps users work with AI agents across threads, tasks, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
 
-Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on employee or managed computers. Each daemon runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
+Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on user or managed computers. Each daemon runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
 <p align="center">
   <img src="docs/images/relay-threads.png" alt="A Relay thread: one agent has fixed a bug and handed it to a second agent, whose review is streaming live" width="960">
@@ -27,8 +27,8 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 - **Projects** — Bring a shared workspace and a roster of agents together on one computer.
 - **Agents and teams** — Give each agent a runtime, role, personality, and skills. Group agents into teams that work Solo, Build → Review, Pipeline, or Lead-led.
 - **Skills** — Publish versioned skill bundles and grant them to agents from a shared library.
-- **Computers** — Enroll employee or managed computers and see their health, runtimes, and running work.
-- **Administration** — Manage employees, computers, activity, and token usage from one Admin Console.
+- **Computers** — Enroll user or managed computers and see their health, runtimes, and running work.
+- **Administration** — Manage users, computers, activity, and token usage from one Admin Console.
 
 ## Product tour
 
@@ -133,7 +133,7 @@ backend/     Python / FastAPI control plane: API routes, event-sourced stores, s
 packages/    TypeScript workspaces
   relay-core/        Shared protocol, agent registry, CLI commands, prompts
   relay-daemon/      Execution plane: registers a computer and runs agent CLIs
-  relay-supervisor/  Keeps employee daemons provisioned and running
+  relay-supervisor/  Keeps user daemons provisioned and running
 web/         Next.js web UI, exported statically and served by the backend
 docs/        Architecture, API, deployment, design system, and ADRs
 script/      User bootstrap, demo seeding, README snapshot generator

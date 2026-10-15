@@ -57,7 +57,7 @@ from ..services.team_dispatch import (
     TEAM_UNAVAILABLE_MESSAGE,
     TeamDispatchError,
     resolve_team_task_assignments,
-    task_execution_employee_id,
+    task_execution_user_id,
 )
 
 PERMANENT_DISPATCH_CODES = {
@@ -85,8 +85,8 @@ def materialize_legacy_agent_assignment(
     agent_store: Any,
     placement_store: Any,
 ) -> dict[str, Any] | None:
-    employee_id = task_execution_employee_id(task)
-    if not employee_id:
+    user_id = task_execution_user_id(task)
+    if not user_id:
         return None
     assignment = {"agent": executor_kind}
     node = ready_node_for_task(registry, task, [assignment])
@@ -96,7 +96,7 @@ def materialize_legacy_agent_assignment(
     candidates = sorted(
         (
             agent
-            for agent in agent_store.list_agents(supervisor_employee_id=employee_id)
+            for agent in agent_store.list_agents(supervisor_user_id=user_id)
             if not agent.get("deletedAt")
             and agent.get("enabled", True)
             and agent["executorKind"] == executor_kind
@@ -107,7 +107,7 @@ def materialize_legacy_agent_assignment(
     if not candidates:
         logger.info(
             "No declared agent for this runtime; task stays queued",
-            employee_id=employee_id,
+            user_id=user_id,
             executor_kind=executor_kind,
             computer_id=node_computer_id,
         )
@@ -323,7 +323,7 @@ class TaskScheduler:
                 else None
             )
             try:
-                employee_id = task_execution_employee_id(task)
+                user_id = task_execution_user_id(task)
                 daemon_nodes = task_workspace_nodes(
                     task, self.registry.monitor_nodes(), self.registry.store
                 )
@@ -367,7 +367,7 @@ class TaskScheduler:
                     ]
                     assignments = resolve_agent_assignments(
                         assignments,
-                        employee_id=employee_id,
+                        user_id=user_id,
                         is_admin=False,
                         agent_store=self.backend.agent_store,
                         placement_store=self.backend.agent_placement_store,
@@ -564,8 +564,8 @@ class TaskScheduler:
             logger.info(
                 "Managed node provisioning requested for queued task",
                 task_id=task["id"],
-                employee_id=(
-                    task.get("assigneeEmployeeId") or task.get("ownerEmployeeId")
+                user_id=(
+                    task.get("assigneeUserId") or task.get("ownerUserId")
                 ),
             )
 
@@ -722,12 +722,12 @@ def ready_node_for_task(
     requested_agents = [
         assignment.get("agent") for assignment in assignments if assignment.get("agent")
     ]
-    employee_id = task.get("assigneeEmployeeId") or task.get("ownerEmployeeId")
+    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
     active_runs_by_node: dict[str, list[dict[str, Any]]] = {}
     for run in registry.daemon_store.list_active_runs():
         active_runs_by_node.setdefault(run["nodeId"], []).append(run)
     for node in registry.list_ready():
-        if employee_id and node.get("employeeId") != employee_id:
+        if user_id and node.get("userId") != user_id:
             continue
         if node.get("status") in (
             "stopped",
@@ -749,10 +749,10 @@ def ready_node_for_task(
     return None
 
 
-def employee_has_device_node(registry: Any, employee_id: str) -> bool:
+def user_has_device_node(registry: Any, user_id: str) -> bool:
     return any(
-        node.get("employeeId") == employee_id
-        and node.get("nodeLocation") == "employee-device"
+        node.get("userId") == user_id
+        and node.get("nodeLocation") == "user-device"
         and not node.get("retiredAt")
         for node in registry.monitor_nodes()
     )
@@ -763,7 +763,7 @@ def ensure_managed_capacity_for_task(
 ) -> Any | None:
     if not managed_node_store:
         return None
-    employee_id = task.get("assigneeEmployeeId") or task.get("ownerEmployeeId")
-    if not employee_id or employee_has_device_node(registry, employee_id):
+    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
+    if not user_id or user_has_device_node(registry, user_id):
         return None
-    return managed_node_store.ensure_node_for_employee(employee_id)
+    return managed_node_store.ensure_node_for_user(user_id)

@@ -11,9 +11,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 /**
- * The computers assigned to one employee.
+ * The computers assigned to one user.
  *
- * The employee surfaces answer "who has which machine", so the chip row lists
+ * The user surfaces answer "who has which machine", so the chip row lists
  * computers, not agents — the activity metrics beside it (`ready/total`) have
  * always counted computers, and pairing them with an agent list made the row
  * read as two unrelated tallies. Agents live on a computer, one level down;
@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
  * (cloud / laptop / pending) + name. Static by design — this is a readout, and
  * a machine's actions live on its own card.
  */
-export function EmployeeComputers({
+export function UserComputers({
   nodes,
   t,
 }: {
@@ -31,7 +31,7 @@ export function EmployeeComputers({
   t: TFunction;
 }) {
   if (nodes.length === 0) {
-    return <span className="adm-emp-no-nodes">{t("admin.v2.no_computers_for_employee")}</span>;
+    return <span className="adm-emp-no-nodes">{t("admin.v2.no_computers_for_user")}</span>;
   }
 
   return (

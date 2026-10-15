@@ -18,7 +18,7 @@ function session(artifacts: RelayArtifact[]): RelaySession {
   return {
     id: "ses_1",
     workspacePath: "/workspace",
-    ownerEmployeeId: "alice",
+    ownerUserId: "alice",
     taskGoal: "Build artifact drawer",
     participants: ["human", "claude"],
     status: "completed",

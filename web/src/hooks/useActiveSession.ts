@@ -19,47 +19,47 @@ export function pickInitialActiveSessionId(
 }
 
 // Whether the effect below should pick an opening thread. The pick is
-// per-employee and one-shot: the session list changes on every poll tick and
+// per-user and one-shot: the session list changes on every poll tick and
 // every streamed update, and re-deriving on each of those would drag the
 // selection back to the most recent thread — undoing an explicit "new
 // thread", which deliberately clears both the selection and its stored
 // id. An empty list means the first load has not landed yet, so wait.
 export function shouldDeriveActiveSession(input: {
-  employeeId: string;
+  userId: string;
   derivedFor: string | null;
   sessionCount: number;
 }): boolean {
-  if (!input.employeeId) return false;
-  if (input.derivedFor === input.employeeId) return false;
+  if (!input.userId) return false;
+  if (input.derivedFor === input.userId) return false;
   return input.sessionCount > 0;
 }
 
-// Picks the thread an employee sees on arrival, once per employee. The value
+// Picks the thread a user sees on arrival, once per user. The value
 // itself lives in the relay store (next to selectedSessionId and composingNew)
 // so the thread-selection actions there can move all three together.
-export function useActiveSession(employeeId: string, sessions: readonly SessionLike[]) {
+export function useActiveSession(userId: string, sessions: readonly SessionLike[]) {
   const activeSessionId = useRelayStore((s) => s.activeSessionId);
   const setActiveSessionId = useRelayStore((s) => s.setActiveSessionId);
   const adoptActiveSessionId = useRelayStore((s) => s.adoptActiveSessionId);
   const derivedForRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!employeeId) {
+    if (!userId) {
       derivedForRef.current = null;
       adoptActiveSessionId(null);
       return;
     }
     if (!shouldDeriveActiveSession({
-      employeeId,
+      userId,
       derivedFor: derivedForRef.current,
       sessionCount: sessions.length,
     })) return;
-    derivedForRef.current = employeeId;
+    derivedForRef.current = userId;
     const stored = typeof window !== "undefined"
-      ? window.localStorage.getItem(activeSessionStorageKey(employeeId))
+      ? window.localStorage.getItem(activeSessionStorageKey(userId))
       : null;
     adoptActiveSessionId(pickInitialActiveSessionId(stored, sessions));
-  }, [adoptActiveSessionId, employeeId, sessions]);
+  }, [adoptActiveSessionId, userId, sessions]);
 
   return { activeSessionId, setActiveSessionId };
 }

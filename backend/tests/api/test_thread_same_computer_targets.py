@@ -30,7 +30,7 @@ def _node(app, sandbox_id: str) -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": sandbox_id,
-            "employeeId": "admin",
+            "userId": "admin",
             "token": f"token_{sandbox_id}",
             "workspacePath": f"/workspace/{sandbox_id}",
             "protocolVersion": 1,
@@ -69,7 +69,7 @@ def _thread(app, node: dict[str, Any], owner: dict[str, Any], **fields: Any) -> 
         {
             "daemonNodeId": node["id"],
             "workspacePath": node["workspacePath"],
-            "ownerEmployeeId": "admin",
+            "ownerUserId": "admin",
             "ownerAgentId": owner["id"],
             "taskGoal": "Keep one room",
             **fields,

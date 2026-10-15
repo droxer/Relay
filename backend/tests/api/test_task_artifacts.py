@@ -89,7 +89,7 @@ def test_task_artifacts_dedupes_regenerated_file_across_sessions(monkeypatch) ->
             task_store=app.state.task_store,
             task_id=task["id"],
             workspace_path=ws,
-            owner_employee_id="admin",
+            owner_user_id="admin",
             owner_agent_id=agent["id"],
         )
         second_session = controller.create_session(task["title"], ["human", "claude"])[
@@ -163,7 +163,7 @@ def test_task_artifacts_unknown_task_is_404(monkeypatch) -> None:
         )
 
 
-def test_task_artifacts_denied_for_other_employee(monkeypatch) -> None:
+def test_task_artifacts_denied_for_other_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root, TemporaryDirectory() as ws:
         app = create_app(root)
@@ -171,10 +171,10 @@ def test_task_artifacts_denied_for_other_employee(monkeypatch) -> None:
         _bootstrap(client)
         task = _create_task_with_session(client, ws)
 
-        assert client.post("/api/v1/admin/users", json={
+        assert client.post("/api/v1/admin/accounts", json={
             "username": "worker",
             "password": "kestrel-vault-7719",
-            "employeeId": "emp_worker",
+            "userId": "emp_worker",
         }).status_code == 201
         worker = TestClient(app)
         assert worker.post("/api/v1/auth/login", json={"username": "worker", "password": "kestrel-vault-7719"}).status_code == 200

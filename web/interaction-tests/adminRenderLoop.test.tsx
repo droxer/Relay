@@ -9,7 +9,7 @@ import { AdminPage } from "../src/components/AdminPage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { CurrentUser } from "../src/types";
 
-const ADMIN = { id: "u1", username: "admin", role: "admin", employeeId: "e1" } as unknown as CurrentUser;
+const ADMIN = { id: "u1", username: "admin", role: "admin", userId: "e1" } as unknown as CurrentUser;
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -26,7 +26,7 @@ it("renders while the node poll is still in flight", () => {
   // set state on every render pass — "Too many re-renders" on first visit.
   const pending = () => new Promise<never>(() => {});
   vi.spyOn(controlPanelQueries, "fetchControlPanelNodes").mockImplementation(pending);
-  vi.spyOn(api, "listControlPanelEmployees").mockImplementation(pending);
+  vi.spyOn(api, "listControlPanelUsers").mockImplementation(pending);
   vi.spyOn(api, "getOrgSettings").mockImplementation(pending);
 
   const { container } = render(

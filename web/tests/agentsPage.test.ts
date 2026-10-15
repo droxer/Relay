@@ -55,7 +55,7 @@ describe("agent meta line", () => {
     assert.match(rule, /var\(--type-meta\)/);
 
     // The team surfaces used to redefine it a rung larger.
-    for (const path of ["src/styles/teams.css", "src/styles/admin-v2-employees.css"]) {
+    for (const path of ["src/styles/teams.css", "src/styles/admin-v2-users.css"]) {
       const sheet = await read(path);
       assert.doesNotMatch(sheet, /\.team-(?:profile-member|member-option)-meta \{/, path);
     }

@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const now = new Date().toISOString();
 const executionFor = (reason: string) => ({ phase: "recovery_required", blockingReason: reason, canDelete: false, executionConfirmed: false, deletionRequested: false, lastConfirmedAt: null, nextRecoveryAt: null });
-const sessionFor = (reason: string) => ({ id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerEmployeeId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution: executionFor(reason) });
+const sessionFor = (reason: string) => ({ id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerUserId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution: executionFor(reason) });
 
 async function serveRecoveryThread(page: Page, reason: string, phase = "recovery_required", detail: { computerOnline?: boolean; deletionRequested?: boolean } = {}): Promise<string[]> {
   const session = sessionFor(reason);
@@ -12,7 +12,7 @@ async function serveRecoveryThread(page: Page, reason: string, phase = "recovery
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/recovery-thread")) body = session;
     if (route.request().method() === "POST") {
       writes.push(path);
@@ -47,12 +47,12 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
   test(`thread recovery offers the safe action for ${reason}`, async ({ page }, testInfo) => {
     const now = new Date().toISOString();
     const execution = { phase: "recovery_required", blockingReason: reason, canDelete: false, executionConfirmed: false, deletionRequested: false, lastConfirmedAt: null, nextRecoveryAt: null };
-    const session = { id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerEmployeeId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution };
+    const session = { id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerUserId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution };
     const writes: string[] = [];
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname;
       let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
       if (path.endsWith("/threads/recovery-thread")) body = session;
       if (route.request().method() === "POST") {
         writes.push(path);
@@ -146,7 +146,7 @@ for (const reason of ["execution_lost", "execution_interrupted"]) {
       await page.route("**/api/**", async route => {
         const path = new URL(route.request().url()).pathname;
         let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-        if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme, language } };
+        if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme, language } };
         if (path.endsWith("/threads/recovery-thread")) body = session;
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
       });
@@ -175,7 +175,7 @@ test("a completed turn whose live output had gaps says so", async ({ page }) => 
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/recovery-thread")) body = session;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });

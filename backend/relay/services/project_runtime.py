@@ -90,8 +90,8 @@ def resolve_project_task_assignments(
     project = project_store.get_project(task.get("projectId"))
     if code := project_work_error(project):
         raise ProjectDispatchError(code, permanent=code == "project_not_found")
-    owner = task.get("ownerEmployeeId") or task.get("assigneeEmployeeId")
-    if project.get("ownerEmployeeId") != owner:
+    owner = task.get("ownerUserId") or task.get("assigneeUserId")
+    if project.get("ownerUserId") != owner:
         raise ProjectDispatchError("project_forbidden", permanent=True)
     members = [
         member for member in project.get("members", []) if member.get("enabled", True)
@@ -110,7 +110,7 @@ def resolve_project_task_assignments(
     return (
         resolve_agent_assignments(
             assignments,
-            employee_id=project["ownerEmployeeId"],
+            user_id=project["ownerUserId"],
             is_admin=False,
             agent_store=agent_store,
             placement_store=placement_store,
@@ -142,7 +142,7 @@ def _project_task_assignments(
         try:
             team, agents = team_agents(
                 team_id,
-                project["ownerEmployeeId"],
+                project["ownerUserId"],
                 team_store=team_store,
                 agent_store=agent_store,
             )

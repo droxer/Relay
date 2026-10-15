@@ -49,7 +49,7 @@ export function TeamsPage({
   onSelectTeam: (teamId: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const { teams, isFetching, error, refetch } = useTeams(currentUser.employeeId);
+  const { teams, isFetching, error, refetch } = useTeams(currentUser.userId);
   const [addTeam, setAddTeam] = useUrlSearchState(
     "dialog",
     false,
@@ -245,7 +245,7 @@ export function TeamsPage({
             <TeamWorkspacePage
               key={selectedTeam.id}
               team={selectedTeam}
-              employeeId={currentUser.employeeId}
+              userId={currentUser.userId}
               onOpenThread={onOpenThread}
               onDeleted={() => onSelectTeam(null)}
             />
@@ -257,7 +257,7 @@ export function TeamsPage({
 
       <TeamDrawer
         open={addTeam}
-        employeeId={currentUser.employeeId}
+        userId={currentUser.userId}
         onClose={() => setAddTeam(false)}
       />
     </section>

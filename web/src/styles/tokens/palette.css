@@ -417,11 +417,11 @@
        --card-h-tile    a backlog task tile: title, one facts line. The
                         smallest record frame — everything else the task
                         carries lives in the record drawer.
-       --card-h-fleet   control-panel computer or employee: identity header,
+       --card-h-fleet   control-panel computer or user: identity header,
                         chip body, metric footer.
        --card-h-kpi     dashboard KPI tile: eyebrow, numeral, one hint.
        --card-h-panel   dashboard instrument panel (fleet health, top
-                        employees) — the list inside scrolls, the panel does
+                        users) — the list inside scrolls, the panel does
                         not grow as data arrives.
 
      A card that wants a height off this ladder is telling you it is not a

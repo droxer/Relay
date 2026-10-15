@@ -26,9 +26,9 @@ def _bootstrap(client: TestClient) -> None:
     )
     assert (
         client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "displayName": "Alice",
@@ -53,7 +53,7 @@ def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) 
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "employeeId": "alice",
+            "userId": "alice",
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -68,11 +68,11 @@ def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) 
 def _agent(client: TestClient, node: dict, name: str = "Runner") -> dict:
     # The node is already live, so declaring the agent auto-places it. This
     # route requires an admin session; the bearer admin token works
-    # regardless of which employee's cookie the client currently carries.
+    # regardless of which user's cookie the client currently carries.
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": "alice",
+            "supervisorUserId": "alice",
             "displayName": name,
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -115,16 +115,16 @@ def client(monkeypatch):
 
 
 @pytest.fixture
-def other_employee(client: TestClient):
+def other_user(client: TestClient):
     app = client.app
     assert (
         client.post(
-            "/api/v1/admin/users",
+            "/api/v1/admin/accounts",
             json={
                 "username": "worker",
                 "password": "userpass",
                 "role": "user",
-                "employeeId": "worker",
+                "userId": "worker",
             },
             headers={"Authorization": "Bearer admin_token"},
         ).status_code
@@ -153,8 +153,8 @@ def task_with_run(client: TestClient):
             {
                 "title": "Ship the report",
                 "sourceRoutineId": "routine_nightly",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "assignedAgent": agent["executorKind"],
                 "status": "assigned",
@@ -174,8 +174,8 @@ def backlog_task(client: TestClient):
         "/api/v1/tasks",
         json={
             "title": "Not started yet",
-            "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice",
+            "assigneeUserId": "alice",
         },
     )
     assert created.status_code == 201, created.text
@@ -193,8 +193,8 @@ def routine_with_occurrence(client: TestClient):
             "/api/v1/tasks",
             json={
                 "title": "Weekly report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -221,11 +221,11 @@ def test_owner_lists_the_task_workspace(client, task_with_run):
     assert body["scope"] == "shared"
 
 
-def test_another_employee_cannot_read_the_task_workspace(client, task_with_run, other_employee):
+def test_another_user_cannot_read_the_task_workspace(client, task_with_run, other_user):
     task, _ = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     response = client.get(
         f"/api/v1/tasks/{task['id']}/workspace/files",
-        headers=other_employee.headers,
+        headers=other_user.headers,
     )
     assert response.status_code == 403
 
@@ -277,7 +277,7 @@ def test_project_task_browses_the_recorded_project_workspace(
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_employee_id="alice",
+        owner_user_id="alice",
         project_id="prj_launch",
         workspace_layout="project",
         workspace_subpath="projects/prj_launch",
@@ -323,7 +323,7 @@ def test_task_workspace_rejects_a_daemon_that_lost_task_workspace_support(
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_employee_id="alice",
+        owner_user_id="alice",
         workspace_layout="task",
         workspace_subpath=f"tasks/{backlog_task['id']}",
         daemon_node_id=node["id"],
@@ -361,7 +361,7 @@ def test_newest_workspace_session_does_not_fall_back_to_an_older_node(
             task_store=app.state.task_store,
             task_id=backlog_task["id"],
             workspace_path=node["workspacePath"],
-            owner_employee_id="alice",
+            owner_user_id="alice",
             workspace_layout="task",
             workspace_subpath=f"tasks/{backlog_task['id']}",
             daemon_node_id=node["id"],
@@ -391,7 +391,7 @@ def test_falls_back_to_an_older_session_when_the_newest_was_deleted(client, task
         task_store=app.state.task_store,
         task_id=task["id"],
         workspace_path=node["workspacePath"],
-        owner_employee_id="alice",
+        owner_user_id="alice",
         workspace_layout="task",
         daemon_node_id=node["id"],
     )
@@ -435,7 +435,7 @@ def test_linking_an_unrelated_thread_does_not_replace_the_task_binding(client, t
         task_store=app.state.task_store,
         task_id=task["id"],
         workspace_path=node["workspacePath"],
-        owner_employee_id="alice",
+        owner_user_id="alice",
         workspace_layout="thread",
         daemon_node_id=node["id"],
     )
@@ -450,7 +450,7 @@ def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_t
     app = client.app
     old = _register_node(app, "old-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
     controller = SessionController(app.state.session_store, task_store=app.state.task_store,
-        task_id=backlog_task["id"], owner_employee_id="alice", workspace_path=old["workspacePath"],
+        task_id=backlog_task["id"], owner_user_id="alice", workspace_path=old["workspacePath"],
         workspace_layout="task", workspace_subpath="tasks/original-location", daemon_node_id=old["id"],
         computer_id=computer_id(old))
     controller.create_session("Keep files", ["human", "codex"])
@@ -491,15 +491,15 @@ def test_task_admission_rejects_another_computer_even_without_dispatch_helper(cl
     with pytest.raises(ValueError, match="workspace_unavailable"):
         asyncio.run(client.app.state.backend.run(other["id"], {
             "taskId": task["id"], "taskGoal": "Continue", "assignments": [{"agent": "codex"}],
-            "actorEmployeeId": "alice",
+            "actorUserId": "alice",
         }))
     binding = client.app.state.task_store.get_task(task["id"])["workspaceBinding"]
     assert binding["computerId"] == computer_id(node)
 
 
-def test_task_workspace_status_denies_other_employee(client, task_with_run, other_employee):
+def test_task_workspace_status_denies_other_user(client, task_with_run, other_user):
     task, _ = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
-    response = client.get(f"/api/v1/tasks/{task['id']}/workspace/status", headers=other_employee.headers)
+    response = client.get(f"/api/v1/tasks/{task['id']}/workspace/status", headers=other_user.headers)
     assert response.status_code == 403
 
 
@@ -511,7 +511,7 @@ def _thread_with_unsnapshotted_artifact(app, backlog_task, node) -> tuple[dict, 
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_employee_id="alice",
+        owner_user_id="alice",
         workspace_layout="task",
         workspace_subpath=f"tasks/{backlog_task['id']}",
         daemon_node_id=node["id"],

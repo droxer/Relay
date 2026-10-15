@@ -204,7 +204,7 @@ describe("prompts", () => {
     const logicalAgentState = state({
       task_goal: "Implement the endpoint",
       agent_display_name: "Sentinel",
-      agent_instructions: "Act as the employee's security reviewer.",
+      agent_instructions: "Act as the user's security reviewer.",
     });
     const builders = [
       ["Claude", buildClaudeCommand],

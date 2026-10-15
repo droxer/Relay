@@ -19,36 +19,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { employeeHandleOf } from "../../lib/employeeHandle";
+import { userHandleOf } from "../../lib/userHandle";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { ActionEdit, AdminDelete, ICON } from "../icons";
 import { TonePill } from "../StatusPill";
-import { EmployeeComputers } from "./EmployeeComputers";
+import { UserComputers } from "./UserComputers";
 import {
   isOverLocalComputerLimit,
   localComputerUsageLabel,
-  type EmployeeNodeSummary,
+  type UserNodeSummary,
 } from "./helpers";
 import { useManualSortTable } from "../../hooks/useManualSortTable";
 import { createCellState } from "../../lib/cellState";
 
-/** The columns the employee list can order by. Mirrors `employeeSortColumns`. */
-export type EmployeeSortKey = "employee" | "computers" | "localLimit" | "running" | "ready";
+/** The columns the user list can order by. Mirrors `userSortColumns`. */
+export type UserSortKey = "user" | "computers" | "localLimit" | "running" | "ready";
 
 /** Per-column element classes, carried through TanStack's open `meta` slot. */
 type ColumnChrome = { headClass?: string; cellClass?: string };
 
-interface EmployeeCellState {
+interface UserCellState {
   t: TFunction;
   deletePending: boolean;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
-const EmployeeCells = createCellState<EmployeeCellState>("EmployeeGroupTable");
+const UserCells = createCellState<UserCellState>("UserGroupTable");
 
 /**
- * One status band's employees as a real table.
+ * One status band's users as a real table.
  *
  * Every band is its own table with its own header — a single header above six
  * bands stops naming the row under the reader's eye — and the shared sort
@@ -62,7 +62,7 @@ const EmployeeCells = createCellState<EmployeeCellState>("EmployeeGroupTable");
  * keeps its 220px floor, computers take the slack, and the three metric
  * columns and actions stay pinned at their rem tracks, flush right.
  */
-export function EmployeeGroupTable({
+export function UserGroupTable({
   label,
   members,
   sort,
@@ -75,9 +75,9 @@ export function EmployeeGroupTable({
   /** The band's label — also the table's accessible name. */
   label: string;
   /** Already sorted and paged: the table renders exactly these rows. */
-  members: EmployeeNodeSummary[];
-  sort: SortState<EmployeeSortKey> | null;
-  onSort: (key: EmployeeSortKey) => void;
+  members: UserNodeSummary[];
+  sort: SortState<UserSortKey> | null;
+  onSort: (key: UserSortKey) => void;
   highlightedId: string | null;
   deletePending: boolean;
   onEdit?: (id: string) => void;
@@ -85,8 +85,8 @@ export function EmployeeGroupTable({
 }) {
   const { t } = useTranslation();
   // `t`, the pending flag and the caller's inline action callbacks change
-  // under stable column defs; cells read them through EmployeeCells.
-  const cellState = useMemo<EmployeeCellState>(
+  // under stable column defs; cells read them through UserCells.
+  const cellState = useMemo<UserCellState>(
     () => ({ t, deletePending, onEdit, onDelete }),
     [t, deletePending, onEdit, onDelete],
   );
@@ -96,13 +96,13 @@ export function EmployeeGroupTable({
     [sort],
   );
 
-  const columns = useMemo<ColumnDef<EmployeeNodeSummary>[]>(() => {
+  const columns = useMemo<ColumnDef<UserNodeSummary>[]>(() => {
     /* TanStack's own toggle cycles asc → desc → none with no notion of a
        column's OPENING direction; the caller's `onSort` speaks the
        `nextSortState` cycle (unsorted → the column's default → reversed →
        unsorted), so the header behaves identically here and in the SortMenu. */
     function sortHead(
-      key: EmployeeSortKey,
+      key: UserSortKey,
       label: string,
       align: "start" | "end" = "start",
       defaultDirection: "asc" | "desc" = "asc",
@@ -123,9 +123,9 @@ export function EmployeeGroupTable({
 
     return [
       {
-        id: "employee",
+        id: "user",
         meta: { headClass: "adm-emp-col-identity" } satisfies ColumnChrome,
-        header: () => <EmployeeCells.Read>{(s) => sortHead("employee", s.t("admin.col_employee"))}</EmployeeCells.Read>,
+        header: () => <UserCells.Read>{(s) => sortHead("user", s.t("admin.col_user"))}</UserCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -134,7 +134,7 @@ export function EmployeeGroupTable({
                 <p className="adm-emp-name" translate="no">{member.displayName}</p>
               </div>
               <p className="adm-emp-meta code">
-                <span translate="no">@{employeeHandleOf(member)}</span>
+                <span translate="no">@{userHandleOf(member)}</span>
                 {member.email ? <span translate="no">{member.email}</span> : null}
                 {member.departmentName ? <span>{member.departmentName}</span> : null}
               </p>
@@ -144,8 +144,8 @@ export function EmployeeGroupTable({
       },
       {
         id: "computers",
-        header: () => <EmployeeCells.Read>{(s) => sortHead("computers", s.t("admin.v2.col_computers"), "start", "desc")}</EmployeeCells.Read>,
-        cell: ({ row }) => <EmployeeCells.Read>{(s) => <EmployeeComputers nodes={row.original.nodes} t={s.t} />}</EmployeeCells.Read>,
+        header: () => <UserCells.Read>{(s) => sortHead("computers", s.t("admin.v2.col_computers"), "start", "desc")}</UserCells.Read>,
+        cell: ({ row }) => <UserCells.Read>{(s) => <UserComputers nodes={row.original.nodes} t={s.t} />}</UserCells.Read>,
       },
       {
         id: "localLimit",
@@ -153,8 +153,8 @@ export function EmployeeGroupTable({
            left-aligned control under a right-aligned number reads as a
            different column. */
         meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
-        header: () => <EmployeeCells.Read>{(s) => sortHead("localLimit", s.t("admin.v2.col_local_limit"), "end", "desc")}</EmployeeCells.Read>,
-        cell: ({ row }) => <EmployeeCells.Read>{(s) => {
+        header: () => <UserCells.Read>{(s) => sortHead("localLimit", s.t("admin.v2.col_local_limit"), "end", "desc")}</UserCells.Read>,
+        cell: ({ row }) => <UserCells.Read>{(s) => {
           const member = row.original;
           return (
             <div className="adm-emp-metric">
@@ -170,12 +170,12 @@ export function EmployeeGroupTable({
               ) : null}
             </div>
           );
-        }}</EmployeeCells.Read>,
+        }}</UserCells.Read>,
       },
       {
         id: "running",
         meta: { headClass: "adm-emp-col-running text-right", cellClass: "adm-emp-col-running text-right" } satisfies ColumnChrome,
-        header: () => <EmployeeCells.Read>{(s) => sortHead("running", s.t("admin.v2.col_running"), "end", "desc")}</EmployeeCells.Read>,
+        header: () => <UserCells.Read>{(s) => sortHead("running", s.t("admin.v2.col_running"), "end", "desc")}</UserCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -190,7 +190,7 @@ export function EmployeeGroupTable({
       {
         id: "ready",
         meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
-        header: () => <EmployeeCells.Read>{(s) => sortHead("ready", s.t("admin.v2.col_ready"), "end", "desc")}</EmployeeCells.Read>,
+        header: () => <UserCells.Read>{(s) => sortHead("ready", s.t("admin.v2.col_ready"), "end", "desc")}</UserCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -206,8 +206,8 @@ export function EmployeeGroupTable({
         /* Actions is not a column of data — there is nothing to order by. */
         id: "actions",
         meta: { headClass: "adm-emp-col-actions text-right", cellClass: "adm-emp-col-actions text-right" } satisfies ColumnChrome,
-        header: () => <EmployeeCells.Read>{(s) => s.t("admin.v2.col_actions")}</EmployeeCells.Read>,
-        cell: ({ row }) => <EmployeeCells.Read>{(s) => {
+        header: () => <UserCells.Read>{(s) => s.t("admin.v2.col_actions")}</UserCells.Read>,
+        cell: ({ row }) => <UserCells.Read>{(s) => {
           const member = row.original;
           const { deletePending: pending, onEdit: edit, onDelete: del, t: say } = s;
           if (!edit && !del) return null;
@@ -220,8 +220,8 @@ export function EmployeeGroupTable({
                   type="button"
                   className="adm-node-card-icon-btn"
                   onClick={() => edit(member.id)}
-                  aria-label={say("admin.v2.edit_employee_action")}
-                  title={say("admin.v2.edit_employee_action")}
+                  aria-label={say("admin.v2.edit_user_action")}
+                  title={say("admin.v2.edit_user_action")}
                 >
                   <ActionEdit size={ICON.sm} aria-hidden="true" />
                 </Button>
@@ -235,15 +235,15 @@ export function EmployeeGroupTable({
                   className="adm-node-card-icon-btn"
                   onClick={() => del(member.id)}
                   disabled={pending}
-                  aria-label={say("admin.v2.delete_employee_action")}
-                  title={say("admin.v2.delete_employee_action")}
+                  aria-label={say("admin.v2.delete_user_action")}
+                  title={say("admin.v2.delete_user_action")}
                 >
                   <AdminDelete size={ICON.sm} aria-hidden="true" />
                 </Button>
               ) : null}
             </div>
           );
-        }}</EmployeeCells.Read>,
+        }}</UserCells.Read>,
       },
     ];
   }, [sort, onSort]);
@@ -251,7 +251,7 @@ export function EmployeeGroupTable({
   const table = useManualSortTable(members, columns, sorting);
 
   return (
-    <EmployeeCells.Provider value={cellState}>
+    <UserCells.Provider value={cellState}>
       <Table data-density="compact" aria-label={label}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -260,7 +260,7 @@ export function EmployeeGroupTable({
                 <TableHead
                   key={header.id}
                   className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
-                  aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as EmployeeSortKey).ariaSort : undefined}
+                  aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as UserSortKey).ariaSort : undefined}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHead>
@@ -273,7 +273,7 @@ export function EmployeeGroupTable({
             <TableRow
               key={row.id}
               className={highlightedId === row.original.id ? "is-pulse" : undefined}
-              data-employee={row.original.id}
+              data-user={row.original.id}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
@@ -284,6 +284,6 @@ export function EmployeeGroupTable({
           ))}
         </TableBody>
       </Table>
-    </EmployeeCells.Provider>
+    </UserCells.Provider>
   );
 }

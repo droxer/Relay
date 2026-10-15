@@ -12,17 +12,17 @@ import {
   deleteAgentPlacement,
   deleteAgentProfileImage,
   selectAgentProfilePreset,
-  deleteEmployeeAgent,
+  deleteUserAgent,
   getControlPanelAgent,
   updateAgentProfileImage,
-  updateEmployeeAgent,
-  updateOwnEmployeeAgent,
+  updateUserAgent,
+  updateOwnUserAgent,
 } from "../api";
-import type { AgentPlacement, ControlPanelDaemonNodeRecord, EmployeeAgent } from "../types";
+import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent } from "../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
 import { ADMIN_AGENTS_KEY } from "../lib/adminHelpers";
-import { EMPLOYEE_AGENTS_QUERY_KEY } from "../hooks/useEmployeeAgents";
+import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { formatRelativeTime } from "./admin/helpers";
 import { IdentityMark } from "./IdentityMark";
 import { AgentProfileEditor } from "./AgentProfileEditor";
@@ -34,11 +34,11 @@ import { AgentModelSetting } from "./agents/AgentModelSetting";
 import { agentModel, modelPolicyFor } from "../lib/agentModels.ts";
 
 interface AgentProfilePanelProps {
-  agent: EmployeeAgent;
+  agent: UserAgent;
   nodes?: ControlPanelDaemonNodeRecord[];
   canManage?: boolean;
   canEditMeta?: boolean;
-  onAgentUpdated?: (agent: EmployeeAgent) => void;
+  onAgentUpdated?: (agent: UserAgent) => void;
   onAgentDeleted?: (agentId: string) => void;
   /** Reports unsaved profile drafts so parents can guard navigation. */
   onDirtyChange?: (dirty: boolean) => void;
@@ -108,21 +108,21 @@ export function AgentProfilePanel({
     });
   }, [agent.id, confirm, t, onDirtyChange]);
 
-  async function patchAgent(patch: Parameters<typeof updateEmployeeAgent>[1]) {
+  async function patchAgent(patch: Parameters<typeof updateUserAgent>[1]) {
     if (canManage) {
-      return updateEmployeeAgent(agent.id, patch);
+      return updateUserAgent(agent.id, patch);
     }
-    return updateOwnEmployeeAgent(agent.id, {
+    return updateOwnUserAgent(agent.id, {
       ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
       ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}),
       ...(patch.modelPolicy !== undefined ? { modelPolicy: patch.modelPolicy } : {}),
     });
   }
 
-  function applyAgentUpdate(updated: EmployeeAgent) {
+  function applyAgentUpdate(updated: UserAgent) {
     queryClient.setQueryData(["admin", "agent", updated.id], { agent: updated });
     void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY });
-    void queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
     onAgentUpdated?.(updated);
   }
 
@@ -243,7 +243,7 @@ export function AgentProfilePanel({
     setSaving(true);
     setError(null);
     try {
-      await deleteEmployeeAgent(agent.id);
+      await deleteUserAgent(agent.id);
       void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY });
       onAgentDeleted?.(agent.id);
     } catch (err) {

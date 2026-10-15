@@ -10,7 +10,7 @@ import {
   updateSkill,
 } from "../api";
 import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import type { CurrentUser, SkillFileInput, SkillsResponse, SkillVisibility } from "../types";
 import { ActionAdd, ICON } from "./icons";
@@ -74,8 +74,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const queryClient = useQueryClient();
   const drawerId = useId();
   const skillsQuery = useSkills();
-  const { agents } = useEmployeeAgents(currentUser.employeeId);
-  const { teams } = useTeams(currentUser.employeeId);
+  const { agents } = useUserAgents(currentUser.userId);
+  const { teams } = useTeams(currentUser.userId);
   const [pickedId, setSelectedId] = useState<string | null>(null);
   // Until the reader picks one, the list's first skill is the selection.
   const selectedId = pickedId ?? skillsQuery.data?.skills[0]?.id ?? null;
@@ -102,7 +102,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       : value instanceof Error ? value.message : "unknown";
     return t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") });
   };
-  const owned = skill?.ownerEmployeeId === currentUser.employeeId;
+  const owned = skill?.ownerUserId === currentUser.userId;
   useEffect(() => () => {
     uploadRequest.current.draft++;
     uploadRequest.current.revision++;
@@ -718,7 +718,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           skill={skill}
           agents={agents}
           teams={teams}
-          employeeId={currentUser.employeeId}
+          userId={currentUser.userId}
           onClose={() => setSharing(false)}
         />
       ) : null}

@@ -245,7 +245,8 @@ export class LocalProcessProvider implements ManagedNodeProvider {
 const MANAGED_DAEMON_ENV_DENY = [
   "RELAY_DAEMON_NODE_TOKEN",
   "RELAY_DAEMON_TOKEN",
-  "RELAY_EMPLOYEE_ID",
+  "RELAY_USER_ID",
+  "RELAY_EMPLOYEE_ID", // the daemon still honors the pre-rename name
   "RELAY_SANDBOX_ID",
 ] as const;
 

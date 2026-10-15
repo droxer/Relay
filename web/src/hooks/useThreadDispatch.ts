@@ -1,6 +1,6 @@
 import { useRef, type MutableRefObject } from "react";
 import type { TFunction } from "i18next";
-import type { AgentName, AgentTeam, EmployeeAgent, ProjectRecord, RelaySession } from "../types";
+import type { AgentName, AgentTeam, UserAgent, ProjectRecord, RelaySession } from "../types";
 import type { AppRoute } from "../lib/viewTypes";
 import type { ComposerHandle } from "../components/composer/Composer";
 import type { useRelayMutations } from "./useRelayMutations";
@@ -11,7 +11,7 @@ import { canCancelThreadRun, threadCancelNodeId } from "../lib/threadRunning";
 import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperationKey, threadRoundTeam } from "../lib/messageRouting";
 import { formatDispatchError } from "../lib/agentReadiness";
 import { rerunAssignmentForSession } from "../lib/workflow";
-import { isEmployeeAgentRoutable, preferredRoutableAgent } from "../lib/agentDisplayNames";
+import { isUserAgentRoutable, preferredRoutableAgent } from "../lib/agentDisplayNames";
 import { useHandoffStore } from "../lib/handoffStore";
 import { useComposerTargetStore } from "../lib/composerTargetStore";
 import { useRelayStore } from "../lib/store";
@@ -48,13 +48,13 @@ export interface ThreadDispatchDeps {
   projectDispatchDisabled: boolean;
 
   /* --- who can be addressed (the pick itself is in useComposerTargetStore) */
-  effectiveSelectableLogicalAgents: EmployeeAgent[];
-  composerLogicalAgents?: EmployeeAgent[];
+  effectiveSelectableLogicalAgents: UserAgent[];
+  composerLogicalAgents?: UserAgent[];
   threadMentionCandidates: Parameters<typeof resolveThreadMessageAddress>[0]["candidates"];
   composerTeams: AgentTeam[];
 
   /* --- where it runs ---------------------------------------------------- */
-  selectedEmployee: string;
+  selectedUser: string;
   selectedSandbox: Parameters<typeof threadCancelNodeId>[0]["sandbox"];
   selectedThreadNodeId: ThreadTargets["selectedThreadNodeId"];
   selectedToken: string | undefined;
@@ -93,7 +93,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -108,7 +108,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     { literal = false }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
-    if (!raw || !selectedEmployee || threadRunning || projectDispatchDisabled) return false;
+    if (!raw || !selectedUser || threadRunning || projectDispatchDisabled) return false;
     if (requiresRuntimeSelection && !selectedThreadNodeId) {
       reportMutationError("Computer required", null, t("errors.thread_computer_required"));
       return false;
@@ -346,13 +346,13 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     failureMessageKey: string;
   }) {
     if (!activeSession) return;
-    if (!selectedEmployee) return;
+    if (!selectedUser) return;
     if (threadRunning) return;
     const logicalAgent = effectiveSelectableLogicalAgents.find(
-      (candidate) => candidate.id === prefer && isEmployeeAgentRoutable(candidate),
+      (candidate) => candidate.id === prefer && isUserAgentRoutable(candidate),
     ) ?? (fallback
       ? effectiveSelectableLogicalAgents.find(
-          (candidate) => candidate.executorKind === fallback && isEmployeeAgentRoutable(candidate),
+          (candidate) => candidate.executorKind === fallback && isUserAgentRoutable(candidate),
         )
       : undefined);
     if (!logicalAgent) {

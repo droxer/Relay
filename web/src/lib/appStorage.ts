@@ -21,7 +21,9 @@ export function normalizeLanguage(value: unknown): Language {
 export type TokenMap = Record<string, string>;
 
 const tokenStorageKey = "relay-web.tokens";
-export const selectedEmployeeKey = "relay-web.selectedEmployee";
+export const selectedUserKey = "relay-web.selectedUser";
+/** The pre-rename key; cleared on the next write so it does not linger. */
+export const legacySelectedUserKey = "relay-web.selectedEmployee";
 const themeStorageKey = "relay-web.theme";
 const languageStorageKey = "relay-web.language";
 const threadSpaceWidthKey = "relay-web.threadSpaceWidth";

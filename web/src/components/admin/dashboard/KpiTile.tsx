@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 interface KpiTileProps {
   eyebrow: string;
   value: ReactNode;
-  slot?: "sessions" | "nodes" | "employees" | "tokens";
+  slot?: "sessions" | "nodes" | "users" | "tokens";
   delta?: {
     label: string;
     direction: "up" | "down" | "flat";

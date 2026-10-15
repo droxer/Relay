@@ -36,7 +36,7 @@ from .helpers import (
     get_session_header_for_actor,
     get_task_for_actor,
     is_workspace_artifact,
-    owner_employee_id_for_create,
+    owner_user_id_for_create,
     request_actor,
     request_actor_or_sandbox,
     role_name,
@@ -105,7 +105,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "daemonNodeId": session.get("daemonNodeId"),
         "managedNodeId": session.get("managedNodeId"),
         "workspacePath": session.get("workspacePath"),
-        "ownerEmployeeId": session.get("ownerEmployeeId"),
+        "ownerUserId": session.get("ownerUserId"),
         "ownerAgentId": session.get("ownerAgentId"),
         "teamId": session.get("teamId"),
         "projectId": session.get("projectId"),
@@ -131,9 +131,9 @@ def task_brief_item(task: dict[str, Any]) -> dict[str, Any]:
         "title": task.get("title"),
         "status": task.get("status"),
         "priority": task.get("priority"),
-        "ownerEmployeeId": task.get("ownerEmployeeId"),
+        "ownerUserId": task.get("ownerUserId"),
         "projectId": task.get("projectId"),
-        "assigneeEmployeeId": task.get("assigneeEmployeeId"),
+        "assigneeUserId": task.get("assigneeUserId"),
         "assignedAgent": task.get("assignedAgent"),
         "assignedAgentId": task.get("assignedAgentId"),
         "assignedTeamId": task.get("assignedTeamId"),
@@ -148,22 +148,22 @@ def task_brief_item(task: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def employee_for_workspace_brief(
-    actor: dict[str, Any], requested_employee: str | None
+def user_for_workspace_brief(
+    actor: dict[str, Any], requested_user: str | None
 ) -> str:
     requested = (
-        requested_employee.strip() if isinstance(requested_employee, str) else ""
+        requested_user.strip() if isinstance(requested_user, str) else ""
     )
     if requested and actor["isAdmin"]:
         return requested
-    if requested and requested != actor["employeeId"]:
-        raise HTTPException(403, "Cannot read another employee's workspace.")
-    return actor["employeeId"]
+    if requested and requested != actor["userId"]:
+        raise HTTPException(403, "Cannot read another user's workspace.")
+    return actor["userId"]
 
 
-def agent_supervisor_employee_id(agent: dict[str, Any]) -> str | None:
+def agent_supervisor_user_id(agent: dict[str, Any]) -> str | None:
     """Return an agent's owner across current and legacy agent snapshots."""
-    owner = agent.get("supervisorEmployeeId") or agent.get("employeeId")
+    owner = agent.get("supervisorUserId") or agent.get("userId")
     return owner if isinstance(owner, str) and owner else None
 
 
@@ -178,9 +178,9 @@ def agent_for_workspace(
         raise HTTPException(404, "Agent not found.")
     if (
         not actor["isAdmin"]
-        and agent_supervisor_employee_id(agent) != actor["employeeId"]
+        and agent_supervisor_user_id(agent) != actor["userId"]
     ):
-        raise HTTPException(403, "Cannot read another employee's agent workspace.")
+        raise HTTPException(403, "Cannot read another user's agent workspace.")
     return agent
 
 
@@ -251,7 +251,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         except ValueError as error:
             raise HTTPException(400, "limit must be an integer.") from error
         summaries = ctx.session_store.list_session_summaries(
-            owner_employee_id=None if actor["isAdmin"] else actor["employeeId"],
+            owner_user_id=None if actor["isAdmin"] else actor["userId"],
             limit=min(max(1, requested_limit), 200),
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
@@ -260,7 +260,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     visible = [
         session
         for session in ctx.session_store.list_sessions()
-        if actor["isAdmin"] or session.get("ownerEmployeeId") == actor["employeeId"]
+        if actor["isAdmin"] or session.get("ownerUserId") == actor["userId"]
     ]
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = request.app.state.execution_lifecycle.annotate(sessions)
@@ -286,30 +286,30 @@ def artifact_index_limit(raw: str | None) -> int:
 @router.get("/artifacts")
 def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    requested_employee = request.query_params.get("employeeId")
+    requested_user = request.query_params.get("userId")
     if (
-        requested_employee
+        requested_user
         and not actor["isAdmin"]
-        and requested_employee != actor["employeeId"]
+        and requested_user != actor["userId"]
     ):
-        raise HTTPException(403, "Cannot list artifacts for another employee.")
+        raise HTTPException(403, "Cannot list artifacts for another user.")
     workspace_path = request.query_params.get("workspacePath")
     limit = artifact_index_limit(request.query_params.get("limit"))
     if hasattr(ctx.session_store, "list_artifact_summaries"):
         return {
             "artifacts": ctx.session_store.list_artifact_summaries(
-                owner_employee_id=requested_employee
-                or (None if actor["isAdmin"] else actor["employeeId"]),
+                owner_user_id=requested_user
+                or (None if actor["isAdmin"] else actor["userId"]),
                 workspace_path=workspace_path,
                 limit=limit,
             )
         }
     artifacts: list[dict[str, Any]] = []
     for session in ctx.session_store.list_sessions():
-        owner = session.get("ownerEmployeeId")
-        if not actor["isAdmin"] and owner != actor["employeeId"]:
+        owner = session.get("ownerUserId")
+        if not actor["isAdmin"] and owner != actor["userId"]:
             continue
-        if requested_employee and owner != requested_employee:
+        if requested_user and owner != requested_user:
             continue
         if workspace_path and session.get("workspacePath") != workspace_path:
             continue
@@ -338,9 +338,9 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     if (
         team
         and not actor["isAdmin"]
-        and team.get("ownerEmployeeId") != actor["employeeId"]
+        and team.get("ownerUserId") != actor["userId"]
     ):
-        raise HTTPException(403, "Cannot read another employee's team workspace.")
+        raise HTTPException(403, "Cannot read another user's team workspace.")
 
     project = (
         ctx.project_store.get_project(requested_project_id)
@@ -352,27 +352,27 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     if (
         project
         and not actor["isAdmin"]
-        and project.get("ownerEmployeeId") != actor["employeeId"]
+        and project.get("ownerUserId") != actor["userId"]
     ):
-        raise HTTPException(403, "Cannot read another employee's project workspace.")
+        raise HTTPException(403, "Cannot read another user's project workspace.")
 
     agent = agent_for_workspace(ctx, actor, requested_agent_id)
-    employee_id = (
-        project.get("ownerEmployeeId")
+    user_id = (
+        project.get("ownerUserId")
         if project
-        else team.get("ownerEmployeeId")
+        else team.get("ownerUserId")
         if team
-        else agent_supervisor_employee_id(agent)
+        else agent_supervisor_user_id(agent)
         if agent
-        else employee_for_workspace_brief(actor, request.query_params.get("employeeId"))
+        else user_for_workspace_brief(actor, request.query_params.get("userId"))
     )
-    if not employee_id:
+    if not user_id:
         raise HTTPException(404, "Agent owner not found.")
 
     sessions = [
         session
         for session in ctx.session_store.list_session_snapshots(
-            owner_employee_id=employee_id,
+            owner_user_id=user_id,
             project_id=project["id"] if project else None,
         )
         if (not agent or session_uses_agent(session, agent["id"]))
@@ -416,7 +416,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         include_node = (
             resolve_computer_id(node) == project.get("computerId")
             if project
-            else node.get("employeeId") == employee_id
+            else node.get("userId") == user_id
             if placements is None
             else has_placement or has_authorized_run
         )
@@ -432,7 +432,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     ]
     tasks = [
         task
-        for task in ctx.task_store.list_task_summaries(employee_id=employee_id)
+        for task in ctx.task_store.list_task_summaries(user_id=user_id)
         if (not agent or task.get("assignedAgentId") == agent["id"])
         and (not team or task.get("assignedTeamId") == team["id"])
         and (not project or task.get("projectId") == project["id"])
@@ -454,7 +454,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     )[:12]
 
     return {
-        "employeeId": employee_id,
+        "userId": user_id,
         **({"agentId": agent["id"]} if agent else {}),
         **({"teamId": team["id"]} if team else {}),
         **({"projectId": project["id"]} if project else {}),
@@ -523,9 +523,9 @@ def create_session(
     project_id = task_project_id or requested_project_id
     if project_id and "assignments" in body:
         raise HTTPException(400, "project_assignment_override_unsupported")
-    owner = owner_employee_id_for_create(actor, body)
+    owner = owner_user_id_for_create(actor, body)
     thread_ownership = {
-        "owner_employee_id": owner,
+        "owner_user_id": owner,
         **({"owner_agent_id": owner_agent_id} if owner_agent_id else {}),
     }
     if task:
@@ -541,17 +541,17 @@ def create_session(
             )
         except TeamDispatchError as error:
             raise HTTPException(409, error.code) from error
-        expected_owner = thread_ownership.get("owner_employee_id")
-        requested_owner = string_field(body, "ownerEmployeeId") or string_field(
-            body, "employeeId"
+        expected_owner = thread_ownership.get("owner_user_id")
+        requested_owner = string_field(body, "ownerUserId") or string_field(
+            body, "userId"
         )
         if requested_owner and requested_owner != expected_owner:
             raise HTTPException(
                 403, "Session owner must match the linked task assignee."
             )
         owner = expected_owner or owner
-        if owner and "owner_employee_id" not in thread_ownership:
-            thread_ownership["owner_employee_id"] = owner
+        if owner and "owner_user_id" not in thread_ownership:
+            thread_ownership["owner_user_id"] = owner
     if daemon_node_id:
         node = next(
             (
@@ -569,9 +569,9 @@ def create_session(
                     "message": "The selected computer is not available.",
                 },
             )
-        if owner and node.get("employeeId") != owner:
+        if owner and node.get("userId") != owner:
             raise HTTPException(
-                403, "The selected computer belongs to another employee."
+                403, "The selected computer belongs to another user."
             )
         managed_node_id = node.get("managedNodeId")
         session_computer_id = resolve_computer_id(node)
@@ -666,7 +666,7 @@ def reconcile_execution(session_id: str, request: Request, ctx: AppContextDep) -
     """
     actor = request_actor(request, ctx.auth_store)
     get_session_for_actor(ctx.session_store, session_id, actor)
-    status = request.app.state.execution_lifecycle.reconcile(session_id, actor["employeeId"])
+    status = request.app.state.execution_lifecycle.reconcile(session_id, actor["userId"])
     if status is None:
         raise HTTPException(
             409,
@@ -689,7 +689,7 @@ def update_session(
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
-        owner_employee_id=actor["employeeId"],
+        owner_user_id=actor["userId"],
     )
     result = ctx.session_store.get_session(session_id)
     if "title" in body:
@@ -713,7 +713,7 @@ def cancel_session_run(
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     session = get_session_for_actor(ctx.session_store, session_id, actor)
     body = _request_body
-    reason = string_field(body, "reason") or "Cancelled by employee."
+    reason = string_field(body, "reason") or "Cancelled by user."
     node = next(
         (
             item
@@ -738,7 +738,7 @@ def cancel_session_run(
             node_id,
             session_id,
             reason,
-            actor_employee_id=actor["employeeId"],
+            actor_user_id=actor["userId"],
             actor_is_admin=bool(actor.get("isAdmin")),
         )
         if cancelled is not None:
@@ -754,8 +754,8 @@ def cancel_session_run(
         task_store=ctx.task_store,
         task_id=task_id,
         task_execution_owner=task_owner,
-        owner_employee_id=actor["employeeId"],
-    ).cancel_session(session_id, reason, actor_employee_id=actor["employeeId"])
+        owner_user_id=actor["userId"],
+    ).cancel_session(session_id, reason, actor_user_id=actor["userId"])
 
 
 @router.post("/threads/{session_id}/assignments")
@@ -771,7 +771,7 @@ def assign_session(
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
-        owner_employee_id=actor["employeeId"],
+        owner_user_id=actor["userId"],
     )
     try:
         controller.assign_session(session_id, assignments)
@@ -793,12 +793,12 @@ def delete_session(
         raise HTTPException(400, "stop must be true or false.")
     if stop == "true":
         from fastapi.responses import JSONResponse
-        status = request.app.state.execution_lifecycle.request_delete(session_id, actor["employeeId"])
+        status = request.app.state.execution_lifecycle.request_delete(session_id, actor["userId"])
         return JSONResponse(status, status_code=202) if status else Response(status_code=204)
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
-        owner_employee_id=actor["employeeId"],
+        owner_user_id=actor["userId"],
     )
     try:
         with ctx.registry.dispatch_lock, request.app.state.execution_lifecycle.admission_scope():
@@ -806,7 +806,7 @@ def delete_session(
             if not request.app.state.execution_lifecycle.status(snapshot)["canDelete"]:
                 raise SessionRunInFlightError(session_id)
             controller.delete_session(
-                session_id, snapshot=snapshot, deleted_by=actor["employeeId"]
+                session_id, snapshot=snapshot, deleted_by=actor["userId"]
             )
     except SessionRunInFlightError:
         raise HTTPException(409, "Session has a run in flight.")
@@ -850,7 +850,7 @@ def decision(
     session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     # The sandbox credential here is the browser-minted UI token, which acts as
-    # its employee; the daemon (and every agent) holds only the node token,
+    # its user; the daemon (and every agent) holds only the node token,
     # which never authenticates as a person.
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     session = get_session_for_actor(ctx.session_store, session_id, actor)
@@ -875,7 +875,7 @@ def decision(
             return SessionController(ctx.session_store).record_decision(
                 session_id, kind, string_field(body, "note") or None,
                 valid_agent(body.get("targetAgent")),
-                actor_employee_id=actor["employeeId"],
+                actor_user_id=actor["userId"],
             )
     task_id = task_owner = None
     if kind in ("cancel", "mark_done"):
@@ -891,14 +891,14 @@ def decision(
         task_store=ctx.task_store,
         task_id=task_id,
         task_execution_owner=task_owner,
-        owner_employee_id=actor["employeeId"],
+        owner_user_id=actor["userId"],
     )
     if kind in ("cancel", "mark_done"):
         if run_request:
             terminal_reason = string_field(body, "note") or (
-                "Session marked done by employee."
+                "Session marked done by user."
                 if kind == "mark_done"
-                else "Cancelled by employee."
+                else "Cancelled by user."
             )
             ctx.registry.cancel_run_request_before_delivery(
                 run_request["id"], terminal_reason
@@ -912,7 +912,7 @@ def decision(
         kind,
         string_field(body, "note") or None,
         valid_agent(body.get("targetAgent")),
-        actor_employee_id=actor["employeeId"],
+        actor_user_id=actor["userId"],
     )
     logger.info("Session decision recorded", session_id=session_id, kind=kind)
     return result
@@ -933,7 +933,7 @@ def handoff(
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
-        owner_employee_id=actor["employeeId"],
+        owner_user_id=actor["userId"],
     )
     result = controller.handoff_session(
         session_id,

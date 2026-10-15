@@ -7,16 +7,16 @@ const stamp = "2026-10-10T09:00:00.000Z";
 const QUESTION = "Which vault holds the staging signing key — ops or platform?";
 const computerId = "device:u:host";
 const reviewer = {
-  id: "agt_reviewer", displayName: "Reviewer", executorKind: "claude", defaultRole: "reviewer", supervisorEmployeeId: "u",
+  id: "agt_reviewer", displayName: "Reviewer", executorKind: "claude", defaultRole: "reviewer", supervisorUserId: "u",
   enabled: true, availability: "ready", version: 1, skills: [], deletedAt: null, createdAt: stamp, updatedAt: stamp,
   placements: [{ id: "placement-reviewer", agentId: "agt_reviewer", computerId, daemonNodeId: "node", desiredState: "active", status: "ready" }],
 };
-const node = { id: "node", employeeId: "u", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
+const node = { id: "node", userId: "u", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
   online: true, stale: false, status: "ready", agents: { claude: "ready" }, capabilities: ["thread-workspaces", "task-workspaces", "round-result"] };
 const said = JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Both vaults hold a key named `staging-signing`, and they differ. Rotating the wrong one would break deploys, so I stopped before touching either." }] } });
 const session = {
   id: "keys-thread", title: "Rotate the staging keys", taskGoal: "Rotate the staging signing keys", workspacePath: "/workspace",
-  computerId, daemonNodeId: "node", ownerEmployeeId: "u", ownerAgentId: reviewer.id, participants: ["human"], status: "completed", phase: "completed",
+  computerId, daemonNodeId: "node", ownerUserId: "u", ownerAgentId: reviewer.id, participants: ["human"], status: "completed", phase: "completed",
   finalOutcome: `The round reported it is blocked. ${QUESTION}`, workOutcome: "blocked",
   createdAt: stamp, updatedAt: stamp,
   agentRuns: [{ id: "run-1", agent: "claude", logicalAgentId: reviewer.id, status: "completed", startedAt: stamp, completedAt: stamp, artifactIds: [] }],
@@ -37,7 +37,7 @@ const session = {
 const task = {
   id: "rotate-keys", number: 12, title: "Rotate the staging keys", description: "", priority: "high", status: "waiting_for_human",
   waitingReason: `The round reported it is blocked. ${QUESTION}`, isRoutine: false,
-  linkedSessionIds: [session.id], ownerEmployeeId: "u", assignedAgentId: reviewer.id, createdAt: stamp, updatedAt: stamp, events: [], activity: [],
+  linkedSessionIds: [session.id], ownerUserId: "u", assignedAgentId: reviewer.id, createdAt: stamp, updatedAt: stamp, events: [], activity: [],
 };
 
 async function serve(page: Page, theme: "light" | "dark", taskScoped = true, overrides: Partial<typeof session> & Record<string, unknown> = {}, taskOverrides: Record<string, unknown> = {}): Promise<string[]> {
@@ -48,7 +48,7 @@ async function serve(page: Page, theme: "light" | "dark", taskScoped = true, ove
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: [thread], agents: [reviewer], teams: [], tasks: [waitingTask], nodes: [node], projects: [], sandboxes: [], skills: [], files: [], entries: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme, language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme, language: "en" } };
     if (path.endsWith(`/threads/${session.id}`)) body = thread;
     if (path.endsWith(`/threads/${session.id}/events`)) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });

@@ -32,7 +32,7 @@ def test_agent_stores_create_uuid_agent_ids(tmp_path: Path, store_kind: str) -> 
     assert str(UUID(agent["id"])) == agent["id"]
 
 
-def test_employee_can_own_multiple_agents_of_the_same_executor_kind(
+def test_user_can_own_multiple_agents_of_the_same_executor_kind(
     tmp_path: Path,
 ) -> None:
     store = LocalAgentStore(tmp_path)
@@ -58,11 +58,11 @@ def test_employee_can_own_multiple_agents_of_the_same_executor_kind(
     assert researcher["defaultRole"] == "implementer"
     assert reviewer["defaultRole"] == "reviewer"
     assert {
-        agent["displayName"] for agent in store.list_agents(supervisor_employee_id="alice")
+        agent["displayName"] for agent in store.list_agents(supervisor_user_id="alice")
     } == {"Researcher", "Reviewer"}
 
 
-def test_agent_names_are_unique_within_an_employee(tmp_path: Path) -> None:
+def test_agent_names_are_unique_within_an_user(tmp_path: Path) -> None:
     store = LocalAgentStore(tmp_path)
     store.create_agent(
         "alice",
@@ -182,8 +182,8 @@ def test_database_agent_store_normalizes_legacy_owner_snapshot(tmp_path: Path) -
             "defaultRole": "implementer",
         },
     )
-    legacy = {**agent, "employeeId": "alice"}
-    legacy.pop("supervisorEmployeeId")
+    legacy = {**agent, "userId": "alice"}
+    legacy.pop("supervisorUserId")
     with store.engine.begin() as conn:
         conn.execute(
             store.agents.update()
@@ -191,7 +191,7 @@ def test_database_agent_store_normalizes_legacy_owner_snapshot(tmp_path: Path) -
             .values(snapshot=legacy)
         )
 
-    assert store.get_agent(agent["id"])["supervisorEmployeeId"] == "alice"
+    assert store.get_agent(agent["id"])["supervisorUserId"] == "alice"
 
 
 def test_create_agent_records_the_computer_id(tmp_path) -> None:
@@ -283,7 +283,7 @@ def test_personality_fields_remain_patchable(tmp_path) -> None:
     assert updated["displayName"] == "Grace"
 
 
-def test_database_enforces_employee_scoped_normalized_agent_names() -> None:
+def test_database_enforces_user_scoped_normalized_agent_names() -> None:
     unique_indexes = {
         index.name: tuple(sorted(column.name for column in index.columns))
         for index in DatabaseAgentStore.agents.indexes
@@ -294,6 +294,6 @@ def test_database_enforces_employee_scoped_normalized_agent_names() -> None:
     # erase its own key columns.
     assert unique_indexes["uq_agents_live_supervisor_display_name"] == (
         "display_name_key",
-        "supervisor_employee_id",
+        "supervisor_user_id",
     )
     assert unique_indexes["uq_agents_live_compatibility_key"] == ("compatibility_key",)

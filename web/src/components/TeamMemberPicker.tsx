@@ -2,7 +2,7 @@
 
 import { forwardRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { EmployeeAgent } from "../types";
+import type { UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { TonePill } from "./StatusPill";
@@ -36,11 +36,11 @@ export function removeTeamMember(current: TeamMembership, agentId: string): Team
 /* The team's crew as a short list — only the agents actually on the team,
    each with its lead marker and a remove control — plus one "Add member"
    roster picker for everyone else. It replaces a checkbox row for every agent
-   the employee owns and a separate lead select that restated the same list:
+   the user owns and a separate lead select that restated the same list:
    the lead is chosen on the row it applies to, and the list never grows past
    the team itself. */
 export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   value: TeamMembership;
   onChange: (next: TeamMembership) => void;
   disabled?: boolean;
@@ -57,7 +57,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
   const members = useMemo(
     () => value.memberIds
       .map((id) => agents.find((agent) => agent.id === id))
-      .filter((agent): agent is EmployeeAgent => Boolean(agent)),
+      .filter((agent): agent is UserAgent => Boolean(agent)),
     [agents, value.memberIds],
   );
   const candidates = useMemo(

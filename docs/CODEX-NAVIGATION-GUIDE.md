@@ -226,7 +226,7 @@ change without rediscovering the repository:
 ## Invariants checked
 - Control plane did not execute agents.
 - Event logs remain authoritative.
-- Authorization and employee scoping are unchanged or explicitly tested.
+- Authorization and user scoping are unchanged or explicitly tested.
 - Summary/list optimization preserves completeness and detail access.
 
 ## Data and migration

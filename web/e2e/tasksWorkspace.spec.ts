@@ -4,15 +4,15 @@ for (const mobile of [false, true]) {
   test(`issue queues and execution drawer (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
-    const projects = ["Launch", "Support", "Empty"].map((name) => ({ id: name.toLowerCase(), name, enabled: true, members: [], ownerEmployeeId: "u", computerId: "c", createdAt: stamp, updatedAt: stamp }));
+    const projects = ["Launch", "Support", "Empty"].map((name) => ({ id: name.toLowerCase(), name, enabled: true, members: [], ownerUserId: "u", computerId: "c", createdAt: stamp, updatedAt: stamp }));
     const tasks = [
       { id: "ship", title: "Ship the release", projectId: "launch", status: "review", assignedTeamId: "team-a" },
       { id: "answer", title: "Answer customers", projectId: "support", status: "running" },
-    ].map((task) => ({ ...task, description: "Check the execution results before completing this task.", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] }));
+    ].map((task) => ({ ...task, description: "Check the execution results before completing this task.", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] }));
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let body: unknown = { sessions: [], agents: [], teams: [{ id: "team-a", name: "Launch team", enabled: true, members: [] }], nodes: [], projects, tasks, sandboxes: [], skills: [], files: [], entries: [] };
-      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       const detail = tasks.find((task) => path.endsWith(`/tasks/${task.id}`));
       if (detail) body = detail;
       if (path.endsWith("/events")) body = { events: [] };

@@ -624,10 +624,10 @@ class DaemonNodeRegistry:
             raise PermissionError(
                 f"Unauthorized daemon node registration for {payload['sandboxId']}: token does not match the token issued at provisioning."
             )
-        employee_id = (
-            (existing or {}).get("employeeId")
+        user_id = (
+            (existing or {}).get("userId")
             if existing
-            else payload.get("employeeId")
+            else payload.get("userId")
         )
         next_ui_hash = (
             hash_daemon_node_token(ui_token)
@@ -647,7 +647,7 @@ class DaemonNodeRegistry:
         prior_role_defaults = dict((existing or {}).get("agentRoleDefaults") or {})
         prior_role_overrides = dict((existing or {}).get("agentRoleOverrides") or {})
         prior_display_name = self._registration_display_name(
-            payload, employee_id, existing
+            payload, user_id, existing
         )
         retired_at = (existing or {}).get("retiredAt")
         capacity_input = {
@@ -672,7 +672,7 @@ class DaemonNodeRegistry:
             sandbox_mode = (existing or {}).get("sandboxMode")
         sandbox = {
             "id": payload["sandboxId"],
-            **({"employeeId": employee_id} if employee_id else {}),
+            **({"userId": user_id} if user_id else {}),
             **(
                 {"managedNodeId": existing["managedNodeId"]}
                 if (existing or {}).get("managedNodeId")
@@ -770,7 +770,7 @@ class DaemonNodeRegistry:
         logger.info(
             "Daemon node registered",
             sandbox_id=sandbox["id"],
-            employee_id=sandbox.get("employeeId"),
+            user_id=sandbox.get("userId"),
             status=sandbox["status"],
             agents={agent: status for agent, status in sandbox["agents"].items()},
         )
@@ -825,7 +825,7 @@ class DaemonNodeRegistry:
     def _deleted_tombstone(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         """A deletion tombstone matching the Computer this payload comes from.
 
-        Matches on the node id and, for employee devices, on the workspace
+        Matches on the node id and, for user devices, on the workspace
         identity -- a restarted daemon comes back with a fresh sandboxId but
         the same machine, and deleting a node has to survive that restart.
         """
@@ -879,27 +879,27 @@ class DaemonNodeRegistry:
                 "Retired superseded daemon node incarnation",
                 sandbox_id=node["id"],
                 superseded_by=sandbox["id"],
-                employee_id=node.get("employeeId"),
+                user_id=node.get("userId"),
                 workspace_id=node.get("workspaceId"),
             )
 
     def _registration_display_name(
         self,
         payload: dict[str, Any],
-        employee_id: str | None,
+        user_id: str | None,
         existing: dict[str, Any] | None,
     ) -> str | None:
         if existing is not None:
             display_name = existing.get("displayName")
             return str(display_name) if display_name else None
         workspace_id = payload.get("workspaceId")
-        if not employee_id or not workspace_id:
+        if not user_id or not workspace_id:
             return None
         matches = [
             node
             for node in self.sandboxes.values()
             if node["id"] != payload["sandboxId"]
-            and node.get("employeeId") == employee_id
+            and node.get("userId") == user_id
             and node.get("workspaceId") == workspace_id
             and not node.get("managedNodeId")
         ]
@@ -1037,63 +1037,63 @@ class DaemonNodeRegistry:
             logger.info("Daemon node token reissued", sandbox_id=sandbox_id)
             return updated, node_token
 
-    def count_employee_device_nodes(self, employee_id: str) -> int:
-        """Live personal computers owned by an employee.
+    def count_user_device_nodes(self, user_id: str) -> int:
+        """Live personal computers owned by a user.
 
-        Deleted nodes are excluded: a tombstone is a computer the employee no
+        Deleted nodes are excluded: a tombstone is a computer the user no
         longer has, so it must not consume a slot in their limit.
         """
         self._refresh_persisted_liveness()
         return sum(
             1
             for sandbox in self.sandboxes.values()
-            if sandbox.get("employeeId") == employee_id
+            if sandbox.get("userId") == user_id
             and sandbox.get("status") != DAEMON_NODE_DELETED_STATUS
             and not sandbox.get("retiredAt")
-            and infer_node_location(sandbox) == "employee-device"
+            and infer_node_location(sandbox) == "user-device"
         )
 
-    def assign_employee(self, sandbox_id: str, employee_id: str) -> dict[str, Any]:
+    def assign_user(self, sandbox_id: str, user_id: str) -> dict[str, Any]:
         sandbox = self.sandboxes.get(sandbox_id)
         if not sandbox:
             raise KeyError(sandbox_id)
-        if sandbox.get("employeeId"):
+        if sandbox.get("userId"):
             raise ValueError("Daemon node is already assigned.")
-        persisted = self.daemon_store.assign_node_employee(sandbox_id, employee_id)
+        persisted = self.daemon_store.assign_node_user(sandbox_id, user_id)
         updated = {**sandbox, **persisted}
         self.sandboxes[sandbox_id] = updated
         logger.info(
-            "Daemon node assigned", sandbox_id=sandbox_id, employee_id=employee_id
+            "Daemon node assigned", sandbox_id=sandbox_id, user_id=user_id
         )
         return updated
 
-    def unassign_employee_everywhere(self, employee_id: str) -> list[str]:
+    def unassign_user_everywhere(self, user_id: str) -> list[str]:
         affected: list[str] = []
         for sandbox_id, sandbox in list(self.sandboxes.items()):
-            if sandbox.get("employeeId") == employee_id:
-                self.unassign_employee(sandbox_id)
+            if sandbox.get("userId") == user_id:
+                self.unassign_user(sandbox_id)
                 affected.append(sandbox_id)
         return affected
 
-    def unassign_employee(self, sandbox_id: str) -> dict[str, Any]:
+    def unassign_user(self, sandbox_id: str) -> dict[str, Any]:
         sandbox = self.sandboxes.get(sandbox_id)
         if not sandbox:
             raise KeyError(sandbox_id)
-        if not sandbox.get("employeeId"):
+        if not sandbox.get("userId"):
             raise ValueError("Daemon node is not assigned.")
-        previous = sandbox["employeeId"]
+        previous = sandbox["userId"]
         updated = {
             k: v
             for k, v in sandbox.items()
-            if k not in ("employeeId", "agentRoleOverrides")
+            if k not in ("userId", "agentRoleOverrides")
         }
         updated["updatedAt"] = now_iso()
         self.sandboxes[sandbox_id] = updated
-        self.daemon_store.unassign_node_employee(sandbox_id)
+        self.daemon_store.unassign_node_user(sandbox_id)
         logger.info(
             "Daemon node unassigned",
             sandbox_id=sandbox_id,
-            previous_employee_id=previous,
+            previous_user_id=previous,
         )
         return updated
 
@@ -1285,27 +1285,27 @@ class DaemonNodeRegistry:
 
     def provision_pending(
         self,
-        employee_id: str | None = None,
+        user_id: str | None = None,
         workspace_path: str | None = None,
         sandbox_mode: str = "boxlite",
-        node_location: str | None = "employee-device",
+        node_location: str | None = "user-device",
         display_name: str | None = None,
     ) -> tuple[dict[str, Any], str | None, str | None]:
         if sandbox_mode not in DAEMON_SANDBOX_MODES:
             sandbox_mode = "boxlite"
         enrollment_key = (
-            local_enrollment_key(employee_id, workspace_path)
-            if node_location == "employee-device"
+            local_enrollment_key(user_id, workspace_path)
+            if node_location == "user-device"
             else None
         )
-        if employee_id:
-            existing = self.find_by_employee(employee_id, workspace_path)
+        if user_id:
+            existing = self.find_by_user(user_id, workspace_path)
             if existing:
                 node_token = self.plain_node_tokens.get(existing["id"])
                 updates: dict[str, Any] = {}
                 if not existing.get("sandboxMode"):
                     updates["sandboxMode"] = sandbox_mode
-                # `find_by_employee` treats a pathless node as matching any
+                # `find_by_user` treats a pathless node as matching any
                 # workspace, so reuse can land on a record that never learned
                 # where its work goes. Adopt the caller's path instead of
                 # silently discarding it — an enrollment that reports back a
@@ -1325,7 +1325,7 @@ class DaemonNodeRegistry:
                     self.sandboxes[existing["id"]] = existing
                     self.daemon_store.register_node(existing)
                 if (
-                    node_location == "employee-device"
+                    node_location == "user-device"
                     and existing.get("status") == "provisioning"
                     and not node_token
                 ):
@@ -1351,7 +1351,7 @@ class DaemonNodeRegistry:
         now = now_iso()
         sandbox = {
             "id": sandbox_id,
-            **({"employeeId": employee_id} if employee_id else {}),
+            **({"userId": user_id} if user_id else {}),
             **({"workspacePath": workspace_path} if workspace_path else {}),
             **({"enrollmentKey": enrollment_key} if enrollment_key else {}),
             **({"displayName": display_name} if display_name else {}),
@@ -1377,7 +1377,7 @@ class DaemonNodeRegistry:
         logger.info(
             "Daemon node provisioned",
             sandbox_id=sandbox["id"],
-            employee_id=employee_id,
+            user_id=user_id,
             workspace_path=workspace_path,
             reused=not created,
         )
@@ -1436,8 +1436,8 @@ class DaemonNodeRegistry:
         sandbox = {
             "id": sandbox_id,
             **(
-                {"employeeId": managed_node["employeeId"]}
-                if managed_node.get("employeeId")
+                {"userId": managed_node["userId"]}
+                if managed_node.get("userId")
                 else {}
             ),
             **(
@@ -1471,14 +1471,14 @@ class DaemonNodeRegistry:
         )
         return sandbox, node_token
 
-    def find_by_employee(
-        self, employee_id: str, workspace_path: str | None = None
+    def find_by_user(
+        self, user_id: str, workspace_path: str | None = None
     ) -> dict[str, Any] | None:
         self._refresh_persisted_liveness()
         matches = [
             sandbox
             for sandbox in self.sandboxes.values()
-            if sandbox.get("employeeId") == employee_id
+            if sandbox.get("userId") == user_id
             and sandbox.get("status") != DAEMON_NODE_DELETED_STATUS
             and (
                 not workspace_path
@@ -1688,7 +1688,7 @@ class DaemonNodeRegistry:
 
         Command polling and run events still count as observations for older
         daemons, but new daemons no longer depend on either traffic pattern to
-        remain live. Both employee-device and managed nodes use this contract;
+        remain live. Both user-device and managed nodes use this contract;
         infrastructure recovery remains a managed-node policy concern.
         """
         self._hydrate_node(sandbox_id)
@@ -2236,11 +2236,11 @@ class DaemonNodeRegistry:
 
     def cancel_active_run(
         self, sandbox_id: str, session_id: str, reason: str,
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         with self.dispatch_lock:
             return self._cancel_active_run_unlocked(
-                sandbox_id, session_id, reason, actor_employee_id=actor_employee_id,
+                sandbox_id, session_id, reason, actor_user_id=actor_user_id,
             )
 
     def cancel_run_request_before_delivery(
@@ -2285,7 +2285,7 @@ class DaemonNodeRegistry:
 
     def _cancel_active_run_unlocked(
         self, sandbox_id: str, session_id: str, reason: str,
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         active = next(
             (
@@ -2324,7 +2324,7 @@ class DaemonNodeRegistry:
         if request:
             stopping = self.daemon_store.request_run_stop(
                 request["id"], active["commandId"], reason,
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
             if not stopping:
                 return active
@@ -2497,7 +2497,7 @@ class DaemonNodeRegistry:
                     if blocking_session and all(
                         blocking_session.get(key) == current_session.get(key)
                         for key in (
-                            "ownerEmployeeId",
+                            "ownerUserId",
                             "computerId",
                             "workspaceLayout",
                             "workspaceSubpath",
@@ -4017,7 +4017,7 @@ class DaemonNodeRegistry:
             if session_before.get("status") != "cancelled":
                 controller.cancel_session(
                     run_request["sessionId"], event["reason"],
-                    actor_employee_id=state.get("_relay_stop_actor_employee_id"),
+                    actor_user_id=state.get("_relay_stop_actor_user_id"),
                 )
             self.daemon_store.update_run_request_if_claimed(
                 run_request["id"],
@@ -4835,7 +4835,7 @@ class DaemonNodeRegistry:
             task_id=task_id,
             task_execution_owner=request_execution_owner(run_request) if run_request else None,
             workspace_path=sandbox.get("workspacePath") or "/workspace",
-            owner_employee_id=sandbox.get("employeeId"),
+            owner_user_id=sandbox.get("userId"),
             daemon_node_id=sandbox.get("id"),
             managed_node_id=sandbox.get("managedNodeId"),
             computer_id=computer_id(sandbox),

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { agentReadyForTask, canDiscussTask, discussionAgentsForTask, dueTone, filterTasks, localDateKey, tasksByStatus, type BacklogFilters } from "../src/lib/backlog.js";
-import type { DaemonNodeMonitorRecord, EmployeeAgent, RelayTask } from "../src/types.js";
+import type { DaemonNodeMonitorRecord, UserAgent, RelayTask } from "../src/types.js";
 
 const baseFilters: BacklogFilters = {
   query: "",
@@ -23,8 +23,8 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     description: input.description ?? "",
     priority: input.priority ?? "normal",
     status: input.status ?? "backlog",
-    ownerEmployeeId: input.ownerEmployeeId ?? "alice",
-    assigneeEmployeeId: input.assigneeEmployeeId,
+    ownerUserId: input.ownerUserId ?? "alice",
+    assigneeUserId: input.assigneeUserId,
     dueDate: input.dueDate,
     isRoutine: input.isRoutine ?? false,
     routineTriggers: input.routineTriggers,
@@ -46,7 +46,7 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
 function node(input: Partial<DaemonNodeMonitorRecord> & { id: string }): DaemonNodeMonitorRecord {
   return {
     id: input.id,
-    employeeId: input.employeeId ?? "alice",
+    userId: input.userId ?? "alice",
     status: input.status ?? "ready",
     online: input.online ?? true,
     agents: input.agents ?? { claude: "ready", pi: "ready", codex: "ready", kimi: "ready" },
@@ -94,8 +94,8 @@ describe("filterTasks source", () => {
 describe("filterTasks", () => {
   it("filters by status priority agent assignee and due state", () => {
     const tasks = [
-      task({ id: "a", title: "Ship board", status: "assigned", priority: "high", assignedAgent: "codex", assignedAgentId: "agent_builder", assigneeEmployeeId: "alice", dueDate: "2026-06-20" }),
-      task({ id: "b", title: "Polish copy", status: "backlog", priority: "low", assignedAgent: "claude", assigneeEmployeeId: "bob", dueDate: "2026-06-26" }),
+      task({ id: "a", title: "Ship board", status: "assigned", priority: "high", assignedAgent: "codex", assignedAgentId: "agent_builder", assigneeUserId: "alice", dueDate: "2026-06-20" }),
+      task({ id: "b", title: "Polish copy", status: "backlog", priority: "low", assignedAgent: "claude", assigneeUserId: "bob", dueDate: "2026-06-26" }),
     ];
 
     const result = filterTasks(tasks, {
@@ -134,24 +134,24 @@ describe("filterTasks", () => {
 
 describe("agentReadyForTask", () => {
   it("does not treat legacy executor/node state as a named-agent assignment", () => {
-    const backlogTask = task({ id: "a", title: "A", assignedAgent: "codex", assigneeEmployeeId: "alice" });
+    const backlogTask = task({ id: "a", title: "A", assignedAgent: "codex", assigneeUserId: "alice" });
 
-    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n1", employeeId: "alice" })]), false);
-    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n2", employeeId: "bob" })]), false);
-    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n3", employeeId: "alice", disabledAgents: ["codex"] })]), false);
+    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n1", userId: "alice" })]), false);
+    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n2", userId: "bob" })]), false);
+    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n3", userId: "alice", disabledAgents: ["codex"] })]), false);
     assert.equal(agentReadyForTask(backlogTask, [node({
       id: "n4",
-      employeeId: "alice",
+      userId: "alice",
       status: "running",
       activeRuns: [{ commandId: "cmd_1", sessionId: "ses_1", runId: "run_1", agent: "codex", taskGoal: "question", startedAt: "2026-06-28T00:00:00.000Z" }],
     })]), false);
   });
 
-  it("uses logical-agent availability instead of employee node ownership", () => {
+  it("uses logical-agent availability instead of user node ownership", () => {
     const backlogTask = task({ id: "a", title: "A", assignedAgent: "codex", assignedAgentId: "agent_builder" });
-    const logicalAgent: EmployeeAgent = {
+    const logicalAgent: UserAgent = {
       id: "agent_builder",
-      supervisorEmployeeId: "alice",
+      supervisorUserId: "alice",
       displayName: "Builder",
       executorKind: "codex",
       skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
@@ -164,7 +164,7 @@ describe("agentReadyForTask", () => {
     };
 
     assert.equal(agentReadyForTask(backlogTask, [], [logicalAgent]), true);
-    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n1", employeeId: "alice" })], [{ ...logicalAgent, availability: "offline" }]), false);
+    assert.equal(agentReadyForTask(backlogTask, [node({ id: "n1", userId: "alice" })], [{ ...logicalAgent, availability: "offline" }]), false);
   });
 });
 
@@ -176,9 +176,9 @@ describe("discussionAgentsForTask", () => {
   });
 
   it("uses ready logical agents without exposing their runtime nodes", () => {
-    const backlogTask = task({ id: "a", title: "A", assigneeEmployeeId: "alice" });
-    const base: Omit<EmployeeAgent, "id" | "displayName" | "executorKind"> = {
-      supervisorEmployeeId: "alice", skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
+    const backlogTask = task({ id: "a", title: "A", assigneeUserId: "alice" });
+    const base: Omit<UserAgent, "id" | "displayName" | "executorKind"> = {
+      supervisorUserId: "alice", skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
       enabled: true, version: 1, availability: "ready", placements: [],
       createdAt: "2026-07-10T00:00:00.000Z", updatedAt: "2026-07-10T00:00:00.000Z",
     };
@@ -189,12 +189,12 @@ describe("discussionAgentsForTask", () => {
     ]), ["claude", "codex"]);
   });
 
-  it("does not synthesize employee-facing agents from daemon nodes", () => {
-    const backlogTask = task({ id: "a", title: "A", assigneeEmployeeId: "alice" });
+  it("does not synthesize user-facing agents from daemon nodes", () => {
+    const backlogTask = task({ id: "a", title: "A", assigneeUserId: "alice" });
 
     assert.deepEqual(discussionAgentsForTask(backlogTask, [
-      node({ id: "n1", employeeId: "bob" }),
-      node({ id: "n2", employeeId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", kimi: "unknown" }, disabledAgents: ["codex"] }),
+      node({ id: "n1", userId: "bob" }),
+      node({ id: "n2", userId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", kimi: "unknown" }, disabledAgents: ["codex"] }),
     ]), []);
   });
 });

@@ -24,7 +24,7 @@ function ComputerOptionLabel({ label, ownership }: { label: string; ownership: C
   );
 }
 
-/** One of the employee's computers, by stable identity. Agent creation and
+/** One of the user's computers, by stable identity. Agent creation and
  *  team setup both open with it: where something runs is chosen first. */
 export const ComputerSelect = forwardRef<HTMLButtonElement, {
   options: ComputerOption[];

@@ -34,12 +34,12 @@ def grant(
     ctx: Any,
     skill_id: str,
     agent_ids: list[str],
-    employee_id: str,
+    user_id: str,
     pin: str | dict[str, str] = "latest",
 ) -> list[dict[str, Any]]:
-    skill = _visible_skill(ctx, skill_id, employee_id)
+    skill = _visible_skill(ctx, skill_id, user_id)
     normalized_pin = _validate_pin(ctx, skill_id, pin)
-    agents = _owned_agents(ctx, agent_ids, employee_id)
+    agents = _owned_agents(ctx, agent_ids, user_id)
     for agent in agents:
         _ensure_mutable_policy(agent.get("skillPolicy"))
 
@@ -49,7 +49,7 @@ def grant(
             "skillId": skill["id"],
             "pin": normalized_pin,
             "grantedAt": now_iso(),
-            "grantedByEmployeeId": employee_id,
+            "grantedByUserId": user_id,
         }
 
         def transform(
@@ -65,8 +65,8 @@ def grant(
     return updated
 
 
-def revoke(ctx: Any, skill_id: str, agent_id: str, employee_id: str) -> dict[str, Any]:
-    agent = _owned_agents(ctx, [agent_id], employee_id)[0]
+def revoke(ctx: Any, skill_id: str, agent_id: str, user_id: str) -> dict[str, Any]:
+    agent = _owned_agents(ctx, [agent_id], user_id)[0]
     _ensure_mutable_policy(agent.get("skillPolicy"))
 
     def transform(policy: dict[str, Any]) -> dict[str, Any]:
@@ -82,14 +82,14 @@ def revoke(ctx: Any, skill_id: str, agent_id: str, employee_id: str) -> dict[str
     return ctx.agent_store.transform_skill_policy(agent_id, transform)
 
 
-def _visible_skill(ctx: Any, skill_id: str, employee_id: str) -> dict[str, Any]:
+def _visible_skill(ctx: Any, skill_id: str, user_id: str) -> dict[str, Any]:
     skill = ctx.skill_store.get_skill(skill_id)
     if (
         not skill
         or skill.get("deletedAt")
         or (
             skill.get("visibility") != "org"
-            and skill.get("ownerEmployeeId") != employee_id
+            and skill.get("ownerUserId") != user_id
         )
     ):
         raise SkillGrantError("skill-not-found")
@@ -112,7 +112,7 @@ def _validate_pin(ctx: Any, skill_id: str, pin: Any) -> str | dict[str, str]:
 
 
 def _owned_agents(
-    ctx: Any, agent_ids: list[str], employee_id: str
+    ctx: Any, agent_ids: list[str], user_id: str
 ) -> list[dict[str, Any]]:
     if (
         not isinstance(agent_ids, list)
@@ -129,7 +129,7 @@ def _owned_agents(
         agent = ctx.agent_store.get_agent(agent_id)
         if not agent or agent.get("deletedAt"):
             raise SkillGrantError("agent-not-found")
-        if agent.get("supervisorEmployeeId") != employee_id:
+        if agent.get("supervisorUserId") != user_id:
             raise SkillGrantError("not-agent-owner")
         agents.append(agent)
     return agents

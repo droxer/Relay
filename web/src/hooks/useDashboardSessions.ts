@@ -10,7 +10,7 @@ const EMPTY: DashboardSessionsResponse = {
   last7d: 0,
   statusCounts: {},
   dailyCounts: [],
-  topEmployees: [],
+  topUsers: [],
 };
 
 export function useDashboardSessions(enabled: boolean): {

@@ -71,8 +71,8 @@ export function useBacklogTaskForm({
       collaborationStyle: task.collaborationStyle ?? null,
       startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
-      assigneeEmployeeId:
-        task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
+      assigneeUserId:
+        task.assigneeUserId ?? task.ownerUserId ?? currentUser.userId ?? currentUser.username,
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",

@@ -10,12 +10,12 @@ async function fixture(page: Page, stage: Stage, theme: "light" | "dark" = "ligh
   const finished = new Date(Date.now() - 12_000).toISOString();
   const computerId = "device:alice:host";
   const agents = [["ada", "Ada", "implementer"], ["rex", "Rex", "reviewer"]].map(([id, displayName, defaultRole]) => ({
-    id, displayName, executorKind: "claude", defaultRole, supervisorEmployeeId: "alice",
+    id, displayName, executorKind: "claude", defaultRole, supervisorUserId: "alice",
     enabled: true, availability: "ready", version: 1, skills: [], deletedAt: null,
     placements: [{ id: `placement-${id}`, agentId: id, computerId, daemonNodeId: "node", desiredState: "active", status: "ready" }],
     createdAt: stamp, updatedAt: stamp,
   }));
-  const team = { id: "delivery", name: "Delivery", ownerEmployeeId: "alice", leadAgentId: "ada",
+  const team = { id: "delivery", name: "Delivery", ownerUserId: "alice", leadAgentId: "ada",
     memberAgentIds: ["ada", "rex"], members: agents, lead: agents[0], enabled: true, deletedAt: null,
     collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
   const round = { roundId: "round", collaborationId: "c", source: "thread", purpose: "accomplish", strategy: "room",
@@ -39,16 +39,16 @@ async function fixture(page: Page, stage: Stage, theme: "light" | "dark" = "ligh
     agentRuns.push({ id: "run-rex", assignmentId: "a-review", agent: "claude", logicalAgentId: "rex", role: "reviewer", status: "running", startedAt: finished, artifactIds: [] });
   }
   const session = { id: "handoff", title: "Retry guard", taskGoal: "Add a retry guard to the uploader", teamId: team.id,
-    ownerEmployeeId: "alice", ownerAgentId: "ada", daemonNodeId: "node", computerId,
+    ownerUserId: "alice", ownerAgentId: "ada", daemonNodeId: "node", computerId,
     workspacePath: "/workspace", status: "running", phase: "team", participants: ["human"],
     activeRoundId: "round", collaborationRounds: [round], agentRuns, artifacts: [], decisions: [], events,
     eventCount: events.length, artifactCount: 0, runCount: agentRuns.length, createdAt: stamp, updatedAt: finished };
-  const node = { id: "node", employeeId: "alice", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
+  const node = { id: "node", userId: "alice", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
     online: true, stale: false, status: "ready", agents: { claude: "ready" }, capabilities: ["thread-workspaces", "work-results"] };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [session], agents, teams: [team], tasks: [], nodes: [node], projects: [], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", theme, language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
     if (path.endsWith("/threads/handoff")) body = session;
     if (path.endsWith("/threads/handoff/events")) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });

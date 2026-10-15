@@ -29,7 +29,7 @@ The recommended architecture uses four architectural planes: Control Plane, Exec
 
 ## 1. Architecture Design Principles
 
-- **Center employee amplification, not agent theatrics**: every technical capability must serve the goal of helping employees create value faster.
+- **Center user amplification, not agent theatrics**: every technical capability must serve the goal of helping users create value faster.
 - **Separate the control plane and execution plane completely**: business management logic and untrusted task execution must be separated. The control plane remains stable, auditable, and low risk; the execution plane can be created, destroyed, and isolated elastically.
 - **Check permissions before execution**: every tool call, file access, and system operation must pass identity, permission, task-scope, and policy checks before execution. An agent must not gain unlimited execution capability simply because it inherits a user identity.
 - **Prefer process governance over emergent autonomy**: unlike Manus-style approaches where a model observes screens and DOM directly, Relay should rely heavily on the MCP Gateway and structured API calls. Agents should not operate through opaque black boxes.
@@ -67,7 +67,7 @@ is **thread**. See [HTTP API and Web URL Contract](api.md) and
 | Layer | Responsibility | Recommended Technology | Design Notes |
 | :-: | :-: | :-: | :-: |
 | Channel Layer | IM, web, email, and API entry points | Next.js, Bot Framework, Feishu / Slack / Teams SDKs | A task should be traceable across channels; IM should support approval cards. |
-| Control Plane | Tenants, employees, Agent ID, permissions, tasks, approvals | API service, PostgreSQL, Redis | PostgreSQL is the source of truth; high-risk actions must enter the Approval Service. |
+| Control Plane | Tenants, users, Agent ID, permissions, tasks, approvals | API service, PostgreSQL, Redis | PostgreSQL is the source of truth; high-risk actions must enter the Approval Service. |
 | Agent Runtime | Task planning, state machine, tool policy, context assembly | LangGraph + custom Runtime + Temporal | Temporal handles reliable long-running processes; Relay Runtime handles business state and governance. |
 | Execution Plane (Sandbox) | Isolated execution for untrusted code, file handling, CLI runs | BoxLite, Kubernetes, Cloud Workstations, gVisor | Choose isolation level by task risk and lifecycle; support fast cold starts and lightweight isolation. |
 | Tool Layer | Internal system connections and tool exposure | MCP Gateway, CLI Adapter, Secret Broker | Tools must be registered, versioned, authorized, audited, and rate limited. |
@@ -121,5 +121,5 @@ For the MVP, Relay should hold strict boundaries and focus on closed-loop value 
 - **[New ADR-009](adr/009-control-plane-outside-sandbox.md)**: Keep the durable Relay daemon and control-plane authority outside the sandbox. A sandbox may run only a minimal guest worker for approved command execution, stream forwarding, exit-status reporting, and local file operations.
 - **[New ADR-010](adr/010-leased-agent-node-delivery.md)**: Use explicit, bounded command leases and at-least-once delivery between the control plane and daemon nodes. Only daemon-reported active commands renew ownership; cancellation remains retryable until the run is terminal.
 - **[ADR-012](adr/012-canonical-web-and-api-urls.md)**: Use clean browser paths and a canonical `/api/v1` JSON boundary without pre-release compatibility aliases.
-- **[ADR-013](adr/013-thread-scoped-workspaces.md)**: Give each thread an isolated directory beneath the employee-selected local or supervisor-provisioned cloud workspace root.
+- **[ADR-013](adr/013-thread-scoped-workspaces.md)**: Give each thread an isolated directory beneath the user-selected local or supervisor-provisioned cloud workspace root.
 - **[ADR-020](adr/020-work-outcomes.md)**: Keep execution completion separate from work outcomes, apply work-report gates to single-agent action runs on capable daemons, and distinguish reported completion from explicit human acceptance.

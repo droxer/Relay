@@ -100,9 +100,9 @@ export function ChannelsView({
     queryFn: ({ signal }) => listControlPanelDaemonNodes(signal),
   });
 
-  // Agents aren't owned by employees — the default agent for a chat identity is
-  // resolved through the selected employee's computers (their nodes), matching
-  // the Employees view. With no employee typed, any agent is a candidate.
+  // Agents aren't owned by users — the default agent for a chat identity is
+  // resolved through the selected user's computers (their nodes), matching
+  // the Users view. With no user typed, any agent is a candidate.
 
   const integrations = (query.data ?? []).filter((integration) => integration.provider === "telegram");
   const selected = useMemo(

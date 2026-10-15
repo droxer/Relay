@@ -10,8 +10,8 @@ import type {
   ComputerTokenResponse,
   CreateAgentInput,
   CreateAgentResponse,
-  CreateControlPanelEmployeeInput,
-  CreateControlPanelEmployeeResponse,
+  CreateControlPanelUserInput,
+  CreateControlPanelUserResponse,
   CreateControlPanelDaemonNodeInput,
   CreateControlPanelDaemonNodeResponse,
   CreateLocalDeviceEnrollmentInput,
@@ -25,19 +25,19 @@ import type {
   StartProjectSetupInput,
   CreateTaskInput,
   ControlPanelDaemonNodesResponse,
-  ControlPanelEmployeesResponse,
+  ControlPanelUsersResponse,
   CurrentUser,
   UnassignControlPanelDaemonNodeResponse,
   DaemonNodeMonitorRecord,
   DaemonNodesResponse,
-  EmployeeAgentsResponse,
-  EmployeeAgent,
-  EmployeeRecord,
+  UserAgentsResponse,
+  UserAgent,
+  UserRecord,
   OrgSettingsResponse,
   ProjectsResponse,
   ProjectRecord,
   UpdateProjectInput,
-  UpdateControlPanelEmployeeInput,
+  UpdateControlPanelUserInput,
   AgentTeam,
   AgentTeamsResponse,
   TeamMutationInput,
@@ -183,17 +183,17 @@ export function updateDaemonNodeDisabledAgents(
   );
 }
 
-export function listEmployeeAgents(signal?: AbortSignal): Promise<EmployeeAgentsResponse> {
-  return apiJson<EmployeeAgentsResponse>("/agents", { signal });
+export function listUserAgents(signal?: AbortSignal): Promise<UserAgentsResponse> {
+  return apiJson<UserAgentsResponse>("/agents", { signal });
 }
 
 export function createAgent(body: CreateAgentInput): Promise<CreateAgentResponse> {
   return apiJson<CreateAgentResponse>("/agents", { method: "POST", body });
 }
 
-export function listControlPanelAgents(employeeId?: string, signal?: AbortSignal): Promise<EmployeeAgentsResponse> {
-  const query = employeeId ? `?employeeId=${encodeURIComponent(employeeId)}` : "";
-  return apiJson<EmployeeAgentsResponse>(`/admin/agents${query}`, { signal });
+export function listControlPanelAgents(userId?: string, signal?: AbortSignal): Promise<UserAgentsResponse> {
+  const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+  return apiJson<UserAgentsResponse>(`/admin/agents${query}`, { signal });
 }
 
 export function listTeams(signal?: AbortSignal): Promise<AgentTeamsResponse> {
@@ -215,11 +215,11 @@ export function deleteTeam(teamId: string): Promise<{ team: AgentTeam }> {
   return apiJson<{ team: AgentTeam }>(`/teams/${encodeURIComponent(teamId)}`, { method: "DELETE" });
 }
 
-export function getControlPanelAgent(agentId: string, signal?: AbortSignal): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, { signal });
+export function getControlPanelAgent(agentId: string, signal?: AbortSignal): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, { signal });
 }
 
-export type EmployeeAgentMetaPatch = {
+export type UserAgentMetaPatch = {
   displayName?: string;
   instructions?: string;
   /** `{}` returns the agent to its runtime's default model. */
@@ -228,32 +228,32 @@ export type EmployeeAgentMetaPatch = {
   defaultRole?: AgentRole | null;
 };
 
-export type EmployeeAgentAdminPatch = EmployeeAgentMetaPatch & {
+export type UserAgentAdminPatch = UserAgentMetaPatch & {
   enabled?: boolean;
 };
 
-export function updateOwnEmployeeAgent(
+export function updateOwnUserAgent(
   agentId: string,
-  patch: EmployeeAgentMetaPatch,
-): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(`/agents/${encodeURIComponent(agentId)}`, {
+  patch: UserAgentMetaPatch,
+): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(`/agents/${encodeURIComponent(agentId)}`, {
     method: "PATCH",
     body: patch,
   });
 }
 
-export function updateEmployeeAgent(
+export function updateUserAgent(
   agentId: string,
-  patch: EmployeeAgentAdminPatch,
-): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, {
+  patch: UserAgentAdminPatch,
+): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, {
     method: "PATCH",
     body: patch,
   });
 }
 
-export function deleteEmployeeAgent(agentId: string): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, {
+export function deleteUserAgent(agentId: string): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, {
     method: "DELETE",
   });
 }
@@ -261,8 +261,8 @@ export function deleteEmployeeAgent(agentId: string): Promise<{ agent: EmployeeA
 export function updateAgentProfileImage(
   agentId: string,
   dataUrl: string,
-): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(
+): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(
     `/profile-images/agents/${encodeURIComponent(agentId)}`,
     { method: "PUT", body: { dataUrl }, versioned: false },
   );
@@ -271,8 +271,8 @@ export function updateAgentProfileImage(
 export function selectAgentProfilePreset(
   agentId: string,
   presetUrl: string,
-): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(
+): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(
     `/profile-images/agents/${encodeURIComponent(agentId)}`,
     { method: "PUT", body: { presetUrl }, versioned: false },
   );
@@ -280,8 +280,8 @@ export function selectAgentProfilePreset(
 
 export function deleteAgentProfileImage(
   agentId: string,
-): Promise<{ agent: EmployeeAgent }> {
-  return apiJson<{ agent: EmployeeAgent }>(
+): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(
     `/profile-images/agents/${encodeURIComponent(agentId)}`,
     { method: "DELETE", versioned: false },
   );
@@ -326,17 +326,17 @@ export function listControlPanelDaemonNodes(signal?: AbortSignal): Promise<Contr
   return apiJson<ControlPanelDaemonNodesResponse>("/admin/daemon-nodes", { signal });
 }
 
-export function listControlPanelEmployees(signal?: AbortSignal): Promise<ControlPanelEmployeesResponse> {
-  return apiJson<ControlPanelEmployeesResponse>("/admin/employees", { signal });
+export function listControlPanelUsers(signal?: AbortSignal): Promise<ControlPanelUsersResponse> {
+  return apiJson<ControlPanelUsersResponse>("/admin/users", { signal });
 }
 
-export function createControlPanelEmployee(
-  input: CreateControlPanelEmployeeInput,
-): Promise<CreateControlPanelEmployeeResponse> {
-  return apiJson<CreateControlPanelEmployeeResponse>("/admin/employees", {
+export function createControlPanelUser(
+  input: CreateControlPanelUserInput,
+): Promise<CreateControlPanelUserResponse> {
+  return apiJson<CreateControlPanelUserResponse>("/admin/users", {
     method: "POST",
     body: {
-      employeeId: input.employeeId,
+      userId: input.userId,
       username: input.username,
       password: input.password,
       ...(input.nodeId ? { nodeId: input.nodeId } : {}),
@@ -347,14 +347,14 @@ export function createControlPanelEmployee(
   });
 }
 
-/** Patch an employee's profile. Only the keys present in `input` are sent, so
+/** Patch a user's profile. Only the keys present in `input` are sent, so
     an omitted field is left alone; `maxLocalComputers: null` clears the
     override rather than meaning "no computers". */
-export function updateControlPanelEmployee(
-  input: UpdateControlPanelEmployeeInput,
-): Promise<{ employee: EmployeeRecord }> {
-  return apiJson<{ employee: EmployeeRecord }>(
-    `/admin/employees/${encodeURIComponent(input.employeeId)}`,
+export function updateControlPanelUser(
+  input: UpdateControlPanelUserInput,
+): Promise<{ user: UserRecord }> {
+  return apiJson<{ user: UserRecord }>(
+    `/admin/users/${encodeURIComponent(input.userId)}`,
     {
       method: "PATCH",
       body: {
@@ -383,7 +383,7 @@ export function reissueAdminToken(): Promise<{ adminToken: string }> {
 /** Each field is optional: the backend leaves out what is not sent, so saving
     one card never overwrites the other with a stale value read earlier. */
 export function updateOrgSettings(
-  patch: { maxLocalComputersPerEmployee?: number; maxTaskRounds?: number },
+  patch: { maxLocalComputersPerUser?: number; maxTaskRounds?: number },
 ): Promise<OrgSettingsResponse> {
   return apiJson<OrgSettingsResponse>("/admin/settings", {
     method: "PUT",
@@ -392,11 +392,11 @@ export function updateOrgSettings(
 }
 
 export function assignControlPanelDaemonNode(
-  input: { nodeId: string; employeeId: string },
+  input: { nodeId: string; userId: string },
 ): Promise<AssignControlPanelDaemonNodeResponse> {
   return apiJson<AssignControlPanelDaemonNodeResponse>(`/admin/daemon-nodes/${encodeURIComponent(input.nodeId)}/assignment`, {
     method: "PUT",
-    body: { employeeId: input.employeeId },
+    body: { userId: input.userId },
   });
 }
 
@@ -406,7 +406,7 @@ export function createControlPanelDaemonNode(
   return apiJson<CreateControlPanelDaemonNodeResponse>("/admin/daemon-nodes", {
     method: "POST",
     body: {
-      ...(input.employeeId ? { employeeId: input.employeeId } : {}),
+      ...(input.userId ? { userId: input.userId } : {}),
       ...(input.displayName ? { displayName: input.displayName } : {}),
       ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
       ...(input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
@@ -451,13 +451,13 @@ export function createManagedNode(input: CreateManagedNodeInput): Promise<Create
   return apiJson<CreateManagedNodeResponse>("/admin/managed-nodes", {
     method: "POST",
     body: {
-      employeeId: input.employeeId,
+      userId: input.userId,
       ...(input.displayName ? { displayName: input.displayName } : {}),
       assignmentMode: "dedicated",
       provider: "local-process",
       profile: "standard",
       sandboxMode: input.sandboxMode,
-      workspacePolicy: { kind: "employee-home" },
+      workspacePolicy: { kind: "user-home" },
       desiredState: "running",
     },
   });
@@ -519,11 +519,11 @@ export function updateControlPanelDaemonNodeDisabledAgents(
   );
 }
 
-export function deleteControlPanelEmployee(
-  employeeId: string,
-): Promise<{ employee: { id: string; deletedAt: string }; unassignedNodes: string[] }> {
-  return apiJson<{ employee: { id: string; deletedAt: string }; unassignedNodes: string[] }>(
-    `/admin/employees/${encodeURIComponent(employeeId)}`,
+export function deleteControlPanelUser(
+  userId: string,
+): Promise<{ user: { id: string; deletedAt: string }; unassignedNodes: string[] }> {
+  return apiJson<{ user: { id: string; deletedAt: string }; unassignedNodes: string[] }>(
+    `/admin/users/${encodeURIComponent(userId)}`,
     { method: "DELETE" },
   );
 }
@@ -532,7 +532,7 @@ export function getAuthStatus(signal?: AbortSignal): Promise<{ requiresBootstrap
   return apiJson<{ requiresBootstrap: boolean }>("/auth/status", { signal });
 }
 
-/** Server switches every signed-in employee's UI depends on. */
+/** Server switches every signed-in user's UI depends on. */
 export interface SessionCapabilities {
   /** False when the server limits new automation triggers to schedules. */
   automationTriggers?: boolean;
@@ -576,22 +576,22 @@ export function getSession(sessionId: string, signal?: AbortSignal): Promise<Rel
 }
 
 export function listArtifacts(
-  input: { employeeId?: string; workspacePath?: string } = {},
+  input: { userId?: string; workspacePath?: string } = {},
   signal?: AbortSignal,
 ): Promise<ArtifactsResponse> {
   const params = new URLSearchParams();
-  if (input.employeeId) params.set("employeeId", input.employeeId);
+  if (input.userId) params.set("userId", input.userId);
   if (input.workspacePath) params.set("workspacePath", input.workspacePath);
   const query = params.toString();
   return apiJson<ArtifactsResponse>(`/artifacts${query ? `?${query}` : ""}`, { signal });
 }
 
 export function getWorkspaceBrief(
-  input: { employeeId?: string; agentId?: string; teamId?: string; projectId?: string } = {},
+  input: { userId?: string; agentId?: string; teamId?: string; projectId?: string } = {},
   signal?: AbortSignal,
 ): Promise<WorkspaceBriefResponse> {
   const params = new URLSearchParams();
-  if (input.employeeId) params.set("employeeId", input.employeeId);
+  if (input.userId) params.set("userId", input.userId);
   if (input.agentId) params.set("agentId", input.agentId);
   if (input.teamId) params.set("teamId", input.teamId);
   if (input.projectId) params.set("projectId", input.projectId);
@@ -824,7 +824,7 @@ export interface DashboardSessionsResponse {
   last7d: number;
   statusCounts: Record<string, number>;
   dailyCounts: Array<{ date: string; count: number; completed: number; failed: number }>;
-  topEmployees: Array<{ employeeId: string; sessionCount: number }>;
+  topUsers: Array<{ userId: string; sessionCount: number }>;
 }
 
 export interface TokenCounts {
@@ -929,7 +929,7 @@ export function rotateTelegramWebhookSecret(
 
 export function addChatIdentityLink(
   integrationId: string,
-  input: { externalUserId: string; employeeId: string; displayName?: string; defaultAgentId?: string },
+  input: { externalUserId: string; userId: string; displayName?: string; defaultAgentId?: string },
 ): Promise<{ integration: ChatIntegration }> {
   return apiJson<{ integration: ChatIntegration }>(
     `/admin/chat-integrations/${encodeURIComponent(integrationId)}/identity-links`,
@@ -964,15 +964,15 @@ export function deleteChatAllowedConversation(
   );
 }
 
-export function provisionSandbox(employeeId: string, token?: string, nodeToken?: string): Promise<SandboxRecord> {
-  // No workspacePath: the daemon matches by employee, so we attach to the
-  // employee's registered daemon node (whatever workspace it runs in) instead
+export function provisionSandbox(userId: string, token?: string, nodeToken?: string): Promise<SandboxRecord> {
+  // No workspacePath: the daemon matches by user, so we attach to the
+  // user's registered daemon node (whatever workspace it runs in) instead
   // of provisioning a dead placeholder under a fabricated path.
   return apiJson<SandboxRecord>("/sandboxes", {
     method: "POST",
     token,
     body: {
-      employeeId,
+      userId,
       ...(nodeToken ? { nodeToken } : {}),
     },
   });
@@ -1098,7 +1098,7 @@ export function updateSkill(skillId: string, patch: { displayName?: string; desc
 export function deleteSkill(skillId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { method: "DELETE" }); }
 export function grantSkill(skillId: string, agentIds: string[], pin: "latest" | { revisionId: string } = "latest") { return apiJson<{ granted: unknown[] }>(`/skills/${encodeURIComponent(skillId)}/grants`, { method: "POST", body: { agentIds, pin } }); }
 export function revokeSkill(skillId: string, agentId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}/grants/${encodeURIComponent(agentId)}`, { method: "DELETE" }); }
-export function assignSkill(skillId: string, input: { targetType: "employee" | "team" | "project" | "agent" | "org"; targetId: string; mode?: "optional" | "required" | "suggested"; pin?: "stable" | "latest" | { revisionId: string }; invocation?: "implicit" | "explicit" }) { return apiJson(`/skills/${encodeURIComponent(skillId)}/assignments`, { method: "POST", body: input }); }
+export function assignSkill(skillId: string, input: { targetType: "user" | "team" | "project" | "agent" | "org"; targetId: string; mode?: "optional" | "required" | "suggested"; pin?: "stable" | "latest" | { revisionId: string }; invocation?: "implicit" | "explicit" }) { return apiJson(`/skills/${encodeURIComponent(skillId)}/assignments`, { method: "POST", body: input }); }
 export function revokeSkillAssignment(skillId: string, assignmentId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" }); }
 export function promoteSkillRevision(skillId: string, revisionId: string): Promise<SkillRecord> { return apiJson(`/skills/${encodeURIComponent(skillId)}/revisions/${encodeURIComponent(revisionId)}/promote`, { method: "POST", body: {} }); }
 export function readSkillFile(skillId: string, path: string, channel: "stable" | "latest" = "stable", signal?: AbortSignal): Promise<SkillFilePreview> { return apiJson(`/skills/${encodeURIComponent(skillId)}/files?path=${encodeURIComponent(path)}&channel=${channel}`, { signal }); }

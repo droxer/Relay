@@ -431,9 +431,9 @@ script/init_users.sh --password 'choose-a-strong-password'
 ```
 
 By default this creates user `admin` with the `admin` role and binds it to
-employee `admin` in department `administration`. A password must be supplied
+user `admin` in department `administration`. A password must be supplied
 with `--password` or `RELAY_INITIAL_ADMIN_PASSWORD`; there is no built-in
-password. Pass `--username`, `--role`, `--email`, `--employee-id`,
+password. Pass `--username`, `--role`, `--email`, `--user-id`,
 `--department-id`, or `--department-name` to customize the initial user.
 
 ### Demo data for UI snapshots
@@ -446,7 +446,7 @@ script/init_users.sh \
   --username demo \
   --password 'choose-a-local-test-password' \
   --role user \
-  --employee-id demo \
+  --user-id demo \
   --department-id product \
   --department-name Product
 ```
@@ -515,7 +515,7 @@ private state directory (never mounted into an agent sandbox):
 
 ```text
 .relay/daemon/{nodes,commands,runs,run-requests,events}/         # daemon registry state
-~/.relay/daemon-nodes/<sandbox-id>/credentials/<employee>.token  # daemon auth token
+~/.relay/daemon-nodes/<sandbox-id>/credentials/<user>.token  # daemon auth token
 ~/.relay/daemon-nodes/<sandbox-id>/logs/*.jsonl                  # daemon structured logs
 ```
 

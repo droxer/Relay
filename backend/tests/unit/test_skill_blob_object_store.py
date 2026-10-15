@@ -113,7 +113,7 @@ def test_published_skill_bundles_round_trip_through_the_blob_store(tmp_path) -> 
     owner = str(uuid4())
     with store.engine.begin() as conn:
         conn.execute(
-            insert(store.employees).values(
+            insert(store.users).values(
                 id=owner, handle="alice", display_name="Alice", email=None,
                 department_id=None, max_local_computers=None,
                 created_at=_parse_iso(now_iso()), updated_at=_parse_iso(now_iso()), deleted_at=None,

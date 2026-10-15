@@ -24,13 +24,13 @@ interface ManageExecutorsDrawerProps {
   open: boolean;
   onClose: () => void;
   node: ControlPanelDaemonNodeRecord | null;
-  /** The assigned employee's @handle; the node carries only an id. */
-  employeeHandle?: string;
+  /** The assigned user's @handle; the node carries only an id. */
+  userHandle?: string;
   onUpdated: (node: ControlPanelDaemonNodeRecord) => void;
   onSave: (nodeId: string, disabledAgents: AgentName[]) => Promise<{ node: ControlPanelDaemonNodeRecord }>;
 }
 
-export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onUpdated, onSave }: ManageExecutorsDrawerProps) {
+export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdated, onSave }: ManageExecutorsDrawerProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const [initialDisabled, setInitialDisabled] = useState<Set<AgentName>>(() => new Set());
@@ -131,9 +131,9 @@ export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onU
   const visible = visibleNodeAgentNames(node);
   const agents = [...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && initialDisabled.has(agent))];
   // Name the computer, not its id. An owner handle is only shown when the
-  // caller resolved one (the admin console); never render a raw employee id.
+  // caller resolved one (the admin console); never render a raw user id.
   const computerName = node.displayName?.trim() || abbreviateNodeId(node.id);
-  const subtitle = employeeHandle ? `${computerName} · @${employeeHandle}` : computerName;
+  const subtitle = userHandle ? `${computerName} · @${userHandle}` : computerName;
 
   return (
     <Drawer

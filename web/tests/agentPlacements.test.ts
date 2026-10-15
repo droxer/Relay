@@ -14,7 +14,7 @@ function placement(input: Partial<AgentPlacement> & Pick<AgentPlacement, "id" | 
   return {
     id: input.id,
     agentId: input.agentId ?? "agent_alice",
-    employeeId: input.employeeId ?? "alice",
+    userId: input.userId ?? "alice",
     daemonNodeId: input.daemonNodeId,
     runtimeNodeId: input.runtimeNodeId,
     computerId: input.computerId,
@@ -23,7 +23,7 @@ function placement(input: Partial<AgentPlacement> & Pick<AgentPlacement, "id" | 
     status: input.status ?? "ready",
     priority: input.priority,
     agentVersion: input.agentVersion ?? 1,
-    workspacePolicy: input.workspacePolicy ?? { kind: "employee-home" },
+    workspacePolicy: input.workspacePolicy ?? { kind: "user-home" },
     conditions: input.conditions ?? [],
     createdAt: input.createdAt ?? "2026-07-19T00:00:00Z",
     updatedAt: input.updatedAt ?? "2026-07-19T00:00:00Z",
@@ -41,7 +41,7 @@ describe("describeAgentPlacements", () => {
         daemonNodeId: "node_local",
         priority: 200,
         nodeDisplayName: "Alice’s MacBook",
-        nodeOwnership: "employee-device",
+        nodeOwnership: "user-device",
         nodeSandboxMode: "none",
       }),
       placement({

@@ -10,7 +10,7 @@ import {
   rotateTelegramWebhookSecret,
   updateChatIntegration,
 } from "../../api";
-import type { ChatIntegration, EmployeeAgent, DaemonNodeMonitorRecord } from "../../types";
+import type { ChatIntegration, UserAgent, DaemonNodeMonitorRecord } from "../../types";
 import { agentsOnNodes } from "../../lib/adminHelpers";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -45,7 +45,7 @@ import { useKeyChange } from "../../hooks/useKeyChange";
  */
 interface ChannelDetailProps {
   selected: ChatIntegration | undefined;
-  agents: EmployeeAgent[] | undefined;
+  agents: UserAgent[] | undefined;
   nodes: DaemonNodeMonitorRecord[] | undefined;
   busy: boolean;
   mutate: (label: string, action: () => Promise<{ integration: ChatIntegration }>) => Promise<unknown>;
@@ -82,7 +82,7 @@ export function ChannelDetail({
   const [editCredentials, setEditCredentials] = useState<Record<string, string>>({});
   const [identityForm, setIdentityForm] = useState({
     externalUserId: "",
-    employeeId: "",
+    userId: "",
     displayName: "",
     defaultAgentId: "",
   });
@@ -109,13 +109,13 @@ export function ChannelDetail({
 
   const identityAgentOptions = useMemo(() => {
     const agents = (agentRecords ?? []).filter((agent) => !agent.deletedAt);
-    const employeeId = identityForm.employeeId.trim();
-    if (!employeeId) return agents;
+    const userId = identityForm.userId.trim();
+    if (!userId) return agents;
     const nodeIds = (nodes ?? [])
-      .filter((node) => node.employeeId === employeeId)
+      .filter((node) => node.userId === userId)
       .map((node) => node.id);
     return agentsOnNodes(nodeIds, agents);
-  }, [agentRecords, nodes, identityForm.employeeId]);
+  }, [agentRecords, nodes, identityForm.userId]);
 
   // A channel identity routes to one agent, so this picker offers a single
   // roster and the shared picker draws no tab strip for it. If a channel ever
@@ -131,17 +131,17 @@ export function ChannelDetail({
 
   async function onAddIdentity() {
     if (!selected) return;
-    if (!identityForm.externalUserId.trim() || !identityForm.employeeId.trim()) {
+    if (!identityForm.externalUserId.trim() || !identityForm.userId.trim()) {
       onError(t("admin.v2.chat_identity_required"));
       return;
     }
     await mutate("identity", () => addChatIdentityLink(selected.id, {
       externalUserId: identityForm.externalUserId,
-      employeeId: identityForm.employeeId,
+      userId: identityForm.userId,
       displayName: identityForm.displayName || undefined,
       defaultAgentId: identityForm.defaultAgentId || undefined,
     }));
-    setIdentityForm({ externalUserId: "", employeeId: "", displayName: "", defaultAgentId: "" });
+    setIdentityForm({ externalUserId: "", userId: "", displayName: "", defaultAgentId: "" });
   }
 
   async function onAddConversation() {
@@ -359,19 +359,19 @@ export function ChannelDetail({
               placeholder={`${t("admin.v2.chat_external_user")}…`}
             />
             <Input
-              name="chat-employee-id"
+              name="chat-user-id"
               autoComplete="off"
               spellCheck={false}
-              aria-label={t("admin.v2.placeholder_employee_id")}
-              value={identityForm.employeeId}
+              aria-label={t("admin.v2.placeholder_user_id")}
+              value={identityForm.userId}
               onChange={(event) =>
                 setIdentityForm((prev) => ({
                   ...prev,
-                  employeeId: event.target.value,
+                  userId: event.target.value,
                   defaultAgentId: "",
                 }))
               }
-              placeholder={`${t("admin.v2.placeholder_employee_id")}…`}
+              placeholder={`${t("admin.v2.placeholder_user_id")}…`}
             />
             <Select
               name="chat-default-agent-id"
@@ -418,7 +418,7 @@ export function ChannelDetail({
             {selected.identityLinks.map((link) => (
               <li key={link.id}>
                 <span>
-                  <strong translate="no">@{link.employeeId}</strong>
+                  <strong translate="no">@{link.userId}</strong>
                   <small className="code" translate="no">{link.externalUserId}</small>
                 </span>
                 <Button

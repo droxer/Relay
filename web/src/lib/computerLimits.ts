@@ -7,7 +7,7 @@ export const MAX_LOCAL_COMPUTERS_CEILING = 50;
 
 /** Parse a limit typed into an admin form.
 
-    Returns `null` for an empty field — which the employee forms read as "no
+    Returns `null` for an empty field — which the user forms read as "no
     override, follow the org default" — and `undefined` for text that is not a
     limit at all, so a caller can tell "cleared" from "invalid". */
 export function parseLimitInput(raw: string): number | null | undefined {

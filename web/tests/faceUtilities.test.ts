@@ -180,7 +180,7 @@ describe("type-face utilities", () => {
     // after tokens/base.css at equal specificity — so `.code` alone loses.
     const pairs: readonly (readonly [string, string])[] = [
       ["styles/admin-v2-nodes.css", "adm-node-card-name"],
-      ["styles/admin-v2-employees.css", "adm-node-history-identity span"],
+      ["styles/admin-v2-users.css", "adm-node-history-identity span"],
       ["styles/admin-v2-drawers.css", "adm-assign-node-id"],
     ];
 

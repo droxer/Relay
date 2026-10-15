@@ -73,7 +73,7 @@ def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, data
         session_id = _create_session(client)
         registry = app.state.registry
         registry.register({
-            "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
             "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
         })
         request = registry.daemon_store.create_run_request({
@@ -199,7 +199,7 @@ def test_delete_rejects_daemon_node_token(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
@@ -256,7 +256,7 @@ def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> N
         def finished_thread() -> str:
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": "Run",
-                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": "admin",
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))

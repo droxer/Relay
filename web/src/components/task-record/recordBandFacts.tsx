@@ -26,7 +26,7 @@ export function recordBandFacts(
   t: (key: string, options?: Record<string, unknown>) => string,
   /** The project this task belongs to, when it has one and its name resolves. */
   project?: { id: string; name: string },
-  /** The assignee's resolved display name; without it the raw employee id
+  /** The assignee's resolved display name; without it the raw user id
       would stand where a person's name belongs. */
   assigneeName?: string,
 ): RecordFact[] {

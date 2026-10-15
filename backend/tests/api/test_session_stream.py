@@ -115,7 +115,7 @@ def test_mark_done_persists_a_delivery_fence_for_an_active_request(monkeypatch) 
         app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "employeeId": "admin",
+                "userId": "admin",
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -330,7 +330,7 @@ def test_session_events_accept_chat_service_actor(monkeypatch) -> None:
         client = TestClient(create_app(root))
         headers = {
             "Authorization": "Bearer chat_token",
-            "X-Relay-Employee-Id": "alice",
+            "X-Relay-User-Id": "alice",
         }
 
         created = client.post(
@@ -351,8 +351,8 @@ def test_session_events_accept_chat_service_actor(monkeypatch) -> None:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
 
-        missing_employee = client.get(
+        missing_user = client.get(
             f"/api/v1/threads/{session_id}/events",
             headers={"Authorization": "Bearer chat_token"},
         )
-        assert missing_employee.status_code == 401
+        assert missing_user.status_code == 401

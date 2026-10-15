@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from relay.persistence.employee_handle_backfill import plan_handles
+from relay.persistence.user_handle_backfill import plan_handles
 
 revision = "20260831_0065"
 down_revision = "20260831_0064"

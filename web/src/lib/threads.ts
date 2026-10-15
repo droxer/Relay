@@ -2,7 +2,7 @@ import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary } from ".
 import type { ThreadGroups } from "./threadGroups.js";
 
 // A thread is one owner-scoped session. The row binds to the session
-// itself (not an employee), so the logged-in employee can hold several in
+// itself (not a user), so the logged-in user can hold several in
 // parallel and switch between them.
 export type ThreadItem = {
   session: RelaySession;
@@ -114,15 +114,15 @@ export function canDeleteThread(item: ThreadItem): boolean {
 
 type Labelled = { title?: string; taskGoal: string };
 
-// The logged-in employee's own threads, newest first. /api/v1/threads is already
+// The logged-in user's own threads, newest first. /api/v1/threads is already
 // owner-scoped by the backend, but we defensively filter by owner (and drop
-// archived/closed ones) so the list never surfaces another employee's work.
+// archived/closed ones) so the list never surfaces another user's work.
 export function myThreadSessions(
   sessions: readonly RelaySession[],
-  employeeId: string,
+  userId: string,
 ): RelaySession[] {
   return sessions
-    .filter((s) => !s.archived && (!s.ownerEmployeeId || s.ownerEmployeeId === employeeId))
+    .filter((s) => !s.archived && (!s.ownerUserId || s.ownerUserId === userId))
     .slice()
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

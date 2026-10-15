@@ -96,7 +96,7 @@ def assert_agent_can_move(
     """
     if agent.get("computerId") == target_computer_id:
         return
-    for team in team_store.list_teams(agent.get("supervisorEmployeeId")):
+    for team in team_store.list_teams(agent.get("supervisorUserId")):
         if (
             agent["id"] in team.get("memberAgentIds", [])
             and team.get("computerId")

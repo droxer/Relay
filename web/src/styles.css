@@ -87,7 +87,7 @@
 @import "./styles/section-rail.css" layer(relay);
 @import "./styles/settings-page.css" layer(relay);
 @import "./styles/admin-v2-shell.css" layer(relay);
-@import "./styles/admin-v2-employees.css" layer(relay);
+@import "./styles/admin-v2-users.css" layer(relay);
 @import "./styles/admin-v2-nodes.css" layer(relay);
 @import "./styles/admin-v2-node-agents.css" layer(relay);
 @import "./styles/admin-v2-channels.css" layer(relay);

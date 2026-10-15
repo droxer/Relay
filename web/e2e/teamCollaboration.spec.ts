@@ -2,13 +2,13 @@ import { expect, test } from "@playwright/test";
 
 test("team responsibilities can be edited and persist after reload", async ({ page }) => {
   const stamp = "2026-09-18T00:00:00Z";
-  const agents = ["lead", "builder"].map(id => ({ id, displayName: id === "lead" ? "Lead" : "Builder", executorKind: "codex", defaultRole: "implementer", supervisorEmployeeId: "alice", enabled: true, availability: "ready", computerId: "c", placements: [], version: 1, createdAt: stamp, updatedAt: stamp }));
-  let team = { id: "delivery", name: "Delivery", ownerEmployeeId: "alice", computerId: "c", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], members: agents, lead: agents[0], enabled: true, memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
+  const agents = ["lead", "builder"].map(id => ({ id, displayName: id === "lead" ? "Lead" : "Builder", executorKind: "codex", defaultRole: "implementer", supervisorUserId: "alice", enabled: true, availability: "ready", computerId: "c", placements: [], version: 1, createdAt: stamp, updatedAt: stamp }));
+  let team = { id: "delivery", name: "Delivery", ownerUserId: "alice", computerId: "c", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], members: agents, lead: agents[0], enabled: true, memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
   let saved: Record<string, unknown> | undefined;
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [], tasks: [], nodes: [], projects: [], sandboxes: [], agents, teams: [team] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", language: "en", theme: "light" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", language: "en", theme: "light" } };
     if (path.endsWith("/teams/delivery") && route.request().method() === "PATCH") {
       saved = route.request().postDataJSON();
       team = { ...team, ...saved };

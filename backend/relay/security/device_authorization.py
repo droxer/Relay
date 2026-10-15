@@ -13,6 +13,6 @@ computer_authorizations = Table(
     Column("workspace_path", Text, nullable=False),
     Column("display_name", Text, nullable=False),
     Column("node_id", Text, nullable=True),
-    Column("employee_id", Text, nullable=True),
+    Column("user_id", Text, nullable=True),
 )
 Index("ix_computer_authorizations_expires", computer_authorizations.c.expires_at)

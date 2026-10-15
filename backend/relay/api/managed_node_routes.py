@@ -14,23 +14,23 @@ from ..services.node_agents import (
     sync_node_agents,
 )
 from .deps import AppContext, AppContextDep
-from .helpers import JsonBodyDep, employee_record
+from .helpers import JsonBodyDep, user_record
 
 router = APIRouter()
 
 
-def _assert_employee_exists(ctx: AppContext, employee_id: Any) -> None:
-    """Reject a managed node bound to an employee that does not exist.
+def _assert_user_exists(ctx: AppContext, user_id: Any) -> None:
+    """Reject a managed node bound to a user that does not exist.
 
     Without this the reconciler provisions capacity forever for a typo'd id,
     and the resulting Computer can never be assigned any work.
     """
-    if employee_id is None:
+    if user_id is None:
         return
-    if not isinstance(employee_id, str) or not employee_id.strip():
-        raise HTTPException(400, "employeeId must be a non-empty string.")
-    if not employee_record(ctx.auth_store, employee_id.strip()):
-        raise HTTPException(404, "Employee not found.")
+    if not isinstance(user_id, str) or not user_id.strip():
+        raise HTTPException(400, "userId must be a non-empty string.")
+    if not user_record(ctx.auth_store, user_id.strip()):
+        raise HTTPException(404, "User not found.")
 
 
 def _admin_error(error: Exception) -> HTTPException:
@@ -52,7 +52,7 @@ def create_managed_node(
             payload["displayName"] = normalize_computer_display_name(
                 payload["displayName"]
             )
-        _assert_employee_exists(ctx, payload.get("employeeId"))
+        _assert_user_exists(ctx, payload.get("userId"))
         return {"node": ctx.managed_node_store.create_node(payload)}
     except (KeyError, ValueError) as error:
         if isinstance(error, ValueError) and "displayName" in str(error):
@@ -92,8 +92,8 @@ def update_managed_node(
                 patch["displayName"] = display_name or node_id
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error
-        if "employeeId" in patch:
-            _assert_employee_exists(ctx, patch["employeeId"])
+        if "userId" in patch:
+            _assert_user_exists(ctx, patch["userId"])
         with ctx.registry.dispatch_lock:
             if patch.get("desiredState") in ("stopped", "deleted"):
                 existing = ctx.managed_node_store.get_node(node_id)
@@ -335,8 +335,9 @@ def enroll_managed_daemon(
             "sandboxId": daemon_node["id"],
             "token": runtime_token,
             **(
-                {"employeeId": daemon_node["employeeId"]}
-                if daemon_node.get("employeeId")
+                # `employeeId` keeps daemons that predate the user rename working.
+                {"userId": daemon_node["userId"], "employeeId": daemon_node["userId"]}
+                if daemon_node.get("userId")
                 else {}
             ),
             "sandboxMode": daemon_node.get("sandboxMode") or "boxlite",

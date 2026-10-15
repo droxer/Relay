@@ -16,11 +16,11 @@ export function newBrowserSandboxToken(): string {
 }
 
 export function preferLocalControlPanelNode(
-  employeeId: string,
+  userId: string,
   nodes: ControlPanelDaemonNodeRecord[],
 ): ControlPanelDaemonNodeRecord | undefined {
   return nodes
-    .filter((node) => node.employeeId === employeeId && node.nodeToken)
+    .filter((node) => node.userId === userId && node.nodeToken)
     .sort((a, b) => {
       const score = (node: ControlPanelDaemonNodeRecord) =>
         (node.online && !node.stale ? 2 : 0) + (node.status === "ready" ? 1 : 0);

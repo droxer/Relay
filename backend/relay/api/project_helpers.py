@@ -10,7 +10,7 @@ from .deps import AppContextDep
 
 
 def project_for_owner(
-    ctx: AppContextDep, project_id: str | None, owner_employee_id: str,
+    ctx: AppContextDep, project_id: str | None, owner_user_id: str,
     *, require_enabled: bool = False,
 ) -> dict[str, Any] | None:
     if not project_id:
@@ -18,8 +18,8 @@ def project_for_owner(
     project = ctx.project_store.get_project(project_id)
     if not project or project.get("archivedAt"):
         raise HTTPException(404, "Project not found.")
-    if project.get("ownerEmployeeId") != owner_employee_id:
-        raise HTTPException(403, "Project belongs to another employee.")
+    if project.get("ownerUserId") != owner_user_id:
+        raise HTTPException(403, "Project belongs to another user.")
     if require_enabled and (code := project_work_error(project)):
         raise HTTPException(409, code)
     return project

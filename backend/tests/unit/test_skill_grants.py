@@ -40,7 +40,7 @@ def _skill(ctx, skill_id="skill-1", owner="alice", visibility="private"):
     revision = {"id": f"rev-{skill_id}", "skillId": skill_id}
     skill = {
         "id": skill_id,
-        "ownerEmployeeId": owner,
+        "ownerUserId": owner,
         "visibility": visibility,
         "deletedAt": None,
         "currentRevisionId": revision["id"],

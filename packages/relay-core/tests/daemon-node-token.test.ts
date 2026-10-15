@@ -18,17 +18,17 @@ test("an explicit daemon token replaces a stale persisted token", (t) => {
     rmSync(credentialDirectory, { recursive: true, force: true });
   });
 
-  writeDaemonNodeToken(credentialDirectory, "employee-1", "stale-token");
+  writeDaemonNodeToken(credentialDirectory, "user-1", "stale-token");
 
   const resolution = ensureDaemonNodeToken({
     credentialDirectory,
-    employeeId: "employee-1",
+    userId: "user-1",
     token: "current-token",
   });
 
   assert.equal(resolution.source, "explicit");
   assert.equal(
-    readFileSync(daemonNodeTokenPath(credentialDirectory, "employee-1"), "utf8").trim(),
+    readFileSync(daemonNodeTokenPath(credentialDirectory, "user-1"), "utf8").trim(),
     "current-token",
   );
   assert.equal(existsSync(join(workspacePath, ".relay")), false);

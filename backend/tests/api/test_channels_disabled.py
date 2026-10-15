@@ -52,7 +52,7 @@ def test_disabling_channels_leaves_the_rest_of_the_api_mounted(
 
     assert f"{API_PREFIX}/threads" in paths
     assert f"{API_PREFIX}/admin/daemon-nodes" in paths
-    assert f"{API_PREFIX}/admin/employees" in paths
+    assert f"{API_PREFIX}/admin/users" in paths
 
 
 def test_channel_routes_mount_when_enabled(
@@ -94,7 +94,7 @@ def test_channels_flag_is_off_unless_explicitly_enabled(
         ("/internal/chat/identity/resolve", True),
         ("/admin/chat-integrations", True),
         ("/admin/chat-integrations/{integration_id}/audit", True),
-        ("/admin/employees", False),
+        ("/admin/users", False),
         ("/threads/{session_id}/messages", False),
     ],
 )

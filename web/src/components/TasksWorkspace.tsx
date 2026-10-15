@@ -52,7 +52,7 @@ export function TasksWorkspace({ projects, projectsStatus, tasks, nodes,
           onRefresh={onRefresh}
         />
       </div>
-      <ProjectDrawer open={drawer !== null} computers={nodes} employeeId={currentUser.employeeId} layer={drawer?.onCreated ? (recordTaskId ? 2 : 1) : 0}
+      <ProjectDrawer open={drawer !== null} computers={nodes} userId={currentUser.userId} layer={drawer?.onCreated ? (recordTaskId ? 2 : 1) : 0}
         onClose={() => setDrawer(null)} onSaved={(saved) => drawer?.onCreated?.(saved.id)} />
     </div>
   );

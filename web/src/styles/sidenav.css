@@ -265,7 +265,7 @@
 
 /* Active route reads as selected the same way a conversation row does: a
    soft wash + full-strength ink + a 2px left accent bar. Reserving the solid
-   --action plate for true primary actions (Add employee, Send) keeps one
+   --action plate for true primary actions (Add user, Send) keeps one
    flat hierarchy — selection is calm, action is loud. */
 .sidenav-btn.active,
 .sidenav-btn.active:hover {

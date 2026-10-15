@@ -99,7 +99,7 @@ def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_retur
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -123,7 +123,7 @@ def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_retur
                     "description": "Run automatically.",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -172,7 +172,7 @@ def test_scheduler_fires_a_due_v2_schedule_and_dispatches_one_run() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -198,8 +198,8 @@ def test_scheduler_fires_a_due_v2_schedule_and_dispatches_one_run() -> None:
                     "title": "Standup digest",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "ownerEmployeeId": "alice",
-                    "assigneeEmployeeId": "alice",
+                    "ownerUserId": "alice",
+                    "assigneeUserId": "alice",
                     "isRoutine": True,
                     "routineTriggers": weekdays_9,
                     "routineState": "active",
@@ -252,7 +252,7 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -269,7 +269,7 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
                     "title": "Ship scheduled backlog",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -287,7 +287,7 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
     asyncio.run(run_flow())
 
 
-def test_scheduler_dispatches_when_employee_owns_multiple_computers() -> None:
+def test_scheduler_dispatches_when_user_owns_multiple_computers() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -299,7 +299,7 @@ def test_scheduler_dispatches_when_employee_owns_multiple_computers() -> None:
                 registry.register(
                     {
                         "sandboxId": f"sbx_alice_{suffix}",
-                        "employeeId": "alice",
+                        "userId": "alice",
                         "token": f"node_token_{suffix}",
                         "workspacePath": f"/workspace/alice/{suffix}",
                         "protocolVersion": 1,
@@ -318,7 +318,7 @@ def test_scheduler_dispatches_when_employee_owns_multiple_computers() -> None:
                     "title": "Runs on either computer",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -354,7 +354,7 @@ def test_scheduler_claim_fences_the_resolved_logical_assignment() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -382,7 +382,7 @@ def test_scheduler_claim_fences_the_resolved_logical_assignment() -> None:
                     "title": "Fence the selected agent",
                     "assignedAgent": "codex",
                     "assignedAgentId": original_agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -443,7 +443,7 @@ def test_scheduler_requests_managed_capacity_once_when_no_node_is_ready() -> Non
                     "title": "Needs managed capacity",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -462,13 +462,13 @@ def test_scheduler_requests_managed_capacity_once_when_no_node_is_ready() -> Non
             assert second.dispatched == 0
             assert len(managed_nodes.list_nodes()) == 1
             [node] = managed_nodes.list_nodes()
-            assert node["employeeId"] == "alice"
+            assert node["userId"] == "alice"
             assert node["desiredState"] == "running"
 
     asyncio.run(run_flow())
 
 
-def test_scheduler_waits_for_an_employee_device_node_regardless_of_sandbox_mode() -> (
+def test_scheduler_waits_for_an_user_device_node_regardless_of_sandbox_mode() -> (
     None
 ):
     async def run_flow() -> None:
@@ -481,7 +481,7 @@ def test_scheduler_waits_for_an_employee_device_node_regardless_of_sandbox_mode(
                 "alice",
                 "/Users/alice/workspace",
                 sandbox_mode="boxlite",
-                node_location="employee-device",
+                node_location="user-device",
             )
             managed_nodes = LocalManagedNodeStore(root)
             backend, agent = _logical_backend(root, registry)
@@ -490,7 +490,7 @@ def test_scheduler_waits_for_an_employee_device_node_regardless_of_sandbox_mode(
                     "title": "Wait for Alice's computer",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -526,7 +526,7 @@ def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
                     "title": "Continue after Alice disconnects local mode",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -539,7 +539,7 @@ def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
             ).tick()
 
             [managed] = managed_nodes.list_nodes()
-            assert managed["employeeId"] == "alice"
+            assert managed["userId"] == "alice"
             assert managed["desiredState"] == "running"
 
     asyncio.run(run_flow())
@@ -563,7 +563,7 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
             registry.register(
                 {
                     "sandboxId": "node_builder",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -588,7 +588,7 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
                     "title": "Ship with Builder",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -616,7 +616,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -634,7 +634,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
                     "priority": "high",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -645,7 +645,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
                     "priority": "low",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -683,7 +683,7 @@ def test_scheduler_blocks_after_first_failed_dispatch() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -703,7 +703,7 @@ def test_scheduler_blocks_after_first_failed_dispatch() -> None:
                     "title": "Keeps failing",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -753,7 +753,7 @@ def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -773,7 +773,7 @@ def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
                     "title": "Ambiguous failure",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -848,7 +848,7 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
             node = registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -879,8 +879,8 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
                     **ROUTINE_RUN,
                     "title": "Legacy executor task",
                     "assignedAgent": "codex",
-                    "ownerEmployeeId": "requester",
-                    "assigneeEmployeeId": "alice",
+                    "ownerUserId": "requester",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -908,7 +908,7 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
         current = [
             {
                 "id": "runtime_old",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspaceId": "machine-1",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -919,7 +919,7 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
             list_ready=lambda: current,
             is_live=lambda _node_id: True,
         )
-        task = {"assigneeEmployeeId": "alice"}
+        task = {"assigneeUserId": "alice"}
         declared = agents.create_agent(
             "alice",
             {
@@ -976,7 +976,7 @@ def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypa
             node = registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1006,7 +1006,7 @@ def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypa
                 {
                     "title": "Legacy executor routine",
                     "assignedAgent": "codex",
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "isRoutine": True,
                     "routineEnabled": True,
                     "routineCadence": "daily",
@@ -1043,7 +1043,7 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1060,8 +1060,8 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
                     "title": "Delegated work",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
-                    "ownerEmployeeId": "bob",
-                    "assigneeEmployeeId": "alice",
+                    "ownerUserId": "bob",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -1091,7 +1091,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1142,8 +1142,8 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     **ROUTINE_RUN,
                     "title": "Lead work",
                     "assignedTeamId": team["id"],
-                    "ownerEmployeeId": "requester",
-                    "assigneeEmployeeId": "alice",
+                    "ownerUserId": "requester",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -1216,7 +1216,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     **ROUTINE_RUN,
                     "title": "Blocked lead work",
                     "assignedTeamId": team["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -1247,7 +1247,7 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1295,8 +1295,8 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
                 {
                     "title": "Daily Team report",
                     **({"collaborationStyle": style} if style else {}),
-                    "ownerEmployeeId": "requester",
-                    "assigneeEmployeeId": "alice",
+                    "ownerUserId": "requester",
+                    "assigneeUserId": "alice",
                     "assignedTeamId": team["id"],
                     "isRoutine": True,
                     "routineTriggers": DAILY_9_UTC,
@@ -1324,7 +1324,7 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
             [session_id] = occurrence["linkedSessionIds"]
             session = session_store.get_session(session_id)
             assert session["teamId"] == team["id"]
-            assert session["ownerEmployeeId"] == "alice"
+            assert session["ownerUserId"] == "alice"
             assert session["ownerAgentId"] == lead["id"]
             [manifest] = session["collaborationRounds"]
             assert manifest["style"] == (style or "build_review")
@@ -1396,7 +1396,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
                     **ROUTINE_RUN,
                     "title": "Wait for the team",
                     "assignedTeamId": team["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -1455,7 +1455,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
                     **ROUTINE_RUN,
                     "title": "Provision for the Team lead",
                     "assignedTeamId": team["id"],
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "status": "assigned",
                 }
             )
@@ -1471,7 +1471,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
             assert result.dispatched == 0
             assert result.skipped == 1
             [managed] = managed_nodes.list_nodes()
-            assert managed["employeeId"] == "alice"
+            assert managed["userId"] == "alice"
             assert managed["desiredState"] == "running"
 
     asyncio.run(run_flow())
@@ -1493,7 +1493,7 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
     node = registry.register(
         {
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -1528,8 +1528,8 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
             "title": "Migrate the billing tables",
             "assignedAgent": "codex",
             "assignedAgentId": agent["id"],
-            "assigneeEmployeeId": "alice",
-            "ownerEmployeeId": "alice",
+            "assigneeUserId": "alice",
+            "ownerUserId": "alice",
             "projectId": project["id"],
             "status": "assigned",
         }
@@ -1617,7 +1617,7 @@ def _legacy_fixture(root: str):
     registry.register(
         {
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "workspaceId": "machine-a",
@@ -1631,7 +1631,7 @@ def _legacy_fixture(root: str):
         registry,
         LocalAgentStore(root),
         LocalAgentPlacementStore(root),
-        {"id": "task-1", "ownerEmployeeId": "alice", "assignments": [{"agent": "claude"}]},
+        {"id": "task-1", "ownerUserId": "alice", "assignments": [{"agent": "claude"}]},
     )
 
 
@@ -1672,7 +1672,7 @@ def test_legacy_assignment_without_a_declared_agent_creates_nothing() -> None:
             placement_store=placements,
         )
         assert resolved is None
-        assert agents.list_agents(supervisor_employee_id="alice") == []
+        assert agents.list_agents(supervisor_user_id="alice") == []
 
 
 def test_legacy_assignment_picks_deterministically_among_candidates() -> None:

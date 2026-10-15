@@ -63,7 +63,7 @@ PLACEMENT_RELEVANT_AGENT_FIELDS = frozenset(
 
 
 class LocalAgentStore:
-    """Event-sourced logical agents supervised by employees."""
+    """Event-sourced logical agents supervised by users."""
 
     def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
         self.root = Path(root_dir) / "agents"
@@ -71,26 +71,26 @@ class LocalAgentStore:
         self._lock = RLock()
 
     def create_agent(
-        self, supervisor_employee_id: str, payload: dict[str, Any]
+        self, supervisor_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         agent = _new_agent(
-            supervisor_employee_id,
+            supervisor_user_id,
             payload,
-            name_taken=_name_taken(self, supervisor_employee_id),
+            name_taken=_name_taken(self, supervisor_user_id),
         )
         return self._create_agent(agent)
 
     def _create_agent(self, agent: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             self._ensure_unique_name(
-                agent["supervisorEmployeeId"], agent["displayName"]
+                agent["supervisorUserId"], agent["displayName"]
             )
             self._append(agent["id"], "agent.created", {"agent": agent})
             return agent
 
     def ensure_compatibility_agent(
         self,
-        supervisor_employee_id: str,
+        supervisor_user_id: str,
         executor_kind: str,
         daemon_node_id: str,
         *,
@@ -99,20 +99,20 @@ class LocalAgentStore:
         if executor_kind not in AGENT_NAMES:
             raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
         key = _compatibility_key(
-            supervisor_employee_id, computer_id or daemon_node_id, executor_kind
+            supervisor_user_id, computer_id or daemon_node_id, executor_kind
         )
         legacy_key = _compatibility_key(
-            supervisor_employee_id, daemon_node_id, executor_kind
+            supervisor_user_id, daemon_node_id, executor_kind
         )
         with self._lock:
-            owned = self.list_agents(supervisor_employee_id=supervisor_employee_id)
+            owned = self.list_agents(supervisor_user_id=supervisor_user_id)
             existing = next(
                 (agent for agent in owned if agent.get("compatibilityKey") == key),
                 None,
             )
             if existing:
                 return _migrate_compatibility_display_name(
-                    self, existing, supervisor_employee_id, executor_kind
+                    self, existing, supervisor_user_id, executor_kind
                 )
             legacy = next(
                 (
@@ -125,10 +125,10 @@ class LocalAgentStore:
             if legacy:
                 migrated = self.update_agent(legacy["id"], {"compatibilityKey": key})
                 return _migrate_compatibility_display_name(
-                    self, migrated, supervisor_employee_id, executor_kind
+                    self, migrated, supervisor_user_id, executor_kind
                 )
             agent = _new_agent(
-                supervisor_employee_id,
+                supervisor_user_id,
                 {
                     "displayName": _compatibility_display_name(owned, executor_kind),
                     "executorKind": executor_kind,
@@ -148,35 +148,35 @@ class LocalAgentStore:
     def list_agents(
         self,
         *,
-        supervisor_employee_id: str | None = None,
-        employee_id: str | None = None,
+        supervisor_user_id: str | None = None,
+        user_id: str | None = None,
         include_deleted: bool = False,
     ) -> list[dict[str, Any]]:
-        if employee_id is not None:
+        if user_id is not None:
             if (
-                supervisor_employee_id is not None
-                and supervisor_employee_id != employee_id
+                supervisor_user_id is not None
+                and supervisor_user_id != user_id
             ):
                 raise ValueError(
-                    "employee_id and supervisor_employee_id must match when both are supplied."
+                    "user_id and supervisor_user_id must match when both are supplied."
                 )
-            supervisor_employee_id = employee_id
+            supervisor_user_id = user_id
         agents = [
             _normalized_agent_snapshot(_read_json(path))
             for path in self.root.glob("*/snapshot.json")
         ]
-        if supervisor_employee_id is not None:
+        if supervisor_user_id is not None:
             agents = [
                 agent
                 for agent in agents
-                if agent.get("supervisorEmployeeId") == supervisor_employee_id
+                if agent.get("supervisorUserId") == supervisor_user_id
             ]
         if not include_deleted:
             agents = [agent for agent in agents if not agent.get("deletedAt")]
         return sorted(
             agents,
             key=lambda agent: (
-                agent.get("supervisorEmployeeId") or "",
+                agent.get("supervisorUserId") or "",
                 agent.get("displayName", "").casefold(),
                 agent["id"],
             ),
@@ -278,7 +278,7 @@ class LocalAgentStore:
 
     def _ensure_unique_name(
         self,
-        supervisor_employee_id: str,
+        supervisor_user_id: str,
         display_name: str,
         *,
         exclude_id: str | None = None,
@@ -287,7 +287,7 @@ class LocalAgentStore:
             (
                 agent
                 for agent in self.list_agents(
-                    supervisor_employee_id=supervisor_employee_id
+                    supervisor_user_id=supervisor_user_id
                 )
                 if (
                     agent["id"] != exclude_id
@@ -299,7 +299,7 @@ class LocalAgentStore:
         )
         if duplicate:
             raise ValueError(
-                f"Supervisor {supervisor_employee_id} already has an agent named {display_name}."
+                f"Supervisor {supervisor_user_id} already has an agent named {display_name}."
             )
 
     def _append(self, agent_id: str, event_type: str, payload: dict[str, Any]) -> None:
@@ -327,12 +327,12 @@ class DatabaseAgentStore:
         metadata,
         database_id_column(),
         Column(
-            "supervisor_employee_id",
+            "supervisor_user_id",
             entity_uuid_type(),
             ForeignKey(
-                "employees.id",
+                "users.id",
                 ondelete="RESTRICT",
-                name="fk_agents_supervisor_employee",
+                name="fk_agents_supervisor_user",
             ),
             nullable=False,
             index=True,
@@ -350,13 +350,13 @@ class DatabaseAgentStore:
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Column("deleted_at", DateTime(timezone=True), nullable=True),
-        # Uniqueness applies to an employee's *live* agents. Deleting used to
+        # Uniqueness applies to a user's *live* agents. Deleting used to
         # mean nulling display_name_key and dropping compatibility_key so the
         # row escaped a whole-table constraint; the predicate says it directly,
         # so both key columns are now written unconditionally.
         Index(
             "uq_agents_live_supervisor_display_name",
-            "supervisor_employee_id",
+            "supervisor_user_id",
             "display_name_key",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
@@ -387,7 +387,7 @@ class DatabaseAgentStore:
         Column("timestamp", DateTime(timezone=True), nullable=False),
         Column("payload", json_type(), nullable=False),
         UniqueConstraint(
-            "agent_id", "sequence", name="uq_employee_agent_events_sequence"
+            "agent_id", "sequence", name="uq_user_agent_events_sequence"
         ),
     )
 
@@ -400,17 +400,17 @@ class DatabaseAgentStore:
             create_all_tables(self.engine)
 
     def create_agent(
-        self, supervisor_employee_id: str, payload: dict[str, Any]
+        self, supervisor_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         agent = _new_agent(
-            supervisor_employee_id,
+            supervisor_user_id,
             payload,
-            name_taken=_name_taken(self, supervisor_employee_id),
+            name_taken=_name_taken(self, supervisor_user_id),
         )
         return self._create_agent(agent)
 
     def _create_agent(self, agent: dict[str, Any]) -> dict[str, Any]:
-        self._ensure_unique_name(agent["supervisorEmployeeId"], agent["displayName"])
+        self._ensure_unique_name(agent["supervisorUserId"], agent["displayName"])
         event = _agent_event(agent["id"], "agent.created", {"agent": agent})
         try:
             with store_transaction(self.engine) as conn:
@@ -423,13 +423,13 @@ class DatabaseAgentStore:
                 )
         except IntegrityError as error:
             raise ValueError(
-                f"Supervisor {agent['supervisorEmployeeId']} already has an agent named {agent['displayName']}."
+                f"Supervisor {agent['supervisorUserId']} already has an agent named {agent['displayName']}."
             ) from error
         return agent
 
     def ensure_compatibility_agent(
         self,
-        supervisor_employee_id: str,
+        supervisor_user_id: str,
         executor_kind: str,
         daemon_node_id: str,
         *,
@@ -438,18 +438,18 @@ class DatabaseAgentStore:
         if executor_kind not in AGENT_NAMES:
             raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
         key = _compatibility_key(
-            supervisor_employee_id, computer_id or daemon_node_id, executor_kind
+            supervisor_user_id, computer_id or daemon_node_id, executor_kind
         )
         legacy_key = _compatibility_key(
-            supervisor_employee_id, daemon_node_id, executor_kind
+            supervisor_user_id, daemon_node_id, executor_kind
         )
-        owned = self.list_agents(supervisor_employee_id=supervisor_employee_id)
+        owned = self.list_agents(supervisor_user_id=supervisor_user_id)
         existing = next(
             (agent for agent in owned if agent.get("compatibilityKey") == key), None
         )
         if existing:
             return _migrate_compatibility_display_name(
-                self, existing, supervisor_employee_id, executor_kind
+                self, existing, supervisor_user_id, executor_kind
             )
         legacy = next(
             (
@@ -462,10 +462,10 @@ class DatabaseAgentStore:
         if legacy:
             migrated = self.update_agent(legacy["id"], {"compatibilityKey": key})
             return _migrate_compatibility_display_name(
-                self, migrated, supervisor_employee_id, executor_kind
+                self, migrated, supervisor_user_id, executor_kind
             )
         agent = _new_agent(
-            supervisor_employee_id,
+            supervisor_user_id,
             {
                 "displayName": _compatibility_display_name(owned, executor_kind),
                 "executorKind": executor_kind,
@@ -480,14 +480,14 @@ class DatabaseAgentStore:
                 conn.execute(
                     select(
                         self.agents.c.snapshot,
-                        self.agents.c.supervisor_employee_id,
+                        self.agents.c.supervisor_user_id,
                     ).where(self.agents.c.id == agent_id)
                 )
                 .mappings()
                 .first()
             )
         return (
-            _normalized_agent_snapshot(row["snapshot"], row["supervisor_employee_id"])
+            _normalized_agent_snapshot(row["snapshot"], row["supervisor_user_id"])
             if row
             else None
         )
@@ -495,16 +495,16 @@ class DatabaseAgentStore:
     def list_agents(
         self,
         *,
-        supervisor_employee_id: str | None = None,
+        supervisor_user_id: str | None = None,
         include_deleted: bool = False,
     ) -> list[dict[str, Any]]:
         statement = select(
             self.agents.c.snapshot,
-            self.agents.c.supervisor_employee_id,
+            self.agents.c.supervisor_user_id,
         )
-        if supervisor_employee_id is not None:
+        if supervisor_user_id is not None:
             statement = statement.where(
-                self.agents.c.supervisor_employee_id == supervisor_employee_id
+                self.agents.c.supervisor_user_id == supervisor_user_id
             )
         if not include_deleted:
             statement = statement.where(self.agents.c.deleted_at.is_(None))
@@ -513,12 +513,12 @@ class DatabaseAgentStore:
         return sorted(
             (
                 _normalized_agent_snapshot(
-                    row["snapshot"], row["supervisor_employee_id"]
+                    row["snapshot"], row["supervisor_user_id"]
                 )
                 for row in rows
             ),
             key=lambda agent: (
-                agent.get("supervisorEmployeeId") or "",
+                agent.get("supervisorUserId") or "",
                 agent.get("displayName", "").casefold(),
                 agent["id"],
             ),
@@ -547,7 +547,7 @@ class DatabaseAgentStore:
                     select(
                         self.agents.c.id,
                         self.agents.c.snapshot,
-                        self.agents.c.supervisor_employee_id,
+                        self.agents.c.supervisor_user_id,
                         self.agents.c.event_version,
                     )
                     .where(self.agents.c.id == agent_id)
@@ -559,7 +559,7 @@ class DatabaseAgentStore:
             if not row:
                 raise KeyError(agent_id)
             current = _normalized_agent_snapshot(
-                row["snapshot"], row["supervisor_employee_id"]
+                row["snapshot"], row["supervisor_user_id"]
             )
             if current.get("deletedAt"):
                 raise KeyError(agent_id)
@@ -725,13 +725,13 @@ class DatabaseAgentStore:
                 )
         except IntegrityError as error:
             raise ValueError(
-                f"Supervisor {agent['supervisorEmployeeId']} already has an agent named {agent['displayName']}."
+                f"Supervisor {agent['supervisorUserId']} already has an agent named {agent['displayName']}."
             ) from error
         return agent
 
     def _ensure_unique_name(
         self,
-        supervisor_employee_id: str,
+        supervisor_user_id: str,
         display_name: str,
         *,
         exclude_id: str | None = None,
@@ -740,7 +740,7 @@ class DatabaseAgentStore:
             (
                 agent
                 for agent in self.list_agents(
-                    supervisor_employee_id=supervisor_employee_id
+                    supervisor_user_id=supervisor_user_id
                 )
                 if agent["id"] != exclude_id
                 and agent.get("displayName", "").casefold() == display_name.casefold()
@@ -749,25 +749,25 @@ class DatabaseAgentStore:
         )
         if duplicate:
             raise ValueError(
-                f"Supervisor {supervisor_employee_id} already has an agent named {display_name}."
+                f"Supervisor {supervisor_user_id} already has an agent named {display_name}."
             )
 
 
-def _name_taken(store: Any, supervisor_employee_id: str) -> Callable[[str], bool]:
+def _name_taken(store: Any, supervisor_user_id: str) -> Callable[[str], bool]:
     existing = {
         agent.get("displayName", "").casefold()
-        for agent in store.list_agents(supervisor_employee_id=supervisor_employee_id)
+        for agent in store.list_agents(supervisor_user_id=supervisor_user_id)
     }
     return lambda candidate: candidate.casefold() in existing
 
 
 def _new_agent(
-    supervisor_employee_id: str,
+    supervisor_user_id: str,
     payload: dict[str, Any],
     *,
     name_taken: Callable[[str], bool] | None = None,
 ) -> dict[str, Any]:
-    supervisor_employee_id = supervisor_employee_id.strip()
+    supervisor_user_id = supervisor_user_id.strip()
     raw_display_name = payload.get("displayName")
     if raw_display_name is not None and not isinstance(raw_display_name, str):
         raise ValueError("displayName must be a string.")
@@ -778,8 +778,8 @@ def _new_agent(
     default_role = _optional_string(payload, "defaultRole")
     if not default_role:
         raise ValueError("defaultRole is required.")
-    if not supervisor_employee_id:
-        raise ValueError("supervisorEmployeeId is required.")
+    if not supervisor_user_id:
+        raise ValueError("supervisorUserId is required.")
     if executor_kind not in AGENT_NAMES:
         raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
     if default_role not in AGENT_ROLES:
@@ -791,7 +791,7 @@ def _new_agent(
     timestamp = now_iso()
     return {
         "id": agent_id,
-        "supervisorEmployeeId": supervisor_employee_id,
+        "supervisorUserId": supervisor_user_id,
         "displayName": display_name,
         "executorKind": executor_kind,
         "defaultRole": default_role,
@@ -857,7 +857,7 @@ def _normalize_agent_identity_patch(
     if "displayName" in patch:
         display_name = _required_string(patch, "displayName")
         ensure_unique_name(
-            current["supervisorEmployeeId"], display_name, exclude_id=agent_id
+            current["supervisorUserId"], display_name, exclude_id=agent_id
         )
         normalized["displayName"] = display_name
     if "profileImageUrl" in patch:
@@ -888,34 +888,34 @@ def _normalize_agent_runtime_patch(patch: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalized_agent_snapshot(
-    agent: dict[str, Any], supervisor_employee_id: str | None = None
+    agent: dict[str, Any], supervisor_user_id: str | None = None
 ) -> dict[str, Any]:
     owner = (
-        agent.get("supervisorEmployeeId")
-        or agent.get("employeeId")
-        or supervisor_employee_id
+        agent.get("supervisorUserId")
+        or agent.get("userId")
+        or supervisor_user_id
     )
-    return {**agent, "supervisorEmployeeId": owner} if owner else agent
+    return {**agent, "supervisorUserId": owner} if owner else agent
 
 
 def _compatibility_key(
-    supervisor_employee_id: str, computer_id: str, executor_kind: str
+    supervisor_user_id: str, computer_id: str, executor_kind: str
 ) -> str:
-    # A compatibility agent belongs to one stable Computer. Employee devices
+    # A compatibility agent belongs to one stable Computer. User devices
     # use their durable daemon id; managed Computers use managedNodeId so a
     # replaceable daemon incarnation never changes Logical Agent identity.
-    return f"{supervisor_employee_id}:{computer_id}:{executor_kind}"
+    return f"{supervisor_user_id}:{computer_id}:{executor_kind}"
 
 
 def _migrate_compatibility_display_name(
-    store: Any, agent: dict[str, Any], supervisor_employee_id: str, executor_kind: str
+    store: Any, agent: dict[str, Any], supervisor_user_id: str, executor_kind: str
 ) -> dict[str, Any]:
     legacy_prefix = f"{executor_kind.capitalize()} · "
     if not agent.get("displayName", "").startswith(legacy_prefix):
         return agent
     others = [
         item
-        for item in store.list_agents(supervisor_employee_id=supervisor_employee_id)
+        for item in store.list_agents(supervisor_user_id=supervisor_user_id)
         if item["id"] != agent["id"]
     ]
     return store.update_agent(
@@ -953,7 +953,7 @@ def _agent_row(
 ) -> dict[str, Any]:
     return {
         "id": database_id or agent["id"],
-        "supervisor_employee_id": agent["supervisorEmployeeId"],
+        "supervisor_user_id": agent["supervisorUserId"],
         "display_name": agent["displayName"],
         # Written unconditionally: uniqueness is scoped to live agents by the
         # partial index, so a soft delete no longer has to erase its own keys.

@@ -61,9 +61,9 @@ class DatabaseProjectStore:
         metadata,
         database_id_column(),
         Column(
-            "owner_employee_id",
+            "owner_user_id",
             entity_uuid_type(),
-            ForeignKey("employees.id", ondelete="RESTRICT", name="fk_projects_owner"),
+            ForeignKey("users.id", ondelete="RESTRICT", name="fk_projects_owner"),
             nullable=False,
         ),
         Column("name", Text, nullable=False),
@@ -77,10 +77,10 @@ class DatabaseProjectStore:
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Column("archived_at", DateTime(timezone=True), nullable=True),
-        Index("ix_projects_owner_updated", "owner_employee_id", "updated_at"),
+        Index("ix_projects_owner_updated", "owner_user_id", "updated_at"),
         Index(
             "uq_projects_live_owner_name",
-            "owner_employee_id",
+            "owner_user_id",
             "name_key",
             unique=True,
             postgresql_where=text("archived_at IS NULL"),
@@ -131,9 +131,9 @@ class DatabaseProjectStore:
             create_all_tables(self.engine)
 
     def create_project(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        project = _new_project(owner_employee_id, payload)
+        project = _new_project(owner_user_id, payload)
         event = _project_event(project["id"], "project.created", {"project": project})
         try:
             with store_transaction(self.engine) as conn:
@@ -165,14 +165,14 @@ class DatabaseProjectStore:
 
     def list_projects(
         self,
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         *,
         include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         statement = select(self.projects.c.snapshot)
-        if owner_employee_id is not None:
+        if owner_user_id is not None:
             statement = statement.where(
-                self.projects.c.owner_employee_id == owner_employee_id
+                self.projects.c.owner_user_id == owner_user_id
             )
         if not include_archived:
             statement = statement.where(self.projects.c.archived_at.is_(None))
@@ -419,12 +419,12 @@ class DatabaseProjectStore:
             conn.execute(insert(self.members), rows)
 
 
-def _new_project(owner_employee_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     project_id = new_database_id()
     timestamp = now_iso()
     return {
         "id": project_id,
-        "ownerEmployeeId": owner_employee_id,
+        "ownerUserId": owner_user_id,
         "name": _required_text(
             payload.get("name"),
             "project_name_required",
@@ -500,7 +500,7 @@ def _project_row(
 ) -> dict[str, Any]:
     return {
         "id": database_id or project["id"],
-        "owner_employee_id": project["ownerEmployeeId"],
+        "owner_user_id": project["ownerUserId"],
         "name": project["name"],
         "name_key": project["name"].casefold(),
         "computer_id": project["computerId"],

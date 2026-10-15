@@ -114,7 +114,7 @@ def resolve_session_daemon_node_id(
 def resolve_agent_assignments(
     assignments: list[dict[str, Any]],
     *,
-    employee_id: str,
+    user_id: str,
     is_admin: bool,
     agent_store: Any,
     placement_store: Any,
@@ -150,10 +150,10 @@ def resolve_agent_assignments(
             raise AgentRoutingError(
                 "agent_not_found", f"Agent {agent_id} was not found."
             )
-        if not is_admin and agent.get("supervisorEmployeeId") != employee_id:
+        if not is_admin and agent.get("supervisorUserId") != user_id:
             raise AgentRoutingError(
                 "agent_forbidden",
-                f"Agent {agent_id} is not available to this employee.",
+                f"Agent {agent_id} is not available to this user.",
             )
         if not agent.get("enabled", True):
             raise AgentRoutingError(
@@ -284,7 +284,7 @@ def _attach_never_run_agent_to_managed_capacity(
             node
             for node in nodes.values()
             if node.get("managedNodeId")
-            and node.get("employeeId") == agent.get("supervisorEmployeeId")
+            and node.get("userId") == agent.get("supervisorUserId")
             and node.get("online")
             and not node.get("stale")
             and node.get("status") in ("ready", "running")

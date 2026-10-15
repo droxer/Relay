@@ -10,7 +10,7 @@ test("managed enrollment is saved privately and atomically outside the workspace
   try {
     const path = join(root, "identity.json");
     assert.equal(loadManagedEnrollment(path), undefined);
-    const enrollment = { sandboxId: "sandbox", token: "runtime-token", employeeId: "alice", sandboxMode: "boxlite" as const };
+    const enrollment = { sandboxId: "sandbox", token: "runtime-token", userId: "alice", sandboxMode: "boxlite" as const };
     saveManagedEnrollment(path, enrollment);
     assert.deepEqual(loadManagedEnrollment(path), enrollment);
     assert.equal(statSync(path).mode & 0o777, 0o600);

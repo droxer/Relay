@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 
 import { agentMatchesQuery } from "../src/lib/agentSearch.js";
 import { groupAgentsByComputer, UNPLACED_GROUP_KEY } from "../src/lib/agentGroups.js";
-import type { AgentPlacement, EmployeeAgent } from "../src/types.js";
+import type { AgentPlacement, UserAgent } from "../src/types.js";
 
 const read = (path: string) => readFile(resolve("web", path), "utf8");
 
@@ -15,7 +15,7 @@ function placement(
   return {
     id: input.id,
     agentId: input.agentId ?? "agent_alice",
-    employeeId: input.employeeId ?? "alice",
+    userId: input.userId ?? "alice",
     daemonNodeId: input.daemonNodeId,
     runtimeNodeId: input.runtimeNodeId,
     computerId: input.computerId,
@@ -34,10 +34,10 @@ function placement(
   };
 }
 
-function agent(id: string, placements: AgentPlacement[]): EmployeeAgent {
+function agent(id: string, placements: AgentPlacement[]): UserAgent {
   return {
     id,
-    supervisorEmployeeId: "alice",
+    supervisorUserId: "alice",
     displayName: id,
     executorKind: "codex",
     enabled: true,
@@ -45,7 +45,7 @@ function agent(id: string, placements: AgentPlacement[]): EmployeeAgent {
     placements,
     createdAt: "2026-09-01T00:00:00Z",
     updatedAt: "2026-09-01T00:00:00Z",
-  } as EmployeeAgent;
+  } as UserAgent;
 }
 
 describe("groupAgentsByComputer", () => {
@@ -55,7 +55,7 @@ describe("groupAgentsByComputer", () => {
       daemonNodeId: "node_laptop",
       computerId: "computer_laptop",
       nodeDisplayName: "Alice’s MacBook",
-      nodeOwnership: "employee-device",
+      nodeOwnership: "user-device",
     });
     const managed = placement({
       id: "p_managed",

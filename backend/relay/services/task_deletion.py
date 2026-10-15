@@ -74,8 +74,8 @@ def _delete_task(
     except (KeyError, FileNotFoundError) as error:
         raise TaskDeletionError("task_not_found") from error
 
-    actor_employee_id = actor.get("employeeId")
-    if not actor.get("isAdmin") and task.get("ownerEmployeeId") != actor_employee_id:
+    actor_user_id = actor.get("userId")
+    if not actor.get("isAdmin") and task.get("ownerUserId") != actor_user_id:
         raise TaskDeletionError("task_delete_forbidden")
 
     if task.get("deletedAt"):
@@ -97,7 +97,7 @@ def _delete_task(
     try:
         deleted = ctx.task_store.delete_task(
             task_id,
-            deleted_by=actor_employee_id,
+            deleted_by=actor_user_id,
             reject_active_claim=True,
             active_linked_session=lambda current: task_has_active_linked_session(
                 ctx.session_store, current, execution_lifecycle=execution_lifecycle
@@ -114,13 +114,13 @@ def _delete_task(
                     continue
             for record in related[1:]:
                 ctx.task_store.delete_task(
-                    record["id"], deleted_by=actor_employee_id, reject_active_claim=True,
+                    record["id"], deleted_by=actor_user_id, reject_active_claim=True,
                     active_linked_session=lambda current: task_has_active_linked_session(
                         ctx.session_store, current, execution_lifecycle=execution_lifecycle
                     ),
                 )
         session_ids = {sid for record in related for sid in record.get("linkedSessionIds", [])}
-        _delete_task_threads(ctx, task_id, sorted(session_ids), actor_employee_id, execution_lifecycle)
+        _delete_task_threads(ctx, task_id, sorted(session_ids), actor_user_id, execution_lifecycle)
         deleted = ctx.task_store.get_task(task_id)
     except (TaskExecutionActiveError, SessionRunInFlightError) as error:
         raise TaskDeletionError("task_execution_active") from error

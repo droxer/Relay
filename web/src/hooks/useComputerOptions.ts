@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listSandboxes } from "../api";
 import {
-  computersForEmployee,
+  computersForUser,
   computerName,
   type ComputerOwnership,
   type NodeLike,
@@ -33,7 +33,7 @@ function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
     .map(([kind]) => kind);
   return {
     id: sandbox.id,
-    employeeId: sandbox.employeeId,
+    userId: sandbox.userId,
     workspaceId: sandbox.workspaceId,
     managedNodeId: sandbox.managedNodeId,
     supportedAgents: readyRuntimes,
@@ -46,12 +46,12 @@ function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
 }
 
 /**
- * The employee's computers, grouped by stable identity — one option per
+ * The user's computers, grouped by stable identity — one option per
  * machine however many runtime nodes it has had. Agent creation and team
  * setup both pick from this list, so the two always name computers the same
  * way.
  */
-export function useComputerOptions(employeeId: string, enabled: boolean): {
+export function useComputerOptions(userId: string, enabled: boolean): {
   options: ComputerOption[];
   nodeLikes: NodeLike[];
   isLoading: boolean;
@@ -67,7 +67,7 @@ export function useComputerOptions(employeeId: string, enabled: boolean): {
   );
   const nodeLikes = useMemo(() => sandboxes.map(toNodeLike), [sandboxes]);
   const options = useMemo(
-    () => computersForEmployee(nodeLikes, employeeId).map((group) => {
+    () => computersForUser(nodeLikes, userId).map((group) => {
       const primary = sandboxes.find((sandbox) => group.nodes.some((node) => node.id === sandbox.id));
       return {
         computerId: group.computerId,
@@ -75,7 +75,7 @@ export function useComputerOptions(employeeId: string, enabled: boolean): {
         label: primary ? computerName(primary) : group.computerId,
       };
     }),
-    [nodeLikes, sandboxes, employeeId],
+    [nodeLikes, sandboxes, userId],
   );
   return { options, nodeLikes, isLoading: query.isLoading };
 }

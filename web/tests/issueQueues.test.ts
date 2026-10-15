@@ -21,7 +21,7 @@ function issue(input: Partial<RelayTaskListItem> & { id: string }): RelayTaskLis
     description: "",
     priority: "normal",
     status: "backlog",
-    ownerEmployeeId: ME,
+    ownerUserId: ME,
     isRoutine: false,
     linkedSessionIds: [],
     createdAt: "2026-09-01T00:00:00.000Z",
@@ -34,8 +34,8 @@ const loose = issue({ id: "loose" });
 const looseDone = issue({ id: "loose-done", status: "done" });
 const occurrence = issue({ id: "occurrence", sourceRoutineId: "routine-1" });
 const review = issue({ id: "review", projectId: "p1", status: "review" });
-const othersReview = issue({ id: "others-review", projectId: "p1", status: "review", assigneeEmployeeId: "bob" });
-const waiting = issue({ id: "waiting", projectId: "p2", status: "waiting_for_human", assigneeEmployeeId: ME });
+const othersReview = issue({ id: "others-review", projectId: "p1", status: "review", assigneeUserId: "bob" });
+const waiting = issue({ id: "waiting", projectId: "p2", status: "waiting_for_human", assigneeUserId: ME });
 const blocked = issue({ id: "blocked", projectId: "p1", status: "blocked" });
 const running = issue({ id: "running", projectId: "p2", status: "running" });
 const overdue = issue({ id: "overdue", projectId: "p1", dueDate: "2026-09-20" });
@@ -54,26 +54,26 @@ describe("issue queues", () => {
   });
 
   it("needs me is human-gated work that is mine", () => {
-    assert.deepEqual(ids(issuesInQueue(all, "needs_me", { employeeId: ME, today: TODAY })), ["review", "waiting"]);
+    assert.deepEqual(ids(issuesInQueue(all, "needs_me", { userId: ME, today: TODAY })), ["review", "waiting"]);
   });
 
   it("untriaged is open intake outside a project", () => {
-    assert.deepEqual(ids(issuesInQueue(all, "untriaged", { employeeId: ME, today: TODAY })), ["loose"]);
+    assert.deepEqual(ids(issuesInQueue(all, "untriaged", { userId: ME, today: TODAY })), ["loose"]);
   });
 
   it("overdue ignores finished work", () => {
-    assert.deepEqual(ids(issuesInQueue(all, "overdue", { employeeId: ME, today: TODAY })), ["overdue"]);
+    assert.deepEqual(ids(issuesInQueue(all, "overdue", { userId: ME, today: TODAY })), ["overdue"]);
   });
 
   it("open and done partition every issue, and routine templates are never issues", () => {
-    const open = issuesInQueue(all, "open", { employeeId: ME, today: TODAY });
-    const done = issuesInQueue(all, "done", { employeeId: ME, today: TODAY });
+    const open = issuesInQueue(all, "open", { userId: ME, today: TODAY });
+    const done = issuesInQueue(all, "done", { userId: ME, today: TODAY });
     assert.equal(open.length + done.length, all.length - 1);
     assert.ok(!open.concat(done).some((task) => task.isRoutine));
   });
 
   it("counts every queue", () => {
-    const counts = issueQueueCounts(all, { employeeId: ME, today: TODAY });
+    const counts = issueQueueCounts(all, { userId: ME, today: TODAY });
     assert.deepEqual(Object.keys(counts).sort(), [...ISSUE_QUEUES].sort());
     assert.equal(counts.blocked, 1);
     assert.equal(counts.running, 1);
@@ -90,7 +90,7 @@ describe("issue queues", () => {
 describe("groupIssues", () => {
   const label = {
     project: (id: string) => ({ p1: "Alpha", p2: "Beta" } as Record<string, string>)[id] ?? id,
-    assignee: (task: RelayTaskListItem) => task.assigneeEmployeeId ?? "",
+    assignee: (task: RelayTaskListItem) => task.assigneeUserId ?? "",
   };
 
   it("groups by project with the no-project group first", () => {

@@ -4,11 +4,11 @@ import { expect, it } from "vitest";
 import { TeamMemberPicker, addTeamMember, removeTeamMember, type TeamMembership } from "../src/components/TeamMemberPicker";
 import { TeamMemberCard } from "../src/components/TeamMemberCard";
 import { teamMutationInput } from "../src/lib/teamForm";
-import type { EmployeeAgent, RelaySession, TeamMemberConfig } from "../src/types";
+import type { UserAgent, RelaySession, TeamMemberConfig } from "../src/types";
 
-const agent = (id: string, displayName: string, executorKind: EmployeeAgent["executorKind"] = "codex") => ({
+const agent = (id: string, displayName: string, executorKind: UserAgent["executorKind"] = "codex") => ({
   id, displayName, executorKind, enabled: true, availability: "ready", placements: [], deletedAt: null,
-}) as unknown as EmployeeAgent;
+}) as unknown as UserAgent;
 
 const ROSTER = [agent("lead", "Planner", "claude"), agent("builder", "Builder"), agent("qa", "Checker")];
 

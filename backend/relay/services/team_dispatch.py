@@ -26,18 +26,18 @@ class TeamDispatchError(ValueError):
         super().__init__(code)
 
 
-def task_execution_employee_id(task: dict[str, Any]) -> str:
-    employee_id = task.get("assigneeEmployeeId") or task.get("ownerEmployeeId")
-    return employee_id if isinstance(employee_id, str) else ""
+def task_execution_user_id(task: dict[str, Any]) -> str:
+    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
+    return user_id if isinstance(user_id, str) else ""
 
 
 def task_thread_ownership(
     task: dict[str, Any], *, team_store: Any, agent_store: Any
 ) -> dict[str, str]:
     ownership: dict[str, str] = {}
-    employee_id = task_execution_employee_id(task)
-    if employee_id:
-        ownership["owner_employee_id"] = employee_id
+    user_id = task_execution_user_id(task)
+    if user_id:
+        ownership["owner_user_id"] = user_id
     assigned_agent_id = task.get("assignedAgentId")
     if isinstance(assigned_agent_id, str) and assigned_agent_id:
         ownership["owner_agent_id"] = assigned_agent_id
@@ -98,7 +98,7 @@ def resolve_team_task_assignments(
         team_member_assignments(
             agents, team=team, style=resolve_collaboration_style(team, task, None)
         ),
-        employee_id=task_execution_employee_id(task),
+        user_id=task_execution_user_id(task),
         is_admin=False,
         agent_store=agent_store,
         placement_store=placement_store,
@@ -109,7 +109,7 @@ def resolve_team_task_assignments(
 
 def team_agents(
     team_id: str,
-    employee_id: str,
+    user_id: str,
     *,
     team_store: Any,
     agent_store: Any,
@@ -129,7 +129,7 @@ def team_agents(
             "team_disabled" if team.get("memberAgentIds") else "team_invalid",
             permanent=True,
         )
-    if team.get("ownerEmployeeId") != employee_id:
+    if team.get("ownerUserId") != user_id:
         raise TeamDispatchError("team_forbidden", permanent=True)
     members = list(team.get("memberAgentIds") or [])
     lead = team.get("leadAgentId")
@@ -394,7 +394,7 @@ def _task_team_agents(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return team_agents(
         task.get("assignedTeamId") or "",
-        task_execution_employee_id(task),
+        task_execution_user_id(task),
         team_store=team_store,
         agent_store=agent_store,
     )

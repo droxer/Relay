@@ -90,11 +90,11 @@ def test_team_store_crud_and_events(team_store) -> None:
         created["id"], {"name": "Delivery crew", "enabled": False}
     )
 
-    assert updated["ownerEmployeeId"] == "alice"
-    assert "supervisorEmployeeId" not in updated
+    assert updated["ownerUserId"] == "alice"
+    assert "supervisorUserId" not in updated
     assert updated["name"] == "Delivery crew"
     assert updated["enabled"] is False
-    assert team_store.list_teams(owner_employee_id="alice") == [updated]
+    assert team_store.list_teams(owner_user_id="alice") == [updated]
     assert [event["type"] for event in team_store.events(created["id"])] == [
         "team.created",
         "team.updated",
@@ -102,7 +102,7 @@ def test_team_store_crud_and_events(team_store) -> None:
 
     deleted = team_store.delete_team(created["id"])
     assert deleted["deletedAt"]
-    assert team_store.list_teams(owner_employee_id="alice") == []
+    assert team_store.list_teams(owner_user_id="alice") == []
     assert team_store.get_team(created["id"])["deletedAt"]
 
 
@@ -116,8 +116,8 @@ def test_team_store_normalizes_legacy_supervisor_owner(team_store) -> None:
         },
     )
     legacy = {
-        **{key: value for key, value in created.items() if key != "ownerEmployeeId"},
-        "supervisorEmployeeId": "alice",
+        **{key: value for key, value in created.items() if key != "ownerUserId"},
+        "supervisorUserId": "alice",
     }
     if isinstance(team_store, DatabaseTeamStore):
         with team_store.engine.begin() as conn:
@@ -131,13 +131,13 @@ def test_team_store_normalizes_legacy_supervisor_owner(team_store) -> None:
         snapshot_path.write_text(json.dumps(legacy), encoding="utf-8")
 
     loaded = team_store.get_team(created["id"])
-    assert loaded["ownerEmployeeId"] == "alice"
-    assert "supervisorEmployeeId" not in loaded
-    assert team_store.list_teams(owner_employee_id="alice") == [loaded]
+    assert loaded["ownerUserId"] == "alice"
+    assert "supervisorUserId" not in loaded
+    assert team_store.list_teams(owner_user_id="alice") == [loaded]
 
     updated = team_store.update_team(created["id"], {"name": "Legacy crew"})
-    assert updated["ownerEmployeeId"] == "alice"
-    assert "supervisorEmployeeId" not in updated
+    assert updated["ownerUserId"] == "alice"
+    assert "supervisorUserId" not in updated
 
 
 def test_team_names_are_unique_per_owner(team_store) -> None:

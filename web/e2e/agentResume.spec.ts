@@ -6,7 +6,7 @@ async function fixture(page: Page, runtimeSessionId?: string) {
   const stamp = "2026-10-11T10:00:00Z";
   const computerId = "device:alice:host";
   const agent = {
-    id: "ada", displayName: "Ada", executorKind: "claude", defaultRole: "implementer", supervisorEmployeeId: "alice",
+    id: "ada", displayName: "Ada", executorKind: "claude", defaultRole: "implementer", supervisorUserId: "alice",
     enabled: true, availability: "ready", version: 1, skills: [], deletedAt: null,
     placements: [{ id: "placement-ada", agentId: "ada", computerId, daemonNodeId: "node", desiredState: "active", status: "ready" }],
     createdAt: stamp, updatedAt: stamp,
@@ -19,19 +19,19 @@ async function fixture(page: Page, runtimeSessionId?: string) {
       ...(runtimeSessionId ? { runtimeSessionId } : {}) },
   ];
   const session = { id: "resume", title: "Billing migration", taskGoal: "Migrate the billing tables",
-    ownerEmployeeId: "alice", ownerAgentId: "ada", daemonNodeId: "node", computerId,
+    ownerUserId: "alice", ownerAgentId: "ada", daemonNodeId: "node", computerId,
     workspacePath: "/workspace", status: "cancelled", phase: "cancelled", participants: ["human"], collaborationRounds: [],
     agentRuns: [{ id: "run-ada", agent: "claude", logicalAgentId: "ada", status: "cancelled", startedAt: stamp, completedAt: stamp, artifactIds: [],
       ...(runtimeSessionId ? { runtimeSessionId } : {}) }],
     artifacts: [], decisions: [], events, eventCount: events.length, artifactCount: 0, runCount: 1, createdAt: stamp, updatedAt: stamp };
-  const node = { id: "node", employeeId: "alice", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
+  const node = { id: "node", userId: "alice", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
     online: true, stale: false, status: "ready", agents: { claude: "ready" }, capabilities: ["thread-workspaces", "agent-resume"] };
   const posted: unknown[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [], nodes: [node], projects: [], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/resume")) body = session;
     if (path.endsWith("/threads/resume/events")) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });

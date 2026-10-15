@@ -51,7 +51,7 @@ const EMIT = `emit() { payload=$(base64 | tr -d '\\n'); if [ -n "$payload" ]; th
 // Credentials reach curl as a header on stdin (`-H @-`), never in argv. With
 // no key or token in the env, a local computer falls back to Claude Code's own
 // saved login — its credentials file, or on macOS the keychain item it writes —
-// so the employee's existing setup is enough. The token only ever lives in a
+// so the user's existing setup is enough. The token only ever lives in a
 // shell variable; nothing from it is emitted.
 const CLAUDE_SAVED_LOGIN_TOKEN = [
   "claude_login_token() {",

@@ -22,9 +22,9 @@ guarantees around a question, not its blocking shape:
 |---|---|---|
 | The answer is the result of the question's own call | Matched by thread + task status, re-derived on the web | Unchanged; phase 1 |
 | A malformed question fails loudly and the model retries | Every bad verdict file degraded to a generic wait | Rejections are logged and named on the task |
-| Only the human approves | Already held: the token that acts as an employee is minted in their browser; agents hold only the node token | Unchanged (verified) |
+| Only the human approves | Already held: the token that acts as a user is minted in their browser; agents hold only the node token | Unchanged (verified) |
 | A denial is feedback to the same work | Reject wiped the question; a review task was stranded | Question kept; a reject that would strand a task is refused |
-| Decisions are auditable | Decisions recorded no actor | Every decision records `actorEmployeeId` |
+| Decisions are auditable | Decisions recorded no actor | Every decision records `actorUserId` |
 | Gates come before an action, enforced outside the model | Not built (ADR-007 approval, `toolPolicy`) | Unchanged; phase 3 |
 
 ## Phase 0 — review fixes (done)
@@ -32,14 +32,14 @@ guarantees around a question, not its blocking shape:
 Backend:
 
 - **Who decided.** `approve`, `reject`, `cancel`, `mark_done`, `rerun` and
-  `handoff` decisions, and the cancel route, record `actorEmployeeId`
+  `handoff` decisions, and the cancel route, record `actorUserId`
   (`_decided_by` in `sessions/controller.py`). Delivered Stop requests keep
-  their initiating employee in durable run-request state until exit is
+  their initiating user in durable run-request state until exit is
   acknowledged, including after a backend restart and when an admin stops
-  another employee's run. Repeated Stop requests preserve the first actor.
+  another user's run. Repeated Stop requests preserve the first actor.
 - **Who may decide (verified, unchanged).** `POST /threads/{id}/decisions`
   accepts a login session or a node's UI token. The UI token is minted in the
-  employee's browser and stored only as a hash. The daemon, and every agent
+  user's browser and stored only as a hash. The daemon, and every agent
   it runs, holds only the node token, which never authenticates as a person.
   So an agent cannot answer or approve its own wait. The review finding that
   it could was a false positive.

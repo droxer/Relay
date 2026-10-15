@@ -92,7 +92,7 @@ def test_session_stores_preserve_team_provenance() -> None:
             created = store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "ownerAgentId": "agent_lead",
                     "teamId": "team_delivery",
                     "taskGoal": "ship the release",
@@ -265,16 +265,16 @@ def test_session_summary_pages_are_bounded_and_event_free() -> None:
                 store.create_session(
                     {
                         "workspacePath": "/workspace/alice",
-                        "ownerEmployeeId": "alice" if index < 2 else "bob",
+                        "ownerUserId": "alice" if index < 2 else "bob",
                         "taskGoal": f"task {index}",
                         "participants": ["human"],
                     }
                 )
 
-            summaries = store.list_session_summaries(owner_employee_id="alice", limit=1)
+            summaries = store.list_session_summaries(owner_user_id="alice", limit=1)
 
             assert len(summaries) == 1
-            assert summaries[0]["ownerEmployeeId"] == "alice"
+            assert summaries[0]["ownerUserId"] == "alice"
             assert summaries[0]["eventCount"] == 1
             assert "events" not in summaries[0]
 
@@ -319,7 +319,7 @@ def test_session_stores_delete_session() -> None:
             created = store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "ship the release",
                     "participants": ["human"],
                 }
@@ -972,7 +972,7 @@ def test_deleted_session_stays_deleted_and_retains_token_usage() -> None:
             session = store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "ship the release",
                     "participants": ["human"],
                 }

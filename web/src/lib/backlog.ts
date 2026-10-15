@@ -1,7 +1,7 @@
 import { compareTaskQueue, taskWorkflowStage } from "./taskFlow.ts";
 import { taskRef } from "./taskRef.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
-import type { AgentName, DaemonNodeMonitorRecord, EmployeeAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
+import type { AgentName, DaemonNodeMonitorRecord, UserAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
 
 export const TASK_STATUSES: TaskStatus[] = ["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"];
 export const TASK_PRIORITIES: TaskPriority[] = ["high", "normal", "low"];
@@ -46,7 +46,7 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.assignedAgent);
     if (filters.assignment === "assigned" && !assigned) return false;
     if (filters.assignment === "unassigned" && assigned) return false;
-    if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
+    if (assignee && !(task.assigneeUserId ?? task.ownerUserId ?? "").toLowerCase().includes(assignee)) return false;
     if (query) {
       const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
       if (!haystack.includes(query)) return false;
@@ -66,7 +66,7 @@ export type BacklogSortKey = "title" | "status" | "priority" | "assignee" | "due
  * Sortable columns for the backlog list, in header order.
  *
  * `assigneeName` is injected rather than read off the task because the row
- * prints a RESOLVED display name — sorting by `assigneeEmployeeId` would
+ * prints a RESOLVED display name — sorting by `assigneeUserId` would
  * order the list by a string the reader cannot see, which reads as no sort
  * at all. Same reason the enumerated columns rank by their domain order:
  * "high, low, normal" is alphabetical, not a priority ordering.
@@ -99,12 +99,12 @@ export function tasksByStatus(tasks: RelayTaskListItem[]): Record<TaskStatus, Re
   }, {} as Record<TaskStatus, RelayTaskListItem[]>);
 }
 
-// Employee workflows use named logical-agent availability only. Legacy
+// User workflows use named logical-agent availability only. Legacy
 // executor-only assignments stay visible but cannot be dispatched.
 export function agentReadyForTask(
   task: RelayTaskListItem,
   _nodes: DaemonNodeMonitorRecord[],
-  logicalAgents: EmployeeAgent[] = [],
+  logicalAgents: UserAgent[] = [],
 ): boolean {
   if (task.assignedAgentId) {
     return logicalAgents.some(
@@ -117,7 +117,7 @@ export function agentReadyForTask(
 export function discussionAgentsForTask(
   _task: RelayTaskListItem,
   _nodes: DaemonNodeMonitorRecord[],
-  logicalAgents: EmployeeAgent[] = [],
+  logicalAgents: UserAgent[] = [],
 ): AgentName[] {
   const readyLogicalAgents = logicalAgents.filter(
     (agent) => agent.enabled && agent.availability === "ready",

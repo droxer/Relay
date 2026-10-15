@@ -4,7 +4,7 @@ import { act, createRef } from "react";
 import { expect, it, vi } from "vitest";
 import { Composer } from "../src/components/composer/Composer";
 import type { MentionCandidate } from "../src/lib/mentions";
-import type { EmployeeAgent } from "../src/types";
+import type { UserAgent } from "../src/types";
 
 /* The live `@` wiring, end to end: the real Composer, the real
    `useMentionAutocomplete`, the real `lib/mentions` parsing. `mentionPopup.test.tsx`
@@ -19,7 +19,7 @@ const CANDIDATES: MentionCandidate[] = [
 const AGENTS = [
   { id: "a1", displayName: "Ada", executorKind: "claude", availability: "ready", placements: [], enabled: true },
   { id: "a2", displayName: "Alan", executorKind: "claude", availability: "ready", placements: [], enabled: true },
-] as unknown as EmployeeAgent[];
+] as unknown as UserAgent[];
 
 function setup() {
   render(
@@ -29,7 +29,7 @@ function setup() {
       activeLogicalAgentId="a1"
       onLogicalAgentPicked={vi.fn()}
       activeAgentDisplayName="Ada"
-      selectedEmployee="emp"
+      selectedUser="emp"
       initializingThread={false}
       runtimeNodes={[]}
       runtimeNodeId="n1"

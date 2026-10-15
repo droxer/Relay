@@ -15,7 +15,7 @@ import {
 } from "../../lib/routine";
 import { TRIGGER_KINDS } from "../../lib/automationTrigger";
 import type { FilterSpec } from "../../lib/urlFilters";
-import type { EmployeeAgent } from "../../types";
+import type { UserAgent } from "../../types";
 
 /* Routine board chrome — the section rail and the filter bar. Split out of
    RoutinesPage the same way BacklogChrome was split out of BacklogPage: the
@@ -85,7 +85,7 @@ export function formatNextRunDate(value: string): string {
 
 const ROUTINE_BAR_KEYS = ["trigger", "agent", "assignee"] as const;
 
-export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
+export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: UserAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
   const fields = useMemo<FilterBarField[]>(() => [
     { id: "trigger", label: t("automation.trigger"), kind: "select",

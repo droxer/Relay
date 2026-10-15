@@ -33,7 +33,7 @@ document.
 - [`product.md`](product.md) owns product direction, users, scenarios, and
   roadmap.
 - [`agent-facing-product-design.md`](agent-facing-product-design.md) owns the
-  employee-facing agent model and vocabulary boundary.
+  user-facing agent model and vocabulary boundary.
 - [`system-architecture.md`](system-architecture.md) owns target architecture
   and strategic technology choices.
 - [`implementation-plan.md`](implementation-plan.md) translates that target

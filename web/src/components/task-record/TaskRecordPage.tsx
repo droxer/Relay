@@ -23,7 +23,7 @@ import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
 import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
-import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
+import { useUserAgents } from "../../hooks/useUserAgents";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
@@ -119,8 +119,8 @@ export function TaskRecordPage({
   const readOnly = projectReadOnly(project);
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
-  const { teams } = useTeams(currentUser.employeeId);
-  const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
+  const { teams } = useTeams(currentUser.userId);
+  const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
     agentName: (agentId) => logicalAgents.find((agent) => agent.id === agentId)?.displayName,

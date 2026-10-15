@@ -2,22 +2,22 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listEmployeeAgents } from "../api";
-import { dedupeAgentsById } from "../lib/employeeAgents";
-import type { EmployeeAgent } from "../types";
+import { listUserAgents } from "../api";
+import { dedupeAgentsById } from "../lib/userAgents";
+import type { UserAgent } from "../types";
 
-export const EMPLOYEE_AGENTS_QUERY_KEY = "employee-agents";
+export const USER_AGENTS_QUERY_KEY = "user-agents";
 
-export function useEmployeeAgents(employeeId?: string): {
-  agents: EmployeeAgent[];
+export function useUserAgents(userId?: string): {
+  agents: UserAgent[];
   isFetching: boolean;
   error: string | null;
   refetch: () => Promise<unknown>;
 } {
   const query = useQuery({
-    queryKey: [EMPLOYEE_AGENTS_QUERY_KEY, employeeId],
-    queryFn: ({ signal }) => listEmployeeAgents(signal),
-    enabled: Boolean(employeeId),
+    queryKey: [USER_AGENTS_QUERY_KEY, userId],
+    queryFn: ({ signal }) => listUserAgents(signal),
+    enabled: Boolean(userId),
     refetchInterval: 10_000,
   });
   const agents = useMemo(() => dedupeAgentsById(query.data?.agents ?? []), [query.data]);

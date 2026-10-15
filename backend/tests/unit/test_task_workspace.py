@@ -61,14 +61,14 @@ def test_binding_survives_daemon_replacement_on_the_same_computer():
     task = {"id": "one", "workspaceBinding": {
         "computerId": "device:alice:machine", "layout": "task", "subpath": "tasks/one",
     }}
-    node = {"id": "replacement", "employeeId": "alice", "workspaceId": "machine", **TASK_CAPABLE_NODE}
+    node = {"id": "replacement", "userId": "alice", "workspaceId": "machine", **TASK_CAPABLE_NODE}
     assert resolve_task_workspace(task, node=node) == ("task", "tasks/one")
 
 
 def test_recorded_legacy_thread_is_reused_even_on_an_old_daemon():
     from types import SimpleNamespace
     from relay.services.task_workspace import recorded_task_workspace, task_workspace_nodes
-    node = {"id": "old", "employeeId": "alice", "workspaceId": "machine", **OLD_NODE}
+    node = {"id": "old", "userId": "alice", "workspaceId": "machine", **OLD_NODE}
     sessions = {"original": {"id": "original", "daemonNodeId": "old", "workspaceLayout": "thread"}}
     store = SimpleNamespace(get_session=lambda key: sessions[key])
     task = {"id": "task", "linkedSessionIds": ["original", "deleted"]}

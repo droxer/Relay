@@ -19,7 +19,7 @@ import type { ProjectRecord } from "../src/types.js";
 function project(id: string, archivedAt?: string): ProjectRecord {
   return {
     id,
-    ownerEmployeeId: "emp-1",
+    ownerUserId: "emp-1",
     name: id,
     computerId: "device:mac:one",
     workspaceLayout: "project",

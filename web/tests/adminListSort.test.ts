@@ -3,12 +3,12 @@ import { describe, it } from "node:test";
 
 import { applySort } from "../src/lib/listSort.js";
 import {
-  buildEmployeeSummaries,
-  employeeSortColumns,
+  buildUserSummaries,
+  userSortColumns,
   nodeSortColumns,
   stableNodeOrder,
 } from "../src/lib/adminHelpers.js";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../src/types.js";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../src/types.js";
 
 function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string }): ControlPanelDaemonNodeRecord {
   return {
@@ -25,23 +25,23 @@ function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string }): Co
   } as ControlPanelDaemonNodeRecord;
 }
 
-function employee(id: string, displayName: string): EmployeeRecord {
-  return { id, displayName } as EmployeeRecord;
+function user(id: string, displayName: string): UserRecord {
+  return { id, displayName } as UserRecord;
 }
 
 describe("node table columns", () => {
   const nodes = [
-    node({ id: "n-c", displayName: "charlie", employeeId: "e2", status: "failed" }),
+    node({ id: "n-c", displayName: "charlie", userId: "e2", status: "failed" }),
     node({ id: "n-a", displayName: "alpha", status: "ready" }),
-    node({ id: "n-b", displayName: "bravo", employeeId: "e1", status: "running" }),
+    node({ id: "n-b", displayName: "bravo", userId: "e1", status: "running" }),
   ];
-  const employees = [employee("e1", "Ada"), employee("e2", "Zoe")];
-  const columns = nodeSortColumns(new Map(employees.map((e) => [e.id, e])));
+  const users = [user("e1", "Ada"), user("e2", "Zoe")];
+  const columns = nodeSortColumns(new Map(users.map((e) => [e.id, e])));
 
   it("covers the node table's data columns and nothing else", () => {
     // No `status`: health renders as pills inside the node cell, and a sort
     // with no column header is a sort nobody can reach.
-    assert.deepEqual(columns.map((column) => column.key), ["node", "employee", "runtimes"]);
+    assert.deepEqual(columns.map((column) => column.key), ["node", "user", "runtimes"]);
   });
 
   it("sorts by the label the row shows, falling back to the id when unnamed", () => {
@@ -54,10 +54,10 @@ describe("node table columns", () => {
 
   it("keeps unassigned nodes last in both directions", () => {
     // An unassigned node has no owner to sort among the owners.
-    assert.equal(applySort(nodes, columns, { key: "employee", direction: "asc" }).at(-1)?.id, "n-a");
-    assert.equal(applySort(nodes, columns, { key: "employee", direction: "desc" }).at(-1)?.id, "n-a");
+    assert.equal(applySort(nodes, columns, { key: "user", direction: "asc" }).at(-1)?.id, "n-a");
+    assert.equal(applySort(nodes, columns, { key: "user", direction: "desc" }).at(-1)?.id, "n-a");
     assert.deepEqual(
-      applySort(nodes, columns, { key: "employee", direction: "asc" }).map((n) => n.id),
+      applySort(nodes, columns, { key: "user", direction: "asc" }).map((n) => n.id),
       ["n-b", "n-c", "n-a"],
     );
   });
@@ -68,26 +68,26 @@ describe("node table columns", () => {
   });
 });
 
-describe("employee table columns", () => {
-  const employees = [employee("e1", "Zoe"), employee("e2", "Ada")];
+describe("user table columns", () => {
+  const users = [user("e1", "Zoe"), user("e2", "Ada")];
   const nodes = [
-    node({ id: "n1", employeeId: "e1", status: "running" }),
-    node({ id: "n2", employeeId: "e1", status: "ready" }),
-    node({ id: "n3", employeeId: "e2", status: "ready" }),
+    node({ id: "n1", userId: "e1", status: "running" }),
+    node({ id: "n2", userId: "e1", status: "ready" }),
+    node({ id: "n3", userId: "e2", status: "ready" }),
   ];
-  const summaries = buildEmployeeSummaries(employees, nodes);
-  const columns = employeeSortColumns();
+  const summaries = buildUserSummaries(users, nodes);
+  const columns = userSortColumns();
 
-  it("covers the employee table's data columns and nothing else", () => {
+  it("covers the user table's data columns and nothing else", () => {
     assert.deepEqual(
       columns.map((column) => column.key),
-      ["employee", "computers", "localLimit", "running", "ready"],
+      ["user", "computers", "localLimit", "running", "ready"],
     );
   });
 
   it("sorts people by name and counts most-first", () => {
     assert.deepEqual(
-      applySort(summaries, columns, { key: "employee", direction: "asc" }).map((s) => s.id),
+      applySort(summaries, columns, { key: "user", direction: "asc" }).map((s) => s.id),
       ["e2", "e1"],
     );
     assert.deepEqual(
@@ -101,6 +101,6 @@ describe("employee table columns", () => {
       const column = columns.find((candidate) => candidate.key === key);
       assert.equal(column?.defaultDirection, "desc", key);
     }
-    assert.equal(columns.find((column) => column.key === "employee")?.defaultDirection, undefined);
+    assert.equal(columns.find((column) => column.key === "user")?.defaultDirection, undefined);
   });
 });

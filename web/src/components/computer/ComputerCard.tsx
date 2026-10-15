@@ -46,7 +46,7 @@ import {
 } from "../admin/helpers";
 
 /**
- * One of the signed-in employee's own computers.
+ * One of the signed-in user's own computers.
  *
  * Not `NodeCard`: that is a fleet-survey tile built to be scanned 40-at-a-time
  * by an admin, so it compresses a machine to a name, a truncated id, and four

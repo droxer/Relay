@@ -10,8 +10,8 @@ function project(id: string, name: string, archivedAt?: string): ProjectRecord {
   return {
     id,
     name,
-    ownerEmployeeId: "employee-1",
-    computerId: "device:employee-1:main",
+    ownerUserId: "user-1",
+    computerId: "device:user-1:main",
     workspaceLayout: "project",
     workspaceSubpath: `projects/${id}`,
     leadAgentId: "agent-1",

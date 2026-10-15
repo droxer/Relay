@@ -119,7 +119,7 @@ def test_managed_state_and_images_are_shared_between_replicas(tmp_path):
     url = f"sqlite:///{tmp_path}/shared.db"
     a = DatabaseManagedNodeStore(url, create_schema=True)
     b = DatabaseManagedNodeStore(url, create_schema=True)
-    node = a.create_node({"employeeId": "alice"})
+    node = a.create_node({"userId": "alice"})
     assert b.get_node(node["id"]) == node
     attempt, credential = a.create_attempt(node["id"])
     assert b.consume_enrollment_grant(credential) == (b.get_node(node["id"]), attempt)
@@ -160,7 +160,7 @@ def test_managed_attempt_creation_is_atomic_across_instances(tmp_path):
 
     url = f"sqlite:///{tmp_path}/concurrent.db"
     stores = [DatabaseManagedNodeStore(url, create_schema=True) for _ in range(2)]
-    node = stores[0].create_node({"employeeId": "alice"})
+    node = stores[0].create_node({"userId": "alice"})
     barrier = threading.Barrier(2)
 
     def create(store):
@@ -190,7 +190,7 @@ def test_local_operational_import_is_dry_runnable_and_idempotent(tmp_path):
 
     root = tmp_path / "legacy"
     local = LocalManagedNodeStore(root)
-    node = local.create_node({"employeeId": "alice"})
+    node = local.create_node({"userId": "alice"})
     attempt, credential = local.create_attempt(node["id"])
     image = b"\x89PNG\r\n\x1a\nimage"
     LocalProfileImageStore(root).save(
@@ -300,7 +300,7 @@ def test_import_conflict_rolls_back_prior_records(tmp_path):
 
     root = tmp_path / "legacy"
     source = LocalManagedNodeStore(root)
-    node = source.create_node({"employeeId": "alice"})
+    node = source.create_node({"userId": "alice"})
     url = f"sqlite:///{tmp_path}/conflict.db"
     shared = DatabaseManagedNodeStore(url, create_schema=True)
     a = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nfirst").decode()
@@ -336,7 +336,7 @@ def test_managed_attempt_failure_rolls_back_across_records(tmp_path, monkeypatch
     store = DatabaseManagedNodeStore(
         f"sqlite:///{tmp_path}/rollback.db", create_schema=True
     )
-    node = store.create_node({"employeeId": "alice"})
+    node = store.create_node({"userId": "alice"})
     original = store._write_record
 
     def fail_grant(kind, record):

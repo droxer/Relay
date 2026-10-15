@@ -5,7 +5,7 @@ import { nodeOwnershipProfile } from "../lib/adminHelpers";
 import { pathForAppState } from "../lib/appRoute";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { useProjectLookup } from "../hooks/useProjectLookup";
-import type { DaemonNodeMonitorRecord, EmployeeAgent, RelaySession } from "../types";
+import type { DaemonNodeMonitorRecord, UserAgent, RelaySession } from "../types";
 import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
@@ -37,7 +37,7 @@ export function ThreadMeta({
   /** The agent that last answered here, for a room the roster cannot name. */
   agentName?: string;
   /** The room, in join order. */
-  participants: EmployeeAgent[];
+  participants: UserAgent[];
   computers: DaemonNodeMonitorRecord[];
   onOpenProject: (projectId: string) => void;
 }) {
@@ -100,7 +100,7 @@ function ProjectChip({ project, onOpen }: {
  * the names would cost more width than the row has and belong in tooltips.
  */
 function RoomMark({ participants, agentName }: {
-  participants: EmployeeAgent[];
+  participants: UserAgent[];
   agentName?: string;
 }) {
   const { t } = useTranslation();

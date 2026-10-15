@@ -4,7 +4,7 @@ type ThreadComputer = {
   id: string;
   managedNodeId?: string;
   retiredAt?: string;
-  employeeId?: string;
+  userId?: string;
   workspaceId?: string;
   online: boolean;
   stale: boolean;
@@ -29,20 +29,20 @@ type ThreadAgent = {
 };
 
 /**
- * Every computer this employee could ever run a thread on, live or not.
+ * Every computer this user could ever run a thread on, live or not.
  *
- * The fleet list spans employees (an admin's `/daemon-nodes` returns every
+ * The fleet list spans users (an admin's `/daemon-nodes` returns every
  * machine they own) and keeps a tombstone row for a deleted node, so "still in
- * the fleet" is not the same question as "still this employee's to use". This
+ * the fleet" is not the same question as "still this user's to use". This
  * is the set a pick is allowed to survive in; `selectableThreadComputers`
  * narrows it further to what can take work right now.
  */
 export function assignableThreadComputers<T extends ThreadComputer>(
   nodes: readonly T[],
-  employeeId: string,
+  userId: string,
 ): T[] {
   return nodes.filter(
-    (node) => node.employeeId === employeeId
+    (node) => node.userId === userId
       && !node.retiredAt
       && node.status !== "deleted",
   );
@@ -50,9 +50,9 @@ export function assignableThreadComputers<T extends ThreadComputer>(
 
 export function selectableThreadComputers<T extends ThreadComputer>(
   nodes: readonly T[],
-  employeeId: string,
+  userId: string,
 ): T[] {
-  return assignableThreadComputers(nodes, employeeId).filter(
+  return assignableThreadComputers(nodes, userId).filter(
     (node) => node.online
       && !node.stale
       && ["ready", "running", "busy"].includes(node.status),
@@ -90,8 +90,8 @@ export function threadComputerSignature(
  * selectable set for one poll used to silently reassign the user's thread to
  * whichever computer happened to sort first.
  *
- * `assignable` must be the *employee-scoped* list, not the raw fleet: a pick
- * that outlives a switch to another employee, or a node that has since been
+ * `assignable` must be the *user-scoped* list, not the raw fleet: a pick
+ * that outlives a switch to another user, or a node that has since been
  * deleted, would otherwise stick and be dispatched to.
  */
 export function resolveNewThreadComputer(
@@ -124,7 +124,7 @@ type ThreadTeam = {
  * Teams align with the picked computer the same way agents do: a team can
  * only take a thread on a computer that hosts its whole roster, since team
  * dispatch is a lead-first pipeline across every member. Members are matched
- * by id against the employee's agents, which carry the placements.
+ * by id against the user's agents, which carry the placements.
  */
 export function teamsForThreadNode<T extends ThreadTeam>(
   teams: readonly T[],
@@ -171,10 +171,10 @@ export function teamRosterForThread<T extends ThreadRosterTeam>(
  *
  * A team or project thread refuses a non-member outright — the backend answers
  * `agent_forbidden` — so the composer's `@` popup and the handoff picker must
- * offer the roster, not every agent the employee owns. A thread with no roster
+ * offer the roster, not every agent the user owns. A thread with no roster
  * is unrestricted and keeps the list it was given. Members are returned lead
  * first, matching dispatch order, and roster ids the agent list cannot name
- * (deleted, or another employee's) are dropped rather than offered as a
+ * (deleted, or another user's) are dropped rather than offered as a
  * pick that cannot resolve.
  */
 export function addressableThreadAgents<T extends { id: string; deletedAt?: string }>(

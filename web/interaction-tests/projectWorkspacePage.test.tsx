@@ -15,9 +15,9 @@ vi.mock("../src/components/BacklogPage", () => ({
 vi.mock("../src/components/ProjectWorkspaceFiles", () => ({ ProjectWorkspaceFiles: () => null }));
 vi.mock("../src/components/ProjectMemberEditor", () => ({ ProjectMemberEditor: () => null }));
 
-const user: CurrentUser = { id: "u-1", username: "fei", role: "user", employeeId: "fei" };
+const user: CurrentUser = { id: "u-1", username: "fei", role: "user", userId: "fei" };
 const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
-  id: "p", ownerEmployeeId: "fei", name: "Launch", computerId: "device:fei:m", workspaceLayout: "project",
+  id: "p", ownerUserId: "fei", name: "Launch", computerId: "device:fei:m", workspaceLayout: "project",
   workspaceSubpath: "projects/p", leadAgentId: null, members: [], enabled: true, version: 1,
   createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-01T00:00:00Z", ...overrides,
 });

@@ -88,7 +88,7 @@ describe("disabledSetsEqual", () => {
   });
 });
 
-describe("employee placement details", () => {
+describe("user placement details", () => {
   it("shows sandbox implementation only to administrators", async () => {
     const source = await readFile(
       resolve("web/src/components/PlacementList.tsx"),

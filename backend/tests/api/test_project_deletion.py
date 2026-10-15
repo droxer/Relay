@@ -19,16 +19,16 @@ def project_env(monkeypatch, request):
         _bootstrap(client)
         node = _register_computer(app, "node_delete", "delete-machine")
         # Cleanup support is independently negotiated with the daemon.
-        app.state.registry.register({**node, "sandboxId": node["id"], "employeeId": "alice",
+        app.state.registry.register({**node, "sandboxId": node["id"], "userId": "alice",
             "protocolVersion": 1, "supportedAgents": ["codex", "claude"], "token": f"token_{node['id']}", "capabilities": [*node["capabilities"], "project-workspace-delete"]})
         agent = _agent(client, app, node, "Shared agent", "codex")
         _login_alice(client)
         response = client.post("/api/v1/projects", json={"name": "Delete me", "daemonNodeId": node["id"], "members": [{"agentId": agent["id"], "role": "planner", "responsibilities": "Plan"}], "leadAgentId": agent["id"]})
         assert response.status_code == 201, response.text
         project = response.json()["project"]
-        task = app.state.task_store.create_task({"title": "Project task", "ownerEmployeeId": "alice", "projectId": project["id"]})
-        routine = app.state.task_store.create_task({"title": "Project routine", "ownerEmployeeId": "alice", "projectId": project["id"], "isRoutine": True, "routineEnabled": True, "routineCadence": "daily"})
-        session = app.state.session_store.create_session({"taskGoal": "Project thread", "ownerEmployeeId": "alice", "projectId": project["id"], "workspacePath": "/workspace", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"]})
+        task = app.state.task_store.create_task({"title": "Project task", "ownerUserId": "alice", "projectId": project["id"]})
+        routine = app.state.task_store.create_task({"title": "Project routine", "ownerUserId": "alice", "projectId": project["id"], "isRoutine": True, "routineEnabled": True, "routineCadence": "daily"})
+        session = app.state.session_store.create_session({"taskGoal": "Project thread", "ownerUserId": "alice", "projectId": project["id"], "workspacePath": "/workspace", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"]})
         app.state.task_store.link_session(task["id"], session["id"])
         yield app, client, node, agent, project, task, routine, session
 
@@ -36,7 +36,7 @@ def project_env(monkeypatch, request):
 def test_delete_project_cascades_and_queues_workspace_cleanup(project_env):
     app, client, node, agent, project, task, routine, session = project_env
     other_project = client.post("/api/v1/projects", json={"name": "Keep project", "daemonNodeId": node["id"], "members": [], "leadAgentId": None}).json()["project"]
-    other = app.state.task_store.create_task({"title": "Keep", "ownerEmployeeId": "alice", "projectId": other_project["id"]})
+    other = app.state.task_store.create_task({"title": "Keep", "ownerUserId": "alice", "projectId": other_project["id"]})
     occurrence = app.state.task_store.create_triggered_occurrence(routine["id"], run_date="2026-09-22", trigger_kind="manual", depth=0, context="")
     assert occurrence is not None
     app.state.task_store.link_session(other["id"], session["id"])
@@ -118,12 +118,12 @@ def test_delete_archived_project_and_acknowledge_cleanup(project_env):
     assert app.state.daemon_store.get_command(command["id"])["status"] == "completed"
 
 
-def test_delete_project_cannot_be_used_by_another_employee(project_env):
+def test_delete_project_cannot_be_used_by_another_user(project_env):
     app, client, node, agent, project, task, routine, session = project_env
     client.post("/api/v1/auth/logout")
     assert client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1").status_code == 401
     client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"})
-    client.post("/api/v1/admin/employees", json={"employeeId": "bob", "username": "bob", "password": "userpass", "displayName": "Bob"})
+    client.post("/api/v1/admin/users", json={"userId": "bob", "username": "bob", "password": "userpass", "displayName": "Bob"})
     client.post("/api/v1/auth/logout")
     client.post("/api/v1/auth/login", json={"username": "bob", "password": "userpass"})
     assert client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1").status_code == 403
@@ -155,7 +155,7 @@ def test_project_deletion_defers_cleanup_until_daemon_upgrade(project_env):
     assert app.state.registry.take_commands(node["id"], f"token_{node['id']}", lease_seconds=0) == []
     assert app.state.daemon_store.get_command(response.json()["cleanupCommandId"])["status"] != "completed"
     app.state.registry.register({
-        **old_node, "sandboxId": node["id"], "employeeId": "alice",
+        **old_node, "sandboxId": node["id"], "userId": "alice",
         "protocolVersion": 1, "supportedAgents": ["codex"],
         "token": f"token_{node['id']}",
         "capabilities": [*old_node["capabilities"], "project-workspace-delete"],

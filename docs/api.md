@@ -46,13 +46,13 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/threads` | Session-backed threads, events, artifacts, decisions, handoffs |
 | `/api/v1/tasks` | Backlog and automation resources, assignment, pickups, runs |
 | `/api/v1/agents`, `/api/v1/teams` | Current-user agents and teams |
-| `/api/v1/skills` | Employee-owned catalog, immutable revisions, and agent grants |
+| `/api/v1/skills` | User-owned catalog, immutable revisions, and agent grants |
 | `/api/v1/admin/agents`, `/api/v1/admin/agent-placements` | Admin logical-agent and placement CRUD |
 | `/api/v1/agent-runs` | Ad-hoc agent-targeted run dispatch |
 | `/api/v1/projects` | Computer-bound project rosters and shared-workspace rooms |
 | `/api/v1/sandboxes`, `/api/v1/daemon-nodes` | Execution-plane observations and commands |
 | `/api/v1/artifacts`, `/api/v1/workspace` | Generated artifacts and workspace reads |
-| `/api/v1/admin` | Administrative users, employees, fleet, agents, teams, and integrations |
+| `/api/v1/admin` | Administrative users, users, fleet, agents, teams, and integrations |
 | `/api/v1/internal/chat` | Chat-service identity and conversation operations. Mounted, together with `/api/v1/admin/chat-integrations`, only when `RELAY_CHANNELS_ENABLED=1` |
 | `/api/v1/daemon-node-registrations` | Daemon heartbeat registration |
 | `/api/v1/daemon-node-enrollments` | Managed and local daemon enrollment |
@@ -141,7 +141,7 @@ appear in a response. Old records and events still replay: the reducer upgrades
 them, and a legacy-shaped write to an already-v2 automation only maps its state.
 When `RELAY_AUTOMATION_TRIGGERS_ENABLED` is off (default on), writes accept
 schedule triggers only; `capabilities.automationTriggers` in `GET /admin/settings`
-and `/auth/me` (every employee) reports it.
+and `/auth/me` (every user) reports it.
 
 `POST /api/v1/automations/schedule-preview` (any signed-in user) takes
 `{schedule}` and returns `{summary, next: [up to three ISO UTC datetimes]}`; an exhausted `once`
@@ -372,7 +372,7 @@ an attempt. Daemons acknowledge requested execution with the lease-bound
 
 ## Projects
 
-`GET /api/v1/projects` returns the current employee's active and archived
+`GET /api/v1/projects` returns the current user's active and archived
 projects so historical project threads keep their original grouping. Creating a
 project binds an immutable stable Computer identity and creates one shared
 workspace subpath for every task conversation in that project:
@@ -441,8 +441,8 @@ additionally refuses delivery if the project still exists after a rollback.
 The daemon removes only `projects/{projectId}` and refuses symlink or escaping
 roots. Older daemons must be updated before pending files can be removed.
 
-Employees with active projects cannot be soft-deleted. After all their projects
-are archived, employee soft deletion is allowed and retains the project history.
+Users with active projects cannot be soft-deleted. After all their projects
+are archived, user soft deletion is allowed and retains the project history.
 
 Project workspace reads address the persistent shared project root directly;
 they do not require a Thread. They are live-only and return
@@ -473,7 +473,7 @@ projectless work. Routine templates and their `sourceRoutineId` runs are exempt;
 clients cannot create a routine run by supplying `sourceRoutineId` to POST.
 
 `PATCH /api/v1/tasks/{id}` with `projectId` moves unstarted intake into an enabled
-project owned by the same employee and records `task.project_set`. An assignment
+project owned by the same user and records `task.project_set`. An assignment
 may accompany the move, subject to the project's normal assignment rules.
 Project membership cannot subsequently be cleared or changed. Work with linked
 threads, routines, and routine runs cannot be moved. Clearing a legacy intake
@@ -481,8 +481,8 @@ assignment is allowed and returns Ready intake to Backlog.
 
 Every task carries `number` and `numberScope`, assigned by the backend (never
 accepted on create or PATCH). A project's issues count within the project
-(`project:{id}`); an employee's other issues (`issue:{employeeId}`) and their
-automations (`automation:{employeeId}`) count separately. A move into a project
+(`project:{id}`); a user's other issues (`issue:{userId}`) and their
+automations (`automation:{userId}`) count separately. A move into a project
 takes that project's next number; numbers are never reused. Clients display
 `#{number}` for an issue and `AUTO-{number}` for an automation, and link it to
 the record; the `id` stays the key in every URL and request.
@@ -615,9 +615,9 @@ representation and `204` otherwise.
 
 ## Shared skills
 
-Catalog routes require an authenticated employee. Private skills are visible
+Catalog routes require an authenticated user. Private skills are visible
 only to their owner; organization skills can be browsed and granted by other
-employees. Only the publisher can edit or delete a skill. Each employee can
+users. Only the publisher can edit or delete a skill. Each user can
 grant only to their own logical agents.
 
 | Method and path under `/api/v1` | Request / result |
@@ -703,7 +703,7 @@ Ready, In progress, Review, Done) while retaining `status` for execution and wai
 conditions. An execution claim reserves WIP but remains Ready; the task enters In
 progress only when the daemon reports that an agent has started. `GET /tasks` and
 `GET /tasks?view=summary` also return
-`flowPolicy: { wipLimit, scope: "employee" }`.
+`flowPolicy: { wipLimit, scope: "user" }`.
 
 New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is
 `human` (default) or `automatic`; it is immutable once work starts. Successful
@@ -941,7 +941,7 @@ curl -fsSL https://relay.example.com/install.sh | bash
 
 `POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
 the same pipeline with shell-quoted arguments scoped to the enrolled computer
-(`… | bash -s -- --sandbox-id … --employee-id … --workspace …`). It
+(`… | bash -s -- --sandbox-id … --user-id … --workspace …`). It
 contains no token; the installer reads the existing node token from `/dev/tty`.
 `daemonCommand` and `daemonEnv` remain available for compatibility.
 

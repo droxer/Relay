@@ -6,17 +6,17 @@ import {
   taskAssignmentOptions,
   taskAssignmentPatch,
 } from "../src/lib/taskAssignment.js";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, RelayTaskListItem } from "../src/types.js";
+import type { AgentTeam, UserAgent, ProjectRecord, RelayTaskListItem } from "../src/types.js";
 
-function agent(id: string, computerId: string, supervisorEmployeeId?: string): EmployeeAgent {
+function agent(id: string, computerId: string, supervisorUserId?: string): UserAgent {
   return {
-    id, displayName: id, executorKind: "codex", supervisorEmployeeId,
+    id, displayName: id, executorKind: "codex", supervisorUserId,
     placements: [{ computerId, desiredState: "active" }],
-  } as unknown as EmployeeAgent;
+  } as unknown as UserAgent;
 }
 
-function team(id: string, memberAgentIds: string[], ownerEmployeeId = ""): AgentTeam {
-  return { id, name: id, memberAgentIds, ownerEmployeeId } as unknown as AgentTeam;
+function team(id: string, memberAgentIds: string[], ownerUserId = ""): AgentTeam {
+  return { id, name: id, memberAgentIds, ownerUserId } as unknown as AgentTeam;
 }
 
 const project = {
@@ -25,7 +25,7 @@ const project = {
 
 function task(over: Partial<RelayTaskListItem> = {}): RelayTaskListItem {
   return {
-    id: "t", title: "T", status: "backlog", priority: "normal", projectId: "p", assigneeEmployeeId: "me",
+    id: "t", title: "T", status: "backlog", priority: "normal", projectId: "p", assigneeUserId: "me",
     linkedSessionIds: [], createdAt: "", updatedAt: "", ...over,
   } as RelayTaskListItem;
 }
@@ -36,7 +36,7 @@ describe("task assignment rules", () => {
   it("offers agents and whole teams on the project's computer, plus enabled members", () => {
     const agents = [agent("here", "c1"), agent("away", "c2"), agent("remote-member", "c2"), agent("theirs", "c1", "someone-else")];
     const teams = [team("local", ["here"]), team("split", ["here", "away"])];
-    const options = taskAssignmentOptions({ project, agents, teams, assigneeEmployeeId: "me" });
+    const options = taskAssignmentOptions({ project, agents, teams, assigneeUserId: "me" });
     assert.deepEqual(ids(options.agents), ["here", "remote-member"]);
     assert.deepEqual(ids(options.teams), ["local"]);
   });
@@ -44,7 +44,7 @@ describe("task assignment rules", () => {
   it("keeps the current pick listed even when it no longer qualifies", () => {
     const options = taskAssignmentOptions({
       project, agents: [agent("away", "c2")], teams: [team("split", ["away"])],
-      assigneeEmployeeId: "me", assignedAgentId: "away", assignedTeamId: "split",
+      assigneeUserId: "me", assignedAgentId: "away", assignedTeamId: "split",
     });
     assert.deepEqual(ids(options.agents), ["away"]);
     assert.deepEqual(ids(options.teams), ["split"]);

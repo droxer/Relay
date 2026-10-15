@@ -9,7 +9,7 @@ import { installedComputers, removeService, serviceArguments } from '../src/inst
 import { decodeServiceFile, encodeTaskFile, registerWindowsTask, windowsAccount, windowsServiceDirectory } from '../src/windows-service.js';
 
 const argv = ['C:\\Program Files\\nodejs\\node.exe', 'C:\\Users\\o\'brien\\AppData\\Local\\Relay\\releases\\abc\\node_modules\\relay-daemon\\dist\\cli.js',
-  '--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--employee-id', 'alice',
+  '--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--user-id', 'alice',
   '--workspace', 'C:\\Users\\o\'brien\\My Work & $(stuff) "x"', '--sandbox', 'none'];
 
 function decodedScript(content: string): string {

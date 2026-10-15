@@ -6,7 +6,7 @@ from relay.services.agent_binding import binding_status
 def _agent(**overrides) -> dict:
     return {
         "id": "agent-1",
-        "supervisorEmployeeId": "alice",
+        "supervisorUserId": "alice",
         "executorKind": "claude",
         "computerId": "device:alice:machine-a",
         **overrides,
@@ -16,7 +16,7 @@ def _agent(**overrides) -> dict:
 def _node(**overrides) -> dict:
     return {
         "id": "node-1",
-        "employeeId": "alice",
+        "userId": "alice",
         "workspaceId": "machine-a",
         "supportedAgents": ["claude"],
         "online": True,

@@ -57,7 +57,7 @@ def _session_for(app: Any, task_id: str, workspace: str, agent_id: str) -> str:
         task_store=app.state.task_store,
         task_id=task_id,
         workspace_path=workspace,
-        owner_employee_id="admin",
+        owner_user_id="admin",
         owner_agent_id=agent_id,
     )
     return controller.create_session("Weekly status deck", ["human", "claude"])["id"]

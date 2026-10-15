@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 
-export type RunLocation = "managed" | "employee-device";
+export type RunLocation = "managed" | "user-device";
 
 interface RunModeFieldProps {
   value: RunLocation;
@@ -16,7 +16,7 @@ interface RunModeFieldProps {
 
 const RUN_MODE_OPTIONS: Array<{ location: RunLocation; kind: "managed" | "local" }> = [
   { location: "managed", kind: "managed" },
-  { location: "employee-device", kind: "local" },
+  { location: "user-device", kind: "local" },
 ];
 
 export function RunModeField({ value, onChange, name, disabled }: RunModeFieldProps) {

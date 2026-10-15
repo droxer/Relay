@@ -24,7 +24,7 @@ from relay.persistence.task_store import (
     DatabaseTaskStore,
     LocalTaskStore,
 )
-from relay.security.auth import DatabaseUserAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
 
 
 def test_backend_container_runs_as_non_root_runtime_user() -> None:
@@ -88,7 +88,7 @@ def test_app_factory_uses_database_stores_without_local_state(monkeypatch) -> No
         DatabaseSessionStore(database_url, create_schema=True)
         DatabaseTaskStore(database_url, create_schema=True)
         DatabaseDaemonStore(database_url, create_schema=True)
-        DatabaseUserAuthStore(database_url, create_schema=True)
+        DatabaseAccountAuthStore(database_url, create_schema=True)
         DatabaseChatIntegrationStore(database_url, create_schema=True)
         monkeypatch.setenv("RELAY_STORAGE", "postgres")
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
@@ -98,7 +98,7 @@ def test_app_factory_uses_database_stores_without_local_state(monkeypatch) -> No
     assert isinstance(app.state.session_store, DatabaseSessionStore)
     assert isinstance(app.state.task_store, DatabaseTaskStore)
     assert isinstance(app.state.daemon_store, DatabaseDaemonStore)
-    assert isinstance(app.state.auth_store, DatabaseUserAuthStore)
+    assert isinstance(app.state.auth_store, DatabaseAccountAuthStore)
     assert isinstance(app.state.chat_store, DatabaseChatIntegrationStore)
     assert not hasattr(app.state.session_store, "root_dir")
     assert not hasattr(app.state.session_store, "artifacts_dir")

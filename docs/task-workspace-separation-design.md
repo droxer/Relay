@@ -20,7 +20,7 @@ so the daemon gives it its own directory at `<nodeRoot>/<sessionId>/`
 - `task_rounds.continuation_session_id` exists only to work around this: a
   continuation round is forced back into the original thread because "a thread
   workspace belongs to its session".
-- An employee has no way to browse what a task actually produced on disk. The
+- A user has no way to browse what a task actually produced on disk. The
   artifact index (`GET /api/v1/tasks/{id}/artifacts`) shows indexed document-type
   files only, after the fact.
 
@@ -31,7 +31,7 @@ should get the same treatment.
 ## Goal
 
 Each backlog task and each routine occurrence runs in its own durable workspace,
-shared by every round and every agent working that task, and the owning employee
+shared by every round and every agent working that task, and the owning user
 can browse its contents from the task drawer.
 
 ## Decisions taken
@@ -187,7 +187,7 @@ workspace does not exist yet, and the UI renders it as an empty state.
 - A node that is offline or lacks `workspace-read-shared` yields
   `503 {"reason": "placement-unavailable"}`, surfaced in the UI as an empty state
   explaining the computer is unavailable.
-- Another employee's task yields `403` from `get_task_for_actor`.
+- Another user's task yields `403` from `get_task_for_actor`.
 
 ### 7. Testing
 
@@ -198,7 +198,7 @@ Backend (`backend/tests/`):
   passthrough.
 - Dispatch records `workspaceLayout: "task"` and the derived subpath.
 - Fallback to `thread` when the chosen node lacks `task-workspaces`.
-- Browse routes: owner reads, another employee gets 403, offline or
+- Browse routes: owner reads, another user gets 403, offline or
   non-`workspace-read-shared` node gets 503, never-dispatched task gets 503.
 - Generated-file artifact paths resolve correctly under the `task` layout.
 

@@ -6,7 +6,7 @@ import { hrefForAdminSection } from "../../lib/appRoute";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import {
   AdminDashboard,
-  AdminEmployees,
+  AdminUsers,
   AdminNode,
   AdminSettings,
 } from "../icons";
@@ -19,14 +19,14 @@ interface AdminViewToggleProps {
 }
 
 // The control panel's sections are a second-column rail, not header tabs:
-// Employees, Computers, and Organization are separate destinations under one
+// Users, Computers, and Organization are separate destinations under one
 // route, each with its own address. The rail grammar itself is shared with
 // personal settings — see SectionNav.
 export function AdminViewToggle({ view, onChange }: AdminViewToggleProps) {
   const { t } = useTranslation();
   const items: SectionNavItem<AdminView>[] = [
     { id: "dashboard", label: t("admin.v2.nav_dashboard"), Icon: AdminDashboard, href: hrefForAdminSection("dashboard") },
-    { id: "employees", label: t("admin.v2.nav_employees"), Icon: AdminEmployees, href: hrefForAdminSection("employees") },
+    { id: "users", label: t("admin.v2.nav_users"), Icon: AdminUsers, href: hrefForAdminSection("users") },
     { id: "computers", label: t("admin.v2.nav_computers"), Icon: AdminNode, href: hrefForAdminSection("computers") },
     { id: "organization", label: t("admin.v2.nav_organization"), Icon: AdminSettings, href: hrefForAdminSection("organization") },
   ];

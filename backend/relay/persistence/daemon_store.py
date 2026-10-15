@@ -210,7 +210,7 @@ def assigned_node_location(node: dict[str, Any]) -> str:
         return str(node["nodeLocation"])
     if node.get("managedNodeId"):
         return "managed"
-    return "employee-device"
+    return "user-device"
 
 
 NodeSettingValue = str | None | list[str] | dict[str, str]
@@ -382,7 +382,7 @@ class LocalDaemonStore:
     def claim_pending_node(
         self, sandbox: dict[str, Any]
     ) -> tuple[dict[str, Any], bool]:
-        """Atomically create or adopt one provisional employee device."""
+        """Atomically create or adopt one provisional user device."""
         node = _node_for_storage(sandbox)
         enrollment_key = node.get("enrollmentKey")
         if not enrollment_key:
@@ -396,7 +396,7 @@ class LocalDaemonStore:
                 ):
                     continue
                 existing_key = existing.get("enrollmentKey") or local_enrollment_key(
-                    existing.get("employeeId"), existing.get("workspacePath")
+                    existing.get("userId"), existing.get("workspacePath")
                 )
                 if existing_key != enrollment_key:
                     continue
@@ -441,18 +441,18 @@ class LocalDaemonStore:
             # record is the only thing anything reads.
             return updated
 
-    def assign_node_employee(self, node_id: str, employee_id: str) -> dict[str, Any]:
+    def assign_node_user(self, node_id: str, user_id: str) -> dict[str, Any]:
         node = self.get_node(node_id)
         if not node:
             raise KeyError(node_id)
-        if node.get("employeeId"):
+        if node.get("userId"):
             raise ValueError("Daemon node is already assigned.")
-        updated = {**node, "employeeId": employee_id, "updatedAt": now_iso()}
+        updated = {**node, "userId": user_id, "updatedAt": now_iso()}
         updated["nodeLocation"] = assigned_node_location(updated)
         self._write_node(updated)
         self.append_daemon_event(
             daemon_event(
-                "daemon.node.assigned", {"nodeId": node_id, "employeeId": employee_id}
+                "daemon.node.assigned", {"nodeId": node_id, "userId": user_id}
             )
         )
         return updated
@@ -525,22 +525,22 @@ class LocalDaemonStore:
         self.append_daemon_event(event)
         return updated
 
-    def unassign_node_employee(self, node_id: str) -> dict[str, Any]:
+    def unassign_node_user(self, node_id: str) -> dict[str, Any]:
         node = self.get_node(node_id)
         if not node:
             raise KeyError(node_id)
-        previous = node.get("employeeId")
+        previous = node.get("userId")
         updated = {
             k: v
             for k, v in node.items()
-            if k not in ("employeeId", "agentRoleOverrides")
+            if k not in ("userId", "agentRoleOverrides")
         }
         updated["updatedAt"] = now_iso()
         self._write_node(updated)
         self.append_daemon_event(
             daemon_event(
                 "daemon.node.unassigned",
-                {"nodeId": node_id, "previousEmployeeId": previous},
+                {"nodeId": node_id, "previousUserId": previous},
             )
         )
         return updated
@@ -1208,7 +1208,7 @@ class LocalDaemonStore:
 
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str,
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
@@ -1217,8 +1217,8 @@ class LocalDaemonStore:
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
             state.setdefault("_relay_stop_requested_at", now_iso())
-            if actor_employee_id:
-                state.setdefault("_relay_stop_actor_employee_id", actor_employee_id)
+            if actor_user_id:
+                state.setdefault("_relay_stop_actor_user_id", actor_user_id)
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
@@ -1521,12 +1521,12 @@ class DatabaseDaemonStore:
         metadata,
         database_id_column(),
         Column(
-            "employee_id",
+            "user_id",
             entity_uuid_type(),
             ForeignKey(
-                "employees.id",
+                "users.id",
                 ondelete="SET NULL",
-                name="fk_daemon_nodes_employee",
+                name="fk_daemon_nodes_user",
             ),
             nullable=True,
         ),
@@ -1551,7 +1551,7 @@ class DatabaseDaemonStore:
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Column("last_seen_at", DateTime(timezone=True), nullable=True),
-        Index("ix_daemon_nodes_employee_id", "employee_id"),
+        Index("ix_daemon_nodes_user_id", "user_id"),
         # updated_at and last_seen_at are deliberately unindexed: every
         # heartbeat rewrites both, and leaving them out of every index is what
         # lets PostgreSQL apply that write as a HOT update.
@@ -1571,12 +1571,12 @@ class DatabaseDaemonStore:
                 "AND retired_at IS NULL"
             ),
         ),
-        # A Computer is (employee_id, workspace_id) for an employee device and
+        # A Computer is (user_id, workspace_id) for a user device and
         # managed_node_id for a managed one -- never the daemon's own id, which
         # changes every time the daemon process is replaced.
         Index(
             "uq_daemon_nodes_computer",
-            "employee_id",
+            "user_id",
             "workspace_id",
             unique=True,
             postgresql_where=text("managed_node_id IS NULL AND retired_at IS NULL"),
@@ -1997,13 +1997,13 @@ class DatabaseDaemonStore:
             agents = self._node_agents_by_node(conn, [node_pk])
         return apply_node_agents(row_to_node(row), agents.get(node_pk, []))
 
-    def assign_node_employee(self, node_id: str, employee_id: str) -> dict[str, Any]:
+    def assign_node_user(self, node_id: str, user_id: str) -> dict[str, Any]:
         node = self.get_node(node_id)
         if not node:
             raise KeyError(node_id)
-        if node.get("employeeId"):
+        if node.get("userId"):
             raise ValueError("Daemon node is already assigned.")
-        updated = {**node, "employeeId": employee_id, "updatedAt": now_iso()}
+        updated = {**node, "userId": user_id, "updatedAt": now_iso()}
         updated["nodeLocation"] = assigned_node_location(updated)
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
@@ -2012,7 +2012,7 @@ class DatabaseDaemonStore:
                 conn,
                 daemon_event(
                     "daemon.node.assigned",
-                    {"nodeId": node_id, "employeeId": employee_id},
+                    {"nodeId": node_id, "userId": user_id},
                 ),
             )
         return updated
@@ -2093,27 +2093,27 @@ class DatabaseDaemonStore:
             self._append_daemon_event(conn, event)
         return updated
 
-    def unassign_node_employee(self, node_id: str) -> dict[str, Any]:
+    def unassign_node_user(self, node_id: str) -> dict[str, Any]:
         node = self.get_node(node_id)
         if not node:
             raise KeyError(node_id)
-        previous = node.get("employeeId")
+        previous = node.get("userId")
         updated = {
             k: v
             for k, v in node.items()
-            if k not in ("employeeId", "agentRoleOverrides")
+            if k not in ("userId", "agentRoleOverrides")
         }
         updated["updatedAt"] = now_iso()
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
-            # `updated` drops employeeId entirely, so node_to_row would leave the
+            # `updated` drops userId entirely, so node_to_row would leave the
             # column untouched rather than clearing it.
-            self._save_node(conn, {**updated, "employeeId": None}, database_id=node_pk)
+            self._save_node(conn, {**updated, "userId": None}, database_id=node_pk)
             self._append_daemon_event(
                 conn,
                 daemon_event(
                     "daemon.node.unassigned",
-                    {"nodeId": node_id, "previousEmployeeId": previous},
+                    {"nodeId": node_id, "previousUserId": previous},
                 ),
             )
         return updated
@@ -3203,7 +3203,7 @@ class DatabaseDaemonStore:
 
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str,
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = conn.execute(select(self.run_requests).where(self.run_requests.c.id == request_id).with_for_update()).mappings().first()
@@ -3215,8 +3215,8 @@ class DatabaseDaemonStore:
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
             state.setdefault("_relay_stop_requested_at", now_iso())
-            if actor_employee_id:
-                state.setdefault("_relay_stop_actor_employee_id", actor_employee_id)
+            if actor_user_id:
+                state.setdefault("_relay_stop_actor_user_id", actor_user_id)
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
@@ -3569,7 +3569,7 @@ def node_to_row(
 ) -> dict[str, Any]:
     return {
         "id": database_id or node["id"],
-        "employee_id": node.get("employeeId"),
+        "user_id": node.get("userId"),
         "display_name": node.get("displayName"),
         "workspace_path": node.get("workspacePath"),
         "workspace_id": node.get("workspaceId"),
@@ -3677,7 +3677,7 @@ def apply_node_agents(node: dict[str, Any], rows: list[Any]) -> dict[str, Any]:
 def row_to_node(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
-        **({"employeeId": row["employee_id"]} if row.get("employee_id") else {}),
+        **({"userId": row["user_id"]} if row.get("user_id") else {}),
         **({"displayName": row["display_name"]} if row.get("display_name") else {}),
         **(
             {"workspacePath": row["workspace_path"]}

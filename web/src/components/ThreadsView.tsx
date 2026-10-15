@@ -7,7 +7,7 @@ import {
   ICON,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
-import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, EmployeeAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
+import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, UserAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
 import {
   buildExecutorDisplayNameMap,
   buildLogicalAgentImageMap,
@@ -75,13 +75,13 @@ type ThreadsViewProps = {
   onRenameThread: (session: RelaySession) => void;
   onCloseThread: (sessionId: string) => void;
   activeAgent: AgentName;
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   /** Who recovery (rerun / handoff) may reach — a team thread's own roster. */
-  selectableLogicalAgents: EmployeeAgent[];
+  selectableLogicalAgents: UserAgent[];
   /** Who a new round may reach — every agent on the thread's computer. */
-  composerLogicalAgents: EmployeeAgent[];
+  composerLogicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
-  onLogicalAgentPicked: (agent: EmployeeAgent) => void;
+  onLogicalAgentPicked: (agent: UserAgent) => void;
   composerTeams: AgentTeam[];
   activeTeamId: string | null;
   onTeamPicked: (team: AgentTeam) => void;
@@ -102,7 +102,7 @@ type ThreadsViewProps = {
   onSpaceResizeActive: (active: boolean) => void;
   onToggleThreadList: () => void;
   onBackToThreads: () => void;
-  selectedEmployee: string;
+  selectedUser: string;
   initializingThread: boolean;
   projectName?: string;
   /** The project's roster offered as one composer target. */
@@ -117,7 +117,7 @@ type ThreadsViewProps = {
   /** Agents `@` may name in this thread. */
   mentionCandidates: MentionCandidate[];
   /** Agents in the thread's room, resolved for the header strip. */
-  threadParticipants: EmployeeAgent[];
+  threadParticipants: UserAgent[];
   onRuntimeNodeChange: (nodeId: string) => void;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
@@ -183,7 +183,7 @@ export function ThreadsView({
   onSpaceResizeActive,
   onToggleThreadList,
   onBackToThreads,
-  selectedEmployee,
+  selectedUser,
   initializingThread,
   projectName,
   projectRoom,
@@ -474,7 +474,7 @@ export function ThreadsView({
               </>
             ) : (
               <TranscriptEmpty
-                selectedEmployee={selectedEmployee}
+                selectedUser={selectedUser}
                 onSuggestion={(text) => {
                   composerRef.current?.setText(text);
                   composerRef.current?.focus();
@@ -493,7 +493,7 @@ export function ThreadsView({
           activeTeamId={activeTeamId}
           onTeamPicked={onTeamPicked}
           activeAgentDisplayName={activeAgentDisplayName}
-          selectedEmployee={selectedEmployee}
+          selectedUser={selectedUser}
           initializingThread={initializingThread}
           projectName={projectName}
           projectRoom={projectRoom}
@@ -541,7 +541,7 @@ export function ThreadsView({
       <ProjectDrawer
         open={projectDrawerOpen}
         computers={runtimeNodes}
-        employeeId={currentUser.employeeId}
+        userId={currentUser.userId}
         onClose={() => setProjectDrawerOpen(false)}
         onSaved={(project) => onSelectProject(project.id)}
       />

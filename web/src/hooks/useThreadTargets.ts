@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { AgentTeam, EmployeeAgent, RelaySession } from "../types";
+import type { AgentTeam, UserAgent, RelaySession } from "../types";
 import {
   agentsForThreadNode,
   assignableThreadComputers,
@@ -27,7 +27,7 @@ import { useStableValue } from "./useStableValue";
 type ThreadComputerLike = Parameters<typeof assignableThreadComputers>[0][number];
 
 export interface ThreadTargets<N extends ThreadComputerLike> {
-  /** Every machine this employee could run on, live or not. */
+  /** Every machine this user could run on, live or not. */
   assignableComputers: N[];
   /** …narrowed to the ones that can take work right now. */
   selectableComputers: N[];
@@ -42,20 +42,20 @@ export interface ThreadTargets<N extends ThreadComputerLike> {
   /** The picked computer's record, for a thread that has not. Stable. */
   selectedThreadComputer: N | null;
   /** Agents placed on the selected computer. */
-  selectableLogicalAgents: EmployeeAgent[];
+  selectableLogicalAgents: UserAgent[];
   /** Teams whose whole roster is placed there, plus a started thread's own. */
   composerTeams: AgentTeam[];
   /** The room, in join order. */
-  threadParticipants: EmployeeAgent[];
+  threadParticipants: UserAgent[];
 }
 
 interface ThreadTargetsInput<N extends ThreadComputerLike> {
   activeSession: RelaySession | undefined;
   composingNew: boolean;
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   newThreadNodeId: string | null;
   runtimeNodes: readonly N[];
-  selectedEmployee: string;
+  selectedUser: string;
   teams: AgentTeam[];
 }
 
@@ -65,20 +65,20 @@ export function useThreadTargets<N extends ThreadComputerLike>({
   logicalAgents,
   newThreadNodeId,
   runtimeNodes,
-  selectedEmployee,
+  selectedUser,
   teams,
 }: ThreadTargetsInput<N>): ThreadTargets<N> {
-  // Every machine this employee could run on, live or not. A pick is allowed
+  // Every machine this user could run on, live or not. A pick is allowed
   // to survive inside this set and nowhere else: the fleet list spans
-  // employees and keeps tombstones for deleted nodes, so "still listed" is not
+  // users and keeps tombstones for deleted nodes, so "still listed" is not
   // "still mine to use".
   const assignableComputers = useMemo(
-    () => assignableThreadComputers(runtimeNodes, selectedEmployee),
-    [runtimeNodes, selectedEmployee],
+    () => assignableThreadComputers(runtimeNodes, selectedUser),
+    [runtimeNodes, selectedUser],
   );
   const selectableComputers = useMemo(
-    () => selectableThreadComputers(runtimeNodes, selectedEmployee),
-    [runtimeNodes, selectedEmployee],
+    () => selectableThreadComputers(runtimeNodes, selectedUser),
+    [runtimeNodes, selectedUser],
   );
   // Held stable across polls: the picker only reads ids and display names, so
   // a heartbeat that merely refreshed `lastSeenAt` must not hand it a new
@@ -109,7 +109,7 @@ export function useThreadTargets<N extends ThreadComputerLike>({
 
   // Same resolution for the pick on a not-yet-started thread, so the trigger
   // keeps naming the chosen computer through a poll that drops it from the
-  // selectable set — but only within this employee's own machines, so the
+  // selectable set — but only within this user's own machines, so the
   // trigger can never name someone else's. Held stable so the memoized picker
   // ignores heartbeats.
   const pickedComputer = useMemo(
@@ -142,12 +142,12 @@ export function useThreadTargets<N extends ThreadComputerLike>({
   }, [teams, logicalAgents, selectedThreadNodeId, startedThreadTeamId]);
 
   // The room, in join order. Ids the roster names but the agent list does not
-  // know (deleted, or another employee's) are dropped rather than rendered as
+  // know (deleted, or another user's) are dropped rather than rendered as
   // a nameless chip.
   const threadParticipants = useMemo(
     () => (activeSession?.participantAgentIds ?? [])
       .map((agentId) => logicalAgents.find((agent) => agent.id === agentId))
-      .filter((agent): agent is EmployeeAgent => Boolean(agent)),
+      .filter((agent): agent is UserAgent => Boolean(agent)),
     [activeSession?.participantAgentIds, logicalAgents],
   );
 

@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import type { ControlPanelDaemonNodeRecord } from "relay-core";
 
-export interface EmployeeRecord {
+export interface UserRecord {
   id: string;
   displayName?: string;
   email?: string;
@@ -12,9 +12,9 @@ export interface EmployeeRecord {
 }
 
 export interface SupervisorBackend {
-  listEmployees(): Promise<EmployeeRecord[]>;
+  listUsers(): Promise<UserRecord[]>;
   listDaemonNodes(): Promise<ControlPanelDaemonNodeRecord[]>;
-  provisionDaemonNode(input: { employeeId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode>;
+  provisionDaemonNode(input: { userId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode>;
 }
 
 export type ManagedNodeDesiredState = "running" | "stopped" | "deleted";
@@ -23,7 +23,7 @@ export type ManagedNodePhase = "requested" | "allocating" | "bootstrapping" | "r
 export interface ManagedNodeRecord {
   id: string;
   displayName: string;
-  employeeId?: string;
+  userId?: string;
   assignmentMode: "dedicated" | "pooled" | "shared";
   provider: string;
   profile: string;
@@ -93,7 +93,7 @@ export interface ProvisionedDaemonNode {
 }
 
 export interface DaemonLaunchRequest {
-  employee: EmployeeRecord;
+  user: UserRecord;
   node: ControlPanelDaemonNodeRecord;
   env: Record<string, string>;
   workspacePath: string;

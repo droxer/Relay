@@ -9,10 +9,10 @@ import { modelHintKey, modelIdProblem, modelPolicyFor } from "../../lib/agentMod
 import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
 import { ComputerSelect } from "../ComputerSelect";
-import { EMPLOYEE_AGENTS_QUERY_KEY } from "../../hooks/useEmployeeAgents";
+import { USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
 import { agentLabel } from "../../lib/plan";
 import { AGENT_NAMES, AGENT_ROLE_OPTIONS } from "../../types";
-import type { AgentName, AgentRole, EmployeeAgent } from "../../types";
+import type { AgentName, AgentRole, UserAgent } from "../../types";
 import { AgentMark } from "../AgentMark";
 import { PresetAvatarGrid } from "../PresetAvatarGrid";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
@@ -38,19 +38,19 @@ import { useOnOpen } from "@/hooks/useKeyChange";
 interface CreateAgentDialogProps {
   open: boolean;
   onClose: () => void;
-  employeeId: string;
+  userId: string;
   /** Fires once the agent exists on the backend, so the caller can select it right away. */
-  onCreated: (agent: EmployeeAgent) => void;
+  onCreated: (agent: UserAgent) => void;
 }
 
 /**
  * Explicit agent creation: computer -> runtime -> role. Mirrors the shape of
  * ConnectComputerDrawer / ManageExecutorsDrawer rather than inventing a new
  * form pattern. POST /agents is the only write; the computer/runtime
- * options come from the employee-scoped GET /sandboxes already used
+ * options come from the user-scoped GET /sandboxes already used
  * elsewhere in the app.
  */
-export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: CreateAgentDialogProps) {
+export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAgentDialogProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const computerLabelId = useId();
@@ -65,7 +65,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const roleTriggerRef = useRef<HTMLButtonElement>(null);
   const modelTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const computers = useComputerOptions(employeeId, open);
+  const computers = useComputerOptions(userId, open);
   const { nodeLikes, options: computerOptions } = computers;
 
   const [computerId, setComputerId] = useState("");
@@ -185,7 +185,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
         displayName: displayName.trim() || undefined,
         profileImageUrl,
       });
-      await queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] });
+      await queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
       onCreated(result.agent);
       onClose();
     } catch (err) {

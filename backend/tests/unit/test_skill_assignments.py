@@ -36,10 +36,10 @@ def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
     )
     alice, bob = str(uuid4()), str(uuid4())
     with store.engine.begin() as conn:
-        for employee_id, handle in ((alice, "alice"), (bob, "bob")):
+        for user_id, handle in ((alice, "alice"), (bob, "bob")):
             conn.execute(
-                insert(store.employees).values(
-                    id=employee_id,
+                insert(store.users).values(
+                    id=user_id,
                     handle=handle,
                     display_name=handle.title(),
                     email=None,
@@ -71,27 +71,27 @@ def test_assignment_store_upserts_and_revokes_scoped_targets(tmp_path):
 
     first = store.upsert_assignment(
         skill["id"],
-        target_type="employee",
+        target_type="user",
         target_id=alice,
         mode="optional",
         pin="stable",
         invocation="implicit",
-        created_by_employee_id=alice,
+        created_by_user_id=alice,
     )
     second = store.upsert_assignment(
         skill["id"],
-        target_type="employee",
+        target_type="user",
         target_id=alice,
         mode="required",
         pin="latest",
         invocation="implicit",
-        created_by_employee_id=alice,
+        created_by_user_id=alice,
     )
 
     assert second["id"] == first["id"]
     assert second["mode"] == "required"
     assert store.list_assignments(
-        targets=[("employee", alice)]
+        targets=[("user", alice)]
     ) == [second]
     assert store.delete_assignment(second["id"])["id"] == second["id"]
     assert store.list_assignments(skill_id=skill["id"]) == []
@@ -115,12 +115,12 @@ class _TargetStore:
     def get_project(self, target_id: str):
         return self.records.get(target_id)
 
-    def list_teams(self, owner_employee_id=None):
+    def list_teams(self, owner_user_id=None):
         return [
             record
             for record in self.records.values()
-            if owner_employee_id is None
-            or record.get("ownerEmployeeId") == owner_employee_id
+            if owner_user_id is None
+            or record.get("ownerUserId") == owner_user_id
         ]
 
 
@@ -128,13 +128,13 @@ def _ctx(store, alice: str, bob: str):
     agents = [
         {
             "id": "agent-a",
-            "supervisorEmployeeId": alice,
+            "supervisorUserId": alice,
             "enabled": True,
             "skillPolicy": {},
         },
         {
             "id": "agent-b",
-            "supervisorEmployeeId": bob,
+            "supervisorUserId": bob,
             "enabled": True,
             "skillPolicy": {},
         },
@@ -143,13 +143,13 @@ def _ctx(store, alice: str, bob: str):
         [
             {
                 "id": "team-a",
-                "ownerEmployeeId": alice,
+                "ownerUserId": alice,
                 "memberAgentIds": ["agent-a"],
                 "deletedAt": None,
             },
             {
                 "id": "team-b",
-                "ownerEmployeeId": bob,
+                "ownerUserId": bob,
                 "memberAgentIds": ["agent-b"],
                 "deletedAt": None,
             },
@@ -159,7 +159,7 @@ def _ctx(store, alice: str, bob: str):
         [
             {
                 "id": "project-a",
-                "ownerEmployeeId": alice,
+                "ownerUserId": alice,
                 "members": [{"agentId": "agent-a", "enabled": True}],
                 "archivedAt": None,
             }
@@ -183,7 +183,7 @@ def test_assignment_service_enforces_target_ownership(tmp_path):
     assert error.value.code == "not-target-owner"
 
     with pytest.raises(SkillAssignmentError) as error:
-        assign(ctx, skill["id"], "employee", bob, alice)
+        assign(ctx, skill["id"], "user", bob, alice)
     assert error.value.code == "not-target-owner"
 
     with pytest.raises(SkillAssignmentError) as error:
@@ -191,15 +191,15 @@ def test_assignment_service_enforces_target_ownership(tmp_path):
     assert error.value.code == "not-target-owner"
 
 
-def test_employee_team_project_and_agent_assignments_are_dynamic(tmp_path):
+def test_user_team_project_and_agent_assignments_are_dynamic(tmp_path):
     store, alice, bob = _store(tmp_path)
     ctx = _ctx(store, alice, bob)
-    employee_skill = _skill(store, alice, "employee-review")
+    user_skill = _skill(store, alice, "user-review")
     team_skill = _skill(store, alice, "team-review")
     project_skill = _skill(store, alice, "project-review")
     agent_skill = _skill(store, alice, "agent-review")
 
-    assign(ctx, employee_skill["id"], "employee", alice, alice)
+    assign(ctx, user_skill["id"], "user", alice, alice)
     assign(ctx, team_skill["id"], "team", "team-a", alice)
     assign(ctx, project_skill["id"], "project", "project-a", alice)
     assign(ctx, agent_skill["id"], "agent", "agent-a", alice)
@@ -209,12 +209,12 @@ def test_employee_team_project_and_agent_assignments_are_dynamic(tmp_path):
     with_project = effective_assignments(ctx, agent, project_id="project-a")
 
     assert {item["skillId"] for item in without_project} == {
-        employee_skill["id"],
+        user_skill["id"],
         team_skill["id"],
         agent_skill["id"],
     }
     assert {item["skillId"] for item in with_project} == {
-        employee_skill["id"],
+        user_skill["id"],
         team_skill["id"],
         project_skill["id"],
         agent_skill["id"],
@@ -233,7 +233,7 @@ def test_suggested_assignment_is_visible_but_not_auto_delivered(tmp_path):
     assignment = assign(
         ctx,
         skill["id"],
-        "employee",
+        "user",
         alice,
         alice,
         mode="suggested",
@@ -248,7 +248,7 @@ def test_revoke_requires_the_assignment_target_owner(tmp_path):
     store, alice, bob = _store(tmp_path)
     ctx = _ctx(store, alice, bob)
     skill = _skill(store, alice)
-    assignment = assign(ctx, skill["id"], "employee", alice, alice)
+    assignment = assign(ctx, skill["id"], "user", alice, alice)
 
     with pytest.raises(SkillAssignmentError) as error:
         revoke(ctx, assignment["id"], bob)

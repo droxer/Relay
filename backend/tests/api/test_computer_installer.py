@@ -66,10 +66,10 @@ def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
     monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
     workspace = "/Users/alice/a project/$(touch pwned)'"
-    command = computer_install_command(request, {"id": "node-1", "employeeId": "alice", "workspacePath": workspace})
+    command = computer_install_command(request, {"id": "node-1", "userId": "alice", "workspacePath": workspace})
     assert command.startswith("curl -fsSL https://api.example.com/install.sh | bash -s -- ")
     args = shlex.split(command.split(" | bash -s -- ")[1])
-    assert args == ["--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", workspace]
+    assert args == ["--sandbox-id", "node-1", "--user-id", "alice", "--workspace", workspace]
 
 
 def _shell_fixture(tmp_path):
@@ -115,7 +115,7 @@ def _shell_fixture(tmp_path):
 
 def test_piped_installer_preserves_paths_and_does_not_print_token(tmp_path):
     source, env = _shell_fixture(tmp_path)
-    args = ["--backend-url", "https://relay.example.com", "--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", "/a path/$(not-executed)"]
+    args = ["--backend-url", "https://relay.example.com", "--sandbox-id", "node-1", "--user-id", "alice", "--workspace", "/a path/$(not-executed)"]
     for _ in range(2):  # reinstall reuses the verified release
         result = subprocess.run(["sh", "-s", "--", *args], input=source, env=env, text=True, capture_output=True)
         assert result.returncode == 0, result.stderr
@@ -135,7 +135,7 @@ def test_bare_installer_supplies_the_backend_it_was_served_from(tmp_path):
 def test_sudo_installs_for_the_invoking_user_not_root(tmp_path):
     source, env = _shell_fixture(tmp_path)
     env.update(FAKE_ROOT="1", SUDO_USER="alice")
-    args = ["--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", "/a path/$HOME $(not-executed)'"]
+    args = ["--sandbox-id", "node-1", "--user-id", "alice", "--workspace", "/a path/$HOME $(not-executed)'"]
     result = subprocess.run(["bash", "-s", "--", *args], input=source, env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
     assert "INSTALL_STARTED" in result.stdout
@@ -343,14 +343,14 @@ def test_token_response_only_offers_installer_for_complete_personal_computers(mo
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
-    node = {"id": "node-1", "employeeId": "alice", "workspacePath": "/home/alice/project",
-            "nodeLocation": "employee-device", "sandboxMode": "none"}
+    node = {"id": "node-1", "userId": "alice", "workspacePath": "/home/alice/project",
+            "nodeLocation": "user-device", "sandboxMode": "none"}
     response = _token_response(request, node, "fixture-token")
     assert "curl -fsSL" in response["installCommand"]
     assert "fixture-token" not in response["installCommand"]
     for overrides in [
         {"sandboxMode": "boxlite"}, {"nodeLocation": "cloud"},
-        {"workspacePath": None}, {"employeeId": None},
+        {"workspacePath": None}, {"userId": None},
     ]:
         response = _token_response(request, {**node, **overrides}, "fixture-token")
         assert "installCommand" not in response
@@ -394,8 +394,8 @@ def test_windows_commands_quote_every_argument_for_powershell(monkeypatch):
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
     assert computer_windows_setup_command(request) == "irm 'https://api.example.com/install.ps1' | iex"
     workspace = "C:\\Users\\o'brien\\My Work $(evil)"
-    command = computer_windows_install_command(request, {"id": "node-1", "employeeId": "alice", "workspacePath": workspace})
+    command = computer_windows_install_command(request, {"id": "node-1", "userId": "alice", "workspacePath": workspace})
     assert command == (
         "& ([scriptblock]::Create((irm 'https://api.example.com/install.ps1'))) "
-        "'--sandbox-id' 'node-1' '--employee-id' 'alice' '--workspace' 'C:\\Users\\o''brien\\My Work $(evil)'"
+        "'--sandbox-id' 'node-1' '--user-id' 'alice' '--workspace' 'C:\\Users\\o''brien\\My Work $(evil)'"
     )

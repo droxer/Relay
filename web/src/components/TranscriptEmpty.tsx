@@ -6,7 +6,7 @@ import { sendShortcutLabel } from "../lib/sendShortcut";
 import { Button } from "@/components/ui/button";
 
 type TranscriptEmptyProps = {
-  selectedEmployee: string;
+  selectedUser: string;
   /** A starter chip drops its prompt into the composer and focuses it. */
   onSuggestion?: (text: string) => void;
 };
@@ -14,14 +14,14 @@ type TranscriptEmptyProps = {
 const SUGGESTION_KEYS = ["plan", "review", "orient"] as const;
 
 export function TranscriptEmpty({
-  selectedEmployee,
+  selectedUser,
   onSuggestion,
 }: TranscriptEmptyProps) {
   const { t } = useTranslation();
-  const ready = Boolean(selectedEmployee);
+  const ready = Boolean(selectedUser);
   const headline = ready
     ? t("transcript.ready_for")
-    : t("transcript.ready_no_employee");
+    : t("transcript.ready_no_user");
 
   return (
     <RelayEmptyState

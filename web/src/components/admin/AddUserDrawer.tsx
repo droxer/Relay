@@ -2,10 +2,10 @@
 
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { createControlPanelEmployee } from "../../api";
+import { createControlPanelUser } from "../../api";
 import type {
   ControlPanelDaemonNodeRecord,
-  CreateControlPanelEmployeeResponse,
+  CreateControlPanelUserResponse,
 } from "../../types";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   MIN_LOCAL_COMPUTERS,
   parseLimitInput,
 } from "../../lib/computerLimits";
-import { isValidEmployeeHandle, normalizeEmployeeHandle } from "../../lib/employeeHandle";
+import { isValidUserHandle, normalizeUserHandle } from "../../lib/userHandle";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordProblem } from "../../lib/passwordPolicy";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
@@ -30,30 +30,30 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { useOnOpen } from "@/hooks/useKeyChange";
 
-interface AddEmployeeDrawerProps {
+interface AddUserDrawerProps {
   open: boolean;
   onClose: () => void;
   unassignedNodes: ControlPanelDaemonNodeRecord[];
   /** The org default, shown as the placeholder for an unset limit. */
   defaultMaxLocalComputers?: number;
-  /** False when the auth store cannot store a per-employee limit; the field
+  /** False when the auth store cannot store a per-user limit; the field
       is left out entirely rather than offered and then refused. */
   allowLimitOverride?: boolean;
-  onSuccess: (result: CreateControlPanelEmployeeResponse) => void;
+  onSuccess: (result: CreateControlPanelUserResponse) => void;
 }
 
-export function AddEmployeeDrawer({
+export function AddUserDrawer({
   open,
   onClose,
   unassignedNodes,
   defaultMaxLocalComputers,
   allowLimitOverride = true,
   onSuccess,
-}: AddEmployeeDrawerProps) {
+}: AddUserDrawerProps) {
   const { t } = useTranslation();
   const nodeLabelId = useId();
 
-  const [employeeId, setEmployeeId] = useState("");
+  const [userId, setUserId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -62,18 +62,18 @@ export function AddEmployeeDrawer({
   const [maxLocalComputers, setMaxLocalComputers] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
-    employeeId?: string;
+    userId?: string;
     username?: string;
     password?: string;
     maxLocalComputers?: string;
   }>({});
   const [isBusy, setIsBusy] = useState(false);
-  const employeeIdRef = useRef<HTMLInputElement>(null);
+  const userIdRef = useRef<HTMLInputElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const limitRef = useRef<HTMLInputElement>(null);
   const hasUnsavedChanges = Boolean(
-    employeeId.trim()
+    userId.trim()
     || displayName.trim()
     || email.trim()
     || username.trim()
@@ -85,11 +85,11 @@ export function AddEmployeeDrawer({
 
   // When the typed id is not what gets stored (`@Alice` → `alice`), the hint
   // says so — the form never promises an identity the backend will not create.
-  const normalizedHandle = normalizeEmployeeHandle(employeeId);
-  const handleIsNormalized = Boolean(normalizedHandle) && normalizedHandle !== employeeId.trim();
+  const normalizedHandle = normalizeUserHandle(userId);
+  const handleIsNormalized = Boolean(normalizedHandle) && normalizedHandle !== userId.trim();
 
   useOnOpen(open, () => {
-    setEmployeeId("");
+    setUserId("");
     setDisplayName("");
     setEmail("");
     setUsername("");
@@ -101,17 +101,17 @@ export function AddEmployeeDrawer({
     setIsBusy(false);
   });
 
-  function clearFieldError(field: "employeeId" | "username" | "password" | "maxLocalComputers") {
+  function clearFieldError(field: "userId" | "username" | "password" | "maxLocalComputers") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextEmployeeId = normalizeEmployeeHandle(employeeId);
+    const nextUserId = normalizeUserHandle(userId);
     const nextFieldErrors: typeof fieldErrors = {};
-    if (!nextEmployeeId) nextFieldErrors.employeeId = t("admin.employee_required");
-    else if (!isValidEmployeeHandle(nextEmployeeId)) {
-      nextFieldErrors.employeeId = t("admin.v2.employee_id_invalid");
+    if (!nextUserId) nextFieldErrors.userId = t("admin.user_required");
+    else if (!isValidUserHandle(nextUserId)) {
+      nextFieldErrors.userId = t("admin.v2.user_id_invalid");
     }
     if (!username.trim()) nextFieldErrors.username = t("admin.username_required");
     if (!password) nextFieldErrors.password = t("admin.password_required");
@@ -121,7 +121,7 @@ export function AddEmployeeDrawer({
       // the backend; its refusal arrives as the form-level error.
       const problem = passwordProblem(password, [
         username,
-        nextEmployeeId,
+        nextUserId,
         displayName,
         email,
       ]);
@@ -144,8 +144,8 @@ export function AddEmployeeDrawer({
     // Every invalid field is in the chain, in the order they appear on screen.
     // The limit used to be validated but never focused, so an invalid limit
     // returned early with focus parked on Submit and the message off-screen.
-    const firstInvalid = nextFieldErrors.employeeId
-      ? employeeIdRef
+    const firstInvalid = nextFieldErrors.userId
+      ? userIdRef
       : nextFieldErrors.username
         ? usernameRef
         : nextFieldErrors.password
@@ -161,8 +161,8 @@ export function AddEmployeeDrawer({
     setIsBusy(true);
     setError(null);
     try {
-      const result = await createControlPanelEmployee({
-        employeeId: nextEmployeeId,
+      const result = await createControlPanelUser({
+        userId: nextUserId,
         username: username.trim(),
         password,
         nodeId: selectedNodeId || undefined,
@@ -172,7 +172,7 @@ export function AddEmployeeDrawer({
       });
       onSuccess(result);
     } catch (err) {
-      setError(t("admin.v2.add_employee_error", { message: err instanceof Error ? err.message : String(err) }));
+      setError(t("admin.v2.add_user_error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setIsBusy(false);
     }
@@ -187,9 +187,9 @@ export function AddEmployeeDrawer({
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("admin.v2.provision_kicker_employee")}
-      title={t("admin.v2.add_employee_title")}
-      subtitle={t("admin.v2.add_employee_sub")}
+      kicker={t("admin.v2.provision_kicker_user")}
+      title={t("admin.v2.add_user_title")}
+      subtitle={t("admin.v2.add_user_sub")}
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
       width="form"
@@ -201,32 +201,32 @@ export function AddEmployeeDrawer({
           </h3>
 
           <Field
-            label={t("admin.employee_id")}
+            label={t("admin.user_id")}
             required
             hint={handleIsNormalized
-              ? t("admin.v2.employee_id_normalized", { handle: normalizedHandle })
-              : t("admin.v2.employee_id_hint")}
-            error={fieldErrors.employeeId}
-            errorId="add-emp-employee-id-error"
+              ? t("admin.v2.user_id_normalized", { handle: normalizedHandle })
+              : t("admin.v2.user_id_hint")}
+            error={fieldErrors.userId}
+            errorId="add-emp-user-id-error"
           >
             <Input
-              ref={employeeIdRef}
+              ref={userIdRef}
               data-modal-initial-focus
-              name="employee-id"
+              name="user-id"
               className="code"
-              value={employeeId}
+              value={userId}
               onChange={(event) => {
-                setEmployeeId(event.target.value);
-                clearFieldError("employeeId");
+                setUserId(event.target.value);
+                clearFieldError("userId");
               }}
               /* Off, not "username": this form creates someone ELSE's account,
                  and the browser would otherwise offer to save the new
-                 employee's credentials as the signed-in admin's own. */
+                 user's credentials as the signed-in admin's own. */
               autoComplete="off"
               spellCheck={false}
-              placeholder={t("admin.v2.placeholder_employee_id")}
-              aria-invalid={Boolean(fieldErrors.employeeId) || undefined}
-              aria-describedby={fieldErrors.employeeId ? "add-emp-employee-id-error" : undefined}
+              placeholder={t("admin.v2.placeholder_user_id")}
+              aria-invalid={Boolean(fieldErrors.userId) || undefined}
+              aria-describedby={fieldErrors.userId ? "add-emp-user-id-error" : undefined}
             />
           </Field>
 
@@ -309,7 +309,7 @@ export function AddEmployeeDrawer({
           </Field>
         </section>
 
-        {/* Everything about the employee's machines, and all of it optional:
+        {/* Everything about the user's machines, and all of it optional:
             a computer to hand over now, and the quota for the ones they
             enroll themselves. One section instead of two half-empty ones. */}
         <section className="adm-provision-section" aria-labelledby="adm-emp-computers">
@@ -332,7 +332,7 @@ export function AddEmployeeDrawer({
                   <SelectValue placeholder={t("admin.select_node")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Same row grammar as the employee picker in AddNodeDrawer:
+                  {/* Same row grammar as the user picker in AddNodeDrawer:
                       the name leads, the identifier trails in muted ink. */}
                   {unassignedNodes.map((node) => (
                     <SelectItem key={node.id} value={node.id}>
@@ -350,7 +350,7 @@ export function AddEmployeeDrawer({
             </Field>
           )}
 
-          {/* Left out entirely when the auth store cannot keep a per-employee
+          {/* Left out entirely when the auth store cannot keep a per-user
               limit, rather than offered and then refused. */}
           {allowLimitOverride ? (
             <Field

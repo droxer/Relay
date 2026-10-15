@@ -52,14 +52,14 @@ def _login(client: TestClient, username: str, password: str) -> None:
     assert response.status_code == 200
 
 
-def _create_user(client: TestClient, username: str, *, employee_id: str) -> None:
+def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
     response = client.post(
-        "/api/v1/admin/users",
+        "/api/v1/admin/accounts",
         json={
             "username": username,
             "password": "userpass",
             "role": "user",
-            "employeeId": employee_id,
+            "userId": user_id,
         },
     )
     assert response.status_code == 201
@@ -146,7 +146,7 @@ def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch) ->
         app.state.registry.register(
             {
                 "sandboxId": "sbx_workspace",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -208,7 +208,7 @@ def test_daemon_heartbeat_is_authenticated_and_returns_lease_policy(
         app.state.registry.register(
             {
                 "sandboxId": "sbx_heartbeat",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -247,12 +247,12 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         rejected_local = client.post(
             "/api/v1/admin/managed-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "provider": "local-process",
                 "sandboxMode": "none",
             },
@@ -263,7 +263,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         created = client.post(
             "/api/v1/admin/managed-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "provider": "local-process",
                 "sandboxMode": "boxlite",
             },
@@ -373,7 +373,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         assert alice_client.get("/api/v1/daemon-nodes").json()["nodes"] == []
 
 
-def test_employee_daemon_list_replaces_retired_managed_runtime_with_one_placeholder(
+def test_user_daemon_list_replaces_retired_managed_runtime_with_one_placeholder(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -381,12 +381,12 @@ def test_employee_daemon_list_replaces_retired_managed_runtime_with_one_placehol
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         managed = app.state.managed_node_store.create_node(
-            {"employeeId": "alice", "displayName": "Alice cloud"}
+            {"userId": "alice", "displayName": "Alice cloud"}
         )
         app.state.managed_node_store.create_node(
-            {"employeeId": "bob", "displayName": "Bob cloud"}
+            {"userId": "bob", "displayName": "Bob cloud"}
         )
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
@@ -424,15 +424,15 @@ def test_employee_daemon_list_replaces_retired_managed_runtime_with_one_placehol
         assert visible["online"] is False
 
 
-def test_employee_daemon_list_hides_superseded_local_runtime(monkeypatch) -> None:
+def test_user_daemon_list_hides_superseded_local_runtime(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         common = {
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "alice-machine",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -442,11 +442,11 @@ def test_employee_daemon_list_hides_superseded_local_runtime(monkeypatch) -> Non
         }
         app.state.registry.register(
             {**common, "sandboxId": "local_old", "token": "old-token"},
-            authorized_node_location="employee-device",
+            authorized_node_location="user-device",
         )
         app.state.registry.register(
             {**common, "sandboxId": "local_current", "token": "current-token"},
-            authorized_node_location="employee-device",
+            authorized_node_location="user-device",
         )
         _login(client, "alice", "userpass")
 
@@ -464,7 +464,7 @@ def test_legacy_managed_node_with_retired_policy_can_be_deleted(monkeypatch) -> 
         _bootstrap_admin(client)
         _login_admin(client)
 
-        node = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        node = app.state.managed_node_store.create_node({"userId": "alice"})
         app.state.managed_node_store._write_node(
             {
                 **node,
@@ -488,11 +488,11 @@ def test_admin_can_recover_deleted_managed_node(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         created = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         ).json()["node"]
 
         active = client.post(f"/api/v1/admin/managed-nodes/{created['id']}/recover")
@@ -523,7 +523,7 @@ def test_admin_can_recover_deleted_managed_node(monkeypatch) -> None:
 
 def test_recovered_managed_node_reattaches_the_original_agent(monkeypatch) -> None:
     """Deleting the managed node only removes its placement — the agent
-    itself was declared explicitly by the employee and is never erased by the
+    itself was declared explicitly by the user and is never erased by the
     system. After recovery, re-registering backfills a placement for that
     same agent; no fresh agent declaration is needed."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -533,7 +533,7 @@ def test_recovered_managed_node_reattaches_the_original_agent(monkeypatch) -> No
         _bootstrap_admin(client)
         _login_admin(client)
 
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -620,11 +620,11 @@ def test_recovered_managed_node_conflicts_with_replacement_policy_slot(
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         created = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         ).json()["node"]
         app.state.managed_node_store.update_node(
             created["id"], {"desiredState": "deleted"}
@@ -632,7 +632,7 @@ def test_recovered_managed_node_conflicts_with_replacement_policy_slot(
         app.state.managed_node_store.update_node(created["id"], {"phase": "deleted"})
         client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         )
 
         recovered = client.post(f"/api/v1/admin/managed-nodes/{created['id']}/recover")
@@ -650,11 +650,11 @@ def test_admin_can_permanently_delete_terminal_managed_node_record(
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         created = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         ).json()["node"]
 
         premature = client.delete(f"/api/v1/admin/managed-nodes/{created['id']}/record")
@@ -683,7 +683,7 @@ def test_permanent_delete_retires_leftover_managed_runtime(monkeypatch) -> None:
         _bootstrap_admin(client)
         _login_admin(client)
 
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -724,7 +724,7 @@ def test_delete_managed_node_cleans_orphaned_runtime(monkeypatch) -> None:
         _bootstrap_admin(client)
         _login_admin(client)
 
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -769,7 +769,7 @@ def test_managed_node_runtime_cannot_be_drained_or_retired_during_active_run(
         _bootstrap_admin(client)
         _login_admin(client)
 
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         runtime_id = "sbx_busy_managed"
         app.state.managed_node_store._write_node(
             {
@@ -781,7 +781,7 @@ def test_managed_node_runtime_cannot_be_drained_or_retired_during_active_run(
         app.state.registry.register(
             {
                 "sandboxId": runtime_id,
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -794,7 +794,7 @@ def test_managed_node_runtime_cannot_be_drained_or_retired_during_active_run(
                 "nodeId": runtime_id,
                 "sessionId": app.state.session_store.create_session({
                     "workspacePath": "/workspace", "taskGoal": "Keep this runtime busy",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                 })["id"],
                 "taskGoal": "Keep this runtime busy",
                 "assignments": [],
@@ -826,7 +826,7 @@ def test_running_managed_runtime_retirement_preserves_agent_and_placement(
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -896,7 +896,7 @@ def test_stopped_managed_runtime_preserves_agent_for_restart(monkeypatch) -> Non
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -957,7 +957,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         original = create_app(root)
-        managed = original.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = original.state.managed_node_store.create_node({"userId": "alice"})
         attempt, _credential = original.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -1025,7 +1025,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
         [current] = [
             item
             for item in restarted.state.agent_store.list_agents(
-                supervisor_employee_id="alice"
+                supervisor_user_id="alice"
             )
             if item["executorKind"] == "codex"
         ]
@@ -1045,10 +1045,10 @@ def test_failed_managed_node_is_visible_as_failed(monkeypatch) -> None:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _login_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         managed = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         ).json()["node"]
         attempt = client.post(
             f"/api/v1/admin/managed-nodes/{managed['id']}/attempts"
@@ -1076,7 +1076,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1144,7 +1144,7 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1243,7 +1243,7 @@ def test_output_event_does_not_replace_explicit_lease_heartbeat(monkeypatch) -> 
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1316,7 +1316,7 @@ def test_run_completed_finalizes_even_when_token_usage_is_unusable(monkeypatch) 
                 "/api/v1/daemon-node-registrations",
                 json={
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1383,7 +1383,7 @@ def test_daemon_delivery_output_reaches_the_canonical_session_stream(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1497,7 +1497,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1571,7 +1571,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
         stopped = app.state.session_store.get_session(session_id)
         assert stopped["agentRuns"][-1]["tokenUsage"]["total"] == 34
         assert stopped["tokenUsage"]["total"] == 34
-        assert stopped["decisions"][-1]["actorEmployeeId"] == ("admin" if stop_as_admin else "alice")
+        assert stopped["decisions"][-1]["actorUserId"] == ("admin" if stop_as_admin else "alice")
 
         after_terminal = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1",
@@ -1594,7 +1594,7 @@ def test_session_cancel_uses_durable_run_when_node_monitor_is_stale(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1657,7 +1657,7 @@ def test_cancel_returns_terminal_session_when_run_finishes_before_request(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1742,7 +1742,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1795,7 +1795,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
         assert "does not have ready agent" in run.json()["detail"]
 
 
-def test_admin_creates_employee_login_and_assigns_unassigned_node(monkeypatch) -> None:
+def test_admin_creates_user_login_and_assigns_unassigned_node(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -1817,16 +1817,16 @@ def test_admin_creates_employee_login_and_assigns_unassigned_node(monkeypatch) -
             headers={"Authorization": "Bearer ui_token"},
         )
         assert response.status_code == 200
-        assert "employeeId" not in response.json()
+        assert "userId" not in response.json()
 
         response = client.get("/api/v1/admin/daemon-nodes")
         assert response.status_code == 200
-        assert "employeeId" not in response.json()["nodes"][0]
+        assert "userId" not in response.json()["nodes"][0]
 
         response = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "email": "alice@example.com",
@@ -1836,13 +1836,13 @@ def test_admin_creates_employee_login_and_assigns_unassigned_node(monkeypatch) -
         )
         assert response.status_code == 201
         body = response.json()
-        assert body["user"]["username"] == "alice"
-        assert body["user"]["role"] == "user"
-        assert body["user"]["employeeId"] == "alice"
-        assert body["employee"]["id"] == "alice"
-        assert body["employee"]["displayName"] == "Alice"
+        assert body["account"]["username"] == "alice"
+        assert body["account"]["role"] == "user"
+        assert body["account"]["userId"] == "alice"
+        assert body["user"]["id"] == "alice"
+        assert body["user"]["displayName"] == "Alice"
         assert body["node"]["id"] == "sbx_unassigned"
-        assert body["node"]["employeeId"] == "alice"
+        assert body["node"]["userId"] == "alice"
 
         poll = client.get(
             "/api/v1/daemon-nodes/sbx_unassigned/commands",
@@ -1856,10 +1856,10 @@ def test_admin_creates_employee_login_and_assigns_unassigned_node(monkeypatch) -
             "/api/v1/auth/login", json={"username": "alice", "password": "userpass"}
         )
         assert login.status_code == 200
-        assert login.json()["user"]["employeeId"] == "alice"
+        assert login.json()["user"]["userId"] == "alice"
 
 
-def test_admin_assigns_unassigned_node_to_existing_employee(monkeypatch) -> None:
+def test_admin_assigns_unassigned_node_to_existing_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -1868,12 +1868,12 @@ def test_admin_assigns_unassigned_node_to_existing_employee(monkeypatch) -> None
         _login_admin(client)
 
         created = client.post(
-            "/api/v1/admin/users",
+            "/api/v1/admin/accounts",
             json={
                 "username": "alice",
                 "password": "userpass",
                 "role": "user",
-                "employeeId": "alice",
+                "userId": "alice",
             },
         )
         assert created.status_code == 201
@@ -1891,25 +1891,25 @@ def test_admin_assigns_unassigned_node_to_existing_employee(monkeypatch) -> None
             },
         )
         assert registered.status_code == 200
-        assert "employeeId" not in registered.json()
+        assert "userId" not in registered.json()
 
         assigned = client.put(
             "/api/v1/admin/daemon-nodes/node_unassigned/assignment",
-            json={"employeeId": "alice"},
+            json={"userId": "alice"},
         )
         assert assigned.status_code == 200
         body = assigned.json()
-        assert body["employee"]["id"] == "alice"
+        assert body["user"]["id"] == "alice"
         assert body["node"]["id"] == "node_unassigned"
-        assert body["node"]["employeeId"] == "alice"
-        assert body["node"]["nodeLocation"] == "employee-device"
+        assert body["node"]["userId"] == "alice"
+        assert body["node"]["nodeLocation"] == "user-device"
 
         listing = client.get("/api/v1/admin/daemon-nodes")
         assert listing.status_code == 200
         listed = next(
             node for node in listing.json()["nodes"] if node["id"] == "node_unassigned"
         )
-        assert listed["nodeLocation"] == "employee-device"
+        assert listed["nodeLocation"] == "user-device"
 
         restarted = TestClient(create_app(root))
         _login_admin(restarted)
@@ -1920,16 +1920,16 @@ def test_admin_assigns_unassigned_node_to_existing_employee(monkeypatch) -> None
             for node in restarted_listing.json()["nodes"]
             if node["id"] == "node_unassigned"
         )
-        assert restarted_node["nodeLocation"] == "employee-device"
+        assert restarted_node["nodeLocation"] == "user-device"
 
         second = client.put(
             "/api/v1/admin/daemon-nodes/node_unassigned/assignment",
-            json={"employeeId": "alice"},
+            json={"userId": "alice"},
         )
         assert second.status_code == 409
 
 
-def test_create_employee_rejects_invalid_node_assignment(monkeypatch) -> None:
+def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -1937,24 +1937,24 @@ def test_create_employee_rejects_invalid_node_assignment(monkeypatch) -> None:
         _login_admin(client)
 
         # Node assignment is optional: onboarding without a nodeId creates only
-        # the employee/user record. Nodes are managed separately.
+        # the user/user record. Nodes are managed separately.
         without_node = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "nodeless",
+                "userId": "nodeless",
                 "username": "nodeless",
                 "password": "userpass",
             },
         )
         assert without_node.status_code == 201
         without_node_body = without_node.json()
-        assert without_node_body["employee"]["id"] == "nodeless"
+        assert without_node_body["user"]["id"] == "nodeless"
         assert "node" not in without_node_body
 
         missing_node = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "nodeId": "sbx_missing",
@@ -1974,9 +1974,9 @@ def test_create_employee_rejects_invalid_node_assignment(monkeypatch) -> None:
             },
         )
         first = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "nodeId": "sbx_unassigned",
@@ -1996,9 +1996,9 @@ def test_create_employee_rejects_invalid_node_assignment(monkeypatch) -> None:
             },
         )
         duplicate_user = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "bob",
+                "userId": "bob",
                 "username": "alice",
                 "password": "userpass",
                 "nodeId": "sbx_second",
@@ -2007,9 +2007,9 @@ def test_create_employee_rejects_invalid_node_assignment(monkeypatch) -> None:
         assert duplicate_user.status_code == 409
 
         already_assigned = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "carol",
+                "userId": "carol",
                 "username": "carol",
                 "password": "userpass",
                 "nodeId": "sbx_unassigned",
@@ -2050,23 +2050,23 @@ def test_control_panel_accepts_admin_bearer_token_for_supervisor(monkeypatch) ->
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         response = client.get(
-            "/api/v1/admin/employees", headers={"Authorization": "Bearer admin_token"}
+            "/api/v1/admin/users", headers={"Authorization": "Bearer admin_token"}
         )
         assert response.status_code == 200
 
         created = client.post(
-            "/api/v1/admin/users",
+            "/api/v1/admin/accounts",
             json={
                 "username": "alice",
                 "password": "userpass",
                 "role": "user",
-                "employeeId": "alice",
+                "userId": "alice",
             },
             headers={"Authorization": "Bearer admin_token"},
         )
         assert created.status_code == 201
         body = created.json()
-        assert body["user"]["employeeId"] == "alice"
+        assert body["account"]["userId"] == "alice"
         assert "node" not in body
 
 
@@ -2082,7 +2082,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
         response = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
             },
         )
@@ -2090,7 +2090,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
         assert response.status_code == 201
         body = response.json()
         node = body["node"]
-        assert node["employeeId"] == "alice"
+        assert node["userId"] == "alice"
         assert node["workspacePath"] == "/workspace/alice"
         assert node["sandboxMode"] == "boxlite"
         assert node["status"] == "provisioning"
@@ -2102,7 +2102,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
         assert "--use-local-agent-home" not in body["daemonCommand"]
         assert "--workspace /workspace/alice" in body["daemonCommand"]
         assert body["daemonEnv"]["RELAY_SANDBOX_ID"] == node["id"]
-        assert body["daemonEnv"]["RELAY_EMPLOYEE_ID"] == "alice"
+        assert body["daemonEnv"]["RELAY_USER_ID"] == "alice"
         assert body["daemonEnv"]["RELAY_DAEMON_NODE_TOKEN"] == body["nodeToken"]
         assert body["daemonEnv"]["RELAY_SANDBOX_MODE"] == "boxlite"
         assert body["daemonEnv"]["RELAY_WORKSPACE"] == "/workspace/alice"
@@ -2143,7 +2143,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
             },
         )
         assert register.status_code == 200
-        assert register.json()["employeeId"] == "alice"
+        assert register.json()["userId"] == "alice"
         assert register.json()["sandboxMode"] == "boxlite"
         assert register.json()["agents"]["codex"] == "ready"
 
@@ -2151,7 +2151,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": node["id"],
-                "employeeId": "Alice",
+                "userId": "Alice",
                 "token": body["nodeToken"],
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2161,7 +2161,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
             },
         )
         assert mismatched_register.status_code == 200
-        assert mismatched_register.json()["employeeId"] == "alice"
+        assert mismatched_register.json()["userId"] == "alice"
 
         poll = client.get(
             f"/api/v1/daemon-nodes/{node['id']}/commands",
@@ -2173,7 +2173,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
         duplicate = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
             },
         )
@@ -2187,7 +2187,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
 
         unassign = client.delete(f"/api/v1/admin/daemon-nodes/{node['id']}/assignment")
         assert unassign.status_code == 200
-        assert "employeeId" not in unassign.json()["node"]
+        assert "userId" not in unassign.json()["node"]
 
         delete = client.delete(f"/api/v1/admin/daemon-nodes/{node['id']}")
         assert delete.status_code == 204
@@ -2207,18 +2207,18 @@ def test_control_panel_creates_local_mode_daemon_node(monkeypatch) -> None:
         response = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "displayName": "Alice's MacBook",
                 "workspacePath": "/workspace/alice",
                 "sandboxMode": "none",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
             },
         )
 
         assert response.status_code == 201
         body = response.json()
         assert body["node"]["sandboxMode"] == "none"
-        assert body["node"]["nodeLocation"] == "employee-device"
+        assert body["node"]["nodeLocation"] == "user-device"
         assert body["node"]["displayName"] == "Alice's MacBook"
         assert "--sandbox none" in body["daemonCommand"]
         assert "--allow-host-agent-execution" in body["daemonCommand"]
@@ -2238,7 +2238,7 @@ def test_control_panel_creates_local_mode_daemon_node(monkeypatch) -> None:
         duplicate = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "sandboxMode": "boxlite",
             },
@@ -2264,7 +2264,7 @@ def test_control_panel_rejects_unknown_sandbox_mode(monkeypatch) -> None:
         response = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "sandboxMode": "firecracker",
             },
         )
@@ -2272,8 +2272,8 @@ def test_control_panel_rejects_unknown_sandbox_mode(monkeypatch) -> None:
         assert response.status_code == 400
 
 
-def test_control_panel_refuses_an_isolated_employee_device(monkeypatch) -> None:
-    # `nodeLocation` and `sandboxMode` are not independent: an employee device
+def test_control_panel_refuses_an_isolated_user_device(monkeypatch) -> None:
+    # `nodeLocation` and `sandboxMode` are not independent: a user device
     # runs agents as host processes. Admin creation lands on the same
     # `provision_daemon_node` as self-service enrollment, which stores the mode
     # verbatim — so a caller asking for the pair must be refused here rather
@@ -2287,10 +2287,10 @@ def test_control_panel_refuses_an_isolated_employee_device(monkeypatch) -> None:
         response = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/Users/alice/project",
                 "sandboxMode": "boxlite",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
             },
         )
 
@@ -2301,12 +2301,12 @@ def test_control_panel_refuses_an_isolated_employee_device(monkeypatch) -> None:
         # `nodeLocation` absent means.
         managed = client.post(
             "/api/v1/admin/daemon-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         )
         assert managed.status_code == 201
 
 
-def test_employee_device_node_requires_an_absolute_workspace(monkeypatch) -> None:
+def test_user_device_node_requires_an_absolute_workspace(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2316,10 +2316,10 @@ def test_employee_device_node_requires_an_absolute_workspace(monkeypatch) -> Non
         response = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "relative/project",
                 "sandboxMode": "boxlite",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
             },
         )
 
@@ -2327,7 +2327,7 @@ def test_employee_device_node_requires_an_absolute_workspace(monkeypatch) -> Non
         assert "absolute workspacePath" in response.json()["detail"]
 
 
-def test_employee_can_create_own_device_enrollment(monkeypatch) -> None:
+def test_user_can_create_own_device_enrollment(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2335,9 +2335,9 @@ def test_employee_can_create_own_device_enrollment(monkeypatch) -> None:
         _login_admin(client)
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "username": "alice",
                     "password": "userpass",
                 },
@@ -2363,8 +2363,8 @@ def test_employee_can_create_own_device_enrollment(monkeypatch) -> None:
 
         assert response.status_code == 201
         body = response.json()
-        assert body["node"]["employeeId"] == "alice"
-        assert body["node"]["nodeLocation"] == "employee-device"
+        assert body["node"]["userId"] == "alice"
+        assert body["node"]["nodeLocation"] == "user-device"
         assert body["node"]["displayName"] == "Travel Laptop"
         assert body["node"]["workspacePath"] == "/Users/alice/project"
         assert "enrollmentKey" not in body["node"]
@@ -2372,15 +2372,15 @@ def test_employee_can_create_own_device_enrollment(monkeypatch) -> None:
         assert body["reused"] is False
 
 
-def _enroll_employee(client: TestClient, employee_id: str) -> None:
-    """Create `employee_id` and leave the client signed in as them."""
+def _enroll_user(client: TestClient, user_id: str) -> None:
+    """Create `user_id` and leave the client signed in as them."""
     _login_admin(client)
     assert (
         client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": employee_id,
-                "username": employee_id,
+                "userId": user_id,
+                "username": user_id,
                 "password": "userpass",
             },
         ).status_code
@@ -2390,7 +2390,7 @@ def _enroll_employee(client: TestClient, employee_id: str) -> None:
     assert (
         client.post(
             "/api/v1/auth/login",
-            json={"username": employee_id, "password": "userpass"},
+            json={"username": user_id, "password": "userpass"},
         ).status_code
         == 200
     )
@@ -2403,7 +2403,7 @@ def test_local_enrollment_defaults_to_direct_execution(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
 
         response = client.post(
             "/api/v1/daemon-node-enrollments/local",
@@ -2418,14 +2418,14 @@ def test_local_enrollment_defaults_to_direct_execution(monkeypatch) -> None:
 
 
 def test_local_enrollment_refuses_the_isolated_runtime(monkeypatch) -> None:
-    # BoxLite is provisioned on admin-owned hardware; asking an employee's own
+    # BoxLite is provisioned on admin-owned hardware; asking a user's own
     # laptop for it must fail loudly rather than be quietly downgraded, or the
     # start command would contradict what the caller asked for.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
 
         response = client.post(
             "/api/v1/daemon-node-enrollments/local",
@@ -2439,20 +2439,20 @@ def test_local_enrollment_refuses_the_isolated_runtime(monkeypatch) -> None:
 def test_local_enrollment_adopts_the_workspace_of_a_pathless_computer(
     monkeypatch,
 ) -> None:
-    # `find_by_employee` treats a node with no workspacePath as matching any
+    # `find_by_user` treats a node with no workspacePath as matching any
     # path, so reuse used to hand back a record that never learned where the
-    # employee's work lives.
+    # user's work lives.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _login_admin(client)
         created = client.post(
-            "/api/v1/admin/daemon-nodes", json={"employeeId": "alice"}
+            "/api/v1/admin/daemon-nodes", json={"userId": "alice"}
         )
         assert created.status_code == 201
         assert not created.json()["node"].get("workspacePath")
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
 
         response = client.post(
             "/api/v1/daemon-node-enrollments/local",
@@ -2474,7 +2474,7 @@ def test_local_enrollment_adopts_without_recovering_a_token(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         first = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2488,7 +2488,7 @@ def test_local_enrollment_adopts_without_recovering_a_token(
         app.state.registry.register(
             {
                 "sandboxId": node_id,
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": node_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -2516,12 +2516,12 @@ def test_local_enrollment_adopts_without_recovering_a_token(
         assert app.state.registry.get(node_id)["nodeTokenHash"]
 
 
-def test_employee_can_disconnect_own_computer(monkeypatch) -> None:
+def test_user_can_disconnect_own_computer(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2537,32 +2537,32 @@ def test_employee_can_disconnect_own_computer(monkeypatch) -> None:
         assert all(node["id"] != node_id for node in listed.json()["nodes"])
 
 
-def test_employee_cannot_disconnect_another_employees_computer(monkeypatch) -> None:
+def test_user_cannot_disconnect_another_users_computer(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
         )
         assert enrolled.status_code == 201
         node_id = enrolled.json()["node"]["id"]
-        _enroll_employee(client, "bob")
+        _enroll_user(client, "bob")
 
         response = client.delete(f"/api/v1/daemon-nodes/{node_id}")
 
         assert response.status_code == 403
 
 
-def test_employee_cannot_disconnect_an_admin_managed_computer(monkeypatch) -> None:
+def test_user_cannot_disconnect_an_admin_managed_computer(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2581,12 +2581,12 @@ def test_employee_cannot_disconnect_an_admin_managed_computer(monkeypatch) -> No
         assert "managed by an admin" in response.json()["detail"]
 
 
-def test_employee_must_reissue_to_recover_a_computer_token(monkeypatch) -> None:
+def test_user_must_reissue_to_recover_a_computer_token(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2601,14 +2601,14 @@ def test_employee_must_reissue_to_recover_a_computer_token(monkeypatch) -> None:
         assert node_token not in response.text
 
 
-def test_employee_cannot_reveal_token_after_a_backend_restart(monkeypatch) -> None:
+def test_user_cannot_reveal_token_after_a_backend_restart(monkeypatch) -> None:
     # A backend restart cannot recover a previously issued secret.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         first_app = create_app(root)
         client = TestClient(first_app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2633,19 +2633,19 @@ def test_employee_cannot_reveal_token_after_a_backend_restart(monkeypatch) -> No
         assert node_token not in response.text
 
 
-def test_employee_cannot_reveal_another_employees_token(monkeypatch) -> None:
+def test_user_cannot_reveal_another_users_token(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
         )
         assert enrolled.status_code == 201
         node_id = enrolled.json()["node"]["id"]
-        _enroll_employee(client, "bob")
+        _enroll_user(client, "bob")
 
         assert client.get(f"/api/v1/daemon-nodes/{node_id}/token").status_code == 403
         assert (
@@ -2661,7 +2661,7 @@ def test_reveal_requires_authentication(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2673,13 +2673,13 @@ def test_reveal_requires_authentication(monkeypatch) -> None:
         assert client.get(f"/api/v1/daemon-nodes/{node_id}/token").status_code == 401
 
 
-def test_employee_can_reissue_own_computer_token(monkeypatch) -> None:
+def test_user_can_reissue_own_computer_token(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2704,7 +2704,7 @@ def test_employee_can_reissue_own_computer_token(monkeypatch) -> None:
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": old_token,
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
@@ -2725,7 +2725,7 @@ def test_reveal_without_a_recoverable_token_points_at_reissue(monkeypatch) -> No
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2747,13 +2747,13 @@ def test_reveal_without_a_recoverable_token_points_at_reissue(monkeypatch) -> No
         assert client.get(f"/api/v1/daemon-nodes/{node_id}/token").status_code == 409
 
 
-def test_employee_cannot_reveal_a_managed_computer_token(monkeypatch) -> None:
+def test_user_cannot_reveal_a_managed_computer_token(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2781,7 +2781,7 @@ def test_disconnecting_a_computer_destroys_its_token_secret(monkeypatch) -> None
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project", "sandboxMode": "none"},
@@ -2801,7 +2801,7 @@ def test_disconnecting_a_computer_destroys_its_token_secret(monkeypatch) -> None
             assert "nodeTokenSecret" not in path.read_text()
 
 
-def test_employee_can_manage_own_computer_executors(monkeypatch) -> None:
+def test_user_can_manage_own_computer_executors(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2809,9 +2809,9 @@ def test_employee_can_manage_own_computer_executors(monkeypatch) -> None:
         _login_admin(client)
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "username": "alice",
                     "password": "userpass",
                 },
@@ -2841,7 +2841,7 @@ def test_employee_can_manage_own_computer_executors(monkeypatch) -> None:
         assert response.json()["node"]["disabledAgents"] == ["codex"]
 
 
-def test_employee_cannot_manage_another_employees_computer_executors(
+def test_user_cannot_manage_another_users_computer_executors(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -2849,13 +2849,13 @@ def test_employee_cannot_manage_another_employees_computer_executors(
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _login_admin(client)
-        for employee_id in ("alice", "bob"):
+        for user_id in ("alice", "bob"):
             assert (
                 client.post(
-                    "/api/v1/admin/employees",
+                    "/api/v1/admin/users",
                     json={
-                        "employeeId": employee_id,
-                        "username": employee_id,
+                        "userId": user_id,
+                        "username": user_id,
                         "password": "userpass",
                     },
                 ).status_code
@@ -2898,9 +2898,9 @@ def test_admin_can_manage_any_computers_executors(monkeypatch) -> None:
         _login_admin(client)
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "username": "alice",
                     "password": "userpass",
                 },
@@ -2940,9 +2940,9 @@ def test_disabled_agents_endpoint_rejects_invalid_payload(monkeypatch) -> None:
         _login_admin(client)
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "username": "alice",
                     "password": "userpass",
                 },
@@ -2989,14 +2989,14 @@ def test_control_panel_creates_unassigned_pending_daemon_node(monkeypatch) -> No
         body = response.json()
         node = body["node"]
         assert str(UUID(node["id"])) == node["id"]
-        assert "employeeId" not in node
+        assert "userId" not in node
         assert node["workspacePath"] == "/workspace/shared"
         assert node["status"] == "provisioning"
         assert "nodeLocation" not in node
         assert body["sandboxToken"].startswith("tok_")
         assert body["nodeToken"].startswith("tok_")
-        assert "--employee-id" not in body["daemonCommand"]
-        assert "RELAY_EMPLOYEE_ID" not in body["daemonEnv"]
+        assert "--user-id" not in body["daemonCommand"]
+        assert "RELAY_USER_ID" not in body["daemonEnv"]
 
         register = client.post(
             "/api/v1/daemon-node-registrations",
@@ -3011,13 +3011,13 @@ def test_control_panel_creates_unassigned_pending_daemon_node(monkeypatch) -> No
             },
         )
         assert register.status_code == 200
-        assert "employeeId" not in register.json()
+        assert "userId" not in register.json()
 
-        register_with_employee = client.post(
+        register_with_user = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": node["id"],
-                "employeeId": "clark",
+                "userId": "clark",
                 "token": body["nodeToken"],
                 "workspacePath": "/workspace/shared",
                 "protocolVersion": 1,
@@ -3026,8 +3026,8 @@ def test_control_panel_creates_unassigned_pending_daemon_node(monkeypatch) -> No
                 "status": "ready",
             },
         )
-        assert register_with_employee.status_code == 200
-        assert "employeeId" not in register_with_employee.json()
+        assert register_with_user.status_code == 200
+        assert "userId" not in register_with_user.json()
 
 
 def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
@@ -3042,7 +3042,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3068,7 +3068,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         assert created.status_code == 201
         session = created.json()
         session_id = session["id"]
-        assert session["ownerEmployeeId"] == "alice"
+        assert session["ownerUserId"] == "alice"
 
         listed = token_client.get("/api/v1/threads", headers=headers)
         assert listed.status_code == 200
@@ -3108,7 +3108,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
             "/api/v1/threads",
             json={
                 "taskGoal": "bob task",
-                "ownerEmployeeId": "bob",
+                "ownerUserId": "bob",
             },
         )
         assert bob_session.status_code == 201
@@ -3137,7 +3137,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         assert bad_token.json()["detail"] == "Invalid sandbox token."
 
 
-def test_anonymous_caller_cannot_provision_employee_sandbox(monkeypatch) -> None:
+def test_anonymous_caller_cannot_provision_user_sandbox(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -3146,7 +3146,7 @@ def test_anonymous_caller_cannot_provision_employee_sandbox(monkeypatch) -> None
         response = anonymous.post(
             "/api/v1/sandboxes",
             json={
-                "employeeId": "victim",
+                "userId": "victim",
                 "nodeToken": "attacker-node-token",
                 "workspacePath": "/tmp/victim",
             },
@@ -3157,7 +3157,7 @@ def test_anonymous_caller_cannot_provision_employee_sandbox(monkeypatch) -> None
         assert app.state.registry.monitor_nodes() == []
 
 
-def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
+def test_user_can_ask_assigned_daemon_node_without_daemon_node_token(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3166,13 +3166,13 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
-        _create_user(admin_client, "bob", employee_id="bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
 
         pending = admin_client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/stale",
             },
         )
@@ -3183,7 +3183,7 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3207,13 +3207,13 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
         bob_client = TestClient(app)
         _login(bob_client, "bob", "userpass")
 
-        provision = alice_client.post("/api/v1/sandboxes", json={"employeeId": "alice"})
+        provision = alice_client.post("/api/v1/sandboxes", json={"userId": "alice"})
         assert provision.status_code == 201
         assert provision.json()["id"] == "sbx_alice"
         assert "nodeToken" not in provision.json()
 
         bob_provision = bob_client.post(
-            "/api/v1/sandboxes", json={"employeeId": "alice"}
+            "/api/v1/sandboxes", json={"userId": "alice"}
         )
         assert bob_provision.status_code == 403
 
@@ -3226,7 +3226,7 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
         )
         assert run.status_code == 202
         session_id = run.json()["id"]
-        assert run.json()["ownerEmployeeId"] == "alice"
+        assert run.json()["ownerUserId"] == "alice"
         assert run.json()["status"] == "running"
 
         cancel = alice_client.post(
@@ -3240,7 +3240,7 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3280,7 +3280,7 @@ def test_employee_can_ask_assigned_daemon_node_without_daemon_node_token(
         assert alice_cancel_bob.status_code == 403
 
 
-def test_employee_can_name_owned_computer_and_name_survives_heartbeat(
+def test_user_can_name_owned_computer_and_name_survives_heartbeat(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3289,13 +3289,13 @@ def test_employee_can_name_owned_computer_and_name_survives_heartbeat(
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
+        _create_account(admin_client, "alice", user_id="alice")
 
         registered = admin_client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "workspaceId": "mch_alice",
@@ -3341,7 +3341,7 @@ def test_employee_can_name_owned_computer_and_name_survives_heartbeat(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "workspaceId": "mch_alice",
@@ -3359,7 +3359,7 @@ def test_employee_can_name_owned_computer_and_name_survives_heartbeat(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice_replacement",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "replacement_node_token",
                 "workspacePath": "/workspace/another-project",
                 "workspaceId": "mch_alice",
@@ -3388,21 +3388,21 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
-        _create_user(admin_client, "bob", employee_id="bob")
-        for employee_id in ("alice", "bob"):
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
+        for user_id in ("alice", "bob"):
             response = admin_client.post(
                 "/api/v1/daemon-node-registrations",
                 json={
-                    "sandboxId": f"sbx_{employee_id}",
-                    "employeeId": employee_id,
-                    "token": f"{employee_id}_node_token",
+                    "sandboxId": f"sbx_{user_id}",
+                    "userId": user_id,
+                    "token": f"{user_id}_node_token",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
                     "capabilities": ["thread-workspaces"],
                     "status": "ready",
                 },
-                headers={"Authorization": f"Bearer {employee_id}_ui_token"},
+                headers={"Authorization": f"Bearer {user_id}_ui_token"},
             )
             assert response.status_code == 200
 
@@ -3439,7 +3439,7 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
         assert (
             alice_client.patch(
                 "/api/v1/daemon-nodes/sbx_alice",
-                json={"displayName": "Laptop", "employeeId": "bob"},
+                json={"displayName": "Laptop", "userId": "bob"},
             ).status_code
             == 400
         )
@@ -3475,7 +3475,7 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "alice_node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -3488,7 +3488,7 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
         assert "displayName" not in heartbeat_after_reset.json()
 
 
-def test_employee_renames_managed_computer_through_runtime_identity(
+def test_user_renames_managed_computer_through_runtime_identity(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3497,10 +3497,10 @@ def test_employee_renames_managed_computer_through_runtime_identity(
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
+        _create_account(admin_client, "alice", user_id="alice")
         managed = admin_client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         ).json()["node"]
         assert (
             admin_client.patch(
@@ -3590,13 +3590,13 @@ def test_sandbox_run_accepts_decision_metadata(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
+        _create_account(admin_client, "alice", user_id="alice")
 
         register = admin_client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3641,13 +3641,13 @@ def test_sandbox_run_accepts_fresh_new_conversation_payload(monkeypatch) -> None
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
+        _create_account(admin_client, "alice", user_id="alice")
 
         register = admin_client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3671,10 +3671,10 @@ def test_sandbox_run_accepts_fresh_new_conversation_payload(monkeypatch) -> None
 
         assert run.status_code == 202
         assert run.json()["taskGoal"] == "start a fresh thread"
-        assert run.json()["ownerEmployeeId"] == "alice"
+        assert run.json()["ownerUserId"] == "alice"
 
 
-def test_admin_can_start_existing_employee_session_on_employee_daemon_node(
+def test_admin_can_start_existing_user_session_on_user_daemon_node(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3683,14 +3683,14 @@ def test_admin_can_start_existing_employee_session_on_employee_daemon_node(
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
-        _create_user(admin_client, "bob", employee_id="bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
 
         register = admin_client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3705,7 +3705,7 @@ def test_admin_can_start_existing_employee_session_on_employee_daemon_node(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_bob",
-                "employeeId": "bob",
+                "userId": "bob",
                 "token": "bob_node_token",
                 "workspacePath": "/workspace/bob",
                 "protocolVersion": 1,
@@ -3721,14 +3721,14 @@ def test_admin_can_start_existing_employee_session_on_employee_daemon_node(
             "/api/v1/threads",
             json={
                 "taskGoal": "alice asks through admin",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "assignments": [{"agent": "codex"}],
                 "workspacePath": "/workspace/alice",
             },
         )
         assert created.status_code == 201
         session_id = created.json()["id"]
-        assert created.json()["ownerEmployeeId"] == "alice"
+        assert created.json()["ownerUserId"] == "alice"
 
         bob_client = TestClient(app)
         _login(bob_client, "bob", "userpass")
@@ -3752,11 +3752,11 @@ def test_admin_can_start_existing_employee_session_on_employee_daemon_node(
         )
         assert run.status_code == 202
         assert run.json()["id"] == session_id
-        assert run.json()["ownerEmployeeId"] == "alice"
+        assert run.json()["ownerUserId"] == "alice"
         assert run.json()["status"] == "running"
 
 
-def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
+def test_admin_can_soft_delete_user_and_unassign_nodes(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -3765,11 +3765,11 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         _login_admin(client)
 
         register_user = client.post(
-            "/api/v1/admin/users",
+            "/api/v1/admin/accounts",
             json={
                 "username": "alice",
                 "password": "harbor-quartz-8830",
-                "employeeId": "alice",
+                "userId": "alice",
                 "displayName": "Alice",
             },
         )
@@ -3777,7 +3777,7 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         provision = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
             },
         )
@@ -3795,7 +3795,7 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorEmployeeId": "alice",
+                "supervisorUserId": "alice",
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -3818,7 +3818,7 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": agent["id"],
                 "memberAgentIds": [agent["id"]],
@@ -3827,28 +3827,28 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         managed_node = client.post(
             "/api/v1/admin/managed-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "assignmentMode": "dedicated",
                 "sandboxMode": "boxlite",
             },
         ).json()["node"]
-        employee_client = TestClient(app)
+        user_client = TestClient(app)
         assert (
-            employee_client.post(
+            user_client.post(
                 "/api/v1/auth/login",
                 json={"username": "alice", "password": "harbor-quartz-8830"},
             ).status_code
             == 200
         )
 
-        listing = client.get("/api/v1/admin/employees")
+        listing = client.get("/api/v1/admin/users")
         assert listing.status_code == 200
-        assert any(item["id"] == "alice" for item in listing.json()["employees"])
+        assert any(item["id"] == "alice" for item in listing.json()["users"])
 
-        delete = client.delete("/api/v1/admin/employees/alice")
+        delete = client.delete("/api/v1/admin/users/alice")
         assert delete.status_code == 200
         body = delete.json()
-        assert body["employee"]["id"] == "alice"
+        assert body["user"]["id"] == "alice"
         assert node_id in body["unassignedNodes"]
         assert body["deletedAgents"] == [agent["id"]]
         assert body["removedPlacements"] == [placement["id"]]
@@ -3867,9 +3867,9 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
             app.state.managed_node_store.get_node(managed_node["id"])["desiredState"]
             == "deleted"
         )
-        assert employee_client.get("/api/v1/auth/me").status_code == 401
+        assert user_client.get("/api/v1/auth/me").status_code == 401
         assert (
-            employee_client.post(
+            user_client.post(
                 "/api/v1/auth/login",
                 json={"username": "alice", "password": "harbor-quartz-8830"},
             ).status_code
@@ -3879,7 +3879,7 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
             client.post(
                 "/api/v1/admin/agents",
                 json={
-                    "supervisorEmployeeId": "alice",
+                    "supervisorUserId": "alice",
                     "displayName": "Orphan",
                     "executorKind": "codex", "defaultRole": "implementer",
                 },
@@ -3887,18 +3887,18 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
             == 404
         )
 
-        post_delete_employees = client.get("/api/v1/admin/employees")
-        assert post_delete_employees.status_code == 200
+        post_delete_users = client.get("/api/v1/admin/users")
+        assert post_delete_users.status_code == 200
         assert all(
-            item["id"] != "alice" for item in post_delete_employees.json()["employees"]
+            item["id"] != "alice" for item in post_delete_users.json()["users"]
         )
 
         nodes = client.get("/api/v1/admin/daemon-nodes")
         assert nodes.status_code == 200
         match = next(item for item in nodes.json()["nodes"] if item["id"] == node_id)
-        assert "employeeId" not in match
+        assert "userId" not in match
 
-        duplicate = client.delete("/api/v1/admin/employees/alice")
+        duplicate = client.delete("/api/v1/admin/users/alice")
         assert duplicate.status_code == 409
 
 
@@ -3912,7 +3912,7 @@ def test_admin_updates_disabled_agents_for_daemon_node(monkeypatch) -> None:
         provision = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
             },
         )
@@ -3995,7 +3995,7 @@ def test_admin_updates_disabled_agents_for_daemon_node(monkeypatch) -> None:
         assert "agentRoleDefaults" not in clear_defaults.json()["node"]
 
 
-def test_employee_updates_agent_role_overrides_for_own_daemon_node(monkeypatch) -> None:
+def test_user_updates_agent_role_overrides_for_own_daemon_node(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -4005,14 +4005,14 @@ def test_employee_updates_agent_role_overrides_for_own_daemon_node(monkeypatch) 
         anon_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
-        _create_user(admin_client, "alice", employee_id="alice")
-        _create_user(admin_client, "bob", employee_id="bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
         created_node = admin_client.post(
-            "/api/v1/admin/daemon-nodes", json={"employeeId": "alice"}
+            "/api/v1/admin/daemon-nodes", json={"userId": "alice"}
         )
         assert created_node.status_code == 201
         nodes = admin_client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
-        alice_node = next(node for node in nodes if node.get("employeeId") == "alice")
+        alice_node = next(node for node in nodes if node.get("userId") == "alice")
 
         _login(alice_client, "alice", "userpass")
         update = alice_client.patch(
@@ -4060,7 +4060,7 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/remote/daemon/workspace",
                 "protocolVersion": 1,
@@ -4133,7 +4133,7 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
         assert download.headers["content-type"].startswith("application/pdf")
 
 
-def test_managed_node_requires_an_existing_employee(monkeypatch) -> None:
+def test_managed_node_requires_an_existing_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -4143,21 +4143,21 @@ def test_managed_node_requires_an_existing_employee(monkeypatch) -> None:
 
         missing = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "ghost", "sandboxMode": "boxlite"},
+            json={"userId": "ghost", "sandboxMode": "boxlite"},
         )
         assert missing.status_code == 404
         assert app.state.managed_node_store.list_nodes() == []
 
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         created = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         )
         assert created.status_code == 202
 
         reassigned = client.patch(
             f"/api/v1/admin/managed-nodes/{created.json()['node']['id']}",
-            json={"employeeId": "ghost"},
+            json={"userId": "ghost"},
         )
         assert reassigned.status_code == 404
 
@@ -4183,7 +4183,7 @@ def test_cancel_recovers_a_session_whose_run_request_is_stuck_finalizing(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -4229,12 +4229,12 @@ def test_cancel_recovers_a_session_whose_run_request_is_stuck_finalizing(
         assert cancel.json()["status"] == "cancelled"
 
 
-def _employee_device_registration(
+def _user_device_registration(
     sandbox_id: str = "sbx_device", *, token: str = "node_token"
 ) -> dict[str, Any]:
     return {
         "sandboxId": sandbox_id,
-        "employeeId": "alice",
+        "userId": "alice",
         "token": token,
         "protocolVersion": 1,
         "supportedAgents": ["codex"],
@@ -4254,14 +4254,14 @@ def test_deleting_a_node_survives_the_running_daemon_reregistering(monkeypatch) 
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        app.state.registry.register(_employee_device_registration())
+        app.state.registry.register(_user_device_registration())
 
         deleted = client.delete("/api/v1/admin/daemon-nodes/sbx_device")
         assert deleted.status_code == 204
         assert client.get("/api/v1/admin/daemon-nodes").json()["nodes"] == []
 
         again = client.post(
-            "/api/v1/daemon-node-registrations", json=_employee_device_registration()
+            "/api/v1/daemon-node-registrations", json=_user_device_registration()
         )
 
         assert again.status_code == 410
@@ -4279,12 +4279,12 @@ def test_deleted_node_registration_is_rejected_after_a_daemon_restart(
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        app.state.registry.register(_employee_device_registration())
+        app.state.registry.register(_user_device_registration())
         assert client.delete("/api/v1/admin/daemon-nodes/sbx_device").status_code == 204
 
         restarted = client.post(
             "/api/v1/daemon-node-registrations",
-            json=_employee_device_registration("sbx_device_restarted"),
+            json=_user_device_registration("sbx_device_restarted"),
         )
 
         assert restarted.status_code == 410
@@ -4298,7 +4298,7 @@ def test_deleted_node_command_poll_is_terminal(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        app.state.registry.register(_employee_device_registration())
+        app.state.registry.register(_user_device_registration())
         assert client.delete("/api/v1/admin/daemon-nodes/sbx_device").status_code == 204
 
         polled = client.get(
@@ -4318,17 +4318,17 @@ def test_deleted_computer_can_be_enrolled_again(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        app.state.registry.register(_employee_device_registration())
+        app.state.registry.register(_user_device_registration())
         assert client.delete("/api/v1/admin/daemon-nodes/sbx_device").status_code == 204
 
         created = client.post(
-            "/api/v1/admin/daemon-nodes", json={"employeeId": "alice"}
+            "/api/v1/admin/daemon-nodes", json={"userId": "alice"}
         )
         assert created.status_code == 201
         node = created.json()["node"]
         registered = client.post(
             "/api/v1/daemon-node-registrations",
-            json=_employee_device_registration(
+            json=_user_device_registration(
                 node["id"], token=created.json()["nodeToken"]
             ),
         )
@@ -4344,7 +4344,7 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root), base_url="http://backend.internal:8790")
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments/local",
             json={"workspacePath": "/Users/alice/project"},
@@ -4375,7 +4375,7 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _enroll_employee(client, "alice")
+        _enroll_user(client, "alice")
         enrolled = client.post("/api/v1/daemon-node-enrollments/local", json={"workspacePath": "/Users/alice/project"}).json()
         node_id, token = enrolled["node"]["id"], enrolled["nodeToken"]
         endpoint = f"/api/v1/daemon-nodes/{node_id}/runtime-refresh"
@@ -4396,7 +4396,7 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         ack = {"commandId": command_id, "leaseId": command["leaseId"]}
         assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [ack]}).status_code == 200
         assert client.get(endpoint + f"/{command_id}").json()["status"] == "completed"
-        _enroll_employee(client, "bob")
+        _enroll_user(client, "bob")
         assert client.post(endpoint).status_code == 403
         assert client.get(endpoint + f"/{command_id}").status_code == 403
 
@@ -4411,7 +4411,7 @@ def test_device_authorization_requires_browser_approval_and_single_use_redemptio
         browser = TestClient(app)
         device = TestClient(app)
         _bootstrap_admin(browser)
-        _enroll_employee(browser, "alice")
+        _enroll_user(browser, "alice")
         started = device.post("/api/v1/computer-authorizations", json={"workspacePath": "/Users/alice/work", "displayName": "Alice laptop"})
         assert started.status_code == 201
         grant = started.json()
@@ -4430,7 +4430,7 @@ def test_device_authorization_requires_browser_approval_and_single_use_redemptio
         device = TestClient(create_app(root))
         redeemed = device.post(endpoint, headers=headers)
         assert redeemed.status_code == 200
-        assert redeemed.json()["employeeId"] == "alice"
+        assert redeemed.json()["userId"] == "alice"
         token = redeemed.json()["token"]
         assert token
         registration = device.post("/api/v1/daemon-node-registrations", json={
@@ -4455,7 +4455,7 @@ def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -
         browser = TestClient(app)
         device = TestClient(app)
         _bootstrap_admin(browser)
-        _enroll_employee(browser, "alice")
+        _enroll_user(browser, "alice")
         grant = device.post("/api/v1/computer-authorizations", json={
             "workspacePath": "/Users/alice/work", "displayName": "Alice laptop"}).json()
         with store_transaction(app.state.session_store.engine) as conn:
@@ -4481,7 +4481,7 @@ def test_daemon_auth_check_is_read_only_and_requires_node_token(monkeypatch) -> 
             {
                 "sandboxId": "doctor-node",
                 "protocolVersion": 1,
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "runtime-token",
                 "supportedAgents": ["codex"],
                 "status": "busy",
@@ -4517,3 +4517,60 @@ def test_daemon_auth_check_is_read_only_and_requires_node_token(monkeypatch) -> 
             "/api/v1/daemon-nodes/doctor-node/auth-check",
             headers={"Authorization": "Bearer runtime-token"},
         ).status_code == 401
+
+
+def test_a_daemon_that_predates_the_user_rename_still_registers(monkeypatch) -> None:
+    # Daemons on users' machines upgrade on their own schedule; until they do
+    # they send `employeeId` and the old "employee-device" location.
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _login_admin(client)
+        legacy = {
+            key: value for key, value in _user_device_registration().items() if key != "userId"
+        }
+
+        registered = client.post(
+            "/api/v1/daemon-node-registrations",
+            json={**legacy, "employeeId": "alice", "nodeLocation": "employee-device"},
+        )
+
+        assert registered.status_code == 200, registered.text
+        [node] = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+        assert node["userId"] == "alice"
+        assert node.get("nodeLocation") in (None, "user-device")
+        assert node["employeeId"] == "alice"  # mirrored for older supervisors
+
+
+def test_a_supervisor_that_predates_the_user_rename_still_reconciles(monkeypatch) -> None:
+    # The supervisor's reconcile loop, as it shipped before the rename: list
+    # employees, list nodes keyed by employeeId, provision one by employeeId.
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        admin = {"Authorization": "Bearer admin_token"}
+        created = client.post(
+            "/api/v1/admin/accounts",
+            json={"username": "alice", "password": "userpass", "role": "user", "userId": "alice"},
+            headers=admin,
+        )
+        assert created.status_code == 201, created.text
+
+        employees = client.get("/api/v1/admin/employees", headers=admin)
+        assert employees.status_code == 200
+        assert "alice" in [employee["id"] for employee in employees.json()["employees"]]
+
+        provisioned = client.post(
+            "/api/v1/admin/daemon-nodes",
+            json={"employeeId": "alice", "workspacePath": "/workspace/alice"},
+            headers=admin,
+        )
+        assert provisioned.status_code == 201, provisioned.text
+        assert provisioned.json()["node"]["employeeId"] == "alice"
+
+        nodes = client.get("/api/v1/admin/daemon-nodes", headers=admin).json()["nodes"]
+        assert [node["employeeId"] for node in nodes] == ["alice"]
+        assert [node["userId"] for node in nodes] == ["alice"]

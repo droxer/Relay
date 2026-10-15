@@ -27,7 +27,7 @@ function session(events: RelaySession["events"]): RelaySession {
   return {
     id: "ses_1",
     workspacePath: "/workspace",
-    ownerEmployeeId: "alice",
+    ownerUserId: "alice",
     taskGoal: "Build artifact display",
     participants: ["human", "claude"],
     status: "running",
@@ -724,7 +724,7 @@ describe("logical agent identity in the transcript", () => {
   const agents = [
     {
       id: "agt_ada",
-      employeeId: "alice",
+      userId: "alice",
       displayName: "Ada",
       executorKind: "claude" as const,
       skillPolicy: {},
@@ -739,7 +739,7 @@ describe("logical agent identity in the transcript", () => {
     },
     {
       id: "agt_zoe",
-      employeeId: "alice",
+      userId: "alice",
       displayName: "Zoe",
       executorKind: "claude" as const,
       skillPolicy: {},

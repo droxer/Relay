@@ -35,9 +35,9 @@ def merge_agent_state(state: dict[str, Any], patch: dict[str, Any]) -> dict[str,
     }
 
 
-def _decided_by(actor_employee_id: str | None) -> dict[str, str]:
+def _decided_by(actor_user_id: str | None) -> dict[str, str]:
     """Who made a human decision — the audit trail of every approval."""
-    return {"actorEmployeeId": actor_employee_id} if actor_employee_id else {}
+    return {"actorUserId": actor_user_id} if actor_user_id else {}
 
 
 class SessionArchivedError(Exception):
@@ -61,7 +61,7 @@ class SessionController:
         task_id: str | None = None,
         task_execution_owner: dict[str, Any] | None = None,
         workspace_path: str = "/workspace",
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         owner_agent_id: str | None = None,
         team_id: str | None = None,
         project_id: str | None = None,
@@ -76,7 +76,7 @@ class SessionController:
         self.task_id = task_id
         self.task_execution_owner = task_execution_owner
         self.workspace_path = workspace_path
-        self.owner_employee_id = owner_employee_id
+        self.owner_user_id = owner_user_id
         self.owner_agent_id = owner_agent_id
         self.team_id = team_id
         self.project_id = project_id
@@ -98,8 +98,8 @@ class SessionController:
                 **({"id": session_id} if session_id else {}),
                 "workspacePath": self.workspace_path,
                 **(
-                    {"ownerEmployeeId": self.owner_employee_id}
-                    if self.owner_employee_id
+                    {"ownerUserId": self.owner_user_id}
+                    if self.owner_user_id
                     else {}
                 ),
                 **(
@@ -137,7 +137,7 @@ class SessionController:
             "Session created",
             session_id=session["id"],
             workspace_path=self.workspace_path,
-            owner=self.owner_employee_id,
+            owner=self.owner_user_id,
         )
         return session
 
@@ -145,12 +145,12 @@ class SessionController:
         self,
         session_id: str,
         text: str,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
         message_id: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"text": text}
-        if actor_employee_id:
-            payload["actorEmployeeId"] = actor_employee_id
+        if actor_user_id:
+            payload["actorUserId"] = actor_user_id
         event = relay_event("user.message", session_id, payload)
         if message_id:
             event["id"] = message_id
@@ -164,7 +164,7 @@ class SessionController:
         self,
         session_id: str,
         agent_ids: list[str],
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         """Admit agents to the thread's room, addressed into it by a message."""
         current = self.store.get_session(session_id)
@@ -177,8 +177,8 @@ class SessionController:
         if not newcomers:
             return current
         payload: dict[str, Any] = {"agentIds": newcomers}
-        if actor_employee_id:
-            payload["actorEmployeeId"] = actor_employee_id
+        if actor_user_id:
+            payload["actorUserId"] = actor_user_id
         session = self._append(
             session_id,
             relay_event("thread.participants_joined", session_id, payload),
@@ -384,16 +384,16 @@ class SessionController:
 
     def cancel_session(
         self, session_id: str, note: str = "Cancelled by human.",
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
             return self._cancel_session(
-                session_id, note, actor_employee_id=actor_employee_id
+                session_id, note, actor_user_id=actor_user_id
             )
 
     def _cancel_session(
         self, session_id: str, note: str = "Cancelled by human.",
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         current = self.store.get_session(session_id)
         if current["status"] == "cancelled":
@@ -409,7 +409,7 @@ class SessionController:
                         "kind": "cancel",
                         "createdAt": now_iso(),
                         "note": note,
-                        **_decided_by(actor_employee_id),
+                        **_decided_by(actor_user_id),
                     }
                 },
             ),
@@ -426,12 +426,12 @@ class SessionController:
         target_agent: str | None = None,
         *,
         decision_id: str | None = None,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
             return self._record_decision(
                 session_id, kind, note, target_agent, decision_id=decision_id,
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
 
     def _record_decision(
@@ -442,12 +442,12 @@ class SessionController:
         target_agent: str | None = None,
         *,
         decision_id: str | None = None,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         if kind == "cancel":
             return self.cancel_session(
                 session_id, note or "Cancelled by human.",
-                actor_employee_id=actor_employee_id,
+                actor_user_id=actor_user_id,
             )
         if decision_id:
             current = self.store.get_session(session_id)
@@ -462,7 +462,7 @@ class SessionController:
             "createdAt": now_iso(),
             **({"note": note} if note else {}),
             **({"targetAgent": target_agent} if target_agent else {}),
-            **_decided_by(actor_employee_id),
+            **_decided_by(actor_user_id),
         }
         logger.info(
             "Human decision recorded",
@@ -551,14 +551,14 @@ class SessionController:
         target_agent_id: str | None = None,
         *,
         decision_id: str | None = None,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         # A decision ID is the retry receipt. It must not become durable
         # before the assignment artifact and final handoff status do.
         with self._transaction():
             return self._handoff_session(
                 session_id, target_agent, assignments, note, target_agent_id,
-                decision_id=decision_id, actor_employee_id=actor_employee_id,
+                decision_id=decision_id, actor_user_id=actor_user_id,
             )
 
     def _handoff_session(
@@ -570,7 +570,7 @@ class SessionController:
         target_agent_id: str | None = None,
         *,
         decision_id: str | None = None,
-        actor_employee_id: str | None = None,
+        actor_user_id: str | None = None,
     ) -> dict[str, Any]:
         if decision_id:
             current = self.store.get_session(session_id)
@@ -597,7 +597,7 @@ class SessionController:
                             if target_agent_id
                             else {}
                         ),
-                        **_decided_by(actor_employee_id),
+                        **_decided_by(actor_user_id),
                     }
                 },
             ),

@@ -21,9 +21,9 @@ def _bootstrap(client: TestClient) -> None:
     )
     assert (
         client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "displayName": "Alice",
@@ -44,7 +44,7 @@ def _register_computer(
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "employeeId": "alice",
+            "userId": "alice",
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
@@ -66,7 +66,7 @@ def _agent(client: TestClient, app, node: dict, name: str, executor: str) -> dic
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": "alice",
+            "supervisorUserId": "alice",
             "displayName": name,
             "executorKind": executor,
             "defaultRole": "implementer",
@@ -88,7 +88,7 @@ def _login_alice(client: TestClient) -> None:
     )
 
 
-def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> None:
+def test_user_creates_and_updates_computer_bound_project(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -123,7 +123,7 @@ def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> Non
 
         assert created.status_code == 201, created.text
         project = created.json()["project"]
-        assert project["ownerEmployeeId"] == "alice"
+        assert project["ownerUserId"] == "alice"
         assert project["computerId"] == "device:alice:machine-a"
         assert project["workspaceLayout"] == "project"
         assert project["workspaceSubpath"] == f"projects/{project['id']}"
@@ -494,7 +494,7 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("archive_first", [True, False])
-def test_employee_delete_requires_archival_and_preserves_history(
+def test_user_delete_requires_archival_and_preserves_history(
     monkeypatch, archive_first,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -534,15 +534,15 @@ def test_employee_delete_requires_archival_and_preserves_history(
             == 200
         )
 
-        deleted = client.delete("/api/v1/admin/employees/alice")
+        deleted = client.delete("/api/v1/admin/users/alice")
 
         assert deleted.status_code == (200 if archive_first else 409), deleted.text
         saved_project = app.state.project_store.get_project(project["id"])
         assert bool(saved_project.get("archivedAt")) is archive_first
         assert saved_project["members"] == project["members"]
         assert bool(app.state.agent_store.get_agent(lead["id"]).get("deletedAt")) is archive_first
-        employees = client.get("/api/v1/admin/employees").json()["employees"]
-        assert any(employee["id"] == "alice" for employee in employees) is not archive_first
+        users = client.get("/api/v1/admin/users").json()["users"]
+        assert any(user["id"] == "alice" for user in users) is not archive_first
 
 
 def test_project_routes_are_owner_scoped(monkeypatch) -> None:
@@ -573,9 +573,9 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
         client.post("/api/v1/auth/logout")
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "bob",
+                    "userId": "bob",
                     "username": "bob",
                     "password": "userpass",
                     "displayName": "Bob",
@@ -583,7 +583,7 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
             ).status_code
             == 401
         )
-        # Create Bob as admin, then verify the employee routes do not disclose Alice.
+        # Create Bob as admin, then verify the user routes do not disclose Alice.
         assert (
             client.post(
                 "/api/v1/auth/login",
@@ -593,9 +593,9 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
         )
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "bob",
+                    "userId": "bob",
                     "username": "bob",
                     "password": "userpass",
                     "displayName": "Bob",
@@ -821,7 +821,7 @@ def test_project_task_rejects_agents_and_teams_on_another_computer(monkeypatch) 
         # The team API refuses a split roster now; a legacy split team can
         # still exist in storage, and project admission must keep refusing it.
         split_team = app.state.team_store.create_team(
-            lead["supervisorEmployeeId"],
+            lead["supervisorUserId"],
             {
                 "name": "Split",
                 "leadAgentId": lead["id"],
@@ -1049,7 +1049,7 @@ def test_project_dispatch_fails_closed_after_incompatible_daemon_replacement(
         app.state.registry.register(
             {
                 "sandboxId": computer["id"],
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": f"token_{computer['id']}",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
@@ -1435,7 +1435,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         other = create_project("Other room")
         session = app.state.session_store.create_session(
             {
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "taskGoal": "Scoped thread",
                 "workspacePath": "/workspace/relay",
                 "projectId": project["id"],
@@ -1446,7 +1446,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         app.state.session_store.create_session(
             {
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "taskGoal": "Other thread",
                 "workspacePath": "/workspace/relay",
                 "projectId": other["id"],
@@ -1454,7 +1454,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         task = app.state.task_store.create_task(
             {
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Scoped task",
                 "projectId": project["id"],
                 "status": "assigned",
@@ -1462,7 +1462,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         app.state.task_store.create_task(
             {
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Other task",
                 "projectId": other["id"],
                 "status": "assigned",

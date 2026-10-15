@@ -67,7 +67,7 @@ Legacy project task drawer links redirect to the corresponding Tasks detail.
 Keep the existing workflow: Backlog → Ready → Running → Review → Done. Ready
 uses the existing `assigned` status. Blocked and waiting-for-human remain visible
 exceptions, with the reason and next action shown on the task. Do not invent a
-second task lifecycle for projects. Retain the employee-scoped work-in-progress
+second task lifecycle for projects. Retain the user-scoped work-in-progress
 limit; changing project filters must not change that limit.
 
 The project header offers New task. Secondary sections are Routines, Agents,
@@ -128,7 +128,7 @@ shared project files from retained task/run artifacts.
 ## Domain rules
 
 - A task and its project have the same owner. Project association grants no new
-  employee access; existing task access rules still apply. Audit legacy assignee
+  user access; existing task access rules still apply. Audit legacy assignee
   access separately rather than exposing project files through task membership.
 - A task may use project-led execution or an enabled member of its project roster.
   Independent team assignment is not supported for new project tasks, consistent

@@ -60,13 +60,13 @@ describe("reviewed design regressions", () => {
     const tokenHook = readWeb("src/hooks/useTokenUsage.ts");
 
     assert.match(dashboard, /const sessionsReady = !sessionsQuery\.isLoading && !sessionsQuery\.error;/);
-    assert.match(dashboard, /<TopEmployees[\s\S]*?error=\{sessionsQuery\.error\}/);
+    assert.match(dashboard, /<TopUsers[\s\S]*?error=\{sessionsQuery\.error\}/);
     assert.match(sessionHook, /isError: boolean/);
     assert.match(tokenHook, /isError:/);
   });
 
   it("lets agent and team routes distinguish failed loads from empty results", () => {
-    const agents = readWeb("src/hooks/useEmployeeAgents.ts");
+    const agents = readWeb("src/hooks/useUserAgents.ts");
     const teams = readWeb("src/hooks/useTeams.ts");
 
     assert.match(agents, /error: string \| null/);
@@ -142,10 +142,10 @@ describe("reviewed design regressions", () => {
 
   it("associates reviewed select triggers with their visible labels", () => {
     const taskDrawer = readWeb("src/components/task-board/TaskDrawer.tsx");
-    const employeeDrawer = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
+    const userDrawer = readWeb("src/components/admin/AddUserDrawer.tsx");
 
     assert.match(taskDrawer, /labelId=\{priorityLabelId\}[\s\S]*?aria-labelledby=\{priorityLabelId\}/);
-    assert.match(employeeDrawer, /labelId=\{nodeLabelId\}[\s\S]*?aria-labelledby=\{nodeLabelId\}/);
+    assert.match(userDrawer, /labelId=\{nodeLabelId\}[\s\S]*?aria-labelledby=\{nodeLabelId\}/);
   });
 
   it("reserves fallback space for markdown images", () => {

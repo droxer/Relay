@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { revokeSkill } from "../api";
-import type { EmployeeAgent } from "../types";
+import type { UserAgent } from "../types";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EMPLOYEE_AGENTS_QUERY_KEY } from "../hooks/useEmployeeAgents";
+import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { SkillPreviewDrawer } from "./SkillPreviewDrawer";
 
@@ -18,7 +18,7 @@ function qualifiedName(skill: { name: string; namespace?: string }) {
 }
 
 interface AgentSkillsPanelProps {
-  agent: EmployeeAgent;
+  agent: UserAgent;
   /** Whether the viewer may revoke granted skills. */
   canEdit?: boolean;
 }
@@ -44,7 +44,7 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
       await revokeSkill(skillId, agent.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
-        queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }),
       ]);
     } catch (err) {
       const code = err && typeof err === "object" && "code" in err && typeof err.code === "string"

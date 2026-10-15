@@ -79,33 +79,33 @@ def provision_sandbox(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     body = _request_body
-    employee_id = string_field(body, "employeeId")
-    if not employee_id:
-        raise HTTPException(400, "employeeId is required.")
+    user_id = string_field(body, "userId")
+    if not user_id:
+        raise HTTPException(400, "userId is required.")
     actor = request_actor_or_none(request, ctx.auth_store)
     if not actor:
         raise HTTPException(401, "Authentication required.")
-    if not actor["isAdmin"] and employee_id != actor["employeeId"]:
+    if not actor["isAdmin"] and user_id != actor["userId"]:
         raise HTTPException(403, "Sandbox access denied.")
     try:
         sandbox = ctx.backend.provision(
             {
-                "employeeId": employee_id,
+                "userId": user_id,
                 "sandboxId": string_field(body, "sandboxId") or None,
                 "workspacePath": string_field(body, "workspacePath") or None,
                 "token": bearer_token(request),
                 "nodeToken": string_field(body, "nodeToken") or None,
-                "actorEmployeeId": actor["employeeId"],
+                "actorUserId": actor["userId"],
                 "actorIsAdmin": actor["isAdmin"],
             }
         )
         logger.info(
-            "Sandbox provisioned", sandbox_id=sandbox["id"], employee_id=employee_id
+            "Sandbox provisioned", sandbox_id=sandbox["id"], user_id=user_id
         )
         return present_computer(ctx, provisioned_sandbox_record(sandbox))
     except PermissionError as error:
         logger.warning(
-            "Sandbox provisioning denied", employee_id=employee_id, error=str(error)
+            "Sandbox provisioning denied", user_id=user_id, error=str(error)
         )
         raise HTTPException(403, str(error))
 
@@ -135,19 +135,19 @@ async def run_sandbox(
     if not task_goal or not assignments:
         raise HTTPException(400, "taskGoal and at least one assignment are required.")
     session_id = string_field(body, "sessionId") or string_field(body, "session_id")
-    employee_id = sandbox.get("employeeId")
-    if employee_id and session_id and actor and actor.get("isAdmin"):
+    user_id = sandbox.get("userId")
+    if user_id and session_id and actor and actor.get("isAdmin"):
         session = ctx.session_store.get_session(session_id)
-        employee_id = session.get("ownerEmployeeId") or employee_id
-    if employee_id:
+        user_id = session.get("ownerUserId") or user_id
+    if user_id:
         assignments = [
-            _resolve_legacy_assignment(ctx, employee_id, sandbox_id, assignment)
+            _resolve_legacy_assignment(ctx, user_id, sandbox_id, assignment)
             for assignment in assignments
         ]
     parsed: dict[str, Any] = {
         "taskGoal": task_goal,
         "assignments": assignments,
-        **({"agentFirst": True} if employee_id else {}),
+        **({"agentFirst": True} if user_id else {}),
     }
     if session_id:
         parsed["sessionId"] = session_id
@@ -172,7 +172,7 @@ async def run_sandbox(
             key: value for key, value in parsed_decision.items() if value
         }
     if actor:
-        parsed["actorEmployeeId"] = actor["employeeId"]
+        parsed["actorUserId"] = actor["userId"]
         parsed["actorIsAdmin"] = actor["isAdmin"]
     logger.info(
         "Sandbox run starting",
@@ -189,14 +189,14 @@ async def run_sandbox(
 
 def _resolve_legacy_assignment(
     ctx: AppContextDep,
-    employee_id: str,
+    user_id: str,
     sandbox_id: str,
     assignment: dict[str, Any],
 ) -> dict[str, Any]:
     node = ctx.registry.get(sandbox_id)
     node_computer_id = computer_id(node or {"id": sandbox_id})
     agent = ctx.agent_store.ensure_compatibility_agent(
-        employee_id,
+        user_id,
         assignment["agent"],
         sandbox_id,
         computer_id=node_computer_id,

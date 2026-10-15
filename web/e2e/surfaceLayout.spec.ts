@@ -5,7 +5,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
    phone width, on a touch pointer, or when two controls share a row. */
 
 const stamp = "2026-09-01T00:00:00.000Z";
-const USER = { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" };
+const USER = { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" };
 
 const reply = [
   { type: "assistant", message: { content: [{ type: "text", text: "Both keys are accepted during cutover.\n\n```ts\nexport const KEYS = [OLD_SIGNING_KEY, NEW_SIGNING_KEY];\n```" }] } },
@@ -13,7 +13,7 @@ const reply = [
 
 const session = {
   id: "review-thread", title: "Rotate the signing key", taskGoal: "Rotate the signing key",
-  workspacePath: "/workspace", ownerEmployeeId: "review-user", participants: ["human"],
+  workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
   status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp,
   agentRuns: [{ id: "run-1", agent: "claude", status: "completed", mode: "action", startedAt: stamp, completedAt: stamp }],
   artifacts: [], decisions: [], collaborationRounds: [], eventCount: 3, artifactCount: 0, runCount: 1,
@@ -28,7 +28,7 @@ const session = {
    badge, and an origin name. That is the row the 240px floor has to survive. */
 const waiting = {
   id: "waiting-thread", title: "Approve the pricing copy", taskGoal: "Approve the pricing copy",
-  workspacePath: "/workspace", ownerEmployeeId: "review-user", participants: ["human"],
+  workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
   status: "waiting_for_human", phase: "created", createdAt: stamp, updatedAt: stamp,
   agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [],
   eventCount: 1, artifactCount: 0, runCount: 0, events: [],
@@ -36,13 +36,13 @@ const waiting = {
 
 const task = {
   id: "task-1", title: "Reconcile September invoices against the ledger export", description: "",
-  priority: "high", status: "backlog", ownerEmployeeId: "review-user", isRoutine: false,
+  priority: "high", status: "backlog", ownerUserId: "review-user", isRoutine: false,
   linkedSessionIds: ["review-thread", "waiting-thread"], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
 
 const routine = {
   id: "routine-1", title: "Weekly ledger reconciliation", description: "", priority: "normal", status: "backlog",
-  ownerEmployeeId: "review-user", isRoutine: true, routineState: "active",
+  ownerUserId: "review-user", isRoutine: true, routineState: "active",
   routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "week", at: "09:00", days: [1] } } }],
   linkedSessionIds: [], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
@@ -339,7 +339,7 @@ test("a board card keeps its controls inside the card on touch", async ({ browse
 
      The lanes live on a project's Issues tab, behind the view toggle; the
      global Issues route is a table and draws no cards. */
-  const project = { id: "p", name: "Launch", ownerEmployeeId: "review-user", computerId: "c", enabled: true, members: [],
+  const project = { id: "p", name: "Launch", ownerUserId: "review-user", computerId: "c", enabled: true, members: [],
     leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p", createdAt: stamp, updatedAt: stamp };
   const page = await openPage(browser, "/projects/p?tab=tasks", true, undefined, undefined,
     { projects: [project], tasks: [{ ...task, projectId: project.id }] });

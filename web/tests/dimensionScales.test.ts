@@ -226,7 +226,7 @@ describe("avatar scale", () => {
   });
 
   it("agrees with the TypeScript AVATAR scale", () => {
-    // Two languages, one taxonomy. EmployeeAvatar takes its box size as a
+    // Two languages, one taxonomy. UserAvatar takes its box size as a
     // prop while every other avatar takes it from CSS, so the scale has to
     // exist twice; it must not exist twice with different values.
     const icons = readFileSync(path.join(srcDir, "components", "icons.tsx"), "utf8");

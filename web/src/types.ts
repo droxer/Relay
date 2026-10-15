@@ -86,7 +86,7 @@ export interface SessionSummary {
   daemonNodeId?: string;
   managedNodeId?: string;
   workspacePath: string;
-  ownerEmployeeId?: string;
+  ownerUserId?: string;
   ownerAgentId?: string;
   teamId?: string;
   projectId?: string;
@@ -111,7 +111,7 @@ export interface ArtifactIndexItem extends RelayArtifact {
   sessionId: string;
   sessionTitle?: string;
   taskGoal?: string;
-  ownerEmployeeId?: string;
+  ownerUserId?: string;
   workspacePath?: string;
   sessionUpdatedAt?: string;
   taskId?: string;
@@ -208,7 +208,7 @@ export interface WorkspaceBriefSession {
   daemonNodeId?: string;
   managedNodeId?: string;
   workspacePath?: string;
-  ownerEmployeeId?: string;
+  ownerUserId?: string;
   ownerAgentId?: string;
   teamId?: string;
   currentAgent?: AgentName;
@@ -225,8 +225,8 @@ export interface WorkspaceBriefTask {
   title?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  ownerEmployeeId?: string;
-  assigneeEmployeeId?: string;
+  ownerUserId?: string;
+  assigneeUserId?: string;
   assignedAgent?: AgentName;
   assignedAgentId?: string;
   assignedTeamId?: string;
@@ -242,7 +242,7 @@ export interface WorkspaceBriefTask {
 }
 
 export interface WorkspaceBriefResponse {
-  employeeId: string;
+  userId: string;
   teamId?: string;
   projectId?: string;
   workspacePath?: string;
@@ -331,7 +331,7 @@ export interface TaskWorkspaceFileResponse {
 }
 
 export interface TasksResponse {
-  flowPolicy?: { wipLimit: number; scope: "employee" };
+  flowPolicy?: { wipLimit: number; scope: "user" };
   tasks: RelayTaskSummary[];
 }
 
@@ -409,7 +409,7 @@ export interface ProjectContextSuggestion {
 
 export interface ProjectRecord {
   id: string;
-  ownerEmployeeId: string;
+  ownerUserId: string;
   name: string;
   /** What the project is for. Absent on projects created before it existed. */
   description?: string;
@@ -482,7 +482,7 @@ export interface ControlPanelDaemonNodesResponse {
   nodes: ControlPanelDaemonNodeRecord[];
 }
 
-export interface EmployeeRecord {
+export interface UserRecord {
   id: string;
   /** The @handle. `id` is a UUID under the database auth store, so this — not
       the id — is what the admin surfaces render. Optional only for records
@@ -496,14 +496,14 @@ export interface EmployeeRecord {
   maxLocalComputers?: number | null;
   /** The override when there is one, the org default otherwise. Resolved server-side. */
   effectiveMaxLocalComputers?: number;
-  /** Live personal computers the employee currently owns. */
+  /** Live personal computers the user currently owns. */
   localComputerCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface OrgSettings {
-  maxLocalComputersPerEmployee: number;
+  maxLocalComputersPerUser: number;
   /** How many extra rounds a task may run when it reports itself unfinished. */
   maxTaskRounds: number;
   updatedAt?: string | null;
@@ -512,28 +512,28 @@ export interface OrgSettings {
 export interface OrgSettingsResponse {
   settings: OrgSettings;
   capabilities?: {
-    /** False when the auth store cannot hold employee edits (name, email, limit). */
-    employeeEdits?: boolean;
+    /** False when the auth store cannot hold user edits (name, email, limit). */
+    userEdits?: boolean;
   };
   /** Whether an admin bearer token exists. Only its hash is stored, so the
       value itself comes back once, from the reissue route. */
   adminTokenConfigured?: boolean;
 }
 
-export interface UpdateControlPanelEmployeeInput {
-  employeeId: string;
+export interface UpdateControlPanelUserInput {
+  userId: string;
   displayName?: string;
   email?: string;
-  /** `null` clears the override so the employee follows the org default again. */
+  /** `null` clears the override so the user follows the org default again. */
   maxLocalComputers?: number | null;
 }
 
-export interface ControlPanelEmployeesResponse {
-  employees: EmployeeRecord[];
+export interface ControlPanelUsersResponse {
+  users: UserRecord[];
 }
 
-export interface CreateControlPanelEmployeeInput {
-  employeeId: string;
+export interface CreateControlPanelUserInput {
+  userId: string;
   username: string;
   password: string;
   nodeId?: string;
@@ -542,18 +542,18 @@ export interface CreateControlPanelEmployeeInput {
   maxLocalComputers?: number | null;
 }
 
-export interface CreateControlPanelEmployeeResponse {
-  employee: EmployeeRecord;
-  user: CurrentUser;
+export interface CreateControlPanelUserResponse {
+  user: UserRecord;
+  account: CurrentUser;
   node?: ControlPanelDaemonNodeRecord;
-  /** Set when the employee was created but the requested computer could not be
-      attached (someone else claimed it first). The employee is still real — the
+  /** Set when the user was created but the requested computer could not be
+      attached (someone else claimed it first). The user is still real — the
       admin resolves the computer from the assign flow. */
   assignmentError?: string;
 }
 
 export interface AssignControlPanelDaemonNodeResponse {
-  employee: EmployeeRecord;
+  user: UserRecord;
   node: ControlPanelDaemonNodeRecord;
 }
 
@@ -562,20 +562,20 @@ export interface UnassignControlPanelDaemonNodeResponse {
 }
 
 interface CreateControlPanelDaemonNodeCommon {
-  employeeId?: string;
+  userId?: string;
   displayName?: string;
 }
 
 /** `nodeLocation` and `sandboxMode` are not independent, so they are paired in
-    the type rather than left to each call site: an employee device runs agents
+    the type rather than left to each call site: a user device runs agents
     as host processes against the installs already on it, and BoxLite isolation
     belongs to hardware an admin provisions. Both admin drawers had drifted to
     sending the isolated runtime for a local computer, which the backend now
     also refuses — this makes it a compile error instead of a start command the
-    employee's laptop cannot execute. */
+    user's laptop cannot execute. */
 export type CreateControlPanelDaemonNodeInput =
   | (CreateControlPanelDaemonNodeCommon & {
-      nodeLocation: "employee-device";
+      nodeLocation: "user-device";
       /** Where the agents' work lands on that device; required, and absolute. */
       workspacePath: string;
       sandboxMode: "none";
@@ -595,7 +595,7 @@ export interface CreateControlPanelDaemonNodeResponse {
   daemonEnv: Record<string, string>;
 }
 
-/** Self-service registration of the caller's own device — no employeeId, the backend
+/** Self-service registration of the caller's own device — no userId, the backend
     attributes it to the authenticated actor, and no sandboxMode: a personal computer
     runs its agents directly. */
 export interface CreateLocalDeviceEnrollmentInput {
@@ -639,7 +639,7 @@ export type ManagedNodePhase =
 export interface ManagedNodeRecord {
   id: string;
   displayName: string;
-  employeeId?: string;
+  userId?: string;
   assignmentMode: "dedicated" | "pooled" | "shared";
   provider: string;
   profile: string;
@@ -656,7 +656,7 @@ export interface ManagedNodeRecord {
 }
 
 export interface CreateManagedNodeInput {
-  employeeId: string;
+  userId: string;
   displayName?: string;
   sandboxMode: "boxlite";
 }
@@ -674,7 +674,7 @@ export type LogicalAgentAvailability = "ready" | "busy" | "pending" | "offline";
 export interface AgentPlacement {
   id: string;
   agentId: string;
-  employeeId: string;
+  userId: string;
   /** Runtime node observed when the placement was created (audit only). */
   daemonNodeId: string;
   /** Current runtime node resolved through the placement's stable Computer. */
@@ -683,7 +683,7 @@ export interface AgentPlacement {
   computerId?: string;
   managedNodeId?: string;
   nodeDisplayName?: string;
-  nodeOwnership?: "managed" | "employee-device" | "unknown";
+  nodeOwnership?: "managed" | "user-device" | "unknown";
   nodeSandboxMode?: "boxlite" | "none";
   executorKind: AgentName;
   desiredState: "active" | "draining" | "removed";
@@ -716,12 +716,12 @@ export type AgentBindingStatus =
   | "computer_offline"
   | "runtime_missing";
 
-export interface EmployeeAgent {
+export interface UserAgent {
   id: string;
-  /** The employee who supervises this agent. `/agents` is already scoped to
+  /** The user who supervises this agent. `/agents` is already scoped to
       the caller, and records that predate supervision carry no owner at all,
       so this is optional — an agent without one is globally assignable. */
-  supervisorEmployeeId?: string;
+  supervisorUserId?: string;
   displayName: string;
   profileImageUrl?: string | null;
   executorKind: AgentName;
@@ -769,11 +769,11 @@ export interface CreateAgentInput {
 }
 
 export interface CreateAgentResponse {
-  agent: EmployeeAgent;
+  agent: UserAgent;
 }
 
-export interface EmployeeAgentsResponse {
-  agents: EmployeeAgent[];
+export interface UserAgentsResponse {
+  agents: UserAgent[];
 }
 
 export interface TeamMemberSummary {
@@ -797,7 +797,7 @@ export interface TeamMemberConfig {
 export interface AgentTeam {
   collaborationStyle?: CollaborationStyle;
   id: string;
-  ownerEmployeeId: string;
+  ownerUserId: string;
   name: string;
   profileImageUrl?: string | null;
   leadAgentId?: string | null;
@@ -951,7 +951,7 @@ export interface CurrentUser {
   username: string;
   email?: string;
   role: UserRole;
-  employeeId?: string;
+  userId?: string;
   displayName?: string;
   theme?: Theme;
   language?: Language;
@@ -969,7 +969,7 @@ export type ChatIntegrationStatus = "draft" | "active" | "degraded" | "disabled"
 export interface ChatIdentityLink {
   id: string;
   externalUserId: string;
-  employeeId: string;
+  userId: string;
   displayName?: string | null;
   defaultAgentId?: string | null;
   createdAt: string;
@@ -1014,23 +1014,23 @@ export interface ChatIntegrationsResponse {
 export type SkillVisibility = "private" | "org";
 export type SkillSource = "authored" | "upload" | "git";
 export interface SkillFileInput { path: string; contentBase64: string }
-export interface SkillRevision { id: string; revision: number; bytes: number; manifestSha256: string; createdAt: string; createdByEmployeeId: string; note?: string | null }
+export interface SkillRevision { id: string; revision: number; bytes: number; manifestSha256: string; createdAt: string; createdByUserId: string; note?: string | null }
 export interface SkillFileSummary { path: string; sha256: string; bytes: number }
 export interface SkillAssignment {
   id: string;
   skillId: string;
-  targetType: "employee" | "team" | "project" | "agent" | "org";
+  targetType: "user" | "team" | "project" | "agent" | "org";
   targetId: string;
   mode: "optional" | "required" | "suggested";
   pin: "stable" | "latest" | { revisionId: string };
   invocation: "implicit" | "explicit";
-  createdByEmployeeId: string;
+  createdByUserId: string;
   createdAt: string;
   updatedAt: string;
 }
 export interface SkillRecord {
   id: string;
-  ownerEmployeeId: string;
+  ownerUserId: string;
   namespace: string;
   name: string;
   slug: string;

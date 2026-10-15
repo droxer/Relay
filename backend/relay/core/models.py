@@ -50,7 +50,7 @@ class DaemonNodeRegistration(RelayModel):
     # Runs a restarted daemon admitted before it crashed and will not resume.
     journaled_command_ids: list[str] = Field(default_factory=list, max_length=1000)
     sandbox_id: str
-    employee_id: str | None = None
+    user_id: str | None = None
     token: str
     workspace_path: str | None = None
     workspace_id: str | None = None

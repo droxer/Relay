@@ -87,7 +87,7 @@ def test_compute_prior_handoff_note_targets_a_logical_agent() -> None:
 
 def test_rejected_handoff_does_not_append_a_decision(tmp_path: Path) -> None:
     store = LocalSessionStore(tmp_path)
-    controller = SessionController(store, owner_employee_id="alice")
+    controller = SessionController(store, owner_user_id="alice")
     session = controller.create_session("Fix auth", ["human", "claude"])
     controller.archive_session(session["id"])
 
@@ -107,7 +107,7 @@ def test_handoff_rolls_back_all_writes_and_can_be_retried(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_phase: str
 ) -> None:
     store = DatabaseSessionStore(f"sqlite:///{tmp_path}/handoff.db", create_schema=True)
-    controller = SessionController(store, owner_employee_id="alice")
+    controller = SessionController(store, owner_user_id="alice")
     session = controller.create_session("Fix auth", ["human", "claude"])
     session_id = session["id"]
     before = store.get_session(session_id)

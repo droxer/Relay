@@ -21,7 +21,7 @@ const activeRun = {
 
 const node: DaemonNodeMonitorRecord = {
   id: "sbx_alice",
-  employeeId: "alice",
+  userId: "alice",
   status: "running",
   agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
   createdAt: "2026-06-12T00:00:00.000Z",
@@ -42,7 +42,7 @@ describe("threadRunning", () => {
     assert.equal(findActiveRunForSession(node, "ses_other"), undefined);
   });
 
-  it("finds the node that owns the run when an employee has multiple nodes", () => {
+  it("finds the node that owns the run when a user has multiple nodes", () => {
     const idleNode = { ...node, id: "sbx_idle", activeRuns: [] };
     const runningNode = { ...node, id: "sbx_running" };
 

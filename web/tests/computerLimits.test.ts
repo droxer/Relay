@@ -4,30 +4,30 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import {
-  buildEmployeeSummaries,
+  buildUserSummaries,
   isOverLocalComputerLimit,
   localComputerUsageLabel,
 } from "../src/lib/adminHelpers.js";
 import { parseLimitInput } from "../src/lib/computerLimits.js";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../src/types.js";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../src/types.js";
 
-function localNode(id: string, employeeId: string): ControlPanelDaemonNodeRecord {
+function localNode(id: string, userId: string): ControlPanelDaemonNodeRecord {
   return {
     id,
-    employeeId,
+    userId,
     status: "ready",
     online: true,
-    nodeLocation: "employee-device",
+    nodeLocation: "user-device",
     sandboxMode: "none",
     queuedCommandCount: 0,
     activeRuns: [],
   } as unknown as ControlPanelDaemonNodeRecord;
 }
 
-function managedNode(id: string, employeeId: string): ControlPanelDaemonNodeRecord {
+function managedNode(id: string, userId: string): ControlPanelDaemonNodeRecord {
   return {
     id,
-    employeeId,
+    userId,
     status: "ready",
     online: true,
     nodeLocation: "managed",
@@ -37,7 +37,7 @@ function managedNode(id: string, employeeId: string): ControlPanelDaemonNodeReco
   } as unknown as ControlPanelDaemonNodeRecord;
 }
 
-function employee(input: Partial<EmployeeRecord> & { id: string }): EmployeeRecord {
+function user(input: Partial<UserRecord> & { id: string }): UserRecord {
   return { displayName: input.id, ...input };
 }
 
@@ -58,10 +58,10 @@ describe("parseLimitInput", () => {
   });
 });
 
-describe("employee summary computer limits", () => {
+describe("user summary computer limits", () => {
   it("counts only personal computers against the limit", () => {
-    const [summary] = buildEmployeeSummaries(
-      [employee({ id: "alice", effectiveMaxLocalComputers: 3 })],
+    const [summary] = buildUserSummaries(
+      [user({ id: "alice", effectiveMaxLocalComputers: 3 })],
       [localNode("n1", "alice"), managedNode("n2", "alice")],
     );
     assert.equal(summary.localComputerCount, 1);
@@ -70,9 +70,9 @@ describe("employee summary computer limits", () => {
     assert.equal(isOverLocalComputerLimit(summary), false);
   });
 
-  it("carries the override through and flags an employee over a lowered limit", () => {
-    const [summary] = buildEmployeeSummaries(
-      [employee({ id: "alice", maxLocalComputers: 1, effectiveMaxLocalComputers: 1 })],
+  it("carries the override through and flags a user over a lowered limit", () => {
+    const [summary] = buildUserSummaries(
+      [user({ id: "alice", maxLocalComputers: 1, effectiveMaxLocalComputers: 1 })],
       [localNode("n1", "alice"), localNode("n2", "alice")],
     );
     assert.equal(summary.maxLocalComputers, 1);
@@ -81,8 +81,8 @@ describe("employee summary computer limits", () => {
   });
 
   it("shows a bare count and never flags when the server sent no limit", () => {
-    const [summary] = buildEmployeeSummaries(
-      [employee({ id: "alice" })],
+    const [summary] = buildUserSummaries(
+      [user({ id: "alice" })],
       [localNode("n1", "alice")],
     );
     assert.equal(summary.maxLocalComputers, null);
@@ -92,7 +92,7 @@ describe("employee summary computer limits", () => {
 });
 
 describe("settings copy", () => {
-  it("ships every key the settings and employee-limit surfaces render", async () => {
+  it("ships every key the settings and user-limit surfaces render", async () => {
     const locale = JSON.parse(
       await readFile(resolve("web/src/i18n/locales/en/translation.json"), "utf8"),
     );
@@ -113,8 +113,8 @@ describe("settings copy", () => {
       "emp_limit_use_default",
       "emp_limit_over",
       "col_local_limit",
-      "edit_employee_title",
-      "edit_employee_action",
+      "edit_user_title",
+      "edit_user_action",
     ]) {
       assert.equal(typeof v2[key], "string", `missing admin.v2.${key}`);
     }

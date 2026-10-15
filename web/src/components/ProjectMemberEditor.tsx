@@ -11,7 +11,7 @@ import {
   AGENT_ROLE_OPTIONS,
   type AgentRole,
   type DaemonNodeMonitorRecord,
-  type EmployeeAgent,
+  type UserAgent,
   type ProjectMember,
   type ProjectRecord,
 } from "../types";
@@ -68,7 +68,7 @@ type ProjectMemberEditorProps = {
   /** Null member = add mode; an existing member = edit mode. */
   member: ProjectMember | null;
   project: ProjectRecord;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   computers: DaemonNodeMonitorRecord[];
   onClose: () => void;
 };

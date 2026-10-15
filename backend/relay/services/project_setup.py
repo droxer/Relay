@@ -70,7 +70,7 @@ def setup_candidates(
     a proposal may staff, and what the setup agent is told it can choose from."""
     candidates = []
     for agent in agent_store.list_agents(
-        supervisor_employee_id=project["ownerEmployeeId"]
+        supervisor_user_id=project["ownerUserId"]
     ):
         if not agent.get("enabled", True):
             continue
@@ -289,7 +289,7 @@ def _member_issue(
     agent = agent_store.get_agent(agent_id)
     if not agent or agent.get("deletedAt"):
         return "agent_not_found"
-    if agent.get("supervisorEmployeeId") != project["ownerEmployeeId"]:
+    if agent.get("supervisorUserId") != project["ownerUserId"]:
         return "agent_wrong_owner"
     if not agent.get("enabled", True):
         return "agent_disabled"

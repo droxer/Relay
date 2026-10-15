@@ -30,14 +30,14 @@ def _bootstrap_admin(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def _create_user(client: TestClient, username: str, *, employee_id: str) -> None:
+def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
     response = client.post(
-        "/api/v1/admin/users",
+        "/api/v1/admin/accounts",
         json={
             "username": username,
             "password": "userpass",
             "role": "user",
-            "employeeId": employee_id,
+            "userId": user_id,
         },
     )
     assert response.status_code == 201
@@ -69,7 +69,7 @@ def _mark_run_executing(client: TestClient, command: dict) -> None:
 
 def _create_agent(
     client: TestClient,
-    employee_id: str,
+    user_id: str,
     *,
     executor_kind: str = "codex",
     node_id: str | None = None,
@@ -81,11 +81,11 @@ def _create_agent(
         assert node is not None, f"node {node_id} must be registered first"
         target_computer_id = computer_id(node)
     else:
-        # No explicit node: give this employee's test computer a stable,
+        # No explicit node: give this user's test computer a stable,
         # offline identity so creation succeeds without auto-placing the
         # agent. Tests relying on "no ready node yet" behavior depend on
         # this staying offline (status "stopped").
-        offline_node_id = f"offline_node_{employee_id}"
+        offline_node_id = f"offline_node_{user_id}"
         existing = client.app.state.registry.get(offline_node_id)
         # supportedAgents is a registration-payload field only; the registry
         # never persists it on the stored node record (it's folded into the
@@ -101,10 +101,10 @@ def _create_agent(
         node = client.app.state.registry.register(
             {
                 "sandboxId": offline_node_id,
-                "employeeId": employee_id,
-                "workspaceId": f"machine-{employee_id}",
+                "userId": user_id,
+                "workspaceId": f"machine-{user_id}",
                 "token": "node_token",
-                "workspacePath": f"/workspace/{employee_id}",
+                "workspacePath": f"/workspace/{user_id}",
                 "protocolVersion": 1,
                 "supportedAgents": sorted(existing_ready | {executor_kind}),
                 "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
@@ -115,7 +115,7 @@ def _create_agent(
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": employee_id,
+            "supervisorUserId": user_id,
             "displayName": f"{executor_kind.title()} Task Agent",
             "executorKind": executor_kind,
             "defaultRole": "implementer",
@@ -142,7 +142,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
 
         created = client.post(
@@ -151,8 +151,8 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
                 "title": "Ship backlog",
                 "description": "Add the task board.",
                 "priority": "high",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "dueDate": "2026-06-30",
                 "isRoutine": True,
                 "routineTriggers": WEEKLY_TRIGGERS,
@@ -161,7 +161,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         )
         assert created.status_code == 201
         task = created.json()
-        assert task["assigneeEmployeeId"] == "alice"
+        assert task["assigneeUserId"] == "alice"
         assert task["dueDate"] == "2026-06-30"
         assert task["isRoutine"] is True
         assert task["routineTriggers"] == WEEKLY_TRIGGERS
@@ -185,7 +185,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
 
         skipped_routine = client.post(
             "/api/v1/tasks/claim-next",
-            json={"agent": "codex", "assigneeEmployeeId": "alice"},
+            json={"agent": "codex", "assigneeUserId": "alice"},
         )
         assert skipped_routine.status_code == 404
 
@@ -195,8 +195,8 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
             json={
                 "title": "Claim normal backlog",
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
             },
@@ -205,7 +205,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
 
         claimed = client.post(
             "/api/v1/tasks/claim-next",
-            json={"agent": "codex", "assigneeEmployeeId": "alice"},
+            json={"agent": "codex", "assigneeUserId": "alice"},
         )
         assert claimed.status_code == 404
         assert (
@@ -220,13 +220,13 @@ def test_task_collaboration_style_is_validated(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         invalid = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Bad style",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "collaborationStyle": "debate",
             },
         )
@@ -237,7 +237,7 @@ def test_task_collaboration_style_is_validated(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "title": "Good style",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "collaborationStyle": "build_review",
             },
         )
@@ -306,8 +306,8 @@ def test_task_summary_view_without_limit_preserves_complete_list(monkeypatch) ->
         _bootstrap_admin(client)
         observed: dict[str, object] = {}
 
-        def list_task_summaries(*, employee_id=None, limit=None):
-            observed.update(employee_id=employee_id, limit=limit)
+        def list_task_summaries(*, user_id=None, limit=None):
+            observed.update(user_id=user_id, limit=limit)
             return []
 
         monkeypatch.setattr(
@@ -317,7 +317,7 @@ def test_task_summary_view_without_limit_preserves_complete_list(monkeypatch) ->
         response = client.get("/api/v1/tasks?view=summary")
 
         assert response.status_code == 200
-        assert observed == {"employee_id": None, "limit": None}
+        assert observed == {"user_id": None, "limit": None}
 
 
 def test_routine_create_defaults_to_paused(monkeypatch) -> None:
@@ -325,14 +325,14 @@ def test_routine_create_defaults_to_paused(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         created = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Daily routine",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
             },
@@ -347,8 +347,8 @@ def test_routine_create_defaults_to_paused(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "title": "Manual routine",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
             },
         )
@@ -363,7 +363,7 @@ def test_routine_next_run_follows_the_schedule_timezone(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
 
         tokyo = [{"kind": "schedule", "schedule": {"timezone": "Asia/Tokyo", "repeat": {"every": "day", "at": "09:00"}}}]
@@ -371,8 +371,8 @@ def test_routine_next_run_follows_the_schedule_timezone(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "title": "Timezone-aware routine",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -389,14 +389,14 @@ def test_routine_schedule_change_and_resume_recalculate_next_run(monkeypatch) ->
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         created = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Routine",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
                 "routineState": "paused",
@@ -428,7 +428,7 @@ def test_marking_task_done_only_completes_task_scoped_session(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         project = project_for_agents(client.app.state.project_store, "alice", [agent])
 
@@ -437,8 +437,8 @@ def test_marking_task_done_only_completes_task_scoped_session(
             json={
                 "projectId": project["id"],
                 "title": "Write the report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "createSession": True,
             },
         )
@@ -484,12 +484,12 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -514,8 +514,8 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
             json={
                 "projectId": project["id"],
                 "title": "Run from backlog",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
             },
@@ -578,12 +578,12 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -601,8 +601,8 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
             json={
                 "projectId": project["id"],
                 "title": "Explain backlog",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
             },
         )
@@ -630,7 +630,7 @@ def test_task_start_requests_managed_capacity_when_no_node_is_ready(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         # Managed capacity is requested on the projectless path, which only a
         # routine's own runs take now; project work waits for its computer.
@@ -638,8 +638,8 @@ def test_task_start_requests_managed_capacity_when_no_node_is_ready(
             {
                 **ROUTINE_RUN,
                 "title": "Provision before running",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -654,7 +654,7 @@ def test_task_start_requests_managed_capacity_when_no_node_is_ready(
             "Managed node provisioning requested for alice."
         )
         [managed] = app.state.managed_node_store.list_nodes()
-        assert managed["employeeId"] == "alice"
+        assert managed["userId"] == "alice"
 
 
 def test_task_start_reports_restart_of_stopped_managed_capacity(monkeypatch) -> None:
@@ -663,9 +663,9 @@ def test_task_start_reports_restart_of_stopped_managed_capacity(monkeypatch) -> 
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
-        managed = app.state.managed_node_store.create_node({"employeeId": "alice"})
+        managed = app.state.managed_node_store.create_node({"userId": "alice"})
         app.state.managed_node_store.update_node(
             managed["id"], {"desiredState": "stopped"}
         )
@@ -675,8 +675,8 @@ def test_task_start_reports_restart_of_stopped_managed_capacity(monkeypatch) -> 
             {
                 **ROUTINE_RUN,
                 "title": "Restart managed capacity",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -701,12 +701,12 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -729,8 +729,8 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
                 "projectId": project["id"],
                 "title": "Plan onboarding",
                 "description": "Discuss rollout and implementation.",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         )
         assert created.status_code == 201
@@ -815,30 +815,30 @@ def test_unassigned_project_task_runs_the_project_roster(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         # Simulate the control-plane provisioning record that authorizes this
         # daemon to register on Alice's behalf.
         provisioned = app.state.registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": [],
                 "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "stopped",
             },
             "ui_token",
-            authorized_node_location="employee-device",
+            authorized_node_location="user-device",
         )
         computer = computer_id(provisioned)
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -849,11 +849,11 @@ def test_unassigned_project_task_runs_the_project_roster(
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
-        assert app.state.agent_store.list_agents(supervisor_employee_id="alice") == []
+        assert app.state.agent_store.list_agents(supervisor_user_id="alice") == []
         named = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorEmployeeId": "alice",
+                "supervisorUserId": "alice",
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -864,7 +864,7 @@ def test_unassigned_project_task_runs_the_project_roster(
         reviewer = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorEmployeeId": "alice",
+                "supervisorUserId": "alice",
                 "displayName": "Reviewer",
                 "executorKind": "claude",
                 "defaultRole": "reviewer",
@@ -881,8 +881,8 @@ def test_unassigned_project_task_runs_the_project_roster(
                 "projectId": project["id"],
                 "title": "Design checkout recovery",
                 "description": "Find the right implementation plan and risks.",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         )
         assert created.status_code == 201
@@ -962,8 +962,8 @@ def test_unassigned_project_task_runs_the_project_roster(
             json={
                 "projectId": project["id"],
                 "title": "Run with the one remaining named agent",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         )
         assert single.status_code == 201, single.text
@@ -986,12 +986,12 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1009,8 +1009,8 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
             json={
                 "projectId": project["id"],
                 "title": "Audit the release",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         )
         assert created.status_code == 201
@@ -1066,12 +1066,12 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
         app.state.today = FixedDate.today
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1086,8 +1086,8 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "title": "Weekly retro",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
                 "routineTriggers": WEEKLY_TRIGGERS,
                 "routineState": "paused",
@@ -1116,12 +1116,12 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1140,8 +1140,8 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
             json={
                 "projectId": project["id"],
                 "title": "Scheduled backlog",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
             },
@@ -1181,12 +1181,12 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         app.state.today = FixedDate.today
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1203,8 +1203,8 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
             "/api/v1/tasks",
             json={
                 "title": "Weekly report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineTriggers": WEEKLY_TRIGGERS,
@@ -1254,14 +1254,14 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         created = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Retry queued report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
@@ -1309,12 +1309,12 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1335,8 +1335,8 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
             "/api/v1/tasks",
             json={
                 "title": "Stable assignment report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": original_agent["id"],
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
@@ -1366,7 +1366,7 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
         second = _create_agent(client, "alice", executor_kind="claude")
         project = project_for_agents(client.app.state.project_store, "alice", [first, second])
@@ -1376,9 +1376,9 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
                 "/api/v1/tasks",
                 json={
                     "projectId": project["id"],
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                 "title": "Claimed task",
-                    "assigneeEmployeeId": "alice",
+                    "assigneeUserId": "alice",
                     "assignedAgentId": first["id"],
                     "status": "assigned",
                 },
@@ -1402,7 +1402,7 @@ def test_claimed_task_rejects_pickup_assignment_update(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
         project = project_for_agents(client.app.state.project_store, "alice", [first])
         second = _create_agent(client, "alice", executor_kind="claude")
@@ -1410,9 +1410,9 @@ def test_claimed_task_rejects_pickup_assignment_update(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Claimed pickup",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": first["id"],
                 "status": "assigned",
             },
@@ -1439,16 +1439,16 @@ def test_claimed_task_allows_metadata_update(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice", executor_kind="codex")
         project = project_for_agents(client.app.state.project_store, "alice", [agent])
         task = client.post(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Original title",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
             },
@@ -1474,12 +1474,12 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         registered = client.post(
             "/api/v1/daemon-node-registrations",
             json={
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1502,8 +1502,8 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
             json={
                 "projectId": project["id"],
                 "title": "Use the assigned agent",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": assigned["id"],
                 "status": "assigned",
             },
@@ -1556,7 +1556,7 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         for field in ("routineType", "routineCadence", "routineNextRunDate", "routineEnabled"):
             legacy = client.post(
@@ -1584,7 +1584,7 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "title": "Never assigned",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
                 "routineState": "active",
@@ -1598,7 +1598,7 @@ def test_clearing_a_legacy_ready_intake_issue_returns_it_to_backlog(monkeypatch)
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         # Clearing only returns work to Backlog outside a project, which is now
         # an intake issue made Ready before intake existed. In a project the
@@ -1606,8 +1606,8 @@ def test_clearing_a_legacy_ready_intake_issue_returns_it_to_backlog(monkeypatch)
         task = client.app.state.task_store.create_task(
             {
                 "title": "Requeue me",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -1658,7 +1658,7 @@ def test_active_task_assignment_cannot_change(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
         second = _create_agent(client, "alice", executor_kind="claude")
         project = project_for_agents(client.app.state.project_store, "alice", [first, second])
@@ -1666,9 +1666,9 @@ def test_active_task_assignment_cannot_change(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Already running",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": first["id"],
                 "createSession": True,
             },
@@ -1702,16 +1702,16 @@ def test_pickup_rejects_terminal_tasks_without_creating_a_session(monkeypatch) -
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         project = project_for_agents(client.app.state.project_store, "alice", [agent])
         task = client.post(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Already done",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "backlog",
             },
@@ -1735,14 +1735,14 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
 
         created = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Delete me",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "isRoutine": True,
                 "routineTriggers": DAILY_TRIGGERS,
                 "routineState": "paused",
@@ -1755,7 +1755,7 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
         assert deleted.status_code == 200
         assert deleted.json()["outcome"] == "deleted"
         assert deleted.json()["task"]["deletedAt"]
-        assert deleted.json()["task"]["deletedByEmployeeId"] == "admin"
+        assert deleted.json()["task"]["deletedByUserId"] == "admin"
 
         again = client.delete(f"/api/v1/tasks/{task_id}")
         assert again.status_code == 200
@@ -1776,14 +1776,14 @@ def test_task_delete_requires_owner_or_admin(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "alice", user_id="alice")
+        _create_account(client, "bob", user_id="bob")
         task = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Owned by Alice",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "bob",
+                "ownerUserId": "alice",
+                "assigneeUserId": "bob",
             },
         ).json()
 
@@ -1796,7 +1796,7 @@ def test_task_delete_requires_owner_or_admin(monkeypatch) -> None:
         deleted = client.delete(f"/api/v1/tasks/{task['id']}")
         assert deleted.status_code == 200
         assert deleted.json()["outcome"] == "deleted"
-        assert deleted.json()["task"]["deletedByEmployeeId"] == "alice"
+        assert deleted.json()["task"]["deletedByUserId"] == "alice"
 
 
 def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> None:
@@ -1804,7 +1804,7 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
+        _create_account(client, "alice", user_id="alice")
         agent = _create_agent(client, "alice")
         project = project_for_agents(client.app.state.project_store, "alice", [agent])
         dispatching = client.post(
@@ -1812,8 +1812,8 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
             json={
                 "projectId": project["id"],
                 "title": "Dispatching",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
             },
@@ -1832,8 +1832,8 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
             json={
                 "projectId": project["id"],
                 "title": "Already running",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         ).json()
         session = client.app.state.session_store.create_session(
@@ -1841,7 +1841,7 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
                 "workspacePath": root,
                 "taskGoal": "Run linked work",
                 "participants": ["human", "codex"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
             }
         )
         client.app.state.task_store.link_session(running["id"], session["id"])
@@ -1917,7 +1917,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
         for index, task in enumerate([routine, *occurrences]):
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": "Routine run",
-                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": "admin",
             })
             if active is not True or index != 2:
                 sessions.append_event(session["id"], relay_event(
@@ -1931,7 +1931,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             linked.append(session["id"])
         unrelated = sessions.create_session({
             "workspacePath": root, "taskGoal": "Keep me",
-            "participants": ["human"], "ownerEmployeeId": "admin",
+            "participants": ["human"], "ownerUserId": "admin",
         })
         if active == "reserved":
             # Fail on the last thread after earlier deletes to prove rollback.
@@ -1972,7 +1972,7 @@ def test_task_delete_deletes_its_threads(monkeypatch) -> None:
         def thread(goal: str) -> str:
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": goal,
-                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": "admin",
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))
@@ -2018,7 +2018,7 @@ def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine)
         for index in range(2):
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": f"Round {index}",
-                "participants": ["human"], "ownerEmployeeId": "admin",
+                "participants": ["human"], "ownerUserId": "admin",
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))
@@ -2074,7 +2074,7 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         sessions = client.app.state.session_store
         session = sessions.create_session({
             "workspacePath": root, "taskGoal": "Linked work",
-            "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+            "participants": ["human", "codex"], "ownerUserId": "admin",
         })
         if session_status != "created":
             sessions.append_event(session["id"], relay_event(

@@ -13,7 +13,7 @@ import { StateMark, type StateShape, type StateTone } from "./StateMark";
  *
  * Every list view in the app groups, and each groups by the one dimension its
  * reader scans for — task status on the backlog, schedule health on routines,
- * fleet health on the admin employee and computer lists. That is what pays
+ * fleet health on the admin user and computer lists. That is what pays
  * for the columns the rows no longer have to carry: a row inside a band
  * labelled "Blocked" has already said it is blocked, so the per-row status
  * word is gone and the width it held went to the record's own facts.

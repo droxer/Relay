@@ -3,7 +3,7 @@
 import { type ReactNode, type RefObject } from "react";
 import {
   AdminConnect,
-  AdminEmployees,
+  AdminUsers,
   AdminLocked,
   AdminVerified,
   ICON,
@@ -118,7 +118,7 @@ export function readiness(integration: ChatIntegration): Array<{
         }]
       : []),
     { key: "secrets", labelKey: "admin.v2.chat_readiness_secrets", ready: integration.secretConfigured, icon: AdminLocked },
-    { key: "links", labelKey: "admin.v2.chat_readiness_identity", ready: integration.identityLinkCount > 0, icon: AdminEmployees },
+    { key: "links", labelKey: "admin.v2.chat_readiness_identity", ready: integration.identityLinkCount > 0, icon: AdminUsers },
     { key: "allowlist", labelKey: "admin.v2.chat_readiness_allowlist", ready: integration.allowedConversationCount > 0, icon: AdminVerified },
   ];
 }

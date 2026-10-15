@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 def _resolve_owner(ctx: AppContextDep, body: dict[str, Any]) -> dict[str, Any]:
-    """Resolve the chat identity (and thus the owning employee) or raise."""
+    """Resolve the chat identity (and thus the owning user) or raise."""
     try:
         identity = ctx.chat_store.resolve_identity(body)
     except ValueError as error:
@@ -21,8 +21,8 @@ def _resolve_owner(ctx: AppContextDep, body: dict[str, Any]) -> dict[str, Any]:
     return identity
 
 
-def _owned_by(session: dict[str, Any], employee_id: str) -> bool:
-    return session.get("ownerEmployeeId") == employee_id
+def _owned_by(session: dict[str, Any], user_id: str) -> bool:
+    return session.get("ownerUserId") == user_id
 
 
 @router.post("/internal/chat/identity/resolve")
@@ -56,8 +56,8 @@ def chat_conversation_session(
         session = ctx.session_store.get_session(record["sessionId"])
     except KeyError:
         return {"session": None, "mapping": record}
-    # Never surface another employee's session, or a closed (archived) one.
-    if not _owned_by(session, identity["employeeId"]) or session.get("archived"):
+    # Never surface another user's session, or a closed (archived) one.
+    if not _owned_by(session, identity["userId"]) or session.get("archived"):
         return {"session": None, "mapping": record}
     return {"session": session, "mapping": record}
 
@@ -66,14 +66,14 @@ def chat_conversation_session(
 def chat_conversation_sessions(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    """List the owning employee's open conversations for switch/list commands."""
+    """List the owning user's open conversations for switch/list commands."""
     require_chat_service_request(request)
     body = _request_body
     identity = _resolve_owner(ctx, body)
     sessions = [
         session
         for session in ctx.session_store.list_sessions()
-        if not session.get("archived") and session.get("ownerEmployeeId") == identity["employeeId"]
+        if not session.get("archived") and session.get("ownerUserId") == identity["userId"]
     ]
     return {"sessions": sessions}
 
@@ -82,7 +82,7 @@ def chat_conversation_sessions(
 def chat_conversation_mapping(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    """Bind a chat thread to a session the resolved employee owns."""
+    """Bind a chat thread to a session the resolved user owns."""
     require_chat_service_request(request)
     body = _request_body
     identity = _resolve_owner(ctx, body)
@@ -93,7 +93,7 @@ def chat_conversation_mapping(
         session = ctx.session_store.get_session(session_id)
     except KeyError:
         raise HTTPException(404, "Session not found.")
-    if not _owned_by(session, identity["employeeId"]):
-        raise HTTPException(403, "Session is owned by another employee.")
-    record = ctx.chat_store.set_conversation_session(body, session_id, identity["employeeId"])
+    if not _owned_by(session, identity["userId"]):
+        raise HTTPException(403, "Session is owned by another user.")
+    record = ctx.chat_store.set_conversation_session(body, session_id, identity["userId"])
     return {"mapping": record}

@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import { backendPublicOrigin } from "./apiOrigin.ts";
 import { byNumber, byText, type SortColumn } from "./listSort.ts";
-import type { AgentName, ControlPanelDaemonNodeRecord, EmployeeAgent, EmployeeRecord, LogicalAgentAvailability, Tone } from "../types.js";
+import type { AgentName, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
 
 export const ADMIN_AGENTS_KEY = ["admin", "agents"] as const;
 
@@ -39,7 +39,7 @@ function defaultBackendUrl(): string {
 
 /** Mirror backend daemon_start_command so cached node tokens stay usable after restart. */
 export function buildDaemonStartCommand(
-  node: Pick<ControlPanelDaemonNodeRecord, "id" | "employeeId" | "workspacePath" | "sandboxMode">,
+  node: Pick<ControlPanelDaemonNodeRecord, "id" | "userId" | "workspacePath" | "sandboxMode">,
   _nodeToken: string,
   backendUrl = defaultBackendUrl(),
 ): string {
@@ -56,14 +56,14 @@ export function buildDaemonStartCommand(
   if (sandboxMode === "none") {
     parts.push("--allow-host-agent-execution", "--use-local-agent-home");
   }
-  if (node.employeeId) parts.push("--employee-id", node.employeeId);
+  if (node.userId) parts.push("--user-id", node.userId);
   if (node.workspacePath) parts.push("--workspace", node.workspacePath);
   return `read -rsp 'Relay node token: ' RELAY_DAEMON_NODE_TOKEN && echo && export RELAY_DAEMON_NODE_TOKEN && ${parts.map(shellQuote).join(" ")}`;
 }
 
 const STALE_AFTER_MS = 15_000;
 export interface StoredNodeToken {
-  employeeId?: string;
+  userId?: string;
   sandboxToken?: string;
   nodeToken?: string;
   daemonCommand?: string;
@@ -93,7 +93,7 @@ export function matchesNodeQuickFilter(
   filter: NodeQuickFilter,
 ): boolean {
   if (filter === "all") return true;
-  if (filter === "unassigned") return !node.employeeId;
+  if (filter === "unassigned") return !node.userId;
   const status = visualStatus(node);
   if (filter === "failed") return status === "failed" || status === "stale";
   // "Running" describes the Computer process, not only an actively executing
@@ -191,10 +191,10 @@ export function formatRelativeTime(value: string | undefined, t: TFunction): str
   return rtf.format(-Math.floor(days / 365), "year");
 }
 
-export interface EmployeeNodeSummary {
+export interface UserNodeSummary {
   id: string;
-  /** The employee's `@handle`. Optional for the same reason it is on
-      EmployeeRecord: a row from a backend that predates the column. */
+  /** The user's `@handle`. Optional for the same reason it is on
+      UserRecord: a row from a backend that predates the column. */
   handle?: string;
   displayName: string;
   email?: string;
@@ -209,16 +209,16 @@ export interface EmployeeNodeSummary {
   maxLocalComputers: number | null;
   /** The limit actually in force — the override when pinned, the org default otherwise. */
   effectiveMaxLocalComputers?: number;
-  /** Live personal computers the employee owns, counted from their nodes. */
+  /** Live personal computers the user owns, counted from their nodes. */
   localComputerCount: number;
 }
 
-/** Employees who own more personal computers than their limit now allows.
+/** Users who own more personal computers than their limit now allows.
 
     Lowering a limit never disconnects a computer, so this state is reachable
-    and worth surfacing: the employee keeps working but cannot add another. */
+    and worth surfacing: the user keeps working but cannot add another. */
 export function isOverLocalComputerLimit(
-  member: Pick<EmployeeNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
+  member: Pick<UserNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
 ): boolean {
   if (member.effectiveMaxLocalComputers === undefined) return false;
   return member.localComputerCount > member.effectiveMaxLocalComputers;
@@ -226,19 +226,19 @@ export function isOverLocalComputerLimit(
 
 /** "2/3" when a limit is known, otherwise just the count. */
 export function localComputerUsageLabel(
-  member: Pick<EmployeeNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
+  member: Pick<UserNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
 ): string {
   if (member.effectiveMaxLocalComputers === undefined) return String(member.localComputerCount);
   return `${member.localComputerCount}/${member.effectiveMaxLocalComputers}`;
 }
 
-export type EmployeeQuickFilter = "all" | "running" | "ready" | "idle" | "failed" | "unassigned";
-export type EmployeeSummaryStatusKey = "running" | "ready" | "failed" | "idle" | "no_nodes";
-type EmployeeSummaryTone = Tone;
+export type UserQuickFilter = "all" | "running" | "ready" | "idle" | "failed" | "unassigned";
+export type UserSummaryStatusKey = "running" | "ready" | "failed" | "idle" | "no_nodes";
+type UserSummaryTone = Tone;
 
-export function matchesEmployeeQuickFilter(
-  member: EmployeeNodeSummary,
-  filter: EmployeeQuickFilter,
+export function matchesUserQuickFilter(
+  member: UserNodeSummary,
+  filter: UserQuickFilter,
 ): boolean {
   if (filter === "all") return true;
   if (filter === "running") return member.runningCount > 0;
@@ -253,16 +253,16 @@ export function matchesEmployeeQuickFilter(
   return member.nodeCount === 0;
 }
 
-export function employeeSummaryStatus(
-  member: EmployeeNodeSummary,
-): { tone: EmployeeSummaryTone; key: EmployeeSummaryStatusKey } {
+export function userSummaryStatus(
+  member: UserNodeSummary,
+): { tone: UserSummaryTone; key: UserSummaryStatusKey } {
   if (member.runningCount > 0) return { tone: "info", key: "running" };
   if (member.readyCount > 0) return { tone: "good", key: "ready" };
   // One bucket ("Failed / stale" — the machines that need attention), two
   // severities. Its tone follows the worst machine in it: a failure is bad,
   // but a computer that has only stopped checking in is degraded, the same
   // amber `statusTone("stale")` gives it everywhere else. The whole bucket
-  // painted red made an employee with one quiet laptop look like an incident.
+  // painted red made a user with one quiet laptop look like an incident.
   if (member.failedCount > 0) {
     const anyFailed = member.nodes.some((node) => visualStatus(node) === "failed");
     return { tone: anyFailed ? "bad" : "warn", key: "failed" };
@@ -272,13 +272,13 @@ export function employeeSummaryStatus(
 }
 
 /**
- * Employee fleet health, most-urgent first — the order the employee list
- * bands in. Not the order `EmployeeSummaryStatusKey` happens to be declared
+ * User fleet health, most-urgent first — the order the user list
+ * bands in. Not the order `UserSummaryStatusKey` happens to be declared
  * in: that union lists the states, this ranks them. An admin opens this list
  * to find the people whose machines need something, so a failure sorts above
- * a healthy fleet and an employee with no computer at all sorts last.
+ * a healthy fleet and a user with no computer at all sorts last.
  */
-export const EMPLOYEE_SUMMARY_STATUS_ORDER: readonly EmployeeSummaryStatusKey[] = [
+export const USER_SUMMARY_STATUS_ORDER: readonly UserSummaryStatusKey[] = [
   "failed",
   "running",
   "ready",
@@ -287,17 +287,17 @@ export const EMPLOYEE_SUMMARY_STATUS_ORDER: readonly EmployeeSummaryStatusKey[] 
 ];
 
 /**
- * Employees partitioned by fleet health, in `EMPLOYEE_SUMMARY_STATUS_ORDER`.
- * `employeeSummaryStatus` is already exclusive — every employee has exactly
+ * Users partitioned by fleet health, in `USER_SUMMARY_STATUS_ORDER`.
+ * `userSummaryStatus` is already exclusive — every user has exactly
  * one — so this is a true partition, which is what a band may claim to be.
  */
-export function employeesByStatus(
-  members: EmployeeNodeSummary[],
-): Record<EmployeeSummaryStatusKey, EmployeeNodeSummary[]> {
+export function usersByStatus(
+  members: UserNodeSummary[],
+): Record<UserSummaryStatusKey, UserNodeSummary[]> {
   const grouped = Object.fromEntries(
-    EMPLOYEE_SUMMARY_STATUS_ORDER.map((key) => [key, [] as EmployeeNodeSummary[]]),
-  ) as Record<EmployeeSummaryStatusKey, EmployeeNodeSummary[]>;
-  for (const member of members) grouped[employeeSummaryStatus(member).key].push(member);
+    USER_SUMMARY_STATUS_ORDER.map((key) => [key, [] as UserNodeSummary[]]),
+  ) as Record<UserSummaryStatusKey, UserNodeSummary[]>;
+  for (const member of members) grouped[userSummaryStatus(member).key].push(member);
   return grouped;
 }
 
@@ -344,63 +344,63 @@ export function nodesByStatus(
   return [...known, ...unknown].map((status) => ({ status, nodes: grouped.get(status) ?? [] }));
 }
 
-export function employeeEmptyStateTranslationKey(
+export function userEmptyStateTranslationKey(
   query: string,
-  filter: EmployeeQuickFilter,
-): "admin.v2.no_match" | "admin.v2.no_employees_for_filter" {
+  filter: UserQuickFilter,
+): "admin.v2.no_match" | "admin.v2.no_users_for_filter" {
   return query.trim() || filter === "all"
     ? "admin.v2.no_match"
-    : "admin.v2.no_employees_for_filter";
+    : "admin.v2.no_users_for_filter";
 }
 
-export function buildEmployeeSummaries(
-  employees: EmployeeRecord[],
+export function buildUserSummaries(
+  users: UserRecord[],
   nodes: ControlPanelDaemonNodeRecord[],
-): EmployeeNodeSummary[] {
-  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
-  const nodesByEmployee = new Map<string, ControlPanelDaemonNodeRecord[]>();
+): UserNodeSummary[] {
+  const userById = new Map(users.map((user) => [user.id, user]));
+  const nodesByUser = new Map<string, ControlPanelDaemonNodeRecord[]>();
 
   for (const node of nodes) {
-    if (!node.employeeId) continue;
-    const current = nodesByEmployee.get(node.employeeId) ?? [];
-    nodesByEmployee.set(node.employeeId, [...current, node]);
+    if (!node.userId) continue;
+    const current = nodesByUser.get(node.userId) ?? [];
+    nodesByUser.set(node.userId, [...current, node]);
   }
 
   const ids = new Set<string>([
-    ...employees.map((employee) => employee.id),
-    ...nodes.map((node) => node.employeeId).filter((id): id is string => Boolean(id)),
+    ...users.map((user) => user.id),
+    ...nodes.map((node) => node.userId).filter((id): id is string => Boolean(id)),
   ]);
   return [...ids].sort().map((id) => {
-    const employee = employeeById.get(id);
-    const employeeNodes = nodesByEmployee.get(id) ?? [];
-    // Employee summaries are categorical: an idle ready Computer must not also
-    // make its employee look like they have an actively running agent.
-    const readyCount = employeeNodes.filter((node) => visualStatus(node) === "ready").length;
-    const runningCount = employeeNodes.filter((node) => visualStatus(node) === "running").length;
-    const failedCount = employeeNodes.filter((node) => matchesNodeQuickFilter(node, "failed")).length;
+    const user = userById.get(id);
+    const userNodes = nodesByUser.get(id) ?? [];
+    // User summaries are categorical: an idle ready Computer must not also
+    // make its user look like they have an actively running agent.
+    const readyCount = userNodes.filter((node) => visualStatus(node) === "ready").length;
+    const runningCount = userNodes.filter((node) => visualStatus(node) === "running").length;
+    const failedCount = userNodes.filter((node) => matchesNodeQuickFilter(node, "failed")).length;
     // Counted from the nodes on screen rather than the server's tally so the
     // ratio stays consistent with the computers listed beside it.
-    const localComputerCount = employeeNodes.filter(
+    const localComputerCount = userNodes.filter(
       (node) => nodeOwnershipProfile(node) === "local",
     ).length;
     return {
       id,
       // The @handle, carried through so the cards and rows can render the
-      // employee's real one. Dropping it here sent `employeeHandleOf` to its
+      // user's real one. Dropping it here sent `userHandleOf` to its
       // fallback on every summary — a slugified display name under the
       // database auth store, which is a second spelling of one identity.
-      handle: employee?.handle,
-      displayName: employee?.displayName || id,
-      email: employee?.email,
-      departmentId: employee?.departmentId,
-      departmentName: employee?.departmentName,
-      nodeCount: employeeNodes.length,
+      handle: user?.handle,
+      displayName: user?.displayName || id,
+      email: user?.email,
+      departmentId: user?.departmentId,
+      departmentName: user?.departmentName,
+      nodeCount: userNodes.length,
       readyCount,
       runningCount,
       failedCount,
-      nodes: employeeNodes,
-      maxLocalComputers: employee?.maxLocalComputers ?? null,
-      effectiveMaxLocalComputers: employee?.effectiveMaxLocalComputers,
+      nodes: userNodes,
+      maxLocalComputers: user?.maxLocalComputers ?? null,
+      effectiveMaxLocalComputers: user?.effectiveMaxLocalComputers,
       localComputerCount,
     };
   });
@@ -412,29 +412,29 @@ export function buildEmployeeSummaries(
  * its own, and a sort the header cannot offer is a sort no reader can reach.
  * Give status its own column first if this table ever needs to order by it.
  */
-export type NodeSortKey = "node" | "employee" | "runtimes";
+export type NodeSortKey = "node" | "user" | "runtimes";
 
 /**
  * Sortable columns for the admin node table, in header order.
  *
- * The employee column takes the map rather than an id because the row prints
- * the owner's display NAME; sorting by `employeeId` would order the table by
+ * The user column takes the map rather than an id because the row prints
+ * the owner's display NAME; sorting by `userId` would order the table by
  * a string that is nowhere on screen.
  */
 export function nodeSortColumns(
-  employeeById: ReadonlyMap<string, EmployeeRecord>,
+  userById: ReadonlyMap<string, UserRecord>,
 ): readonly SortColumn<ControlPanelDaemonNodeRecord, NodeSortKey>[] {
   const ownerName = (node: ControlPanelDaemonNodeRecord) =>
-    (node.employeeId && employeeById.get(node.employeeId)?.displayName) || node.employeeId || "";
+    (node.userId && userById.get(node.userId)?.displayName) || node.userId || "";
   return [
     // Same label rule as `stableNodeOrder`: an unnamed machine sorts under its id.
     { key: "node", compare: byText((node) => node.displayName?.trim() || node.id) },
     {
-      key: "employee",
+      key: "user",
       compare: byText(ownerName),
       // "Nobody owns this" is a gap, not a name — it belongs at the bottom
       // whichever way the column is pointed.
-      isMissing: (node) => !node.employeeId,
+      isMissing: (node) => !node.userId,
     },
     {
       key: "runtimes",
@@ -444,18 +444,18 @@ export function nodeSortColumns(
   ];
 }
 
-export type EmployeeSortKey = "employee" | "computers" | "localLimit" | "running" | "ready";
+export type UserSortKey = "user" | "computers" | "localLimit" | "running" | "ready";
 
 /**
- * Sortable columns for the admin employee table, in header order.
+ * Sortable columns for the admin user table, in header order.
  *
  * Every count column opens descending: a reader sorting by "Running" is
  * asking who has the most work in flight, and an ascending first click would
  * answer with a screenful of zeroes.
  */
-export function employeeSortColumns(): readonly SortColumn<EmployeeNodeSummary, EmployeeSortKey>[] {
+export function userSortColumns(): readonly SortColumn<UserNodeSummary, UserSortKey>[] {
   return [
-    { key: "employee", compare: byText((member) => member.displayName) },
+    { key: "user", compare: byText((member) => member.displayName) },
     { key: "computers", compare: byNumber((member) => member.nodeCount), defaultDirection: "desc" },
     {
       key: "localLimit",
@@ -469,11 +469,11 @@ export function employeeSortColumns(): readonly SortColumn<EmployeeNodeSummary, 
   ];
 }
 
-// Agents are placed on computers, not owned by employees. An agent belongs to a
+// Agents are placed on computers, not owned by users. An agent belongs to a
 // set of nodes when one of its live placements runs on one of them — this is the
-// only correct way to associate agents with an employee (via the employee's
-// nodes), never agent.employeeId.
-export function agentsOnNodes(nodeIds: Iterable<string>, agents: EmployeeAgent[]): EmployeeAgent[] {
+// only correct way to associate agents with a user (via the user's
+// nodes), never agent.userId.
+export function agentsOnNodes(nodeIds: Iterable<string>, agents: UserAgent[]): UserAgent[] {
   const ids = new Set(nodeIds);
   return agents.filter(
     (agent) =>
@@ -506,7 +506,7 @@ type NodeLocalityKind = "this_host" | "saved_here" | "remote";
 /** Management ownership is independent of the daemon's sandbox implementation. */
 export function nodeOwnershipProfile(node: Pick<ControlPanelDaemonNodeRecord, "nodeLocation" | "sandboxMode">): NodeOwnershipProfile {
   if (node.nodeLocation === "managed") return "managed";
-  if (node.nodeLocation === "employee-device") return "local";
+  if (node.nodeLocation === "user-device") return "local";
   return "pending";
 }
 
@@ -578,7 +578,7 @@ export function upsertStoredCredentialsFromNodes(
     if (!node.nodeToken) continue;
     const existing = next[node.id];
     const merged: StoredNodeToken = {
-      employeeId: node.employeeId ?? existing?.employeeId,
+      userId: node.userId ?? existing?.userId,
       nodeToken: node.nodeToken,
       sandboxToken: existing?.sandboxToken,
       daemonCommand: existing?.daemonCommand ?? buildDaemonStartCommand(node, node.nodeToken, backendUrl),
@@ -587,7 +587,7 @@ export function upsertStoredCredentialsFromNodes(
     if (
       existing?.nodeToken !== merged.nodeToken
       || existing?.daemonCommand !== merged.daemonCommand
-      || existing?.employeeId !== merged.employeeId
+      || existing?.userId !== merged.userId
     ) {
       next = { ...next, [node.id]: merged };
       changed = true;
@@ -635,7 +635,7 @@ export function truncateId(id: string, head = 8, tail = 8): string {
   return `${id.slice(0, head)}…${id.slice(-tail)}`;
 }
 
-/** Initials for employee/operator avatars in admin drawers. */
+/** Initials for user/operator avatars in admin drawers. */
 export function initialsOf(value: string): string {
   const trimmed = value.replace(/^@/, "").trim();
   if (!trimmed) return "?";

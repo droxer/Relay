@@ -20,7 +20,7 @@ const agents = [
   { id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
   { id: "bo", displayName: "Bo", executorKind: "codex", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
 ];
-vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents }) }));
+vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, open }: any) => open ? children : null }));
 /* A select whose items are plain buttons, so a test picks an option by name. */
@@ -39,7 +39,7 @@ vi.mock("@/components/ui/select", () => {
   };
 });
 
-const computers = [{ id: "node", workspaceId: "mac", employeeId: "alice", capabilities: ["project-workspaces"] }] as unknown as DaemonNodeMonitorRecord[];
+const computers = [{ id: "node", workspaceId: "mac", userId: "alice", capabilities: ["project-workspaces"] }] as unknown as DaemonNodeMonitorRecord[];
 const created = { id: "p", version: 1, name: "Launch the site", members: [], leadAgentId: null, enabled: true } as unknown as ProjectRecord;
 
 beforeEach(() => {
@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 it("opens on intent and asks for one before drafting", () => {
-  render(<ProjectDrawer open computers={computers} employeeId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
   expect(create).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toBe("project.setup_intent_required");
@@ -59,7 +59,7 @@ it("opens on intent and asks for one before drafting", () => {
 
 it("creates the project from the intent and asks the chosen agent to draft its setup", async () => {
   const onSaved = vi.fn();
-  render(<ProjectDrawer open computers={computers} employeeId="alice" onClose={vi.fn()} onSaved={onSaved} />);
+  render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={onSaved} />);
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_intent/ }), { target: { value: "Launch the site.\nWith pricing." } });
   fireEvent.click(screen.getByRole("button", { name: "node" }));
   fireEvent.click(screen.getByRole("button", { name: /^Bo · / }));
@@ -75,7 +75,7 @@ it("creates the project from the intent and asks the chosen agent to draft its s
 it("still opens the created project when its setup cannot start", async () => {
   startSetup.mockRejectedValue(new Error("project_setup_unsupported"));
   const onSaved = vi.fn();
-  render(<ProjectDrawer open computers={computers} employeeId="alice" onClose={vi.fn()} onSaved={onSaved} />);
+  render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={onSaved} />);
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_intent/ }), { target: { value: "Launch" } });
   fireEvent.click(screen.getByRole("button", { name: "node" }));
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
@@ -83,7 +83,7 @@ it("still opens the created project when its setup cannot start", async () => {
 });
 
 it("keeps the manual form one click away", () => {
-  render(<ProjectDrawer open computers={computers} employeeId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
   expect(screen.getByRole("textbox", { name: "project.name" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "project.create" })).toBeTruthy();

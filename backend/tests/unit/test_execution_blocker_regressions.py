@@ -18,7 +18,7 @@ def runtime(tmp_path, request, monkeypatch):
     tasks = DatabaseTaskStore(url, create_schema=True) if database else LocalTaskStore(tmp_path)
     daemon = DatabaseDaemonStore(url, create_schema=True) if database else LocalDaemonStore(tmp_path)
     registry = DaemonNodeRegistry(sessions, daemon, task_store=tasks)
-    payload = dict(sandboxId="node", employeeId="alice", token="token", workspacePath="/workspace",
+    payload = dict(sandboxId="node", userId="alice", token="token", workspacePath="/workspace",
                    protocolVersion=1, supportedAgents=["codex"], capabilities=["thread-workspaces", "task-workspaces"],
                    status="ready", maxConcurrentRuns=10)
     registry.register(payload, "ui")

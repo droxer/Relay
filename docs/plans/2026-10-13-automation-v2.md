@@ -1350,9 +1350,9 @@ Target rules (`AutomationMatcher._targets`):
             return [target] if is_active(target) and has_webhook(target) else []
         matched = []
         for task in automations.values():
-            owner = task.get("ownerEmployeeId")
+            owner = task.get("ownerUserId")
             subject = event.get("subject") or {}
-            if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
+            if owner and owner not in (subject.get("ownerUserId"), subject.get("assigneeUserId")):
                 continue
             if any(trigger.get("kind") in EVENT_KINDS and event_matches(trigger, event) for trigger in triggers_of(task)):
                 matched.append(task)
@@ -1644,7 +1644,7 @@ def test_patch_legacy_routine_with_v2_fields_keeps_schedule(client, task_store):
     legacy = task_store.create_task({"title": "Old", "isRoutine": True, "routineCadence": "weekly",
                                      "routineNextRunDate": "2030-01-02", "routineEnabled": True,
                                      "assignedAgent": "codex", "assignedAgentId": AGENT_ID,
-                                     "ownerEmployeeId": OWNER_ID})
+                                     "ownerUserId": OWNER_ID})
     current = client.get(f"/api/v1/tasks/{legacy['id']}").json()
     saved = client.patch(f"/api/v1/tasks/{legacy['id']}", json={
         "title": "Renamed", "routineTriggers": current["routineTriggers"], "routineState": current["routineState"]}).json()

@@ -66,7 +66,7 @@ def test_rejects_collaboration_across_nodes_even_with_shared_workspace(
                 {"agentId": researcher["id"]},
                 {"agentId": builder["id"]},
             ],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -116,7 +116,7 @@ def test_agents_on_same_computer_resolve_together(tmp_path: Path) -> None:
             {"agentId": researcher["id"]},
             {"agentId": builder["id"]},
         ],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -126,7 +126,7 @@ def test_agents_on_same_computer_resolve_together(tmp_path: Path) -> None:
     assert [item["daemonNodeId"] for item in resolved] == ["node_a", "node_a"]
 
 
-def test_employee_cannot_route_another_employees_agent(tmp_path: Path) -> None:
+def test_user_cannot_route_another_users_agent(tmp_path: Path) -> None:
     agents = LocalAgentStore(tmp_path)
     placements = LocalAgentPlacementStore(tmp_path)
     agent = agents.create_agent(
@@ -142,7 +142,7 @@ def test_employee_cannot_route_another_employees_agent(tmp_path: Path) -> None:
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="bob",
+            user_id="bob",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -166,16 +166,16 @@ def test_managed_capacity_does_not_replace_a_healthy_local_placement(
         },
     )
     local_placement = placements.create_placement(agent, "node_local")
-    local_node = {**node("node_local", "codex"), "employeeId": "alice"}
+    local_node = {**node("node_local", "codex"), "userId": "alice"}
     managed_node = {
         **node("node_managed", "codex"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "managed_alice",
     }
 
     [resolved] = resolve_agent_assignments(
         [{"agentId": agent["id"]}],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -205,7 +205,7 @@ def test_managed_capacity_does_not_move_an_offline_agent_to_another_computer(
     )
     offline = {
         **node("runtime_a", "codex"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "computer_a",
         "online": False,
         "stale": True,
@@ -213,14 +213,14 @@ def test_managed_capacity_does_not_move_an_offline_agent_to_another_computer(
     }
     other = {
         **node("runtime_b", "codex"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "computer_b",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -260,7 +260,7 @@ def test_legacy_nonempty_policy_blocks_dispatch(
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -299,7 +299,7 @@ def test_canonical_workspace_id_does_not_override_node_scope(tmp_path: Path) -> 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": researcher["id"]}, {"agentId": builder["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -347,7 +347,7 @@ def test_node_affine_placements_reject_cross_node_workflow(tmp_path: Path) -> No
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": researcher["id"]}, {"agentId": builder["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -385,7 +385,7 @@ def test_different_workspace_ids_reject_cross_node_workflow(tmp_path: Path) -> N
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": first["id"]}, {"agentId": second["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -436,7 +436,7 @@ def test_node_affine_session_rejects_followup_on_different_node(
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": second["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -467,7 +467,7 @@ def test_session_without_prior_run_does_not_invent_node_affinity(
 
     resolved = resolve_agent_assignments(
         [{"agentId": agent["id"]}],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -476,7 +476,7 @@ def test_session_without_prior_run_does_not_invent_node_affinity(
                 "node_a",
                 "codex",
                 workspace="/host/alice",
-                workspace_id="employee:alice:home",
+                workspace_id="user:alice:home",
             )
         ],
         session={
@@ -523,7 +523,7 @@ def test_managed_runtime_replacement_keeps_existing_session_affinity(
 
     resolved = resolve_agent_assignments(
         [{"agentId": agent["id"]}],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -535,7 +535,7 @@ def test_managed_runtime_replacement_keeps_existing_session_affinity(
                     workspace_id="managed:computer_one",
                 ),
                 "managedNodeId": "computer_one",
-                "employeeId": "alice",
+                "userId": "alice",
             }
         ],
         session=session,
@@ -572,7 +572,7 @@ def test_managed_runtime_replacement_keeps_pre_run_session_affinity(
 
     resolved = resolve_agent_assignments(
         [{"agentId": agent["id"]}],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -584,7 +584,7 @@ def test_managed_runtime_replacement_keeps_pre_run_session_affinity(
                     workspace_id="managed:computer_one",
                 ),
                 "managedNodeId": "computer_one",
-                "employeeId": "alice",
+                "userId": "alice",
             }
         ],
         session=session,
@@ -616,12 +616,12 @@ def test_legacy_pre_run_session_follows_managed_runtime_history(
     new_node = {
         **node("node_new", "codex"),
         "managedNodeId": "computer_one",
-        "employeeId": "alice",
+        "userId": "alice",
     }
 
     resolved = resolve_agent_assignments(
         [{"agentId": agent["id"]}],
-        employee_id="alice",
+        user_id="alice",
         is_admin=False,
         agent_store=agents,
         placement_store=placements,
@@ -679,7 +679,7 @@ def test_shared_path_session_rejects_followup_on_different_node(
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": second["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -709,7 +709,7 @@ def test_offline_agent_returns_stable_reason(tmp_path: Path) -> None:
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -740,7 +740,7 @@ def test_saturated_placement_returns_capacity_exhausted(tmp_path: Path) -> None:
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -755,7 +755,7 @@ def test_device_compatibility_agent_does_not_borrow_managed_capacity(
 ) -> None:
     """A device's stand-in agent stays on its device when that device is down.
 
-    Placing it on the employee's managed Computer would relocate it for good,
+    Placing it on the user's managed Computer would relocate it for good,
     so every thread already pinned to the device would start rejecting it with
     workspace_unavailable.
     """
@@ -765,21 +765,21 @@ def test_device_compatibility_agent_does_not_borrow_managed_capacity(
     original = placements.create_placement(agent, "device_node")
     offline_device = {
         **node("device_node", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "online": False,
         "stale": True,
         "status": "stopped",
     }
     managed = {
         **node("managed_runtime", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "computer_managed",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -807,7 +807,7 @@ def test_assignment_does_not_borrow_another_managed_computer(tmp_path: Path) -> 
     placements.create_placement(agent, "node-home", {"managedNodeId": "mnode-home"})
     offline_home = {
         **node("node-home", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "mnode-home",
         "online": False,
         "stale": True,
@@ -815,14 +815,14 @@ def test_assignment_does_not_borrow_another_managed_computer(tmp_path: Path) -> 
     }
     spare = {
         **node("node-spare", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "mnode-spare",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -868,14 +868,14 @@ def test_phantom_placement_with_run_history_does_not_attach_elsewhere(
     )
     spare = {
         **node("node-spare", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "mnode-spare",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -904,7 +904,7 @@ def test_phantom_placement_does_not_attach_to_non_ready_executor(
     original = placements.create_placement(agent, "node-missing")
     non_ready = {
         **node("node-spare", "claude"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "mnode-spare",
         "agents": {"claude": "error"},
         "supportedAgents": ["claude"],
@@ -913,7 +913,7 @@ def test_phantom_placement_does_not_attach_to_non_ready_executor(
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -933,7 +933,7 @@ def test_placement_resolves_to_the_same_computer_under_a_new_node_id() -> None:
     nodes = {
         "node-new": {
             "id": "node-new",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-a",
         }
     }
@@ -962,7 +962,7 @@ def test_thread_follows_its_computer_across_a_new_node_id() -> None:
     nodes = [
         {
             "id": "node-new",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-a",
             "online": True,
             "stale": False,
@@ -979,7 +979,7 @@ def test_offline_computer_resolves_to_nothing_instead_of_borrowing() -> None:
     other_machine = [
         {
             "id": "node-other",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-b",
             "online": True,
             "stale": False,
@@ -1078,13 +1078,13 @@ def test_offline_computer_id_thread_refuses_instead_of_borrowing(
     }
     other_machine = {
         **node("node_b", "codex", workspace_id="machine-b"),
-        "employeeId": "alice",
+        "userId": "alice",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -1118,14 +1118,14 @@ def test_offline_managed_node_id_thread_refuses_instead_of_borrowing(
     }
     other_managed_node = {
         **node("node_b", "codex"),
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "computer_two",
     }
 
     with pytest.raises(AgentRoutingError) as error:
         resolve_agent_assignments(
             [{"agentId": agent["id"]}],
-            employee_id="alice",
+            user_id="alice",
             is_admin=False,
             agent_store=agents,
             placement_store=placements,
@@ -1209,7 +1209,7 @@ def test_legacy_session_recovers_device_identity_from_its_run_placement(
         agent,
         {
             "id": "node-old",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-a",
         },
     )

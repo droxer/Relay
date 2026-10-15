@@ -9,7 +9,7 @@ import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
@@ -84,8 +84,8 @@ import { useKeyChange } from "../hooks/useKeyChange";
 
 
 export function BacklogPage({ readOnly = false, projectId, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
-  const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
-  const { teams } = useTeams(currentUser.employeeId);
+  const { agents: logicalAgents } = useUserAgents(currentUser.userId);
+  const { teams } = useTeams(currentUser.userId);
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
   const { deleteTasksMutation } = useRelayMutations();

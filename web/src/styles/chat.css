@@ -41,7 +41,7 @@
   display: none;
 }
 
-.chat-title .employee-avatar {
+.chat-title .user-avatar {
   width: 36px;
   height: var(--control-h-sm);
   font-size: var(--fs-3);

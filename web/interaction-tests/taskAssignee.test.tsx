@@ -15,7 +15,7 @@ for (const view of ["card", "row"] as const) {
   ])(`shows the assigned agent or explicit fallback on every ${view}: %j`, (assignment, name, expected) => {
     const task = {
       id: "task-1", title: "Ship feature", status: "backlog", priority: "normal",
-      ownerEmployeeId: "employee-1", assigneeEmployeeId: "employee-1",
+      ownerUserId: "user-1", assigneeUserId: "user-1",
       linkedSessionIds: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
       ...assignment,
     } as RelayTaskListItem;

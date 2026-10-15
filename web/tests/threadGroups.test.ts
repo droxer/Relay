@@ -13,7 +13,7 @@ function item(
   const session = {
     id,
     workspacePath: "/workspace",
-    ownerEmployeeId: "alice",
+    ownerUserId: "alice",
     taskGoal: `goal ${id}`,
     participants: ["human", "claude"],
     status,

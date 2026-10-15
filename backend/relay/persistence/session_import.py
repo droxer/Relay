@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .session_store import DatabaseSessionStore, artifact_snapshot_extension
-from .store_common import _parse_iso, _read_jsonl, materialize_events
+from .store_common import _parse_iso, _read_json, _read_jsonl, materialize_events
 
 
 def _content_bytes(content: str | None, metadata: dict[str, Any]) -> bytes | None:
@@ -196,7 +196,7 @@ def migrate_local_sessions(
             )
             snapshot_path = session_dir / "snapshot.json"
             if snapshot_path.exists():
-                snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+                snapshot = _read_json(snapshot_path)
                 if snapshot != session:
                     report["warnings"].append(
                         {

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { isStale, visualStatus } from "../lib/adminHelpers";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../types";
 
 export interface NodeMetrics {
   total: number;
@@ -8,12 +8,12 @@ export interface NodeMetrics {
   running: number;
   failed: number;
   queued: number;
-  employeeTotal: number;
+  userTotal: number;
 }
 
 export function useNodeMetrics(
   nodes: ControlPanelDaemonNodeRecord[],
-  employees: EmployeeRecord[],
+  users: UserRecord[],
 ): NodeMetrics {
   return useMemo(() => {
     const total = nodes.length;
@@ -24,8 +24,8 @@ export function useNodeMetrics(
       return status === "failed" || status === "stale";
     }).length;
     const queued = nodes.reduce((acc, node) => acc + node.queuedCommandCount, 0);
-    const employeeTotal =
-      employees.length || new Set(nodes.map((node) => node.employeeId).filter(Boolean)).size;
-    return { total, ready, running, failed, queued, employeeTotal };
-  }, [nodes, employees]);
+    const userTotal =
+      users.length || new Set(nodes.map((node) => node.userId).filter(Boolean)).size;
+    return { total, ready, running, failed, queued, userTotal };
+  }, [nodes, users]);
 }

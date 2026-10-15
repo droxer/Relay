@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ..persistence.team_store import TeamValidationError, validate_team_payload
 from ..security.auth import require_admin_session
 from ..services.team_computer import resolve_team_computer
-from .agent_routes import _agent_with_placements, _employee_exists
+from .agent_routes import _agent_with_placements, _user_exists
 from .deps import AppContextDep
 from .helpers import (
     JsonBodyDep,
@@ -33,17 +33,17 @@ def _active_team(ctx: AppContextDep, team_id: str) -> dict[str, Any]:
 
 
 def _owned_team(
-    ctx: AppContextDep, team_id: str, employee_id: str
+    ctx: AppContextDep, team_id: str, user_id: str
 ) -> dict[str, Any]:
     team = _active_team(ctx, team_id)
-    if team.get("ownerEmployeeId") != employee_id:
-        raise HTTPException(403, "Cannot access another employee's team.")
+    if team.get("ownerUserId") != user_id:
+        raise HTTPException(403, "Cannot access another user's team.")
     return team
 
 
 def _validated_roster(
     ctx: AppContextDep,
-    owner_employee_id: str,
+    owner_user_id: str,
     body: dict[str, Any],
     *,
     current: dict[str, Any] | None = None,
@@ -59,10 +59,10 @@ def _validated_roster(
         # deletion renamable; the store still refuses to enable it.
         return current.get("leadAgentId"), list(current.get("memberAgentIds") or []), {}
     lead, members = validate_team_payload(
-        owner_employee_id, body, ctx.agent_store, current=current
+        owner_user_id, body, ctx.agent_store, current=current
     )
     computer = resolve_team_computer(
-        owner_employee_id,
+        owner_user_id,
         body,
         members,
         current=current,
@@ -114,7 +114,7 @@ def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return {
         "teams": [
             _team_view(ctx, team)
-            for team in ctx.team_store.list_teams(actor["employeeId"])
+            for team in ctx.team_store.list_teams(actor["userId"])
         ]
     }
 
@@ -126,9 +126,9 @@ def create_team(
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
     try:
-        lead, members, computer = _validated_roster(ctx, actor["employeeId"], body)
+        lead, members, computer = _validated_roster(ctx, actor["userId"], body)
         team = ctx.team_store.create_team(
-            actor["employeeId"],
+            actor["userId"],
             {**body, "leadAgentId": lead, "memberAgentIds": members, **computer},
         )
     except ValueError as error:
@@ -141,11 +141,11 @@ def update_team(
     team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    current = _owned_team(ctx, team_id, actor["employeeId"])
+    current = _owned_team(ctx, team_id, actor["userId"])
     body = _request_body
     try:
         lead, members, computer = _validated_roster(
-            ctx, actor["employeeId"], body, current=current
+            ctx, actor["userId"], body, current=current
         )
         team = ctx.team_store.update_team(
             team_id, _team_patch(body, lead, members, computer)
@@ -158,7 +158,7 @@ def update_team(
 @router.delete("/teams/{team_id}", status_code=200)
 def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    _owned_team(ctx, team_id, actor["employeeId"])
+    _owned_team(ctx, team_id, actor["userId"])
     deleted = ctx.team_store.delete_team(team_id)
     ctx.profile_image_store.delete("teams", team_id)
     return {"team": _team_view(ctx, deleted)}
@@ -167,11 +167,11 @@ def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 @router.get("/admin/teams")
 def list_control_panel_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    owner_employee_id = request.query_params.get("ownerEmployeeId") or None
+    owner_user_id = request.query_params.get("ownerUserId") or None
     return {
         "teams": [
             _team_view(ctx, team)
-            for team in ctx.team_store.list_teams(owner_employee_id)
+            for team in ctx.team_store.list_teams(owner_user_id)
         ]
     }
 
@@ -182,15 +182,15 @@ def create_control_panel_team(
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    owner_employee_id = string_field(body, "ownerEmployeeId")
-    if not owner_employee_id:
-        raise HTTPException(400, "ownerEmployeeId is required.")
-    if not _employee_exists(ctx.auth_store, owner_employee_id):
-        raise HTTPException(404, "Employee not found.")
+    owner_user_id = string_field(body, "ownerUserId")
+    if not owner_user_id:
+        raise HTTPException(400, "ownerUserId is required.")
+    if not _user_exists(ctx.auth_store, owner_user_id):
+        raise HTTPException(404, "User not found.")
     try:
-        lead, members, computer = _validated_roster(ctx, owner_employee_id, body)
+        lead, members, computer = _validated_roster(ctx, owner_user_id, body)
         team = ctx.team_store.create_team(
-            owner_employee_id,
+            owner_user_id,
             {
                 "name": body.get("name"),
                 "profileImageUrl": body.get("profileImageUrl"),
@@ -225,7 +225,7 @@ def update_control_panel_team(
     body = _request_body
     try:
         lead, members, computer = _validated_roster(
-            ctx, current["ownerEmployeeId"], body, current=current
+            ctx, current["ownerUserId"], body, current=current
         )
         team = ctx.team_store.update_team(
             team_id, _team_patch(body, lead, members, computer)

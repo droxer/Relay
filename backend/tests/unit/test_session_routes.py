@@ -92,7 +92,7 @@ def test_session_creation_persists_the_selected_computer(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "employeeId": "admin",
+                "userId": "admin",
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -110,11 +110,11 @@ def test_session_creation_persists_the_selected_computer(monkeypatch) -> None:
         assert created.json()["daemonNodeId"] == "node_a"
 
 
-def test_session_creation_on_an_employee_device_computer_persists_a_device_identity(
+def test_session_creation_on_an_user_device_computer_persists_a_device_identity(
     monkeypatch,
 ) -> None:
-    """Important 3 回归：employee-device 节点（无 managedNodeId，只有
-    employeeId + workspaceId）创建出的 thread，snapshot 必须带 device:
+    """Important 3 回归：user-device 节点（无 managedNodeId，只有
+    userId + workspaceId）创建出的 thread，snapshot 必须带 device:
     身份 —— 懒回填对这类节点永远拿不到 managedNodeId 历史，只能靠创建路径
     自己写对。"""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -133,7 +133,7 @@ def test_session_creation_on_an_employee_device_computer_persists_a_device_ident
         app.state.registry.register(
             {
                 "sandboxId": "node_device_a",
-                "employeeId": "admin",
+                "userId": "admin",
                 "workspaceId": "machine-abc123",
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
@@ -174,7 +174,7 @@ def test_session_read_backfills_managed_affinity_from_deleted_runtime_history(
         app.state.registry.daemon_store.register_node(
             {
                 "id": "runtime_old",
-                "employeeId": "admin",
+                "userId": "admin",
                 "managedNodeId": "computer_admin",
                 "workspacePath": "/workspace/admin",
                 "sandboxMode": "boxlite",
@@ -188,7 +188,7 @@ def test_session_read_backfills_managed_affinity_from_deleted_runtime_history(
             {
                 "workspacePath": "/workspace/admin",
                 "daemonNodeId": "runtime_old",
-                "ownerEmployeeId": "admin",
+                "ownerUserId": "admin",
                 "taskGoal": "continue after replacement",
                 "participants": ["human", "codex"],
             }
@@ -231,7 +231,7 @@ def test_thread_read_does_not_500_when_registration_history_disagrees_with_the_s
         app.state.registry.daemon_store.register_node(
             {
                 "id": "runtime_1",
-                "employeeId": "admin",
+                "userId": "admin",
                 "managedNodeId": "computer_B",
                 "workspacePath": "/workspace/admin",
                 "sandboxMode": "boxlite",
@@ -252,7 +252,7 @@ def test_thread_read_does_not_500_when_registration_history_disagrees_with_the_s
             {
                 "workspacePath": "/workspace/admin",
                 "daemonNodeId": "runtime_1",
-                "ownerEmployeeId": "admin",
+                "ownerUserId": "admin",
                 "taskGoal": "continue after replacement",
                 "participants": ["human", "codex"],
             }

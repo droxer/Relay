@@ -47,9 +47,9 @@ export function recordActions(
  * owner or an admin, the rule the resume route enforces.
  */
 export function canManageAutomation(
-  task: Pick<RelayTaskListItem, "ownerEmployeeId">,
-  user: { role: string; employeeId?: string },
+  task: Pick<RelayTaskListItem, "ownerUserId">,
+  user: { role: string; userId?: string },
 ): boolean {
   if (user.role === "admin") return true;
-  return Boolean(user.employeeId) && task.ownerEmployeeId === user.employeeId;
+  return Boolean(user.userId) && task.ownerUserId === user.userId;
 }

@@ -160,7 +160,7 @@ class AutomationService:
         with store_transaction(self.task_store.engine) as conn:
             lock_automation_state(conn)
             task = self.task_store.get_task(task_id)
-            if not actor.get("isAdmin") and task.get("ownerEmployeeId") != actor.get("employeeId"):
+            if not actor.get("isAdmin") and task.get("ownerUserId") != actor.get("userId"):
                 raise PermissionError("Only the automation's owner or an admin can resume it.")
             if state_of(task) == "active":
                 return task
@@ -203,9 +203,9 @@ def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict
 
 
 def _resumer(task: dict[str, Any], actor: dict[str, Any]) -> str:
-    """Who resumed, by role: activity names no raw employee ids."""
-    employee = actor.get("employeeId")
-    if employee and employee == task.get("ownerEmployeeId"):
+    """Who resumed, by role: activity names no raw user ids."""
+    user = actor.get("userId")
+    if user and user == task.get("ownerUserId"):
         return "its owner"
     if actor.get("isAdmin"):
         return "an admin"
@@ -236,7 +236,7 @@ REFUSAL_MESSAGES = {
 
 
 def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
-    if not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
+    if not actor["isAdmin"] and task.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     refusal = _run_now_refusal(task)
     if refusal:

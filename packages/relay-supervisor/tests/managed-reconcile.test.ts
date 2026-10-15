@@ -25,12 +25,12 @@ function managedNode(): ManagedNodeRecord {
   return {
     id: "mnode_alice",
     displayName: "Alice",
-    employeeId: "alice",
+    userId: "alice",
     assignmentMode: "dedicated",
     provider: "local-process",
     profile: "standard",
     sandboxMode: "boxlite",
-    workspacePolicy: { kind: "employee-home" },
+    workspacePolicy: { kind: "user-home" },
     desiredState: "running",
     generation: 1,
     phase: "requested",
@@ -222,7 +222,7 @@ test("local process provider reports spawn failures without an unhandled error e
     backendUrl: "http://backend.test",
     enrollmentCredential: "grant.secret",
     workspacePath: "/tmp/relay-supervisor-missing-command",
-    workspaceId: "employee:alice:home",
+    workspaceId: "user:alice:home",
   }), /ENOENT/);
 });
 
@@ -241,7 +241,7 @@ test("local process provider is idempotent for a managed node generation", async
     backendUrl: "http://backend.test",
     enrollmentCredential: "grant.secret",
     workspacePath: "/tmp",
-    workspaceId: "employee:alice:home",
+    workspaceId: "user:alice:home",
   };
 
   const first = await provider.ensure(input);
@@ -251,7 +251,7 @@ test("local process provider is idempotent for a managed node generation", async
     const restarted = new LocalProcessProvider({
       command: "must-not-spawn",
       stateDirectory,
-      async readProcessCommand() { return "relay-daemon --workspace-id employee:alice:home"; },
+      async readProcessCommand() { return "relay-daemon --workspace-id user:alice:home"; },
       async readProcessStart() { return "Tue Jul 21 12:00:00 2026"; },
     });
     assert.equal((await restarted.ensure(input)).id, first.id);
@@ -273,7 +273,7 @@ test("local process provider replaces a persisted daemon owned by an older attem
     backendUrl: "http://backend.test",
     enrollmentCredential: "grant.first",
     workspacePath: "/tmp",
-    workspaceId: "employee:alice:home",
+    workspaceId: "user:alice:home",
   };
   const first = await firstProvider.ensure(input);
   const restartedProvider = new LocalProcessProvider({ command, stateDirectory });
@@ -452,7 +452,7 @@ test("managed workspace identity is explicit when configured and node-affine oth
     "repo:relay",
   );
   assert.equal(
-    workspaceIdForManagedNode({ ...managedNode(), employeeId: undefined, workspacePolicy: { kind: "node-affine" } }),
+    workspaceIdForManagedNode({ ...managedNode(), userId: undefined, workspacePolicy: { kind: "node-affine" } }),
     "managed-node:mnode_alice:workspace-root",
   );
 });
@@ -639,7 +639,7 @@ test("managed reconciler finalizes deleted provider cleanup once", async () => {
   const deleted = { ...managedNode(), desiredState: "deleted" as const, phase: "deleting" as const };
   const attempt = {
     ...(await new FakeManagedBackend([]).createProvisioningAttempt(deleted.id)).attempt,
-    providerInstanceId: "local-process:4242:ZW1wbG95ZWU6YWxpY2U6aG9tZQ:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2",
+    providerInstanceId: "local-process:4242:dXNlcjphbGljZTpob21l:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2",
   };
   const backend = new FakeManagedBackend([deleted], [], [attempt]);
   const provider = new FakeProvider();
@@ -689,7 +689,7 @@ test("local process provider can inspect and stop a persisted pid after restart"
   const provider = new LocalProcessProvider({
     async readProcessCommand() {
       return running
-        ? "node relay-daemon --workspace-id employee:alice:home --sandbox boxlite"
+        ? "node relay-daemon --workspace-id user:alice:home --sandbox boxlite"
         : undefined;
     },
     signalProcess(pid, signal) {
@@ -700,7 +700,7 @@ test("local process provider can inspect and stop a persisted pid after restart"
     stopTimeoutMs: 0,
   });
 
-  const instanceId = "local-process:4242:ZW1wbG95ZWU6YWxpY2U6aG9tZQ:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
+  const instanceId = "local-process:4242:dXNlcjphbGljZTpob21l:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
   assert.equal(await provider.inspect(instanceId), "running");
   await provider.stop(instanceId);
   assert.deepEqual(signals, [[4242, "SIGTERM"]]);
@@ -713,7 +713,7 @@ test("local process provider refuses to signal a reused pid", async () => {
     async readProcessStart() { return "Sun Jul 19 12:01:00 2026"; },
     signalProcess(pid, signal) { signals.push([pid, signal]); },
   });
-  const instanceId = "local-process:4242:ZW1wbG95ZWU6YWxpY2U6aG9tZQ:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
+  const instanceId = "local-process:4242:dXNlcjphbGljZTpob21l:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
 
   assert.equal(await provider.inspect(instanceId), "unknown");
   await provider.stop(instanceId);
@@ -724,12 +724,12 @@ test("local process provider refuses a matching workspace when the process start
   const signals: Array<[number, NodeJS.Signals]> = [];
   const provider = new LocalProcessProvider({
     async readProcessCommand() {
-      return "node relay-daemon --workspace-id employee:alice:home --sandbox boxlite";
+      return "node relay-daemon --workspace-id user:alice:home --sandbox boxlite";
     },
     async readProcessStart() { return "Sun Jul 19 12:01:00 2026"; },
     signalProcess(pid, signal) { signals.push([pid, signal]); },
   });
-  const instanceId = "local-process:4242:ZW1wbG95ZWU6YWxpY2U6aG9tZQ:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
+  const instanceId = "local-process:4242:dXNlcjphbGljZTpob21l:U3VuIEp1bCAxOSAxMjowMDowMCAyMDI2";
 
   assert.equal(await provider.inspect(instanceId), "unknown");
   await provider.stop(instanceId);
@@ -869,7 +869,7 @@ test("managed reconciler replaces a registering runtime from an older generation
 
 test("one provider inspection failure does not starve later managed nodes", async () => {
   const first = managedNode();
-  const second = { ...managedNode(), id: "mnode_bob", employeeId: "bob" };
+  const second = { ...managedNode(), id: "mnode_bob", userId: "bob" };
   const backend = new FakeManagedBackend([first, second]);
   const provider = new FakeProvider();
   const inspected: string[] = [];
@@ -882,7 +882,7 @@ test("one provider inspection failure does not starve later managed nodes", asyn
     backend,
     providers: [provider],
     backendUrl: "http://backend.test",
-    workspacePathForNode: (node) => `/workspaces/${node.employeeId}`,
+    workspacePathForNode: (node) => `/workspaces/${node.userId}`,
   });
 
   assert.equal((await reconciler.reconcileOnce()).started, 2);
@@ -913,7 +913,7 @@ test("local process provider recovers a stale allocating marker after supervisor
     backendUrl: "http://backend.test",
     enrollmentCredential: "grant.secret",
     workspacePath: "/tmp",
-    workspaceId: "employee:alice:home",
+    workspaceId: "user:alice:home",
   });
   t.after(() => provider.stop(instance.id));
 
@@ -988,11 +988,11 @@ test("managed daemon env drops ambient identity that would bypass enrollment", (
   const previous = {
     RELAY_SANDBOX_ID: process.env.RELAY_SANDBOX_ID,
     RELAY_DAEMON_TOKEN: process.env.RELAY_DAEMON_TOKEN,
-    RELAY_EMPLOYEE_ID: process.env.RELAY_EMPLOYEE_ID,
+    RELAY_USER_ID: process.env.RELAY_USER_ID,
   };
   process.env.RELAY_SANDBOX_ID = "sbx_stale";
   process.env.RELAY_DAEMON_TOKEN = "stale_token";
-  process.env.RELAY_EMPLOYEE_ID = "stale_employee";
+  process.env.RELAY_USER_ID = "stale_user";
   try {
     const env = managedDaemonEnv({
       node: managedNode(),
@@ -1008,15 +1008,15 @@ test("managed daemon env drops ambient identity that would bypass enrollment", (
       backendUrl: "http://127.0.0.1:8790",
       enrollmentCredential: "grant.secret",
       workspacePath: "/tmp/ws",
-      workspaceId: "employee:alice:home",
+      workspaceId: "user:alice:home",
     });
 
     assert.equal(env.RELAY_SANDBOX_ID, undefined);
     assert.equal(env.RELAY_DAEMON_TOKEN, undefined);
     assert.equal(env.RELAY_DAEMON_NODE_TOKEN, undefined);
-    assert.equal(env.RELAY_EMPLOYEE_ID, undefined);
+    assert.equal(env.RELAY_USER_ID, undefined);
     assert.equal(env.RELAY_ENROLLMENT_TOKEN, "grant.secret");
-    assert.equal(env.RELAY_WORKSPACE_ID, "employee:alice:home");
+    assert.equal(env.RELAY_WORKSPACE_ID, "user:alice:home");
     // Inherited child stdout keeps supervisor logs lifecycle-only.
     assert.equal(env.RELAY_DAEMON_ECHO_AGENT_OUTPUT, "0");
   } finally {
@@ -1055,7 +1055,7 @@ test("managed daemon maps the BoxLite proxy without proxying the supervisor", ()
       backendUrl: "http://127.0.0.1:8790",
       enrollmentCredential: "grant.secret",
       workspacePath: "/tmp/ws",
-      workspaceId: "employee:alice:home",
+      workspaceId: "user:alice:home",
     });
 
     assert.equal(process.env.HTTP_PROXY, undefined);

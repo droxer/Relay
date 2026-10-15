@@ -86,7 +86,7 @@ for name, workspace, workspace_id in (
     )
     computers[name] = {
         "id": node["id"],
-        "computerId": f"device:{registration['employeeId']}:{workspace_id}",
+        "computerId": f"device:{registration['userId']}:{workspace_id}",
         "token": token,
     }
     print("computer", name, node["id"], registration.get("status"))

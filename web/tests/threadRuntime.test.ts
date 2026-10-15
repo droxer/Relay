@@ -7,7 +7,7 @@ type TestNode = {
   id: string;
   managedNodeId?: string;
   retiredAt?: string;
-  employeeId?: string;
+  userId?: string;
   online: boolean;
   stale: boolean;
   status: string;
@@ -16,7 +16,7 @@ type TestNode = {
 function node(overrides: Partial<TestNode> = {}): TestNode {
   return {
     id: "sbx_alice",
-    employeeId: "alice",
+    userId: "alice",
     online: true,
     stale: false,
     status: "ready",

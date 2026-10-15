@@ -23,16 +23,16 @@ def _profile_entity(
     actor = request_actor(request, ctx.auth_store)
     if kind == "agents":
         entity = ctx.agent_store.get_agent(entity_id)
-        owner_id = entity.get("supervisorEmployeeId") if entity else None
+        owner_id = entity.get("supervisorUserId") if entity else None
     elif kind == "teams":
         entity = ctx.team_store.get_team(entity_id)
-        owner_id = entity.get("ownerEmployeeId") if entity else None
+        owner_id = entity.get("ownerUserId") if entity else None
     else:
         raise HTTPException(404, "Profile image not found.")
     if not entity or entity.get("deletedAt"):
         raise HTTPException(404, "Profile not found.")
-    if not actor["isAdmin"] and owner_id != actor["employeeId"]:
-        raise HTTPException(403, "Cannot access another employee's profile image.")
+    if not actor["isAdmin"] and owner_id != actor["userId"]:
+        raise HTTPException(403, "Cannot access another user's profile image.")
     return entity, owner_id
 
 

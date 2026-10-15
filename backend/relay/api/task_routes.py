@@ -67,12 +67,12 @@ from .helpers import (
     JsonBodyDep,
     actor_can_access_record,
     artifact_index_item,
-    assignee_employee_id_for_task,
+    assignee_user_id_for_task,
     assignment_list,
     get_task_for_actor,
     get_task_or_404,
     json_body,
-    owner_employee_id_for_create,
+    owner_user_id_for_create,
     participants_for_assignments,
     request_actor,
     string_field,
@@ -107,7 +107,7 @@ def logical_agent_for_assignment(
     actor: dict[str, Any],
     agent_id: str | None,
     *,
-    expected_employee_id: str | None = None,
+    expected_user_id: str | None = None,
 ) -> dict[str, Any] | None:
     if not agent_id:
         return None
@@ -116,12 +116,12 @@ def logical_agent_for_assignment(
         raise HTTPException(404, "Logical agent not found.")
     if not agent.get("enabled", True):
         raise HTTPException(409, "agent_disabled")
-    allowed_employee_id = expected_employee_id or actor["employeeId"]
-    if agent.get("supervisorEmployeeId") != allowed_employee_id:
+    allowed_user_id = expected_user_id or actor["userId"]
+    if agent.get("supervisorUserId") != allowed_user_id:
         raise HTTPException(403, "Logical agent is not available to the task assignee.")
     if (
         not actor["isAdmin"]
-        and agent.get("supervisorEmployeeId") != actor["employeeId"]
+        and agent.get("supervisorUserId") != actor["userId"]
     ):
         raise HTTPException(403, "Logical agent access denied.")
     return agent
@@ -132,7 +132,7 @@ def team_for_assignment(
     actor: dict[str, Any],
     team_id: str | None,
     *,
-    expected_employee_id: str,
+    expected_user_id: str,
     require_actor_access: bool = True,
 ) -> dict[str, Any] | None:
     if not team_id:
@@ -145,12 +145,12 @@ def team_for_assignment(
         raise HTTPException(
             409, "team_disabled" if team.get("memberAgentIds") else "team_invalid"
         )
-    if team.get("ownerEmployeeId") != expected_employee_id:
+    if team.get("ownerUserId") != expected_user_id:
         raise HTTPException(403, "Team is not available to the task assignee.")
     if (
         require_actor_access
         and not actor["isAdmin"]
-        and team.get("ownerEmployeeId") != actor["employeeId"]
+        and team.get("ownerUserId") != actor["userId"]
     ):
         raise HTTPException(403, "Team access denied.")
     return team
@@ -174,7 +174,7 @@ def project_move_target(
     if code := project_move_error(current):
         raise HTTPException(409, code)
     return project_for_owner(
-        ctx, project_id, current.get("ownerEmployeeId"), require_enabled=True
+        ctx, project_id, current.get("ownerUserId"), require_enabled=True
     )
 
 
@@ -293,9 +293,9 @@ def _validate_filter_scope(
             found = None
         if not found:
             raise HTTPException(400, f"{at} filters.{key} does not exist.")
-    owner_actor = {"employeeId": owner, "isAdmin": False}
-    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_employee_id=owner)
-    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_employee_id=owner)
+    owner_actor = {"userId": owner, "isAdmin": False}
+    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_user_id=owner)
+    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_user_id=owner)
     project = project_for_owner(ctx, filters.get("projectId"), owner, require_enabled=True)
     if project:
         validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
@@ -376,17 +376,17 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         limit = min(max(1, requested_limit), 500)
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         tasks = ctx.task_store.list_task_summaries(
-            employee_id=None if actor["isAdmin"] else actor["employeeId"],
+            user_id=None if actor["isAdmin"] else actor["userId"],
             limit=limit,
         )
     else:
         tasks = ctx.task_store.list_tasks(
-            employee_id=None if actor["isAdmin"] else actor["employeeId"],
+            user_id=None if actor["isAdmin"] else actor["userId"],
             limit=limit,
         )
     return {
         "tasks": [without_legacy_fields(task) for task in tasks],
-        "flowPolicy": {"wipLimit": wip_limit(), "scope": "employee"},
+        "flowPolicy": {"wipLimit": wip_limit(), "scope": "user"},
     }
 
 
@@ -399,8 +399,8 @@ def create_task(
     title = string_field(body, "title") or string_field(body, "taskGoal")
     if not title:
         raise HTTPException(400, "title is required.")
-    owner = owner_employee_id_for_create(actor, body)
-    assignee = assignee_employee_id_for_task(actor, body, owner)
+    owner = owner_user_id_for_create(actor, body)
+    assignee = assignee_user_id_for_task(actor, body, owner)
     project_id = string_field(body, "projectId") or None
     project = project_for_owner(ctx, project_id, owner, require_enabled=True)
     if project and "assignments" in body:
@@ -412,10 +412,10 @@ def create_task(
     if "assignedAgent" in body:
         raise HTTPException(400, "assignedAgent is read-only; use assignedAgentId.")
     logical_agent = logical_agent_for_assignment(
-        ctx, actor, assigned_agent_id, expected_employee_id=assignee
+        ctx, actor, assigned_agent_id, expected_user_id=assignee
     )
     if logical_agent:
-        assignee = logical_agent["supervisorEmployeeId"]
+        assignee = logical_agent["supervisorUserId"]
     if project:
         validate_project_assignment(
             ctx,
@@ -427,7 +427,7 @@ def create_task(
         ctx,
         actor,
         assigned_team_id,
-        expected_employee_id=assignee,
+        expected_user_id=assignee,
     )
     agent = logical_agent["executorKind"] if logical_agent else None
     status = task_status(body.get("status"))
@@ -459,8 +459,8 @@ def create_task(
         try:
             task_thread_ownership(
                 {
-                    "ownerEmployeeId": owner,
-                    "assigneeEmployeeId": assignee,
+                    "ownerUserId": owner,
+                    "assigneeUserId": assignee,
                     "assignedTeamId": assigned_team_id,
                 },
                 team_store=ctx.team_store,
@@ -473,8 +473,8 @@ def create_task(
             "title": title,
             "description": string_field(body, "description"),
             "priority": task_priority(body.get("priority")) or "normal",
-            "ownerEmployeeId": owner,
-            "assigneeEmployeeId": assignee,
+            "ownerUserId": owner,
+            "assigneeUserId": assignee,
             **({"projectId": project["id"]} if project else {}),
             "dueDate": date_field(body, "dueDate"),
             "status": status,
@@ -551,7 +551,7 @@ def ensure_relay_pause_transition_allowed(
         state_of(current) == "paused_by_relay"
         and (routine.get("routineState") in ("active", "paused") or routine.get("isRoutine") is False)
         and not actor.get("isAdmin")
-        and current.get("ownerEmployeeId") != actor.get("employeeId")
+        and current.get("ownerUserId") != actor.get("userId")
     ):
         # An ordinary pause or conversion would let the assignee activate it later.
         raise HTTPException(403, "Only the automation's owner or an admin can resume it.")
@@ -611,10 +611,10 @@ def update_task(
     routine = routine_fields(body, current=current)
     ensure_relay_pause_transition_allowed(current, routine, actor)
     if "routineTriggers" in body:
-        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=current.get("ownerEmployeeId"))
+        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=current.get("ownerUserId"))
     assignee = (
-        assignee_employee_id_for_task(actor, body, current.get("assigneeEmployeeId"))
-        if "assigneeEmployeeId" in body or "assignee_employee_id" in body
+        assignee_user_id_for_task(actor, body, current.get("assigneeUserId"))
+        if "assigneeUserId" in body or "assignee_user_id" in body
         else None
     )
     agent = valid_agent(body.get("assignedAgent")) if "assignedAgent" in body else None
@@ -634,7 +634,7 @@ def update_task(
     )
     if "assignedAgent" in body:
         raise HTTPException(400, "assignedAgent is read-only; use assignedAgentId.")
-    assignee_changed = bool(assignee and assignee != current.get("assigneeEmployeeId"))
+    assignee_changed = bool(assignee and assignee != current.get("assigneeUserId"))
     if (
         assignee_changed
         and (current.get("assignedAgentId") or current.get("assignedTeamId"))
@@ -643,16 +643,16 @@ def update_task(
     ):
         raise HTTPException(
             400,
-            "Changing the assignee requires an assignment for the new employee, or an explicit empty assignment.",
+            "Changing the assignee requires an assignment for the new user, or an explicit empty assignment.",
         )
     if (
         assignee_changed
-        and current.get("ownerEmployeeId") == current.get("assigneeEmployeeId")
-        and assignee != current.get("ownerEmployeeId")
+        and current.get("ownerUserId") == current.get("assigneeUserId")
+        and assignee != current.get("ownerUserId")
     ):
         raise HTTPException(
             403,
-            "An employee-owned task cannot be reassigned to another employee.",
+            "A user-owned task cannot be reassigned to another user.",
         )
     logical_agent = None
     if not (
@@ -664,9 +664,9 @@ def update_task(
             ctx,
             actor,
             assigned_agent_id,
-            expected_employee_id=assignee
-            or current.get("assigneeEmployeeId")
-            or current.get("ownerEmployeeId"),
+            expected_user_id=assignee
+            or current.get("assigneeUserId")
+            or current.get("ownerUserId"),
         )
     if logical_agent:
         if agent and agent != logical_agent["executorKind"]:
@@ -674,12 +674,12 @@ def update_task(
                 400, "assignedAgent does not match assignedAgentId executor kind."
             )
         agent = logical_agent["executorKind"]
-        assignee = logical_agent["supervisorEmployeeId"]
-    expected_team_employee_id = (
+        assignee = logical_agent["supervisorUserId"]
+    expected_team_user_id = (
         assignee
-        or current.get("assigneeEmployeeId")
-        or current.get("ownerEmployeeId")
-        or actor["employeeId"]
+        or current.get("assigneeUserId")
+        or current.get("ownerUserId")
+        or actor["userId"]
     )
     unchanged_team_assignment = bool(
         assigned_team_id
@@ -690,7 +690,7 @@ def update_task(
         ctx,
         actor,
         assigned_team_id,
-        expected_employee_id=expected_team_employee_id,
+        expected_user_id=expected_team_user_id,
         require_actor_access=not unchanged_team_assignment,
     )
     if (
@@ -710,7 +710,7 @@ def update_task(
     ):
         raise HTTPException(
             400,
-            "PATCH requires title, description, priority, dueDate, assigneeEmployeeId, assignedAgentId, assignedTeamId, projectId, or status.",
+            "PATCH requires title, description, priority, dueDate, assigneeUserId, assignedAgentId, assignedTeamId, projectId, or status.",
         )
     next_routine_active = routine.get("routineState", state_of(current)) == "active"
     next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
@@ -791,11 +791,11 @@ def update_task(
         "collaborationStyle": collaboration_style,
         "blockerReason": blocker_reason,
         **unblocked_wait,
-        "actorEmployeeId": actor["employeeId"],
+        "actorUserId": actor["userId"],
         "expectedStatus": current["status"],
         "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
         "dueDate": due_date,
-        "assigneeEmployeeId": assignee,
+        "assigneeUserId": assignee,
         **({"projectId": move_project["id"]} if move_project else {}),
         **routine,
         **assignment_patch,
@@ -855,7 +855,7 @@ def update_task(
 def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_or_404(ctx.task_store, task_id)
-    if not actor.get("isAdmin") and current.get("ownerEmployeeId") != actor.get("employeeId"):
+    if not actor.get("isAdmin") and current.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "task_delete_forbidden")
     if not current.get("deletedAt"):
         ensure_task_project_writable(ctx, current)
@@ -873,7 +873,7 @@ def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
     logger.info(
         "Task deleted",
         task_id=task_id,
-        actor=actor.get("employeeId") or actor.get("username"),
+        actor=actor.get("userId") or actor.get("username"),
         outcome=result["outcome"],
     )
     return public_task_result(result)
@@ -909,9 +909,9 @@ def assign_task(
             ctx,
             actor,
             assigned_team_id,
-            expected_employee_id=current.get("assigneeEmployeeId")
-            or current.get("ownerEmployeeId")
-            or actor["employeeId"],
+            expected_user_id=current.get("assigneeUserId")
+            or current.get("ownerUserId")
+            or actor["userId"],
         )
         try:
             task_thread_ownership(
@@ -934,9 +934,9 @@ def assign_task(
         ctx,
         actor,
         assigned_agent_id,
-        expected_employee_id=current.get("assigneeEmployeeId")
-        or current.get("ownerEmployeeId")
-        or actor["employeeId"],
+        expected_user_id=current.get("assigneeUserId")
+        or current.get("ownerUserId")
+        or actor["userId"],
     )
     if not logical_agent or not assigned_agent_id:
         raise HTTPException(400, "agentId is required for task assignment.")
@@ -954,7 +954,7 @@ def assign_task(
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
-    if task.get("isRoutine") and not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
+    if task.get("isRoutine") and not actor["isAdmin"] and task.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     ensure_task_project_writable(ctx, task)
     ensure_issue_in_project(task)
@@ -1165,9 +1165,9 @@ def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], b
         ctx,
         actor,
         agent_id,
-        expected_employee_id=current.get("assigneeEmployeeId")
-        or current.get("ownerEmployeeId")
-        or actor["employeeId"],
+        expected_user_id=current.get("assigneeUserId")
+        or current.get("ownerUserId")
+        or actor["userId"],
     )
     if not logical_agent or not agent_id:
         raise HTTPException(400, "agentId is required to pick up a task.")
@@ -1176,7 +1176,7 @@ def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], b
         ctx,
         task_id,
         {
-            "assigneeEmployeeId": logical_agent["supervisorEmployeeId"],
+            "assigneeUserId": logical_agent["supervisorUserId"],
             "status": "assigned",
             "assignedAgent": agent,
             "assignedAgentId": agent_id,

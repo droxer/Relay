@@ -15,7 +15,7 @@ from ..security.auth import (
     user_session_token_from_request,
 )
 from ..security.edge import client_ip
-from ..services.computer_limits import decorate_user_limits
+from ..services.computer_limits import decorate_account_limits
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, string_field
 
@@ -38,17 +38,17 @@ def _consume_auth_attempt(request: Request, key: str) -> None:
 
 @router.get("/auth/status")
 def auth_status(ctx: AppContextDep) -> dict[str, Any]:
-    return {"requiresBootstrap": not ctx.auth_store.has_users()}
+    return {"requiresBootstrap": not ctx.auth_store.has_accounts()}
 
 
 @router.get("/auth/me")
 def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    user = require_user_session(request, ctx.auth_store)
+    account = require_user_session(request, ctx.auth_store)
     return {
         "authenticated": True,
-        "user": decorate_user_limits(ctx, ctx.auth_store._public_user(user)),
-        # Server switches every signed-in employee's UI depends on; admin
-        # settings are admin-only, and employees edit automations too.
+        "user": decorate_account_limits(ctx, ctx.auth_store._public_account(account)),
+        # Server switches every signed-in user's UI depends on; admin
+        # settings are admin-only, and users edit automations too.
         "capabilities": {"automationTriggers": automation_triggers_enabled()},
     }
 
@@ -57,7 +57,7 @@ def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 def update_auth_preferences(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    user = require_user_session(request, ctx.auth_store)
+    account = require_user_session(request, ctx.auth_store)
     body = _request_body
     theme = string_field(body, "theme") if "theme" in body else None
     language = string_field(body, "language") if "language" in body else None
@@ -65,7 +65,7 @@ def update_auth_preferences(
         raise HTTPException(400, "theme or language is required.")
     try:
         updated = ctx.auth_store.update_user_preferences(
-            user["id"],
+            account["id"],
             theme=theme,
             language=language,
         )
@@ -74,7 +74,7 @@ def update_auth_preferences(
     # The client replaces its session user with this response, so it must
     # carry the same decorated fields as /auth/me and /auth/login — dropping
     # them here would ungate the connect-computer CTA until the next reload.
-    return {"user": decorate_user_limits(ctx, updated)}
+    return {"user": decorate_account_limits(ctx, updated)}
 
 
 @router.post("/auth/bootstrap")
@@ -89,7 +89,7 @@ def auth_bootstrap(
     rate_key = _auth_rate_key(request, "bootstrap")
     _consume_auth_attempt(request, rate_key)
     try:
-        user = ctx.auth_store.bootstrap_with_token(
+        account = ctx.auth_store.bootstrap_with_token(
             string_field(body, "token"),
             string_field(body, "username"),
             string_field(body, "password"),
@@ -97,12 +97,12 @@ def auth_bootstrap(
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     request.app.state.auth_rate_limiter.reset(rate_key)
-    session = ctx.auth_store.create_session(user["id"])
+    session = ctx.auth_store.create_session(account["id"])
     attrs = user_session_cookie_attrs_for_request(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds
     )
     response.set_cookie(value=session["token"], **attrs)
-    return {"user": user}
+    return {"user": account}
 
 
 @router.post("/auth/login")
@@ -117,16 +117,16 @@ def auth_login(
     username = string_field(body, "username")
     rate_key = _auth_rate_key(request, "login", username)
     _consume_auth_attempt(request, rate_key)
-    user = ctx.auth_store.authenticate(username, string_field(body, "password"))
-    if not user:
+    account = ctx.auth_store.authenticate(username, string_field(body, "password"))
+    if not account:
         raise HTTPException(401, "Invalid username or password.")
     request.app.state.auth_rate_limiter.reset(rate_key)
-    session = ctx.auth_store.create_session(user["id"])
+    session = ctx.auth_store.create_session(account["id"])
     attrs = user_session_cookie_attrs_for_request(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds
     )
     response.set_cookie(value=session["token"], **attrs)
-    return {"user": decorate_user_limits(ctx, ctx.auth_store._public_user(user))}
+    return {"user": decorate_account_limits(ctx, ctx.auth_store._public_account(account))}
 
 
 @router.post("/auth/logout")

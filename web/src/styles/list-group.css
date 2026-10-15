@@ -1,5 +1,5 @@
 /* The grouped list — the one band/columns/rows grammar every list view in the
-   app now shares: the backlog, the routine list, and the admin employee and
+   app now shares: the backlog, the routine list, and the admin user and
    computer lists. Each groups by the one dimension its reader scans for, and
    the band is what the per-row status column used to be: said once, at full
    size, instead of once per row in 96px of small type.
@@ -108,7 +108,7 @@
    The admin tables are grid rows on a card-less canvas rather than the task
    list's flex rows, so the band only has to supply the vertical rhythm the
    flat `<ul>` used to get from its own margin. Column tracks stay with each
-   table (admin-v2-employees.css / admin-v2-nodes.css) — the band knows
+   table (admin-v2-users.css / admin-v2-nodes.css) — the band knows
    nothing about them. */
 
 .adm-grouped-list {

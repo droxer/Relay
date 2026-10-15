@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { listControlPanelEmployees } from "../api";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../types";
+import { listControlPanelUsers } from "../api";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../types";
 import {
-  ADMIN_EMPLOYEES_KEY,
+  ADMIN_USERS_KEY,
   CONTROL_PANEL_NODES_KEY,
   CONTROL_PANEL_POLL_MS,
   fetchControlPanelNodes,
@@ -11,22 +11,22 @@ import {
 
 interface AdminNodes {
   nodes: ControlPanelDaemonNodeRecord[];
-  employees: EmployeeRecord[];
+  users: UserRecord[];
 }
 
 // Fallbacks must keep a stable identity: AdminPage keys useKeyChange on
 // `nodes`, and a fresh `[]` per render never converges — an infinite
 // render loop on every first visit, before the poll resolves.
 const NO_NODES: ControlPanelDaemonNodeRecord[] = [];
-const NO_EMPLOYEES: EmployeeRecord[] = [];
+const NO_USERS: UserRecord[] = [];
 
-// Admin page node snapshot (daemon nodes + employees). Node polling shares
+// Admin page node snapshot (daemon nodes + users). Node polling shares
 // CONTROL_PANEL_NODES_KEY with useLocalDaemonNodes so localhost chat + admin
 // reuse one /api/v1/admin/daemon-nodes poll instead of two timers. When `live` is false the
 // data is fetched once and not refreshed, which keeps the admin card view stable.
 export function useAdminNodes(enabled: boolean, live: boolean = true): {
   nodes: ControlPanelDaemonNodeRecord[];
-  employees: EmployeeRecord[];
+  users: UserRecord[];
   lastUpdated: Date | null;
   pollError: string | null;
   mergeNodes: (updater: (prev: AdminNodes) => AdminNodes) => void;
@@ -34,7 +34,7 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
 } {
   const queryClient = useQueryClient();
 
-  const [nodesQuery, employeesQuery] = useQueries({
+  const [nodesQuery, usersQuery] = useQueries({
     queries: [
       {
         queryKey: CONTROL_PANEL_NODES_KEY,
@@ -43,9 +43,9 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
         refetchInterval: live ? CONTROL_PANEL_POLL_MS : false,
       },
       {
-        queryKey: ADMIN_EMPLOYEES_KEY,
+        queryKey: ADMIN_USERS_KEY,
         queryFn: async ({ signal }: { signal: AbortSignal }) =>
-          (await listControlPanelEmployees(signal)).employees ?? [],
+          (await listControlPanelUsers(signal)).users ?? [],
         enabled,
         refetchInterval: live ? CONTROL_PANEL_POLL_MS : false,
       },
@@ -53,16 +53,16 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
   });
 
   const nodes = nodesQuery.data ?? NO_NODES;
-  const employees = employeesQuery.data ?? NO_EMPLOYEES;
-  const pollError = nodesQuery.error ?? employeesQuery.error;
-  const dataUpdatedAt = Math.max(nodesQuery.dataUpdatedAt, employeesQuery.dataUpdatedAt);
+  const users = usersQuery.data ?? NO_USERS;
+  const pollError = nodesQuery.error ?? usersQuery.error;
+  const dataUpdatedAt = Math.max(nodesQuery.dataUpdatedAt, usersQuery.dataUpdatedAt);
 
   const mergeNodes = useCallback(
     (updater: (prev: AdminNodes) => AdminNodes) => {
       queryClient.setQueryData<ControlPanelDaemonNodeRecord[]>(CONTROL_PANEL_NODES_KEY, (prevNodes) => {
-        const prevEmployees = queryClient.getQueryData<EmployeeRecord[]>(ADMIN_EMPLOYEES_KEY) ?? [];
-        const next = updater({ nodes: prevNodes ?? [], employees: prevEmployees });
-        queryClient.setQueryData(ADMIN_EMPLOYEES_KEY, next.employees);
+        const prevUsers = queryClient.getQueryData<UserRecord[]>(ADMIN_USERS_KEY) ?? [];
+        const next = updater({ nodes: prevNodes ?? [], users: prevUsers });
+        queryClient.setQueryData(ADMIN_USERS_KEY, next.users);
         return next.nodes;
       });
     },
@@ -72,15 +72,15 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
   const refetch = useCallback(
     () => Promise.all([
       queryClient.refetchQueries({ queryKey: CONTROL_PANEL_NODES_KEY }),
-      queryClient.refetchQueries({ queryKey: ADMIN_EMPLOYEES_KEY }),
+      queryClient.refetchQueries({ queryKey: ADMIN_USERS_KEY }),
     ]),
     [queryClient],
   );
 
   return {
     nodes,
-    employees,
-    lastUpdated: nodes.length > 0 || employees.length > 0 ? new Date(dataUpdatedAt) : null,
+    users,
+    lastUpdated: nodes.length > 0 || users.length > 0 ? new Date(dataUpdatedAt) : null,
     pollError: pollError instanceof Error ? pollError.message : pollError ? String(pollError) : null,
     mergeNodes,
     refetch,

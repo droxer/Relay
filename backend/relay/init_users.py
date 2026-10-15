@@ -26,7 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--role", choices=["admin", "user"], default="admin")
     parser.add_argument("--email", default=None)
-    parser.add_argument("--employee-id", default=None)
+    # --employee-id is the pre-rename spelling of the same flag.
+    parser.add_argument("--user-id", "--employee-id", dest="user_id", default=None)
     parser.add_argument("--department-id", default="administration")
     parser.add_argument("--department-name", default="Administration")
     parser.add_argument(
@@ -39,17 +40,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--password is required (or set RELAY_INITIAL_ADMIN_PASSWORD).")
 
     store = auth_store_from_env(args.data_dir)
-    if args.only_if_empty and store.has_users():
+    if args.only_if_empty and store.has_accounts():
         print("Users already exist; skipped.")
         return 0
 
     try:
-        user = store.create_user(
+        account = store.create_account(
             args.username,
             args.password,
             role=args.role,
             email=args.email,
-            employee_id=args.employee_id or args.username,
+            user_id=args.user_id or args.username,
             department_id=args.department_id,
             department_name=args.department_name,
         )
@@ -57,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Failed to create user: {error}", file=sys.stderr)
         return 1
 
-    print(f"Created {user['role']} user {user['username']}.")
+    print(f"Created {account['role']} user {account['username']}.")
     return 0
 
 

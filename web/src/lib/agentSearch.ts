@@ -1,4 +1,4 @@
-import type { EmployeeAgent } from "../types.js";
+import type { UserAgent } from "../types.js";
 import { activePlacements, describeAgentPlacements } from "./agentPlacements.ts";
 
 /**
@@ -14,7 +14,7 @@ import { activePlacements, describeAgentPlacements } from "./agentPlacements.ts"
  * translated, and this module has no translator.
  */
 export function agentMatchesQuery(
-  agent: EmployeeAgent,
+  agent: UserAgent,
   blurb: string,
   query: string,
 ): boolean {

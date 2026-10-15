@@ -56,7 +56,7 @@ class _TeamWriteConflict(RuntimeError):
 
 
 def validate_team_payload(
-    owner_employee_id: str,
+    owner_user_id: str,
     payload: dict[str, Any],
     agent_store: Any,
     *,
@@ -80,7 +80,7 @@ def validate_team_payload(
         agent = agent_store.get_agent(agent_id)
         if not agent or agent.get("deletedAt"):
             raise TeamValidationError("team_member_not_found")
-        if agent.get("supervisorEmployeeId") != owner_employee_id:
+        if agent.get("supervisorUserId") != owner_user_id:
             raise TeamValidationError("team_member_wrong_supervisor")
     return lead, normalized
 
@@ -92,11 +92,11 @@ class LocalTeamStore:
         self._lock = RLock()
 
     def create_team(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        team = _new_team(owner_employee_id, payload)
+        team = _new_team(owner_user_id, payload)
         with self._lock:
-            self._ensure_unique_name(team["ownerEmployeeId"], team["name"])
+            self._ensure_unique_name(team["ownerUserId"], team["name"])
             self._append(team["id"], "team.created", {"team": team})
         return team
 
@@ -106,7 +106,7 @@ class LocalTeamStore:
 
     def list_teams(
         self,
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         *,
         include_deleted: bool = False,
     ) -> list[dict[str, Any]]:
@@ -114,18 +114,18 @@ class LocalTeamStore:
             _normalized_team_snapshot(_read_json(path))
             for path in self.root.glob("*/snapshot.json")
         ]
-        if owner_employee_id is not None:
+        if owner_user_id is not None:
             teams = [
                 team
                 for team in teams
-                if team.get("ownerEmployeeId") == owner_employee_id
+                if team.get("ownerUserId") == owner_user_id
             ]
         if not include_deleted:
             teams = [team for team in teams if not team.get("deletedAt")]
         return sorted(
             teams,
             key=lambda team: (
-                team.get("ownerEmployeeId") or "",
+                team.get("ownerUserId") or "",
                 team.get("name", "").casefold(),
                 team["id"],
             ),
@@ -137,7 +137,7 @@ class LocalTeamStore:
             normalized = _normalize_team_patch(patch, current=current)
             if "name" in normalized:
                 self._ensure_unique_name(
-                    current["ownerEmployeeId"],
+                    current["ownerUserId"],
                     normalized["name"],
                     exclude_id=team_id,
                 )
@@ -189,7 +189,7 @@ class LocalTeamStore:
 
     def _ensure_unique_name(
         self,
-        owner_employee_id: str,
+        owner_user_id: str,
         name: str,
         *,
         exclude_id: str | None = None,
@@ -197,7 +197,7 @@ class LocalTeamStore:
         if any(
             team["id"] != exclude_id
             and team.get("name", "").casefold() == name.casefold()
-            for team in self.list_teams(owner_employee_id)
+            for team in self.list_teams(owner_user_id)
         ):
             raise TeamValidationError("team_name_taken")
 
@@ -220,12 +220,12 @@ class DatabaseTeamStore:
         metadata,
         database_id_column(),
         Column(
-            "owner_employee_id",
+            "owner_user_id",
             entity_uuid_type(),
             ForeignKey(
-                "employees.id",
+                "users.id",
                 ondelete="RESTRICT",
-                name="fk_teams_owner_employee",
+                name="fk_teams_owner_user",
             ),
             nullable=False,
             index=True,
@@ -244,7 +244,7 @@ class DatabaseTeamStore:
         # why the casefolded key column is kept rather than an expression index.
         Index(
             "uq_teams_live_owner_name",
-            "owner_employee_id",
+            "owner_user_id",
             "name_key",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
@@ -274,10 +274,10 @@ class DatabaseTeamStore:
             create_all_tables(self.engine)
 
     def create_team(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        team = _new_team(owner_employee_id, payload)
-        self._ensure_unique_name(team["ownerEmployeeId"], team["name"])
+        team = _new_team(owner_user_id, payload)
+        self._ensure_unique_name(team["ownerUserId"], team["name"])
         event = _team_event(team["id"], "team.created", {"team": team})
         row = _team_row(team, event_version=1)
         try:
@@ -300,7 +300,7 @@ class DatabaseTeamStore:
                 conn.execute(
                     select(
                         self.teams.c.snapshot,
-                        self.teams.c.owner_employee_id,
+                        self.teams.c.owner_user_id,
                     ).where(self.teams.c.id == team_id)
                 )
                 .mappings()
@@ -308,7 +308,7 @@ class DatabaseTeamStore:
             )
         return (
             _normalized_team_snapshot(
-                row["snapshot"], row["owner_employee_id"]
+                row["snapshot"], row["owner_user_id"]
             )
             if row
             else None
@@ -316,18 +316,18 @@ class DatabaseTeamStore:
 
     def list_teams(
         self,
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         *,
         include_deleted: bool = False,
     ) -> list[dict[str, Any]]:
         statement = select(
             self.teams.c.snapshot,
-            self.teams.c.owner_employee_id,
+            self.teams.c.owner_user_id,
         )
-        if owner_employee_id is not None:
+        if owner_user_id is not None:
             statement = statement.where(
-                self.teams.c.owner_employee_id
-                == owner_employee_id
+                self.teams.c.owner_user_id
+                == owner_user_id
             )
         if not include_deleted:
             statement = statement.where(self.teams.c.deleted_at.is_(None))
@@ -335,14 +335,14 @@ class DatabaseTeamStore:
             rows = conn.execute(statement).mappings().all()
         teams = [
             _normalized_team_snapshot(
-                row["snapshot"], row["owner_employee_id"]
+                row["snapshot"], row["owner_user_id"]
             )
             for row in rows
         ]
         return sorted(
             teams,
             key=lambda team: (
-                team.get("ownerEmployeeId") or "",
+                team.get("ownerUserId") or "",
                 team.get("name", "").casefold(),
                 team["id"],
             ),
@@ -444,7 +444,7 @@ class DatabaseTeamStore:
                             select(
                                 self.teams.c.id,
                                 self.teams.c.snapshot,
-                                self.teams.c.owner_employee_id,
+                                self.teams.c.owner_user_id,
                                 self.teams.c.event_version,
                             )
                             .where(self.teams.c.id == team_id)
@@ -456,7 +456,7 @@ class DatabaseTeamStore:
                     if not row:
                         raise KeyError(team_id)
                     current = _normalized_team_snapshot(
-                        row["snapshot"] or {}, row["owner_employee_id"]
+                        row["snapshot"] or {}, row["owner_user_id"]
                     )
                     if current.get("deletedAt"):
                         raise KeyError(team_id)
@@ -499,7 +499,7 @@ class DatabaseTeamStore:
 
     def _ensure_unique_name(
         self,
-        owner_employee_id: str,
+        owner_user_id: str,
         name: str,
         *,
         exclude_id: str | None = None,
@@ -507,7 +507,7 @@ class DatabaseTeamStore:
         if any(
             team["id"] != exclude_id
             and team.get("name", "").casefold() == name.casefold()
-            for team in self.list_teams(owner_employee_id)
+            for team in self.list_teams(owner_user_id)
         ):
             raise TeamValidationError("team_name_taken")
 
@@ -543,11 +543,11 @@ def _without_member(
 
 
 def _new_team(
-    owner_employee_id: str, payload: dict[str, Any]
+    owner_user_id: str, payload: dict[str, Any]
 ) -> dict[str, Any]:
-    owner_employee_id = owner_employee_id.strip()
-    if not owner_employee_id:
-        raise ValueError("ownerEmployeeId is required.")
+    owner_user_id = owner_user_id.strip()
+    if not owner_user_id:
+        raise ValueError("ownerUserId is required.")
     name = _required_name(payload.get("name"))
     members = payload.get("memberAgentIds")
     lead = payload.get("leadAgentId")
@@ -564,7 +564,7 @@ def _new_team(
     timestamp = now_iso()
     return {
         "id": team_id,
-        "ownerEmployeeId": owner_employee_id,
+        "ownerUserId": owner_user_id,
         "name": name,
         **({"profileImageUrl": profile_image_url} if profile_image_url else {}),
         "leadAgentId": lead,
@@ -588,21 +588,21 @@ def _new_team(
 
 
 def _normalized_team_snapshot(
-    team: dict[str, Any], owner_employee_id: str | None = None
+    team: dict[str, Any], owner_user_id: str | None = None
 ) -> dict[str, Any]:
     """Map pre-owner terminology onto the current team contract on read."""
     owner = (
-        team.get("ownerEmployeeId")
-        or team.get("supervisorEmployeeId")
-        or team.get("employeeId")
-        or owner_employee_id
+        team.get("ownerUserId")
+        or team.get("supervisorUserId")
+        or team.get("userId")
+        or owner_user_id
     )
     normalized = {
         key: value
         for key, value in team.items()
-        if key not in {"supervisorEmployeeId", "employeeId"}
+        if key not in {"supervisorUserId", "userId"}
     }
-    return {**normalized, "ownerEmployeeId": owner} if owner else normalized
+    return {**normalized, "ownerUserId": owner} if owner else normalized
 
 
 def _normalize_team_patch(
@@ -692,7 +692,7 @@ def _team_row(
 ) -> dict[str, Any]:
     return {
         "id": database_id or team["id"],
-        "owner_employee_id": team["ownerEmployeeId"],
+        "owner_user_id": team["ownerUserId"],
         "name": team["name"],
         "name_key": team["name"].casefold(),
         "lead_agent_id": team.get("leadAgentId"),

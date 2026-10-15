@@ -12,7 +12,7 @@ test("relay-daemon CLI parses admin-created credential flags", () => {
     "http://127.0.0.1:8790",
     "--sandbox-id",
     "sbx_alice_123",
-    "--employee-id",
+    "--user-id",
     "alice",
     "--token",
     "tok_node",
@@ -29,7 +29,7 @@ test("relay-daemon CLI parses admin-created credential flags", () => {
   assert.deepEqual(args, {
     backendUrl: "http://127.0.0.1:8790",
     sandboxId: "sbx_alice_123",
-    employeeId: "alice",
+    userId: "alice",
     token: "tok_node",
     workspace: "/Users/alice/project",
     workspaceId: "repo:relay",
@@ -48,7 +48,7 @@ test("relay-daemon CLI still allows env-only runtime options", () => {
   assert.deepEqual(args, {
     backendUrl: undefined,
     sandboxId: undefined,
-    employeeId: undefined,
+    userId: undefined,
     token: undefined,
     workspace: undefined,
     workspaceId: undefined,
@@ -67,7 +67,7 @@ test("relay-daemon CLI parses doctor mode", () => {
   assert.deepEqual(args, {
     backendUrl: undefined,
     sandboxId: "sbx_alice",
-    employeeId: undefined,
+    userId: undefined,
     token: undefined,
     workspace: undefined,
     workspaceId: undefined,

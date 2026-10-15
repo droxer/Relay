@@ -22,10 +22,10 @@ event log.
 
 ## Local and managed nodes
 
-Employee-device and managed nodes use the same heartbeat interface and timeout
+User-device and managed nodes use the same heartbeat interface and timeout
 semantics. Their behavior differs only after expiry:
 
-- An employee-device node becomes offline and remains assigned. Waking or
+- A user-device node becomes offline and remains assigned. Waking or
   restarting its daemon renews the same identity when its credential is still
   valid.
 - A managed node becomes offline, then the managed-node reconciler applies its

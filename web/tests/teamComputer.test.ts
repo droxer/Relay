@@ -8,15 +8,15 @@ import {
   pruneMembershipToComputer,
   teamComputerId,
 } from "../src/lib/teamComputer.js";
-import type { AgentPlacement, EmployeeAgent } from "../src/types.js";
+import type { AgentPlacement, UserAgent } from "../src/types.js";
 
-const HERE = "device:employee-1:here";
-const THERE = "device:employee-1:there";
+const HERE = "device:user-1:here";
+const THERE = "device:user-1:there";
 
 const placement = (overrides: Partial<AgentPlacement> = {}): AgentPlacement => ({
   id: "placement",
   agentId: "agent",
-  employeeId: "employee-1",
+  userId: "user-1",
   daemonNodeId: "node-1",
   executorKind: "codex",
   desiredState: "active",
@@ -30,9 +30,9 @@ const placement = (overrides: Partial<AgentPlacement> = {}): AgentPlacement => (
   ...overrides,
 });
 
-const agent = (id: string, computerId: string, overrides: Partial<EmployeeAgent> = {}): EmployeeAgent => ({
+const agent = (id: string, computerId: string, overrides: Partial<UserAgent> = {}): UserAgent => ({
   id,
-  supervisorEmployeeId: "employee-1",
+  supervisorUserId: "user-1",
   displayName: id,
   executorKind: "codex",
   skillPolicy: {},

@@ -3,10 +3,10 @@
 ## Status
 
 Accepted for incremental implementation. The first vertical slice is
-implemented: event-sourced employee agents and placements, compatibility
+implemented: event-sourced user agents and placements, compatibility
 translation for legacy requests, agent-targeted dispatch,
 per-assignment Computer placement, run audit identity, logical-agent instructions,
-employee chat selection, and an admin Agents view.
+user chat selection, and an admin Agents view.
 
 PostgreSQL-backed agent/placement stores, durable task and routine assignment
 by logical Agent, stable Computer identity, and Computer-affine team dispatch
@@ -15,10 +15,10 @@ named-agent clients, and compatibility retirement remain rollout work.
 
 ## Summary
 
-Employees should work with named agents. They should not need to understand
+Users should work with named agents. They should not need to understand
 which replaceable Daemon Node currently serves a Computer. Computers advertise
 Agent Runtime capabilities through their Daemon Nodes; the control plane binds
-employee-owned Agents to a required runtime on a stable Computer and resolves a
+user-owned Agents to a required runtime on a stable Computer and resolves a
 healthy current node for every run.
 
 The current relationship:
@@ -30,18 +30,18 @@ computer -> daemon node -> supported executor names
 becomes:
 
 ```text
-employee -> logical agent -> placement -> agent runtime -> computer -> daemon node
+user -> logical agent -> placement -> agent runtime -> computer -> daemon node
 ```
 
-This permits one employee to own several agents, including multiple agents of
+This permits one user to own several agents, including multiple agents of
 the same Agent Runtime kind. Independent Agents may live on different
 Computers, while Agents assembled into one Thread must use runtimes on that
 Thread's Computer.
 
 ## Goals
 
-- Make the logical agent the employee-facing unit of identity and selection.
-- Allow an employee to own multiple agents distributed across nodes.
+- Make the logical agent the user-facing unit of identity and selection.
+- Allow a user to own multiple agents distributed across nodes.
 - Separate agent configuration and policy from runtime health and capacity.
 - Route each workflow assignment to a compatible healthy placement.
 - Preserve daemon-only execution, command leases, event-sourced sessions, and
@@ -63,7 +63,7 @@ Thread's Computer.
 | Term | Meaning |
 | :- | :- |
 | Executor kind | Runtime implementation: `claude`, `pi`, `codex`, or `kimi`. This replaces the ambiguous use of agent name for a CLI type. |
-| Logical agent | Employee-owned identity with a name, executor kind, role, instructions, and policy. |
+| Logical agent | User-owned identity with a name, executor kind, role, instructions, and policy. |
 | Runtime capability | A daemon's report that it can execute an executor kind, including health and capacity. |
 | Placement | Binding that allows one logical agent to execute through one Agent Runtime on one stable Computer. |
 | Placement candidate | A placement that satisfies ownership, health, policy, workspace, and capacity requirements for a run. |
@@ -78,18 +78,18 @@ A logical agent exists even when all of its placements are offline. Its name,
 role, instructions, permissions, and ownership must not be derived from daemon
 registration.
 
-### Nodes advertise capabilities; they do not define employees
+### Nodes advertise capabilities; they do not define users
 
-Daemon registration reports what the runtime can execute. Employee ownership
+Daemon registration reports what the runtime can execute. User ownership
 is attached to logical agents. Registration never creates a logical agent. A
 node may host placements for several agents and, subject to policy, several
-employees.
+users.
 
 ### Runs target agents and record placements
 
 New run requests target a logical agent ID. Relay selects a placement and
 records both the stable logical agent ID and the actual node/placement used.
-This preserves the employee-facing identity and the operational audit trail.
+This preserves the user-facing identity and the operational audit trail.
 
 ### Placement is replaceable
 
@@ -106,15 +106,15 @@ workspace to move or reuse across threads.
 
 ## Domain model
 
-### EmployeeAgent
+### UserAgent
 
-`EmployeeAgent` is the durable employee-owned logical identity.
+`UserAgent` is the durable user-owned logical identity.
 
 | Field | Type | Notes |
 | :- | :- | :- |
 | `id` | string | Stable `agent_...` identity. |
-| `employeeId` | string | Owning employee. |
-| `displayName` | string | Employee-facing name such as `Researcher`. |
+| `userId` | string | Owning user. |
+| `displayName` | string | User-facing name such as `Researcher`. |
 | `executorKind` | enum | `claude`, `pi`, `codex`, or `kimi`. |
 | `defaultRole` | enum | Existing Relay role vocabulary. |
 | `instructions` | string, nullable | Agent-specific control-plane instructions. |
@@ -125,8 +125,8 @@ workspace to move or reuse across threads.
 | `version` | integer | Incremented for placement-relevant configuration changes. |
 | `createdAt` / `updatedAt` | timestamp | Audit timestamps. |
 
-Agent display names need only be unique within an employee. Executor kind is
-not unique: an employee may own both `Researcher` and `Reviewer` using Claude.
+Agent display names need only be unique within a user. Executor kind is
+not unique: a user may own both `Researcher` and `Reviewer` using Claude.
 
 ### AgentPlacement
 
@@ -194,19 +194,19 @@ Run records add:
 - `agentVersion`
 
 Old assignments without `agentId` are resolved through a compatibility agent
-owned by the session employee.
+owned by the session user.
 
 ## Ownership and authorization
 
-- An employee may use agents they own or agents explicitly shared with them.
+- A user may use agents they own or agents explicitly shared with them.
 - A non-admin cannot select an arbitrary daemon node or placement.
 - Placement selection occurs only after agent authorization succeeds.
 - Non-empty agent policy fields are rejected until the daemon can enforce them,
   and pre-existing non-empty policy metadata makes an agent undispatchable; the
   API must never present stored policy metadata as an effective control.
-- Administrators manage placements and runtime nodes; employees manage only
+- Administrators manage placements and runtime nodes; users manage only
   agent settings permitted by policy.
-- Audit events record the employee, logical agent, placement, daemon node,
+- Audit events record the user, logical agent, placement, daemon node,
   executor kind, and effective policy version.
 
 ## Placement and dispatch
@@ -262,25 +262,25 @@ belongs to one Thread on one Computer. See
 
 ## Managed-node relationship
 
-Managed nodes remain infrastructure desired state. Employee ownership is
+Managed nodes remain infrastructure desired state. User ownership is
 removed from their core identity over time:
 
-- `ManagedNode.employeeId` becomes an optional placement-policy hint.
-- the one-dedicated-node-per-employee constraint is removed;
+- `ManagedNode.userId` becomes an optional placement-policy hint.
+- the one-dedicated-node-per-user constraint is removed;
 - managed nodes declare capacity, locality, and workspace policy;
-- agent placements decide which employee agents use that capacity;
+- agent placements decide which user agents use that capacity;
 - pooled nodes become useful once placements can target them.
 
 The supervisor continues to reconcile infrastructure only. It must not create
-logical agents or decide employee authorization.
+logical agents or decide user authorization.
 
 ## API direction
 
-### Employee agents
+### User agents
 
-- `GET /api/v1/agents` — agents visible to the authenticated employee.
+- `GET /api/v1/agents` — agents visible to the authenticated user.
 - `POST /api/v1/admin/agents` — create a logical agent; pass
-  `supervisorEmployeeId` in the request body.
+  `supervisorUserId` in the request body.
 - `GET /api/v1/admin/agents/{agentId}` — admin detail including placements.
 - `PATCH /api/v1/admin/agents/{agentId}` — update configuration or desired state.
 - `DELETE /api/v1/admin/agents/{agentId}` — disable and retire after active runs drain.
@@ -294,7 +294,7 @@ logical agents or decide employee authorization.
 
 ### Runtime nodes
 
-Existing daemon-node APIs remain operational. Employee-facing responses stop
+Existing daemon-node APIs remain operational. User-facing responses stop
 using daemon node as the primary selectable resource.
 
 ### Runs
@@ -304,7 +304,7 @@ legacy `agent` executor kind and resolves a compatibility logical agent.
 
 ## User experience
 
-### Employee
+### User
 
 The primary selector lists named agents with role and availability:
 
@@ -321,12 +321,12 @@ placement failure detail when useful.
 
 The control panel separates:
 
-- **People** — employees and their logical agents;
+- **People** — users and their logical agents;
 - **Agents** — identity, policy, configuration, availability, and placements;
 - **Runtime Nodes** — infrastructure, capabilities, capacity, and health.
 
 Agent availability is derived from placements. Runtime-node health is not
-presented as employee ownership.
+presented as user ownership.
 
 ## Compatibility and migration rules
 
@@ -334,9 +334,9 @@ presented as employee ownership.
 - Existing sessions and tasks without `agentId` remain executable.
 - Daemon registration and Computer assignment never create agents.
 - An old request without `agentId` may lazily create a hidden compatibility
-  identity for `(employeeId, computerId, executorKind)`. It exists only to
+  identity for `(userId, computerId, executorKind)`. It exists only to
   translate that request through the logical-agent pipeline and is not returned
-  in the employee Agent roster.
+  in the user Agent roster.
 - Existing node-level disabled-agent and role-default settings remain enforced
   until equivalent placement/agent policy is materialized.
 - Daemons can upgrade independently because the backend accepts both old
@@ -346,10 +346,10 @@ presented as employee ownership.
 
 ## Success criteria
 
-- One employee can own multiple logical agents, including two of the same
+- One user can own multiple logical agents, including two of the same
   executor kind.
 - Those Agents can be placed on different Computers.
-- Employees select agents without selecting nodes.
+- Users select agents without selecting nodes.
 - Every run records logical agent, placement, runtime node, and executor kind.
 - Replacing a Computer's Daemon Node preserves its placements. A Computer
   outage makes only its placements unavailable and does not remove logical
