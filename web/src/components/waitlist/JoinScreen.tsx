@@ -99,7 +99,7 @@ function JoinForm({
   onAuthenticated: (user: CurrentUser) => void;
   onDead: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [handle, setHandle] = useState(() => normalizeUserHandle(invite.suggestedHandle));
   const [password, setPassword] = useState("");
   const [problems, setProblems] = useState<JoinProblems>({});
@@ -141,7 +141,7 @@ function JoinForm({
       <Field
         className="login-field"
         label={t("waitlist.email")}
-        hint={t("waitlist.join_expires", { date: new Date(invite.expiresAt).toLocaleDateString() })}
+        hint={t("waitlist.join_expires", { date: new Date(invite.expiresAt).toLocaleDateString(i18n.language, { dateStyle: "medium" }) })}
       >
         <Input className="login-input" name="email" type="email" value={invite.email} readOnly autoComplete="email" />
       </Field>
