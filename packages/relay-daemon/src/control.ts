@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WINDOWS_SERVICE_SUFFIX, decodeServiceFile, windowsTaskArguments, startWindowsTask, stopWindowsTask, windowsLogTail, windowsServiceDirectory, windowsTaskState } from './windows-service.js';
 
 export const SERVICE_PREFIX = 'build.relay.computer.';
 const LOG_LINES = '100';
@@ -29,6 +30,8 @@ export interface ControlDeps {
   home: string;
   uid: number;
   run(command: string, args: string[], options?: { inherit?: boolean }): CommandResult;
+  /** Pause between service-state polls; defaults to a blocking wait. */
+  sleep?(ms: number): void;
   log(line: string): void;
   brand?: RelayBrand;
 }
@@ -53,13 +56,18 @@ Options:
 function serviceDirectory(platform: string, home: string): string {
   if (platform === 'darwin') return join(home, 'Library', 'LaunchAgents');
   if (platform === 'linux') return join(home, '.config', 'systemd', 'user');
-  throw new Error('Relay supports macOS and Linux.');
+  if (platform === 'win32') return windowsServiceDirectory(home);
+  throw new Error('Relay supports macOS, Linux and Windows.');
+}
+
+function serviceSuffix(platform: string): string {
+  return platform === 'darwin' ? '.plist' : platform === 'win32' ? WINDOWS_SERVICE_SUFFIX : '.service';
 }
 
 export function installedServices(platform: string, home: string): InstalledService[] {
   const directory = serviceDirectory(platform, home);
   if (!existsSync(directory)) return [];
-  const suffix = platform === 'darwin' ? '.plist' : '.service';
+  const suffix = serviceSuffix(platform);
   return readdirSync(directory)
     .filter(file => file.startsWith(SERVICE_PREFIX) && file.endsWith(suffix))
     .sort()
@@ -72,8 +80,9 @@ export function installedServices(platform: string, home: string): InstalledServ
 const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 const SYSTEMD_ESCAPES: Record<string, string> = { n: '\n', r: '\r' };
 
-/** Inverse of `serviceDefinition` (install.ts): the argv a launchd plist or systemd unit runs. */
+/** Inverse of `serviceDefinition` (install.ts): the argv a launchd plist, systemd unit or Windows logon task runs. */
 export function serviceArguments(platform: string, content: string): string[] {
+  if (platform === 'win32') return windowsTaskArguments(content);
   if (platform === 'darwin') {
     const array = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(content)?.[1] ?? '';
     return [...array.matchAll(/<string>([\s\S]*?)<\/string>/g)]
@@ -89,7 +98,7 @@ export function serviceArguments(platform: string, content: string): string[] {
 /** Which command owns a service: the one matching its backend. Unreadable services stay with `relay`. */
 function serviceBrand(platform: string, service: InstalledService): RelayBrand {
   try {
-    const argv = serviceArguments(platform, readFileSync(service.file, 'utf8'));
+    const argv = serviceArguments(platform, decodeServiceFile(readFileSync(service.file)));
     const index = argv.indexOf('--backend-url');
     return index >= 0 && argv[index + 1] ? brandForBackend(argv[index + 1]!) : RELAY_BRAND;
   } catch {
@@ -126,6 +135,11 @@ function serviceState(deps: ControlDeps, service: InstalledService): { running: 
     const pid = result.status === 0 ? /^\s*pid = (\d+)/m.exec(result.stdout)?.[1] : undefined;
     return pid ? { running: true, detail: `running (pid ${pid})` } : { running: false, detail: 'stopped' };
   }
+  if (deps.platform === 'win32') {
+    const state = windowsTaskState(deps, service.name);
+    if (state === 'Running') return { running: true, detail: 'running' };
+    return { running: false, detail: state === 'Ready' || state === 'Disabled' ? 'stopped' : state.toLowerCase() };
+  }
   const state = deps.run('systemctl', ['--user', 'is-active', `${service.name}.service`]).stdout.trim() || 'unknown';
   return state === 'active' ? { running: true, detail: 'running' } : { running: false, detail: state === 'inactive' ? 'stopped' : state };
 }
@@ -139,6 +153,7 @@ function start(deps: ControlDeps, service: InstalledService, restart: boolean): 
     deps.run('launchctl', ['bootstrap', `gui/${deps.uid}`, service.file]);
     return deps.run('launchctl', ['kickstart', ...(restart ? ['-k'] : []), target]).status === 0;
   }
+  if (deps.platform === 'win32') return startWindowsTask(deps, service.name, restart);
   const unit = `${service.name}.service`;
   if (deps.run('systemctl', ['--user', 'enable', unit]).status !== 0) return false;
   return deps.run('systemctl', ['--user', restart ? 'restart' : 'start', unit]).status === 0;
@@ -152,13 +167,15 @@ function stop(deps: ControlDeps, service: InstalledService): boolean {
     deps.run('launchctl', ['bootout', target]);
     return !serviceState(deps, service).running;
   }
+  if (deps.platform === 'win32') return stopWindowsTask(deps, service.name);
   return deps.run('systemctl', ['--user', 'disable', '--now', `${service.name}.service`]).status === 0;
 }
 
 function logs(deps: ControlDeps, service: InstalledService, follow: boolean): boolean {
-  if (deps.platform === 'darwin') {
+  if (deps.platform === 'darwin' || deps.platform === 'win32') {
     const file = join(deps.home, '.relay', 'daemon-nodes', service.id, 'logs', 'service.log');
     if (!existsSync(file)) { deps.log(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`); return true; }
+    if (deps.platform === 'win32') return windowsLogTail(deps, file, LOG_LINES, follow);
     return deps.run('tail', ['-n', LOG_LINES, ...(follow ? ['-f'] : []), file], { inherit: true }).status === 0;
   }
   return deps.run('journalctl', ['--user', '-u', `${service.name}.service`, '-n', LOG_LINES, '--no-pager', ...(follow ? ['-f'] : [])], { inherit: true }).status === 0;
@@ -215,7 +232,7 @@ export function systemControlDeps(): ControlDeps {
     home: homedir(),
     uid: process.getuid?.() ?? 0,
     run: (command, args, options) => {
-      const result = spawnSync(command, args, { encoding: 'utf8', stdio: options?.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+      const result = spawnSync(command, args, { encoding: 'utf8', stdio: options?.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'], windowsHide: true });
       if (result.error) throw new Error(`Cannot run ${command}: ${result.error.message}`);
       return { status: result.status, stdout: result.stdout ?? '' };
     },

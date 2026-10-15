@@ -139,6 +139,16 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
                   copied={copiedField === "setup"}
                   onCopy={() => void copy("setup", result.installCommand ?? result.daemonCommand ?? "")}
                 />
+                {result.windowsInstallCommand ? (
+                  <CredCopyRow
+                    label={t("computer.connect_setup_windows_label")}
+                    hint={t("computer.connect_setup_windows_hint")}
+                    value={result.windowsInstallCommand}
+                    copyLabel={t("computer.connect_setup_windows_copy")}
+                    copied={copiedField === "setup-windows"}
+                    onCopy={() => void copy("setup-windows", result.windowsInstallCommand!)}
+                  />
+                ) : null}
                 {!result.installCommand ? <Alert>{t("computer.connect_legacy_hint")}</Alert> : null}
               </section>
             </li>

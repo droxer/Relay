@@ -142,7 +142,7 @@ cf_cache_rules() {
       rule("relay_cache_api"; "Relay: never cache the API or SSE"; api_path("/api/"); {cache: false}),
       rule("relay_cache_profile_images"; "Relay: per-user profile images"; api_path("/profile-images/"); {cache: false}),
       rule("relay_cache_install_script"; "Relay: install script pins the current bundle";
-        "(http.host eq \"\($api)\" and http.request.uri.path in {\"/install.sh\" \"/computer/install.sh\"})"; {cache: false}),
+        "(http.host eq \"\($api)\" and http.request.uri.path in {\"/install.sh\" \"/computer/install.sh\" \"/install.ps1\" \"/computer/install.ps1\"})"; {cache: false}),
       rule("relay_cache_next_static"; "Relay: content-hashed web assets";
         "(http.host eq \"\($web)\" and starts_with(http.request.uri.path, \"/_next/static/\"))";
         {cache: true, edge_ttl: {mode: "override_origin", default: 31536000}}),

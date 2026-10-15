@@ -306,6 +306,20 @@ calls the backend origin directly with `credentials: "include"`.
    `relay restart`, `relay status`, and `relay logs [--follow]`. `stop` keeps the
    service off across logins until `relay start` (or re-running the installer);
    with several connected computers, `--computer <node-id>` narrows any command.
+
+   **Windows** (10 version 1803 or newer, x64/arm64) gets a PowerShell twin:
+   `irm <origin>/install.ps1 | iex`, or for an enrolled computer
+   `& ([scriptblock]::Create((irm '<origin>/install.ps1'))) '--sandbox-id' …`.
+   It needs no administrator window and installs under `%LOCALAPPDATA%\Relay`
+   with the same SHA-256 checks (the private Node.js runtime is the `win-*.zip`
+   build). Git for Windows is required: every agent command runs as a bash
+   script, so the daemon uses Git Bash (`RELAY_BASH_PATH` overrides discovery;
+   WSL's `bash.exe` is never used). The background service is a Task Scheduler
+   logon task for the installing account that starts a hidden PowerShell, which
+   runs `windows-service-host.js`; that host appends to `service.log` and
+   restarts the daemon 10 seconds after a crash, matching launchd and systemd.
+   `relay.cmd` lands in `%USERPROFILE%\.local\bin`; the installer prints its
+   full path for `stop`, `start`, `restart`, `status`, and `logs`.
    Confirm that the
    computer becomes online in Relay; an accepted registration alone is not an
    online heartbeat.

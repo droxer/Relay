@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentCredentialEnv, buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, buildPiPreflightCommand, initialAgentState } from "../src/index.js";
+import { agentCredentialEnv, canonicalPathKey, buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, buildPiPreflightCommand, initialAgentState } from "../src/index.js";
 
 function local(action: () => void): void {
   const previous = process.env;
@@ -84,3 +84,10 @@ test("local permissions remain native unless trusted execution is explicit", () 
   process.env.RELAY_LOCAL_PERMISSION_POLICY = "typo";
   assert.throws(() => buildCodexCommand(initialAgentState("task")), /permission policy/i);
 }));
+
+test("a copied Windows environment keeps one PATH whatever the OS spelled it", () => {
+  assert.deepEqual(canonicalPathKey({ Path: "C:\\a", HOME: "h" }, "win32"), { HOME: "h", PATH: "C:\\a" });
+  assert.deepEqual(canonicalPathKey({ PATH: "C:\\a" }, "win32"), { PATH: "C:\\a" });
+  assert.deepEqual(canonicalPathKey({ Path: "/x" }, "darwin"), { Path: "/x" });
+  assert.deepEqual(canonicalPathKey({ HOME: "h" }, "win32"), { HOME: "h" });
+});

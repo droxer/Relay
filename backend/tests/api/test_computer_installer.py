@@ -342,3 +342,47 @@ def test_token_response_only_offers_installer_for_complete_personal_computers(mo
         response = _token_response(request, {**node, **overrides}, "fixture-token")
         assert "installCommand" not in response
         assert "daemonCommand" in response
+
+
+def test_windows_installer_is_public_pinned_and_ascii(monkeypatch, tmp_path):
+    bundle = tmp_path / "daemon.tar.gz"
+    bundle.write_bytes(b"release fixture")
+    monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(bundle))
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    client = TestClient(create_app(str(tmp_path / "state")))
+    response = client.get("/install.ps1")
+    assert response.status_code == 200
+    # `irm` returns a string only for a textual content type.
+    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    assert response.headers["cache-control"] == "no-store"
+    digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
+    assert f"Get-RelayFile 'https://api.example.com/computer/daemon-{digest}.tar.gz' $bundle" in response.text
+    assert "@('--backend-url', 'https://api.example.com')" in response.text
+    assert f"Test-RelaySha256 $bundle '{digest}'" in response.text
+    assert "@@" not in response.text
+    # Windows PowerShell may decode the download as Latin-1.
+    assert response.text.isascii()
+    # It runs inside the user's own session: `exit` would close their window.
+    assert not any(line.strip().startswith("exit") for line in response.text.splitlines())
+    assert client.get("/computer/install.ps1").text == response.text
+
+
+def test_windows_installer_missing_build_fails_explicitly(monkeypatch, tmp_path):
+    monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(tmp_path / "missing"))
+    client = TestClient(create_app(str(tmp_path / "state")))
+    assert client.get("/install.ps1").status_code == 503
+
+
+def test_windows_commands_quote_every_argument_for_powershell(monkeypatch):
+    from starlette.requests import Request
+    from relay.api.computer_installer_routes import computer_windows_install_command, computer_windows_setup_command
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
+    assert computer_windows_setup_command(request) == "irm 'https://api.example.com/install.ps1' | iex"
+    workspace = "C:\\Users\\o'brien\\My Work $(evil)"
+    command = computer_windows_install_command(request, {"id": "node-1", "employeeId": "alice", "workspacePath": workspace})
+    assert command == (
+        "& ([scriptblock]::Create((irm 'https://api.example.com/install.ps1'))) "
+        "'--sandbox-id' 'node-1' '--employee-id' 'alice' '--workspace' 'C:\\Users\\o''brien\\My Work $(evil)'"
+    )

@@ -33,7 +33,9 @@ function validateEnvironment(value: unknown, allowed = ALLOWED_KEYS): Record<str
 function readPrivateJson(path: string): unknown {
   if (!isAbsolute(path)) throw new Error("Runtime configuration paths must be absolute.");
   const stat = lstatSync(path);
-  if (!stat.isFile() || (stat.mode & 0o077) !== 0 || (process.getuid && stat.uid !== process.getuid())) {
+  // Windows has no POSIX mode bits to check; files under the user profile are private by ACL.
+  const broad = process.platform !== "win32" && (stat.mode & 0o077) !== 0;
+  if (!stat.isFile() || broad || (process.getuid && stat.uid !== process.getuid())) {
     throw new Error("Runtime configuration must be an owned private file (chmod 600).");
   }
   try { return JSON.parse(readFileSync(path, "utf8")); }
