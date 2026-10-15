@@ -20,6 +20,16 @@ import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ManageAgentRow } from "./ManageAgentRow";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
 
+/** `base` with every agent in `toggles` flipped. */
+function toggledFrom(base: Set<AgentName>, toggles: Set<AgentName>): Set<AgentName> {
+  const next = new Set(base);
+  for (const agent of toggles) {
+    if (next.has(agent)) next.delete(agent);
+    else next.add(agent);
+  }
+  return next;
+}
+
 interface ManageExecutorsDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -38,24 +48,43 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Snapshot the saved state when the drawer opens or the target node changes.
-  // Intentionally NOT depending on node.disabledAgents identity — the admin
-  // node poll replaces the array every 2s, which would wipe pending toggles.
+  // Snapshot the saved state when the drawer opens, when it targets another
+  // node, and once more when a node opened before its saved state loaded
+  // (`disabledAgents` absent) finally reports one.
   const nodeId = node?.id ?? null;
-  const previousNodeIdRef = useRef<string | null>(null);
+  const savedDisabled = node?.disabledAgents;
+  const hasSavedState = savedDisabled !== undefined;
+  const snapshotRef = useRef<{ nodeId: string | null; hasSavedState: boolean }>({
+    nodeId: null,
+    hasSavedState: false,
+  });
   useEffect(() => {
-    if (!shouldSnapshotDisabledAgents(open, previousNodeIdRef.current, nodeId)) {
-      if (!open) previousNodeIdRef.current = null;
+    const previous = snapshotRef.current;
+    const isNewTarget = shouldSnapshotDisabledAgents(open, previous.nodeId, nodeId);
+    const savedStateArrived = open && nodeId !== null && !isNewTarget && !previous.hasSavedState && hasSavedState;
+    if (!isNewTarget && !savedStateArrived) {
+      if (!open) snapshotRef.current = { nodeId: null, hasSavedState: false };
       return;
     }
-    previousNodeIdRef.current = nodeId;
-    const snapshot = new Set((node?.disabledAgents ?? []) as AgentName[]);
+    snapshotRef.current = { nodeId, hasSavedState };
+    const snapshot = new Set((savedDisabled ?? []) as AgentName[]);
     setInitialDisabled(snapshot);
+    if (savedStateArrived) {
+      // The placeholder baseline was empty, so everything in `prev` is a
+      // toggle the reader already made: replay those toggles onto the real
+      // baseline rather than discarding them.
+      setDisabled((prev) => toggledFrom(snapshot, prev));
+      return;
+    }
     setDisabled(new Set(snapshot));
     setError(null);
     setSaving(false);
+    // Deliberately keyed on `hasSavedState`, not `savedDisabled`: the admin
+    // node poll hands over a fresh `disabledAgents` array every couple of
+    // seconds, and re-snapshotting on that identity would wipe the reader's
+    // pending toggles. The array is read only on the transitions above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, nodeId]);
+  }, [open, nodeId, hasSavedState]);
 
   const dirty = !disabledSetsEqual(disabled, initialDisabled);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && dirty && !saving);

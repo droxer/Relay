@@ -16,6 +16,7 @@ import {
 } from "../CodeView";
 import { Markdown } from "../LazyMarkdown";
 import type { ArtifactView } from "../artifact/ArtifactViewToggle";
+import { PdfFrame } from "../artifact/PdfFrame";
 import { useKeyChange } from "../../hooks/useKeyChange";
 
 /** Every workspace-file response (project, node, task, …) shares this shape
@@ -89,7 +90,7 @@ export function WorkspaceFilePreview({
             // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a workspace file of unknown size
             <img className="artifact-image-preview" src={media.src} alt={name} />
           ) : (
-            <iframe className="artifact-frame-preview" title={name} src={media.src} />
+            <PdfFrame title={name} src={media.src} />
           )}
           {data.truncated ? (
             <p className="workspace-preview-truncated">{t("workspace.file_truncated", { limit: formatBytes(data.limitBytes, i18n.language) })}</p>

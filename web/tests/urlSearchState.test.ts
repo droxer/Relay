@@ -17,11 +17,16 @@ describe("URL search state history", () => {
     assert.equal(calls, 1);
   });
 
-  it("keeps History API effects outside React state updaters and subscribes to back/forward", async () => {
+  it("derives the value from the URL store and subscribes to back/forward", async () => {
     const source = await readFile(resolve("web/src/hooks/useUrlSearchState.ts"), "utf8");
+    const store = await readFile(resolve("web/src/hooks/useLocationSearch.ts"), "utf8");
 
-    assert.doesNotMatch(source, /setValue\(\(current\)/);
-    assert.match(source, /window\.addEventListener\("popstate", sync\)/);
+    // No copy of the URL in React state: a changed fallback must apply at once.
+    assert.doesNotMatch(source, /useState/);
+    assert.match(source, /useLocationSearch\(\)/);
+    assert.match(store, /useSyncExternalStore/);
+    assert.match(store, /window\.addEventListener\("popstate", onChange\)/);
+    assert.match(store, /window\.addEventListener\(APP_NAVIGATION_EVENT, onChange\)/);
     assert.match(source, /window\.history\[historyMode === "push"/);
     assert.match(source, /window\.dispatchEvent\(new Event\(APP_NAVIGATION_EVENT\)\)/);
   });

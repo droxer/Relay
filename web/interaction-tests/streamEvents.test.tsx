@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useSessionEvents } from "../src/hooks/useSessionEvents";
 import { getSession, RelayApiError } from "../src/api";
+import { isSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 vi.mock("../src/api", () => ({ getSession: vi.fn(), RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } } }));
 vi.mock("../src/lib/frameScheduler", () => ({ browserFrameSchedulerHost: () => ({}), createFrameScheduler: () => ({ request: (callback: () => void) => callback(), cancel: vi.fn() }) }));
 const key = ["relay", "sessions"];
@@ -72,4 +73,23 @@ it("drops an HTTP recovery response after switching sessions", async () => {
   await act(async () => resolve({ ...initial, status: "completed" }));
   expect(client.getQueryData<any[]>(key)?.[0].status).toBe("running");
   view.unmount(); client.clear();
+});
+
+it("reports the stream connected from open until it errors, closes, or unmounts", async () => {
+  const { client, view } = setup();
+  vi.mocked(getSession).mockResolvedValue({ ...initial } as never);
+  expect(isSessionStreamConnected()).toBe(false);
+  act(() => sources[0].onopen());
+  expect(isSessionStreamConnected()).toBe(true);
+  await act(async () => sources[0].onerror());
+  expect(isSessionStreamConnected()).toBe(false);
+  await act(() => vi.advanceTimersByTimeAsync(1_000));
+  act(() => sources[1].onopen());
+  expect(isSessionStreamConnected()).toBe(true);
+  act(() => sources[1].listeners.get("done")!({ data: JSON.stringify({ status: "completed" }) }));
+  expect(isSessionStreamConnected()).toBe(false);
+  act(() => sources[1].onopen());
+  view.unmount();
+  expect(isSessionStreamConnected()).toBe(false);
+  client.clear();
 });

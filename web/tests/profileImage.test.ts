@@ -6,7 +6,7 @@ import { identityMonogram } from "../src/lib/identity.js";
 
 describe("Profile images", () => {
   it("supports agent and team image upload, removal, and fallback marks", async () => {
-    const apiSource = await readFile(resolve("web/src/api.ts"), "utf8");
+    const apiSource = await readFile(resolve("web/src/api-client/agents.ts"), "utf8");
     const pickerSource = await readFile(resolve("web/src/components/ProfileImagePicker.tsx"), "utf8");
     const agentProfileSource = await readFile(resolve("web/src/components/AgentProfilePanel.tsx"), "utf8");
     const teamProfileSource = await readFile(resolve("web/src/components/TeamWorkspacePage.tsx"), "utf8");

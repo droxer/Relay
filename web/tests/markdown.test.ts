@@ -189,7 +189,7 @@ describe("markdown component wiring", () => {
   });
 
   it("passes the live flag from the stream into the renderer", () => {
-    assert.match(readWeb("src/components/AgentStream.tsx"), /<MarkdownContent text=\{visibleText\} live=\{live\} \/>/);
+    assert.match(readWeb("src/components/AgentStream.tsx"), /<StreamingMarkdown text=\{visibleText\} live \/>/);
   });
 
   it("carries .md-body on the transcript wrapper", () => {
@@ -275,6 +275,17 @@ describe("markdown link targets", () => {
     assert.equal(markdownLinkKind("./chart.png"), "relative");
     assert.equal(markdownLinkKind("../README.md"), "relative");
     assert.equal(markdownLinkKind("/src/index.ts"), "relative");
+  });
+
+  it("never treats a script-capable or unknown scheme as a destination", () => {
+    // react-markdown's default urlTransform already blanks these; this is the
+    // second line, so a custom urlTransform cannot turn them into live links.
+    assert.equal(markdownLinkKind("javascript:alert(1)"), "unsafe");
+    assert.equal(markdownLinkKind("  JavaScript:alert(1)"), "unsafe");
+    assert.equal(markdownLinkKind("vbscript:msgbox(1)"), "unsafe");
+    assert.equal(markdownLinkKind("data:text/html;base64,PGgxPg=="), "unsafe");
+    assert.equal(markdownLinkKind("file:///etc/passwd"), "unsafe");
+    assert.equal(markdownLinkKind("HTTPS://example.com"), "external");
   });
 
   it("has no target when react-markdown blanked an unsafe protocol", () => {

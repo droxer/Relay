@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { listDaemonNodes, listProjects, listSandboxes, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { mergeSessionSummaries } from "../lib/sessionPollMerge";
-import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
+import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
+import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
@@ -67,9 +68,10 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
   };
 }
 
-// Server state for the control-plane console, owned by TanStack Query. The
-// Freshness-critical nodes, sessions, and task state poll every 3s; stable
-// sandbox inventory reconciles less often. Dedup and retry/backoff come
+// Server state for the control-plane console, owned by TanStack Query.
+// Freshness-critical nodes and task state poll every 3s; sessions back off
+// while the open thread's SSE tail is connected; projects and stable sandbox
+// inventory reconcile less often. No poll runs in a hidden tab. Dedup and retry/backoff come
 // from the cache instead of hand-rolled timers. The hook keeps its previous
 // external shape so callers (App.tsx) are unchanged.
 export function useRelayData(
@@ -83,8 +85,15 @@ export function useRelayData(
 
   // One-shot override applied by refresh(_, tokenOverride) during sandbox
   // provisioning, before the freshly minted token has propagated into state.
-  const overrideRef = useRef<string | undefined>(undefined);
-  const fetchToken = () => overrideRef.current ?? token;
+  // Each refresh call owns its override by identity: overlapping refreshes
+  // must not clear another call's override while its fetches (or retries)
+  // are still in flight.
+  const overrideRef = useRef<{ token: string } | undefined>(undefined);
+  const manualRefreshesRef = useRef(0);
+  const fetchToken = () => overrideRef.current?.token ?? token;
+  // Re-renders only when the stream connects or drops, which re-arms the
+  // sessions interval at once instead of after the next poll.
+  const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
 
   const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
     combine: combineRelayCollections,
@@ -112,7 +121,7 @@ export function useRelayData(
       {
         queryKey: SESSIONS_KEY,
         enabled,
-        refetchInterval: RELAY_POLL_INTERVALS_MS.sessions,
+        refetchInterval: sessionsPollIntervalMs(streamConnected),
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
           const summaries = (await listSessionSummaries(signal)).sessions ?? [];
           return mergeSessionSummaries(
@@ -134,7 +143,7 @@ export function useRelayData(
       {
         queryKey: PROJECTS_KEY,
         enabled,
-        refetchInterval: RELAY_POLL_INTERVALS_MS.tasks,
+        refetchInterval: RELAY_POLL_INTERVALS_MS.projects,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ProjectRecord[]> =>
           (await listProjects(signal)).projects ?? [],
       },
@@ -169,13 +178,16 @@ export function useRelayData(
   const refresh = useCallback(
     async (_signal?: AbortSignal, tokenOverride?: string) => {
       if (!enabled) return;
+      const override = tokenOverride ? { token: tokenOverride } : undefined;
+      if (override) overrideRef.current = override;
+      manualRefreshesRef.current += 1;
       setManualRefreshPending(true);
-      if (tokenOverride) overrideRef.current = tokenOverride;
       try {
         await queryClient.refetchQueries({ queryKey: RELAY_KEY });
       } finally {
-        overrideRef.current = undefined;
-        setManualRefreshPending(false);
+        if (override && overrideRef.current === override) overrideRef.current = undefined;
+        manualRefreshesRef.current -= 1;
+        if (manualRefreshesRef.current === 0) setManualRefreshPending(false);
       }
     },
     [enabled, queryClient],

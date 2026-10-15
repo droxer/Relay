@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { RELAY_POLL_INTERVALS_MS, ROSTER_STALE_TIME_MS } from "../lib/relayPolling";
 import { listUserAgents } from "../api";
 import { dedupeAgentsById } from "../lib/userAgents";
 import type { UserAgent } from "../types";
@@ -18,13 +19,17 @@ export function useUserAgents(userId?: string): {
     queryKey: [USER_AGENTS_QUERY_KEY, userId],
     queryFn: ({ signal }) => listUserAgents(signal),
     enabled: Boolean(userId),
-    refetchInterval: 10_000,
+    // Every roster mutation invalidates this key, so the poll only has to
+    // catch node-reported availability drift; the stale window lets the many
+    // pages that mount this hook share one read instead of refetching.
+    staleTime: ROSTER_STALE_TIME_MS,
+    refetchInterval: RELAY_POLL_INTERVALS_MS.agents,
   });
   const agents = useMemo(() => dedupeAgentsById(query.data?.agents ?? []), [query.data]);
   // Getters, not values: React Query re-renders a component for every result
   // field the component READ. Reading isFetching here on behalf of callers
   // that only want the list (App, every board) re-rendered the whole app on
-  // each 10s poll's start and end. Only a caller that reads it now pays.
+  // each poll's start and end. Only a caller that reads it now pays.
   return {
     agents,
     get isFetching() { return query.isFetching; },

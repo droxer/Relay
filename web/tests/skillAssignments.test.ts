@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 test("the web skill contract exposes scoped assignments and stable revisions", async () => {
-  const types = await readFile(resolve("web/src/types.ts"), "utf8");
+  const types = await readFile(resolve("web/src/domain-types/skills.ts"), "utf8");
   assert.match(types, /export interface SkillAssignment/);
   assert.match(types, /stableRevisionId: string/);
   assert.match(types, /assignments: SkillAssignment\[\]/);

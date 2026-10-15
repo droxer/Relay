@@ -154,7 +154,7 @@ describe("My Computer record card", () => {
     // and the enrollment would hand back a start command for that VM.
     const [drawer, api] = await Promise.all([
       read("web/src/components/computer/ConnectComputerDrawer.tsx"),
-      read("web/src/api.ts"),
+      read("web/src/api-client/computers.ts"),
     ]);
     assert.doesNotMatch(drawer, /boxlite/);
     assert.doesNotMatch(drawer, /connect-computer-sandbox-mode/);
@@ -251,7 +251,7 @@ describe("My Computer: connect CTA respects the local-computer limit", () => {
   it("ships the limit copy and the session fields it depends on", async () => {
     const [localeRaw, types] = await Promise.all([
       read("web/src/i18n/locales/en/translation.json"),
-      read("web/src/types.ts"),
+      read("web/src/domain-types/users.ts"),
     ]);
     const locale = JSON.parse(localeRaw);
     assert.equal(typeof locale.computer.limit_reached, "string");
@@ -289,7 +289,7 @@ describe("Admin console: adding a local computer", () => {
     // The two fields are not independent. Encoding that in the input type makes
     // the regression above a compile error rather than a start command the
     // user's machine cannot execute.
-    const types = await read("web/src/types.ts");
+    const types = await read("web/src/domain-types/computers.ts");
     const input = types.match(/export type CreateControlPanelDaemonNodeInput =[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
     assert.notEqual(input.trim(), "", "the input-type regex stopped matching — refresh it");
     assert.match(input, /nodeLocation: "user-device";[\s\S]*?sandboxMode: "none";/);

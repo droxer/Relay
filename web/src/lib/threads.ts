@@ -114,17 +114,32 @@ export function canDeleteThread(item: ThreadItem): boolean {
 
 type Labelled = { title?: string; taskGoal: string };
 
+// Newest first. `updatedAt` is a server ISO-8601 UTC timestamp, so plain code
+// unit comparison orders it correctly — localeCompare pays for collation it
+// does not need, on a list re-derived every streamed frame.
+function byRecency(a: RelaySession, b: RelaySession): number {
+  return a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0;
+}
+
+function isOrderedByRecency(sessions: readonly RelaySession[]): boolean {
+  for (let index = 1; index < sessions.length; index += 1) {
+    if (byRecency(sessions[index - 1], sessions[index]) > 0) return false;
+  }
+  return true;
+}
+
 // The logged-in user's own threads, newest first. /api/v1/threads is already
 // owner-scoped by the backend, but we defensively filter by owner (and drop
 // archived/closed ones) so the list never surfaces another user's work.
+// The SSE tail rewrites the sessions list once per frame, almost always
+// without reordering it, so a linear order check skips the sort.
 export function myThreadSessions(
   sessions: readonly RelaySession[],
   userId: string,
 ): RelaySession[] {
-  return sessions
-    .filter((s) => !s.archived && (!s.ownerUserId || s.ownerUserId === userId))
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const mine = sessions.filter((s) => !s.archived && (!s.ownerUserId || s.ownerUserId === userId));
+  // `mine` is a fresh array, so sorting it in place leaves the input alone.
+  return isOrderedByRecency(mine) ? mine : mine.sort(byRecency);
 }
 
 // Merge a session returned by a mutation into the cached list, replacing any
@@ -137,7 +152,7 @@ export function upsertThreadSession(
   session: RelaySession,
 ): RelaySession[] {
   const others = sessions.filter((candidate) => candidate.id !== session.id);
-  return [session, ...others].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return [session, ...others].sort(byRecency);
 }
 
 export function pickActiveThreadSession(input: {

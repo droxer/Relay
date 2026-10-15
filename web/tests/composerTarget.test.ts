@@ -13,6 +13,13 @@ const member = (availability: string, enabled = true) => ({
   availability: availability as "ready" | "busy" | "pending" | "offline",
 });
 
+/** The signed-in shell: AuthenticatedApp (split out of the App auth gate)
+    plus the composer routing it delegates to. */
+async function readSignedInApp(): Promise<string> {
+  const files = ["web/src/AuthenticatedApp.tsx", "web/src/hooks/useComposerRouting.ts"];
+  return (await Promise.all(files.map((file) => readFile(resolve(file), "utf8")))).join("\n");
+}
+
 describe("composer team targeting", () => {
   it("routes a team only when every member can take work", () => {
     assert.equal(isTeamRoutable({ enabled: true, members: [member("ready"), member("busy")] }), true);
@@ -25,7 +32,7 @@ describe("composer team targeting", () => {
 
   it("offers teams in the composer picker and lets a started thread retarget them", async () => {
     const select = await readFile(resolve("web/src/components/composer/AgentSelect.tsx"), "utf8");
-    const app = await readFile(resolve("web/src/App.tsx"), "utf8");
+    const app = await readSignedInApp();
     // The composer-send path moved into hooks/useThreadDispatch when App.tsx
     // was broken up; the assertion follows it rather than pinning the file it
     // used to live in.
@@ -62,7 +69,7 @@ describe("composer team targeting", () => {
 
 describe("composer agent selection", () => {
   it("names the same agents in `@` as in the footer picker", async () => {
-    const app = await readFile(resolve("web/src/App.tsx"), "utf8");
+    const app = await readSignedInApp();
     // The placement-derived list moved into useThreadTargets when App.tsx was
     // broken up; the assertion follows it rather than pinning the file it
     // used to live in. Both surfaces still read ONE list — every agent on the
@@ -168,7 +175,7 @@ describe("composer agent selection", () => {
   });
 
   it("narrows a project round to the picked member and widens it back", async () => {
-    const app = await readFile(resolve("web/src/App.tsx"), "utf8");
+    const app = await readSignedInApp();
     const composer = await readFile(resolve("web/src/components/composer/Composer.tsx"), "utf8");
     // The composer-send path moved into hooks/useThreadDispatch when App.tsx
     // was broken up; the assertion follows it rather than pinning the file it

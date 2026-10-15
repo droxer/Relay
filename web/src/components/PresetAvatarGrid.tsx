@@ -5,6 +5,12 @@ import { useTranslation } from "react-i18next";
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { PRESET_AVATAR_STYLES, type PresetAvatarKind } from "../lib/presetAvatars";
 
+/* A tile's rendered size in the profile-image popover (320px wide, eight
+   columns). CSS stretches the image to fill its square tile at every width;
+   the attributes reserve a square box before the SVG and the stylesheet
+   arrive, so the grid does not jump as tiles load. */
+const PRESET_TILE_PX = 32;
+
 /**
  * The preset profile images for an agent or a team, as one radio group.
  *
@@ -72,7 +78,7 @@ export function PresetAvatarGrid({
                   onClick={onCommit ? () => onCommit(url) : undefined}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a preset SVG avatar */}
-                  <img src={url} alt="" draggable={false} />
+                  <img src={url} alt="" width={PRESET_TILE_PX} height={PRESET_TILE_PX} draggable={false} />
                 </RadioGroupChoice>
               ))}
             </div>

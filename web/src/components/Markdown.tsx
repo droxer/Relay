@@ -1,4 +1,4 @@
-import { isValidElement, useMemo, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import { isValidElement, memo, useMemo, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeSlug from "rehype-slug";
@@ -127,8 +127,13 @@ export function Markdown({ text, variant = "chat" }: { text: string; variant?: M
 /** Markdown content without the prose wrapper, for composition in live output.
  *
  *  `live` marks the text as a prefix of an in-flight stream: a half-written
- *  fence is not yet a diagram and not yet worth copying. */
-export function MarkdownContent({ text, live = false }: { text: string; live?: boolean }) {
+ *  fence is not yet a diagram and not yet worth copying.
+ *
+ *  Memoized: a full react-markdown parse runs every plugin over the whole
+ *  text, so a parent re-render with the same text must not repeat it. Streamed
+ *  output renders as one of these per block (lib/markdownBlocks), so settled
+ *  blocks skip the parse while only the growing tail re-runs it. */
+export const MarkdownContent = memo(function MarkdownContent({ text, live = false }: { text: string; live?: boolean }) {
   const mode = useMemo(() => ({ live }), [live]);
   return (
     <MarkdownModeProvider value={mode}>
@@ -141,4 +146,4 @@ export function MarkdownContent({ text, live = false }: { text: string; live?: b
       </ReactMarkdown>
     </MarkdownModeProvider>
   );
-}
+});

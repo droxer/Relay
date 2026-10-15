@@ -6,7 +6,7 @@ import {
   StatusOk,
   StatusWarn,
 } from "./icons";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CodexCollaborationEvent } from "relay-core";
 
@@ -24,6 +24,7 @@ import {
 } from "../lib/agentStream";
 import { useHighlightedHtml } from "../hooks/useHighlightedHtml";
 import { MarkdownContent } from "./LazyMarkdown";
+import { splitMarkdownBlocks } from "../lib/markdownBlocks";
 import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
@@ -170,7 +171,7 @@ function SegmentView({
       </div>
     );
   }
-  return <RawSegment text={segment.text} />;
+  return <RawSegment text={segment.text} streaming={streaming && last} />;
 }
 
 // A run of tool calls and commands, folded behind a one-line summary ("Used 2
@@ -277,14 +278,45 @@ function ThinkingSegment({ text, live }: { text: string; live: boolean }) {
 // so it renders as Markdown rather than as a monospace dump with its own ```
 // fences left showing. The block keeps its frame so it still reads as
 // unrecognised output rather than as ordinary prose.
-function RawSegment({ text }: { text: string }) {
+function RawSegment({ text, streaming }: { text: string; streaming: boolean }) {
   return (
     <div className="agent-raw">
       <div className="md-body agent-prose">
-        <MarkdownContent text={text} />
+        {/* Raw output never rendered in live mode; it only borrows the
+            per-block parse while it is still growing. */}
+        {streaming ? <StreamingMarkdown text={text} live={false} /> : <MarkdownContent text={text} />}
       </div>
     </div>
   );
+}
+
+// One top-level block of streamed Markdown. Memoized on its text, so a
+// frame that only grows the tail block leaves every earlier block's parse alone.
+const MarkdownBlock = memo(function MarkdownBlock({ text, live }: { text: string; live: boolean }) {
+  return <MarkdownContent text={text} live={live} />;
+});
+
+// Streamed Markdown renders block by block: re-parsing the whole reply on every
+// animation frame made a long answer's total parse work quadratic in its
+// length. The blocks are siblings with no wrapper, so the DOM — and the caret
+// rules in agent-stream.css that hang off `.agent-prose > :last-child` — match
+// a single parse. Only the last block is in flight: every boundary
+// splitMarkdownBlocks finds sits outside any fence, so an earlier block's fences
+// are closed and render settled, while a half-written fence is always in the
+// last block and stays `live`.
+//
+// Trade-off: rehype-slug dedupes heading ids per parse, so two equal headings
+// in different blocks share an id while the reply streams. Settled text goes
+// back to a single parse (see TextSegment / RawSegment), so the final document
+// gets the same `-1` suffixes as before; only mid-stream `#` links can land on
+// the first of two equal headings.
+function StreamingMarkdown({ text, live }: { text: string; live: boolean }) {
+  const blocks = useMemo(() => splitMarkdownBlocks(text), [text]);
+  // Index keys are the right identity: a streamed prefix only grows, so block
+  // N stays block N and keeps its memoized parse.
+  return blocks.map((block, index) => (
+    <MarkdownBlock key={index} text={block} live={live && index === blocks.length - 1} />
+  ));
 }
 
 // A shell command the agent ran: the `⏺` mono line of the tool log, but
@@ -333,7 +365,7 @@ function TextSegment({ text, live }: { text: string; live: boolean }) {
           styles/markdown.css is scoped to it. Without it the transcript
           renders unstyled — headings collapse to body-sized plain text. */}
       <div className="md-body agent-prose" aria-hidden={live || undefined}>
-        <MarkdownContent text={visibleText} live={live} />
+        {live ? <StreamingMarkdown text={visibleText} live /> : <MarkdownContent text={visibleText} />}
       </div>
       {live ? (
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">

@@ -112,8 +112,12 @@ export function normalizeOverEscapedQuotes(code: string): string {
 
 /** What a Markdown link or image target points at, which decides how it renders.
  *
- * - `external`: an absolute URL (`https:`, `mailto:`, `//host`) — a real
- *   destination, opened in a new tab.
+ * - `external`: an absolute `http:`/`https:`/`mailto:` URL or a `//host`
+ *   one — a real destination, opened in a new tab.
+ * - `unsafe`: any other scheme (`javascript:`, `vbscript:`, `data:`, `file:`,
+ *   …). react-markdown's default `urlTransform` already blanks the dangerous
+ *   ones to "", so this is the second line: should that transform ever be
+ *   replaced, such a target still renders inert rather than as a live link.
  * - `fragment`: `#…` — a footnote or heading in the same document. It must stay
  *   in this tab; opening a new tab to scroll to a footnote reloads the app.
  * - `relative`: anything else. Agent prose says `[report](out/report.md)` or
@@ -123,12 +127,16 @@ export function normalizeOverEscapedQuotes(code: string): string {
  *   render inert — the text and target stay visible, nothing navigates.
  * - `none`: no target at all (react-markdown blanks unsafe protocols to "").
  */
-export type MarkdownLinkKind = "external" | "fragment" | "relative" | "none";
+export type MarkdownLinkKind = "external" | "fragment" | "relative" | "unsafe" | "none";
+
+const SAFE_LINK_SCHEMES = new Set(["http", "https", "mailto"]);
 
 export function markdownLinkKind(href: string | null | undefined): MarkdownLinkKind {
   const target = href?.trim() ?? "";
   if (!target) return "none";
   if (target.startsWith("#")) return "fragment";
-  if (target.startsWith("//") || /^[a-z][a-z\d+.-]*:/i.test(target)) return "external";
-  return "relative";
+  if (target.startsWith("//")) return "external";
+  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(target)?.[1]?.toLowerCase();
+  if (scheme === undefined) return "relative";
+  return SAFE_LINK_SCHEMES.has(scheme) ? "external" : "unsafe";
 }

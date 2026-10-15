@@ -15,6 +15,12 @@ import { isPresetAvatarUrl, type PresetAvatarKind } from "../lib/presetAvatars";
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_PROFILE_IMAGE_BYTES = 2 * 1024 * 1024;
 
+/* The largest rendered size, the 64px picker (`--avatar-2xl`). Call sites
+   size the box from 16px up and CSS stretches the image to fill it; the
+   attributes give the image its square ratio and a reserved box before the
+   upload decodes, so a row does not reflow as faces load. */
+const PROFILE_IMAGE_PX = 64;
+
 export function ProfileImage({
   src,
   alt,
@@ -29,7 +35,7 @@ export function ProfileImage({
   return (
     <span className={`profile-image${className ? ` ${className}` : ""}`} data-has-image={src ? "true" : "false"}>
       {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a user-uploaded image */}
-      {src ? <img src={src} alt={alt} /> : fallback}
+      {src ? <img src={src} alt={alt} width={PROFILE_IMAGE_PX} height={PROFILE_IMAGE_PX} /> : fallback}
     </span>
   );
 }
