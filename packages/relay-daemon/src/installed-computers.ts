@@ -1,6 +1,8 @@
 /** The computers this account already installed, read back from the service files the installer wrote. */
 import { readFileSync, unlinkSync } from 'node:fs';
-import { installedServices, type InstalledService } from './control.js';
+import { installedServices, serviceArguments, type InstalledService } from './control.js';
+
+export { serviceArguments };
 
 export interface InstalledComputer extends InstalledService {
   backendUrl: string;
@@ -10,23 +12,6 @@ export interface InstalledComputer extends InstalledService {
 
 export interface ServiceRunner {
   run(command: string, args: string[]): { status: number | null; stdout: string };
-}
-
-const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
-const SYSTEMD_ESCAPES: Record<string, string> = { n: '\n', r: '\r' };
-
-/** Inverse of `serviceDefinition`: the argv a launchd plist or systemd unit runs. */
-export function serviceArguments(platform: string, content: string): string[] {
-  if (platform === 'darwin') {
-    const array = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(content)?.[1] ?? '';
-    return [...array.matchAll(/<string>([\s\S]*?)<\/string>/g)]
-      .map(match => match[1]!.replace(/&(lt|gt|amp|quot|apos);/g, (_, name: string) => XML_ENTITIES[name]!));
-  }
-  const exec = /^ExecStart=(.*)$/m.exec(content)?.[1] ?? '';
-  return [...exec.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => match[1]!
-    .replace(/\\(.)/g, (_, char: string) => SYSTEMD_ESCAPES[char] ?? char)
-    .replace(/%%/g, '%')
-    .replace(/\$\$/g, '$'));
 }
 
 function option(argv: string[], name: string): string | undefined {

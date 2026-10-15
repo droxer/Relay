@@ -8,6 +8,7 @@ import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
+import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
 
@@ -42,7 +43,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   }
   const backendUrl = values.get('--backend-url')!;
   const url = new URL(backendUrl);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Backend must use HTTPS (HTTP is allowed for loopback only).');
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname))) throw new Error('Backend must use HTTPS (HTTP is allowed for loopback only).');
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Backend URL must be an origin.');
   const sandboxId = values.get('--sandbox-id') ?? '';
   const employeeId = values.get('--employee-id') ?? '';
@@ -62,7 +63,7 @@ const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&
 const systemd = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%').replace(/\$/g, () => '$$').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
 const shell = (value: string): string => `'${value.replace(/'/g, "'\\''")}'`;
 
-export function serviceDefinition(platform: string, id: string, argv: string[], logDir: string, path: string): { name: string; content: string } {
+export function serviceDefinition(platform: string, id: string, argv: string[], logDir: string, path: string, brand: RelayBrand = RELAY_BRAND): { name: string; content: string } {
   const name = `build.relay.computer.${id}`;
   // Deleted nodes exit successfully. Recover crashes without restarting an
   // intentional shutdown and repeatedly contacting a deleted registration.
@@ -81,7 +82,7 @@ export function serviceDefinition(platform: string, id: string, argv: string[], 
   }
   if (platform !== 'linux') throw new Error('Only macOS and Linux services are supported.');
   return { name, content: `[Unit]
-Description=Relay personal computer ${id}
+Description=${brand.product} personal computer ${id}
 After=network-online.target
 [Service]
 Type=simple
@@ -99,14 +100,15 @@ WantedBy=default.target
 const LAUNCHER_MARKER = '# Managed by Relay computer installer';
 
 /** Writes `<binDir>/<name>` to run `script`, unless an unrelated executable already owns that name. */
-function installLauncher(binDir: string, name: string, script: string): string | undefined {
+function installLauncher(binDir: string, name: string, script: string, brand: RelayBrand): string | undefined {
   mkdirSync(binDir, { recursive: true });
   const launcher = join(binDir, name);
   if (existsSync(launcher) && !readFileSync(launcher, 'utf8').includes(LAUNCHER_MARKER)) {
     console.log(`Preserving existing executable: ${launcher}`);
     return undefined;
   }
-  writeFileSync(launcher, `#!/bin/sh\n${LAUNCHER_MARKER}\nexec ${shell(process.execPath)} ${shell(script)} "$@"\n`, { mode: 0o755 });
+  const env = brand === RELAY_DEV_BRAND ? `${BRAND_ENV}=dev ` : '';
+  writeFileSync(launcher, `#!/bin/sh\n${LAUNCHER_MARKER}\n${env}exec ${shell(process.execPath)} ${shell(script)} "$@"\n`, { mode: 0o755 });
   chmodSync(launcher, 0o755);
   return launcher;
 }
@@ -146,12 +148,12 @@ function serviceRunner(): ServiceRunner {
 }
 
 /** Removes every other service installed for this backend and workspace: one computer, one service. */
-function removeSupersededServices(installed: InstalledComputer[], options: InstallOptions): void {
+function removeSupersededServices(installed: InstalledComputer[], options: InstallOptions, brand: RelayBrand): void {
   const runner = serviceRunner();
   for (const computer of installed) {
     if (computer.id === options.sandboxId || !sameComputer(computer, options.backendUrl, options.workspace)) continue;
     removeService(process.platform, process.getuid?.() ?? 0, computer, runner);
-    console.log(`Removed an older Relay install for this workspace (${computer.id}).`);
+    console.log(`Removed an older ${brand.product} install for this workspace (${computer.id}).`);
   }
   if (process.platform === 'linux') spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
 }
@@ -163,6 +165,7 @@ async function install(): Promise<void> {
     const probe = spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' });
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
   }
+  const brand = brandForBackend(options.backendUrl);
   const installed = installedComputers(process.platform, homedir());
   if (options.deviceSetup) {
     // install.sh prompts for it; reading /dev/tty from Node dies on EINTR under sudo.
@@ -174,13 +177,13 @@ async function install(): Promise<void> {
   const existing = options.deviceSetup ? await reusableComputer(installed, options.backendUrl, options.workspace) : undefined;
   if (existing) {
     // Re-running the install command upgrades this computer in place: same node, same token, new release.
-    console.log('Relay is already installed for this workspace; upgrading it.');
+    console.log(`${brand.product} is already installed for this workspace; upgrading it.`);
     options.sandboxId = existing.computer.id;
     options.employeeId = existing.computer.employeeId;
     process.env.RELAY_DAEMON_NODE_TOKEN = existing.token;
   } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
-      backendUrl: options.backendUrl, workspace: options.workspace, displayName: hostname().slice(0, 80),
+      backendUrl: options.backendUrl, workspace: options.workspace, displayName: brand === RELAY_DEV_BRAND ? brand.product : hostname().slice(0, 80),
       openBrowser: url => {
         console.log(`Confirm this computer in your browser:\n${url}`);
         const browser = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true });
@@ -235,8 +238,8 @@ async function install(): Promise<void> {
     '--employee-id', options.employeeId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
     '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
   const binDir = join(homedir(), '.local', 'bin');
-  const wrapper = installLauncher(binDir, 'relay-daemon', cli);
-  const control = installLauncher(binDir, 'relay', join(dirname(cli), 'control.js'));
+  const wrapper = installLauncher(binDir, `${brand.command}-daemon`, cli, brand);
+  const control = installLauncher(binDir, brand.command, join(dirname(cli), 'control.js'), brand);
   if (options.foreground) {
     // Keep service files for `relay start`, but prevent a background daemon from sharing this identity.
     const runner = serviceRunner();
@@ -245,7 +248,7 @@ async function install(): Promise<void> {
         stopService(process.platform, process.getuid?.() ?? 0, computer, runner);
       }
     }
-    console.log('Starting Relay in this terminal. Press Ctrl+C to stop.');
+    console.log(`Starting ${brand.product} in this terminal. Press Ctrl+C to stop.`);
     const child = spawnSync(argv[0]!, argv.slice(1), { stdio: 'inherit' });
     process.exitCode = child.status ?? 1;
     return;
@@ -253,7 +256,7 @@ async function install(): Promise<void> {
   const logDir = join(stateDir, 'logs');
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
   const path = `${dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}`;
-  const service = serviceDefinition(process.platform, options.sandboxId, argv, logDir, path);
+  const service = serviceDefinition(process.platform, options.sandboxId, argv, logDir, path, brand);
   if (process.platform === 'darwin') {
     const directory = join(homedir(), 'Library', 'LaunchAgents');
     mkdirSync(directory, { recursive: true });
@@ -279,17 +282,17 @@ async function install(): Promise<void> {
     }
   }
   // Only after the new service started, so a failed install never leaves the computer with none.
-  removeSupersededServices(installed, options);
-  console.log('Connected to Relay. You can close this terminal.');
-  console.log('Relay runs in the background and starts automatically when you log in.');
+  removeSupersededServices(installed, options, brand);
+  console.log(`Connected to ${brand.product}. You can close this terminal.`);
+  console.log(`${brand.product} runs in the background and starts automatically when you log in.`);
   if (control) {
     const relay = shell(control);
-    console.log('Control Relay with:');
+    console.log(`Control ${brand.product} with:`);
     console.log(`  Stop: ${relay} stop`);
     console.log(`  Start: ${relay} start`);
     console.log('Other commands: status, restart, logs.');
   }
-  if (options.verbose) console.log(`CLI installed at ${wrapper ?? join(binDir, 'relay-daemon')}.`);
+  if (options.verbose) console.log(`CLI installed at ${wrapper ?? join(binDir, `${brand.command}-daemon`)}.`);
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseInstallArgs, serviceDefinition } from '../src/install.js';
+import { brandForBackend, RELAY_BRAND, RELAY_DEV_BRAND } from '../src/control.js';
 
 const args = ['--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--employee-id', 'alice', '--workspace', '/tmp/a project'];
 test('installer requires scoped settings and rejects unsupported origins and identifiers', () => {
@@ -22,6 +23,15 @@ test('services preserve argv boundaries and never contain node credentials', () 
   assert.match(linux.content, /%%/);
   assert.match(linux.content, /\$\$\(touch x\)/);
   assert.doesNotMatch(mac.content + linux.content, /TOKEN/);
+});
+
+test('a computer installed against a loopback backend is branded Relay Dev', () => {
+  for (const url of ['http://localhost:8790', 'http://127.0.0.1:8790', 'http://[::1]:8790']) {
+    assert.equal(brandForBackend(url), RELAY_DEV_BRAND);
+  }
+  assert.equal(brandForBackend('https://api.get-relay.cc'), RELAY_BRAND);
+  const linux = serviceDefinition('linux', 'node-1', ['/usr/bin/node'], '/tmp/log', '/usr/bin', RELAY_DEV_BRAND);
+  assert.match(linux.content, /^Description=Relay Dev personal computer node-1$/m);
 });
 
 test('installed services restart failures but leave deleted-node clean exits stopped', () => {
@@ -84,6 +94,8 @@ test('installer verifies authentication and writes a service using the real pack
       response.setHeader('Content-Type', 'application/json');
       if (request.url === '/api/v1/computer-authorizations') {
         assert.equal(JSON.parse(body).workspacePath, workspace);
+        // The fixture backend is loopback, so this is a local dev install.
+        assert.equal(JSON.parse(body).displayName, 'Relay Dev');
         response.statusCode = 201;
         response.end(JSON.stringify({ deviceCode: 'device-fixture-secret', verificationUrl: `http://${request.headers.host}/computer?connect=browser-code` }));
         return;
@@ -117,7 +129,7 @@ test('installer verifies authentication and writes a service using the real pack
     });
     assert.equal(registrations.length, 0);
     assert.doesNotMatch(stdout + stderr, /fixture-token/);
-    assert.match(stdout, /Connected to Relay\. You can close this terminal\./);
+    assert.match(stdout, /Connected to Relay Dev\. You can close this terminal\./);
     const verifyControlHints = async (output: string, path: string) => {
       const hints = [...output.matchAll(/^  (Stop|Start): (.+)$/gm)];
       assert.deepEqual(hints.map(hint => hint[1]), ['Stop', 'Start']);
@@ -135,7 +147,11 @@ test('installer verifies authentication and writes a service using the real pack
         assert.equal(readFileSync(calls, 'utf8'), expected.join('\n') + '\n');
       }
     };
-    assert.match(readFileSync(join(home, '.local/bin/relay'), 'utf8'), /control\.js/);
+    assert.match(readFileSync(join(home, '.local/bin/relay-dev'), 'utf8'), /RELAY_BRAND=dev exec .*control\.js/);
+    assert.match(readFileSync(join(home, '.local/bin/relay-dev-daemon'), 'utf8'), /cli\.js/);
+    // A local dev install leaves a production `relay` launcher alone.
+    assert.equal(readFileSync(join(bin, 'relay'), 'utf8'), '#!/bin/sh\nexit 99\n');
+    assert.equal(existsSync(join(home, '.local/bin/relay')), false);
     assert.doesNotMatch(stdout, /launchctl|systemctl|journalctl|CLI installed at|Logs:/);
     const credential = join(home, '.relay/daemon-nodes/node-install-test/credentials/alice.token');
     assert.equal(readFileSync(credential, 'utf8').trim(), 'fixture-token');
@@ -183,7 +199,7 @@ test('installer verifies authentication and writes a service using the real pack
     });
     assert.match(upgrade.stdout, /already installed for this workspace; upgrading it/);
     assert.doesNotMatch(upgrade.stdout, /Confirm this computer in your browser/);
-    assert.match(upgrade.stdout, /Removed an older Relay install for this workspace \(node-stale\)/);
+    assert.match(upgrade.stdout, /Removed an older Relay Dev install for this workspace \(node-stale\)/);
     assert.doesNotMatch(upgrade.stdout + upgrade.stderr, /fixture-token/);
     assert.equal(existsSync(stale), false);
     assert.equal(readFileSync(service, 'utf8'), content);
