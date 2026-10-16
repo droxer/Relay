@@ -10,6 +10,7 @@ COPY package.json package-lock.json tsconfig.options.json ./
 COPY packages/relay-core/ ./packages/relay-core/
 COPY packages/relay-daemon/ ./packages/relay-daemon/
 COPY tools/build-computer.mjs ./tools/build-computer.mjs
+COPY tools/vendor/braces/ ./tools/vendor/braces/
 RUN npm ci --ignore-scripts --include=dev --workspace relay-core --workspace relay-daemon --include-workspace-root \
     && npm run build:computer
 

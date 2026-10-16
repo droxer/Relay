@@ -15,6 +15,7 @@ WORKDIR /build
 COPY package.json package-lock.json tsconfig.options.json ./
 COPY packages/relay-core/package.json ./packages/relay-core/
 COPY web/package.json ./web/
+COPY tools/vendor/braces/ ./tools/vendor/braces/
 RUN npm ci --include=dev --workspace relay-core --workspace web --include-workspace-root
 
 COPY packages/relay-core/ ./packages/relay-core/
