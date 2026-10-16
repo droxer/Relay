@@ -961,6 +961,8 @@ class DaemonNodeRegistry:
         logger.debug("Daemon node status updated", sandbox_id=sandbox_id, status=status)
 
     def monitor_nodes(self) -> list[dict[str, Any]]:
+        from .client_version import client_outdated  # imports this module
+
         self._refresh_persisted_liveness()
         active_runs_by_node = self._active_runs_by_node()
         queued_counts = self.daemon_store.queued_command_counts()
@@ -984,6 +986,7 @@ class DaemonNodeRegistry:
                     ],
                     "online": liveness["online"],
                     "stale": liveness["stale"],
+                    "clientOutdated": client_outdated(sandbox),
                     **(
                         {"lastSeenAgeMs": liveness["lastSeenAgeMs"]}
                         if "lastSeenAgeMs" in liveness

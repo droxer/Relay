@@ -1,4 +1,14 @@
 import type { ControlPanelDaemonNodeRecord, DaemonNodeMonitorRecord, SandboxRecord } from "relay-core";
+
+/* The node records the web reads carry one field the shared protocol type
+   does not: whether the computer runs an older Relay client than the server
+   expects. The backend derives it per read; only the web renders it, so it
+   is declared here rather than in relay-core. Absent on an older backend. */
+declare module "relay-core" {
+  interface DaemonNodeMonitorRecord {
+    clientOutdated?: boolean;
+  }
+}
 import type { UserRecord } from "./users.ts";
 
 export interface SandboxesResponse {

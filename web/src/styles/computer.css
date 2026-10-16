@@ -175,6 +175,15 @@
   color: var(--ink-4);
 }
 
+/* The client on this machine is older than the server: what to do about it,
+   under the line that says what the machine is. */
+.computer-card-outdated {
+  margin: var(--sp-1) 0 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 .computer-card-actions {
   display: flex;
   flex: 0 0 auto;

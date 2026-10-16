@@ -45,7 +45,9 @@ from ..automations.model import is_active, listens, schedule_triggers, state_of
 from ..core.human_waits import ensure_wait_record
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
+from ..notifications.rules import task_notification_rows
 from .automation_store import insert_outbox_rows, task_outbox_rows
+from .notification_store import insert_notification_rows
 from .protocols import TaskDispatchAssignment
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
@@ -1348,6 +1350,7 @@ class DatabaseTaskStore:
                     )
             if self.emit_automation_events:
                 insert_outbox_rows(conn, task_outbox_rows(current, task))
+            insert_notification_rows(conn, task_notification_rows(current, task, events))
         logger.debug(
             "Database task events appended",
             task_id=task_id,

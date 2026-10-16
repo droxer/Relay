@@ -52,6 +52,10 @@ import { resolveNewThreadComputer } from "./lib/threadRuntime";
 import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
+import { useNotifications } from "./hooks/useNotifications";
+import { computerSettingsDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
+import { hrefForSettingsSection } from "./lib/appRoute";
+import type { NotificationBellBinding } from "./components/notifications/NotificationBell";
 
 type UserPreferences = ReturnType<typeof useUserPreferences>;
 
@@ -237,6 +241,38 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     onSetComposingNewFromPath: setComposingNewFromPath,
     onClearPendingMessage: dropPendingMessage,
   });
+  /* The inbox. A computer notice opens wherever that computer is managed:
+     the person's own settings for a machine they hold, the control panel
+     for shared hardware an admin is told about. */
+  const ownNodeIds = useMemo(
+    () => new Set(nodes.filter((node) => node.userId === user.userId).map((node) => node.id)),
+    [nodes, user.userId],
+  );
+  const computerDestination = useCallback(
+    (nodeId: string) => computerSettingsDestination(nodeId, { isAdmin: user.role === "admin", ownNodeIds }),
+    [ownNodeIds, user.role],
+  );
+  const openNotice = useStableEvent(({ target }: { target: NotificationTarget }) => {
+    if (target.kind === "task") {
+      if (target.routineId) navigateToRoutineRecord(target.routineId, target.taskId);
+      else navigateToTaskRecord(target.taskId);
+      return;
+    }
+    if (computerDestination(target.nodeId) === "admin") navigateToAdminSection("computers");
+    else navigateToSettings("computers");
+  });
+  const notificationController = useNotifications({
+    // Session-cookie authenticated, so every signed-in account has an inbox —
+    // a bootstrap admin without a User files notices under its account.
+    enabled: true,
+    onOpen: openNotice,
+  });
+  const notificationBell = useMemo<NotificationBellBinding>(() => ({
+    controller: notificationController,
+    hrefFor: (target) => notificationHref(target, target.kind === "computer" ? computerDestination(target.nodeId) : "settings"),
+    settingsHref: hrefForSettingsSection("notifications"),
+    onOpenSettings: () => navigateToSettings("notifications"),
+  }), [computerDestination, navigateToSettings, notificationController]);
   const activeProject = useMemo(() => {
     const id = routedProjectId ?? activeSession?.projectId;
     return id ? projects.find((project) => project.id === id) ?? null : null;
@@ -506,6 +542,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       onNewThread={startNewThread}
       onboarding={onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null}
       onOpenOnboarding={openOnboarding}
+      notifications={notificationBell}
       onNewTask={() => {
         taskCreateIntent()?.queue();
         // The queued intent is picked up by the tasks board, which is no

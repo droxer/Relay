@@ -33,6 +33,7 @@ import {
   clampSidenavWidth, maxSidenavWidth, SIDENAV_WIDTH_DEFAULT, SIDENAV_WIDTH_MAX, SIDENAV_WIDTH_MIN,
 } from "../lib/sidenav";
 import { chatColumnWidth, viewportWidth } from "../lib/shellMetrics";
+import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
 
 /** Mobile-only More overflow: the destinations that do not fit the bottom tab
  *  bar. A table rather than five repeated <a> blocks — the blocks differed
@@ -54,7 +55,7 @@ const MORE_ROUTES: readonly {
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
-export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding }: {
+export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding, notifications }: {
   sidenavExpanded: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
   width: number;
@@ -69,6 +70,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   /** Setup progress while the onboarding wizard is active; null hides the chip. */
   onboarding?: { done: number; total: number } | null;
   onOpenOnboarding?: () => void;
+  notifications?: NotificationBellBinding;
 }) {
   const { t } = useTranslation();
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -333,6 +335,22 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           <ActionSearch size={ICON.md} />
           <span className="sr-only">{t("command.title")}</span>
         </Button>
+        {/* The inbox opens a panel beside the rail rather than navigating,
+            so it sits with the chrome squares, next to the palette. */}
+        {notifications ? (
+          <NotificationBell
+            {...notifications}
+            className="sidenav-btn"
+            side="right"
+            align="end"
+            triggerProps={{
+              onMouseEnter: (e) => showNavTooltip(t("notifications.title"), e.currentTarget, true),
+              onMouseLeave: hideNavTooltip,
+              onFocus: (e) => showNavTooltip(t("notifications.title"), e.currentTarget, true),
+              onBlur: hideNavTooltip,
+            }}
+          />
+        ) : null}
         {/* Settings is a direct footer link; sign-out used to hide inside its
             menu, which made the gear an account surface instead of a
             destination. Two controls, one job each. */}

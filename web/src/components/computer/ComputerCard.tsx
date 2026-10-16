@@ -9,6 +9,7 @@ import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
+import { ClientOutdatedBadge } from "./ClientOutdatedBadge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -116,6 +117,7 @@ export function ComputerCard({
                 live={statusTone(status) === "info"}
               />
             ) : null}
+            <ClientOutdatedBadge node={node} t={t} />
           </div>
           {/* The separators are drawn by CSS on each item after the first, and each
               item is nowrap: a wrapping flex row breaks between children, so
@@ -127,6 +129,11 @@ export function ComputerCard({
             <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>{" "}
             <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
           </p>
+          {/* The reader owns this machine, so the fix is theirs to make:
+              say it in the open, not only in the badge's hover title. */}
+          {node.clientOutdated === true ? (
+            <p className="computer-card-outdated">{t("computer.client_outdated_hint")}</p>
+          ) : null}
         </div>
         {/* One overflow menu instead of a row of five outlined buttons: rename,
             token, and disconnect are occasional, so they stay labelled but out

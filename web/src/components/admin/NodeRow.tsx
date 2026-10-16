@@ -8,6 +8,7 @@ import { NodeActions } from "./NodeActions";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { ICON, NodeOwnershipIcon } from "../icons";
+import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 
 /* The nodes list is a TanStack table now (see NodesView): a "row" here is one
    component per column, and flexRender mounts each as a real component —
@@ -51,6 +52,7 @@ export function NodeIdentityCell({
             {nodeName}
           </span>
           <NodePresence node={node} t={t} withLabel />
+          <ClientOutdatedBadge node={node} t={t} />
         </span>
         <span className="adm-node-card-handle code" translate="no">{node.id}</span>
       </span>

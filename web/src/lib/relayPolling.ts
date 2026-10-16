@@ -16,6 +16,9 @@ export const RELAY_POLL_INTERVALS_MS = {
   /** Agents and teams only drift through node-reported availability. */
   agents: 30_000,
   teams: 30_000,
+  /** The notification inbox. The bell is a summary, not a live feed, and a
+      run's own surfaces already show it finishing in real time. */
+  notifications: 30_000,
   /** A settled task record with no list row to signal a retry or reopen. */
   settledTaskRecord: 30_000,
 } as const;

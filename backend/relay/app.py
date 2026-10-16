@@ -28,6 +28,7 @@ from .api import (
     daemon_node_routes,
     managed_node_routes,
     node_workspace_routes,
+    notification_routes,
     password_reset_routes,
     profile_image_routes,
     project_routes,
@@ -86,6 +87,8 @@ from .persistence.stores import (
 )
 from .persistence.team_store import DatabaseTeamStore, LocalTeamStore
 from .persistence.waitlist_store import DatabaseWaitlistStore
+from .persistence.notification_store import DatabaseNotificationStore
+from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
 from .security.auth import USER_COOKIE_NAME, auth_store_from_env, configure_admin_token
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
@@ -351,12 +354,17 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     from .services.execution_lifecycle import ExecutionLifecycleService
     execution_lifecycle = ExecutionLifecycleService(registry, chat_store)
+    notification_store = notification_store_from_env()
+    computer_notifications = ComputerNotificationWatcher(
+        registry, auth_store, notification_store, interval_seconds=watch_interval_from_env(),
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if notification_bridge:
             notification_bridge.start()
         execution_lifecycle.start()
+        computer_notifications.start()
         if scheduler:
             scheduler.start()
         try:
@@ -364,6 +372,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         finally:
             if scheduler:
                 await scheduler.stop()
+            await computer_notifications.stop()
             await execution_lifecycle.stop()
             if notification_bridge:
                 await notification_bridge.stop()
@@ -398,6 +407,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.task_store = task_store
     app.state.daemon_store = daemon_store
     app.state.execution_lifecycle = execution_lifecycle
+    app.state.notification_store = notification_store
+    app.state.computer_notifications = computer_notifications
     app.state.chat_store = chat_store
     app.state.chat_probe = probe_chat_integration
     app.state.chat_provision = provision_chat_integration
@@ -469,6 +480,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         sandbox_routes.router,
         daemon_node_routes.router,
         managed_node_routes.router,
+        notification_routes.router,
         password_reset_routes.router,
         waitlist_routes.router,
     )
@@ -631,6 +643,11 @@ def task_store_from_env(root_dir: Path) -> Any:
 def automation_store_from_env() -> DatabaseAutomationStore:
     url = database_url_from_env(setting="database-only automation storage")
     return DatabaseAutomationStore(url, create_schema=url.startswith("sqlite"))
+
+
+def notification_store_from_env() -> DatabaseNotificationStore:
+    url = database_url_from_env(setting="database-only notification storage")
+    return DatabaseNotificationStore(url, create_schema=url.startswith("sqlite"))
 
 
 def channels_enabled_from_env() -> bool:

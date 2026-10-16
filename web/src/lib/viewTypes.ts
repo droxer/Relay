@@ -5,11 +5,12 @@ export type AppRoute = "main" | "projects" | "backlog" | "routine" | "agents" | 
    routes of their own; they are sections of one Settings surface now, beside
    appearance and language — the same rail-of-sections shape the control panel
    uses. Adding a section = one entry here plus its case in SettingsPage. */
-export type SettingsSection = "computers" | "skills" | "appearance" | "language";
+export type SettingsSection = "computers" | "skills" | "notifications" | "appearance" | "language";
 
 const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   "computers",
   "skills",
+  "notifications",
   "appearance",
   "language",
 ];

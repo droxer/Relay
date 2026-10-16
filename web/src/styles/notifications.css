@@ -1,0 +1,171 @@
+/* =====================================================================
+   Notification inbox  (notif-* namespace)
+
+   The bell (components/notifications/NotificationBell.tsx) sits in the rail
+   footer on desktop and at the end of the phone top bar; both open the same
+   panel. The panel is a popover, so it takes the popover chrome and only
+   lays out its own rows here. Rows are links: a notice is a destination.
+   ===================================================================== */
+
+.notif-bell {
+  position: relative;
+}
+
+/* The unread count, pinned to the glyph's top corner. A capsule, so it may
+   take --r-full: it grows from a circle ("3") to a short pill ("9+"). */
+.notif-bell-badge {
+  position: absolute;
+  top: calc(var(--sp-1) * -1);
+  right: calc(var(--sp-1) * -1);
+  min-width: var(--icon-md);
+  height: var(--icon-md);
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-full);
+  background: var(--action);
+  color: var(--on-action);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  line-height: var(--icon-md);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* In the top bar the glyph button is a 44px square, so the badge sits
+   inside its corner rather than hanging off the bar's edge. */
+.mobile-topbar-bell .notif-bell-badge {
+  top: var(--sp-1);
+  right: var(--sp-1);
+}
+
+.notif-panel {
+  width: min(24rem, calc(100vw - var(--sp-6)));
+  gap: 0;
+  padding: 0;
+}
+
+.notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
+}
+
+.notif-heading {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.notif-list {
+  max-height: min(28rem, 60vh);
+  margin: 0;
+  padding: var(--sp-1);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.notif-row:hover {
+  background: var(--row-hover);
+}
+
+/* The tone mark sits on the title's first line. */
+.notif-mark {
+  flex: 0 0 auto;
+  margin-top: var(--sp-1-5);
+}
+
+.notif-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sp-0-5);
+  min-width: 0;
+}
+
+.notif-title {
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.notif-row[data-unread] .notif-title {
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.notif-detail {
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-time {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font: var(--type-meta);
+}
+
+.notif-empty {
+  margin: 0;
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-align: center;
+}
+
+.notif-foot {
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 0.5px solid var(--line-1);
+}
+
+.notif-settings-link {
+  color: var(--link);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+/* ── Settings → Notifications ──────────────────────────────────────────── */
+
+.notif-prefs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.notif-pref-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.notif-pref-row:last-child {
+  border-bottom: 0;
+}
+
+.notif-pref-status {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
