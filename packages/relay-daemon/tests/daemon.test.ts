@@ -37,6 +37,7 @@ after(() => {
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
+import { AgentNotInstalledError } from "../src/agent-preflight.js";
 import { requestUpdatePause } from "../src/update-pause.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
@@ -1099,6 +1100,53 @@ test("local node refreshes agent availability before heartbeat registration", as
   assert.equal(registrations[1].supportedAgents.includes("codex"), true);
 });
 
+test("capability refresh logs an agent only when its availability changes", async () => {
+  const stop = new AbortController();
+  const logs: Array<{ level: string; message: string; agent?: unknown }> = [];
+  let registrations = 0;
+  let claudeChecks = 0;
+  const record = (level: string) => (message: string, fields?: Record<string, unknown>) => {
+    if (message.startsWith("agent ")) logs.push({ level, message, agent: fields?.agent });
+  };
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_quiet_refresh",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    sandbox: "none",
+    token: "node_token",
+    pollIntervalMs: 1,
+    heartbeatIntervalMs: 1,
+    shutdownGraceMs: 50,
+    logger: { info: record("info"), warn: record("warn"), error: record("error"), output: () => undefined },
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      ensure: async (agent) => {
+        if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
+        if (agent === "kimi") throw new Error("Kimi requires a valid native config.toml.");
+        // Claude signs out on the third probe: a real change, so it is logged again.
+        if (agent === "claude" && claudeChecks++ === 2) throw new Error("Claude Code is not logged in.");
+      },
+    }),
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        if (++registrations === 3) stop.abort();
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) return jsonResponse({ commands: [] });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  const about = (agent: string) => logs.filter((entry) => entry.agent === agent).map(({ level, message }) => `${level} ${message}`);
+  assert.deepEqual(about("pi"), ["info agent capability ready"]);
+  assert.deepEqual(about("codex"), ["info agent not installed"]);
+  assert.deepEqual(about("kimi"), ["warn agent capability failed"]);
+  assert.deepEqual(about("claude"), ["info agent capability ready", "warn agent capability failed"]);
+});
+
 test("capability refresh never probes agents while a run is active", async () => {
   const stop = new AbortController();
   const command = runCommand("cmd_active_refresh");
@@ -2047,6 +2095,7 @@ test("relay daemon bounds stopped registration during shutdown", async () => {
     token: "node_token",
     pollIntervalMs: 5,
     shutdownGraceMs: 50,
+    shutdownRegistrationTimeoutMs: 100,
     logger: testLogger(),
     signal: stop.signal,
     environment: {

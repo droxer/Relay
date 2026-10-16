@@ -5,6 +5,7 @@ import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { localExitProven } from "./exit-proof.js";
 import { localBash } from "./local-shell.js";
+import { agentPreflightError } from "./agent-preflight.js";
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
 export function createLocalRuntime(): DaemonExecutionEnvironment {
@@ -41,10 +42,7 @@ async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Pr
     signal,
     env: Object.fromEntries(agentCredentialEnv(agent)),
   });
-  if (result.exit_code !== 0) {
-    const detail = (result.stderr || result.stdout || result.error_message || "").trim();
-    throw new Error(`${def.preflight.label} preflight failed.${detail ? ` ${detail}` : ""}`);
-  }
+  if (result.exit_code !== 0) throw agentPreflightError(agent, result);
 }
 
 const AGENT_SUBPROCESS_ENV_DENY = new Set([
