@@ -76,6 +76,11 @@ export class GuestPool {
     return booted ? this.lease(booted) : this.acquire(fallbackWorkspace, signal);
   }
 
+  /** Whether `acquireAny` would borrow a booted guest instead of booting one. */
+  hasBootedGuest(): boolean {
+    return !this.closed && [...this.guests.values()].some((guest) => guest.booted);
+  }
+
   async close(): Promise<void> {
     this.closed = true;
     this.wake();

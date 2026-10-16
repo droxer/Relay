@@ -121,3 +121,17 @@ test("closing during a boot stops that guest once it comes up", async () => {
   (await acquiring).release();
   await assert.rejects(pool.acquire("/w/b"), /closed/);
 });
+
+test("a pool reports a borrowable guest only once one has booted", async () => {
+  const { pool, boots } = controlledPool(1);
+  assert.equal(pool.hasBootedGuest(), false);
+  const acquiring = pool.acquire("/w/thread");
+  await tick();
+  assert.equal(pool.hasBootedGuest(), false);
+  boots[0]!.resolve();
+  const lease = await acquiring;
+  assert.equal(pool.hasBootedGuest(), true);
+  lease.release();
+  await pool.close();
+  assert.equal(pool.hasBootedGuest(), false);
+});

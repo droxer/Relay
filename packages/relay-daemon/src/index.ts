@@ -28,6 +28,7 @@ import type {
 import {
   startOrchestratorSession,
   ensureAgentReady as ensureSandboxAgentReady,
+  probeAgentReadiness,
   resolveBoxliteHome,
   BoxliteRuntimeOwner,
 } from "./sandbox-session.js";
@@ -579,6 +580,44 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         throw error;
       }
     };
+    // A busy computer still re-checks the runtimes no run is using, in the
+    // background so the command poll (and any cancel it carries) is not held
+    // up. Runtimes in use keep their last report: probing them would touch
+    // the credentials the running agent is using. A BoxLite node probes
+    // inside a guest that is already up and skips the round while none is.
+    let busyRuntimeRefresh: Promise<void> | undefined;
+    const refreshIdleRuntimesWhileBusy = async (): Promise<void> => {
+      const inUse = new Set([...activeRuns.values()].map(({ command }) => command.agent));
+      const idle = AGENT_NAMES.filter((agent) => !inUse.has(agent));
+      const keepInUse = <T>(fresh: Partial<Record<AgentName, T>>, prior: Partial<Record<AgentName, T>>) => ({
+        ...Object.fromEntries(Object.entries(fresh).filter(([agent]) => !inUse.has(agent as AgentName))),
+        ...Object.fromEntries(Object.entries(prior).filter(([agent]) => inUse.has(agent as AgentName))),
+      }) as Partial<Record<AgentName, T>>;
+      const signal = AbortSignal.any([runtimeSignal, AbortSignal.timeout(BUSY_RUNTIME_REFRESH_TIMEOUT_MS)]);
+      const commands = [...runtimeRefreshCommands].slice(0, 50);
+      try {
+        const health = await discoverDaemonAgentHealth(environment, logger, sandboxId, signal, idle, agentHealth);
+        const inventory = await discoverAgentInventory(environment.execStream, signal, inventoryDiscoveryTimeoutMs);
+        const models = await discoverAgentModels(environment.execStream, readyAgents(health), signal, inventoryDiscoveryTimeoutMs, providerModelLists);
+        if (signal.aborted || stopping) return;
+        agentHealth = { ...agentHealth, ...health };
+        agentInventory = keepInUse(inventory, agentInventory);
+        agentModels = keepInUse(models, agentModels);
+        refreshedCommands = commands.map(([commandId, leaseId]) => ({ commandId, leaseId }));
+        updateHeartbeatSettings(await register());
+      } catch (error) {
+        logger.warn("busy runtime refresh failed; it will retry", {
+          sandboxId, error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        refreshedCommands = [];
+        // A failed attempt waits out the interval instead of retrying every
+        // poll; an unacknowledged refresh request is redelivered once its
+        // lease lapses.
+        for (const [commandId] of commands) runtimeRefreshCommands.delete(commandId);
+        lastRegisteredAt = Date.now();
+      }
+    };
     outboxTask = (async () => {
       while (!runtimeSignal.aborted) {
         await terminalOutbox.replay(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), token, runtimeSignal);
@@ -626,8 +665,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (stopping) return { commands: [] };
         // Capability re-registration refreshes agent inventory independently
         // of the lightweight liveness heartbeat.
-        if (activeRuns.size === 0 && (runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs)) {
-          agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, agentHealth);
+        const runtimeRefreshDue = runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs;
+        if (runtimeRefreshDue && activeRuns.size > 0 && !busyRuntimeRefresh && (environment.canProbeWithoutBooting?.() ?? true)) {
+          busyRuntimeRefresh = refreshIdleRuntimesWhileBusy().finally(() => { busyRuntimeRefresh = undefined; });
+        }
+        if (activeRuns.size === 0 && !busyRuntimeRefresh && runtimeRefreshDue) {
+          agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, AGENT_NAMES, agentHealth);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
           agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists);
           refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
@@ -1103,10 +1146,11 @@ async function discoverDaemonAgentHealth(
   logger: DaemonLogger,
   sandboxId: string,
   signal?: AbortSignal,
+  agents: readonly AgentName[] = AGENT_NAMES,
   previous?: Partial<Record<AgentName, DaemonAgentHealth>>,
 ): Promise<Partial<Record<AgentName, DaemonAgentHealth>>> {
   const health: Partial<Record<AgentName, DaemonAgentHealth>> = {};
-  for (const agent of AGENT_NAMES) {
+  for (const agent of agents) {
     const def = getAgent(agent);
     let notInstalled = false;
     try {
@@ -1532,8 +1576,15 @@ export interface WorkspaceExecution {
 
 export interface DaemonExecutionEnvironment {
   readonly sandboxMode: DaemonSandboxMode;
-  /** Workspace-agnostic preflight, used by capability discovery. */
+  /** Workspace-agnostic preflight, used by capability discovery. Probes
+   * afresh each call so a runtime that stopped working is reported. */
   ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
+  /**
+   * Whether discovery can run now without starting new execution capacity
+   * (a BoxLite node borrows an already-booted guest). Absent means always:
+   * a local node probes with plain host processes.
+   */
+  canProbeWithoutBooting?(): boolean;
   /** Workspace-agnostic exec, used by inventory and model discovery. */
   execStream: typeof localProcessExecStream;
   /** Hold the execution context for one run's workspace until release(). */
@@ -1631,19 +1682,21 @@ export function createBoxliteEnvironment(
     execStream: (cmd, args = [], execOptions = {}) => lease.manager.execStream(cmd, args, execOptions),
     release: lease.release,
   });
-  const withAnyGuest = async <T>(signal: AbortSignal | undefined, work: (execution: WorkspaceExecution) => Promise<T>): Promise<T> => {
-    const execution = workspaceExecution(await pool.acquireAny(workspacePath, signal));
+  const withAnyGuest = async <T>(signal: AbortSignal | undefined, work: (lease: GuestLease) => Promise<T>): Promise<T> => {
+    const lease = await pool.acquireAny(workspacePath, signal);
     try {
-      return await work(execution);
+      return await work(lease);
     } finally {
-      execution.release();
+      lease.release();
     }
   };
   return {
     sandboxMode: "boxlite",
-    ensureAgentReady: (agent, signal) => withAnyGuest(signal, (execution) => execution.ensureAgentReady(agent, signal)),
+    // Discovery probes afresh; runs keep the per-guest cache (workspaceExecution).
+    ensureAgentReady: (agent, signal) => withAnyGuest(signal, (lease) => probeAgentReadiness(agent, signal, lease.manager)),
+    canProbeWithoutBooting: () => pool.hasBootedGuest(),
     execStream: (cmd, args = [], execOptions = {}) =>
-      withAnyGuest(execOptions.signal, (execution) => execution.execStream(cmd, args, execOptions)),
+      withAnyGuest(execOptions.signal, (lease) => lease.manager.execStream(cmd, args, execOptions)),
     acquireWorkspace: async (hostWorkspace, signal) => workspaceExecution(await pool.acquire(hostWorkspace, signal)),
     // Agents only ever run inside this computer's guests, so once every guest
     // a previous daemon left behind is confirmed gone, so are its runs.
@@ -1874,6 +1927,8 @@ const SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS = 500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;
+// A hung agent CLI must not wedge busy-time refreshes for the rest of the run.
+const BUSY_RUNTIME_REFRESH_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMMAND_LEASE_SECONDS = 60 * 60;
 const DEFAULT_COMMAND_LEASE_SECONDS = 90;
 /** Longer than a typical backend deploy, and well inside the backend's 15-minute idle reaper. */

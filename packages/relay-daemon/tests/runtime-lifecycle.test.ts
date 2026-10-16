@@ -162,3 +162,57 @@ test("runtime owner closes initialization still in flight", async (t) => {
   await Promise.all([starting, closing]);
   assert.equal(shutdowns, 1);
 });
+
+test("discovery re-probes a guest's cached runtime so a stopped one is reported", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-runtime-probe-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, "runtime");
+  const native = { shutdown: async () => {}, close() {} };
+  const owner = new BoxliteRuntimeOwner(home, async () => native);
+  let preflights = 0;
+  let skillInstalls = 0;
+  let loggedIn = true;
+  const manager = {
+    ensureImage: () => "/unused-rootfs",
+    createSandbox: async (_runtime, input) => ({ name: input.boxName, raw: {} }),
+    setActiveSandbox() {},
+    stopActiveSandbox: async () => {},
+    removeSandbox: async () => {},
+    prepareWorkspace: async () => [501, 20],
+    prepareAgentAuth: async () => {},
+    prepareAgentSkills: async () => { skillInstalls++; },
+    execStream: async () => { throw new Error("unused"); },
+    runShell: async () => {
+      preflights++;
+      return loggedIn ? { exit_code: 0, stdout: "", stderr: "" } : { exit_code: 1, stdout: "", stderr: "Not logged in" };
+    },
+  } as ExecutionManager;
+  const logger = { info() {}, warn() {}, error() {}, output() {} } satisfies DaemonLogger;
+  const environment = createBoxliteEnvironment("sandbox-probe", root, logger, {
+    boxliteHome: home, executionManager: manager, runtimeOwner: owner,
+  });
+  t.after(() => environment.close());
+  assert.equal(environment.canProbeWithoutBooting?.(), false);
+  const run = await environment.acquireWorkspace(root);
+  await run.ensureAgentReady("codex");
+  assert.equal(environment.canProbeWithoutBooting?.(), true);
+  assert.equal(preflights, 1);
+  assert.equal(skillInstalls, 1);
+
+  // A run's readiness is cached for the guest; discovery is not.
+  await run.ensureAgentReady("codex");
+  assert.equal(preflights, 1);
+  await environment.ensureAgentReady("codex");
+  assert.equal(preflights, 2);
+  // The probe may share the guest with a running agent, so it leaves skills alone.
+  assert.equal(skillInstalls, 1);
+
+  loggedIn = false;
+  await assert.rejects(environment.ensureAgentReady("codex"), /Codex auth preflight failed/);
+  // The stopped runtime is no longer trusted by the next run either.
+  await assert.rejects(run.ensureAgentReady("codex"), /Codex auth preflight failed/);
+
+  loggedIn = true;
+  await environment.ensureAgentReady("codex");
+  run.release();
+});
