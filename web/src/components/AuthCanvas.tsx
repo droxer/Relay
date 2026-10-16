@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RelayMark } from "./RelayMark";
 import { ICON } from "./icons";
+import { GithubLink, GithubMark } from "./landing/GithubMark";
 import { PublicLink } from "./waitlist/PublicLink";
 
 /* The double-chevron geometry, shared by the bled watermark and the proof
@@ -58,12 +59,17 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
       {/* Left half: the cover. It says what Relay is; it holds no controls. */}
       <section className="login-cover">
         {/* The brand leads home: the landing page is the way back for a
-            visitor who arrived at the gate before knowing what Relay is. */}
-        <header>
+            visitor who arrived at the gate before knowing what Relay is.
+            The repository sits opposite it, as it does in the landing nav. */}
+        <header className="login-cover-head">
           <PublicLink href="/" className="login-brand">
             <RelayMark size={ICON.xl} />
             <span className="login-wordmark">Relay</span>
           </PublicLink>
+          <GithubLink className="login-github">
+            <GithubMark size={ICON.md} />
+            <span>{t("landing.github")}</span>
+          </GithubLink>
         </header>
 
         <div className="login-intro">
@@ -94,6 +100,9 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
           duplicated markup. */}
       <footer className="login-foot">
         <span className="login-foot-meta">Relay · {new Date().getFullYear()}</span>
+        <GithubLink className="login-foot-github" label={t("landing.github")}>
+          <GithubMark size={ICON.md} />
+        </GithubLink>
       </footer>
     </main>
   );
