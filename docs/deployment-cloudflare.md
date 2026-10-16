@@ -383,7 +383,7 @@ Then sign in at `https://app.example.com`, open a thread with a running agent
 and confirm the stream stays live for several minutes, and connect a daemon to
 `https://api.example.com`.
 
-## 10. Waitlist invite email (optional)
+## 10. Transactional email: waitlist invites and password resets (optional)
 
 `deploy/deploy.sh` turns the waitlist on (`RELAY_WAITLIST_ENABLED=1`) unless
 `deploy/.env` sets it to `0`. With it on, the backend emails waitlist invites and "you're
@@ -391,7 +391,10 @@ on the list" confirmations through [Cloudflare Email
 Service](https://developers.cloudflare.com/email-service/) (Email Sending is in
 beta). It calls the REST API from Railway; no Worker is involved. Without the
 three `RELAY_MAIL_*` variables it sends nothing and the admin copies each invite
-link instead.
+link instead. The same mailer sends password reset links, so "Forgot password?"
+appears on the sign-in screen only once these and `RELAY_PUBLIC_WEB_URL` (or
+`RELAY_PUBLIC_BACKEND_URL`) are set; until then an admin
+creates a reset link from the user's edit drawer and hands it over.
 
 1. Put the account on the **Workers Paid** plan. Sending to arbitrary
    recipients needs it; it includes 3,000 emails a month, then $0.35 per 1,000.
@@ -417,4 +420,8 @@ link instead.
 Tunables: `RELAY_WAITLIST_INVITE_TTL_DAYS` (14), `RELAY_WAITLIST_MAX_WAITING`
 (10000), `RELAY_WAITLIST_RATE_LIMIT_ATTEMPTS` / `_WINDOW_SECONDS` (5 per 600),
 and `RELAY_WAITLIST_CONFIRMATION_EMAIL=0` to stop confirmations if the form is
-abused to mail strangers.
+abused to mail strangers. Password reset: `RELAY_PASSWORD_RESET_TTL_MINUTES`
+(30, bounded 5–1440), `RELAY_PASSWORD_RESET_COOLDOWN_SECONDS` (60) and
+`RELAY_PASSWORD_RESET_MAX_PER_HOUR` (5) per account, and
+`RELAY_PASSWORD_RESET_RATE_LIMIT_ATTEMPTS` / `_WINDOW_SECONDS` (5 per 900) per
+IP.

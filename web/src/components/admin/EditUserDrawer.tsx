@@ -18,6 +18,7 @@ import {
 } from "../../lib/computerLimits";
 import { Alert } from "@/components/ui/alert";
 import { useOnOpen } from "@/hooks/useKeyChange";
+import { UserPasswordReset } from "./UserPasswordReset";
 
 interface EditUserDrawerProps {
   open: boolean;
@@ -28,7 +29,8 @@ interface EditUserDrawerProps {
   onSuccess: (user: UserRecord) => void;
 }
 
-/** Edit an existing user: name, email, and their personal-computer limit.
+/** Edit an existing user: name, email, their personal-computer limit, and a
+    one-time password reset link (its own action, outside the form's Save).
 
     Leaving the limit field empty clears the override, so the user follows
     the org default again — that is a real edit, not a no-op, which is why the
@@ -232,6 +234,8 @@ export function EditUserDrawer({
             </p>
           ) : null}
         </section>
+
+        {user ? <UserPasswordReset open={open} userId={user.id} /> : null}
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
 

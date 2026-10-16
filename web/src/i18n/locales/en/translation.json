@@ -1466,7 +1466,17 @@
       "password_problem_short": "Use at least {{min}} characters.",
       "password_problem_long": "Use at most {{max}} characters.",
       "password_problem_identifier": "Must not contain the user’s username, handle, name, or email.",
-      "password_problem_degenerate": "Must not be one repeated character or a straight keyboard sequence."
+      "password_problem_degenerate": "Must not be one repeated character or a straight keyboard sequence.",
+      "section_password": "Password",
+      "password_reset_hint": "Create a one-time link that lets this person choose a new password. It's emailed to them when email is set up.",
+      "password_reset_create": "Create reset link",
+      "password_reset_link": "Reset link",
+      "password_reset_expires": "Works once. Expires {{time}}.",
+      "password_reset_sent": "Emailed to the address on file.",
+      "password_reset_not_sent": "Not emailed — share this link with them directly.",
+      "password_reset_failed": "Email delivery failed — share this link with them directly.",
+      "password_reset_error": "Couldn't create a reset link: {{message}}",
+      "password_reset_copy": "Copy reset link"
     },
     "signing_in": "Signing in…",
     "waitlist": {
@@ -1581,7 +1591,9 @@
     "error_generic": "Something went wrong. Try again.",
     "do_ask": "Ask anything your company knows, with sources.",
     "do_handoff": "Delegate notes, follow-ups, and routine updates.",
-    "do_control": "Nothing risky happens without your approval."
+    "do_control": "Nothing risky happens without your approval.",
+    "forgot_password": "Forgot password?",
+    "reset_done": "Password updated. Sign in with your new password."
   },
   "landing": {
     "nav_label": "Relay",
@@ -2662,5 +2674,32 @@
     "password_problem_degenerate": "Must not be one repeated character or a straight keyboard sequence.",
     "join_submit": "Create account",
     "join_submitting": "Creating account…"
+  },
+  "password_reset": {
+    "retry_lookup": "Try again",
+    "request_title": "Reset your password",
+    "request_lede": "Enter your username or the email on your account. If it matches, we'll email you a link to choose a new password.",
+    "identifier": "Username or email",
+    "problem_required": "Enter your username or email.",
+    "problem_too_long": "That's longer than any username or email we accept.",
+    "submit": "Send reset link",
+    "submitting": "Sending…",
+    "sent_title": "Check your email",
+    "sent_body": "If an account matches, we've sent a link to its email address. The link works once and expires soon.",
+    "ask_admin": "No email? Your Relay admin can create a reset link for you.",
+    "unavailable": "Password reset by email isn't available here. Ask your Relay admin for a reset link.",
+    "back_to_sign_in": "Back to sign in",
+    "choose_title": "Choose a new password",
+    "choose_for": "For @{{username}}. Every signed-in session will be signed out.",
+    "new_password": "New password",
+    "confirm_password": "Confirm new password",
+    "mismatch": "The passwords don't match.",
+    "complete_submit": "Set new password",
+    "complete_submitting": "Saving…",
+    "checking": "Checking your link…",
+    "dead_title": "This link no longer works",
+    "dead_body": "Reset links work once and expire after a short time. Ask for a new one.",
+    "request_new": "Send a new link",
+    "error_rate_limited": "Too many attempts. Wait a few minutes and try again."
   }
 }

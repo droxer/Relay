@@ -225,6 +225,8 @@ class AccountAuthStore:
         if legacy_deleted_path.exists() and not self.deleted_users_path.exists():
             legacy_deleted_path.replace(self.deleted_users_path)
         self.session_ttl_seconds = session_ttl_seconds
+        # Every file read/modify/write uses this shared reentrant lock,
+        # including session migration, so none can restore a pre-reset snapshot.
         self._lock = _shared_auth_lock(f"local:{self.auth_dir.resolve()}")
 
     def resolve_user_id(self, user_id: str) -> str:
@@ -243,22 +245,23 @@ class AccountAuthStore:
         return {entry["id"] for entry in raw if entry.get("id")}
 
     def soft_delete_user(self, user_id: str) -> dict[str, Any]:
-        user_id = (user_id or "").strip()
-        if not user_id:
-            raise ValueError("userId is required.")
-        accounts = self._read_accounts()
-        if not any(account.get("userId") == user_id for account in accounts):
-            raise KeyError(user_id)
-        entries: list[dict[str, Any]] = []
-        if self.deleted_users_path.exists():
-            entries = _read_json(self.deleted_users_path)
-        if any(entry.get("id") == user_id for entry in entries):
-            raise ValueError("User is already deleted.")
-        record = {"id": user_id, "deletedAt": now_iso()}
-        entries.append(record)
-        _write_json(self.deleted_users_path, entries, mode=0o600)
-        logger.info("User soft-deleted", user_id=user_id)
-        return record
+        with self._lock:
+            user_id = (user_id or "").strip()
+            if not user_id:
+                raise ValueError("userId is required.")
+            accounts = self._read_accounts()
+            if not any(account.get("userId") == user_id for account in accounts):
+                raise KeyError(user_id)
+            entries: list[dict[str, Any]] = []
+            if self.deleted_users_path.exists():
+                entries = _read_json(self.deleted_users_path)
+            if any(entry.get("id") == user_id for entry in entries):
+                raise ValueError("User is already deleted.")
+            record = {"id": user_id, "deletedAt": now_iso()}
+            entries.append(record)
+            _write_json(self.deleted_users_path, entries, mode=0o600)
+            logger.info("User soft-deleted", user_id=user_id)
+            return record
 
     def has_accounts(self) -> bool:
         return len(self._read_accounts()) > 0
@@ -274,43 +277,44 @@ class AccountAuthStore:
         department_id: str | None = None,
         department_name: str | None = None,
     ) -> dict[str, Any]:
-        accounts = self._read_accounts()
-        username = username.strip().lower()
-        if not username:
-            raise ValueError("username is required.")
-        validate_password(
-            password, identifiers=(username, user_id, display_name, email)
-        )
-        if role not in ("admin", "user"):
-            raise ValueError("role must be admin or user.")
-        if any(account["username"] == username for account in accounts):
-            raise ValueError("username already exists.")
-        account = {
-            "id": new_database_id(),
-            "username": username,
-            "email": email.strip() if email else None,
-            "role": role,
-            "userId": user_id.strip() if user_id else None,
-            "displayName": display_name.strip() if display_name else None,
-            "departmentId": department_id.strip() if department_id else None,
-            "departmentName": department_name.strip() if department_name else None,
-            "theme": DEFAULT_USER_THEME,
-            "language": DEFAULT_USER_LANGUAGE,
-            "passwordHash": hash_password(password),
-            "createdAt": now_iso(),
-            "updatedAt": now_iso(),
-        }
-        accounts.append(account)
-        self._write_accounts(accounts)
-        if account.get("userId") and self.deleted_users_path.exists():
-            entries = [
-                entry
-                for entry in _read_json(self.deleted_users_path)
-                if entry.get("id") != account["userId"]
-            ]
-            _write_json(self.deleted_users_path, entries, mode=0o600)
-        logger.info("Account created", account_id=account["id"], username=username, role=role)
-        return self._public_account(account)
+        with self._lock:
+            accounts = self._read_accounts()
+            username = username.strip().lower()
+            if not username:
+                raise ValueError("username is required.")
+            validate_password(
+                password, identifiers=(username, user_id, display_name, email)
+            )
+            if role not in ("admin", "user"):
+                raise ValueError("role must be admin or user.")
+            if any(account["username"] == username for account in accounts):
+                raise ValueError("username already exists.")
+            account = {
+                "id": new_database_id(),
+                "username": username,
+                "email": email.strip() if email else None,
+                "role": role,
+                "userId": user_id.strip() if user_id else None,
+                "displayName": display_name.strip() if display_name else None,
+                "departmentId": department_id.strip() if department_id else None,
+                "departmentName": department_name.strip() if department_name else None,
+                "theme": DEFAULT_USER_THEME,
+                "language": DEFAULT_USER_LANGUAGE,
+                "passwordHash": hash_password(password),
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
+            }
+            accounts.append(account)
+            self._write_accounts(accounts)
+            if account.get("userId") and self.deleted_users_path.exists():
+                entries = [
+                    entry
+                    for entry in _read_json(self.deleted_users_path)
+                    if entry.get("id") != account["userId"]
+                ]
+                _write_json(self.deleted_users_path, entries, mode=0o600)
+            logger.info("Account created", account_id=account["id"], username=username, role=role)
+            return self._public_account(account)
 
     def update_user_preferences(
         self,
@@ -319,18 +323,19 @@ class AccountAuthStore:
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
     ) -> dict[str, Any]:
-        _validate_user_preferences(theme=theme, language=language)
-        accounts = self._read_accounts()
-        account = next((entry for entry in accounts if entry["id"] == account_id), None)
-        if not account:
-            raise KeyError(account_id)
-        if theme is not None:
-            account["theme"] = theme
-        if language is not None:
-            account["language"] = language
-        account["updatedAt"] = now_iso()
-        self._write_accounts(accounts)
-        return self._public_account(account)
+        with self._lock:
+            _validate_user_preferences(theme=theme, language=language)
+            accounts = self._read_accounts()
+            account = next((entry for entry in accounts if entry["id"] == account_id), None)
+            if not account:
+                raise KeyError(account_id)
+            if theme is not None:
+                account["theme"] = theme
+            if language is not None:
+                account["language"] = language
+            account["updatedAt"] = now_iso()
+            self._write_accounts(accounts)
+            return self._public_account(account)
 
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
         username = username.strip().lower()
@@ -358,48 +363,50 @@ class AccountAuthStore:
             return self.create_account(username, password, role="admin")
 
     def create_session(self, account_id: str) -> dict[str, Any]:
-        token = new_session_token()
-        now = datetime.now(timezone.utc)
-        expires_at = now.timestamp() + self.session_ttl_seconds
-        session = {
-            "tokenHash": hash_session_token(token),
-            "accountId": account_id,
-            "createdAt": _format_iso(now),
-            "expiresAt": _format_iso(
-                datetime.fromtimestamp(expires_at, tz=timezone.utc)
-            ),
-        }
-        sessions = self._read_sessions()
-        sessions.append(session)
-        self._write_sessions(sessions)
-        return {**session, "token": token}
+        with self._lock:
+            token = new_session_token()
+            now = datetime.now(timezone.utc)
+            expires_at = now.timestamp() + self.session_ttl_seconds
+            session = {
+                "tokenHash": hash_session_token(token),
+                "accountId": account_id,
+                "createdAt": _format_iso(now),
+                "expiresAt": _format_iso(
+                    datetime.fromtimestamp(expires_at, tz=timezone.utc)
+                ),
+            }
+            sessions = self._read_sessions()
+            sessions.append(session)
+            self._write_sessions(sessions)
+            return {**session, "token": token}
 
     def get_session_by_token(self, token: str | None) -> dict[str, Any] | None:
-        if not token:
+        with self._lock:
+            if not token:
+                return None
+            sessions = self._read_sessions()
+            for session in sessions:
+                expected_hash = session.get("tokenHash")
+                legacy_token = session.get("token")
+                matches = bool(
+                    isinstance(expected_hash, str)
+                    and secrets.compare_digest(expected_hash, hash_session_token(token))
+                ) or bool(
+                    isinstance(legacy_token, str)
+                    and len(legacy_token) == len(token)
+                    and secrets.compare_digest(legacy_token, token)
+                )
+                if matches:
+                    if legacy_token:
+                        session["tokenHash"] = hash_session_token(token)
+                        session.pop("token", None)
+                        self._write_sessions(sessions)
+                    expires_at = _parse_iso(session.get("expiresAt"))
+                    if expires_at and expires_at <= datetime.now(timezone.utc):
+                        self.delete_session(token)
+                        return None
+                    return session
             return None
-        sessions = self._read_sessions()
-        for session in sessions:
-            expected_hash = session.get("tokenHash")
-            legacy_token = session.get("token")
-            matches = bool(
-                isinstance(expected_hash, str)
-                and secrets.compare_digest(expected_hash, hash_session_token(token))
-            ) or bool(
-                isinstance(legacy_token, str)
-                and len(legacy_token) == len(token)
-                and secrets.compare_digest(legacy_token, token)
-            )
-            if matches:
-                if legacy_token:
-                    session["tokenHash"] = hash_session_token(token)
-                    session.pop("token", None)
-                    self._write_sessions(sessions)
-                expires_at = _parse_iso(session.get("expiresAt"))
-                if expires_at and expires_at <= datetime.now(timezone.utc):
-                    self.delete_session(token)
-                    return None
-                return session
-        return None
 
     def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
         account = next(
@@ -410,33 +417,35 @@ class AccountAuthStore:
         return account
 
     def delete_session(self, token: str) -> bool:
-        sessions = self._read_sessions()
-        before = len(sessions)
-        token_hash = hash_session_token(token)
-        sessions = [
-            session
-            for session in sessions
-            if session.get("tokenHash") != token_hash and session.get("token") != token
-        ]
-        if len(sessions) < before:
-            self._write_sessions(sessions)
-            return True
-        return False
+        with self._lock:
+            sessions = self._read_sessions()
+            before = len(sessions)
+            token_hash = hash_session_token(token)
+            sessions = [
+                session
+                for session in sessions
+                if session.get("tokenHash") != token_hash and session.get("token") != token
+            ]
+            if len(sessions) < before:
+                self._write_sessions(sessions)
+                return True
+            return False
 
     def cleanup_expired_sessions(self) -> int:
-        sessions = self._read_sessions()
-        now = datetime.now(timezone.utc)
-        kept = [
-            s
-            for s in sessions
-            if not (
-                _parse_iso(s.get("expiresAt")) and _parse_iso(s.get("expiresAt")) <= now
-            )
-        ]
-        removed = len(sessions) - len(kept)
-        if removed:
-            self._write_sessions(kept)
-        return removed
+        with self._lock:
+            sessions = self._read_sessions()
+            now = datetime.now(timezone.utc)
+            kept = [
+                s
+                for s in sessions
+                if not (
+                    _parse_iso(s.get("expiresAt")) and _parse_iso(s.get("expiresAt")) <= now
+                )
+            ]
+            removed = len(sessions) - len(kept)
+            if removed:
+                self._write_sessions(kept)
+            return removed
 
     def list_accounts(self) -> list[dict[str, Any]]:
         return [self._public_account(account) for account in self._read_accounts()]
@@ -552,6 +561,26 @@ class DatabaseAccountAuthStore:
         Column("expires_at", DateTime(timezone=True), nullable=False),
         Index("ix_auth_sessions_account_id", "account_id"),
         Index("ix_auth_sessions_expires_at", "expires_at"),
+    )
+    # Single-use password reset links; only the token's SHA-256 is kept. The
+    # rules that read and write it live in `security/password_resets.py`.
+    password_resets = Table(
+        "auth_password_resets",
+        metadata,
+        database_id_column(),
+        Column(
+            "account_id",
+            entity_uuid_type(),
+            ForeignKey("auth_accounts.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column("token_hash", Text, nullable=False, unique=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("expires_at", DateTime(timezone=True), nullable=False),
+        # Set when the link is redeemed or superseded by a newer one.
+        Column("used_at", DateTime(timezone=True), nullable=True),
+        Index("ix_auth_password_resets_account_id_created_at", "account_id", "created_at"),
+        Index("ix_auth_password_resets_expires_at", "expires_at"),
     )
 
     def __init__(

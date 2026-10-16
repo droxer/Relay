@@ -525,3 +525,54 @@ def test_postgres_output_compaction_redacts_in_place(migrated_schema):
             "SELECT position FROM maintenance_cursors WHERE name = 'session_output_compaction'"
         )).scalar_one()
     assert position["id"] == sid
+
+
+def test_password_reset_redemption_waits_for_account_before_claiming_link(migrated_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+    from threading import Event
+
+    from relay.notifications.mailer import NullMailer
+    from relay.security.auth import DatabaseAccountAuthStore
+    from relay.security.password_resets import ResetNotLiveError, password_reset_store_for
+    from relay.services.password_reset import PasswordResetService
+    from sqlalchemy import event, select, update
+    from sqlalchemy.sql.dml import Update
+
+    url, _ = migrated_schema
+    auth = DatabaseAccountAuthStore(url)
+    account = auth.create_account("ada", "kestrel-vault-7719", user_id="ada")
+    service = PasswordResetService(password_reset_store_for(auth), NullMailer())
+    token = service.admin_issue("ada", web_origin="https://relay.test").url.split("#token=", 1)[1]
+    waiting_for_account = Event()
+
+    def observe_lock(conn, clause, multiparams, params, options):
+        if getattr(clause, "_for_update_arg", None) is not None or (
+            isinstance(clause, Update) and clause.table.name == "auth_accounts"
+        ):
+            waiting_for_account.set()
+
+    with ThreadPoolExecutor() as workers:
+        try:
+            with auth.engine.begin() as issuer:
+                issuer.execute(select(auth.accounts.c.id).where(
+                    auth.accounts.c.id == account["id"]
+                ).with_for_update())
+                event.listen(auth.engine, "before_execute", observe_lock)
+                completion = workers.submit(service.complete, token, "harbor-lantern-5521")
+                assert waiting_for_account.wait(5)
+                # A competing issuer holds the Account. Redemption must not
+                # hold the reset row while waiting, or this NOWAIT lock fails.
+                issuer.execute(select(auth.password_resets.c.id).where(
+                    auth.password_resets.c.account_id == account["id"]
+                ).with_for_update(nowait=True))
+                issuer.execute(update(auth.password_resets).where(
+                    auth.password_resets.c.account_id == account["id"]
+                ).values(used_at=datetime.now(timezone.utc)))
+            # After the issuer retires the token and releases its lock,
+            # redemption must recheck it rather than changing the password.
+            with pytest.raises(ResetNotLiveError):
+                completion.result(timeout=5)
+        finally:
+            event.remove(auth.engine, "before_execute", observe_lock)
+    assert auth.authenticate("ada", "kestrel-vault-7719") is not None

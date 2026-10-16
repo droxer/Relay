@@ -1,4 +1,4 @@
-"""Copy for the waitlist's two emails, in the two languages the web UI ships.
+"""Copy for Relay's transactional emails, in the two languages the web UI ships.
 
 Plain text is the real message; the HTML is the same words with a link, kept
 minimal so it renders the same in every client. Anything a person typed (their
@@ -25,6 +25,14 @@ _COPY = {
             "email you an invite as soon as there's a spot."
         ),
         "footer": "If you didn't ask for this, you can ignore this email.",
+        "reset_subject": "Reset your Relay password",
+        "reset_body": "Someone asked to reset the password for @{username}.",
+        "reset_action": "Choose a new password",
+        "reset_expiry": "This link works once and expires in {minutes} minutes.",
+        "reset_footer": "If you didn't ask for this, ignore this email — your password won't change.",
+        "changed_subject": "Your Relay password was changed",
+        "changed_body": "The password for @{username} was changed at {time}. Every signed-in session was signed out.",
+        "changed_footer": "If this wasn't you, contact your Relay admin right away.",
     },
     "zh-CN": {
         "invite_subject": "你的 Relay 邀请",
@@ -36,6 +44,14 @@ _COPY = {
         "confirm_subject": "你已加入 Relay 候补名单",
         "confirm_body": "感谢你对 Relay 的关注。你已在候补名单中，一有名额我们会立即发送邀请邮件。",
         "footer": "如果这不是你本人的操作，请忽略此邮件。",
+        "reset_subject": "重置你的 Relay 密码",
+        "reset_body": "有人请求重置 @{username} 的密码。",
+        "reset_action": "设置新密码",
+        "reset_expiry": "此链接仅可使用一次，将在 {minutes} 分钟后失效。",
+        "reset_footer": "如果这不是你本人的操作，请忽略此邮件，你的密码不会改变。",
+        "changed_subject": "你的 Relay 密码已更改",
+        "changed_body": "@{username} 的密码已于 {time} 更改，所有已登录的会话均已退出。",
+        "changed_footer": "如果这不是你本人的操作，请立即联系你的 Relay 管理员。",
     },
 }
 
@@ -79,3 +95,34 @@ def confirmation_email(*, to: str, locale: str | None) -> EmailMessage:
     text = f"{copy['confirm_body']}\n\n{copy['footer']}"
     html = f"<p>{escape(copy['confirm_body'])}</p><p>{escape(copy['footer'])}</p>"
     return EmailMessage(to=to, subject=copy["confirm_subject"], text=text, html=html)
+
+
+def password_reset_email(
+    *, to: str, username: str, reset_url: str, expires_in_minutes: int, locale: str | None
+) -> EmailMessage:
+    copy = _copy(locale)
+    body = copy["reset_body"].format(username=username)
+    expiry = copy["reset_expiry"].format(minutes=expires_in_minutes)
+    text = "\n\n".join(
+        [body, f"{copy['reset_action']}: {reset_url}", expiry, copy["reset_footer"]]
+    )
+    html = "".join(
+        [
+            f"<p>{escape(body)}</p>",
+            f'<p><a href="{escape(reset_url, quote=True)}">{escape(copy["reset_action"])}</a></p>',
+            f"<p>{escape(expiry)}</p>",
+            f"<p>{escape(copy['reset_footer'])}</p>",
+        ]
+    )
+    return EmailMessage(to=to, subject=copy["reset_subject"], text=text, html=html)
+
+
+def password_changed_email(
+    *, to: str, username: str, changed_at: str, locale: str | None
+) -> EmailMessage:
+    """No link on purpose: a look-alike of this mail should have nothing to click."""
+    copy = _copy(locale)
+    body = copy["changed_body"].format(username=username, time=changed_at)
+    text = f"{body}\n\n{copy['changed_footer']}"
+    html = f"<p>{escape(body)}</p><p>{escape(copy['changed_footer'])}</p>"
+    return EmailMessage(to=to, subject=copy["changed_subject"], text=text, html=html)

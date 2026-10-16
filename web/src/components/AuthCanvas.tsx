@@ -45,7 +45,7 @@ const COVER_POINTS = ["login.do_ask", "login.do_handoff", "login.do_control"] as
  * and redeem an invite all stand on it, so the brand moment is the same
  * whichever door a visitor came through — only the gate changes.
  */
-export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "join"; children: ReactNode }) {
+export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "join" | "forgot-password" | "reset-password"; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <main className="login-screen" data-mode={mode}>

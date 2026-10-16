@@ -46,6 +46,20 @@ export function createControlPanelUser(
 /** Patch a user's profile. Only the keys present in `input` are sent, so
     an omitted field is left alone; `maxLocalComputers: null` clears the
     override rather than meaning "no computers". */
+/** A one-time password reset link for a user, emailed when mail is set up;
+    the link always comes back so it can be handed over another way. */
+export interface AdminPasswordReset {
+  url: string;
+  expiresAt: string;
+  delivery: "sent" | "bounced" | "failed" | "skipped";
+}
+
+export function issueUserPasswordReset(userId: string): Promise<AdminPasswordReset> {
+  return apiJson<AdminPasswordReset>(`/admin/users/${encodeURIComponent(userId)}/password-reset`, {
+    method: "POST",
+  });
+}
+
 export function updateControlPanelUser(
   input: UpdateControlPanelUserInput,
 ): Promise<{ user: UserRecord }> {
