@@ -1903,10 +1903,8 @@ class DatabaseSessionStore:
         if content is not None:
             artifact = {**artifact, "bytes": len(content)}
             if self.blob_store is not None:
-                # Uploaded before the row exists, so a committed row never
-                # points at bytes that are not there yet.
-                blob_key = artifact_blob_key(session_id, artifact["id"])
-                self.blob_store.put(blob_key, content, content_type=artifact.get("contentType"))
+                blob_key = self._upload_snapshot(session_id, artifact, content)
+            if blob_key is not None:
                 metadata.update(blob_metadata(blob_key, content))
             else:
                 encoded = base64.b64encode(content).decode("ascii")
@@ -1988,6 +1986,31 @@ class DatabaseSessionStore:
             )
             self._index_workspace_files(conn, session_pk, session, [artifact])
         return self.get_session(session_id)
+
+    def _upload_snapshot(
+        self, session_id: str, artifact: dict[str, Any], content: bytes
+    ) -> str | None:
+        """Upload a snapshot before its row exists; None keeps it inline.
+
+        Uploading first means a committed row never points at bytes that are
+        not there yet. A failed upload (a missing bucket, an R2 outage) falls
+        back to the database, because indexing runs inside run finalization
+        and raising here would leave the run finalizing forever.
+        """
+        assert self.blob_store is not None
+        key = artifact_blob_key(session_id, artifact["id"])
+        try:
+            self.blob_store.put(key, content, content_type=artifact.get("contentType"))
+        except Exception as error:  # noqa: BLE001 - botocore's ClientError, without importing it
+            logger.error(
+                "Blob store upload failed; keeping the artifact snapshot in the database",
+                session_id=session_id,
+                artifact_id=artifact["id"],
+                blob_key=key,
+                error=str(error),
+            )
+            return None
+        return key
 
     def _discard_blob(self, key: str) -> None:
         assert self.blob_store is not None

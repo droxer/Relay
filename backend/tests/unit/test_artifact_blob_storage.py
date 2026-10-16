@@ -105,6 +105,23 @@ def test_failed_index_removes_the_uploaded_blob(store, blobs) -> None:
     assert blobs.blobs == {}
 
 
+def test_an_unreachable_blob_store_keeps_the_snapshot_inline(store, blobs, monkeypatch) -> None:
+    # A missing bucket or an R2 outage must not wedge run finalization: the
+    # reaper would retry the same terminal event forever.
+    def refuse(*_args, **_kwargs):
+        raise RuntimeError("NoSuchBucket: The specified bucket does not exist.")
+
+    monkeypatch.setattr(blobs, "put", refuse)
+    session = _session(store)
+    artifact, _ = store.index_workspace_artifact(session["id"], _artifact(session["id"]), CONTENT)
+
+    row = _row(store)
+    assert "blobKey" not in row["metadata"]
+    assert row["metadata"]["contentEncoding"] == "base64"
+    assert artifact["bytes"] == len(CONTENT)
+    assert store.read_artifact_content(session["id"], ARTIFACT_ID) == CONTENT
+
+
 def test_deleting_a_session_deletes_its_blobs(store, blobs) -> None:
     keep = _session(store)
     doomed = _session(store)
