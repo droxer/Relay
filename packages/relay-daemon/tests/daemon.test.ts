@@ -37,6 +37,7 @@ after(() => {
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
+import { AgentNotInstalledError } from "../src/agent-preflight.js";
 import { requestUpdatePause } from "../src/update-pause.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
@@ -1099,7 +1100,54 @@ test("local node refreshes agent availability before heartbeat registration", as
   assert.equal(registrations[1].supportedAgents.includes("codex"), true);
 });
 
-test("capability refresh never probes agents while a run is active", async () => {
+test("capability refresh logs an agent only when its availability changes", async () => {
+  const stop = new AbortController();
+  const logs: Array<{ level: string; message: string; agent?: unknown }> = [];
+  let registrations = 0;
+  let claudeChecks = 0;
+  const record = (level: string) => (message: string, fields?: Record<string, unknown>) => {
+    if (message.startsWith("agent ")) logs.push({ level, message, agent: fields?.agent });
+  };
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_quiet_refresh",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    sandbox: "none",
+    token: "node_token",
+    pollIntervalMs: 1,
+    heartbeatIntervalMs: 1,
+    shutdownGraceMs: 50,
+    logger: { info: record("info"), warn: record("warn"), error: record("error"), output: () => undefined },
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      ensure: async (agent) => {
+        if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
+        if (agent === "kimi") throw new Error("Kimi requires a valid native config.toml.");
+        // Claude signs out on the third probe: a real change, so it is logged again.
+        if (agent === "claude" && claudeChecks++ === 2) throw new Error("Claude Code is not logged in.");
+      },
+    }),
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        if (++registrations === 3) stop.abort();
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) return jsonResponse({ commands: [] });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  const about = (agent: string) => logs.filter((entry) => entry.agent === agent).map(({ level, message }) => `${level} ${message}`);
+  assert.deepEqual(about("pi"), ["info agent capability ready"]);
+  assert.deepEqual(about("codex"), ["info agent not installed"]);
+  assert.deepEqual(about("kimi"), ["warn agent capability failed"]);
+  assert.deepEqual(about("claude"), ["info agent capability ready", "warn agent capability failed"]);
+});
+
+test("a busy BoxLite node with no booted guest never probes agents", async () => {
   const stop = new AbortController();
   const command = runCommand("cmd_active_refresh");
   let served = false;
@@ -1122,16 +1170,22 @@ test("capability refresh never probes agents while a run is active", async () =>
     shutdownGraceMs: 50,
     logger: testLogger(),
     signal: stop.signal,
-    environment: fakeEnvironment({
-      ensure: async () => { readinessChecks += 1; },
-      exec: async (_cmd, args, options) => {
-        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
-        checksWhenRunStarted = readinessChecks;
-        await runGate;
-        options?.stdoutRenderer?.("done\n");
-        return { exit_code: 0, stdout: "done\n", stderr: "" };
-      },
-    }),
+    // With no guest up yet, probing would boot a VM beside the run's, so the
+    // busy node skips the round.
+    environment: {
+      canProbeWithoutBooting: () => false,
+      ...fakeEnvironment({
+        ensure: async () => { readinessChecks += 1; },
+        exec: async (_cmd, args, options) => {
+          if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+          checksWhenRunStarted = readinessChecks;
+          await runGate;
+          options?.stdoutRenderer?.("done\n");
+          return { exit_code: 0, stdout: "done\n", stderr: "" };
+        },
+      }),
+      sandboxMode: "boxlite",
+    },
     fetchFn: async (url, init) => {
       const path = new URL(String(url)).pathname;
       if (path === "/api") return jsonResponse({ name: "Relay backend" });
@@ -1162,6 +1216,137 @@ test("capability refresh never probes agents while a run is active", async () =>
   });
 
   assert.equal(checksBeforeRelease, checksWhenRunStarted);
+});
+
+for (const mode of ["none", "boxlite"] as const) test(`a busy ${mode === "none" ? "local" : "cloud (BoxLite)"} node re-checks the runtimes no run is using`, async () => {
+  const stop = new AbortController();
+  const command = runCommand("cmd_busy_refresh");
+  const checks: AgentName[] = [];
+  const busyRegistrations: DaemonNodeRegistration[] = [];
+  let runStarted = false;
+  let codexChecksWhenRunStarted = 0;
+  let codexChecksBeforeRelease = -1;
+  let served = false;
+  let releaseRun!: () => void;
+  const runGate = new Promise<void>((resolve) => { releaseRun = resolve; });
+  const codexChecks = () => checks.filter((agent) => agent === "codex").length;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_busy_refresh",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    sandbox: "none",
+    token: "node_token",
+    pollIntervalMs: 1,
+    heartbeatIntervalMs: 1,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: {
+      ...fakeEnvironment({
+        ensure: async (agent) => {
+          checks.push(agent);
+          // Claude logs out mid-run; the busy refresh must notice.
+          if (agent === "claude" && runStarted) throw new Error("Claude Code is not logged in.");
+        },
+        exec: async (_cmd, args, options) => {
+          if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+          codexChecksWhenRunStarted = codexChecks();
+          runStarted = true;
+          await runGate;
+          options?.stdoutRenderer?.("done\n");
+          return { exit_code: 0, stdout: "done\n", stderr: "" };
+        },
+      }),
+      sandboxMode: mode,
+      // A BoxLite node probes inside the run's already-booted guest.
+      ...(mode === "boxlite" ? { canProbeWithoutBooting: () => true } : {}),
+    },
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = await jsonBody<DaemonNodeRegistration>(init);
+        if (body.status === "busy" && runStarted) {
+          busyRegistrations.push(body);
+          if (codexChecksBeforeRelease < 0) {
+            codexChecksBeforeRelease = codexChecks();
+            releaseRun();
+          }
+        }
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) {
+        if (!served) {
+          served = true;
+          return jsonResponse({ commands: [command] });
+        }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        if (event.type === "run.completed" || event.type === "run.failed") setTimeout(() => stop.abort(), 0);
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.ok(busyRegistrations.length > 0, "a busy node still re-registers its runtimes");
+  // The running agent's own credentials are never touched mid-run.
+  assert.equal(codexChecksBeforeRelease, codexChecksWhenRunStarted);
+  const [busy] = busyRegistrations;
+  assert.equal(busy.agentHealth?.claude?.status, "failed");
+  assert.equal(busy.agentHealth?.codex?.status, "ready");
+  assert.deepEqual(busy.supportedAgents.includes("claude"), false);
+  assert.deepEqual(busy.supportedAgents.includes("codex"), true);
+});
+
+for (const mode of ["none", "boxlite"] as const) test(`an idle ${mode === "none" ? "local" : "cloud (BoxLite)"} node reports a runtime that stops and resumes`, async () => {
+  const stop = new AbortController();
+  const registrations: DaemonNodeRegistration[] = [];
+  // Codex works, then its login lapses, then the owner logs back in.
+  const codexStates = [true, false, true];
+  let codexChecks = 0;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: `sbx_stop_resume_${mode}`,
+    userId: "alice",
+    workspacePath: process.cwd(),
+    sandbox: "none",
+    token: "node_token",
+    pollIntervalMs: 1,
+    heartbeatIntervalMs: 1,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: {
+      ...fakeEnvironment({
+        ensure: async (agent) => {
+          if (agent !== "codex") return;
+          const loggedIn = codexStates[Math.min(codexChecks++, codexStates.length - 1)];
+          if (!loggedIn) throw new Error("Codex auth preflight failed. Not logged in.");
+        },
+      }),
+      sandboxMode: mode,
+    },
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = await jsonBody<DaemonNodeRegistration>(init);
+        if (body.status !== "stopped") registrations.push(body);
+        if (registrations.length === 3) stop.abort();
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) return jsonResponse({ commands: [] });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.deepEqual(registrations.slice(0, 3).map((body) => body.agentHealth?.codex?.status), ["ready", "failed", "ready"]);
+  assert.deepEqual(registrations.slice(0, 3).map((body) => body.supportedAgents.includes("codex")), [true, false, true]);
+  assert.match(registrations[1]!.agentHealth?.codex?.detail ?? "", /Not logged in/);
 });
 
 test("daemon renews liveness while an idle command poll is in flight", async () => {
@@ -2047,6 +2232,7 @@ test("relay daemon bounds stopped registration during shutdown", async () => {
     token: "node_token",
     pollIntervalMs: 5,
     shutdownGraceMs: 50,
+    shutdownRegistrationTimeoutMs: 100,
     logger: testLogger(),
     signal: stop.signal,
     environment: {
