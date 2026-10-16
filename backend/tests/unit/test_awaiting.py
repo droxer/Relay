@@ -110,6 +110,15 @@ def test_legacy_gate_reasons_are_reworded_and_others_quoted() -> None:
     assert read_waiting_reason("The round reported it is blocked.") == ("question", None)
 
 
+def test_a_reason_recorded_once_per_step_is_quoted_once() -> None:
+    missing = "A required step ended without reporting what it did."
+    assert plain_gate_reason(f"The work can't be accepted yet. {missing} {missing}") == missing
+    assert plain_gate_reason(
+        "Work needs attention. Work a1 is not accepted: missing. Work b2 is not accepted: missing. "
+        "Required contribution c3 failed."
+    ) == f"{missing} A required step failed to run."
+
+
 @pytest.mark.parametrize("policy,status,human,expected", [
     ("human", "done", False, "review"),
     ("human", "done", True, "done"),

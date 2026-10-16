@@ -129,17 +129,24 @@
   overflow-wrap: anywhere;
 }
 
-/* The answers: one click each sends the reply. Full-width rows rather than
-   chips, because an offered answer is often a sentence and a chip would
-   truncate the very words being chosen. The index is a quiet key, not a
-   badge; the send glyph shows on intent so the row says what a click does. */
+/* The answers: one click each sends the reply. One grouped list split by
+   hairlines — a menu, not a stack of filled buttons — so the agent's words
+   above stay the loud thing, and the answers read at the quote's size rather
+   than shouting over it. Full-width rows rather than chips, because an
+   offered answer is often a sentence and a chip would truncate the very words
+   being chosen. The index is a quiet key, not a badge; the send glyph shows
+   on intent so the row says what a click does. No overflow clip on the list:
+   the end rows round themselves, so the focus ring is never cut off. */
 .awaiting-input-choices {
   display: grid;
-  gap: var(--sp-1);
-  margin: 0;
+  margin: var(--sp-1) 0 0;
   padding: 0;
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-2);
   list-style: none;
 }
+
+.awaiting-input-choices > li + li { border-top: 0.5px solid var(--line-1); }
 
 .awaiting-input-choice {
   display: grid;
@@ -147,25 +154,28 @@
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  min-height: 36px;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
-  background: var(--control-fill);
+  min-height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink-1);
-  font: var(--type-body);
+  font: 400 var(--fs-transcript)/var(--leading-snug) var(--font-sans);
   text-align: start;
   cursor: pointer;
-  transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease);
 }
+
+.awaiting-input-choices > li:first-child .awaiting-input-choice { border-start-start-radius: var(--r-2); border-start-end-radius: var(--r-2); }
+.awaiting-input-choices > li:last-child .awaiting-input-choice { border-end-start-radius: var(--r-2); border-end-end-radius: var(--r-2); }
 
 .awaiting-input-choice-key {
   min-width: 1.5ch;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--ink-3);
-  font: 500 var(--fs-code)/1 var(--font-mono);
+  color: var(--ink-4);
+  font: 500 var(--fs-1)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -183,7 +193,6 @@
 .awaiting-input-choice:hover:not(:disabled),
 .awaiting-input-choice:focus-visible,
 .awaiting-input-choice[data-chosen] {
-  border-color: var(--action);
   background: var(--action-soft);
 }
 
@@ -207,14 +216,18 @@
    until intent, with the caution tone kept for the rail alone. */
 .awaiting-input:is([data-kind="check"], [data-kind="budget"]) .awaiting-input-choice { color: var(--ink-2); }
 
+/* The hint, when it says something the controls do not, and the way to type
+   an answer instead. With no hint the button keeps the trailing edge, under
+   the rows' send glyphs. */
 .awaiting-input-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--sp-3);
 }
 
 .awaiting-input-hint {
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   color: var(--ink-3);
