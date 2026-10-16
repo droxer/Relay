@@ -7,6 +7,8 @@ from relay.services.project_runtime import (
     ProjectDispatchError,
     project_member_assignments,
     project_runtime_node,
+    project_thread_assignments,
+    project_runtime_snapshot,
     resolve_project_task_assignments,
 )
 
@@ -177,3 +179,44 @@ def test_crewless_project_refuses_a_task_that_names_no_one():
 
     assert raised.value.code == "project_roster_invalid"
     assert raised.value.permanent is True
+
+
+def _placements(on_computer: set[str]):
+    def list_placements(*, agent_id: str):
+        computer = "device:alice:main" if agent_id in on_computer else "device:alice:other"
+        return [{"computerId": computer, "desiredState": "active"}]
+    return SimpleNamespace(list_placements=list_placements)
+
+
+def _thread_assignments(project, selected, room=(), on_computer=frozenset()):
+    return project_thread_assignments(
+        project,
+        mode="action",
+        selected_agent_ids=selected,
+        room_agent_ids=list(room),
+        snapshot=project_runtime_snapshot(project),
+        agent_store=SimpleNamespace(get_agent=lambda agent_id: {"id": agent_id}),
+        placement_store=_placements(set(on_computer)),
+    )
+
+
+def test_addressing_crew_members_without_the_lead_names_no_coordinator():
+    assignments = _thread_assignments(_project(), ["builder", "reviewer"])
+
+    assert [item["agentId"] for item in assignments] == ["builder", "reviewer"]
+    assert not any(item["coordinator"] for item in assignments)
+
+
+def test_crewless_room_skips_agents_that_left_the_project_computer():
+    assignments = _thread_assignments(
+        _crewless_project(), None, room=["alex", "gone"], on_computer={"alex"}
+    )
+
+    assert [item["agentId"] for item in assignments] == ["alex"]
+
+
+def test_addressing_an_agent_off_the_project_computer_is_refused():
+    with pytest.raises(ProjectDispatchError) as raised:
+        _thread_assignments(_crewless_project(), ["gone"], on_computer={"alex"})
+
+    assert raised.value.code == "project_agent_off_computer"

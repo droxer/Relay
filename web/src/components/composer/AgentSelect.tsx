@@ -118,8 +118,8 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // Agents and agent teams are two rosters, so the popup tabs between them
   // rather than stacking both into one scroll — the same picker the task
   // drawer uses. A project thread offers teams nowhere (its targets are the
-  // room and its own members), so there it is one roster and the strip does
-  // not render.
+  // room, its crew, and the other agents on its computer), so there it is one
+  // roster and the strip does not render.
   const teamsOffered = teamOptionsEnabled && teams.length > 0;
   const tabs: RosterTab<"agents" | "teams">[] = teamsOffered
     ? [
@@ -198,8 +198,8 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
               : agentOptions({ logicalAgents, t })}
           </SelectGroup>
         ) : room ? (
-          // A project thread's targets are one roster — the room and the
-          // members inside it — so they stay stacked under their own labels.
+          // A project thread's targets are one roster — the room, its crew,
+          // and the other agents on its computer — stacked under their labels.
           <>
             <SelectGroup>
               <SelectLabel>{t("composer.project_group")}</SelectLabel>

@@ -254,7 +254,15 @@ def project_thread_assignments(
     member_ids = project_member_ids(project)
     selected = selected_agent_ids
     if selected is None and not member_ids:
-        selected = list(room_agent_ids)
+        # Nobody named anyone, so an agent that has since left the computer
+        # drops out of the room instead of failing the whole message.
+        selected = [
+            agent_id
+            for agent_id in room_agent_ids
+            if not project_task_assignment_error(
+                project, agent_id=agent_id, team=None, placement_store=placement_store
+            )
+        ]
     if selected is None:
         return project_member_assignments(project, mode=mode, snapshot=snapshot)
     assignments: list[dict[str, Any]] = []
@@ -281,9 +289,6 @@ def project_thread_assignments(
                 agent_store=agent_store,
             )
         )
-    # Without the lead in the round, the first agent addressed coordinates it.
-    if assignments and not any(item["coordinator"] for item in assignments):
-        assignments[0] = {**assignments[0], "coordinator": True}
     return assignments
 
 
