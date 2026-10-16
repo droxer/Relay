@@ -8,12 +8,11 @@
   justify-content: center;
   min-height: 100vh;
   min-height: 100svh;
-  /* Renders before .login-screen mounts, so --lg-* isn't in scope yet —
-     fall back to the theme-independent "always dark" surface primitives
-     (also used by the diff viewer / artifact chrome) rather than a
-     one-off literal. */
-  background: var(--dark-surface);
-  color: var(--dark-ink-soft);
+  /* Renders before .login-screen mounts, so --lg-* isn't in scope yet; the
+     theme register is — the layout's theme script sets html[data-theme]
+     before first paint — so the gate matches the screen it gives way to. */
+  background: var(--surface-0);
+  color: var(--ink-3);
 }
 
 .login-checking-text {
@@ -31,8 +30,7 @@
 .login-checking-text::after {
   content: "▌";
   margin-left: var(--sp-1);
-  /* Pre-mount caret on the pinned dark canvas — matches --lg-ink. That var
-     isn't in scope before .login-screen mounts, so fall back to the
-     root-level register token it aliases. */
-  color: var(--lg-ink, var(--dark-ink));
+  /* Matches --lg-ink, which isn't in scope before .login-screen mounts, so
+     read the register token it aliases. */
+  color: var(--ink-1);
 }
