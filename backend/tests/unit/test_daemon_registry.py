@@ -24,7 +24,6 @@ from relay.daemon_registry import (
 from relay.daemon_registry.artifacts import is_snapshotable_path
 from relay.daemon_registry.registry import (
     _confined_workspace_path,
-    task_progress_file,
 )
 from relay.persistence.agent_placement_store import LocalAgentPlacementStore
 from relay.persistence.agent_store import LocalAgentStore
@@ -33,6 +32,7 @@ from relay.persistence.session_store import LocalSessionStore
 from relay.persistence.store_common import _read_jsonl, new_database_id
 from relay.persistence.task_store import LocalTaskStore
 from relay.sessions import SessionController
+from relay.sessions.handoff_files import handoff_checkpoint_file, handoff_file
 from sqlalchemy import event, select
 
 
@@ -5596,13 +5596,21 @@ def test_a_malformed_round_result_is_ignored_rather_than_steering_the_task() -> 
     asyncio.run(run_flow())
 
 
-def test_progress_log_is_named_per_thread_on_a_shared_node_workspace() -> None:
+def test_handoff_notes_are_named_per_thread_on_a_shared_node_workspace() -> None:
     # A thread workspace holds one thread, so the plain name is unambiguous.
-    assert task_progress_file("ses_alpha", "thread") == "PROGRESS.md"
+    assert handoff_file("ses_alpha", "thread") == "HANDOFF.md"
     # A legacy node-root session shares its workspace with every other thread
-    # that ran on the node, so the log has to name its own thread.
-    assert task_progress_file("ses_alpha", "node-root") == "PROGRESS-ses_alpha.md"
-    assert task_progress_file("ses_beta", "node-root") == "PROGRESS-ses_beta.md"
+    # that ran on the node, so the notes have to name their own thread.
+    assert handoff_file("ses_alpha", "node-root") == "HANDOFF-ses_alpha.md"
+    assert handoff_file("ses_beta", "node-root") == "HANDOFF-ses_beta.md"
+
+
+def test_handoff_checkpoint_sits_beside_its_notes() -> None:
+    assert handoff_checkpoint_file("HANDOFF.md") == "HANDOFF.json"
+    assert handoff_checkpoint_file("HANDOFF-ses_alpha.md") == "HANDOFF-ses_alpha.json"
+    # A context accepted before the rename looks where that agent was told to write.
+    assert handoff_checkpoint_file("PROGRESS.md") == "PROGRESS.md.handoff.json"
+    assert handoff_checkpoint_file("PROGRESS-ses_alpha.md") == "PROGRESS-ses_alpha.md.handoff.json"
 
 
 def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
@@ -5634,7 +5642,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
                 },
             )
             [chat_command] = registry.take_commands("sbx_alice", "node_token")
-            assert chat_command["state"]["progress_file"] == "PROGRESS.md"
+            assert chat_command["state"]["progress_file"] == "HANDOFF.md"
             assert "round_result_file" not in chat_command["state"]
             registry.handle_event(
                 "sbx_alice",
@@ -5661,7 +5669,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
             [task_command] = registry.take_commands("sbx_alice", "node_token")
 
             assert task_command["workspaceLayout"] == "thread"
-            assert task_command["state"]["progress_file"] == "PROGRESS.md"
+            assert task_command["state"]["progress_file"] == "HANDOFF.md"
 
     asyncio.run(run_flow())
 

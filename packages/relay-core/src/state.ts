@@ -83,7 +83,7 @@ export interface AgentState {
    */
   repair_note?: string;
   /**
-   * Workspace-relative progress log for task work, e.g. "PROGRESS.md". The
+   * Workspace-relative handoff notes for task work, e.g. "HANDOFF.md". The
    * transcript is capped, so this is what carries decisions past the point
    * where earlier turns are elided.
    */
