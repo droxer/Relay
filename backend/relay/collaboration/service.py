@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from ..core.computer_identity import computer_id
+from ..core.human_waits import QUESTION_ID_PREFIX
 from ..core.ids import new_database_id, new_relay_id
 from ..services.agent_location import agent_computer_ids
 from ..services.agent_routing import (
@@ -17,7 +18,8 @@ from ..services.agent_routing import (
 )
 from ..services.project_runtime import (
     ProjectDispatchError,
-    project_member_assignments,
+    project_member_ids,
+    project_thread_assignments,
     project_runtime_node,
     project_task_assignment_error,
     project_runtime_snapshot,
@@ -343,17 +345,24 @@ class CollaborationConductor:
                 if raw_assignments is not None
                 else None
             )
+            if selected_ids is None and answered_task is not None:
+                selected_ids = self._asking_outside_agent_ids(
+                    project, intent.question_id
+                )
             if intent.project_setup is not None:
                 raw_assignments = self._project_setup_assignments(
                     project, selected_ids, project_snapshot
                 )
             else:
                 try:
-                    raw_assignments = project_member_assignments(
+                    raw_assignments = project_thread_assignments(
                         project,
                         mode=intent.mode,
                         selected_agent_ids=selected_ids,
+                        room_agent_ids=_room_agent_ids(session) if session else [],
                         snapshot=project_snapshot,
+                        agent_store=self.ctx.agent_store,
+                        placement_store=self.ctx.agent_placement_store,
                     )
                 except ProjectDispatchError as error:
                     raise CollaborationError(error.code, status=400) from error
@@ -669,6 +678,31 @@ class CollaborationConductor:
                 "projectSnapshot": snapshot,
             }
         ]
+
+    def _asking_outside_agent_ids(
+        self, project: dict[str, Any], question_id: str | None
+    ) -> list[str] | None:
+        """The agents of the round that asked, when it ran outside the crew.
+
+        A run's question id derives from its run request, so an unaddressed
+        answer can go back to whoever asked. A crew round keeps the room rule
+        (None), so only work handed to agents off the roster changes course.
+        """
+        prefix = f"{QUESTION_ID_PREFIX}_"
+        if not question_id or not question_id.startswith(prefix):
+            return None
+        request = self.ctx.registry.daemon_store.get_run_request(
+            question_id[len(prefix):]
+        )
+        agent_ids = list(dict.fromkeys(
+            item["agentId"]
+            for item in (request or {}).get("assignments") or []
+            if isinstance(item, dict) and isinstance(item.get("agentId"), str)
+        ))
+        crew = project_member_ids(project)
+        if not agent_ids or all(agent_id in crew for agent_id in agent_ids):
+            return None
+        return agent_ids
 
     def _assert_current_question(
         self, session: dict[str, Any] | None, question_id: str

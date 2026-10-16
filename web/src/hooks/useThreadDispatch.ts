@@ -15,6 +15,7 @@ import { isUserAgentRoutable, preferredRoutableAgent } from "../lib/agentDisplay
 import { useHandoffStore } from "../lib/handoffStore";
 import { useComposerTargetStore } from "../lib/composerTargetStore";
 import { useRelayStore } from "../lib/store";
+import { projectRoomAgentIds } from "../lib/taskAssignment";
 import { useThreadSendStore } from "../lib/threadSendStore";
 
 type Mutations = ReturnType<typeof useRelayMutations>;
@@ -148,8 +149,12 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     const goal = raw;
     let newThreadAgentIds: string[] | undefined;
     // A project round addresses the whole roster unless the composer (or a
-    // mention) names one member — the backend expands whichever it is given.
-    const projectRoomRound = Boolean(activeProject) && projectRoomTarget;
+    // mention) names one agent — the backend expands whichever it is given.
+    // An empty room (a project without a crew, before anyone ran) falls back
+    // to the picked agent rather than sending to no one.
+    const projectRoomRound = activeProject
+      ? projectRoomTarget && projectRoomAgentIds(activeProject, activeSession).length > 0
+      : false;
     // A mention overrides the footer selection. Team messages intentionally
     // default to the room; every single-agent message requires one valid
     // footer selection and never fails open to the room.

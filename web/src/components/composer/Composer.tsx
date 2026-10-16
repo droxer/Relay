@@ -10,7 +10,7 @@ import {
   ICON,
   NavProjects,
 } from "../icons";
-import { AgentSelect } from "./AgentSelect";
+import { AgentSelect, type ProjectRoomOption } from "./AgentSelect";
 import { ComposerContextLine } from "./ComposerContext";
 import { useComposer } from "../../hooks/useComposer";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete";
@@ -64,7 +64,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** A project room owns its Computer and roster, so neither is editable here. */
   projectName?: string;
   /** The project's roster as one target: the round runs every member. */
-  projectRoom?: { memberCount: number } | null;
+  projectRoom?: ProjectRoomOption | null;
   projectRoomSelected?: boolean;
   onProjectRoomPicked?: () => void;
   /** Archived or disabled projects remain readable but cannot start another round. */

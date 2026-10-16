@@ -44,6 +44,38 @@ export function agentOnComputer(
   return agentComputerIds(agent).has(computerId);
 }
 
+/**
+ * Who a project thread may address: its enabled crew, then every other agent
+ * on the project's computer. A member the project disabled stays out. Mirrors
+ * `project_thread_assignments` in `backend/relay/services/project_runtime.py`.
+ */
+export function projectThreadRoster(
+  project: Pick<ProjectRecord, "computerId" | "leadAgentId" | "members">,
+  agents: readonly ComputerPlaced[],
+): { leadAgentId: string | null; memberAgentIds: string[] } {
+  const listed = new Set(project.members.map((member) => member.agentId));
+  const crew = project.members.filter((member) => member.enabled).map((member) => member.agentId);
+  const neighbours = agents
+    .filter((agent) => !listed.has(agent.id) && agentOnComputer(agent, project.computerId))
+    .map((agent) => agent.id);
+  return { leadAgentId: project.leadAgentId ?? null, memberAgentIds: [...crew, ...neighbours] };
+}
+
+/**
+ * Who a bare message in a project thread reaches: the enabled crew, or — in a
+ * project without one — the agents already in the thread. Mirrors the room
+ * fallback in `project_thread_assignments`.
+ */
+export function projectRoomAgentIds(
+  project: Pick<ProjectRecord, "members">,
+  session: { participantAgentIds?: readonly string[]; ownerAgentId?: string } | undefined,
+): string[] {
+  const crew = project.members.filter((member) => member.enabled).map((member) => member.agentId);
+  if (crew.length) return crew;
+  if (session?.participantAgentIds?.length) return [...session.participantAgentIds];
+  return session?.ownerAgentId ? [session.ownerAgentId] : [];
+}
+
 /** Every member is on the computer. A member the roster does not know fails. */
 export function teamOnComputer(
   team: { memberAgentIds: readonly string[] },

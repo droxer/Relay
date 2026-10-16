@@ -5,6 +5,7 @@ import type { AgentName, AgentTeam, ProjectRecord, RelaySession, UserAgent } fro
 import { preferredRoutableAgent } from "../lib/agentDisplayNames";
 import { mentionCandidates } from "../lib/mentions";
 import { threadRoundTeam } from "../lib/messageRouting";
+import { projectThreadRoster } from "../lib/taskAssignment";
 import { addressableThreadAgents, teamRosterForThread } from "../lib/threadRuntime";
 
 interface ComposerRoutingInput {
@@ -38,8 +39,9 @@ export function useComposerRouting({
   projectRoomTarget,
 }: ComposerRoutingInput) {
   // Recovery (rerun / handoff) repairs a team's own work, so in a team thread
-  // it answers only the team's members, exactly as a project thread answers
-  // only its own. A new round is different: the thread is pinned to a computer,
+  // it answers only the team's members. A project thread answers its crew and
+  // every other agent on the project's computer (a member the project disabled
+  // stays out). A new round is different: the thread is pinned to a computer,
   // not a roster, so the composer and `@` reach every agent on that computer.
   const activeTeamRoster = useMemo(
     () => teamRosterForThread(activeSession?.teamId, teams),
@@ -47,12 +49,7 @@ export function useComposerRouting({
   );
   const effectiveSelectableLogicalAgents = useMemo(() => {
     if (activeProject) {
-      return addressableThreadAgents(logicalAgents, {
-        leadAgentId: activeProject.leadAgentId,
-        memberAgentIds: activeProject.members
-          .filter((member) => member.enabled)
-          .map((member) => member.agentId),
-      });
+      return addressableThreadAgents(logicalAgents, projectThreadRoster(activeProject, logicalAgents));
     }
     if (activeTeamRoster) {
       return addressableThreadAgents(selectableLogicalAgents, activeTeamRoster);

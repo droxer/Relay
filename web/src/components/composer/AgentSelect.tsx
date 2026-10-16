@@ -14,6 +14,13 @@ import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs
 const TEAM_VALUE_PREFIX = "team:";
 const ROOM_VALUE = "room:all";
 
+/** A project thread's room: who a bare message reaches, and the crew listed
+ *  under it. Agents outside the crew on the same computer list separately. */
+export type ProjectRoomOption = {
+  agentIds: readonly string[];
+  crewAgentIds: readonly string[];
+};
+
 export function teamSelectValue(teamId: string): string {
   return `${TEAM_VALUE_PREFIX}${teamId}`;
 }
@@ -60,7 +67,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   teamOptionsEnabled?: boolean;
   /** The project room's whole roster, offered as one target above its members.
    *  Absent outside a project thread. */
-  room?: { memberCount: number } | null;
+  room?: ProjectRoomOption | null;
   roomSelected?: boolean;
   onRoomPicked?: () => void;
   /** True while THIS thread's run is the cause of the selected agent being
@@ -83,11 +90,17 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   const activeLogicalAgent = logicalAgents.find((agent) => agent.id === activeLogicalAgentId);
   const activeTeam = teams.find((team) => team.id === activeTeamId && !team.deletedAt) ?? null;
   // The roster is the target only while no single member is picked, so the
-  // trigger never claims the whole room while a mention narrows the round.
-  const activeRoom = room && roomSelected && !activeTeam ? room : null;
+  // trigger never claims the whole room while a mention narrows the round —
+  // nor an empty room, whose sends fall back to the picked agent.
+  const activeRoom = room && roomSelected && !activeTeam && room.agentIds.length > 0 ? room : null;
   // A round the whole roster cannot take is still worth offering: the project
-  // reports why at dispatch. One member able to work is enough to keep it live.
-  const roomRoutable = logicalAgents.some(isUserAgentRoutable);
+  // reports why at dispatch. One member able to work is enough to keep it live;
+  // a room with no one in it (a project without a crew, before anyone ran) is not.
+  const roomRoutable = logicalAgents.some(
+    (agent) => room?.agentIds.includes(agent.id) && isUserAgentRoutable(agent),
+  );
+  const crewAgents = logicalAgents.filter((agent) => room?.crewAgentIds.includes(agent.id));
+  const computerAgents = logicalAgents.filter((agent) => !room?.crewAgentIds.includes(agent.id));
   const handleSelected = (value: string | null) => {
     if (value === ROOM_VALUE) {
       onRoomPicked?.();
@@ -105,8 +118,8 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // Agents and agent teams are two rosters, so the popup tabs between them
   // rather than stacking both into one scroll — the same picker the task
   // drawer uses. A project thread offers teams nowhere (its targets are the
-  // room and its own members), so there it is one roster and the strip does
-  // not render.
+  // room, its crew, and the other agents on its computer), so there it is one
+  // roster and the strip does not render.
   const teamsOffered = teamOptionsEnabled && teams.length > 0;
   const tabs: RosterTab<"agents" | "teams">[] = teamsOffered
     ? [
@@ -185,8 +198,8 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
               : agentOptions({ logicalAgents, t })}
           </SelectGroup>
         ) : room ? (
-          // A project thread's targets are one roster — the room and the
-          // members inside it — so they stay stacked under their own labels.
+          // A project thread's targets are one roster — the room, its crew,
+          // and the other agents on its computer — stacked under their labels.
           <>
             <SelectGroup>
               <SelectLabel>{t("composer.project_group")}</SelectLabel>
@@ -205,15 +218,23 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
                   <RoomMark routable={roomRoutable} label={t("composer.project_room")} />
                   <span className="roster-option-copy">
                     <span>{t("composer.project_room")}</span>
-                    <span>{t("teams.member_count", { count: room.memberCount })}</span>
+                    <span>{t("teams.member_count", { count: room.agentIds.length })}</span>
                   </span>
                 </span>
               </SelectItem>
             </SelectGroup>
-            <SelectGroup>
-              <SelectLabel>{t("composer.project_members_group")}</SelectLabel>
-              {agentOptions({ logicalAgents, t })}
-            </SelectGroup>
+            {crewAgents.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel>{t("composer.project_members_group")}</SelectLabel>
+                {agentOptions({ logicalAgents: crewAgents, t })}
+              </SelectGroup>
+            ) : null}
+            {computerAgents.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel>{t("composer.project_computer_group")}</SelectLabel>
+                {agentOptions({ logicalAgents: computerAgents, t })}
+              </SelectGroup>
+            ) : null}
           </>
         ) : (
           agentOptions({ logicalAgents, t })

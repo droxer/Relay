@@ -426,6 +426,7 @@
     "teams_group": "团队",
     "project_group": "项目",
     "project_members_group": "成员",
+    "project_computer_group": "此电脑上",
     "project_room": "整个团队",
     "send_shortcut": "{{shortcut}} 发送",
     "mention_list": "可提及的智能体",

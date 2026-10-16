@@ -16,6 +16,7 @@ import { useLocalDaemonNodes } from "./hooks/useLocalDaemonNodes";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNodes";
 import { isUserAgentRoutable } from "./lib/agentDisplayNames";
 import { legacySelectedUserKey, selectedUserKey } from "./lib/appStorage";
+import { projectRoomAgentIds } from "./lib/taskAssignment";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
@@ -241,6 +242,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     const id = routedProjectId ?? activeSession?.projectId;
     return id ? projects.find((project) => project.id === id) ?? null : null;
   }, [activeSession?.projectId, projects, routedProjectId]);
+  const projectRoom = useMemo(
+    () => (activeProject
+      ? {
+          agentIds: projectRoomAgentIds(activeProject, activeSession),
+          crewAgentIds: activeProject.members.filter((member) => member.enabled).map((member) => member.agentId),
+        }
+      : null),
+    [activeProject, activeSession],
+  );
   const projectDispatchDisabled = Boolean(
     activeProject && (activeProject.archivedAt || !activeProject.enabled),
   );
@@ -608,7 +618,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             selectedUser={selectedUser}
             initializingThread={requiresRuntimeSelection}
             projectName={activeProject?.name}
-            projectRoom={activeProject ? { memberCount: effectiveSelectableLogicalAgents.length } : null}
+            projectRoom={projectRoom}
             projectRoomSelected={projectRoomTarget}
             onProjectRoomPicked={handleProjectRoomPicked}
             projectReadOnly={projectDispatchDisabled}

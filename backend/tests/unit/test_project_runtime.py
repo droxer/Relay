@@ -7,6 +7,8 @@ from relay.services.project_runtime import (
     ProjectDispatchError,
     project_member_assignments,
     project_runtime_node,
+    project_thread_assignments,
+    project_runtime_snapshot,
     resolve_project_task_assignments,
 )
 
@@ -134,3 +136,87 @@ def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style
                for item in assignments)
     assert all(item["projectSnapshot"] == snapshot for item in assignments)
     assert snapshot["projectId"] == project["id"]
+
+
+_NODE = {
+    "id": "node", "userId": "alice", "workspaceId": "main", "online": True,
+    "status": "ready", "capabilities": ["project-workspaces"],
+}
+
+
+def _crewless_project() -> dict:
+    return {**_project(), "members": [], "leadAgentId": None}
+
+
+def test_crewless_project_runs_a_task_assigned_to_an_agent_on_its_computer(monkeypatch):
+    monkeypatch.setattr(
+        "relay.services.project_runtime.resolve_agent_assignments",
+        lambda assignments, **kwargs: assignments,
+    )
+    assignments, snapshot = resolve_project_task_assignments(
+        {"projectId": "project-1", "ownerUserId": "alice", "assignedAgentId": "alex"},
+        project_store=SimpleNamespace(get_project=lambda _: _crewless_project()),
+        agent_store=SimpleNamespace(get_agent=lambda _: {"id": "alex", "defaultRole": "implementer"}),
+        placement_store=None,
+        daemon_nodes=[_NODE],
+    )
+
+    assert [item["agentId"] for item in assignments] == ["alex"]
+    assert assignments[0]["coordinator"] is True
+    assert snapshot["leadAgentId"] is None
+    assert snapshot["members"] == []
+
+
+def test_crewless_project_refuses_a_task_that_names_no_one():
+    with pytest.raises(ProjectDispatchError) as raised:
+        resolve_project_task_assignments(
+            {"projectId": "project-1", "ownerUserId": "alice"},
+            project_store=SimpleNamespace(get_project=lambda _: _crewless_project()),
+            agent_store=None,
+            placement_store=None,
+            daemon_nodes=[_NODE],
+        )
+
+    assert raised.value.code == "project_roster_invalid"
+    assert raised.value.permanent is True
+
+
+def _placements(on_computer: set[str]):
+    def list_placements(*, agent_id: str):
+        computer = "device:alice:main" if agent_id in on_computer else "device:alice:other"
+        return [{"computerId": computer, "desiredState": "active"}]
+    return SimpleNamespace(list_placements=list_placements)
+
+
+def _thread_assignments(project, selected, room=(), on_computer=frozenset()):
+    return project_thread_assignments(
+        project,
+        mode="action",
+        selected_agent_ids=selected,
+        room_agent_ids=list(room),
+        snapshot=project_runtime_snapshot(project),
+        agent_store=SimpleNamespace(get_agent=lambda agent_id: {"id": agent_id}),
+        placement_store=_placements(set(on_computer)),
+    )
+
+
+def test_addressing_crew_members_without_the_lead_names_no_coordinator():
+    assignments = _thread_assignments(_project(), ["builder", "reviewer"])
+
+    assert [item["agentId"] for item in assignments] == ["builder", "reviewer"]
+    assert not any(item["coordinator"] for item in assignments)
+
+
+def test_crewless_room_skips_agents_that_left_the_project_computer():
+    assignments = _thread_assignments(
+        _crewless_project(), None, room=["alex", "gone"], on_computer={"alex"}
+    )
+
+    assert [item["agentId"] for item in assignments] == ["alex"]
+
+
+def test_addressing_an_agent_off_the_project_computer_is_refused():
+    with pytest.raises(ProjectDispatchError) as raised:
+        _thread_assignments(_crewless_project(), ["gone"], on_computer={"alex"})
+
+    assert raised.value.code == "project_agent_off_computer"

@@ -183,8 +183,12 @@ describe("composer agent selection", () => {
     const dispatch = await readFile(resolve("web/src/hooks/useThreadDispatch.ts"), "utf8");
 
     // Room target means "no default agent", which the backend expands to the
-    // whole roster; a picked member routes the round to them alone.
-    assert.match(dispatch, /const projectRoomRound = Boolean\(activeProject\) && projectRoomTarget/);
+    // whole roster; a picked member routes the round to them alone. An empty
+    // room (no crew, no one in the thread yet) falls back to the picked agent.
+    assert.match(
+      dispatch,
+      /const projectRoomRound = activeProject\s*\?\s*projectRoomTarget && projectRoomAgentIds\(activeProject, activeSession\)\.length > 0/,
+    );
     // The pick itself lives in the composer target store; App only wires the
     // composer's handlers to it (the store's own tests pin the flag values).
     const targetStore = await readFile(resolve("web/src/lib/composerTargetStore.ts"), "utf8");

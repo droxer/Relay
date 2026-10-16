@@ -428,6 +428,7 @@
     "teams_group": "Teams",
     "project_group": "Project",
     "project_members_group": "Members",
+    "project_computer_group": "On this computer",
     "project_room": "Entire team",
     "send_shortcut": "{{shortcut}} to send",
     "mention_list": "Agents you can mention",

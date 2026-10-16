@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  projectRoomAgentIds,
+  projectThreadRoster,
   taskAssignmentEditable,
   taskAssignmentOptions,
   taskAssignmentPatch,
@@ -70,5 +72,40 @@ describe("task assignment rules", () => {
       { assignedAgentId: null, assignedTeamId: null, collaborationStyle: "", status: "backlog" });
     assert.deepEqual(taskAssignmentPatch(task(), { kind: "none" }),
       { assignedAgentId: null, assignedTeamId: null, collaborationStyle: "" });
+  });
+});
+
+describe("project thread roster", () => {
+  const crewed = {
+    computerId: "c1", leadAgentId: "lead",
+    members: [
+      { agentId: "builder", enabled: true },
+      { agentId: "lead", enabled: true },
+      { agentId: "benched", enabled: false },
+    ],
+  } as unknown as ProjectRecord;
+  const agents = [agent("lead", "c1"), agent("builder", "c1"), agent("benched", "c1"), agent("alex", "c1"), agent("away", "c2")];
+
+  it("puts the crew first, then every other agent on the project's computer", () => {
+    assert.deepEqual(projectThreadRoster(crewed, agents), {
+      leadAgentId: "lead",
+      memberAgentIds: ["builder", "lead", "alex"],
+    });
+  });
+
+  it("addresses the computer's agents in a project without a crew", () => {
+    const crewless = { computerId: "c1", leadAgentId: null, members: [] } as unknown as ProjectRecord;
+    assert.deepEqual(projectThreadRoster(crewless, agents), {
+      leadAgentId: null,
+      memberAgentIds: ["lead", "builder", "benched", "alex"],
+    });
+  });
+
+  it("sends a bare message to the crew, or to the thread's agents without one", () => {
+    const crewless = { computerId: "c1", leadAgentId: null, members: [] } as unknown as ProjectRecord;
+    assert.deepEqual(projectRoomAgentIds(crewed, { participantAgentIds: ["alex"] }), ["builder", "lead"]);
+    assert.deepEqual(projectRoomAgentIds(crewless, { participantAgentIds: ["alex"] }), ["alex"]);
+    assert.deepEqual(projectRoomAgentIds(crewless, { ownerAgentId: "alex" }), ["alex"]);
+    assert.deepEqual(projectRoomAgentIds(crewless, undefined), []);
   });
 });
