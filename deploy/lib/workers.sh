@@ -41,6 +41,7 @@ workers_publish() {
   CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN python3 "$DEPLOY_DIR/workers_deploy.py" \
     --api-url "$CLOUDFLARE_API_URL" --account "$account" --script "$WORKERS_SCRIPT" \
     --assets "$dir" --worker "$DEPLOY_DIR/workers/worker.js" --headers "$DEPLOY_DIR/workers/_headers" \
+    --api-origin "$API_ORIGIN" \
     || die "publishing Worker $WORKERS_SCRIPT failed"
   cf_ensure_worker_route "$zone" "$WEB_DOMAIN/*" "$WORKERS_SCRIPT"
 }

@@ -51,3 +51,19 @@ assert.deepEqual(requested, ["/"]);
 assertHeaders(missing, "missing asset");
 assert.equal(missing.headers.get("Cache-Control"), "no-store");
 console.log("ok    a missing asset is an uncached 404 with the security headers");
+
+const installer = await worker.fetch(new Request("https://web.example/install.sh"), {
+  ...env,
+  RELAY_API_ORIGIN: "https://api.web.example",
+});
+assert.equal(installer.status, 302);
+assert.equal(installer.headers.get("Location"), "https://api.web.example/install.sh");
+assert.deepEqual(requested, ["/"]);
+assertHeaders(installer, "installer redirect");
+assert.equal(installer.headers.get("Cache-Control"), "no-store");
+const legacyInstaller = await worker.fetch(new Request("https://web.example/computer/install.sh"), {
+  ...env,
+  RELAY_API_ORIGIN: "https://api.web.example",
+});
+assert.equal(legacyInstaller.headers.get("Location"), "https://api.web.example/computer/install.sh");
+console.log("ok    the install script redirects to the API origin, uncached");

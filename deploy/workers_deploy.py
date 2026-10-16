@@ -6,7 +6,7 @@ https://developers.cloudflare.com/workers/static-assets/direct-upload/
     CLOUDFLARE_API_TOKEN=... python3 workers_deploy.py \
         --api-url https://api.cloudflare.com/client/v4 --account <id> \
         --script relay-web --assets web/out --worker deploy/workers/worker.js \
-        --headers deploy/workers/_headers
+        --headers deploy/workers/_headers --api-origin https://api.example.com
 
 The token comes from the environment so it never appears in argv. Files whose
 hash Cloudflare already holds are not uploaded again.
@@ -154,6 +154,14 @@ def upload_assets(args, token, files):
     return completion
 
 
+def bindings(args):
+    result = [{"type": "assets", "name": "ASSETS"}]
+    if args.api_origin:
+        # worker.js sends /install.sh here; the API serves the script.
+        result.append({"type": "plain_text", "name": "RELAY_API_ORIGIN", "text": args.api_origin.rstrip("/")})
+    return result
+
+
 def publish(args, token, completion):
     config = {
         "html_handling": "auto-trailing-slash",
@@ -166,7 +174,7 @@ def publish(args, token, completion):
         "main_module": "worker.js",
         "compatibility_date": COMPATIBILITY_DATE,
         "assets": {"jwt": completion, "config": config},
-        "bindings": [{"type": "assets", "name": "ASSETS"}],
+        "bindings": bindings(args),
     }
     body, content_type = multipart([
         ("metadata", None, "application/json", json.dumps(metadata).encode()),
@@ -183,6 +191,7 @@ def main():
     parser.add_argument("--assets", required=True)
     parser.add_argument("--worker", required=True)
     parser.add_argument("--headers")
+    parser.add_argument("--api-origin", help="API origin that /install.sh redirects to")
     args = parser.parse_args()
     token = os.environ.get("CLOUDFLARE_API_TOKEN")
     if not token:
