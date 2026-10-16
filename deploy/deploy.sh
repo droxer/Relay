@@ -6,6 +6,8 @@
 #   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache, speed settings
 #   deploy/deploy.sh release     deploy the backend and the web UI, wait
 #   deploy/deploy.sh verify      check the live hostnames
+#   deploy/deploy.sh region      move Postgres and the services to RAILWAY_REGION
+#                                (offline for minutes; back up first)
 #
 # Every step is idempotent: re-running converges instead of duplicating.
 # Configuration comes from deploy/.env or deploy/config.env (or $DEPLOY_CONFIG).
@@ -25,7 +27,7 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/verify.sh"
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # $DEPLOY_CONFIG, else deploy/.env, else deploy/config.env (both git-ignored).
@@ -214,6 +216,26 @@ release_backend_and_web_service() {
   [ "$failures" -eq 0 ] || die "$failures service deployment(s) failed for commit $RELEASE_COMMIT (backend: $backend_deployment; web: $web_deployment)"
 }
 
+# Moving Postgres migrates its volume offline, so this is never part of `up`:
+# it runs only when asked by name and confirmed with the target region.
+phase_region() {
+  local name id
+  log "Region: moving services to $RAILWAY_REGION"
+  [ "${CONFIRM_REGION_MOVE:-}" = "$RAILWAY_REGION" ] ||
+    die "moving $POSTGRES_SERVICE takes the API offline while its volume migrates; back it up first (README: Moving region), then re-run with CONFIRM_REGION_MOVE=$RAILWAY_REGION"
+  railway_resolve_context
+  # The database first: a failed move stops before the backend follows it.
+  for name in "$POSTGRES_SERVICE" "$BACKEND_SERVICE" "$WEB_SERVICE"; do
+    id=$(railway_service_id "$name")
+    if [ -z "$id" ]; then
+      info "no $name service; skipped"
+      continue
+    fi
+    railway_move_service "$name" "$id" || die "$name did not come up in $RAILWAY_REGION; later services were not moved"
+  done
+  info "every service runs in $RAILWAY_REGION; run 'deploy.sh verify'"
+}
+
 phase_verify() {
   resolve_services
   verify_deployment "$BACKEND_ID"
@@ -222,7 +244,7 @@ phase_verify() {
 main() {
   local command=${1:-}
   case $command in
-    up | railway | cloudflare | release | verify) ;;
+    up | railway | cloudflare | release | verify | region) ;;
     -h | --help | help | "")
       usage
       [ -n "$command" ] || exit 2
@@ -248,6 +270,7 @@ main() {
     cloudflare) phase_cloudflare ;;
     release) phase_release ;;
     verify) phase_verify ;;
+    region) phase_region ;;
   esac
 }
 

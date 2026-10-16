@@ -165,7 +165,7 @@ check "backend Dockerfile, migration, healthcheck and one replica in the region"
 check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
-check "a new Postgres is placed in the region" "$(svc Postgres) | .region == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
+check "a new Postgres is redeployed into the region" "$(svc Postgres) | .deployments | length == 2 and .[0].regions == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
@@ -205,7 +205,7 @@ fi
 echo "--- second run changes nothing"
 run_phases 2>"$WORK/second.log" || { cat "$WORK/second.log"; exit 1; }
 STATE=$(jq -n --argjson a "$FIRST" --argjson b "$(state)" '{a: $a, b: $b}')
-for op in ProjectCreate ServiceCreate TemplateDeploy VolumeCreate DomainCreate Connect cf.dns.create cf.dns.update \
+for op in ProjectCreate ServiceCreate TemplateDeploy ServiceRedeploy VolumeCreate DomainCreate Connect cf.dns.create cf.dns.update \
   cf.settings.ssl cf.settings.always_use_https cf.settings.http3 cf.settings.0rtt cf.settings.early_hints \
   cf.settings.tiered_cache_smart_topology_enable cf.rules.http_request_late_transform cf.rules.http_request_cache_settings \
   cf.routes.create cf.routes.update cf.workers.upload; do
@@ -222,6 +222,35 @@ BEFORE=$(state | jq '.calls["cf.workers.script"]')
 expect_failure "backend failure stops the release" "the web UI was not published" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
 check "no Worker upload after a failed backend" '.before == .after'
+
+echo "--- moving region"
+start_mock
+write_config 'WEB_HOSTING=railway'
+run_phases 2>/dev/null || exit 1
+write_config 'WEB_HOSTING=railway
+RAILWAY_REGION=europe-west4-drams3a'
+deploy railway 2>"$WORK/region-railway.log"
+STATE=$(state)
+if grep -q "Postgres runs in asia-southeast1-eqsg3a, not europe-west4-drams3a" "$WORK/region-railway.log"; then
+  echo "ok    a re-run names the Postgres region it will not move"
+else
+  echo "FAIL  no warning that Postgres stays in its old region: $(cat "$WORK/region-railway.log")"
+  FAILURES=$((FAILURES + 1))
+fi
+check "a re-run never moves Postgres" "$(svc Postgres) | .regions == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
+check "a changed region replaces the old one instead of adding a copy" "$BACKEND | .config.multiRegionConfig == {\"asia-southeast1-eqsg3a\": null, \"europe-west4-drams3a\": {\"numReplicas\": 1}}"
+expect_failure "a region move needs confirmation" "CONFIRM_REGION_MOVE=europe-west4-drams3a" deploy region
+write_config 'WEB_HOSTING=railway
+RAILWAY_REGION=europe-west4-drams3a
+CONFIRM_REGION_MOVE=europe-west4-drams3a'
+deploy region 2>"$WORK/region.log" || { cat "$WORK/region.log"; exit 1; }
+STATE=$(state)
+check "every service is redeployed into the new region" "[$(svc Postgres), $BACKEND, $WEB] | all(.deployments[0].regions == {\"europe-west4-drams3a\": {\"numReplicas\": 1}})"
+check "a moved service keeps its commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
+BEFORE=$(state | jq '.calls.ServiceRedeploy')
+deploy region 2>/dev/null || exit 1
+STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls.ServiceRedeploy')" '{before: $before, after: $after}')
+check "a second region run redeploys nothing" '.before == .after'
 
 echo "--- moving an existing Railway-hosted UI to Workers"
 start_mock
