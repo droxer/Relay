@@ -45,10 +45,11 @@ Control the ${product} service installed on this computer.
 Commands:
   start     Start ${product} now and at every login.
   stop      Stop ${product} and keep it stopped, also after login, until "${command} start".
-  restart   Restart ${product} (for example after changing agent CLI settings).
+  restart   Restart ${product} (for example after signing in to an agent CLI).
   status    Show whether ${product} is running.
   logs      Show recent ${product} output. Add --follow to keep streaming.
   update    Install the latest ${product} release from your backend and restart.
+            Also picks up agent CLIs installed since setup.
 
 Options:
   --computer <id>   Act on one connected computer when several are installed.

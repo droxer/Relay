@@ -2,8 +2,13 @@ import { spawn, spawnSync } from "node:child_process";
 import type { StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
 import { RELEASED_EXIT_MESSAGE, exitHooksFor } from "./execution-capture.js";
+import { listWindowsProcesses, taskkillArguments, windowsProcessTree } from "./windows-process-tree.js";
 
 const SIGKILL_DELAY_MS = 5_000;
+/** Between Windows tree sweeps while descendants remain. */
+const WINDOWS_SWEEP_MS = 1_000;
+/** How long verified-empty Windows trees may keep their pipes open. */
+const WINDOWS_PIPE_DRAIN_MS = 2_000;
 
 export async function superviseLocalProcess(
   cmd: string,
@@ -30,7 +35,8 @@ export async function superviseLocalProcess(
   }
   const hooks = exitHooksFor(options.signal);
   return new Promise((resolve) => {
-    const detached = process.platform !== "win32";
+    const windows = process.platform === "win32";
+    const detached = !windows;
     const child = spawn(cmd, args, {
       cwd: options.cwd,
       env: options.env,
@@ -38,7 +44,10 @@ export async function superviseLocalProcess(
       detached,
       windowsHide: true,
     });
-    if (detached && child.pid) hooks?.onSpawn?.(child.pid);
+    const spawnedAt = Date.now();
+    // POSIX records the process group; Windows the tree's root pid, which its
+    // descendants keep naming as parent even after it exits.
+    if (child.pid) hooks?.onSpawn?.(child.pid, spawnedAt);
     const stdoutCapture = new BoundedTextCapture();
     const stderrCapture = new BoundedTextCapture();
     let finished = false;
@@ -46,6 +55,10 @@ export async function superviseLocalProcess(
     let reportTimer: NodeJS.Timeout | undefined;
     let cleanupTimer: NodeJS.Timeout | undefined;
     let reported = false;
+    let exitCode: number | null | undefined;
+    let closed = false;
+    let windowsCleanup: Promise<void> | undefined;
+    let windowsTreeCleared = false;
     const scheduleExitReport = (): void => {
       if (reportTimer || reported || finished) return;
       reportTimer = setTimeout(() => {
@@ -88,12 +101,63 @@ export async function superviseLocalProcess(
           // Fall back to the direct child below if the process group is gone.
         }
       }
-      // Windows has no process groups and no signals; only taskkill /T reaches
-      // the agent CLIs a bash script started.
-      if (process.platform === "win32" && child.pid && child.exitCode === null) {
-        if (spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).status === 0) return;
+      if (windows) {
+        void killWindowsTree();
+        return;
       }
       child.kill(signal);
+    };
+    /**
+     * Windows has no process groups and no signals. Ends every live member of
+     * the run's tree, orphans included; true once none remain, undefined when
+     * Windows could not list its processes.
+     */
+    const killWindowsTree = async (): Promise<boolean | undefined> => {
+      const processes = child.pid ? await listWindowsProcesses() : undefined;
+      if (!processes || !child.pid) {
+        // Best effort: taskkill /T still reaches descendants whose parents live.
+        if (child.pid && child.exitCode === null) {
+          spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+        }
+        return undefined;
+      }
+      const members = windowsProcessTree(processes, child.pid, spawnedAt);
+      if (members.length === 0) return true;
+      spawnSync("taskkill", taskkillArguments(members), { stdio: "ignore", windowsHide: true });
+      return false;
+    };
+    /**
+     * Once bash exits on Windows, clear what it left running before reporting
+     * the run finished, as the POSIX path does for its process group. A
+     * descendant holding the inherited pipes would otherwise keep `close`
+     * from ever firing.
+     */
+    const finishWindowsRun = (): void => {
+      windowsCleanup ??= (async () => {
+        let warned = false;
+        for (;;) {
+          if (finished) return;
+          const cleared = await killWindowsTree();
+          if (finished) return;
+          if (cleared === true) { windowsTreeCleared = true; break; }
+          // Without a process list this is the old behaviour: report on close.
+          if (cleared === undefined && closed) { settle(exitCode ?? -1); return; }
+          if (cleared === false) {
+            scheduleExitReport();
+            if (!warned) { process.stderr.write("[relay] Run's descendants are still running; ending them before reporting exit.\n"); warned = true; }
+          }
+          await new Promise((resolve) => { cleanupTimer = setTimeout(resolve, WINDOWS_SWEEP_MS); });
+        }
+        if (closed) { settle(exitCode ?? -1); return; }
+        // Every process of the tree is gone, so whatever still holds the pipes
+        // is not part of this run. Stop waiting for them.
+        cleanupTimer = setTimeout(() => {
+          if (finished) return;
+          child.stdout.destroy();
+          child.stderr.destroy();
+          settle(exitCode ?? -1);
+        }, WINDOWS_PIPE_DRAIN_MS);
+      })();
     };
     const abort = (): void => {
       scheduleExitReport();
@@ -122,9 +186,23 @@ export async function superviseLocalProcess(
     });
     // Parent exit precedes pipe EOF when a descendant inherited stdout/stderr.
     // Clean the process group immediately so those pipes cannot strand exit.
-    child.on("exit", () => { if (!finished && detached && child.pid) terminate("SIGKILL"); });
-    child.on("close", (code) => {
+    child.on("exit", (code) => {
+      exitCode = code;
       if (finished) return;
+      if (windows) finishWindowsRun();
+      else if (child.pid) terminate("SIGKILL");
+    });
+    child.on("close", (code) => {
+      closed = true;
+      exitCode ??= code;
+      if (finished) return;
+      if (windows && child.pid) {
+        if (killTimer) clearTimeout(killTimer);
+        options.signal?.removeEventListener("abort", abort);
+        if (windowsTreeCleared) settle(exitCode ?? -1);
+        else finishWindowsRun();
+        return;
+      }
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener("abort", abort);
       if (detached && child.pid) {

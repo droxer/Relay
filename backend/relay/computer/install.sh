@@ -84,6 +84,7 @@ install_relay() {
     # Prompt on the controlling terminal, never on the piped script's stdin.
     # The token travels only via the child environment, never argv or history.
     if [ "$legacy_setup" = true ] && [ -z "${RELAY_DAEMON_NODE_TOKEN:-}" ]; then
+        (: </dev/tty) 2>/dev/null || fail 'No terminal to read the node token from. Set RELAY_DAEMON_NODE_TOKEN in the environment and run the command again.'
         printf 'Relay node token: ' >/dev/tty
         tty_state=$(stty -g </dev/tty)
         trap 'stty "$tty_state" </dev/tty; exit 1' HUP INT TERM

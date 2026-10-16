@@ -749,9 +749,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const release = new AbortController();
           watchExecutionExit(controller.signal, {
             release: release.signal,
-            onSpawn: (processGroup) => {
+            onSpawn: (processGroup, spawnedAt) => {
               try {
-                executionJournal.attach(command.id, { processGroup, bootAt: hostBootAt() });
+                executionJournal.attach(command.id, { processGroup, spawnedAt, bootAt: hostBootAt() });
               } catch (error) {
                 logger.warn("could not record the run's process group", {
                   ...commandLogFields(sandboxId, command),

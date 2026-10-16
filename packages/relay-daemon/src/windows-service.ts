@@ -75,7 +75,7 @@ export function windowsTaskDefinition(options: {
     <Hidden>false</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>7</Priority>
+    <Priority>5</Priority>
   </Settings>
   <Actions Context="Author"><Exec><Command>${xml(POWERSHELL)}</Command><Arguments>${xml(args)}</Arguments></Exec></Actions>
 </Task>

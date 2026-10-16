@@ -1,19 +1,22 @@
 /** Personal-computer installer entrypoint. Included only in the downloadable client. */
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir, hostname } from 'node:os';
-import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
+import { homedir, hostname, userInfo } from 'node:os';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
-import { bootoutLaunchdService, installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
-import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
+import { bootoutLaunchdService, installedComputers, removeService, sameComputer, serviceArguments, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
+import { installedServices } from './control.js';
+import { launchdBootstrapError, lingerNotice, macProtectedFolder, macProtectedFolderNotice } from './install-notices.js';
+import { installRootOf, pruneInstallDirectories } from './install-pruning.js';
+import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, withCurrentPath, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { localBash } from './local-shell.js';
-import { encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
+import { decodeServiceFile, encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
 interface InstallOptions {
   backendUrl: string;
@@ -94,9 +97,9 @@ export function serviceDefinition(platform: string, id: string, argv: string[], 
 </dict></plist>\n` };
   }
   if (platform !== 'linux') throw new Error('Only macOS, Linux and Windows services are supported.');
+  // A user manager has no network-online.target to order after; the daemon retries its backend instead.
   return { name, content: `[Unit]
 Description=${brand.product} personal computer ${id}
-After=network-online.target
 [Service]
 Type=simple
 ExecStart=${argv.map(systemd).join(' ')}
@@ -197,6 +200,52 @@ function removeSupersededServices(installed: InstalledComputer[], options: Insta
   if (process.platform === 'linux') spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
 }
 
+/** The canonical spelling of an existing, writable workspace directory, so one folder is one computer. */
+function existingWorkspace(workspace: string): string {
+  if (!isAbsolute(workspace)) throw new Error('Choose an absolute workspace directory.');
+  let isDirectory = false;
+  try { isDirectory = statSync(workspace).isDirectory(); } catch { /* reported below */ }
+  if (!isDirectory) throw new Error(`Workspace directory not found: ${workspace}. Create it first, or choose an existing directory.`);
+  try { accessSync(workspace, constants.R_OK | constants.W_OK); } catch {
+    throw new Error(`Workspace directory is not readable and writable by you: ${workspace}.`);
+  }
+  // Symlinks resolved and the volume's own spelling of each name; Windows case
+  // is folded only when comparing (`sameComputer`), never in what agents see.
+  return realpathSync.native(workspace);
+}
+
+/** What the user must know about running in the background on this platform. */
+function platformNotices(workspace: string, brand: RelayBrand): string[] {
+  if (process.platform === 'darwin') {
+    const folder = macProtectedFolder(homedir(), workspace);
+    return folder ? [macProtectedFolderNotice(folder, brand.product)] : [];
+  }
+  if (process.platform === 'linux') {
+    const user = userInfo().username;
+    const linger = spawnSync('loginctl', ['show-user', user, '-p', 'Linger', '--value'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const notice = linger.status === 0 ? lingerNotice(linger.stdout, user, brand.product) : undefined;
+    return notice ? [notice] : [];
+  }
+  return [];
+}
+
+/** Drops releases and Node runtimes no installed service runs any more. */
+function pruneOldInstalls(brand: RelayBrand): void {
+  const root = installRootOf(fileURLToPath(import.meta.url));
+  if (!root) return;
+  const inUse = [process.execPath, fileURLToPath(import.meta.url)];
+  for (const service of installedServices(process.platform, homedir())) {
+    try {
+      inUse.push(...serviceArguments(process.platform, decodeServiceFile(readFileSync(service.file))).slice(0, 2));
+    } catch {
+      // A service we cannot read might run anything; keep everything.
+      return;
+    }
+  }
+  const removed = pruneInstallDirectories(root, inUse, message => console.warn(message));
+  if (removed.length) console.log(`Removed ${removed.length} unused ${brand.product} download${removed.length === 1 ? '' : 's'}.`);
+}
+
 async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
   const savedProfile = options.runtimeProfile ? readRuntimeProfile(options.runtimeProfile) : undefined;
@@ -212,9 +261,7 @@ async function install(): Promise<void> {
   if (options.deviceSetup) {
     // install.sh prompts for it; reading /dev/tty from Node dies on EINTR under sudo.
     if (!options.workspace) throw new Error('Pass --workspace <absolute path> to choose the local workspace directory.');
-    if (!isAbsolute(options.workspace) || !statSync(options.workspace).isDirectory()) throw new Error('Choose an existing absolute workspace directory.');
-    accessSync(options.workspace, constants.R_OK | constants.W_OK);
-    options.workspace = resolve(options.workspace);
+    options.workspace = existingWorkspace(options.workspace);
   }
   const existing = options.deviceSetup ? await reusableComputer(installed, options.backendUrl, options.workspace) : undefined;
   if (existing) {
@@ -238,7 +285,7 @@ async function install(): Promise<void> {
   const nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
   const runtimeEnv = localRuntimeEnvironment();
   runtimeEnv.PATH = [dirname(process.execPath), runtimeEnv.PATH ?? '/usr/bin:/bin'].join(delimiter);
-  const profile = savedProfile ?? (!options.foreground || options.runtimeEnvFile
+  const profile = savedProfile ? withCurrentPath(savedProfile, runtimeEnv.PATH, delimiter) : (!options.foreground || options.runtimeEnvFile
     ? captureRuntimeProfile(runtimeEnv, options.runtimeEnvFile) : undefined);
   const installerEnvironment = process.env;
   if (profile) {
@@ -305,7 +352,9 @@ async function install(): Promise<void> {
     }
     // Reconnecting overrides an earlier `relay stop`, which disables the label.
     spawnSync('launchctl', ['enable', `${domain}/${service.name}`], { stdio: 'ignore' });
-    execFileSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' });
+    if (spawnSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' }).status !== 0) {
+      throw new Error(launchdBootstrapError(process.env, brand.product));
+    }
     if (options.verbose) {
       console.log(`Logs: ${join(logDir, 'service.log')}`);
     }
@@ -329,10 +378,13 @@ async function install(): Promise<void> {
       console.log(`Logs: journalctl --user -u ${service.name}`);
     }
   }
+  const notices = platformNotices(options.workspace, brand);
   // Only after the new service started, so a failed install never leaves the computer with none.
   removeSupersededServices(installed, options, brand);
+  pruneOldInstalls(brand);
   console.log(`Connected to ${brand.product}. You can close this terminal.`);
   console.log(`${brand.product} runs in the background and starts automatically when you log in.`);
+  for (const notice of notices) console.log(`\n${notice}\n`);
   if (control) {
     const relay = controlCommand(control);
     console.log(`Control ${brand.product} with:`);

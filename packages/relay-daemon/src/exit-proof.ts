@@ -1,4 +1,5 @@
 import { uptime } from "node:os";
+import { windowsProcessTree, type WindowsProcess } from "./windows-process-tree.js";
 
 /**
  * Proving that a run admitted before a daemon restart is no longer executing.
@@ -11,8 +12,10 @@ import { uptime } from "node:os";
 
 /** What the journal knows about where a run executed. */
 export interface ExecutionEvidence {
-  /** Process group id of a host-mode run (its leader's pid). */
+  /** Process group id of a host-mode run (its leader's pid); on Windows, the tree's root pid. */
   processGroup?: number;
+  /** When the run's root process spawned, in epoch ms; Windows tells pid reuse apart by it. */
+  spawnedAt?: number;
   /** When the host booted, in epoch ms, as seen when the run spawned. */
   bootAt?: number;
 }
@@ -42,6 +45,22 @@ export function localExitProven(
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ESRCH";
   }
+}
+
+/**
+ * Windows counterpart of `localExitProven`: the run is over once no process of
+ * its tree — the root or anything descending from it — is in `processes`.
+ * Without a process list there is no proof.
+ */
+export function windowsExitProven(
+  evidence: ExecutionEvidence,
+  processes: WindowsProcess[] | undefined,
+  currentBootAt = hostBootAt(),
+): boolean {
+  if (!evidence.processGroup || evidence.bootAt === undefined) return false;
+  if (Math.abs(currentBootAt - evidence.bootAt) > BOOT_SKEW_MS) return true;
+  if (!processes || evidence.spawnedAt === undefined) return false;
+  return windowsProcessTree(processes, evidence.processGroup, evidence.spawnedAt).length === 0;
 }
 
 export interface GuestRuntime {
