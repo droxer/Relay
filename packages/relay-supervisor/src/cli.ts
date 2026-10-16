@@ -194,17 +194,18 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  });
-}
+const WORKSPACE_ROOT = ".relay/user-workspaces";
+const LEGACY_WORKSPACE_ROOT = ".relay/employee-workspaces";
 
 /** Keep using the pre-rename default when it holds a deployment's workspaces. */
 export function defaultWorkspaceRoot(exists: (path: string) => boolean = existsSync): string {
   return exists(LEGACY_WORKSPACE_ROOT) && !exists(WORKSPACE_ROOT) ? LEGACY_WORKSPACE_ROOT : WORKSPACE_ROOT;
 }
 
-const WORKSPACE_ROOT = ".relay/user-workspaces";
-const LEGACY_WORKSPACE_ROOT = ".relay/employee-workspaces";
+// Last, so every module-level binding above is initialized before main() reads it.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
