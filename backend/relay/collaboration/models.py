@@ -35,6 +35,10 @@ class MessageIntent:
     user_message_id: str | None = None
     # A collaboration style for this one round; None uses the team's style.
     style: str | None = None
+    # The wait this message answers (`waitingRequest.questionId`). Set, the
+    # message resumes the task only while that is still the question it waits
+    # on; a stale id is refused rather than answering a newer question.
+    question_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -386,7 +386,10 @@ def test_completion_retry_repairs_structured_task_question(monkeypatch, initial_
         controller.complete_session(session["id"], "Question", task_status="waiting_for_human",
                                     work_outcome="blocked", input_request=request)
         repaired = tasks.get_task(task["id"])
-        assert repaired["waitingRequest"] == request
+        assert {**repaired["waitingRequest"], "questionId": None} == {
+            **request, "questionId": None, "kind": "question",
+        }
+        assert repaired["waitingRequest"]["questionId"].startswith("q_")
         assert repaired["waitingSessionId"] == session["id"]
         assert all("request" not in activity for activity in repaired["activity"])
         again = controller.complete_session(session["id"], "Question", task_status="waiting_for_human",

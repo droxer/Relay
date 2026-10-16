@@ -1603,6 +1603,9 @@ def test_scheduler_stops_a_task_that_never_reports_itself_finished() -> None:
             # The wait quotes why it stopped, and names the thread to answer in.
             assert "2-round budget" in stopped["waitingReason"]
             assert stopped["waitingSessionId"] == command["sessionId"]
+            # A spent budget is a wait of its own kind, with an id to answer.
+            assert stopped["waitingRequest"]["kind"] == "budget"
+            assert stopped["waitingRequest"]["questionId"].startswith("q_")
 
     asyncio.run(run_flow())
 

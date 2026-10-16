@@ -7,9 +7,11 @@ from typing import Any
 from loguru import logger
 
 from ..collaboration.models import COLLABORATION_ADMISSION_EXPIRED_OUTCOME
+from ..core.human_waits import ensure_wait_record
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.protocols import SessionStore, TaskStore
-from ..persistence.store_common import store_transaction
+from ..persistence.store_common import INPUT_REQUEST_FIELDS, store_transaction
+from ..persistence.task_lifecycle import acceptance_status
 from ..persistence.stores import relay_event, relay_task_event
 from ..persistence.task_store import orphaned_by_thread_delete
 
@@ -259,10 +261,9 @@ class SessionController:
         current: dict[str, Any], outcome: str, work_outcome: str,
         input_request: dict[str, Any] | None,
     ) -> bool:
-        request = {key: value for key, value in (input_request or {}).items() if value}
+        request = _session_input_fields(input_request)
         current_request = {
-            key: current[key] for key in ("inputQuestion", "inputOptions", "inputNotes")
-            if current.get(key)
+            key: current[key] for key in INPUT_REQUEST_FIELDS if current.get(key)
         }
         return (
             current.get("status") == "completed"
@@ -277,8 +278,9 @@ class SessionController:
         input_request: dict[str, Any] | None = None,
         *, accepted_by_human: bool = False,
     ) -> dict[str, Any]:
-        # Keep structured human input fields in both completion
-        # events and task closeout, including a retry after a partial write.
+        # The thread's completion quotes the question; the task keeps the
+        # whole wait record (its id and kind too), including on a retry after
+        # a partial write.
         request = {key: value for key, value in (input_request or {}).items() if value}
         task_extras = {"sessionId": session_id, **({"request": request} if request else {})}
         current = self.store.get_session(session_id)
@@ -288,14 +290,12 @@ class SessionController:
             # owner, without duplicating the session event or task transition.
             if self.task_store and self.task_id:
                 task = self.task_store.get_task(self.task_id)
-                expected = (
-                    "review" if task_status == "done" and not accepted_by_human
-                    and task.get("acceptancePolicy", "automatic") == "human"
-                    else task_status
+                expected = acceptance_status(
+                    task, task_status, accepted_by_human=accepted_by_human
                 )
                 missing_request = expected == "waiting_for_human" and (
                     task.get("waitingSessionId") != session_id
-                    or task.get("waitingRequest", {}) != request
+                    or not _same_wait(task.get("waitingRequest"), request)
                 )
                 if task.get("status") != expected or missing_request:
                     self._update_task_status(
@@ -310,7 +310,8 @@ class SessionController:
         session = self._append(
             session_id,
             relay_event("session.completed", session_id, {
-                "outcome": outcome, "workOutcome": work_outcome, **request,
+                "outcome": outcome, "workOutcome": work_outcome,
+                **_session_input_fields(request),
             }),
         )
         self._update_task_status(
@@ -959,21 +960,20 @@ class SessionController:
             # Links are history/navigation, never task execution authority.
             task_ids = []
         for task_id in task_ids:
-            next_status = status
-            if (
-                status == "done" and not accepted_by_human
-                and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human"
-            ):
-                next_status = "review"
+            next_status = acceptance_status(
+                self.task_store.get_task(task_id), status,
+                accepted_by_human=accepted_by_human,
+            )
             payload: dict[str, Any] = {"status": next_status, "reason": message}
             if next_status == "waiting_for_human" and extras.get("sessionId"):
                 # The thread the answer belongs in; any other thread that once
                 # ran this task must not offer to resume it.
                 payload["sessionId"] = extras["sessionId"]
-            if next_status == "waiting_for_human" and extras.get("request"):
-                # The question itself, kept with the task so it outlives any
-                # status question asked in the thread before answering.
-                payload["request"] = extras["request"]
+            if next_status == "waiting_for_human":
+                # The wait itself, kept with the task so it outlives any status
+                # question asked in the thread before answering. A park that
+                # brought no record still gets an id an answer can name.
+                payload["request"] = ensure_wait_record(extras.get("request"))
             if next_status == "blocked":
                 payload["attention"] = {
                     "code": extras.get("code", "unknown"),
@@ -992,3 +992,28 @@ class SessionController:
                 {key: value for key, value in extras.items() if key != "request"},
                 execution_owner=execution_owner,
             )
+
+
+def _session_input_fields(request: dict[str, Any] | None) -> dict[str, Any]:
+    """The part of a wait record its thread's completion quotes."""
+    return {
+        key: value for key, value in (request or {}).items()
+        if key in INPUT_REQUEST_FIELDS and value
+    }
+
+
+def _same_wait(recorded: Any, request: dict[str, Any]) -> bool:
+    """Whether a task already holds the wait a completion retry would write.
+
+    A request that names its id must match exactly. One that does not had an
+    id minted when it was first written, so only its words can be compared.
+    """
+    if not isinstance(recorded, dict) or not recorded:
+        return False
+    if request.get("questionId"):
+        return recorded == request
+
+    def words(wait: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in wait.items() if key not in ("questionId", "kind")}
+
+    return words(recorded) == words(request)

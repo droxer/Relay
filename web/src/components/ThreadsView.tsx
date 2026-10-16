@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionRoute,
@@ -270,6 +270,20 @@ export function ThreadsView({
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
+  // Whatever is sent while the prompt shows — a picked answer or a typed one —
+  // answers that question. Naming it lets the backend refuse a reply that a
+  // newer question has overtaken instead of resuming the task with it.
+  const waitingQuestionId = waiting?.questionId;
+  const sendAnswering = useCallback<typeof onSend>(
+    (style, intent, options) => onSend(
+      style,
+      intent,
+      waitingQuestionId && (intent ?? "accomplish") === "accomplish"
+        ? { ...options, questionId: waitingQuestionId }
+        : options,
+    ),
+    [onSend, waitingQuestionId],
+  );
   const waitingAgentName = waiting?.run
     ? labelForAgentRun({ agent: waiting.run.agent, agentId: waiting.run.logicalAgentId }, logicalAgentNames, agentDisplayNames)
     : activeAgentDisplayName;
@@ -519,7 +533,7 @@ export function ThreadsView({
           mentionCandidates={mentionCandidates}
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
-          onSend={onSend}
+          onSend={sendAnswering}
           onCancelRun={onCancelRun}
           placeholder={waiting ? t("awaiting.placeholder", { agent: waitingAgentName }) : undefined}
           prompt={waiting ? (

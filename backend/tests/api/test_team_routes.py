@@ -3024,19 +3024,91 @@ def test_a_blocked_round_offers_its_answers_as_choices(recovery_team_thread):
     # The step's own blocked report restates the question; it is not a note.
     assert "inputNotes" not in asked
     # The task keeps the question itself, and the thread it waits in.
+    question_id = waiting["waitingRequest"]["questionId"]
+    assert question_id.startswith("q_")
     assert waiting["waitingRequest"] == {
+        "questionId": question_id,
+        "kind": "question",
         "inputQuestion": "Rotate staging only, or prod too?",
         "inputOptions": ["Staging only", "Staging and prod"],
     }
     assert waiting["waitingSessionId"] == session["id"]
+    # Every surface reads the wait from one projection.
+    assert client.get(f"/api/v1/tasks/{task['id']}").json()["awaiting"] == {
+        "questionId": question_id,
+        "kind": "question",
+        "text": "Rotate staging only, or prod too?",
+        "options": ["Staging only", "Staging and prod"],
+        "notes": [],
+        "sessionId": session["id"],
+        "resumable": True,
+    }
 
     # Picking one is a reply: it resumes the work and the choices go away.
     response = client.post(
         f"/api/v1/threads/{session['id']}/messages",
-        json={"text": "Staging only", "idempotencyKey": "answer-2"},
+        json={"text": "Staging only", "idempotencyKey": "answer-2", "questionId": question_id},
     )
     assert response.status_code == 202, response.text
     assert "inputOptions" not in sessions.get_session(session["id"])
+    assert client.get(f"/api/v1/tasks/{task['id']}").json()["awaiting"] is None
+
+
+def test_an_answer_to_a_replaced_question_is_refused(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+    first = store.get_task(task["id"])["waitingRequest"]["questionId"]
+
+    _reply(client, session["id"], "Use the ops vault.", "answer-1", questionId=first)
+    _finish_turns(registry, session["id"], {
+        "status": "blocked",
+        "note": "Which region?",
+        "work": {"status": "blocked", "evidence": [], "note": "Which region?"},
+    })
+    asked_again = store.get_task(task["id"])
+    second = asked_again["waitingRequest"]["questionId"]
+    assert second != first
+
+    # A second tab still showing the first question must not answer the second.
+    stale = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Use the ops vault.", "idempotencyKey": "answer-stale", "questionId": first},
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"]["code"] == "question_superseded"
+    assert store.get_task(task["id"]) == asked_again
+
+    answered = _reply(client, session["id"], "eu-west", "answer-2", questionId=second)
+    assert answered["collaborationRounds"][-1]["workScope"] == {
+        "kind": "task", "taskId": task["id"],
+    }
+
+
+def test_an_answer_is_refused_once_the_task_stopped_waiting(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    question_id = store.get_task(task["id"])["waitingRequest"]["questionId"]
+    store.update_task(task["id"], {"status": "done"})
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Use the ops vault.", "questionId": question_id},
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "question_superseded"
+
+
+def test_an_answer_cannot_be_a_discussion(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    question_id = store.get_task(task["id"])["waitingRequest"]["questionId"]
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "What is left?", "intent": "discuss", "questionId": question_id},
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["code"] == "answer_requires_accomplish"
 
 
 @pytest.mark.parametrize(

@@ -65,13 +65,37 @@ export interface TaskWorkspaceBinding {
   sessionId?: string;
 }
 
-/** A blocked round's structured question, as recorded on its task. */
+/** What a task waiting on its human waits on (`core/human_waits.py`). */
+export type TaskWaitKind = "question" | "check" | "budget";
+
+/** A wait as recorded on its task. Every park since waits carried ids has one;
+ *  older waits may hold only the question's words. */
 export interface TaskWaitingRequest {
+  /** The id an answer names, so a stale reply cannot answer a newer question. */
+  questionId?: string;
+  kind?: TaskWaitKind;
   inputQuestion?: string;
   /** Answers the agent offered, each sendable as is. */
   inputOptions?: string[];
   /** Acceptance-gate reasons the question stood in front of. */
   inputNotes?: string[];
+}
+
+/** What a waiting task asks, as every surface renders it. */
+export interface TaskAwaiting {
+  /** Null for a wait recorded before waits carried ids. */
+  questionId: string | null;
+  kind: TaskWaitKind;
+  /** The agent's question, or the recorded reason in plain words. */
+  text: string | null;
+  /** Answers the agent offered, each sendable as is (2–6, or none). */
+  options: string[];
+  /** Acceptance-gate reasons the question stood in front of. */
+  notes: string[];
+  /** The thread a reply resumes the task from. */
+  sessionId: string | null;
+  /** False for a routine template: shown, never resumed by a reply. */
+  resumable: boolean;
 }
 
 export interface RelayTask {
@@ -87,8 +111,11 @@ export interface RelayTask {
   waitingReason?: string;
   /** The thread the answer belongs in, when the wait came from a round. */
   waitingSessionId?: string;
-  /** What the agent asked, when it stopped on a question. */
+  /** The wait record: its id, kind, and the agent's question if it asked. */
   waitingRequest?: TaskWaitingRequest;
+  /** The wait projected once by the API (`task_awaiting`); null when the
+   *  task is not waiting. Absent on records this package reduces itself. */
+  awaiting?: TaskAwaiting | null;
   blockerReason?: string;
   attention?: TaskExecutionAttention;
   blockerOwnerUserId?: string;

@@ -1,16 +1,17 @@
+import type { TaskAwaiting } from "relay-core";
 import type { RelaySession, RelayTaskListItem } from "../types.js";
 import { isAwaitingFeedbackDecision } from "./workflow.ts";
 
 /**
  * The preamble the backend puts before a blocked round's own note
- * (`_round_outcome` in backend/relay/daemon_registry/registry.py). What
- * follows it is the agent's words — the thing a person has to answer.
+ * (`_round_outcome` in backend/relay/daemon_registry/registry.py). Only a
+ * thread with no task still reads it: a task's wait arrives projected.
  */
 const BLOCKED_ROUND_PREAMBLE = "The round reported it is blocked.";
 /** A gate stop's preamble (`WORK_NEEDS_ATTENTION` in
- *  backend/relay/collaboration/work.py), and the one it replaced. The prompt's
- *  title already says the work stopped, so neither is worth quoting. */
-const GATE_PREAMBLES = ["The work can't be accepted yet.", "Work needs attention."];
+ *  backend/relay/collaboration/work.py). The prompt's title already says the
+ *  work stopped, so it is not worth quoting. */
+const GATE_PREAMBLE = "The work can't be accepted yet.";
 /** Bounds mirrored from `round_result_options` (backend/relay/collaboration/policy.py). */
 const OPTIONS_MIN = 2;
 const OPTIONS_MAX = 6;
@@ -19,8 +20,9 @@ const OPTION_MAX_CHARS = 200;
 
 export type AwaitingInput = {
   /** `question`: the agent stopped to ask. `check`: a gate stopped the round
-   *  (missing evidence, no verdict) and a person decides what happens next. */
-  kind: "question" | "check";
+   *  (missing evidence, no verdict) and a person decides what happens next.
+   *  `budget`: the task used its continuation rounds. */
+  kind: TaskAwaiting["kind"];
   /** The agent's question, or the recorded reason; null when the agent asked
    *  for help without saying what it needs. */
   text: string | null;
@@ -30,22 +32,24 @@ export type AwaitingInput = {
   /** Acceptance-gate reasons the question stood in front of — not what to
    *  answer, but what the person answering should know. */
   notes: string[];
+  /** The wait a reply answers. An answer names it, so a stale reply is
+   *  refused rather than answering whatever the task asks next. Absent for a
+   *  thread-only wait or one recorded before waits carried ids. */
+  questionId?: string;
   /** The turn that stopped — who is waiting on the answer. */
   run?: RelaySession["agentRuns"][number];
   /** The task the reply resumes, when the thread is that task's room. */
   task?: RelayTaskListItem;
 };
 
-type InputRequest = { inputQuestion?: string; inputOptions?: string[]; inputNotes?: string[] };
-
 /**
  * Whether this thread is parked on its human, and on what.
  *
- * A blocked round closes its session as `completed` with `workOutcome:
- * "blocked"` and parks the task at `waiting_for_human`; neither state alone
- * drew anything, so the thread looked finished. A reply resumes the work
- * (the backend runs it as the task's next round), so the reply box is the
- * answer and this is the prompt for it.
+ * A blocked round closes its session as `completed` and parks the task at
+ * `waiting_for_human`; the backend projects that wait onto the task
+ * (`awaiting`, from `task_awaiting`), so this only finds the task waiting in
+ * this thread and renders it. A reply resumes the work, so the reply box is
+ * the answer and this is the prompt for it.
  */
 export function awaitingInput(
   session: RelaySession | undefined,
@@ -56,25 +60,15 @@ export function awaitingInput(
   if (isAwaitingFeedbackDecision(session)) return null;
   const wait = threadWait(session, tasks);
   if (!wait) return null;
-  const { task } = wait;
   const run = session.agentRuns.at(-1);
-  // The task keeps the question across turns in between; a wait recorded
-  // before tasks carried it still has it on this thread's last completion.
-  const request: InputRequest = task?.waitingRequest ?? session;
-  const question = request.inputQuestion?.trim() || null;
-  // Lists in prose may be requested details or steps, rather than alternatives.
-  // Only structured options are safe to send as complete answers.
-  const offered = distinctOptions(request.inputOptions ?? []);
-  const options = offered.length >= OPTIONS_MIN ? offered : [];
-  const notes = (request.inputNotes ?? []).map((note) => note.trim()).filter(Boolean);
-  // Records written before the structured question carry it in the outcome.
-  const reason = readWaitingReason(task?.waitingReason ?? session.finalOutcome);
-  if (!question && !options.length && reason.kind === "check") return { ...reason, options: [], notes: [], run, task };
+  if (!wait.task) return { ...sessionWait(session), run };
+  const { awaiting, task } = wait;
   return {
-    kind: "question",
-    text: question ?? (reason.kind === "question" ? reason.text : null),
-    options,
-    notes,
+    kind: awaiting.kind,
+    text: awaiting.text,
+    options: awaiting.options,
+    notes: awaiting.notes,
+    ...(awaiting.questionId ? { questionId: awaiting.questionId } : {}),
     run,
     task,
   };
@@ -94,23 +88,52 @@ export function threadAwaitsHuman(
   return session.status === "completed" && threadWait(session, tasks) !== null;
 }
 
+type ThreadWait =
+  | { task: RelayTaskListItem; awaiting: TaskAwaiting }
+  | { task?: undefined };
+
 /**
- * What a settled thread waits on, or null when it does not. A task that names
- * this thread is the answer; otherwise the active round's task decides when
- * the list knows it — answered in another thread, moved on the board, or done
- * means the old blocked outcome is history. A task the list does not hold (not
- * loaded yet, or not the viewer's) proves nothing, so the thread's own record
- * stands.
+ * What a settled thread waits on, or null when it does not. A task whose wait
+ * names this thread is the answer — the backend's `_awaiting_task` rule. A
+ * wait recorded before waits named their thread falls back to the active
+ * round's task. Otherwise a task the list holds for the active round has moved
+ * on, so the old blocked outcome is history; a task the list does not hold
+ * (not loaded yet, or not the viewer's) proves nothing, and a thread with no
+ * task speaks for itself.
  */
-function threadWait(
-  session: RelaySession,
-  tasks: readonly RelayTaskListItem[],
-): { task?: RelayTaskListItem } | null {
+function threadWait(session: RelaySession, tasks: readonly RelayTaskListItem[]): ThreadWait | null {
+  for (const task of tasks) {
+    const awaiting = resumableWait(task);
+    if (awaiting?.sessionId === session.id) return { task, awaiting };
+  }
   const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
-  const task = waitingTask(session, scope, tasks);
-  if (task) return { task };
-  if (scope?.kind === "task" && tasks.some((item) => item.id === scope.taskId)) return null;
-  return session.workOutcome === "blocked" ? {} : null;
+  const scoped = scope?.kind === "task" ? tasks.find((item) => item.id === scope.taskId) : undefined;
+  if (!scoped) return session.workOutcome === "blocked" ? {} : null;
+  const legacy = resumableWait(scoped);
+  return legacy && !legacy.sessionId ? { task: scoped, awaiting: legacy } : null;
+}
+
+function resumableWait(task: RelayTaskListItem): TaskAwaiting | null {
+  const { awaiting } = task;
+  return awaiting?.resumable && !task.deletedAt && task.status === "waiting_for_human" ? awaiting : null;
+}
+
+/** A wait recorded only on its thread: a round with no task behind it. */
+function sessionWait(session: RelaySession): Pick<AwaitingInput, "kind" | "text" | "options" | "notes"> {
+  const question = session.inputQuestion?.trim() || null;
+  // Lists in prose may be requested details or steps, rather than alternatives.
+  // Only structured options are safe to send as complete answers.
+  const offered = distinctOptions(session.inputOptions ?? []);
+  const options = offered.length >= OPTIONS_MIN ? offered : [];
+  const notes = (session.inputNotes ?? []).map((note) => note.trim()).filter(Boolean);
+  const outcome = (session.finalOutcome ?? "").trim();
+  const asked = outcome.startsWith(BLOCKED_ROUND_PREAMBLE);
+  if (question || options.length || asked) {
+    const quoted = asked ? outcome.slice(BLOCKED_ROUND_PREAMBLE.length).trim() || null : null;
+    return { kind: "question", text: question ?? quoted, options, notes };
+  }
+  const reason = outcome.startsWith(GATE_PREAMBLE) ? outcome.slice(GATE_PREAMBLE.length).trim() : outcome;
+  return { kind: "check", text: reason || null, options: [], notes };
 }
 
 /**
@@ -118,66 +141,16 @@ function threadWait(
  * not be its newest link (a status question asked elsewhere adds one).
  * Undefined when the task is not waiting or never recorded where.
  */
-export function taskWaitingThreadId(
-  task: Pick<RelayTaskListItem, "status" | "waitingSessionId">,
-): string | undefined {
-  return task.status === "waiting_for_human" ? task.waitingSessionId || undefined : undefined;
-}
-
-/**
- * The task a reply in this thread resumes — the backend's rule
- * (`CollaborationConductor._awaiting_task`). A wait that names its thread
- * wins, so a status question asked in between does not orphan it; older waits
- * fall back to the active round's task. Historical links never count.
- */
-function waitingTask(
-  session: RelaySession,
-  scope: NonNullable<RelaySession["collaborationRounds"]>[number]["workScope"] | undefined,
-  tasks: readonly RelayTaskListItem[],
-): RelayTaskListItem | undefined {
-  const resumable = (item: RelayTaskListItem) => item.status === "waiting_for_human" && !item.isRoutine && !item.deletedAt;
-  const named = tasks.find((item) => item.waitingSessionId === session.id && resumable(item));
-  if (named) return named;
-  if (scope?.kind !== "task") return undefined;
-  return tasks.find((item) => (
-    item.id === scope.taskId && resumable(item) && (!item.waitingSessionId || item.waitingSessionId === session.id)
-  ));
+export function taskWaitingThreadId(task: Pick<RelayTaskListItem, "awaiting">): string | undefined {
+  return task.awaiting?.sessionId ?? undefined;
 }
 
 /** What a waiting task asks, for surfaces that show the task, not its thread. */
-export function taskWaitingPrompt(task: Pick<RelayTaskListItem, "waitingReason" | "waitingRequest">): Pick<AwaitingInput, "kind" | "text" | "notes"> {
-  const question = task.waitingRequest?.inputQuestion?.trim();
-  const notes = (task.waitingRequest?.inputNotes ?? []).map((note) => note.trim()).filter(Boolean);
-  if (question) return { kind: "question", text: question, notes };
-  return { ...readWaitingReason(task.waitingReason), notes };
-}
-
-/** Split a recorded waiting reason into what kind of wait it is and the words
- *  worth quoting. Shared by the thread prompt and the task record. */
-export function readWaitingReason(raw: string | undefined): Pick<AwaitingInput, "kind" | "text"> {
-  const reason = (raw ?? "").trim();
-  if (reason.startsWith(BLOCKED_ROUND_PREAMBLE)) {
-    const question = reason.slice(BLOCKED_ROUND_PREAMBLE.length).trim();
-    return { kind: "question", text: question || null };
-  }
-  return { kind: "check", text: plainGateReason(reason) || null };
-}
-
-/**
- * A gate reason in words a person can act on. The backend now writes these
- * plainly; records written before it named internal assignment ids
- * ("Work 6fc1… is not accepted: missing."), which mean nothing to a reader.
- */
-function plainGateReason(reason: string): string {
-  const preamble = GATE_PREAMBLES.find((item) => reason.startsWith(item));
-  if (!preamble) return reason;
-  return reason.slice(preamble.length).trim()
-    .replace(/Work \S+ is not accepted: (?:missing|missing evidence)\./g, "A required step ended without reporting what it did.")
-    .replace(/Work \S+ is not accepted: done\./g, "A required step says it is done but showed no checks to back that up.")
-    .replace(/Work \S+ is not accepted: (?:continue|blocked)\./g, "A required step is not finished.")
-    .replace(/Work \S+ is not accepted: (.+?)\.(?=\s|$)/g, "A required step is not finished: $1.")
-    .replace(/Required contribution \S+ failed\./g, "A required step failed to run.")
-    .replace(/Unresolved finding on \S+: /g, "A review found a problem that is still open: ");
+export function taskWaitingPrompt(
+  task: Pick<RelayTaskListItem, "awaiting">,
+): Pick<AwaitingInput, "kind" | "text" | "notes"> | null {
+  const { awaiting } = task;
+  return awaiting ? { kind: awaiting.kind, text: awaiting.text, notes: awaiting.notes } : null;
 }
 
 function distinctOptions(raw: readonly string[]): string[] {

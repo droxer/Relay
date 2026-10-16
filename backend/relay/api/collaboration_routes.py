@@ -136,6 +136,15 @@ async def submit_thread_message(
     purpose = string_field(body, "intent") or "accomplish"
     if purpose not in PURPOSES:
         raise HTTPException(400, "intent must be accomplish, discuss, or review.")
+    question_id = body.get("questionId")
+    if question_id is not None and (not isinstance(question_id, str) or not question_id):
+        raise HTTPException(400, "questionId must be a question id.")
+    if question_id and purpose != "accomplish":
+        # An answer resumes the task; a discussion must not.
+        raise HTTPException(
+            400,
+            {"code": "answer_requires_accomplish", "message": "An answer is sent with intent accomplish."},
+        )
     supplied_address_agent_ids = _address_agent_ids(body)
     session = get_session_for_actor(ctx.session_store, thread_id, actor)
     mention_owner_id = (
@@ -172,6 +181,7 @@ async def submit_thread_message(
                 idempotency_key=string_field(body, "idempotencyKey") or None,
                 user_message_id=string_field(body, "userMessageId") or None,
                 style=style,
+                question_id=question_id or None,
             ),
             actor,
         )

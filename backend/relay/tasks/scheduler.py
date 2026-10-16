@@ -15,6 +15,7 @@ from ..collaboration.service import (
     create_round_manifest,
 )
 from ..core.computer_identity import computer_id
+from ..core.human_waits import new_question_id, wait_record
 from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..daemon_registry import node_accepts_run
@@ -521,9 +522,13 @@ class TaskScheduler:
         # is where a person answers, and the message is what they answer.
         session_id = continuation_session_id(task)
         self.task_store.record_round(task["id"], clear_continuation=True)
+        # A spent budget is its own kind of wait, so a surface can offer to
+        # continue rather than quote it as an agent's question.
+        kind = "budget" if code == "round_budget_exhausted" else "check"
         self.task_store.update_task(task["id"], {
             "status": "waiting_for_human",
             "statusReason": message,
+            "statusRequest": wait_record(kind, new_question_id()),
             **({"statusSessionId": session_id} if session_id else {}),
         })
         self._record_dispatch_deferred(task, code, message, state="rejected")

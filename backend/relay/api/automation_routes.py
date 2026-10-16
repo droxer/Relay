@@ -13,13 +13,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from ..automations.model import TriggerError, has_webhook, is_active, public_task_result
+from ..automations.model import TriggerError, has_webhook, is_active
 from ..automations.service import automation_service
 from ..automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ..security.edge import client_ip
 from .contract import API_PREFIX
 from .deps import AppContextDep
 from .helpers import get_task_for_actor, json_body, request_actor
+from .task_routes import public_task_envelope
 
 router = APIRouter()
 
@@ -123,7 +124,7 @@ async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) 
         raise HTTPException(403, str(error)) from error
     except TriggerError as error:
         raise HTTPException(400, str(error)) from error
-    return public_task_result(resumed)
+    return public_task_envelope(resumed)
 
 
 @router.post("/automations/schedule-preview")

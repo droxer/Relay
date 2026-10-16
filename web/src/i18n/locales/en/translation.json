@@ -58,6 +58,7 @@
     "save_preferences": "Could not save your preferences. Check the connection and try again.",
     "delete_thread": "Could not delete the thread. Check the connection and try again.",
     "send_message": "Could not send the message. Check the daemon connection and try again.",
+    "question_superseded": "Someone already answered this question, or the agent asked a new one. The thread now shows what it waits on.",
     "thread_computer_required": "Choose an online computer before starting this thread.",
     "agent_not_ready": "{{agent}} isn’t ready. Choose another agent or try later.",
     "workspace_unavailable": "{{agent}} can’t join this thread because its runtime doesn’t share the thread’s workspace. Start a new thread with this agent or place it on a compatible computer.",
@@ -2216,6 +2217,7 @@
   "awaiting": {
     "question_title": "{{agent}} needs your answer",
     "check_title": "{{agent}} stopped before finishing",
+    "budget_title": "{{agent}} used its round budget",
     "no_question": "{{agent}} asked for help without saying what it needs. Reply with how to proceed.",
     "hint_task": "Your reply resumes {{ref}}.",
     "hint_thread": "Your reply continues the work.",

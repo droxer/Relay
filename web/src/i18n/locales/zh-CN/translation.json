@@ -58,6 +58,7 @@
     "save_preferences": "无法保存偏好设置。请检查连接后重试。",
     "delete_thread": "无法删除对话。请检查连接后重试。",
     "send_message": "无法发送消息。请检查守护进程连接后重试。",
+    "question_superseded": "这个问题已被回答，或智能体提出了新问题。会话现在显示它正在等待的内容。",
     "thread_computer_required": "请先选择一台在线电脑，再开始此对话。",
     "agent_not_ready": "{{agent}} 未就绪。请选择其他智能体或稍后再试。",
     "workspace_unavailable": "{{agent}} 无法加入此对话，因为其运行时未共享该对话的工作区。请使用此智能体新建对话，或将其部署到兼容电脑。",
@@ -2167,6 +2168,7 @@
   "awaiting": {
     "question_title": "{{agent}} 需要你的回答",
     "check_title": "{{agent}} 在完成前停下了",
+    "budget_title": "{{agent}} 已用完轮次预算",
     "no_question": "{{agent}} 请求帮助，但没有说明需要什么。请回复下一步该怎么做。",
     "hint_task": "回复后将继续 {{ref}}。",
     "hint_thread": "回复后将继续这项工作。",

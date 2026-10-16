@@ -18,6 +18,12 @@ type Choice = {
   intent?: "discuss";
 };
 
+const TITLE_KEYS = {
+  question: "awaiting.question_title",
+  check: "awaiting.check_title",
+  budget: "awaiting.budget_title",
+} as const satisfies Record<AwaitingInput["kind"], string>;
+
 /** Typing here is someone writing, not picking an answer. */
 const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"]';
 /** Long enough after mount that the live region is in the accessibility tree
@@ -62,7 +68,10 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   const { task } = waiting;
   const ref = task ? taskRef(task) : null;
   const taskHref = task ? pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: task.id }) : null;
-  const choices: Choice[] = waiting.kind === "check"
+  // A gate stop and a spent budget both leave the next step to the person;
+  // only an agent's question brings its own answers.
+  const asked = waiting.kind === "question";
+  const choices: Choice[] = !asked
     ? [
       { label: t("awaiting.choice_continue"), reply: t("awaiting.choice_continue_reply") },
       { label: t("awaiting.choice_status"), reply: t("awaiting.choice_status_reply"), intent: "discuss" },
@@ -101,12 +110,12 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [choiceCount]);
-  const hint = waiting.kind === "check"
+  const hint = !asked
     ? (ref ? t("awaiting.hint_check_task", { ref }) : t("awaiting.hint_check_thread"))
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : t("awaiting.hint_choices_thread"))
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));
-  const title = t(waiting.kind === "question" ? "awaiting.question_title" : "awaiting.check_title", { agent: agentName });
+  const title = t(TITLE_KEYS[waiting.kind], { agent: agentName });
   return (
     <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
       <p role="status" className="sr-only">{announced ? title : ""}</p>

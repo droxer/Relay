@@ -86,7 +86,8 @@ it("preserves modified link clicks and opens the actual blocking thread", () => 
   expect(open).toHaveBeenCalledWith("blocking-thread");
 });
 it("sends the reply to the thread a waiting task waits in, not its newest link", () => {
-  const waiting = { ...task(undefined, "waiting_for_human"), linkedSessionIds: ["asking-thread", "status-thread"], waitingSessionId: "asking-thread" } as RelayTaskListItem;
+  const waiting = { ...task(undefined, "waiting_for_human"), linkedSessionIds: ["asking-thread", "status-thread"], waitingSessionId: "asking-thread",
+    awaiting: { questionId: "q_1", kind: "question", text: "Which vault?", options: [], notes: [], sessionId: "asking-thread", resumable: true } } as RelayTaskListItem;
   render(<TaskRecoveryPanel task={waiting} />);
   expect(screen.getByRole("link", { name: "recovery.reply_in_thread" }).getAttribute("href")).toBe("/threads/asking-thread");
 });

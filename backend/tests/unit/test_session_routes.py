@@ -291,3 +291,22 @@ def test_a_round_that_stopped_to_ask_awaits_its_human() -> None:
     # A failed session also reads blocked; it is settled, not waiting.
     assert session_awaits_human({"status": "failed", "workOutcome": "blocked"}) is False
     assert session_awaits_human({"status": "completed", "workOutcome": "accepted"}) is False
+
+
+def test_a_thread_awaits_its_human_by_the_task_waiting_in_it() -> None:
+    waiting_task = {
+        "id": "task_1", "status": "waiting_for_human", "waitingSessionId": "ses_1",
+    }
+    scoped = {
+        "id": "ses_1", "status": "completed", "workOutcome": "blocked",
+        "activeRoundId": "r1",
+        "collaborationRounds": [{"roundId": "r1", "workScope": {"kind": "task", "taskId": "task_1"}}],
+    }
+    # A status question since then does not orphan the wait the task names.
+    after_status = {**scoped, "workOutcome": "unverified"}
+    assert session_awaits_human(after_status, [waiting_task]) is True
+    # The task answered elsewhere or finished: the blocked outcome is history.
+    assert session_awaits_human(scoped, [{**waiting_task, "waitingSessionId": "ses_2"}]) is False
+    assert session_awaits_human(scoped, [{"id": "task_1", "status": "done"}]) is False
+    # A task the caller does not hold proves nothing.
+    assert session_awaits_human(scoped, []) is True

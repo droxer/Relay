@@ -117,6 +117,23 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
     task["workflowStage"] = stage
 
 
+def acceptance_status(
+    task: dict[str, Any], status: str, *, accepted_by_human: bool = False
+) -> str:
+    """The status a finished round actually lands on.
+
+    A task that needs human acceptance goes to `review` instead of `done`,
+    unless the person accepting it is the one closing it (mark done).
+    """
+    if (
+        status == "done"
+        and not accepted_by_human
+        and task.get("acceptancePolicy", "automatic") == "human"
+    ):
+        return "review"
+    return status
+
+
 def validate_manual_transition(
     task: dict[str, Any], target: str, *, active: bool = False, unblock: bool = False
 ) -> None:
