@@ -261,6 +261,12 @@ def test_blocker_reasons_name_no_internal_ids():
     assert all(item["assignmentId"] not in " ".join(reasons) for item in items)
 
 
+def test_steps_stopping_the_same_way_give_one_reason():
+    items = assignments()
+    reasons = completion_blockers(items[1:3], {}, require_evidence=True)
+    assert reasons == ["A required step ended without reporting what it did."]
+
+
 @pytest.mark.parametrize(("source", "human"), [("message", True), ("recovery", True), ("schedule", False)])
 def test_a_lead_plan_keeps_who_started_the_round(source, human):
     """Adopting a plan replaces the round manifest. A person's round must stay

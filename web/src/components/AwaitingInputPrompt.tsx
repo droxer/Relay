@@ -110,10 +110,13 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [choiceCount]);
+  // The hint says only what the controls cannot: which task a reply resumes,
+  // or that a bare reply box continues the work. "Pick one or write your
+  // own" is already said by the answers and the button beside them.
   const hint = !asked
-    ? (ref ? t("awaiting.hint_check_task", { ref }) : t("awaiting.hint_check_thread"))
+    ? (ref ? t("awaiting.hint_check_task", { ref }) : null)
     : choices.length
-      ? (ref ? t("awaiting.hint_choices_task", { ref }) : t("awaiting.hint_choices_thread"))
+      ? (ref ? t("awaiting.hint_choices_task", { ref }) : null)
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));
   const title = t(TITLE_KEYS[waiting.kind], { agent: agentName });
   return (
@@ -166,7 +169,7 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
         </ul>
       ) : null}
       <div className="awaiting-input-foot">
-        <p className="awaiting-input-hint">{hint}</p>
+        {hint ? <p className="awaiting-input-hint">{hint}</p> : null}
         <Button type="button" variant="ghost" size="dense" disabled={chosen !== null} onClick={onReply}>
           {t(choices.length ? "awaiting.write_own" : "awaiting.reply")}
         </Button>

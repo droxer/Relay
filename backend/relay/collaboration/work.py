@@ -219,7 +219,9 @@ def completion_blockers(
                 continue
             if result.get("status") != "done" or not result.get("evidence"):
                 blockers.append(unaccepted_work_reason(result))
-    return blockers
+    # The reasons name no step, so two steps stopping the same way read as one
+    # sentence said twice; say it once.
+    return list(dict.fromkeys(blockers))
 
 
 # The preamble a gate stop puts before its reasons. The web strips it (the

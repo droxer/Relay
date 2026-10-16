@@ -32,6 +32,9 @@ _LEGACY_GATE_WORDING = (
     (re.compile(r"Required contribution \S+ failed\."), "A required step failed to run."),
     (re.compile(r"Unresolved finding on \S+: "), "A review found a problem that is still open: "),
 )
+# A sentence said again straight after itself. Reasons recorded before
+# `completion_blockers` deduped them repeat once per step that stopped.
+_REPEATED_SENTENCE = re.compile(r"(?<!\S)([^.]+\.)(?:\s+\1)+(?=\s|$)")
 
 
 def task_awaiting(task: dict[str, Any]) -> dict[str, Any] | None:
@@ -89,7 +92,7 @@ def plain_gate_reason(reason: str) -> str:
     plain = reason[len(preamble):].strip()
     for pattern, replacement in _LEGACY_GATE_WORDING:
         plain = pattern.sub(replacement, plain)
-    return plain
+    return _REPEATED_SENTENCE.sub(r"\1", plain)
 
 
 def _is_gate(raw: Any) -> bool:

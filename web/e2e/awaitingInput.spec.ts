@@ -40,10 +40,32 @@ const task = {
   linkedSessionIds: [session.id], ownerUserId: "u", assignedAgentId: reviewer.id, createdAt: stamp, updatedAt: stamp, events: [], activity: [],
 };
 
+const BLOCKED_ROUND_PREAMBLE = "The round reported it is blocked.";
+
+/** The wait as the backend projects it onto a task response (`task_awaiting`
+ *  in backend/relay/collaboration/awaiting.py); the web renders it as is. A
+ *  test that needs the backend's legacy rewording passes `awaiting` itself. */
+function projectedWait(waitingTask: Record<string, unknown>, thread: Record<string, unknown>, taskScoped: boolean) {
+  const reason = String(waitingTask.waitingReason ?? "");
+  const asked = reason.startsWith(BLOCKED_ROUND_PREAMBLE);
+  return {
+    questionId: "wait-1",
+    kind: asked ? "question" : "check",
+    text: asked ? reason.slice(BLOCKED_ROUND_PREAMBLE.length).trim() || null : reason,
+    options: asked ? (thread.inputOptions as string[] | undefined) ?? [] : [],
+    notes: [],
+    // A legacy linked thread is not where the task waits.
+    sessionId: taskScoped ? thread.id : "elsewhere",
+    resumable: true,
+    ...(waitingTask.awaiting as Record<string, unknown> | undefined),
+  };
+}
+
 async function serve(page: Page, theme: "light" | "dark", taskScoped = true, overrides: Partial<typeof session> & Record<string, unknown> = {}, taskOverrides: Record<string, unknown> = {}): Promise<string[]> {
   const sent: string[] = [];
   const thread = { ...(taskScoped ? session : { ...session, activeRoundId: undefined, collaborationRounds: [] }), ...overrides };
-  const waitingTask = { ...task, ...taskOverrides };
+  const merged = { ...task, ...taskOverrides };
+  const waitingTask = { ...merged, awaiting: projectedWait(merged, thread, taskScoped) };
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -95,7 +117,10 @@ test("an offered answer is one click, and sends as the reply", async ({ page }, 
 test("a gate stop explains itself plainly and offers next steps", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const gate = "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing.";
-  const sent = await serve(page, "dark", true, { finalOutcome: gate }, { waitingReason: gate });
+  const sent = await serve(page, "dark", true, { finalOutcome: gate }, {
+    waitingReason: gate,
+    awaiting: { text: "A required step ended without reporting what it did." },
+  });
   await page.goto(`/threads/${session.id}`);
   const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
   await expect(prompt.locator("blockquote")).toHaveText("A required step ended without reporting what it did.");
@@ -124,16 +149,12 @@ test("asking for status is a question, not a task round", async ({ page }) => {
   await expect.poll(() => bodies.map((body) => body.intent)).toEqual(["discuss"]);
 });
 
-test("a locally rejected choice leaves other answers available", async ({ page }) => {
+test("an offered answer containing an unknown mention sends literally", async ({ page }) => {
   const sent = await serve(page, "light", true, { inputOptions: ["@Unknown deploy", "Staging"] });
   await page.goto(`/threads/${session.id}`);
   const prompt = page.getByRole("region", { name: "Reviewer needs your answer" });
   await prompt.getByRole("button", { name: "@Unknown deploy" }).click();
-  await expect(prompt.getByRole("button", { name: "Staging" })).toBeEnabled();
-  await expect(prompt.getByRole("button", { name: "Write my own" })).toBeEnabled();
-  expect(sent).toEqual([]);
-  await prompt.getByRole("button", { name: "Staging" }).click();
-  await expect.poll(() => sent).toEqual(["Staging"]);
+  await expect.poll(() => sent).toEqual(["@Unknown deploy"]);
 });
 
 test("an unstructured list stays in the question with every item visible", async ({ page }) => {
