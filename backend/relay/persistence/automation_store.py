@@ -295,3 +295,12 @@ class DatabaseAutomationStore:
     def delete_webhook_secret(self, routine_id: str) -> None:
         with store_transaction(self.engine) as conn:
             conn.execute(delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id))
+
+    def forget_routines(self, routine_ids: list[str]) -> None:
+        """Drop every trace of hard-deleted routines: state, rate window, and webhook secret."""
+        if not routine_ids:
+            return
+        with store_transaction(self.engine) as conn:
+            conn.execute(delete(automation_state).where(automation_state.c.routine_id.in_(routine_ids)))
+            conn.execute(delete(automation_webhook_secrets)
+                         .where(automation_webhook_secrets.c.routine_id.in_(routine_ids)))

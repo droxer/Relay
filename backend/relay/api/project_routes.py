@@ -31,7 +31,10 @@ from ..services.project_setup import (
     setup_manifest_block,
     setup_task_goal,
 )
-from ..services.project_deletion import delete_project as delete_project_record
+from ..services.project_deletion import (
+    ProjectDeletionError,
+    delete_project as delete_project_record,
+)
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, request_actor
 from .project_helpers import project_for_owner
@@ -422,6 +425,13 @@ def archive_project(
     return {"project": project}
 
 
+PROJECT_DELETION_STATUS = {
+    "project_delete_forbidden": 403,
+    "project_delete_unsupported": 501,
+    "project_cleanup_queue_full": 503,
+}
+
+
 @router.delete("/projects/{project_id}")
 def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
@@ -437,10 +447,21 @@ def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dic
             ctx, project_id, expected_version=expected_version,
             user_id=actor["userId"],
             lifecycle=request.app.state.execution_lifecycle,
+            automation_store=getattr(request.app.state, "automation_store", None),
         )
     except KeyError as error:
         raise HTTPException(404, "Project not found.") from error
     except ProjectVersionConflict as error:
         raise _project_error(error) from error
+    except ProjectDeletionError as error:
+        raise HTTPException(
+            PROJECT_DELETION_STATUS.get(error.code, 409),
+            {
+                "code": error.code,
+                "message": error.code,
+                "sessionIds": error.session_ids,
+                "taskIds": error.task_ids,
+            },
+        ) from error
     except ValueError as error:
         raise HTTPException(409, str(error)) from error

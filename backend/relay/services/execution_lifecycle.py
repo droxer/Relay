@@ -325,38 +325,9 @@ class ExecutionLifecycleService:
                 for run in self.registry.daemon_store.list_active_runs():
                     if run.get("sessionId") == session_id:
                         self.registry.cancel_active_run(run["nodeId"], session_id, "Thread deletion requested.")
-            # Old finalizers preserved an already-terminal session verbatim,
-            # including stale running agent projections. Repair those records
-            # from retained daemon exit evidence, never from session status.
-            if not self.registry.daemon_store.active_run_request_for_session_any_node(session_id):
-                running = {run["id"] for run in session.get("agentRuns", []) if run.get("status") == "running"}
-                if running:
-                    for event in self.registry.daemon_store.terminal_events_for_session(session_id):
-                        if event.get("runId") not in running:
-                            continue
-                        outcome = "cancelled" if event["type"] == "run.cancelled" else (
-                            "completed" if event["type"] == "run.completed" and event.get("exitCode") == 0 else "failed")
-                        session = self.registry.store.append_event(session_id, relay_event("agent.completed", session_id, {
-                            "runId": event["runId"], "agent": event["agent"], "status": outcome,
-                            "exitCode": event.get("exitCode", 130 if outcome == "cancelled" else 1),
-                            "agentLog": event.get("agentLog", ""),
-                        }))
-                        running.remove(event["runId"])
-            status = self.status(session)
-            if not status["canDelete"] and status["canReportGone"]:
-                # The execution is one Relay has already given up on: its
-                # computer will never report exit, so without an assertion the
-                # deletion pends forever. The person's delete IS that
-                # assertion — apply the same transitions the reconcile
-                # endpoint records instead of making them find a second button.
-                status = self._reconcile_locked(
-                    session,
-                    session.get("deletionRequestedBy") or "unknown",
-                    status["blockingReason"],
-                )
-                # The reconcile appended events; the tombstone and the in-flight
-                # guard below must see the settled record, not the stale one.
-                session = self.registry.store.get_session(session_id)
+            session, status = self.settle_for_deletion(
+                session, session.get("deletionRequestedBy") or "unknown"
+            )
             if not status["canDelete"]:
                 return status
             # Clear external bindings first. Repeating this after a crash is safe.
@@ -364,6 +335,46 @@ class ExecutionLifecycleService:
             controller.delete_session(session_id, snapshot=session,
                                       deleted_by=session.get("deletionRequestedBy"))
             return None
+
+    def settle_for_deletion(
+        self, session: dict[str, Any], user_id: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Bring a thread about to be deleted to its true state. Caller holds the locks.
+
+        Returns the settled session and its status; the caller deletes only
+        when `canDelete` holds. Never stops live work: a thread whose run is
+        still reachable stays blocked.
+        """
+        session_id = session["id"]
+        # Old finalizers preserved an already-terminal session verbatim,
+        # including stale running agent projections. Repair those records
+        # from retained daemon exit evidence, never from session status.
+        if not self.registry.daemon_store.active_run_request_for_session_any_node(session_id):
+            running = {run["id"] for run in session.get("agentRuns", []) if run.get("status") == "running"}
+            if running:
+                for event in self.registry.daemon_store.terminal_events_for_session(session_id):
+                    if event.get("runId") not in running:
+                        continue
+                    outcome = "cancelled" if event["type"] == "run.cancelled" else (
+                        "completed" if event["type"] == "run.completed" and event.get("exitCode") == 0 else "failed")
+                    session = self.registry.store.append_event(session_id, relay_event("agent.completed", session_id, {
+                        "runId": event["runId"], "agent": event["agent"], "status": outcome,
+                        "exitCode": event.get("exitCode", 130 if outcome == "cancelled" else 1),
+                        "agentLog": event.get("agentLog", ""),
+                    }))
+                    running.remove(event["runId"])
+        status = self.status(session)
+        if not status["canDelete"] and status["canReportGone"]:
+            # The execution is one Relay has already given up on: its
+            # computer will never report exit, so without an assertion the
+            # deletion pends forever. The person's delete IS that
+            # assertion — apply the same transitions the reconcile
+            # endpoint records instead of making them find a second button.
+            status = self._reconcile_locked(session, user_id, status["blockingReason"])
+            # The reconcile appended events; the tombstone and the in-flight
+            # guard must see the settled record, not the stale one.
+            session = self.registry.store.get_session(session_id)
+        return session, status
 
     def tick(self) -> None:
         try:

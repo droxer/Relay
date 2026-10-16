@@ -6,6 +6,8 @@ export class RelayApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: string,
+    /** The response's structured `detail`, for errors that carry more than a code. */
+    public readonly detail?: unknown,
   ) {
     super(message);
   }
@@ -93,7 +95,7 @@ export async function apiJson<T>(
       ?? apiErrorMessage(error)
       ?? (text.trim() || response.statusText);
     const code = apiErrorCode(detail) ?? apiErrorCode(error);
-    throw new RelayApiError(message, response.status, code);
+    throw new RelayApiError(message, response.status, code, detail);
   }
   if (!options.guard) return parsed as T;
   try {

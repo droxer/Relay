@@ -278,6 +278,17 @@ DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
 # Status of a node an admin deleted. The row survives as a tombstone so a
 # daemon that is still running cannot resurrect the node by re-registering.
 DAEMON_NODE_DELETED_STATUS = "deleted"
+PROJECT_WORKSPACE_DELETE_CAPABILITY = "project-workspace-delete"
+WORKSPACE_DELETE_COMMAND = "workspace.delete"
+
+
+def cleanup_node_rank(node: dict[str, Any]) -> tuple[bool, bool, str]:
+    """Order a computer's nodes by how soon each could run project cleanup."""
+    return (
+        PROJECT_WORKSPACE_DELETE_CAPABILITY not in (node.get("capabilities") or []),
+        not node.get("online"),
+        node["id"],
+    )
 
 
 class UnknownDaemonNodeError(KeyError):
@@ -776,6 +787,12 @@ class DaemonNodeRegistry:
         self.daemon_store.register_node(sandbox)
         for command in payload.get("runtimeRefreshCommands") or []:
             self.daemon_store.complete_runtime_refresh(sandbox["id"], command)
+        if not retired_at:
+            try:
+                self.rehome_workspace_cleanups(computer_id(sandbox), sandbox["id"])
+            except Exception:
+                # Cleanup stays queued on the retired node; the next registration retries.
+                logger.exception("Failed to move project cleanup", sandbox_id=sandbox["id"])
         logger.info(
             "Daemon node registered",
             sandbox_id=sandbox["id"],
@@ -891,6 +908,60 @@ class DaemonNodeRegistry:
                 user_id=node.get("userId"),
                 workspace_id=node.get("workspaceId"),
             )
+
+    def computer_node_records(self, computer: str) -> list[dict[str, Any]]:
+        """Every node record of one computer, retired incarnations and tombstones included."""
+        return [node for node in self.sandboxes.values() if computer_id(node) == computer]
+
+    def live_cleanup_node(self, computer: str) -> dict[str, Any] | None:
+        """The computer's live node best placed to run project cleanup."""
+        live = [
+            node for node in self.monitor_nodes()
+            if computer_id(node) == computer and not node.get("retiredAt")
+        ]
+        return min(live, key=cleanup_node_rank, default=None)
+
+    def rehome_workspace_cleanups(self, computer: str, target_id: str) -> int:
+        """Hand project cleanup queued on a computer's retired nodes to `target_id`.
+
+        Project deletion queues `workspace.delete` on whichever node record the
+        computer still has, retired ones included, because the files outlive any
+        one incarnation. A retired node never polls again, so the work moves to
+        the live node when one exists. The copy is queued before the original is
+        closed: a crash in between leaves an undeliverable duplicate on the
+        retired node, never a lost cleanup.
+        """
+        moved = 0
+        for node in self.computer_node_records(computer):
+            if node["id"] == target_id or not node.get("retiredAt"):
+                continue
+            for record in self.daemon_store.pending_commands_of_type(
+                node["id"], WORKSPACE_DELETE_COMMAND
+            ):
+                command = {
+                    key: value for key, value in record["command"].items()
+                    if key != "id" and not key.startswith("_")
+                }
+                try:
+                    self.daemon_store.enqueue_command(
+                        target_id, {**command, "id": new_database_id()}
+                    )
+                except ValueError:
+                    logger.warning(
+                        "Deferred moving project cleanup; target command queue is full",
+                        command_id=record["id"], target_node_id=target_id,
+                    )
+                    return moved
+                self.daemon_store.retire_command(
+                    record["id"], f"Cleanup moved to daemon node {target_id}."
+                )
+                moved += 1
+        if moved:
+            logger.info(
+                "Moved project cleanup to live daemon node",
+                computer_id=computer, target_node_id=target_id, commands=moved,
+            )
+        return moved
 
     def _registration_display_name(
         self,
@@ -1292,6 +1363,10 @@ class DaemonNodeRegistry:
                 self.active_commands.pop(command_id, None)
                 if command.get("runId"):
                     self.clear_run_output(command["runId"])
+        computer = computer_id(updated)
+        target = self.live_cleanup_node(computer)
+        if target is not None:
+            self.rehome_workspace_cleanups(computer, target["id"])
         logger.info("Daemon node deleted", sandbox_id=sandbox_id)
         return updated
 

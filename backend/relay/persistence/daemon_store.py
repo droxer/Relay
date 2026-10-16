@@ -885,6 +885,41 @@ class LocalDaemonStore:
             for node_id in list(self._nonterminal_command_ids_by_node.keys())
         }
 
+    def pending_commands_of_type(
+        self, node_id: str, command_type: str
+    ) -> list[dict[str, Any]]:
+        """Published commands of one type that have not finished, delivered or not."""
+        with self._lock:
+            return sorted(
+                (
+                    record
+                    for record in self._command_records_for_node(node_id)
+                    if record.get("status") in ("queued", "dispatched")
+                    and record["command"].get("type") == command_type
+                ),
+                key=lambda record: record.get("createdAt") or "",
+            )
+
+    def retire_command(self, command_id: str, reason: str) -> bool:
+        """Close an unfinished command whose work was handed to another node."""
+        with self._lock:
+            command = self._get_command(command_id)
+            if not command or command.get("status") not in ("queued", "dispatched"):
+                return False
+            now = now_iso()
+            _write_json(
+                self.commands_dir / f"{safe_name(command_id)}.json",
+                {
+                    **command,
+                    "status": "cancelled",
+                    "updatedAt": now,
+                    "completedAt": now,
+                    "error": reason,
+                },
+            )
+            self._remove_command_from_index(command["nodeId"], command_id)
+            return True
+
     def renew_command_leases(
         self,
         node_id: str,
@@ -2688,6 +2723,39 @@ class DatabaseDaemonStore:
                 .group_by(self.commands.c.node_id)
             ).all()
         return {row[0]: row[1] for row in rows}
+
+    def pending_commands_of_type(
+        self, node_id: str, command_type: str
+    ) -> list[dict[str, Any]]:
+        """Published commands of one type that have not finished, delivered or not."""
+        with store_transaction(self.engine) as conn:
+            node_pk = conn.scalar(select(self.nodes.c.id).where(self.nodes.c.id == node_id))
+            if not node_pk:
+                return []
+            rows = (
+                conn.execute(
+                    select(self.commands)
+                    .where(self.commands.c.node_id == node_pk)
+                    .where(self.commands.c.type == command_type)
+                    .where(self.commands.c.status.in_(("queued", "dispatched")))
+                    .order_by(self.commands.c.created_at, self.commands.c.id)
+                )
+                .mappings()
+                .all()
+            )
+        return [row_to_command(row) for row in rows]
+
+    def retire_command(self, command_id: str, reason: str) -> bool:
+        """Close an unfinished command whose work was handed to another node."""
+        now = _parse_iso(now_iso())
+        with store_transaction(self.engine) as conn:
+            result = conn.execute(
+                update(self.commands)
+                .where(self.commands.c.id == command_id)
+                .where(self.commands.c.status.in_(("queued", "dispatched")))
+                .values(status="cancelled", updated_at=now, completed_at=now, error=reason)
+            )
+        return result.rowcount == 1
 
     def renew_command_leases(
         self,
