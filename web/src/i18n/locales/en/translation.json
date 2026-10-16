@@ -1557,6 +1557,7 @@
     "phase_handoff": "Handoff",
     "handoff_to": "{{from}} finished · handing off to {{to}}",
     "handoff_open": "{{from}} finished · preparing the next step",
+    "handoff_closing": "{{from}} finished · wrapping up",
     "handoff_elapsed": "{{seconds}}s",
     "handoff_after_failure": "{{from}} stopped · preparing the next step"
   },

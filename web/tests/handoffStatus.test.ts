@@ -65,3 +65,34 @@ test("cancelled admission and old-daemon output have distinct lifecycle evidence
   const active = applySessionEvent(s, {id: "o", type: "agent.output", sessionId: "s", timestamp: "now", agent: "codex", runId: "run", stream: "stdout", text: "working"});
   assert.equal(deriveHandoffStatus(active)?.status, "running");
 });
+
+test("a settled thread shows no handoff in progress", () => {
+  for (const status of ["completed", "waiting_for_human"] as const) {
+    const s = { ...session(), status };
+    assert.equal(deriveHandoffStatus(s), null, `${status}: never-started handoff`);
+    const staged = { ...s, agentRuns: [{id: "run", assignmentId: "a", agent: "codex", status: "running"}] as RelaySession["agentRuns"] };
+    assert.equal(deriveHandoffStatus(staged), null, `${status}: staged handoff`);
+    const done = { ...s, agentRuns: [{id: "run", assignmentId: "a", agent: "codex", status: "completed"}] as RelaySession["agentRuns"] };
+    assert.equal(deriveHandoffStatus(done), null, `${status}: completed handoff`);
+  }
+  const blocked = { ...session(), status: "completed" as const, workOutcome: "blocked" as const };
+  assert.equal(deriveHandoffStatus(blocked), null);
+});
+
+test("a failed handoff keeps its reason after the thread settles", () => {
+  const s = { ...session(), status: "failed" as const, finalOutcome: "Daemon offline", agentRuns: [{id: "run", assignmentId: "a", agent: "codex", status: "failed"}] as RelaySession["agentRuns"] };
+  assert.deepEqual(deriveHandoffStatus(s), { status: "failed", target: "Reviewer", note: "verify", reason: "Daemon offline" });
+});
+
+test("a running thread still reports its completed handoff", () => {
+  const s = { ...session(), agentRuns: [{id: "run", assignmentId: "a", agent: "codex", status: "completed"}] as RelaySession["agentRuns"] };
+  assert.equal(deriveHandoffStatus(s)?.status, "completed");
+});
+
+test("delivery evidence from before the round started is not read", () => {
+  const s = session();
+  const stale = applySessionEvent(s, {id: "old", sessionId: "s", timestamp: "now", type: "collaboration.delivery", roundId: "r", assignmentId: "a", runId: "run", status: "running"});
+  const restarted = applySessionEvent(stale, {id: "start", sessionId: "s", timestamp: "now", type: "collaboration.round.started", manifest: s.collaborationRounds[0]});
+  assert.equal(deriveHandoffStatus(stale)?.status, "running");
+  assert.equal(deriveHandoffStatus(restarted)?.status, "accepted");
+});

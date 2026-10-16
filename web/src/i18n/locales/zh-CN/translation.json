@@ -1526,6 +1526,7 @@
     "phase_handoff": "移交",
     "handoff_to": "{{from}} 已完成 · 正在移交给 {{to}}",
     "handoff_open": "{{from}} 已完成 · 正在准备下一步",
+    "handoff_closing": "{{from}} 已完成 · 正在收尾",
     "handoff_elapsed": "{{seconds}} 秒",
     "handoff_after_failure": "{{from}} 已停止 · 正在准备下一步"
   },

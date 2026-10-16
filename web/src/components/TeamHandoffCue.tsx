@@ -63,7 +63,9 @@ export function TeamHandoffCue({ session, logicalAgentNames, logicalAgentImages,
   const to = handoff.toAgentId ? logicalAgentNames[handoff.toAgentId] : undefined;
   const label = handoff.outcome === "failed"
     ? t("transcript.handoff_after_failure", { from })
-    : to ? t("transcript.handoff_to", { from, to }) : t("transcript.handoff_open", { from });
+    : handoff.phase === "closing"
+      ? t("transcript.handoff_closing", { from })
+      : to ? t("transcript.handoff_to", { from, to }) : t("transcript.handoff_open", { from });
   const image = handoff.toAgentId ? logicalAgentImages[handoff.toAgentId] : undefined;
 
   return (

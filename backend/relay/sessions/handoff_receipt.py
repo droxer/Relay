@@ -10,7 +10,7 @@ import hashlib
 import json
 from typing import Any
 
-from .handoff_files import handoff_checkpoint_file
+from .handoff_files import handoff_checkpoint_file, legacy_handoff_checkpoint_file
 
 CONTRACT = {"name": "relay.handoff.receipt", "version": 1}
 REQUIREMENTS_LIMIT = 16000
@@ -95,6 +95,13 @@ def capture_handoff_receipt(
     run_id = context["sourceRunId"]
     assignment_id = context["sourceAssignmentId"]
     checkpoint_path = handoff_checkpoint_file(context["progressFile"])
+    # Ordered by preference: the name the source run was told, then the name
+    # it may have been told before the rename.
+    checkpoint_paths = [
+        path
+        for path in (legacy_handoff_checkpoint_file(context["progressFile"]), checkpoint_path)
+        if path
+    ]
     checkpoint: dict[str, Any] = {"status": "missing", "path": checkpoint_path}
     evidence: list[dict[str, Any]] = []
     artifacts = [
@@ -106,7 +113,9 @@ def capture_handoff_receipt(
     ]
     # Give the checkpoint priority when the artifact report is large.
     artifacts.sort(
-        key=lambda item: item.get("workspaceRelativePath") == checkpoint_path
+        key=lambda item: checkpoint_paths.index(item.get("workspaceRelativePath")) + 1
+        if item.get("workspaceRelativePath") in checkpoint_paths
+        else 0
     )
     omitted = len(artifacts) > 24
     for artifact in artifacts[-24:]:
@@ -117,7 +126,8 @@ def capture_handoff_receipt(
         content = _snapshot(store, session["id"], artifact["id"])
         digest = hashlib.sha256(content).hexdigest() if content is not None else None
         evidence.append({"artifactId": artifact["id"], "path": path, "sha256": digest})
-        if path == checkpoint_path:
+        if path in checkpoint_paths:
+            # Sorted last-preferred-last, so the current name wins a tie.
             checkpoint = {
                 "path": path,
                 "artifactId": artifact["id"],

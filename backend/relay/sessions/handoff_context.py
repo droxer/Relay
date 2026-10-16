@@ -19,7 +19,7 @@ from .bridge import (
 )
 
 CONTEXT_BUDGET = 24000
-_ELISION = "\n[Context omitted; consult referenced run logs and the progress file.]\n"
+_ELISION = "\n[Context omitted; consult referenced run logs and the handoff notes named in progressFile.]\n"
 
 
 def _clip(text: str, limit: int, *, tail: bool = False) -> tuple[str, bool]:

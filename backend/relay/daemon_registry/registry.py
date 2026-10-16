@@ -24,9 +24,10 @@ from ..collaboration.models import (
     COLLABORATION_NEW_SESSION_STATE_KEY,
 )
 from ..collaboration.work import (
-    WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, WORK_PLAN_ERROR,
+    WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_PLAN_ERROR,
     WORK_NEEDS_ATTENTION, unaccepted_work_reason,
     completion_blockers, record_work_result, validate_work_result, compile_proposed_plan,
+    work_repair_notes,
     is_answer_turn, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
 )
 from ..collaboration.policy import (
@@ -174,6 +175,21 @@ DAEMON_RECORD_PRUNE_INTERVAL_SECONDS = float(
     os.environ.get("RELAY_DAEMON_RECORD_PRUNE_INTERVAL_SECONDS", "60")
 )
 ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
+# Person-only round sources: an answer, or a rerun/handoff.
+HUMAN_ROUND_SOURCES = frozenset({"message", "recovery"})
+
+
+def is_human_started_round(manifest: dict[str, Any]) -> bool:
+    """Whether a person started this round, including after a lead re-plan."""
+    return manifest.get("source") in HUMAN_ROUND_SOURCES or manifest.get("humanStarted") is True
+
+
+# Failures starting the next assignment (or closing the round) after a turn was
+# finalized: `{index, attempts, retryAt, error}`. Past the cap the thread fails.
+FOLLOW_UP_FAILURE_STATE_KEY = "_relay_follow_up_failure"
+MAX_FOLLOW_UP_ATTEMPTS = 5
+# Bound on remembered slot waits; past it the log may repeat, never grow.
+LOGGED_CAPACITY_WAITS_MAX = 10_000
 # Run-request bookkeeping that has to survive being re-staged. Command state is
 # filtered down to the agent-visible keys, so anything not listed here is lost
 # the moment the next command is staged.
@@ -189,6 +205,7 @@ CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
         ROUND_RESULT_STATE_KEY,
         ROUND_RESULT_REJECTED_STATE_KEY,
         PARTICIPANT_FAILURES_STATE_KEY,
+        FOLLOW_UP_FAILURE_STATE_KEY,
         COLLABORATION_MANIFEST_STATE_KEY,
         COLLABORATION_FINGERPRINT_STATE_KEY,
     }
@@ -512,6 +529,8 @@ class DaemonNodeRegistry:
         # which are delivered exactly once by the enrollment response.
         self.plain_node_tokens: dict[str, str] = {}
         self.dispatch_lock = RLock()
+        # (run request id, assignment index) pairs whose slot wait was logged.
+        self._logged_capacity_waits: set[tuple[str, int]] = set()
         self._dispatch_locks_guard = RLock()
         self._dispatch_locks: dict[str, _DispatchLockEntry] = {}
         self.logical_assignment_validator: Callable[[dict[str, Any]], None] | None = (
@@ -2738,6 +2757,8 @@ class DaemonNodeRegistry:
             batch = self.daemon_store.list_active_run_requests(limit=100, after_id=getattr(self, "_recovery_after_id", None))
             self._recovery_after_id = batch[-1]["id"] if len(batch) == 100 else None
         for request in batch:
+            recovery_request = request
+            recovering_delivery = False
             try:
                 if request.get("status") == "prepared":
                     manifest = (request.get("state") or {}).get(
@@ -2845,6 +2866,17 @@ class DaemonNodeRegistry:
                     )
                 session = self.store.get_session(request["sessionId"])
                 if session.get("status") in ("completed", "failed", "cancelled"):
+                    if (
+                        session["status"] == "completed"
+                        and not request.get("currentCommandId")
+                        and request.get("currentIndex", 0) >= len(request["assignments"])
+                    ):
+                        # Closeout may have persisted the session before its
+                        # task write failed. Replay the original completion;
+                        # repair_completion fences newer human decisions.
+                        if not self._follow_up_backing_off(request):
+                            self._follow_up_run_request(request)
+                        continue
                     if session["status"] == "failed":
                         SessionController(
                             self.store, task_store=self.task_store, task_id=request.get("taskId"),
@@ -2903,6 +2935,9 @@ class DaemonNodeRegistry:
                         request["id"]
                     )
                     if staged:
+                        if self._follow_up_backing_off(request):
+                            continue
+                        recovering_delivery = True
                         command = staged["command"]
                         session = self.store.get_session(request["sessionId"])
                         has_started = any(
@@ -2958,11 +2993,14 @@ class DaemonNodeRegistry:
                         )
                         if published:
                             self._track_active_command(staged["nodeId"], command)
-                    else:
-                        self._enqueue_current_assignment(request)
+                    elif not self._follow_up_backing_off(request):
+                        self._follow_up_run_request(request)
                     continue
                 command_record = self.daemon_store.get_command(command_id)
                 if command_record and command_record.get("status") == "pending":
+                    if self._follow_up_backing_off(request):
+                        continue
+                    recovering_delivery = True
                     published = self.daemon_store.publish_command(
                         command_id, request_id=request["id"]
                     )
@@ -2970,6 +3008,7 @@ class DaemonNodeRegistry:
                         self._track_active_command(
                             command_record["nodeId"], command_record["command"]
                         )
+                    recovering_delivery = False
                 if command_record and command_record.get("status") in (
                     "completed",
                     "failed",
@@ -2999,8 +3038,16 @@ class DaemonNodeRegistry:
                     self.cancel_active_run(request["nodeId"], request["sessionId"], outcome)
                     self._fail_run_request(request, outcome)
                     continue
-            except Exception:
-                logger.exception("Run recovery failed", run_request_id=request.get("id"))
+            except Exception as error:
+                if recovering_delivery:
+                    # Staged and linked-but-unpublished commands bypass the
+                    # normal enqueue helper, but share its failure budget.
+                    try:
+                        self._record_follow_up_failure(recovery_request, error)
+                    except Exception:
+                        logger.exception("Could not record delivery recovery failure",
+                                         run_request_id=recovery_request["id"])
+                logger.exception("Run recovery failed", run_request_id=recovery_request["id"])
 
     def _settle_lost_dispatch(
         self, request: dict[str, Any], command_record: dict[str, Any], *, stopping: bool
@@ -3197,17 +3244,17 @@ class DaemonNodeRegistry:
             if task_owner and task_owner != request_execution_owner(run_request):
                 # Do not fail the session: it may already belong to a newer
                 # round. Reject only this stale execution request.
-                return (
-                    self.daemon_store.update_run_request_if_status(
-                        run_request["id"],
-                        run_request["status"],
-                        {
-                            "status": "failed",
-                            "error": "task_ownership_changed: task execution owner changed",
-                        },
-                    )
-                    or run_request
+                rejected = self.daemon_store.update_run_request_if_status(
+                    run_request["id"],
+                    run_request["status"],
+                    {
+                        "status": "failed",
+                        "error": "task_ownership_changed: task execution owner changed",
+                    },
                 )
+                if rejected:
+                    self._close_superseded_thread(run_request["sessionId"])
+                return rejected or run_request
         assignments = run_request["assignments"]
         index = run_request.get("currentIndex", 0)
         if index >= len(assignments):
@@ -3220,7 +3267,13 @@ class DaemonNodeRegistry:
                 run_request["id"], {"nodeId": node_id}
             )
         run_id = new_database_id()
+        # This can run on a replica that never saw the node's heartbeats (the
+        # reaper runs everywhere), so read durable liveness before judging it.
+        self._hydrate_node(node_id)
         sandbox = self.sandboxes.get(node_id)
+        if sandbox and not self._liveness(sandbox)["online"]:
+            self._refresh_persisted_liveness(node_id)
+            sandbox = self.sandboxes.get(node_id)
         if not sandbox:
             self._fail_run_request(
                 run_request,
@@ -3244,17 +3297,17 @@ class DaemonNodeRegistry:
                 raise ValueError(
                     f"Executor {assignment['executorKind']} is not ready on this runtime node."
                 )
+            node_runs = (
+                active_runs
+                if active_runs is not None
+                else self.daemon_store.list_active_runs(node_id)
+            )
             if not node_accepts_run(
-                sandbox,
-                active_runs=(
-                    active_runs
-                    if active_runs is not None
-                    else self.daemon_store.list_active_runs(node_id)
-                ),
-                session_id=run_request["sessionId"],
+                sandbox, active_runs=node_runs, session_id=run_request["sessionId"]
             ):
                 # Preserve the admitted request and assignment index. Recovery
                 # retries this undelivered assignment when a slot is available.
+                self._note_capacity_wait(run_request, index, node_runs)
                 return run_request
         except (KeyError, ValueError) as error:
             self._fail_run_request(
@@ -3379,15 +3432,16 @@ class DaemonNodeRegistry:
                     "[Handoff instruction]\n" + context["note"]
                 )
         else:
-            bridge = compute_prior_agent_bridge(
-                session_snapshot, assignment["executorKind"], self.store
-            )
-            if bridge:
-                state["prior_agent_bridge"] = bridge
             # Chat can grow into substantial work too. Provide a stable path on
             # every run; the prompt only asks to create a checkpoint for real work.
             progress_file = handoff_file(run_request["sessionId"], workspace_layout)
             state["progress_file"] = progress_file
+            bridge = compute_prior_agent_bridge(
+                session_snapshot, assignment["executorKind"], self.store,
+                progress_file=progress_file,
+            )
+            if bridge:
+                state["prior_agent_bridge"] = bridge
             conversation = compute_conversation_history(
                 session_snapshot, self.store, progress_file=progress_file
             )
@@ -3486,11 +3540,7 @@ class DaemonNodeRegistry:
             ][-20:]
             if request_state.get(QUESTION_NOTE):
                 state["work_question"] = request_state[QUESTION_NOTE]
-            if request_state.get(WORK_REPAIR_NOTE):
-                if assignment["assignmentId"] == request_state.get(WORK_REPAIR_TARGET):
-                    state["repair_note"] = request_state[WORK_REPAIR_NOTE]
-                else:
-                    state["work_revalidation_note"] = "Earlier evidence is stale; revalidate the updated work within your own role. " + request_state[WORK_REPAIR_NOTE]
+            state.update(work_repair_notes(assignments, index, request_state))
         if request_state.get(REPAIR_NOTE_STATE_KEY) and index == 0:
             state["repair_note"] = request_state[REPAIR_NOTE_STATE_KEY]
         # Only ask for the verdict where something reads it back: on a daemon
@@ -3573,11 +3623,15 @@ class DaemonNodeRegistry:
                 None,
             )
             if required_skip:
-                raise ValueError(
+                # Fail visibly like any other ineligible placement: raising here
+                # escaped the eligibility guard and left the round retrying.
+                self._fail_run_request(
+                    run_request,
                     "required_skill_unavailable: "
                     f"{required_skip.get('slug') or required_skip['skillId']} "
-                    f"({required_skip['reason']})"
+                    f"({required_skip['reason']})",
                 )
+                return run_request
             if skill_bundle is None:
                 pass
             elif "agent-skills" in (sandbox.get("capabilities") or []):
@@ -3593,11 +3647,13 @@ class DaemonNodeRegistry:
                     None,
                 )
                 if required:
-                    raise ValueError(
+                    self._fail_run_request(
+                        run_request,
                         "required_skill_unavailable: "
                         f"{required.get('slug') or required['skillId']} "
-                        "(daemon-unsupported)"
+                        "(daemon-unsupported)",
                     )
+                    return run_request
                 unsupported = [
                     {
                         "skillId": skill["skillId"],
@@ -3766,6 +3822,122 @@ class DaemonNodeRegistry:
             "state": state,
         }
 
+    def _note_capacity_wait(
+        self, run_request: dict[str, Any], index: int, node_runs: list[dict[str, Any]]
+    ) -> None:
+        """Log once which runs hold the slots a waiting assignment needs.
+
+        The wait has no deadline (a busy computer is normal), so this is what
+        tells a long one apart from a slot that is never released.
+        """
+        key = (run_request["id"], index)
+        if key in self._logged_capacity_waits:
+            return
+        if len(self._logged_capacity_waits) >= LOGGED_CAPACITY_WAITS_MAX:
+            self._logged_capacity_waits.clear()
+        self._logged_capacity_waits.add(key)
+        logger.info(
+            "Next assignment is waiting for a run slot",
+            run_request_id=run_request["id"],
+            session_id=run_request["sessionId"],
+            node_id=run_request["nodeId"],
+            current_index=index,
+            blocking_run_ids=[run.get("runId") for run in node_runs],
+            same_session=[
+                run.get("runId") for run in node_runs
+                if run.get("sessionId") == run_request["sessionId"]
+            ],
+        )
+
+    def _close_superseded_thread(self, session_id: str) -> None:
+        """Close a thread whose round lost its task to a newer execution.
+
+        With no other request active the thread would read `running` forever.
+        The controller carries no task: the task belongs to its new owner.
+        """
+        if self.daemon_store.active_run_request_for_session_any_node(session_id):
+            return
+        if self.store.get_session(session_id).get("status") != "running":
+            return
+        # Not a cancel: that is a human decision and must name its actor.
+        SessionController(self.store).fail_session(
+            session_id, "This round stopped because its task moved to another run."
+        )
+
+    def _follow_up_run_request(
+        self, run_request: dict[str, Any], outcome: str = "Assignments completed."
+    ) -> None:
+        """Start the request's current assignment, or close the round past its end.
+
+        Runs after finalization has released its terminal claim, so a failure
+        here is outside that claim's attempt counting. Count it on the request
+        instead: a deterministic error used to leave the thread `running` with
+        the reaper retrying forever and nothing visible to anyone.
+        """
+        try:
+            if run_request.get("currentIndex", 0) >= len(run_request["assignments"]):
+                self._complete_run_request(run_request, outcome)
+            else:
+                self._enqueue_current_assignment(run_request)
+        except Exception as error:
+            # Record before re-raising: the caller's own handling (the claim
+            # handler, the reaper's log) cannot count it.
+            self._record_follow_up_failure(run_request, error)
+            raise
+
+    @staticmethod
+    def _follow_up_backing_off(run_request: dict[str, Any]) -> bool:
+        failure = (run_request.get("state") or {}).get(FOLLOW_UP_FAILURE_STATE_KEY)
+        if not isinstance(failure, dict) or failure.get("index") != run_request.get("currentIndex", 0):
+            return False
+        retry_at = failure.get("retryAt")
+        return isinstance(retry_at, str) and datetime.fromisoformat(retry_at) > datetime.now(timezone.utc)
+
+    def _record_follow_up_failure(self, run_request: dict[str, Any], error: Exception) -> None:
+        logger.exception(
+            "Could not continue a run request after finalization",
+            run_request_id=run_request["id"],
+            session_id=run_request.get("sessionId"),
+            current_index=run_request.get("currentIndex", 0),
+        )
+        current = self.daemon_store.get_run_request(run_request["id"])
+        if not current or current.get("status") not in ACTIVE_RUN_REQUEST_STATUSES:
+            return
+        index = current.get("currentIndex", 0)
+        state = dict(current.get("state") or {})
+        previous = state.get(FOLLOW_UP_FAILURE_STATE_KEY)
+        attempts = (
+            int(previous.get("attempts") or 0)
+            if isinstance(previous, dict) and previous.get("index") == index
+            else 0
+        ) + 1
+        if attempts >= MAX_FOLLOW_UP_ATTEMPTS:
+            try:
+                self._fail_run_request(
+                    current,
+                    f"The round could not continue after {attempts} attempts: {str(error)[:500]}",
+                )
+            except Exception:  # noqa: BLE001 - nothing more to do than report it
+                logger.exception(
+                    "Could not fail a run request that cannot continue",
+                    run_request_id=current["id"],
+                )
+            return
+        # A transient error retries on the next recovery pass; a repeating one
+        # backs off until the cap fails the thread.
+        retry_at = datetime.now(timezone.utc) + timedelta(
+            seconds=0 if attempts == 1 else min(300, 5 * 2 ** (attempts - 2))
+        )
+        state[FOLLOW_UP_FAILURE_STATE_KEY] = {
+            "index": index,
+            "attempts": attempts,
+            "retryAt": retry_at.isoformat(),
+            "error": str(error)[:500],
+        }
+        self.daemon_store.update_run_request_if_status(
+            current["id"], current["status"], {"state": state}
+        )
+
     def _claim_and_advance_run_request(self, event: dict[str, Any]) -> bool:
         run_request = self.daemon_store.claim_terminal_run_request(
             event["commandId"],
@@ -3902,6 +4074,7 @@ class DaemonNodeRegistry:
         state.pop(TERMINAL_EVENT_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_ID_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_EXPIRES_STATE_KEY, None)
+        state.pop(FOLLOW_UP_FAILURE_STATE_KEY, None)
         if state.get("_relay_stop_command_id"):
             # Any terminal acknowledgement proves exit, but a late success
             # must not override the durable stop decision or start a successor.
@@ -4162,10 +4335,7 @@ class DaemonNodeRegistry:
         )
         if not updated:
             return
-        if next_index >= len(assignments):
-            self._complete_run_request(updated, "Assignments completed.")
-        else:
-            self._enqueue_current_assignment(updated)
+        self._follow_up_run_request(updated)
 
     @staticmethod
     def _adopt_lead_plan(
@@ -4201,6 +4371,9 @@ class DaemonNodeRegistry:
             ),
             "parentRoundId": parent.get("roundId"),
             "workScope": parent.get("workScope", {"kind": "thread"}),
+            # The plan replaces the manifest; keep who started the round, or a
+            # person's round would spend the unattended continuation budget.
+            "humanStarted": is_human_started_round(parent),
         }
         controller.record_collaboration_round_started(run_request["sessionId"], manifest)
         return planned, {**next_state, COLLABORATION_MANIFEST_STATE_KEY: manifest}
@@ -4346,7 +4519,7 @@ class DaemonNodeRegistry:
             failed_index=run_request.get("currentIndex", 0),
             repair=decision.state[REPAIR_COUNT_STATE_KEY],
         )
-        self._enqueue_current_assignment(updated)
+        self._follow_up_run_request(updated)
         return True
 
     def _next_index_after_success(
@@ -4365,7 +4538,6 @@ class DaemonNodeRegistry:
         mode: str,
     ) -> bool:
         """Keep collecting discussion/review results after one member fails."""
-        assignments = run_request["assignments"]
         decision = decide_failure(
             run_request,
             next_state,
@@ -4394,13 +4566,9 @@ class DaemonNodeRegistry:
         )
         if not updated:
             return False
-        if decision.next_index < len(assignments):
-            self._enqueue_current_assignment(updated)
-        else:
-            self._complete_run_request(
-                updated,
-                "The round completed with one or more participant failures.",
-            )
+        self._follow_up_run_request(
+            updated, "The round completed with one or more participant failures."
+        )
         return True
 
     @staticmethod
@@ -4731,8 +4899,7 @@ class DaemonNodeRegistry:
         # by answering is attended: it opens a fresh budget, so "keep going"
         # after an exhausted budget buys more than the one round it ran.
         manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
-        # Both are person-only routes: an answer, or a rerun/handoff.
-        human_started = manifest.get("source") in ("message", "recovery")
+        human_started = is_human_started_round(manifest)
         self.task_store.record_round(
             task_id,
             round_result=round_result,
@@ -4750,6 +4917,17 @@ class DaemonNodeRegistry:
         run_id = run_request.get("currentRunId")
         command_id = run_request.get("currentCommandId")
         command = self.daemon_store.get_command(command_id) if command_id else None
+        if not command_id:
+            command = self.daemon_store.pending_command_for_run_request(run_request["id"])
+            if command:
+                # A dispatch can fail between staging and linking. Terminalize
+                # its undelivered command too, without inventing a started run.
+                command_id = command["command"]["id"]
+                staged_run_id = command["command"]["runId"]
+                session_runs = self.store.get_session(run_request["sessionId"]).get("agentRuns", [])
+                if any(run["id"] == staged_run_id for run in session_runs):
+                    run_id = staged_run_id
+                    run_request = {**run_request, "currentAgent": command["command"]["agent"]}
         if command and command.get("status") == "dispatched" and not delivery_never_sent:
             # Timeout, loss of liveness, and retirement are not exit evidence.
             # Keep both reservations until the daemon acknowledges termination.
@@ -4757,14 +4935,18 @@ class DaemonNodeRegistry:
             return
         if command_id:
             self.active_commands.pop(command_id, None)
+            command_payload = (command or {}).get("command") or {}
             event = {
                 "type": "run.failed",
                 "commandId": command_id,
                 "sessionId": run_request["sessionId"],
-                "runId": run_id or "",
-                "agent": run_request.get("currentAgent") or "codex",
+                "runId": run_id or command_payload.get("runId", ""),
+                "agent": run_request.get("currentAgent") or command_payload.get("agent", "codex"),
                 "error": outcome,
                 "exitCode": 1,
+                # A concurrent publisher/poll must not turn a locally observed
+                # pending command into permission to release a delivered run.
+                **({"_requireUndelivered": True} if command and command.get("status") in ("pending", "queued") else {}),
             }
             accepted = self.daemon_store.mark_command_failed(
                 run_request["nodeId"], event
@@ -4772,8 +4954,8 @@ class DaemonNodeRegistry:
             if not accepted:
                 command_record = self.daemon_store.get_command(command_id)
                 if command_record:
-                    # A terminal daemon event won the durable transition on
-                    # another replica. Its handler owns the session update.
+                    # Another replica delivered or terminalized this command.
+                    # Keep its reservation; its evidence owns the next update.
                     if run_id:
                         self.clear_run_output(run_id)
                     return

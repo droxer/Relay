@@ -34,3 +34,15 @@ def handoff_checkpoint_file(notes_file: str) -> str:
     if notes_file.startswith(_LEGACY_STEM) or not notes_file.endswith(".md"):
         return notes_file + _LEGACY_CHECKPOINT_SUFFIX
     return notes_file.removesuffix(".md") + ".json"
+
+
+def legacy_handoff_checkpoint_file(notes_file: str) -> str | None:
+    """Where a run dispatched before the rename wrote this notes file's checkpoint.
+
+    A handoff captured after the deploy names the new notes file, but the run
+    it hands off from was told `PROGRESS[-<id>].md`; without this its
+    checkpoint reads as missing.
+    """
+    if not notes_file.startswith(_STEM) or not notes_file.endswith(".md"):
+        return None
+    return _LEGACY_STEM + notes_file.removeprefix(_STEM) + _LEGACY_CHECKPOINT_SUFFIX

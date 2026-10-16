@@ -259,3 +259,36 @@ def test_blocker_reasons_name_no_internal_ids():
     reasons = completion_blockers([items[1]], state, require_evidence=True)
     assert reasons == ["A required step ended without reporting what it did."]
     assert all(item["assignmentId"] not in " ".join(reasons) for item in items)
+
+
+@pytest.mark.parametrize(("source", "human"), [("message", True), ("recovery", True), ("schedule", False)])
+def test_a_lead_plan_keeps_who_started_the_round(source, human):
+    """Adopting a plan replaces the round manifest. A person's round must stay
+    one, or it spends the unattended continuation budget."""
+    from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
+    from relay.daemon_registry.registry import DaemonNodeRegistry, is_human_started_round
+
+    class Controller:
+        def record_collaboration_round_started(self, _session_id, _manifest):
+            pass
+
+    members = assignments()
+    for item in members[1:-1]:
+        item["required"] = False
+    items = compile_assignment_work_graph(members, purpose="accomplish", team_snapshot=None)
+    parent = create_round_manifest(
+        source=source, purpose="accomplish", address={"kind": "room"},
+        assignments=items, team_snapshot=None, round_id="round_1",
+    )
+    _planned, state = DaemonNodeRegistry._adopt_lead_plan(
+        {"id": "req_1", "sessionId": "ses_1"}, Controller(), items,
+        [{
+            "agentId": "builder", "objective": "Implement the endpoint",
+            "acceptanceCriteria": ["Regression tests pass"], "expectedOutputs": ["Endpoint"],
+        }],
+        {COLLABORATION_MANIFEST_STATE_KEY: parent},
+    )
+    assert "_relay_work_plan_error" not in state
+    manifest = state[COLLABORATION_MANIFEST_STATE_KEY]
+    assert manifest["source"] == "lead_plan"
+    assert is_human_started_round(manifest) is human

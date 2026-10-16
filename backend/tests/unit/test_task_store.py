@@ -18,6 +18,44 @@ from sqlalchemy import event, text
 from automation_helpers import fire_now
 
 
+@pytest.mark.parametrize("database", [False, True])
+def test_round_recording_is_idempotent_for_each_execution_owner(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        def open_store():
+            return (
+                DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+                if database else LocalTaskStore(root)
+            )
+        store = open_store()
+        task = store.create_task({"title": "Continue without spending a round twice"})
+        task_id = task["id"]
+        store.append_event(task_id, relay_task_event("task.execution.claimed", task_id, {
+            "requestId": "first", "expectedRevision": 0,
+        }))
+        first_owner = {"requestId": "first", "revision": 1}
+        result = {"status": "continue", "note": "More work"}
+        store.record_round(task_id, round_result=result, round_count=1, execution_owner=first_owner)
+        # The persisted snapshot must deduplicate after a restart too, even
+        # when a retry recalculates a larger budget count from current state.
+        store = open_store()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(lambda _: store.record_round(
+                task_id, round_result=result, round_count=2, execution_owner=first_owner,
+            ), range(2)))
+        replayed = store.get_task(task_id)
+        assert replayed["roundCount"] == 1
+        assert len([event for event in replayed["events"] if event["type"] == "task.round"]) == 1
+        store.append_event(task_id, relay_task_event("task.execution.claimed", task_id, {
+            "requestId": "second", "expectedRevision": 1,
+        }))
+        store.record_round(task_id, round_result=result, round_count=2,
+                           execution_owner={"requestId": "second", "revision": 2})
+        store.record_round(task_id, round_result={"status": "done"}, round_count=99,
+                           execution_owner=first_owner)
+        assert store.get_task(task_id)["roundCount"] == 2
+        assert len([event for event in store.get_task(task_id)["events"] if event["type"] == "task.round"]) == 2
+
+
 def test_task_store_persists_assignment_status_activity_and_link() -> None:
     with TemporaryDirectory() as root:
         store = LocalTaskStore(root)

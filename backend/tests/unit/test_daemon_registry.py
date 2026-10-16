@@ -2584,6 +2584,55 @@ def test_active_run_survives_heartbeat_seen_by_another_backend_replica() -> None
     asyncio.run(run_flow())
 
 
+def test_next_member_starts_from_a_replica_that_missed_the_heartbeats(monkeypatch) -> None:
+    """The reaper runs on every replica. One whose in-memory node record is
+    stale must read durable liveness before calling the computer offline;
+    otherwise it failed a healthy round between two members."""
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            database_url = f"sqlite:///{root}/daemon.db"
+            session_store = LocalSessionStore(root)
+            first = DaemonNodeRegistry(
+                session_store, DatabaseDaemonStore(database_url, create_schema=True)
+            )
+            first.register(
+                {
+                    "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
+                    "workspacePath": "/workspace/alice", "protocolVersion": 1,
+                    "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            second = DaemonNodeRegistry(session_store, DatabaseDaemonStore(database_url))
+            session = await ServerDaemonNodeBackend(first).run(
+                "sbx_alice",
+                {"taskGoal": "pass between members", "assignments": [{"agent": "codex"}, {"agent": "codex"}]},
+            )
+            [command] = first.take_commands("sbx_alice", "node_token", renew_known_active=False)
+            with monkeypatch.context() as patched:
+                # No slot when the first member finishes: the next one waits.
+                patched.setattr(
+                    "relay.daemon_registry.registry.node_accepts_run", lambda *args, **kwargs: False
+                )
+                second.handle_event("sbx_alice", {
+                    "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
+                    "sessionId": session["id"], "agent": "codex", "exitCode": 0,
+                    "agentLog": "first member finished", "leaseId": command["leaseId"],
+                }, "node_token")
+            # The daemon keeps heartbeating, but only `second` hears it.
+            first.sandboxes["sbx_alice"]["lastSeenAt"] = "2020-01-01T00:00:00.000Z"
+            second.heartbeat("sbx_alice", "node_token")
+
+            first.reap_stale_runs()
+
+            snapshot = session_store.get_session(session["id"])
+            assert snapshot["status"] == "running", snapshot.get("finalOutcome")
+            assert len(first.take_commands("sbx_alice", "node_token")) == 1
+
+    asyncio.run(run_flow())
+
+
 def test_daemon_cancel_finds_run_dispatched_by_another_backend_replica() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -5437,6 +5486,11 @@ def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
             registry._enqueue_current_assignment(revived)
             assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
             assert registry.daemon_store.queued_command_count("sbx_alice") == 0
+            # Nothing else runs for the thread, so it closes instead of reading
+            # `running` forever; the task stays with its new owner.
+            thread = _sessions.get_session(command["sessionId"])
+            assert thread["status"] == "failed"
+            assert "moved to another run" in thread["finalOutcome"]
             assert tasks.get_task(task_id) == finished
 
     asyncio.run(run_flow())
@@ -7924,6 +7978,80 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize(
+    ("assignments", "broken"),
+    [
+        # The next member cannot be staged.
+        ([{"agent": "codex"}, {"agent": "codex"}], "compute_prior_agent_bridge"),
+        # The finished member was last and the round cannot close.
+        ([{"agent": "codex"}], "completion_blockers"),
+    ],
+)
+def test_a_round_that_cannot_continue_after_a_turn_fails_visibly(
+    store_factory, monkeypatch, assignments, broken
+):
+    """A turn finished, then starting the next member (or closing the round)
+    raised. The terminal claim was already released, so the error used to go
+    uncounted: the thread stayed `running` behind "preparing the next step"
+    while the reaper retried forever. Now it is counted and, past the cap,
+    fails the thread with the reason."""
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "hand off between members", "assignments": assignments,
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+
+            def explode(*_args, **_kwargs):
+                raise RuntimeError("next step exploded")
+
+            monkeypatch.setattr(f"relay.daemon_registry.registry.{broken}", explode)
+            with pytest.raises(RuntimeError, match="next step exploded"):
+                registry.handle_event("sbx_alice", {
+                    "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
+                    "sessionId": session["id"], "agent": command["agent"], "exitCode": 0,
+                    "agentLog": "member finished", "leaseId": command["leaseId"],
+                }, "node_token")
+
+            [request] = registry.daemon_store.list_active_run_requests(session_ids={session["id"]})
+            failure = request["state"]["_relay_follow_up_failure"]
+            assert failure["attempts"] == 1
+            assert "next step exploded" in failure["error"]
+            assert sessions.get_session(session["id"])["status"] == "running"
+
+            claim = getattr(registry.daemon_store, "claim_recovery_requests", None)
+            if claim:
+                # The database store leases each recovered request for 5s.
+                monkeypatch.setattr(
+                    registry.daemon_store, "claim_recovery_requests",
+                    lambda **kwargs: claim(**{**kwargs, "lease_seconds": 0}),
+                )
+            # The first failure retries on the next pass; after that, backoff
+            # holds passes off.
+            registry.reap_stale_runs()
+            request = registry.daemon_store.get_run_request(request["id"])
+            assert request["state"]["_relay_follow_up_failure"]["attempts"] == 2
+            registry.reap_stale_runs()
+            request = registry.daemon_store.get_run_request(request["id"])
+            assert request["state"]["_relay_follow_up_failure"]["attempts"] == 2
+
+            monkeypatch.setattr(
+                DaemonNodeRegistry, "_follow_up_backing_off", staticmethod(lambda _request: False)
+            )
+            for _ in range(10):
+                registry.reap_stale_runs()
+
+            snapshot = sessions.get_session(session["id"])
+            assert snapshot["status"] == "failed"
+            assert "could not continue" in snapshot["finalOutcome"]
+            assert "next step exploded" in snapshot["finalOutcome"]
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+
+    asyncio.run(run_flow())
+
+
 def test_late_output_from_completed_lease_is_recovered_without_reactivating_run() -> None:
     async def flow() -> None:
         with TemporaryDirectory() as root:
@@ -8455,6 +8583,118 @@ def test_a_retried_completion_repairs_a_missing_task_wait() -> None:
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("human_accepted", [False, True])
+def test_recovery_repairs_a_partially_written_completion(store_factory, human_accepted, monkeypatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Deploy"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            with monkeypatch.context() as patched:
+                def fail_write(*_args, **_kwargs):
+                    raise RuntimeError("task write unavailable")
+                patched.setattr(SessionController, "_update_task_status", fail_write)
+                with pytest.raises(RuntimeError, match="task write unavailable"):
+                    _report_blocked(registry, command, exitCode=0, roundResult={
+                        "status": "blocked", "note": "Which region?",
+                    })
+            assert sessions.get_session(command["sessionId"])["status"] == "completed"
+            if human_accepted:
+                SessionController(sessions, task_store=tasks, task_id=task["id"]).complete_session(
+                    command["sessionId"], "Accepted by the human.", accepted_by_human=True,
+                )
+            registry.reap_stale_runs()
+            repaired = tasks.get_task(task["id"])
+            if human_accepted:
+                assert repaired["status"] == "done"
+                assert sessions.get_session(command["sessionId"])["finalOutcome"] == "Accepted by the human."
+            else:
+                assert repaired["status"] == "waiting_for_human"
+                assert repaired["waitingRequest"]["inputQuestion"] == "Which region?"
+            assert len([event for event in sessions.get_session(command["sessionId"])["events"]
+                        if event["type"] == "session.completed"]) == (2 if human_accepted else 1)
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_recovery_counts_an_unfinished_round_only_once(store_factory, monkeypatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Deploy"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            with monkeypatch.context() as patched:
+                def fail_write(*_args, **_kwargs):
+                    raise RuntimeError("completion unavailable")
+                patched.setattr(SessionController, "complete_session", fail_write)
+                with pytest.raises(RuntimeError, match="completion unavailable"):
+                    _report_blocked(registry, command, exitCode=0, roundResult={
+                        "status": "continue", "note": "More work",
+                    })
+            assert tasks.get_task(task["id"])["roundCount"] == 1
+            registry.reap_stale_runs()
+            assert tasks.get_task(task["id"])["roundCount"] == 1
+            assert len([event for event in tasks.get_task(task["id"])["events"]
+                        if event["type"] == "task.round"]) == 1
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("broken", ["_ensure_agent_started_for_command", "publish_command"])
+def test_staged_successor_recovery_has_a_failure_limit(store_factory, broken, monkeypatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Handoff", "assignments": [{"agent": "codex"}, {"agent": "codex"}],
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            request_id = registry.daemon_store.run_request_for_command(command["id"])["id"]
+            def fail_write(*_args, **_kwargs):
+                raise RuntimeError("successor unavailable")
+            monkeypatch.setattr(registry if broken.startswith("_") else registry.daemon_store, broken, fail_write)
+            monkeypatch.setattr("relay.daemon_registry.registry.DISPATCH_CLAIM_LEASE_SECONDS", 0)
+            monkeypatch.setattr(DaemonNodeRegistry, "_follow_up_backing_off", staticmethod(lambda _request: False))
+            claim = getattr(registry.daemon_store, "claim_recovery_requests", None)
+            if claim:
+                monkeypatch.setattr(registry.daemon_store, "claim_recovery_requests",
+                                    lambda **kwargs: claim(**{**kwargs, "lease_seconds": 0}))
+            with pytest.raises(RuntimeError, match="successor unavailable"):
+                _report_blocked(registry, command, exitCode=0)
+            for _ in range(8):
+                registry.reap_stale_runs()
+            assert sessions.get_session(session["id"])["status"] == "failed"
+            assert not registry.daemon_store.list_active_run_requests(session_ids={session["id"]})
+            assert registry.daemon_store.pending_command_for_run_request(
+                request_id
+            ) is None
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_delivery_winning_a_failure_race_retains_the_execution(store_factory, monkeypatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Keep a delivered execution reserved", "assignments": [{"agent": "codex"}],
+            })
+            [request] = registry.daemon_store.list_active_run_requests(session_ids={session["id"]})
+            mark_failed = registry.daemon_store.mark_command_failed
+            def deliver_then_fail(node_id, event):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["id"] == event["commandId"]
+                return mark_failed(node_id, event)
+            monkeypatch.setattr(registry.daemon_store, "mark_command_failed", deliver_then_fail)
+            registry._fail_run_request(request, "Could not publish")
+            assert sessions.get_session(session["id"])["status"] == "running"
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "running"
+            assert registry.daemon_store.get_command(request["currentCommandId"])["status"] == "dispatched"
+            assert len(registry.daemon_store.list_active_runs("sbx_alice")) == 1
+    asyncio.run(run_flow())
+
+
 def test_a_human_recovery_opens_a_fresh_continuation_budget() -> None:
     async def run_flow() -> None:
         from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
@@ -8462,23 +8702,25 @@ def test_a_human_recovery_opens_a_fresh_continuation_budget() -> None:
         with TemporaryDirectory() as root:
             _sessions, task_store, registry = _round_result_registry(root)
             task = task_store.create_task({"title": "Deploy"})
+            unfinished = {"status": "continue", "note": "more to do"}
+            for _ in range(2):
+                command = await _run_task_round(
+                    registry, ServerDaemonNodeBackend(registry), task["id"]
+                )
+                _report_blocked(registry, command, exitCode=0, roundResult=unfinished)
+            assert task_store.get_task(task["id"])["roundCount"] == 2
+
             command = await _run_task_round(
                 registry, ServerDaemonNodeBackend(registry), task["id"]
             )
             request = registry.daemon_store.run_request_for_command(command["id"])
-            unfinished = {"status": "continue", "note": "more to do"}
-            registry._record_round_result(request, unfinished, "assigned")
-            registry._record_round_result(request, unfinished, "assigned")
-            assert task_store.get_task(task["id"])["roundCount"] == 2
-
-            recovered = {
-                **request,
+            registry.daemon_store.update_run_request(request["id"], {
                 "state": {
                     **(request.get("state") or {}),
                     COLLABORATION_MANIFEST_STATE_KEY: {"source": "recovery"},
                 },
-            }
-            registry._record_round_result(recovered, unfinished, "assigned")
+            })
+            _report_blocked(registry, command, exitCode=0, roundResult=unfinished)
 
             # A person's rerun is attended work, like an answer: it must not be
             # charged to the unattended budget it was run to get past.

@@ -814,6 +814,8 @@ def _apply_task_round(task: dict[str, Any], event: dict[str, Any]) -> None:
     a person editing the title must never disturb the round bookkeeping, and a
     round completing must never look like someone edited the task.
     """
+    if event.get("executionOwner") is not None:
+        task["lastRoundExecutionOwner"] = event["executionOwner"]
     if event.get("roundResult") is not None:
         task["lastRoundResult"] = event["roundResult"]
     if event.get("roundCount") is not None:

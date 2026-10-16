@@ -203,9 +203,15 @@ def next_work_transition(
         and QUESTION_RESUME not in prior
     ):
         return WorkTransition(None, {**state, WORK_PLAN_ERROR: MISSING_PLAN_ERROR})
+    # A solo team's coordinator is its whole round: a plan would only queue
+    # the same assignment again.
     plan = (
         work_result["plan"]
-        if is_planning_turn and next_index is not None and work_result and "plan" in work_result
+        if is_planning_turn
+        and len(assignments) > 1
+        and next_index is not None
+        and work_result
+        and "plan" in work_result
         else None
     )
     return WorkTransition(next_index, state, plan)

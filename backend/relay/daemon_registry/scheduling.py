@@ -26,7 +26,7 @@ def effective_role_for_assignment(
     explicit_role = assignment.get("role")
     if explicit_role in AGENT_ROLES:
         return explicit_role
-    agent = assignment.get("executorKind") or assignment["agent"]
+    agent = assignment.get("executorKind") or assignment.get("agent")
     overrides = (
         node.get("agentRoleOverrides")
         if isinstance(node.get("agentRoleOverrides"), dict)
