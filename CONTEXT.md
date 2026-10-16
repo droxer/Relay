@@ -28,6 +28,13 @@ A single-use, expiring credential issued to one Waitlist Entry. Redeeming it
 creates an Account; only its SHA-256 is stored, and re-inviting rotates it.
 _Avoid_: Invitation code, access key
 
+**Password Reset**:
+A single-use, expiring credential issued to one Account that lets whoever holds
+it set that Account's password once; redeeming it signs every session out and
+signs nobody in. Only its SHA-256 is stored, and issuing a new one retires any
+earlier one for the same Account.
+_Avoid_: Recovery token, reset code, magic link
+
 **Computer**:
 The product-facing execution host on which agents are placed and collaborate.
 _Avoid_: Machine, worker

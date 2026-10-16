@@ -12,6 +12,9 @@ const CLIENT_ROUTES = [
   // Signed-out waitlist pages; an emailed invite hard-loads /join.
   "/waitlist",
   "/join",
+  // Forgotten password; an emailed reset link hard-loads /reset-password.
+  "/forgot-password",
+  "/reset-password",
   "/threads",
   "/threads/:path*",
   "/tasks",

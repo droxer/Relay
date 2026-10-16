@@ -1436,7 +1436,17 @@
       "password_problem_short": "请至少使用 {{min}} 个字符。",
       "password_problem_long": "最多 {{max}} 个字符。",
       "password_problem_identifier": "不能包含用户的用户名、标识、姓名或邮箱。",
-      "password_problem_degenerate": "不能是单个重复字符或连续的键盘序列。"
+      "password_problem_degenerate": "不能是单个重复字符或连续的键盘序列。",
+      "section_password": "密码",
+      "password_reset_hint": "生成一个一次性链接，让此用户设置新密码。配置了邮件时会同时发送给对方。",
+      "password_reset_create": "生成重置链接",
+      "password_reset_link": "重置链接",
+      "password_reset_expires": "仅可使用一次，{{time}} 失效。",
+      "password_reset_sent": "已发送到其登记的邮箱。",
+      "password_reset_not_sent": "未发送邮件，请直接把链接发给对方。",
+      "password_reset_failed": "邮件发送失败，请直接把链接发给对方。",
+      "password_reset_error": "无法生成重置链接：{{message}}",
+      "password_reset_copy": "复制重置链接"
     },
     "signing_in": "正在登录…",
     "waitlist": {
@@ -1550,7 +1560,9 @@
     "error_generic": "出现问题，请重试。",
     "do_ask": "尽管问公司知识库里的任何问题，答案都附来源。",
     "do_handoff": "委派笔记整理、跟进和日常更新工作。",
-    "do_control": "有风险的操作都需你批准后才会执行。"
+    "do_control": "有风险的操作都需你批准后才会执行。",
+    "forgot_password": "忘记密码？",
+    "reset_done": "密码已更新，请使用新密码登录。"
   },
   "landing": {
     "nav_label": "Relay",
@@ -2606,5 +2618,32 @@
     "password_problem_degenerate": "不能是同一字符的重复或连续的键盘序列。",
     "join_submit": "创建账号",
     "join_submitting": "正在创建账号…"
+  },
+  "password_reset": {
+    "retry_lookup": "重试",
+    "request_title": "重置密码",
+    "request_lede": "输入你的用户名或账号邮箱。如果匹配，我们会向你发送一封邮件，用于设置新密码。",
+    "identifier": "用户名或邮箱",
+    "problem_required": "请输入用户名或邮箱。",
+    "problem_too_long": "长度超出了用户名或邮箱的上限。",
+    "submit": "发送重置链接",
+    "submitting": "发送中…",
+    "sent_title": "请查收邮件",
+    "sent_body": "如果有匹配的账号，我们已向其邮箱发送链接。该链接仅可使用一次，且很快失效。",
+    "ask_admin": "没有邮箱？你的 Relay 管理员可以为你生成重置链接。",
+    "unavailable": "此处不支持通过邮件重置密码。请向你的 Relay 管理员索取重置链接。",
+    "back_to_sign_in": "返回登录",
+    "choose_title": "设置新密码",
+    "choose_for": "账号 @{{username}}。所有已登录的会话都将退出。",
+    "new_password": "新密码",
+    "confirm_password": "确认新密码",
+    "mismatch": "两次输入的密码不一致。",
+    "complete_submit": "设置新密码",
+    "complete_submitting": "保存中…",
+    "checking": "正在验证链接…",
+    "dead_title": "此链接已失效",
+    "dead_body": "重置链接仅可使用一次，并会在短时间后失效。请重新申请。",
+    "request_new": "发送新链接",
+    "error_rate_limited": "尝试次数过多，请几分钟后再试。"
   }
 }

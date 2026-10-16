@@ -6,7 +6,8 @@ import { login, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
 import { AuthCanvas } from "./AuthCanvas";
 import { PublicLink } from "./waitlist/PublicLink";
-import { useWaitlistEnabled } from "../hooks/useAuthStatus";
+import { usePasswordResetEnabled, useWaitlistEnabled } from "../hooks/useAuthStatus";
+import { completedReset, forgetCompletedReset } from "../lib/passwordReset";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -17,11 +18,14 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const { t } = useTranslation();
-  const [username, setUsername] = useState("");
+  // Arriving from a finished reset: say so, and fill in whose password it was.
+  const [resetFor] = useState(completedReset);
+  const [username, setUsername] = useState(() => resetFor ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const waitlistEnabled = useWaitlistEnabled();
+  const passwordResetEnabled = usePasswordResetEnabled();
 
   function errorMessage(err: unknown, unauthorizedMessage?: string): string {
     if (err instanceof RelayApiError && err.status === 401 && unauthorizedMessage) {
@@ -36,6 +40,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
     setIsLoading(true);
     try {
       const result = await login({ username: username.trim(), password });
+      forgetCompletedReset();
       onAuthenticated(result.user);
     } catch (err) {
       setError(errorMessage(err, t("login.invalid")));
@@ -49,6 +54,10 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       <h2 className="login-panel-title" id="login-form-title">
         {t("login.kicker_attach")}
       </h2>
+
+      {resetFor && !error ? (
+        <p className="login-note" role="status">{t("login.reset_done")}</p>
+      ) : null}
 
       <form
         className="login-form"
@@ -83,6 +92,13 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
             aria-describedby={error ? "login-error" : undefined}
           />
         </Field>
+        {/* Only when the server can email a link; otherwise the page would
+            just say to ask an admin, which this screen cannot know to say. */}
+        {passwordResetEnabled === true ? (
+          <p className="login-forgot">
+            <PublicLink href="/forgot-password">{t("login.forgot_password")}</PublicLink>
+          </p>
+        ) : null}
 
         {error && (
           <p className="login-error" id="login-error" role="alert">

@@ -180,9 +180,9 @@ describe("waitlist API client", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("reads a missing waitlistEnabled as off", async () => {
+  it("reads a missing waitlistEnabled or passwordResetEnabled as off", async () => {
     globalThis.fetch = (async () => new Response(JSON.stringify({ requiresBootstrap: false }), { status: 200 })) as typeof fetch;
-    assert.deepEqual(await getAuthStatus(), { requiresBootstrap: false, waitlistEnabled: false });
+    assert.deepEqual(await getAuthStatus(), { requiresBootstrap: false, waitlistEnabled: false, passwordResetEnabled: false });
   });
 
   it("asks for one status band's page, oldest first, with the search trimmed", async () => {

@@ -28,6 +28,7 @@ from .api import (
     daemon_node_routes,
     managed_node_routes,
     node_workspace_routes,
+    password_reset_routes,
     profile_image_routes,
     project_routes,
     sandbox_routes,
@@ -98,7 +99,9 @@ from .services.event_notifier import (
 )
 from .services.team_membership import reconcile_team_memberships
 from .services.waitlist import WaitlistService, waitlist_config_from_env
-from .notifications.mailer import mailer_from_env
+from .services.password_reset import PasswordResetService, password_reset_config_from_env
+from .security.password_resets import password_reset_store_for
+from .notifications.mailer import Mailer, mailer_from_env
 from .services.workspace_query import WorkspaceQueryBroker
 from .tasks import TaskScheduler
 from .automations.service import AutomationService, max_runs_per_hour_from_env
@@ -264,8 +267,14 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         create_schema=session_store.engine.dialect.name == "sqlite",
     )
     org_settings_store = org_settings_store_from_env(root_dir)
+    # One mailer for every transactional email; a half-configured mail setup
+    # fails startup here rather than silently dropping invites and resets.
+    mailer = mailer_from_env()
     waitlist_enabled = waitlist_enabled_from_env()
-    waitlist = waitlist_service_from_env() if waitlist_enabled else None
+    waitlist = waitlist_service_from_env(mailer) if waitlist_enabled else None
+    password_reset = PasswordResetService(
+        password_reset_store_for(auth_store), mailer, config=password_reset_config_from_env()
+    )
     from .persistence.operational_import import require_operational_import
     require_operational_import(root_dir, managed_node_store)
     control_plane_notifier = KeyedEventNotifier()
@@ -403,6 +412,11 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         attempts=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_ATTEMPTS", "5")),
         window_seconds=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_WINDOW_SECONDS", "600")),
     )
+    app.state.password_reset = password_reset
+    app.state.password_reset_rate_limiter = AuthRateLimiter(
+        attempts=int(os.environ.get("RELAY_PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", "5")),
+        window_seconds=int(os.environ.get("RELAY_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS", "900")),
+    )
     app.state.managed_node_store = managed_node_store
     app.state.agent_store = agent_store
     app.state.team_store = team_store
@@ -455,6 +469,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         sandbox_routes.router,
         daemon_node_routes.router,
         managed_node_routes.router,
+        password_reset_routes.router,
         waitlist_routes.router,
     )
     canonical_groups = api_router_groups()
@@ -637,12 +652,11 @@ def waitlist_enabled_from_env() -> bool:
     return value in ("1", "true", "yes", "on")
 
 
-def waitlist_service_from_env() -> WaitlistService:
-    # Database-only like org settings; the mailer is built here so a
-    # half-configured mail setup fails startup rather than dropping invites.
+def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:
+    # Database-only like org settings.
     url = database_url_from_env(setting="database-only waitlist storage")
     store = DatabaseWaitlistStore(url, create_schema=url.startswith("sqlite"))
-    return WaitlistService(store, mailer_from_env(), config=waitlist_config_from_env())
+    return WaitlistService(store, mailer, config=waitlist_config_from_env())
 
 
 def chat_store_from_env(root_dir: Path) -> Any:

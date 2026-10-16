@@ -427,6 +427,16 @@
   color: var(--lg-muted);
 }
 
+/* "Forgot password?" — tucked under the password field it belongs to, on the
+   trailing edge, so it reads as an aside to that field rather than a second
+   action beside Sign in. */
+.login-forgot {
+  margin: calc(var(--sp-2) * -1) 0 0;
+  text-align: end;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 /* Ink, not the link blue: the screen spends no accent, and the underline is
    what says link. */
 .login-link {

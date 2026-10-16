@@ -71,14 +71,17 @@ export type AppLocationState = {
 };
 
 /** Signed-out destinations beside `/login`. A signed-in visitor has no use
-    for either, so App sends them home. */
-export type PublicPage = "waitlist" | "join";
+    for any of them, so App sends them home. */
+export type PublicPage = "waitlist" | "join" | "forgot-password" | "reset-password";
 
 /** The address of each public page; next.config.ts's CLIENT_ROUTES must list
     every one or a hard load (an emailed invite link) is a 404. */
 const PUBLIC_PAGE_PATHS: Record<string, PublicPage> = {
   "/waitlist": "waitlist",
   "/join": "join",
+  "/forgot-password": "forgot-password",
+  // An emailed reset link hard-loads this one.
+  "/reset-password": "reset-password",
 };
 
 /** The bare origin. Signed out, it is the landing page that says what Relay

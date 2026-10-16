@@ -73,7 +73,11 @@ def test_routes_are_absent_unless_enabled(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_status_and_capabilities_report_the_switch(client: TestClient) -> None:
-    assert client.get(f"{API}/auth/status").json() == {"requiresBootstrap": True, "waitlistEnabled": True}
+    assert client.get(f"{API}/auth/status").json() == {
+        "requiresBootstrap": True,
+        "waitlistEnabled": True,
+        "passwordResetEnabled": False,
+    }
     _bootstrap_admin(client)
     assert client.get(f"{API}/admin/settings").json()["capabilities"]["waitlist"] is True
 

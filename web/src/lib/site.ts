@@ -20,6 +20,8 @@ export const PRIVATE_PATHS: readonly string[] = [
   "/api/",
   "/login",
   "/join",
+  "/forgot-password",
+  "/reset-password",
   "/threads",
   "/tasks",
   "/issues",

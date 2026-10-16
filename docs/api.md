@@ -37,7 +37,8 @@ an open thread-space panel writes `space=1` with `artifact`; create dialogs use
 route or entity removes query state owned by the previous destination.
 
 Unauthenticated deep links are replaced with `/login?returnTo=...`, except
-`/waitlist` and `/join`, which are the signed-out pages of the waitlist. Relay
+`/waitlist` and `/join`, which are the signed-out pages of the waitlist, and
+`/forgot-password` and `/reset-password`, which are the password reset pages. Relay
 accepts a return path only when it is same-origin and matches a recognized web
 route. `/` is replaced with `/threads`.
 
@@ -1025,3 +1026,26 @@ page sends it to the API only in a POST body, so no server or edge access log
 records a redeemable token. `delivery.status` is `queued`, `sent`, `bounced`,
 `failed`, or `skipped` (no mail configured); it never changes the entry's
 status.
+
+## Password Reset
+
+Asking for a link needs email and a configured public origin:
+`POST /auth/password-reset` answers `404` unless `RELAY_MAIL_*` and
+`RELAY_PUBLIC_WEB_URL` (or `RELAY_PUBLIC_BACKEND_URL`) are set — an emailed link
+is never built from the request's `Host` — and `GET /api/v1/auth/status` reports it as
+`passwordResetEnabled`. Redeeming a link does not, so an admin-issued link
+works on an install without mail. Rules and rationale:
+`docs/password-reset-design.md`.
+
+| Method and path | Auth | Answer |
+| :- | :- | :- |
+| `POST /auth/password-reset` | none | Body `{identifier, locale?}` — a username or an email. `202 {"ok": true}` whether or not an account matched; the lookup and email run after the response. `400` malformed, `429` rate limited (per IP) |
+| `POST /auth/password-reset/lookup` | none | Body `{token}`. `{reset: {username, expiresAt}}`; every dead token is one `404` |
+| `POST /auth/password-reset/complete` | none | Body `{token, password}`. Sets the password, deletes every session of the account, emails a "password changed" notice, and returns `{ok, username}` without signing in. `400` refused password (the link stays live), `404` dead link |
+| `POST /admin/users/{id}/password-reset` | admin | Issues a link for the user's account, bypassing the request throttle, and emails it when mail and an address exist. `{url, expiresAt, delivery}`; `delivery` is `sent`, `bounced`, `failed`, or `skipped` |
+
+Reset links carry the token in the URL fragment (`/reset-password#token=…`) and
+the page sends it only in a POST body. A link expires after
+`RELAY_PASSWORD_RESET_TTL_MINUTES` (default 30); one account is sent at most
+one link per `RELAY_PASSWORD_RESET_COOLDOWN_SECONDS` (default 60) and
+`RELAY_PASSWORD_RESET_MAX_PER_HOUR` (default 5).

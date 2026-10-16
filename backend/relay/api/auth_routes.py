@@ -43,6 +43,8 @@ def auth_status(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         # Public, so the sign-in screen can offer "Request access" only when
         # the waitlist routes are mounted.
         "waitlistEnabled": bool(getattr(request.app.state, "waitlist_enabled", False)),
+        # Whether "Forgot password?" can deliver: self-serve reset needs mail.
+        "passwordResetEnabled": request.app.state.password_reset.self_serve_enabled,
     }
 
 

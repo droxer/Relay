@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { LoginScreen } from "./components/LoginScreen";
 import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
 import { JoinScreen } from "./components/waitlist/JoinScreen";
+import { ForgotPasswordScreen } from "./components/password-reset/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "./components/password-reset/ResetPasswordScreen";
 import { LandingScreen } from "./components/landing/LandingScreen";
 import { AuthChecking } from "./components/AuthChecking";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
@@ -111,6 +113,8 @@ export function App() {
     const { publicPage } = parseAppPath(window.location.pathname);
     if (publicPage === "waitlist") return <WaitlistScreen />;
     if (publicPage === "join") return <JoinScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
+    if (publicPage === "forgot-password") return <ForgotPasswordScreen />;
+    if (publicPage === "reset-password") return <ResetPasswordScreen />;
     return <LoginScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
   }
 
