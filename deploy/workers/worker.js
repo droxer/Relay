@@ -5,6 +5,11 @@
 // than the app shell.
 const ASSET_SUFFIX = /\.[A-Za-z0-9]+$/;
 
+// The published install command names this origin, but the API serves the
+// script: it pins its bundle and backend on the API origin, so send curl there
+// (web/Caddyfile does the same). `/computer/install.sh` is the older path.
+const INSTALLER_PATHS = new Set(["/install.sh", "/computer/install.sh"]);
+
 // _headers is not applied to responses this code returns, so they carry its
 // `/*` block themselves. deploy/tests/worker.mjs keeps the two identical.
 const SECURITY_HEADERS = {
@@ -26,6 +31,10 @@ function withHeaders(response, cacheControl) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (INSTALLER_PATHS.has(url.pathname) && env.RELAY_API_ORIGIN) {
+      const target = new URL(url.pathname + url.search, env.RELAY_API_ORIGIN);
+      return withHeaders(Response.redirect(target.toString(), 302), "no-store");
+    }
     if (ASSET_SUFFIX.test(url.pathname)) {
       const missing = new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain" } });
       return withHeaders(missing, "no-store");

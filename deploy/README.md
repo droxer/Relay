@@ -70,7 +70,9 @@ backend. Once the backend deployment succeeds, it uploads the export through
 the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
 holds are skipped) together with `workers/worker.js` and `workers/_headers`,
 then routes `get-relay.cc/*` to the Worker. A failed backend leaves the
-previous UI in place.
+previous UI in place. The Worker redirects `/install.sh` to the API origin
+(its `RELAY_API_ORIGIN` binding), so the published
+`curl -fsSL https://get-relay.cc/install.sh | bash` reaches the script.
 
 `cloudflare` gives the web host a proxied record: an existing one is kept,
 otherwise it adds `AAAA 100::`. Moving from the Railway web service is
