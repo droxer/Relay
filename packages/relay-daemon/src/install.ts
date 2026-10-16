@@ -9,7 +9,7 @@ import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
-import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
+import { bootoutLaunchdService, installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { localBash } from './local-shell.js';
@@ -300,7 +300,9 @@ async function install(): Promise<void> {
     const file = join(directory, `${service.name}.plist`);
     writeFileSync(file, service.content, { mode: 0o600 });
     const domain = `gui/${process.getuid!()}`;
-    spawnSync('launchctl', ['bootout', `${domain}/${service.name}`], { stdio: 'ignore' });
+    if (!bootoutLaunchdService(serviceRunner(), `${domain}/${service.name}`)) {
+      throw new Error(`The running ${brand.product} service ${service.name} did not stop; run the installer again.`);
+    }
     // Reconnecting overrides an earlier `relay stop`, which disables the label.
     spawnSync('launchctl', ['enable', `${domain}/${service.name}`], { stdio: 'ignore' });
     execFileSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' });

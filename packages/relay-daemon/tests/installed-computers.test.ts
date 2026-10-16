@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { serviceDefinition } from '../src/install.js';
-import { installedComputers, removeService, sameComputer, serviceArguments } from '../src/installed-computers.js';
+import { bootoutLaunchdService, installedComputers, removeService, sameComputer, serviceArguments } from '../src/installed-computers.js';
 
 const argv = ['/a path/node', '/relay/cli.js', '--backend-url', 'https://relay.example.com', '--user-id', 'alice',
   '--workspace', `/tmp/" & % $(touch x) 'w'`, '--sandbox', 'none'];
@@ -61,7 +61,7 @@ describe('installed computers', () => {
             if (probe) return failure === 'still-running'
               ? { status: 0, stdout: 'active' } : { status: null, stdout: '' };
             return { status: failure === 'stop' ? 1 : 0, stdout: '' };
-          } };
+          }, sleep: () => {} };
           assert.throws(() => removeService(platform, 501, installedComputers(platform, home)[0]!, runner), /Cannot stop/);
           assert.equal(existsSync(file), true);
         } finally { cleanup(); }
@@ -69,6 +69,44 @@ describe('installed computers', () => {
     }
 
     if (platform === 'darwin') {
+      it('waits for launchd to unload a booted-out service before reporting it gone', () => {
+        const calls: string[] = [];
+        let probes = 0;
+        const unloaded = bootoutLaunchdService({
+          run: (_command, args) => { calls.push(args[0]!); return { status: args[0] === 'print' && ++probes > 2 ? 113 : 0, stdout: '' }; },
+          sleep: () => { calls.push('sleep'); },
+        }, 'gui/501/build.relay.computer.node-old');
+        assert.equal(unloaded, true);
+        assert.deepEqual(calls, ['bootout', 'print', 'sleep', 'print', 'sleep', 'print']);
+      });
+
+      for (const grace of [undefined, '60000', 'invalid', '-1', 'Infinity']) {
+        it(`allows shutdown grace plus cleanup before timing out (grace=${grace})`, () => {
+          const previous = process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS;
+          if (grace === undefined) delete process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS;
+          else process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS = grace;
+          try {
+            const shutdownMs = grace === '60000' ? 60_250 : 10_250;
+            let elapsed = 0;
+            const unloaded = bootoutLaunchdService({
+              run: (_command, args) => ({ status: args[0] === 'print' && elapsed >= shutdownMs ? 113 : 0, stdout: '' }),
+              sleep: ms => { elapsed += ms; },
+            }, 'gui/501/x');
+            assert.equal(unloaded, true);
+
+            elapsed = 0;
+            assert.equal(bootoutLaunchdService({
+              run: () => ({ status: 0, stdout: '' }),
+              sleep: ms => { elapsed += ms; },
+            }, 'gui/501/x'), false);
+            assert.equal(elapsed, (grace === '60000' ? 60_000 : 10_000) + 30_000);
+          } finally {
+            if (previous === undefined) delete process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS;
+            else process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS = previous;
+          }
+        });
+      }
+
       it('removes an already unloaded service even when bootout fails', () => {
         const { home, write, cleanup } = fixture(platform);
         try {
