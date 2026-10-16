@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
+import { AgentNotInstalledError } from "./agent-preflight.js";
+import { responseErrorDetail } from "./http-error-detail.js";
 export { localProcessExecStream } from "./local-runtime.js";
 import { accessSync, chmodSync, constants, mkdirSync, statSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
@@ -146,6 +148,8 @@ export interface DaemonRuntimeOptions {
   logger?: DaemonLogger;
   signal?: AbortSignal;
   shutdownGraceMs?: number;
+  /** Bound on the final "stopped" registration; defaults to SHUTDOWN_REGISTRATION_TIMEOUT_MS. */
+  shutdownRegistrationTimeoutMs?: number;
   agentHome?: string;
   maxConcurrentRuns?: number;
   environment?: DaemonExecutionEnvironment;
@@ -338,6 +342,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   // Runs whose stop could not be verified, each with the switch that lets it go.
   const unconfirmedExits = new Map<string, AbortController>();
   const shutdownGraceMs = options.shutdownGraceMs ?? positiveIntEnv("RELAY_DAEMON_SHUTDOWN_GRACE_MS") ?? 10_000;
+  const shutdownRegistrationTimeoutMs = options.shutdownRegistrationTimeoutMs ?? SHUTDOWN_REGISTRATION_TIMEOUT_MS;
   const shutdownController = new AbortController();
   const runtimeSignal = options.signal
     ? AbortSignal.any([options.signal, shutdownController.signal])
@@ -440,7 +445,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           relayApiUrl(backendUrl, "/daemon-node-registrations"),
           buildRegistration(undefined, "stopped"),
           undefined,
-          AbortSignal.timeout(SHUTDOWN_REGISTRATION_TIMEOUT_MS),
+          AbortSignal.timeout(shutdownRegistrationTimeoutMs),
         ).catch((error: unknown) => {
           logger.warn("daemon stopped registration failed", { sandboxId, error: error instanceof Error ? error.message : String(error) });
         });
@@ -591,7 +596,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       const signal = AbortSignal.any([runtimeSignal, AbortSignal.timeout(BUSY_RUNTIME_REFRESH_TIMEOUT_MS)]);
       const commands = [...runtimeRefreshCommands].slice(0, 50);
       try {
-        const health = await discoverDaemonAgentHealth(environment, logger, sandboxId, signal, idle);
+        const health = await discoverDaemonAgentHealth(environment, logger, sandboxId, signal, idle, agentHealth);
         const inventory = await discoverAgentInventory(environment.execStream, signal, inventoryDiscoveryTimeoutMs);
         const models = await discoverAgentModels(environment.execStream, readyAgents(health), signal, inventoryDiscoveryTimeoutMs, providerModelLists);
         if (signal.aborted || stopping) return;
@@ -665,7 +670,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           busyRuntimeRefresh = refreshIdleRuntimesWhileBusy().finally(() => { busyRuntimeRefresh = undefined; });
         }
         if (activeRuns.size === 0 && !busyRuntimeRefresh && runtimeRefreshDue) {
-          agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal);
+          agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, AGENT_NAMES, agentHealth);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
           agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists);
           refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
@@ -689,7 +694,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           runtimeSignal,
         );
         if (!response.ok) {
-          const detail = `Command poll failed: ${response.status} ${await response.text()}`;
+          const detail = `Command poll failed: ${response.status} ${await responseErrorDetail(response)}`;
           // A healthy registration route cannot renew execution ownership.
           // Retry transient poll failures directly so they retain outage grace.
           if (response.status >= 500 || response.status === 408 || response.status === 429) {
@@ -1142,10 +1147,12 @@ async function discoverDaemonAgentHealth(
   sandboxId: string,
   signal?: AbortSignal,
   agents: readonly AgentName[] = AGENT_NAMES,
+  previous?: Partial<Record<AgentName, DaemonAgentHealth>>,
 ): Promise<Partial<Record<AgentName, DaemonAgentHealth>>> {
   const health: Partial<Record<AgentName, DaemonAgentHealth>> = {};
   for (const agent of agents) {
     const def = getAgent(agent);
+    let notInstalled = false;
     try {
       await environment.ensureAgentReady(agent, signal);
       health[agent] = {
@@ -1153,16 +1160,22 @@ async function discoverDaemonAgentHealth(
         detail: `${def.displayName} preflight passed.`,
         adapter: "cli",
       };
-      logger.info("agent capability ready", { sandboxId, agent });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
       health[agent] = {
         status: "failed",
-        detail,
+        detail: error instanceof Error ? error.message : String(error),
         adapter: "cli",
       };
-      logger.warn("agent capability failed", { sandboxId, agent, error: detail });
+      // A runtime the user never installed is a fact about the computer, not a fault.
+      notInstalled = error instanceof AgentNotInstalledError;
     }
+    // Periodic refreshes repeat the same answer; log only what changed.
+    const current = health[agent]!;
+    const before = previous?.[agent];
+    if (before?.status === current.status && before.detail === current.detail) continue;
+    if (current.status === "ready") logger.info("agent capability ready", { sandboxId, agent });
+    else if (notInstalled) logger.info("agent not installed", { sandboxId, agent, detail: current.detail });
+    else logger.warn("agent capability failed", { sandboxId, agent, error: current.detail });
   }
   return health;
 }
@@ -1175,7 +1188,7 @@ async function checkBackendReachable(fetchFn: typeof fetch, backendUrl: string, 
   const url = `${backendUrl}/api`;
   const response = await fetchFn(url, { signal: requestSignal(signal) });
   if (!response.ok) {
-    throw new DaemonHttpError(`GET ${url} failed: ${response.status} ${await response.text()}`, response.status);
+    throw new DaemonHttpError(`GET ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
   }
 }
 
@@ -1908,7 +1921,8 @@ function normalizeWorkspacePath(value?: string): string | undefined {
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
-const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 250;
+/** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
+const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
 const SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS = 500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
@@ -1967,7 +1981,7 @@ async function enrollManagedDaemon(
     signal: requestSignal(signal),
   });
   if (!response.ok) {
-    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await response.text()}`, response.status);
+    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
   }
   const body = await response.json() as Partial<ManagedDaemonEnrollment>;
   if (!body.sandboxId || !body.token) throw new Error("Managed daemon enrollment response is incomplete.");
@@ -2066,7 +2080,7 @@ async function postJsonRequest(
     signal: requestSignal(signal),
   });
   if (!response.ok) {
-    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await response.text()}`, response.status);
+    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
   }
   return response;
 }

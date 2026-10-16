@@ -27,6 +27,7 @@ import {
   type AgentOutputSink,
 } from "relay-core";
 import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
+import { agentPreflightError } from "./agent-preflight.js";
 
 export interface OrchestratorSession {
   rootfsPath: string;
@@ -184,10 +185,7 @@ async function runAgentPreflight(
     signal,
     Object.fromEntries(agentCredentialEnv(agent)),
   );
-  if (result.exit_code !== 0) {
-    const detail = (result.stderr || result.stdout).trim();
-    throw new Error(`${def.preflight.label} preflight failed. ${detail}`);
-  }
+  if (result.exit_code !== 0) throw agentPreflightError(agent, result);
 }
 
 export async function shutdownBoxliteRuntime(runtime: BoxliteRuntimeLifecycle): Promise<void> {
