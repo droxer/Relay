@@ -3,6 +3,8 @@ import { isAbsolute, resolve, sep } from "node:path";
 
 import { GUEST_WORKSPACE, type DaemonNodeSandboxMode } from "relay-core";
 
+import { isLinkedWorkspaceSubpath, ProjectLinkError, type ProjectLinkRegistry } from "./project-links.js";
+
 export interface ThreadWorkspace {
   sessionId: string;
   /** Directory on the computer that owns the daemon. */
@@ -26,6 +28,8 @@ export class ThreadWorkspaceManager {
   constructor(
     rootPath: string,
     private readonly sandboxMode: DaemonNodeSandboxMode,
+    /** Existing directories linked as project workspaces; none means `links/` paths never resolve. */
+    private readonly projectLinks?: ProjectLinkRegistry,
   ) {
     this.rootPath = resolve(rootPath);
     assertWorkspaceRoot(this.rootPath);
@@ -67,6 +71,7 @@ export class ThreadWorkspaceManager {
   resolveSubpath(sessionId: string, workspaceSubpath: string): ThreadWorkspace {
     validateThreadId(sessionId);
     const segments = validateWorkspaceSubpath(workspaceSubpath);
+    if (isLinkedWorkspaceSubpath(workspaceSubpath)) return this.resolveLinked(sessionId, workspaceSubpath);
     const hostPath = resolve(this.rootPath, ...segments);
     if (!hostPath.startsWith(this.rootPath + sep)) {
       throw new Error(`Invalid durable workspace path ${JSON.stringify(workspaceSubpath)}.`);
@@ -81,9 +86,23 @@ export class ThreadWorkspaceManager {
   }
 
   ensureSubpath(sessionId: string, workspaceSubpath: string): ThreadWorkspace {
+    // A linked directory already exists by definition; never create one in its place.
+    if (isLinkedWorkspaceSubpath(workspaceSubpath)) return this.resolveSubpath(sessionId, workspaceSubpath);
     const workspace = this.resolveSubpath(sessionId, workspaceSubpath);
     mkdirSync(workspace.hostPath, { recursive: true });
     return this.resolveSubpath(sessionId, workspaceSubpath);
+  }
+
+  private resolveLinked(sessionId: string, workspaceSubpath: string): ThreadWorkspace {
+    if (!this.projectLinks) {
+      throw new ProjectLinkError("not-allowed", "This daemon does not support linked project directories.");
+    }
+    const hostPath = this.projectLinks.resolve(workspaceSubpath);
+    return {
+      sessionId,
+      hostPath,
+      executionPath: this.sandboxMode === "boxlite" ? GUEST_WORKSPACE : hostPath,
+    };
   }
 
   /** Only the canonical root of one project may be permanently removed. */

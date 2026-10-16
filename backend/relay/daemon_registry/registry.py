@@ -73,6 +73,7 @@ from ..services.project_context import (
     project_context_brief,
 )
 from ..services.task_workspace import DAEMON_CAPABILITY_TASK_WORKSPACES
+from ..services.workspace_capabilities import required_workspace_capabilities
 from ..sessions import (
     SessionController,
     compute_conversation_history,
@@ -248,6 +249,8 @@ DAEMON_CAPABILITY_ENDPOINT_MODELS = "endpoint-models"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 # The daemon reports a setup round's proposal file on run.completed.
 DAEMON_CAPABILITY_PROJECT_SETUP = "project-setup"
+# The daemon links existing directories as project workspaces (`links/<id>`).
+DAEMON_CAPABILITY_PROJECT_LINKS = "project-links"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         "work-results",
@@ -268,6 +271,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
         DAEMON_CAPABILITY_AGENT_RESUME,
         DAEMON_CAPABILITY_PROJECT_SETUP,
+        DAEMON_CAPABILITY_PROJECT_LINKS,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -1778,6 +1782,30 @@ class DaemonNodeRegistry:
         deliverable_records: list[dict[str, Any]] = []
         for record in records:
             command = record["command"]
+            required_capabilities = (
+                (DAEMON_CAPABILITY_PROJECT_LINKS,)
+                if command.get("type") == "workspace.link"
+                else required_workspace_capabilities(
+                    command.get("workspaceLayout"), command.get("workspaceSubpath")
+                )
+            )
+            missing_workspace_capability = next(
+                (
+                    capability for capability in required_capabilities
+                    if capability not in ((sandbox or {}).get("capabilities") or [])
+                ),
+                None,
+            )
+            if (
+                command.get("type") in ("workspace.link", "workspace.list", "workspace.read")
+                and missing_workspace_capability
+            ):
+                self.daemon_store.record_workspace_response(sandbox_id, {
+                    "type": "workspace.error", "commandId": command["id"],
+                    "path": command.get("path", ""), "code": "io-error",
+                    "message": f"This workspace requires {missing_workspace_capability} support; upgrade the daemon.",
+                })
+                continue
             if command.get("type") == "workspace.delete":
                 # Local command storage cannot join the project SQL transaction.
                 # Never deliver cleanup if that transaction rolled back, including
@@ -1801,21 +1829,11 @@ class DaemonNodeRegistry:
                 self.daemon_store.get_run_request(request_id) if request_id else None
             )
             workspace_layout = command.get("workspaceLayout")
-            required_workspace_capability = (
-                DAEMON_CAPABILITY_TASK_WORKSPACES
-                if workspace_layout == "task"
-                else None
-            )
-            if (
-                run_request
-                and required_workspace_capability
-                and required_workspace_capability
-                not in ((sandbox or {}).get("capabilities") or [])
-            ):
+            if run_request and missing_workspace_capability:
                 self._fail_run_request(
                     run_request,
                     f"The {workspace_layout} requires a daemon with "
-                    f"{required_workspace_capability} support.",
+                    f"{missing_workspace_capability} support.",
                     delivery_never_sent=record.get("attempt") == 1,
                 )
                 continue
@@ -2349,6 +2367,17 @@ class DaemonNodeRegistry:
             },
         )
         return active
+
+    def _linked_workspace_path(self, session: dict[str, Any]) -> str | None:
+        """A linked project's directory lives outside the node root; the
+        project records where, so its artifacts name the real path."""
+        project_id = session.get("projectId")
+        if not project_id or self.project_store is None:
+            return None
+        project = self.project_store.get_project(project_id)
+        if not project or project.get("workspaceSubpath") != session["workspaceSubpath"]:
+            return None
+        return project.get("workspaceHostPath")
 
     def handle_event(
         self, sandbox_id: str, event: dict[str, Any], token: str | None
@@ -3331,19 +3360,17 @@ class DaemonNodeRegistry:
             )
             return run_request
         if workspace_layout in ("project", "task"):
-            required_capability = (
-                DAEMON_CAPABILITY_PROJECT_WORKSPACES
-                if workspace_layout == "project"
-                else DAEMON_CAPABILITY_TASK_WORKSPACES
-            )
-            if required_capability not in (sandbox.get("capabilities") or []):
-                self._fail_run_request(
-                    run_request,
-                    f"The {workspace_layout} requires a daemon with "
-                    f"{required_capability} support.",
-                )
-                return run_request
             workspace_subpath = session_snapshot.get("workspaceSubpath")
+            for required_capability in required_workspace_capabilities(
+                workspace_layout, workspace_subpath
+            ):
+                if required_capability not in (sandbox.get("capabilities") or []):
+                    self._fail_run_request(
+                        run_request,
+                        f"The {workspace_layout} requires a daemon with "
+                        f"{required_capability} support.",
+                    )
+                    return run_request
             if not isinstance(workspace_subpath, str) or not workspace_subpath:
                 self._fail_run_request(
                     run_request,
@@ -4609,8 +4636,12 @@ class DaemonNodeRegistry:
             )
             in (sandbox.get("capabilities") or [])
         ):
-            artifact_workspace_path = _confined_workspace_path(
-                workspace_path, session["workspaceSubpath"]
+            artifact_workspace_path = (
+                self._linked_workspace_path(session)
+                if session["workspaceSubpath"].startswith("links/")
+                else _confined_workspace_path(
+                    workspace_path, session["workspaceSubpath"]
+                )
             ) or workspace_path
         if isinstance(event.get("generatedFiles"), list):
             items = daemon_reported_generated_files(

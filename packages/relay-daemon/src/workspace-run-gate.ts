@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const LOCK_RETRY_MS = 25;
 const INCOMPLETE_LOCK_STALE_MS = 30_000;
@@ -111,10 +111,16 @@ async function acquireFileLock(
   observer?: WorkspaceGateObserver,
 ): Promise<(() => void) | undefined> {
   if (!workspaceRoot) return undefined;
-  const lockDirectory = workspaceLockDirectory(workspaceRoot);
+  const physicalKey = canonicalPhysicalPath(key);
+  const physicalRoot = canonicalPhysicalPath(workspaceRoot);
+  const fromRoot = relative(physicalRoot, physicalKey);
+  const external = fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot);
+  // Existing internal workspaces keep their lock namespace across upgrades.
+  // Linked directories share one namespace regardless of the daemon's root.
+  const lockDirectory = workspaceLockDirectory(external ? physicalKey : physicalRoot);
   ensureLockDirectory(lockDirectory);
   const digest = createHash("sha256")
-    .update(canonicalPhysicalPath(key))
+    .update(physicalKey)
     .digest("hex");
   const lockPath = join(lockDirectory, `${digest}.lock`);
   const owner: LockOwner = {

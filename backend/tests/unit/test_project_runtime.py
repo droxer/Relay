@@ -6,8 +6,21 @@ import pytest
 from relay.services.project_runtime import (
     ProjectDispatchError,
     project_member_assignments,
+    project_runtime_node,
     resolve_project_task_assignments,
 )
+
+
+def test_linked_project_routing_skips_an_older_sibling_daemon():
+    project = {**_project(), "workspaceSubpath": "links/repo"}
+    older = {
+        "id": "a-older", "userId": "alice", "workspaceId": "main",
+        "online": True, "status": "ready", "capabilities": ["project-workspaces"],
+    }
+    capable = {**older, "id": "b-capable", "capabilities": ["project-workspaces", "project-links"]}
+    assert project_runtime_node(project, [older, capable]) == capable
+    assert project_runtime_node(project, [older]) is None
+    assert project_runtime_node(_project(), [older]) == older
 
 
 def _project(*, enabled: bool = True) -> dict:

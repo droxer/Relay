@@ -6,6 +6,7 @@ from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
 from .agent_routing import resolve_agent_assignments
 from .team_dispatch import TeamDispatchError, team_agents, team_member_assignments
+from .workspace_capabilities import required_workspace_capabilities
 
 
 class ProjectDispatchError(ValueError):
@@ -188,7 +189,12 @@ def project_runtime_node(
             and node.get("online")
             and not node.get("stale")
             and node.get("status") in ("ready", "busy", "running")
-            and "project-workspaces" in (node.get("capabilities") or [])
+            and all(
+                capability in (node.get("capabilities") or [])
+                for capability in required_workspace_capabilities(
+                    "project", project.get("workspaceSubpath")
+                )
+            )
         ),
         key=lambda item: item["id"],
         default=None,

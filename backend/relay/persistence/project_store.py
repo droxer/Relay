@@ -36,6 +36,9 @@ from .store_common import (
 from .store_common import metadata as shared_metadata
 
 PROJECT_NAME_MAX_LENGTH = 120
+# A project that links an existing directory on its computer names it under
+# this subpath namespace; the daemon owns the mapping (`project-links.ts`).
+LINKED_WORKSPACE_PREFIX = "links/"
 
 
 class ProjectValidationError(ValueError):
@@ -181,6 +184,27 @@ class DatabaseProjectStore:
         return sorted(
             (dict(row["snapshot"]) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),
+        )
+
+    def list_linked_workspaces(self, computer_id: str) -> list[dict[str, str]]:
+        """Every linked directory on one computer, archived projects included,
+        in the shape the daemon's registration response carries."""
+        statement = select(self.projects.c.snapshot).where(
+            self.projects.c.computer_id == computer_id,
+            self.projects.c.workspace_subpath.startswith(LINKED_WORKSPACE_PREFIX),
+        )
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+        return sorted(
+            (
+                {
+                    "workspaceSubpath": row["snapshot"]["workspaceSubpath"],
+                    "hostPath": row["snapshot"]["workspaceHostPath"],
+                }
+                for row in rows
+                if row["snapshot"].get("workspaceHostPath")
+            ),
+            key=lambda link: link["workspaceSubpath"],
         )
 
     def update_project(
@@ -439,6 +463,11 @@ def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "workspaceLayout": "project",
         "workspaceSubpath": payload.get("workspaceSubpath") or f"projects/{project_id}",
+        **(
+            {"workspaceHostPath": payload["workspaceHostPath"]}
+            if payload.get("workspaceHostPath")
+            else {}
+        ),
         "leadAgentId": payload.get("leadAgentId"),
         "members": list(payload["members"]),
         "enabled": payload.get("enabled") is not False,

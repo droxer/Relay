@@ -406,7 +406,22 @@ POST   /api/v1/projects/{id}/archive?expectedVersion={version}
 DELETE /api/v1/projects/{id}?expectedVersion={version}
 GET    /api/v1/projects/{id}/workspace/files?path={relativePath}
 GET    /api/v1/projects/{id}/workspace/file?path={relativePath}
+POST   /api/v1/projects/workspace-check { daemonNodeId, workspaceHostPath }
 ```
+
+Creating a project may include an optional absolute `workspaceHostPath` on the
+selected Computer to use an existing directory. Omit it or leave it blank to
+create the usual `projects/{id}` workspace. Linking requires a live daemon with
+`project-links`; the daemon validates the directory against its local
+`RELAY_DAEMON_PROJECT_ROOTS` (path-delimited absolute roots, defaulting to the
+user's home in direct-run mode and none under BoxLite). Relay's workspace root
+and private state cannot overlap the linked directory. Refusals return 422 with
+`detail: { code: "project_workspace_<reason>", message }`.
+`POST /projects/workspace-check` validates without creating a link and returns
+`{ workspaceHostPath }` with the canonical directory path. Linked projects store
+that canonical path and a `links/{id}` workspace subpath; both are immutable.
+Runs and live file operations require link support, including at command
+delivery if a daemon's capabilities change after queueing.
 
 The selected Computer must advertise `project-workspaces`; every enabled member
 must be an enabled agent with an active placement on that Computer. A project
@@ -449,6 +464,11 @@ acknowledgements leave the command eligible for retry. Local command storage
 additionally refuses delivery if the project still exists after a rollback.
 The daemon removes only `projects/{projectId}` and refuses symlink or escaping
 roots. Older daemons must be updated before pending files can be removed.
+
+Deleting a linked project keeps the existing directory and returns
+`workspaceCleanup: "kept", cleanupCommandId: null`. It queues no file deletion
+and does not require the Computer to be registered or online. The same active
+execution and ownership checks still apply.
 
 Users with active projects cannot be soft-deleted. After all their projects
 are archived, user soft deletion is allowed and retains the project history.

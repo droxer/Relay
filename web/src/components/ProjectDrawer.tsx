@@ -6,6 +6,7 @@ import { useUserAgents } from "../hooks/useUserAgents";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
+import { computerLinksFolders, folderPathLooksValid, projectFolderErrorKey } from "../lib/projectFolder";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import { provisionalProjectName } from "../lib/projectSetup";
 import type { DaemonNodeMonitorRecord, UserAgent, ProjectRecord } from "../types";
@@ -14,7 +15,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ProjectDescriptionField, ProjectNameField } from "./ProjectFormFields";
+import { ProjectDescriptionField, ProjectFolderField, ProjectNameField } from "./ProjectFormFields";
 import { RosterAgentItem, RosterEmptyOption, RosterTriggerValue } from "./roster/RosterOption";
 
 /** Setup intents share the backend cap (SETUP_INTENT_MAX_LENGTH). */
@@ -69,6 +70,8 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const [intent, setIntent] = useState("");
   const [setupAgentId, setSetupAgentId] = useState(AUTO_SETUP_AGENT);
   const [computerId, setComputerId] = useState("");
+  const [folder, setFolder] = useState("");
+  const [folderError, setFolderError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [intentError, setIntentError] = useState<string | null>(null);
   const [computerError, setComputerError] = useState<string | null>(null);
@@ -80,12 +83,15 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     [computers],
   );
   const selectedComputer = projectComputers.find((computer) => computer.id === computerId);
+  const linksFolders = computerLinksFolders(selectedComputer);
+  // A folder typed for one computer means nothing on another one.
+  const workspaceHostPath = linksFolders && folder.trim() ? folder.trim() : undefined;
   const setupAgents = useMemo(
     () => (selectedComputer ? agentsEligibleForProject(agents, stableComputerId(selectedComputer), selectedComputer.id) : []),
     [agents, selectedComputer],
   );
   const busy = createProjectMutation.isPending || startProjectSetupMutation.isPending;
-  const hasUnsavedChanges = Boolean(name || description || intent || computerId);
+  const hasUnsavedChanges = Boolean(name || description || intent || computerId || folder);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
   const describing = mode === "describe";
   const noSetupAgents = describing && Boolean(selectedComputer) && setupAgents.length === 0;
@@ -96,10 +102,19 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   }
 
   function requireComputer(): boolean {
-    if (computerId) return true;
-    setComputerError(t("project.computer_required"));
-    computerTriggerRef.current?.focus();
-    return false;
+    if (!computerId) {
+      setComputerError(t("project.computer_required"));
+      computerTriggerRef.current?.focus();
+      return false;
+    }
+    return !workspaceHostPath || folderPathLooksValid(workspaceHostPath);
+  }
+
+  function chooseComputer(value: string) {
+    if (value !== computerId) setFolder("");
+    setComputerId(value);
+    setComputerError(null);
+    setFolderError(null);
   }
 
   async function submitManual() {
@@ -114,6 +129,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: name.trim(),
       ...(nextDescription ? { description: nextDescription } : {}),
       daemonNodeId: computerId,
+      ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
     });
@@ -137,6 +153,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: provisionalProjectName(brief, t("project.setup_fallback_name")),
       description: brief,
       daemonNodeId: computerId,
+      ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
     });
@@ -160,8 +177,11 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     if (busy) return;
     try {
       await (describing ? submitDescribed() : submitManual());
-    } catch {
-      // The shared mutation handler announces the server error; preserve the form.
+    } catch (error) {
+      // The shared mutation handler announces the server error; preserve the
+      // form, and pin a folder refusal to the folder field.
+      const folderKey = projectFolderErrorKey(error);
+      if (folderKey) setFolderError(t(folderKey));
     }
   }
 
@@ -200,7 +220,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 value={computerId}
                 error={computerError}
                 triggerRef={computerTriggerRef}
-                onChange={(value) => { setComputerId(value); setComputerError(null); setSetupAgentId(AUTO_SETUP_AGENT); }}
+                onChange={(value) => { chooseComputer(value); setSetupAgentId(AUTO_SETUP_AGENT); }}
               />
               <SetupAgentField
                 agents={setupAgents}
@@ -210,6 +230,15 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 onChange={setSetupAgentId}
               />
             </div>
+            {linksFolders ? (
+              <ProjectFolderField
+                key={computerId}
+                daemonNodeId={computerId}
+                value={folder}
+                error={folderError}
+                onChange={(value) => { setFolder(value); setFolderError(null); }}
+              />
+            ) : null}
           </>
         ) : (
           <>
@@ -229,9 +258,18 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 value={computerId}
                 error={computerError}
                 triggerRef={computerTriggerRef}
-                onChange={(value) => { setComputerId(value); setComputerError(null); }}
+                onChange={chooseComputer}
               />
             </div>
+            {linksFolders ? (
+              <ProjectFolderField
+                key={computerId}
+                daemonNodeId={computerId}
+                value={folder}
+                error={folderError}
+                onChange={(value) => { setFolder(value); setFolderError(null); }}
+              />
+            ) : null}
             <ProjectDescriptionField value={description} onChange={setDescription} />
           </>
         )}

@@ -78,6 +78,7 @@ import {
   DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
   DAEMON_CAPABILITY_PRODUCED_FILES,
+  DAEMON_CAPABILITY_PROJECT_LINKS,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
   DAEMON_CAPABILITY_ROUND_RESULT,
   DAEMON_CAPABILITY_PROJECT_SETUP,
@@ -95,6 +96,7 @@ import {
 } from "relay-core";
 import { workspaceCommandEvent } from "./workspace-read.js";
 import { ThreadWorkspaceManager } from "./thread-workspace.js";
+import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
@@ -144,6 +146,8 @@ export interface DaemonRuntimeOptions {
   enrollmentToken?: string;
   /** Daemon-private credentials and logs. This directory must never be mounted into an agent sandbox. */
   stateDir?: string;
+  /** Roots a project may link an existing directory beneath; defaults to `configuredProjectRoots`. */
+  projectRoots?: string[];
   logDir?: string;
   logger?: DaemonLogger;
   signal?: AbortSignal;
@@ -317,7 +321,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   if (sandboxMode === "boxlite" && !options.environment) {
     await verifyBoxlitePrerequisites(sandboxId);
   }
-  const threadWorkspaces = new ThreadWorkspaceManager(workspacePath, environment.sandboxMode);
+  const projectLinks = new ProjectLinkRegistry(
+    options.projectRoots ?? configuredProjectRoots(environment.sandboxMode),
+    [workspacePath, stateDir, join(homedir(), ".relay")],
+  );
+  const threadWorkspaces = new ThreadWorkspaceManager(workspacePath, environment.sandboxMode, projectLinks);
   const workspaceRunGate = new WorkspaceRunGate(threadWorkspaces.rootPath);
   let health: DaemonHealthState | undefined;
   const setHealth = (next: DaemonHealthState, fields: DaemonLogFields = {}): void => {
@@ -393,6 +401,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
       DAEMON_CAPABILITY_THREAD_WORKSPACES,
       DAEMON_CAPABILITY_PROJECT_WORKSPACES,
+      DAEMON_CAPABILITY_PROJECT_LINKS,
       "project-workspace-delete",
       DAEMON_CAPABILITY_TASK_WORKSPACES,
       DAEMON_CAPABILITY_ROUND_RESULT,
@@ -420,6 +429,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       // The backend now holds the run as interrupted (or already settled), so
       // the record has served its purpose. The fence stays for this process.
       executionJournal.confirmExit(id);
+    }
+    if (Array.isArray(response.projectLinks)) {
+      for (const rejected of projectLinks.replaceAll(response.projectLinks)) {
+        logger.warn("linked project directory refused", { sandboxId, ...rejected });
+      }
     }
     return validHeartbeatSettings(response.heartbeat);
   };
@@ -958,6 +972,29 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               error: error instanceof Error ? error.message : String(error),
             });
           }
+        } else if (command.type === "workspace.link") {
+          let event: DaemonNodeEvent;
+          try {
+            const hostPath = command.dryRun
+              ? projectLinks.validate(command.hostPath)
+              : projectLinks.link(command.workspaceSubpath, command.hostPath);
+            event = {
+              type: "workspace.linked", commandId: command.id,
+              ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "", hostPath,
+            };
+          } catch (error) {
+            event = {
+              type: "workspace.error",
+              commandId: command.id,
+              ...(command.leaseId ? { leaseId: command.leaseId } : {}),
+              path: "",
+              code: error instanceof ProjectLinkError ? error.code : "io-error",
+              message: error instanceof Error ? error.message : String(error),
+            };
+          }
+          await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), event, token, runtimeSignal).catch((error: unknown) => {
+            logger.error("project link event post failed", { sandboxId, commandId: command.id, error: error instanceof Error ? error.message : String(error) });
+          });
         } else if (command.type === "workspace.list" || command.type === "workspace.read") {
           // Thread ids and durable workspaceSubpaths are validated before the workspace-read helpers
           // run, so an escaping path throws here rather than inside workspaceCommandEvent —

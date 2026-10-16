@@ -80,6 +80,8 @@ export function ProjectSettingsPanel({
 
   const busy = projectSave.pending || archiveProjectMutation.isPending || deleteProjectMutation.isPending;
   const archived = Boolean(project.archivedAt);
+  // A linked project works in a folder the owner chose; others in Relay's own.
+  const workspaceLabel = project.workspaceHostPath ?? project.workspaceSubpath;
   useUnsavedChangesGuard(dirty && !busy);
 
   const adopt = (record: ProjectRecord) => {
@@ -185,14 +187,14 @@ export function ProjectSettingsPanel({
               </dt>
               <dd title={project.computerId} translate="no">{computer.label}</dd>
             </div>
-            {project.workspaceSubpath ? (
+            {workspaceLabel ? (
               <div className="project-settings-fact">
                 <dt>
                   <WorkspaceFolder size={ICON.xs} aria-hidden="true" />
-                  {t("project.shared_workspace")}
+                  {t(project.workspaceHostPath ? "project.folder" : "project.shared_workspace")}
                 </dt>
-                <dd className="code" title={project.workspaceSubpath} translate="no">
-                  {project.workspaceSubpath}
+                <dd className="code" title={workspaceLabel} translate="no">
+                  {workspaceLabel}
                 </dd>
               </div>
             ) : null}

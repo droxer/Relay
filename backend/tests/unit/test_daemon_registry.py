@@ -951,6 +951,65 @@ def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> Non
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("downgrade_before_dispatch", [False, True])
+def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_before_dispatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store = LocalSessionStore(root)
+            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            backend = ServerDaemonNodeBackend(registry)
+            registration = {
+                "sandboxId": "sbx_alice",
+                "userId": "alice",
+                "token": "node_token",
+                "workspacePath": "/workspace/alice",
+                "workspaceId": "machine-a",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces", "project-workspaces", "project-links"],
+                "status": "ready",
+            }
+            registry.register(registration, "ui_token")
+            session = session_store.create_session(
+                {
+                    "workspacePath": "/workspace/alice",
+                    "workspaceLayout": "project",
+                    "workspaceSubpath": "links/repo",
+                    "computerId": "device:alice:machine-a",
+                    "ownerUserId": "alice",
+                    "taskGoal": "keep task files isolated",
+                }
+            )
+
+            if downgrade_before_dispatch:
+                registry.register(
+                    {**registration, "capabilities": ["thread-workspaces", "project-workspaces"]},
+                    "ui_token",
+                )
+            await backend.run(
+                "sbx_alice",
+                {
+                    "sessionId": session["id"],
+                    "taskGoal": session["taskGoal"],
+                    "assignments": [{"agent": "codex"}],
+                },
+            )
+            registry.register(
+                {
+                    **registration,
+                    "capabilities": ["thread-workspaces", "project-workspaces"],
+                },
+                "ui_token",
+            )
+
+            assert registry.take_commands("sbx_alice", "node_token") == []
+            failed = session_store.get_session(session["id"])
+            assert failed["status"] == "failed"
+            assert "project-links support" in failed["finalOutcome"]
+
+    asyncio.run(run_flow())
+
+
 def test_command_poll_cannot_observe_run_before_request_links_command() -> None:
     class PausingDaemonStore(DatabaseDaemonStore):
         def __init__(self, database_url: str):

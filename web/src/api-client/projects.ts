@@ -20,6 +20,19 @@ export function createProject(input: CreateProjectInput): Promise<{ project: Pro
   return apiJson<{ project: ProjectRecord }>("/projects", { method: "POST", body: input });
 }
 
+/** Asks the computer whether it would link this directory; resolves to its canonical path. */
+export function checkProjectWorkspace(
+  daemonNodeId: string,
+  workspaceHostPath: string,
+  signal?: AbortSignal,
+): Promise<{ workspaceHostPath: string }> {
+  return apiJson<{ workspaceHostPath: string }>("/projects/workspace-check", {
+    method: "POST",
+    body: { daemonNodeId, workspaceHostPath },
+    signal,
+  });
+}
+
 export function updateProject(projectId: string, input: UpdateProjectInput): Promise<{ project: ProjectRecord }> {
   return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
@@ -45,7 +58,7 @@ export function archiveProject(projectId: string, expectedVersion: number): Prom
   });
 }
 
-export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued" | "waiting_for_upgrade"; cleanupCommandId: string }> {
+export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued" | "waiting_for_upgrade" | "kept"; cleanupCommandId: string | null }> {
   const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
   return apiJson(`/projects/${encodeURIComponent(projectId)}?${query.toString()}`, { method: "DELETE" });
 }
