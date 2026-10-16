@@ -122,8 +122,8 @@ html[data-theme="dark"] .page-header {
    header hairlines, re-filled form sections, duplicated the copy pill), which
    violated the ownership rule above and forked the drawer grammar in two files. */
 
-/* The login screen owns its entire look in login.css (pinned pre-auth
-   palette, serif headline, underline inputs) — do not re-wash it here. */
+/* The login screen owns its entire look in login.css (theme-aliased
+   --lg-* ramp, serif headline, underline inputs) — do not re-wash it here. */
 
 /* Mobile — same header grammar, no extra chrome */
 @media (max-width: 820px) {

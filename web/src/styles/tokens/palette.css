@@ -204,12 +204,11 @@
      a per-name hue for agents and teams; they are now neutral class glyphs
      (IdentityMark.tsx), which is why no stylelint exemption survives. */
   /* ----- Pinned registers -----
-     Surfaces that must NOT follow the active theme: the pre-auth login
-     ramp (no theme loaded yet), the theme-picker swatches (must show both
-     registers at once), the diff viewer, and ink-fill chrome. Values are
-     the same ones the two registers use above — declared once here so no
-     component ever hand-copies a hex. Consumers: login.css (--lg-*),
-     preferences.css (swatches), workspace.css, artifact.css, a11y.css.
+     Surfaces that must NOT follow the active theme: the theme-picker
+     swatches (must show both registers at once), the diff viewer, and
+     ink-fill chrome. Values are the same ones the two registers use above —
+     declared once here so no component ever hand-copies a hex. Consumers:
+     preferences.css (swatches), workspace-files.css, a11y.css.
 
      This set is CONSUMER-DRIVEN, not a complete mirror of the register above:
      every member here has a caller. Do not "finish" it by adding the tiers
@@ -219,11 +218,8 @@
      paints it. */
   --dark-canvas: #0a0a0a;
   --dark-surface: #171717;
-  --dark-elevated: #262626;
   --dark-ink: #ededed;
-  --dark-ink-soft: #b3b3b3;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
-  --dark-line-soft: color-mix(in srgb, #ffffff 8%, transparent);
 
   --light-canvas: #fafafa;
 

@@ -6,45 +6,35 @@
    right half is the GATE (one column, one action). The two halves separate by fill step
    and a single hairline, not by shadow; the system stays flat.
 
-   The pre-auth screen stays in the pinned dark register (no theme
-   preference is loaded yet). The local --lg-* names alias the always-dark
-   register in tokens/palette.css so the screen stays dark whatever theme
-   the operator has saved. Its primary CTA is the post-auth product's
-   neutral fill, taken from the pinned dark values rather than the active
-   theme (dark-ink plate, canvas ink on top). Spacing,
-   type scale, and radii are theme-independent tokens and are used
-   directly.
+   The screen follows the saved theme like the landing page does: the
+   theme script in app/layout.tsx sets html[data-theme] (saved, or the
+   system's) before first paint. The local --lg-* names alias the theme
+   register in tokens/palette.css, so both registers repaint the screen
+   without a block of their own. Its primary CTA is the post-auth product's
+   neutral fill (ink plate, canvas ink on top). Spacing, type scale, and
+   radii are theme-independent tokens and are used directly.
    ===================================================================== */
 
 .login-screen {
-  /* Pinned dark ramp — aliases of the --dark-* register in palette.css. */
-  --lg-canvas: var(--dark-canvas);
-  --lg-elevated: var(--dark-elevated);
-  --lg-ink: var(--dark-ink);
-  --lg-muted: var(--dark-ink-soft);
-  --lg-hairline: var(--dark-line);
-  --lg-hairline-soft: var(--dark-line-soft);
+  /* Theme ramp — aliases of the active register in palette.css. */
+  --lg-canvas: var(--surface-0);
+  --lg-elevated: var(--surface-3);
+  --lg-ink: var(--ink-1);
+  --lg-muted: var(--ink-3);
+  /* Ink washes rather than --line-1/--line-2: the dot grid and the seams
+     stay as quiet as they were on the dark canvas, and scale with the ink
+     in either register. */
+  --lg-hairline: color-mix(in srgb, var(--lg-ink) 14%, transparent);
+  --lg-hairline-soft: color-mix(in srgb, var(--lg-ink) 8%, transparent);
   /* --lg-steel names the screen's action fill role (the name is kept from
-     the old local palette; the pre-auth CTA stays in the pinned dark
-     register, even when the saved application theme is light). */
-  --lg-steel: var(--dark-ink);
-  --lg-steel-active: var(--dark-ink-soft);
-  --lg-err: var(--dark-ink); /* error is the loud/bright tier — dots stay calm */
+     the old local palette). */
+  --lg-steel: var(--ink-1);
+  --lg-steel-active: var(--ink-3);
+  --lg-err: var(--ink-1); /* error is the loud/bright tier — dots stay calm */
   --lg-accent: var(--lg-steel);
-  /* The canvas is pinned dark whatever theme is saved, so the shared focus
-     ring must bind to the dark register's ink here — the theme-register
-     --link it defaults to would sit dark-on-dark under a saved light
-     theme. Binding the variable (not a per-control override) keeps every
-     login control on the shared --focus-outline mechanism. */
-  --focus-outline: var(--focus-w) solid var(--lg-ink);
   /* The cover's text measure, shared by the cover and the foot so both
      centre on the same left margin inside the cover column. */
   --lg-cover-measure: 38rem;
-  /* RelayMark strokes its lead path with --ink-1, the THEME register's ink.
-     On this pinned-dark canvas a saved light theme would paint it dark on
-     dark. Re-point the variable in this scope rather than special-casing
-     the shared mark. */
-  --ink-1: var(--lg-ink);
 
   /* The split. The cover takes the wider column — it carries a hero
      headline and three lines of prose, the gate carries two fields. */
@@ -133,7 +123,7 @@
 /* The one place a headline owns the viewport — the --fs-hero clamp, which
    tracks the viewport between the 24px tier and 40px and never joins the
    type ladder. The display family sets solid (--track-display is 0 by
-   design); the pinned --lg-* register is a colour fork, not a type fork. */
+   design); the --lg-* ramp is a colour alias, not a type fork. */
 .login-headline {
   margin: 0;
   font-family: var(--font-display);
@@ -301,9 +291,7 @@
 }
 
 /* The shared Input primitive draws its aria-invalid state from --err via
-   Tailwind's border-destructive and --focus-outline-danger. Two problems on
-   this screen: --err is a THEME-register token, so a saved light theme
-   painted the deepened light-register red on a near-black plate; and the tone is
+   Tailwind's border-destructive and --focus-outline-danger. That tone is
    chromatic, which contradicts the achromatic status grammar the rest of
    this screen (and paletteTokens.test.ts) commits to.
 
@@ -374,7 +362,7 @@
 /* Palette-only overrides on the shared Button (variant="default" size="cta"
    w-full): geometry (--control-h, --r-2), typography, the loading
    glyph, and the focus ring all come from the primitive — this block only
-   re-paints the plate in the pinned pre-auth register. */
+   re-paints the plate in the screen's neutral ink. */
 .login-submit {
   background: var(--lg-accent);
   color: var(--lg-canvas);
@@ -385,7 +373,7 @@
 }
 
 .login-submit:disabled {
-  background: var(--dark-surface);
+  background: var(--surface-1);
   color: var(--lg-muted);
   border-color: var(--lg-hairline);
   opacity: 1;
@@ -395,7 +383,7 @@
 
 /* The quieter half of the gate: a sentence above a form, a confirmation that
    replaces one, the explanation for a dead invite. Supporting text, so it
-   takes the supporting-text role in the pinned muted ink. */
+   takes the supporting-text role in the muted ink. */
 .login-note {
   margin: 0;
   font: var(--type-body-sm);
@@ -412,8 +400,8 @@
   color: var(--lg-muted);
 }
 
-/* Ink, not the theme register's link blue (dark-on-dark under a saved light
-   theme); the underline is what says link. */
+/* Ink, not the link blue: the screen spends no accent, and the underline is
+   what says link. */
 .login-link {
   color: var(--lg-ink);
   text-decoration: underline;
@@ -439,8 +427,8 @@
   resize: vertical;
 }
 
-/* The Field primitive draws hints and errors in theme-register tones; this
-   canvas is pinned dark and achromatic, so both read from the --lg-* ramp. */
+/* The Field primitive draws errors in a chromatic tone; this canvas is
+   achromatic, so hints and errors read from the --lg-* ramp. */
 .login-field > p {
   color: var(--lg-muted);
 }

@@ -50,9 +50,7 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
     <main className="login-screen" data-mode={mode}>
       {/* The double-chevron mark bled huge off the canvas edge — the login
           signature. Fixed so it can leave the viewport without creating
-          scrollable overflow; pinned to the dark register via --lg-ink,
-          because unlike RelayMark it must stay dark-register ink whatever
-          theme the operator has saved. */}
+          scrollable overflow; washed from --lg-ink so it follows the theme. */}
       <span className="login-bleed" aria-hidden="true">
         <Chevrons />
       </span>

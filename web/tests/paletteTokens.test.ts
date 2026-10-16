@@ -119,11 +119,11 @@ describe("Meta commerce palette tokens", () => {
   });
 
   it("pins both registers as tokens so nothing hand-copies a hex", () => {
-    // Surfaces that must not follow the active theme (pre-auth login, theme
-    // swatches, diff chrome) read these instead of re-declaring literals.
+    // Surfaces that must not follow the active theme (theme swatches, diff
+    // chrome) read these instead of re-declaring literals.
     for (const name of [
-      "--dark-canvas", "--dark-surface", "--dark-elevated",
-      "--dark-ink", "--dark-ink-soft",
+      "--dark-canvas", "--dark-surface",
+      "--dark-ink",
       "--light-canvas",
     ]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `${name} is not pinned`);
@@ -139,9 +139,7 @@ describe("Meta commerce palette tokens", () => {
       register.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6});`))?.[1];
     assert.equal(declared(darkRegister, "--dark-canvas"), declared(darkRegister, "--surface-0"));
     assert.equal(declared(darkRegister, "--dark-surface"), declared(darkRegister, "--surface-1"));
-    assert.equal(declared(darkRegister, "--dark-elevated"), declared(darkRegister, "--surface-3"));
     assert.equal(declared(darkRegister, "--dark-ink"), declared(darkRegister, "--ink-1"));
-    assert.equal(declared(darkRegister, "--dark-ink-soft"), declared(darkRegister, "--ink-3"));
     assert.equal(declared(darkRegister, "--light-canvas"), declared(lightRegister, "--surface-0"));
   });
 
@@ -237,37 +235,46 @@ describe("Meta commerce palette tokens", () => {
 const login = readStyle("login.css");
 
 describe("pre-auth login palette", () => {
-  it("pins the pre-auth ramp via the always-dark register tokens", () => {
-    // The --lg-* names alias palette.css's pinned register rather than
-    // re-declaring its hexes, so the two can never drift apart.
-    assert.match(login, /--lg-canvas:\s*var\(--dark-canvas\);/);
-    assert.match(login, /--lg-elevated:\s*var\(--dark-elevated\);/);
-    assert.match(login, /--lg-ink:\s*var\(--dark-ink\);/);
-    assert.match(login, /--lg-muted:\s*var\(--dark-ink-soft\);/);
-    assert.match(login, /--lg-err:\s*var\(--dark-ink\);/);
+  it("follows the saved theme through the live register tokens", () => {
+    // The theme script in layout.tsx sets html[data-theme] before first
+    // paint, so the signed-out canvas knows the theme as well as the app
+    // does. The --lg-* names alias the theme register — never the pinned
+    // --dark-* one — so sign-in repaints with the rest of the product.
+    const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
+    assert.doesNotMatch(loginCode, /var\(--dark-/, "login.css must not pin the always-dark register");
+    assert.match(login, /--lg-canvas:\s*var\(--surface-0\);/);
+    assert.match(login, /--lg-elevated:\s*var\(--surface-3\);/);
+    assert.match(login, /--lg-ink:\s*var\(--ink-1\);/);
+    assert.match(login, /--lg-muted:\s*var\(--ink-3\);/);
+    assert.match(login, /--lg-err:\s*var\(--ink-1\);/);
     assert.match(login, /\.login-error \{[^}]*var\(--lg-err\)/s);
   });
 
-  it("holds the shared Input's invalid state to the pinned achromatic tier", () => {
-    // The primitive's aria-invalid ring is drawn from --err, a THEME-register
-    // token, so on this pinned-dark screen a saved light theme painted a deep
-    // red ring — and chromatic at all contradicts .login-error one element
-    // over. Re-pointing --err in the login scope does NOT reach it (both
-    // --focus-outline-danger and --color-destructive substitute --err where
-    // they are declared, on :root), so the rule is spelled out. Guard it.
+  it("does not re-point the theme ink it aliases", () => {
+    // --lg-ink reads --ink-1; declaring --ink-1 from --lg-ink in the same
+    // scope would be a cycle that blanks every ink on the screen.
+    const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
+    assert.doesNotMatch(loginCode, /--ink-1\s*:/);
+  });
+
+  it("holds the shared Input's invalid state to the achromatic tier", () => {
+    // The primitive's aria-invalid ring is drawn from --err, which is
+    // chromatic and contradicts .login-error one element over. Re-pointing
+    // --err in the login scope does NOT reach it (both --focus-outline-danger
+    // and --color-destructive substitute --err where they are declared, on
+    // :root), so the rule is spelled out. Guard it.
     assert.match(
       login,
       /\.login-input\[aria-invalid="true"\] \{[^}]*var\(--lg-err\)[^}]*\}/s,
-      "the login field's invalid state must use the pinned --lg-err, not the theme register's --err",
+      "the login field's invalid state must use the achromatic --lg-err, not the theme register's --err",
     );
   });
 
-  it("pins the login CTA to the dark neutral register", () => {
-    // Login stays dark even when the saved application theme is light.
+  it("paints the login CTA with the theme's neutral ink", () => {
     const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
     assert.doesNotMatch(loginCode, /--action\s*:/, "login.css must not override the shared selection accent");
-    assert.match(login, /--lg-steel:\s*var\(--dark-ink\);/);
-    assert.match(login, /--lg-steel-active:\s*var\(--dark-ink-soft\);/);
+    assert.match(login, /--lg-steel:\s*var\(--ink-1\);/);
+    assert.match(login, /--lg-steel-active:\s*var\(--ink-3\);/);
   });
 
   it("originates no color of its own", () => {
