@@ -4,6 +4,7 @@
   "watchPatterns": [
     "web/**",
     "packages/relay-core/**",
+    "tools/vendor/**",
     "package.json",
     "package-lock.json"
   ],

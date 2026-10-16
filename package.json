@@ -20,12 +20,14 @@
     "web": "npm run dev -w web"
   },
   "overrides": {
+    "braces": "$braces",
     "nanoid": "3.3.18",
     "postcss": "8.5.23",
     "sharp": "0.35.5",
     "katex": "0.18.4"
   },
   "devDependencies": {
+    "braces": "file:tools/vendor/braces",
     "@boxlite-ai/boxlite": "^0.9.7",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
