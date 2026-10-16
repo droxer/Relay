@@ -42,8 +42,9 @@ export type ComposerSendOptions = {
 };
 
 /** How dispatch should read the box. `literal`: the text is a picked answer,
- *  sent as written — a leading "@" is the agent's wording, not an address. */
-export type ComposerDispatchOptions = { literal?: boolean };
+ *  sent as written — a leading "@" is the agent's wording, not an address.
+ *  `questionId`: the wait this message answers (see `AwaitingInput`). */
+export type ComposerDispatchOptions = { literal?: boolean; questionId?: string };
 
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every

@@ -70,6 +70,10 @@ export interface ThreadMessageInput {
   addressTeamId?: string;
   userMessageId?: string;
   idempotencyKey?: string;
+  /** The wait this message answers. The backend resumes the task only while
+   *  it still waits on this question, and answers 409 `question_superseded`
+   *  otherwise. Sent only with intent `accomplish`. */
+  questionId?: string;
 }
 
 export interface ThreadRecoveryInput {

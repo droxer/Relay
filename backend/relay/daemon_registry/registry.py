@@ -48,6 +48,7 @@ from ..collaboration.policy import (
 from ..core.computer_identity import computer_id, local_enrollment_key
 from ..core.model_policy import is_model_id
 from ..core.environment import load_backend_env
+from ..core.human_waits import question_id_for_run, wait_record
 from ..core.ids import new_database_id, new_relay_id, new_sandbox_id, now_iso
 from ..core.models import (
     AGENT_NAMES,
@@ -60,6 +61,7 @@ from ..persistence.daemon_store import (
 )
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.task_execution import request_execution_owner
+from ..persistence.task_lifecycle import acceptance_status
 from ..persistence.stores import (
     infer_node_location,
     relay_event,
@@ -4567,9 +4569,9 @@ class DaemonNodeRegistry:
         if isinstance(round_result, dict):
             self._record_round_result(run_request, {"status": "blocked", "note": outcome} if blockers and not asked else round_result, task_status)
         if task_status == "done" and self.task_store and run_request.get("taskId"):
-            task = self.task_store.get_task(run_request["taskId"])
-            if task.get("acceptancePolicy", "automatic") == "human":
-                task_status = "review"
+            task_status = acceptance_status(
+                self.task_store.get_task(run_request["taskId"]), task_status
+            )
         work_outcome = {
             "waiting_for_human": "blocked",
             "assigned": "unfinished",
@@ -4591,11 +4593,18 @@ class DaemonNodeRegistry:
         # thread quotes it exactly and offers its answers as choices. Gate
         # reasons the question stood in front of travel as notes rather than
         # disappearing: the person answering should know about them.
+        # Every park is a wait with an id an answer must name. The id derives
+        # from the run so a retried finalization writes the same wait.
         input_request = (
             self._input_request(run_request, round_result, blockers, participant_failures)
-            if asked and task_status == "waiting_for_human"
-            else None
-        )
+            if asked
+            # A blocked verdict with no words still asked for help: it is the
+            # agent's question, not a gate's check.
+            else wait_record(
+                "question" if outcome.startswith(BLOCKED_ROUND_PREAMBLE) else "check",
+                question_id_for_run(run_request["id"]),
+            )
+        ) if task_status == "waiting_for_human" else None
         if (
             self.store.get_session(run_request["sessionId"]).get("status")
             != "completed"
@@ -4639,11 +4648,13 @@ class DaemonNodeRegistry:
                 f"{len(participant_failures)} participant assignment(s) failed; "
                 "inspect the thread before closing the work."
             )
-        return {
-            "inputQuestion": round_result.get("note"),
-            "inputOptions": round_result.get("options") or [],
-            "inputNotes": notes,
-        }
+        return wait_record(
+            "question",
+            question_id_for_run(run_request["id"]),
+            question=round_result.get("note"),
+            options=round_result.get("options") or [],
+            notes=notes,
+        )
 
     @staticmethod
     def _round_outcome(

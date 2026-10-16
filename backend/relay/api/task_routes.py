@@ -23,6 +23,7 @@ from ..automations.service import (
     request_manual_occurrence,
     routine_fields_v2,
 )
+from ..collaboration.awaiting import with_awaiting
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
 from ..persistence.store_common import store_transaction
@@ -91,6 +92,25 @@ from .workspace_transport import (
 )
 
 router = APIRouter()
+
+
+def public_task(task: dict[str, Any]) -> dict[str, Any]:
+    """A task as the API answers it: legacy routine keys removed, and the wait
+    it is parked on projected once (`awaiting`) so no client re-derives it."""
+    return with_awaiting(without_legacy_fields(task))
+
+
+def public_task_envelope(result: Any) -> Any:
+    """`public_task` for a route answer that is a task or carries one."""
+    public = public_task_result(result)
+    if not isinstance(public, dict):
+        return public
+    if isinstance(public.get("task"), dict):
+        return {**public, "task": with_awaiting(public["task"])}
+    if "id" in public and "status" in public:
+        return with_awaiting(public)
+    return public
+
 
 
 def update_task_unless_dispatching(
@@ -385,7 +405,7 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=limit,
         )
     return {
-        "tasks": [without_legacy_fields(task) for task in tasks],
+        "tasks": [public_task(task) for task in tasks],
         "flowPolicy": {"wipLimit": wip_limit(), "scope": "user"},
     }
 
@@ -535,13 +555,13 @@ def create_task(
         if assignments:
             controller.assign_session(session["id"], assignments)
         task = ctx.task_store.link_session(task["id"], session["id"])
-    return without_legacy_fields(task)
+    return public_task(task)
 
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return without_legacy_fields(get_task_for_actor(ctx.task_store, task_id, actor))
+    return public_task(get_task_for_actor(ctx.task_store, task_id, actor))
 
 
 def ensure_relay_pause_transition_allowed(
@@ -848,7 +868,7 @@ def update_task(
 
     if has_webhook(current) and (not task.get("isRoutine") or not has_webhook(task)):
         request.app.state.automation_store.delete_webhook_secret(task_id)
-    return without_legacy_fields(task)
+    return public_task(task)
 
 
 @router.delete("/tasks/{task_id}")
@@ -876,7 +896,7 @@ def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
         actor=actor.get("userId") or actor.get("username"),
         outcome=result["outcome"],
     )
-    return public_task_result(result)
+    return public_task_envelope(result)
 
 
 @router.put("/tasks/{task_id}/assignment")
@@ -921,7 +941,7 @@ def assign_task(
             )
         except TeamDispatchError as error:
             raise HTTPException(409, error.code) from error
-        return public_task_result(update_task_unless_dispatching(
+        return public_task_envelope(update_task_unless_dispatching(
             ctx,
             task_id,
             {
@@ -940,7 +960,7 @@ def assign_task(
     )
     if not logical_agent or not assigned_agent_id:
         raise HTTPException(400, "agentId is required for task assignment.")
-    return public_task_result(update_task_unless_dispatching(
+    return public_task_envelope(update_task_unless_dispatching(
         ctx,
         task_id,
         {
@@ -1108,7 +1128,7 @@ async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     # Every answer below carries a task (often the routine definition).
-    return public_task_result(await _start_task(task_id, request, ctx))
+    return public_task_envelope(await _start_task(task_id, request, ctx))
 
 
 async def _start_task(task_id: str, request: Request, ctx: AppContext) -> dict[str, Any]:
@@ -1212,7 +1232,7 @@ async def pickup_task(
         session_id=(result.get("session") or {}).get("id"),
         agent=agent,
     )
-    return public_task_result(result)
+    return public_task_envelope(result)
 
 
 def occurrence_tasks(

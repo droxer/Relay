@@ -139,9 +139,16 @@ export function useRelayMutations() {
   const submitThreadMessageMutation = useMutation({
     mutationFn: ({ sessionId, input }: { sessionId: string; input: ThreadMessageInput }) =>
       submitThreadMessage(sessionId, input),
-    onSuccess: (session) => {
+    onSuccess: (session, { input }) => {
       cacheSession(session);
       void invalidateNodes();
+      // An answer moves its task off the wait; show that without a poll.
+      if (input.questionId) void invalidateTasks();
+    },
+    onError: (error) => {
+      // The question was answered or replaced elsewhere: fetch the one the
+      // task waits on now, so the prompt stops offering the stale one.
+      if (error instanceof RelayApiError && error.code === "question_superseded") void invalidateTasks();
     },
   });
 
@@ -180,6 +187,8 @@ export function useRelayMutations() {
           return {
             ...task,
             ...(status ? { status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status } : {}),
+            // A task moved off its wait no longer asks anything.
+            ...(status && status !== "waiting_for_human" ? { awaiting: null } : {}),
             ...(priority ? { priority } : {}),
             ...(dueDate !== undefined ? { dueDate: dueDate || undefined } : {}),
             ...(assignmentChanged

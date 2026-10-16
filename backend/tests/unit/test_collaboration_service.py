@@ -464,7 +464,13 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
     styled = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi", style="solo"))
     assert plain.style is None
     assert _request_fingerprint(plain) != _request_fingerprint(styled)
-    legacy_payload = {k: v for k, v in asdict(plain).items() if k not in ("idempotency_key", "style", "project_setup")}
+    answer = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi", question_id="q_1"))
+    # Answering a question is a different request from saying the same words.
+    assert _request_fingerprint(plain) != _request_fingerprint(answer)
+    legacy_payload = {
+        k: v for k, v in asdict(plain).items()
+        if k not in ("idempotency_key", "style", "project_setup", "question_id")
+    }
     legacy = hashlib.sha256(
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()

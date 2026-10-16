@@ -105,7 +105,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
-    { literal = false }: import("../components/composer/Composer").ComposerDispatchOptions = {},
+    { literal = false, questionId }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
     if (!raw || !selectedUser || threadRunning || projectDispatchDisabled) return false;
@@ -187,6 +187,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           addressAgentIds: messageAddress.addressAgentIds,
           addressTeamId: addressedTeamId,
           style: roundTeam.teamId ? requestedStyle : undefined,
+          questionId,
         })
       : null;
     const retainedMessageId = messageOperationKey
@@ -224,6 +225,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
               addressTeamId: addressedTeamId,
               userMessageId,
               style: roundTeam.teamId ? requestedStyle : undefined,
+              questionId,
             }),
           })
         : await runLogicalAgentsMutation.mutateAsync({

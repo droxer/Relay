@@ -86,6 +86,7 @@ class _PreparedRound:
     address: dict[str, Any]
     style: str | None = None
     project_setup: dict[str, Any] | None = None
+    question_id: str | None = None
 
 
 class CollaborationConductor:
@@ -187,6 +188,7 @@ class CollaborationConductor:
                 purpose=intent.purpose,
                 address=address,
                 style=intent.style,
+                question_id=intent.question_id,
             )
         if isinstance(intent, RecoveryIntent):
             mode = _mode(intent.mode)
@@ -251,6 +253,11 @@ class CollaborationConductor:
     ) -> dict[str, Any]:
         session = self._session_for_actor(intent.session_id, actor)
         session = self._backfill_runtime_affinity(session)
+        answered_task = (
+            self._assert_current_question(session, intent.question_id)
+            if intent.question_id
+            else None
+        )
         task_goal = (
             latest_user_turn_text(session)
             if intent.source == "recovery" and session
@@ -561,7 +568,9 @@ class CollaborationConductor:
             # task asked for: run it as the task's next round, so the verdict
             # moves the task instead of leaving it parked forever. Discussion
             # and review messages keep their conversational scope.
-            task = self._awaiting_task(session)
+            # An answer resumes exactly the task its question was checked
+            # against; one read, so the check and the resume cannot disagree.
+            task = answered_task or self._awaiting_task(session)
             if task:
                 parsed["taskId"] = task["id"]
                 manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
@@ -660,6 +669,25 @@ class CollaborationConductor:
                 "projectSnapshot": snapshot,
             }
         ]
+
+    def _assert_current_question(
+        self, session: dict[str, Any] | None, question_id: str
+    ) -> dict[str, Any]:
+        """Refuse an answer to a question the thread no longer waits on.
+
+        Matching an answer by thread and task status alone let a stale reply
+        (a second tab, a double send across a quick round) answer whatever the
+        task asked next. Naming the question closes that.
+        """
+        task = self._awaiting_task(session) if session else None
+        current = ((task or {}).get("waitingRequest") or {}).get("questionId")
+        if current != question_id:
+            raise CollaborationError(
+                "question_superseded",
+                "This question was already answered or replaced. "
+                "Reload the thread to see what it waits on now.",
+            )
+        return task
 
     def _awaiting_task(self, session: dict[str, Any]) -> dict[str, Any] | None:
         """The task waiting on this thread's human, if a reply here resumes it.
@@ -992,6 +1020,8 @@ def _request_fingerprint(intent: _PreparedRound) -> str:
     # still match a retry of the same request.
     if payload.get("style") is None:
         payload.pop("style", None)
+    if payload.get("question_id") is None:
+        payload.pop("question_id", None)
     if payload.get("project_setup") is None:
         payload.pop("project_setup", None)
     else:

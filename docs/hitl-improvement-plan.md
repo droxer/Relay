@@ -1,6 +1,7 @@
 # Human-in-the-loop: review fixes and improvement plan
 
-Status: phase 0 implemented (2026-10-14). Phases 1–4 are proposals.
+Status: phases 0 and 1 implemented (2026-10-14, 2026-10-16); phase 2 partly
+(budget waits, one acceptance helper). Phases 3–4 are proposals.
 
 ## Where the design stands
 
@@ -18,9 +19,9 @@ blocks the running turn on a tool call, which suits an operator at a terminal
 and not a work queue. What Relay should take from Claude Code is the set of
 guarantees around a question, not its blocking shape:
 
-| Claude Code guarantee | Relay before this work | Relay after phase 0 |
+| Claude Code guarantee | Relay before this work | Relay now |
 |---|---|---|
-| The answer is the result of the question's own call | Matched by thread + task status, re-derived on the web | Unchanged; phase 1 |
+| The answer is the result of the question's own call | Matched by thread + task status, re-derived on the web | An answer names its `questionId`; a stale one is refused (phase 1) |
 | A malformed question fails loudly and the model retries | Every bad verdict file degraded to a generic wait | Rejections are logged and named on the task |
 | Only the human approves | Already held: the token that acts as a user is minted in their browser; agents hold only the node token | Unchanged (verified) |
 | A denial is feedback to the same work | Reject wiped the question; a review task was stranded | Question kept; a reject that would strand a task is refused |
@@ -105,43 +106,77 @@ Web:
 - **Announced prompt.** The prompt is announced once through a polite live
   region.
 
-## Phase 1 — a question has an id (highest value)
+## Phase 1 — a question has an id (done)
 
-The remaining fragility comes from one fact: an answer is matched to its
-question by thread plus task status, and the web re-derives that rule.
+The remaining fragility came from one fact: an answer was matched to its
+question by thread plus task status, and the web re-derived that rule. The
+design as built differs from the proposal in three places, each noted below.
 
-1. **Question id.** Mint a `questionId` when `_complete_run_request` parks a
-   task. Store it on `session.completed`, in `waitingRequest`, and on the
-   `task.status` event.
-2. **Structured answer.** Add `POST /threads/{id}/answers` with
-   `{questionId, option?: number, text?: string, idempotencyKey}`. The
-   conductor resumes the task only when `questionId` matches the task's
-   current wait. Otherwise it answers 409 `question_superseded`. This closes
-   the two-quick-replies race and the "status question resumed the task"
-   ambiguity (today `purpose` decides, and the client chooses the purpose).
-3. **One backend projection.** Expose `awaiting` on the thread and the task:
-   `{questionId, kind, text, options, notes, taskId, sessionId}`, computed
-   once by the backend's `_awaiting_task` rule. The web then renders it and
-   drops `waitingTask`, the preamble parsing, and the gate-text rewriting from
-   `awaitingInput.ts`. A legacy record without an id keeps today's rule
-   behind the projection, so only one place knows it.
-4. **Retire the legacy preamble.** Once every waiting task carries
-   `waitingRequest`, the outcome-string fallback in `conversation.py` and the
-   web can go.
+- **Every wait is a record with an id.** `backend/relay/core/human_waits.py`
+  owns the shape stored as the task's `waitingRequest`:
+  `{questionId, kind, inputQuestion?, inputOptions?, inputNotes?}`, with
+  `kind` one of `question` (the agent asked), `check` (a gate stopped the
+  round, the verdict was missing, or an unblocked run needs direction) and
+  `budget` (continuation rounds ran out). Every `waiting_for_human` park
+  writes one, not just agent questions, so there is no id-less wait to fall
+  back on.
+- **Ids are derived where retries happen.** A run's closeout uses
+  `q_<runRequestId>` (`question_id_for_run`), so a retried finalization writes
+  the identical wait and the repair path stays a no-op. Scheduler parks and
+  unblocks mint one (`ensure_wait_record`). The thread's `session.completed`
+  keeps only the question fields; the id lives on the task, which is the
+  authority for what is being waited on.
+- **Answers ride the message route** (deviation: no separate
+  `/threads/{id}/answers`). `POST /threads/{id}/messages` accepts
+  `questionId`. With it, the message must be `intent: accomplish` (else 400
+  `answer_requires_accomplish`), and the conductor
+  (`_assert_current_question`) admits it only while the task waiting in this
+  thread still waits on that id — otherwise 409 `question_superseded`. That
+  closes the two-tab and quick-round races. One route keeps one admission
+  path: idempotency keys, mentions, team addressing and the run-in-flight
+  check all apply unchanged. The id is part of the request fingerprint (an
+  unset id is omitted, so older fingerprints still match).
+- **The projection lives on the task** (deviation: not on the thread). Task
+  responses — list, summary, detail, mutation results, and the workspace
+  brief — carry `awaiting: {questionId, kind, text, options, notes,
+  sessionId, resumable}` from `task_awaiting`
+  (`backend/relay/collaboration/awaiting.py`). The web reduces thread events
+  client-side but refetches tasks, so a thread-side projection would go stale
+  between refetches; the task-side one does not. The legacy reading (outcome
+  preamble, pre-rename gate wording, waits without `waitingSessionId`) now
+  exists only in that module.
+- **The web renders, and names the question it shows.** `awaitingInput.ts`
+  finds the task whose `awaiting.sessionId` is this thread and renders it; the
+  preamble parsing, gate-text rewriting and `waitingTask` matching are gone.
+  Only a thread with no task behind it still reads its own completion fields.
+  `ThreadsView` attaches the shown `questionId` to every `accomplish` message
+  sent while the prompt is up — a picked option or a typed answer — and a
+  `question_superseded` refusal says so and refetches tasks so the prompt
+  shows what the task waits on now.
+- **Kept:** a message without `questionId` still resumes a task waiting in its
+  thread (the chat gateway and older clients send none). The legacy preamble
+  fallback in `conversation.py` stays until no waiting task predates
+  `waitingRequest`.
 
 ## Phase 2 — one meaning for "waiting on a human"
 
-- The scheduler's budget-exhausted park (`_park_for_human`) leaves a task
-  waiting with no structured question while its thread reads `unfinished`.
-  Give it a `waitingRequest` (`kind: "budget"`, with options "Continue" and
-  "Stop here") so every wait is a question with a thread.
-- Thread reject is reachable in the web only after an earlier reject: the
-  decision bar mounts only on a pending feedback decision. Either remove it,
-  or rebuild it as "request changes" bound to the task's review. A changes
+- Done: the scheduler's budget-exhausted park writes a `budget` wait with an
+  id and the thread it stopped in, so it reads as a wait everywhere; the
+  prompt offers the same next steps as a gate stop ("Keep going" resumes,
+  "Status" asks without resuming) under its own title.
+- Done: `done → review` is decided in one helper, `acceptance_status`
+  (`persistence/task_lifecycle.py`), used by the closeout, the task status
+  write, and the completion-repair expectation.
+- Done: the workspace brief's "active threads" metric and its task links use
+  the task's wait (`session_awaits_human(session, tasks)`, `awaiting.sessionId`).
+- Open: thread reject is reachable in the web only after an earlier reject:
+  the decision bar mounts only on a pending feedback decision. Either remove
+  it, or rebuild it as "request changes" bound to the task's review. A changes
   request on a review task would move it back to `waiting_for_human` in that
-  thread, with the reason as the question.
-- Keep `done → review` in one helper. It is currently written in
-  `_complete_run_request`, `_update_task_status`, and the repair expectation.
+  thread, with the reason as a `check` wait.
+- Open: a `budget` wait could offer a one-click "grant N more rounds" that
+  raises the task's own round limit, instead of relying on the fresh budget a
+  human-started round opens.
 
 ## Phase 3 — gates before actions (ADR-007)
 
@@ -173,13 +208,18 @@ authority outside the sandbox (ADR-009): the daemon.
   and runtime. Rejected verdicts point at prompt or runtime regressions.
 - Notifications: a wait notifies its task owner through their configured
   channel, with the question and options inline. An answer from a channel
-  goes through the same answer endpoint and `questionId`.
+  goes through the same message route with the wait's `questionId`, so a
+  late channel reply cannot answer a newer question.
+- Metrics by wait `kind`: how often rounds stop on gates or budgets rather
+  than questions says whether evidence rules or round limits are tuned right.
 
-## Known limits of phase 0
+## Known limits
 
-- A dashboard workspace brief (`WorkspacePrimitives.tsx`) still opens a task's
-  first link, because the brief does not carry `waitingSessionId`. Phase 1's
-  projection fixes it.
-- `isAwaitingHuman` in `web/src/lib/workflow.ts` is no longer used by the web.
-  The backend's `session_awaits_human` still counts a reject or blocked thread
-  for the workspace metrics, without consulting the task.
+- A thread with no task (a plain conversation round that stopped to ask) has
+  no wait record and therefore no `questionId`; its prompt still reads the
+  thread's own completion fields, and a reply there is matched by the thread
+  rule. Giving it one needs a thread-side wait, which phase 3's approval waits
+  will want anyway.
+- `isAwaitingHuman` in `web/src/lib/workflow.ts` is unused by the web.
+- Waits recorded before this change carry no `questionId`; they project with
+  `questionId: null` and are answered by the thread rule until they resolve.

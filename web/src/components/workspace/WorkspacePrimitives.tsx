@@ -284,7 +284,8 @@ export function WorkspaceActivities({
           >
             <ul className="workspace-pick-list">
               {tasks.map((task) => {
-                const linkedSessionId = task.linkedSessionIds[0];
+                // A waiting task opens where it is answered, not its first thread.
+                const linkedSessionId = task.awaiting?.sessionId ?? task.linkedSessionIds[0];
                 return (
                   <li key={task.id}>
                     <ActivityTaskCard

@@ -87,6 +87,7 @@ export function submitThreadMessage(
         : {}),
       ...(input.userMessageId ? { userMessageId: input.userMessageId } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      ...(input.questionId && input.intent === "accomplish" ? { questionId: input.questionId } : {}),
     },
   });
 }

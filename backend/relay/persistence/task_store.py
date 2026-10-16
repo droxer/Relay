@@ -42,6 +42,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..automations.model import is_active, listens, schedule_triggers, state_of
+from ..core.human_waits import ensure_wait_record
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
 from .automation_store import insert_outbox_rows, task_outbox_rows
@@ -382,8 +383,11 @@ def task_update_events(
         reason = payload.get("blockerReason") or payload.get("statusReason")
         if reason:
             status_payload["reason"] = reason
-        if payload["status"] == "waiting_for_human" and payload.get("statusSessionId"):
-            status_payload["sessionId"] = payload["statusSessionId"]
+        if payload["status"] == "waiting_for_human":
+            if payload.get("statusSessionId"):
+                status_payload["sessionId"] = payload["statusSessionId"]
+            # Every wait has an id an answer must name (core/human_waits.py).
+            status_payload["request"] = ensure_wait_record(payload.get("statusRequest"))
         if payload["status"] == "blocked":
             status_payload["attention"] = payload.get("attention") or {
                 "code": "manual_block" if payload.get("actorUserId") else "unknown",

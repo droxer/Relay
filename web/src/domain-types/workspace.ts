@@ -5,6 +5,7 @@ import type {
   RoutinePauseReason,
   RoutineState,
   RoutineTrigger,
+  TaskAwaiting,
   TaskPriority,
   TaskStatus,
 } from "relay-core";
@@ -49,6 +50,8 @@ export interface WorkspaceBriefTask {
   routinePauseReason?: RoutinePauseReason;
   routineNextRunAt?: string;
   linkedSessionIds: string[];
+  /** The wait a waiting task is parked on; its thread is where to answer. */
+  awaiting?: TaskAwaiting | null;
   updatedAt?: string;
   createdAt?: string;
 }

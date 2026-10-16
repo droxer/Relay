@@ -86,7 +86,10 @@ describe("groupThreads awaiting an answer", () => {
     };
     const tasks = [
       { id: "task_a", status: "done", isRoutine: false, linkedSessionIds: ["a"] },
-      { id: "task_c", status: "waiting_for_human", isRoutine: false, waitingSessionId: "c", linkedSessionIds: ["c"] },
+      {
+        id: "task_c", status: "waiting_for_human", isRoutine: false, waitingSessionId: "c", linkedSessionIds: ["c"],
+        awaiting: { questionId: "q_1", kind: "question", text: "Which vault?", options: [], notes: [], sessionId: "c", resumable: true },
+      },
     ] as RelayTaskListItem[];
     const answered = item("c", "completed");
     const { needsYou, idle } = groupThreads([scoped("a"), scoped("b"), answered], tasks);

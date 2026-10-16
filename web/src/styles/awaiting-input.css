@@ -26,7 +26,7 @@
   animation: awaiting-input-dock var(--t-slow) var(--ease) both;
 }
 
-.awaiting-input[data-kind="check"] { --awaiting-rail: var(--warn); }
+.awaiting-input:is([data-kind="check"], [data-kind="budget"]) { --awaiting-rail: var(--warn); }
 
 /* Rises out from behind the card: the one motion, and it says where the
    prompt belongs. Reduced motion is handled globally (a11y.css). */
@@ -205,7 +205,7 @@
 
 /* A gate stop's next steps are suggestions, not the agent's words: neutral
    until intent, with the caution tone kept for the rail alone. */
-.awaiting-input[data-kind="check"] .awaiting-input-choice { color: var(--ink-2); }
+.awaiting-input:is([data-kind="check"], [data-kind="budget"]) .awaiting-input-choice { color: var(--ink-2); }
 
 .awaiting-input-foot {
   display: flex;
@@ -232,4 +232,4 @@
    panel's own rail already carries the tone, so the quote keeps the action
    rail only when it is a question. */
 .recovery-panel .awaiting-input-quote { --awaiting-rail: var(--action); }
-.recovery-panel[data-waiting="check"] .awaiting-input-quote { --awaiting-rail: var(--warn); }
+.recovery-panel:is([data-waiting="check"], [data-waiting="budget"]) .awaiting-input-quote { --awaiting-rail: var(--warn); }

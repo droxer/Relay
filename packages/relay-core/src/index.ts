@@ -265,6 +265,8 @@ export {
   type RelayTaskListItem,
   type RelayTaskSummary,
   type TaskExecutionAttention,
+  type TaskAwaiting,
+  type TaskWaitKind,
   type TaskWaitingRequest,
   type TaskPriority,
   type RoutineOccurrenceTriggerKind,

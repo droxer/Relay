@@ -8477,3 +8477,31 @@ def test_a_human_recovery_opens_a_fresh_continuation_budget() -> None:
             assert task_store.get_task(task["id"])["roundCount"] == 1
 
     asyncio.run(run_flow())
+
+
+def test_a_wordless_blocked_verdict_is_still_the_agents_question() -> None:
+    async def run_flow() -> None:
+        from relay.collaboration.awaiting import task_awaiting
+
+        with TemporaryDirectory() as root:
+            _sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            _report_blocked(
+                registry, command, exitCode=0,
+                roundResult={"status": "blocked", "runId": command["runId"]},
+            )
+
+            waiting = task_store.get_task(task["id"])
+            assert waiting["status"] == "waiting_for_human"
+            # The id derives from the run, so a retried closeout asks the same.
+            assert waiting["waitingRequest"] == {
+                "questionId": f"q_{request['id']}", "kind": "question",
+            }
+            awaiting = task_awaiting(waiting)
+            assert (awaiting["kind"], awaiting["text"]) == ("question", None)
+
+    asyncio.run(run_flow())

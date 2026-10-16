@@ -11,6 +11,13 @@ function errorMessage(error: unknown): string {
   return "";
 }
 
+/** An API error's code, read structurally: the lib avoids a value import of
+ *  `RelayApiError` (see `isWorkspaceRetryableError`). */
+function errorCode(error: unknown): string | undefined {
+  const code = error instanceof Error && "code" in error ? (error as Error & { code: unknown }).code : undefined;
+  return typeof code === "string" ? code : undefined;
+}
+
 export function agentReadiness(node: NodeAgentState, agent: AgentName): AgentReadiness {
   if ((node?.disabledAgents ?? []).includes(agent)) return "disabled";
   const status = node?.agents?.[agent] ?? "unknown";
@@ -44,6 +51,7 @@ const PLACEMENT_REJECTION_KEYS: Record<string, string> = {
 };
 
 export function formatDispatchError(error: unknown, t: TFunction): string | undefined {
+  if (errorCode(error) === "question_superseded") return t("errors.question_superseded");
   const message = errorMessage(error);
   const match = message.match(NOT_READY_AGENTS_RE);
   if (match) {

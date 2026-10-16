@@ -108,3 +108,19 @@ _Avoid_: Project, room
 The user who owns and can currently access a Project. Human collaborator
 membership is a separate future authorization concept, not the Project Agent roster.
 _Avoid_: Project Agent, lead Agent
+
+**Wait**:
+A Task parked at `waiting_for_human` on a person, recorded as its
+`waitingRequest`: a `questionId`, a kind — `question` (the agent asked),
+`check` (a gate stopped the round), or `budget` (continuation rounds ran out) —
+and, for a question, the agent's words and offered answers. It names the
+Thread it is answered in. Every surface renders the API's `awaiting`
+projection of it rather than re-deriving one.
+_Avoid_: Block (a blocked Task is stuck on an impediment, not on a person),
+pending decision (a rejected turn's own control)
+
+**Answer**:
+A message sent in the Thread a Wait names, carrying that Wait's `questionId`.
+It resumes the Task as its next round only while the Task still waits on that
+question; an Answer to a replaced question is refused (`question_superseded`).
+_Avoid_: Reply (any message), approval

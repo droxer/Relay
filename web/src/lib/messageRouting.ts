@@ -61,7 +61,7 @@ export function resolveThreadMessageAddress({ text, candidates, defaultAgentId, 
 }
 
 /** Stable retry identity for one semantic continued-thread request. */
-export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style }: {
+export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style, questionId = null }: {
   sessionId: string;
   text: string;
   intent: ThreadMessageInput["intent"];
@@ -69,6 +69,8 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
   /** Aiming the same text at another team is a different request. */
   addressTeamId?: string | null;
   style?: ThreadMessageInput["style"] | null;
+  /** The same words answering a newer question are a new answer. */
+  questionId?: string | null;
 }): string {
   return JSON.stringify([
     sessionId,
@@ -77,6 +79,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
     [...new Set(addressAgentIds)].sort(),
     ...(addressTeamId && addressAgentIds.length === 0 ? [addressTeamId] : []),
     ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? [{ style }] : []),
+    ...(questionId && intent === "accomplish" ? [{ questionId }] : []),
   ]);
 }
 
@@ -85,7 +88,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style }: {
+export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style, questionId = null }: {
   text: string;
   /** `discuss` asks without handing out work; styles apply only to work. */
   intent?: ThreadMessageInput["intent"];
@@ -95,12 +98,15 @@ export function threadMessageInput({ text, intent = "accomplish", addressAgentId
   addressTeamId?: string | null;
   userMessageId: string;
   style?: ThreadMessageInput["style"] | null;
+  /** The wait this message answers; an answer always resumes work. */
+  questionId?: string | null;
 }): ThreadMessageInput {
   return {
     text,
     intent,
     userMessageId,
     idempotencyKey: userMessageId,
+    ...(questionId && intent === "accomplish" ? { questionId } : {}),
     ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? { style } : {}),
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }

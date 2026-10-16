@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
+from ..collaboration.awaiting import task_awaiting
 from ..core.computer_identity import computer_id as resolve_computer_id
 from ..core.ids import new_database_id
 from ..core.models import AGENT_NAMES
@@ -65,18 +66,41 @@ ACTIVE_TASK_STATUSES = frozenset(
 ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
 
 
-def session_awaits_human(session: dict[str, Any]) -> bool:
-    """Whether the thread is parked on its human.
+def session_awaits_human(
+    session: dict[str, Any], tasks: list[dict[str, Any]] | None = None
+) -> bool:
+    """Whether the thread is parked on its human — the web's prompt rule.
 
-    A rejected turn says so in its status. A round that stopped to ask closes
-    its session `completed` with `workOutcome: "blocked"` instead (and parks
-    its task at `waiting_for_human`). A failed session also reads `blocked`,
-    so only a completed one counts. Mirrored by `isAwaitingHuman` in
-    web/src/lib/workflow.ts.
+    A rejected turn says so in its status. A round that stopped closes its
+    session `completed` and parks its task, so a completed thread waits when a
+    waiting task names it (`awaiting.sessionId`). A thread with no task, or a
+    legacy one whose task the caller does not hold, waits when its last
+    round was blocked; a held task that waits elsewhere, or no longer waits,
+    means that blocked outcome is history.
     """
-    return session.get("status") == "waiting_for_human" or (
-        session.get("status") == "completed" and session.get("workOutcome") == "blocked"
+    if session.get("status") == "waiting_for_human":
+        return True
+    if session.get("status") != "completed":
+        return False
+    tasks = tasks or []
+    if any(
+        (task_awaiting(task) or {}).get("sessionId") == session.get("id")
+        for task in tasks
+    ):
+        return True
+    if session.get("workOutcome") != "blocked":
+        return False
+    scope = next(
+        (
+            item.get("workScope")
+            for item in session.get("collaborationRounds") or []
+            if item.get("roundId") == session.get("activeRoundId")
+        ),
+        None,
     )
+    if isinstance(scope, dict) and scope.get("kind") == "task":
+        return not any(task.get("id") == scope.get("taskId") for task in tasks)
+    return True
 
 
 def session_artifact(
@@ -143,6 +167,8 @@ def task_brief_item(task: dict[str, Any]) -> dict[str, Any]:
         "routineState": task.get("routineState") if task.get("isRoutine") else None,
         "routineNextRunAt": task.get("routineNextRunAt"),
         "linkedSessionIds": task.get("linkedSessionIds", []),
+        # Where a waiting task's answer belongs: not necessarily its newest link.
+        "awaiting": task_awaiting(task),
         "updatedAt": task.get("updatedAt"),
         "createdAt": task.get("createdAt"),
     }
@@ -479,7 +505,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
                     session
                     for session in sessions
                     if session.get("status") in ACTIVE_SESSION_STATUSES
-                    or session_awaits_human(session)
+                    or session_awaits_human(session, tasks)
                 ]
             ),
             "taskCount": len(tasks),
