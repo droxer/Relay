@@ -1,6 +1,7 @@
 import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { syncDirectory } from "./sync-directory.js";
 import type { DaemonNodeHeartbeatSettings, DaemonNodeSandboxMode } from "relay-core";
 
 interface ManagedEnrollment {
@@ -30,6 +31,5 @@ export function saveManagedEnrollment(path: string, enrollment: ManagedEnrollmen
   const fd = openSync(temporary, "wx", 0o600);
   try { writeFileSync(fd, JSON.stringify(enrollment)); fsyncSync(fd); } finally { closeSync(fd); }
   renameSync(temporary, path);
-  const directory = openSync(dirname(path), "r");
-  try { fsyncSync(directory); } finally { closeSync(directory); }
+  syncDirectory(dirname(path));
 }

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { syncDirectory } from "./sync-directory.js";
 import type { ExecutionEvidence } from "./exit-proof.js";
 
 export interface ExecutionRecord extends ExecutionEvidence {
@@ -54,16 +55,11 @@ export class ExecutionJournal {
       fsyncSync(fd);
     } finally { closeSync(fd); }
     renameSync(temporary, this.path(record.id));
-    this.syncDirectory();
+    syncDirectory(this.directory);
   }
 
   confirmExit(id: string): void {
     rmSync(this.path(id), { force: true });
-    this.syncDirectory();
-  }
-
-  private syncDirectory(): void {
-    const fd = openSync(this.directory, "r");
-    try { fsyncSync(fd); } finally { closeSync(fd); }
+    syncDirectory(this.directory);
   }
 }

@@ -303,7 +303,15 @@ calls the backend origin directly with `credentials: "include"`.
    a per-computer LaunchAgent (macOS) or systemd user service (Linux). The service
    starts at user login and restarts after failures. Linux requires an active
    systemd user session; append `--foreground` to the copied command to run in
-   the terminal instead. It does not enable system-wide startup or Linux linger.
+   the terminal instead. It does not enable system-wide startup or Linux linger;
+   when linger is off it prints the `sudo loginctl enable-linger <user>` command
+   that keeps the service running without a login. On macOS a workspace under
+   Desktop, Documents, Downloads, iCloud Drive, cloud storage or `/Volumes` gets
+   a notice that the background `node` process needs Files and Folders access,
+   and an install over SSH (no GUI session for launchd) points to `--foreground`.
+   The workspace is recorded by its canonical path (symlinks resolved, the
+   volume's spelling; Windows compares it without case), so re-running setup
+   with a differently spelled path upgrades the same computer.
    Control the service afterwards with `relay stop`, `relay start`,
    `relay restart`, `relay status`, and `relay logs [--follow]`. `stop` keeps the
    service off across logins until `relay start` (or re-running the installer);
@@ -315,7 +323,9 @@ calls the backend origin directly with `credentials: "include"`.
    work before checking for runs in flight and holds that pause through the
    restart. It refuses active runs or a daemon that cannot acknowledge the pause
    unless given `--force`. Failed updates release the pause; use `relay status`
-   to check service health afterward.
+   to check service health afterward. An update also puts the invoking shell's
+   PATH in front of the saved one, so agent CLIs installed since setup are found.
+   On macOS and Windows, `service.log` rotates to `service.log.1` past 10 MB.
 
    **Windows** (10 version 1803 or newer, x64/arm64) gets a PowerShell twin:
    `irm <origin>/install.ps1 | iex`, or for an enrolled computer
@@ -328,6 +338,10 @@ calls the backend origin directly with `credentials: "include"`.
    logon task for the installing account that starts a hidden PowerShell, which
    runs `windows-service-host.js`; that host appends to `service.log` and
    restarts the daemon 10 seconds after a crash, matching launchd and systemd.
+   Windows has no process groups, so a run's processes are found through
+   `ParentProcessId` and creation times (`windows-process-tree.ts`): cancelling
+   or finishing a run ends everything its bash script started, orphans
+   included, and a restarted daemon settles a run once that tree is gone.
    `relay.cmd` lands in `%USERPROFILE%\.local\bin`; the installer prints its
    full path for `stop`, `start`, `restart`, `status`, and `logs`.
    Confirm that the
@@ -335,7 +349,8 @@ calls the backend origin directly with `credentials: "include"`.
    online heartbeat.
 
    Client versions live in `~/.local/share/relay/releases/<sha256>/`, private
-   runtimes in `~/.local/share/relay/runtimes/`, and launchers in
+   runtimes in `~/.local/share/relay/runtimes/` (a successful install removes
+   those no installed service uses, keeping the two newest others), and launchers in
    `~/.local/bin/relay` (service control) and `~/.local/bin/relay-daemon`. Services use absolute paths, so no PATH edit is
    needed to connect. Node credentials remain in the existing private
    `~/.relay/daemon-nodes/<node-id>/credentials/` storage, not service definitions.

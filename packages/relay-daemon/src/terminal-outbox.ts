@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { syncDirectory } from "./sync-directory.js";
 
 // Timeout and rate limiting are transient even though they are 4xx.
 const permanentlyRejected = (status: number) => status >= 400 && status < 500 && status !== 408 && status !== 429;
@@ -60,8 +61,7 @@ export class TerminalOutbox {
       const fd = openSync(temporary, "wx", 0o600);
       try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
       renameSync(temporary, path);
-      const directoryFd = openSync(this.directory, "r");
-      try { fsyncSync(directoryFd); } finally { closeSync(directoryFd); }
+      syncDirectory(this.directory);
       if (output) { this.sizes.set(key, bytes); this.outputBytes += bytes; }
     }
     this.order.set(key, { owner: owner(event), sequence: sequence(event) });

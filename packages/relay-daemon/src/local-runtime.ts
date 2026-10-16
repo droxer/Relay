@@ -3,7 +3,8 @@ import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
-import { localExitProven } from "./exit-proof.js";
+import { localExitProven, windowsExitProven } from "./exit-proof.js";
+import { listWindowsProcesses } from "./windows-process-tree.js";
 import { localBash } from "./local-shell.js";
 import { agentPreflightError } from "./agent-preflight.js";
 
@@ -19,7 +20,11 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
       execStream: localProcessExecStream,
       release: () => undefined,
     }),
-    proveExited: async (records) => records.filter((record) => localExitProven(record)).map((record) => record.id),
+    proveExited: async (records) => {
+      if (process.platform !== "win32") return records.filter((record) => localExitProven(record)).map((record) => record.id);
+      const processes = records.length ? await listWindowsProcesses() : undefined;
+      return records.filter((record) => windowsExitProven(record, processes)).map((record) => record.id);
+    },
     close: async () => undefined,
   };
 }

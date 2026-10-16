@@ -1,5 +1,6 @@
 /** The computers this account already installed, read back from the service files the installer wrote. */
-import { readFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, realpathSync, unlinkSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { installedServices, serviceArguments, type InstalledService } from './control.js';
 import { decodeServiceFile, deleteWindowsTask, stopWindowsTask } from './windows-service.js';
 
@@ -62,8 +63,20 @@ export function installedComputers(platform: string, home: string): InstalledCom
 }
 
 /** One backend plus one workspace is one computer; every service for it is the same install. */
-export function sameComputer(computer: InstalledComputer, backendUrl: string, workspace: string): boolean {
-  return origin(computer.backendUrl) === origin(backendUrl) && computer.workspace === workspace;
+export function sameComputer(computer: InstalledComputer, backendUrl: string, workspace: string, platform: string = process.platform): boolean {
+  return origin(computer.backendUrl) === origin(backendUrl) && workspaceIdentity(computer.workspace, platform) === workspaceIdentity(workspace, platform);
+}
+
+/**
+ * The directory a workspace path names, however it was typed: symlinks
+ * resolved (macOS `/tmp` is `/private/tmp`) and the on-disk spelling of a
+ * case-insensitive volume. Windows paths also compare without case, since a
+ * drive letter's case is not preserved everywhere.
+ */
+export function workspaceIdentity(path: string, platform: string = process.platform): string {
+  let canonical: string;
+  try { canonical = realpathSync.native(path); } catch { canonical = resolve(path); }
+  return platform === 'win32' ? canonical.toLowerCase() : canonical;
 }
 
 function origin(url: string): string | undefined {

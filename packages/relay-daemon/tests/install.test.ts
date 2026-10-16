@@ -45,7 +45,7 @@ test('installed services restart failures but leave deleted-node clean exits sto
 
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -94,7 +94,7 @@ test('installer verifies authentication and writes a service using the real pack
       }
       response.setHeader('Content-Type', 'application/json');
       if (request.url === '/api/v1/computer-authorizations') {
-        assert.equal(JSON.parse(body).workspacePath, workspace);
+        assert.equal(JSON.parse(body).workspacePath, realpathSync.native(workspace));
         // The fixture backend is loopback, so this is a local dev install.
         assert.equal(JSON.parse(body).displayName, 'Relay Dev');
         response.statusCode = 201;
@@ -103,7 +103,7 @@ test('installer verifies authentication and writes a service using the real pack
       }
       if (request.url === '/api/v1/computer-authorizations/token') {
         assert.equal(request.headers.authorization, 'Device device-fixture-secret');
-        response.end(JSON.stringify({ sandboxId: 'node-install-test', userId: 'alice', token: 'fixture-token', workspacePath: workspace }));
+        response.end(JSON.stringify({ sandboxId: 'node-install-test', userId: 'alice', token: 'fixture-token', workspacePath: realpathSync.native(workspace) }));
         return;
       }
       if (rejected && request.url?.endsWith('/auth-check')) {
@@ -206,7 +206,10 @@ test('installer verifies authentication and writes a service using the real pack
     assert.match(upgrade.stdout, /Removed an older Relay Dev install for this workspace \(node-stale\)/);
     assert.doesNotMatch(upgrade.stdout + upgrade.stderr, /fixture-token/);
     assert.equal(existsSync(stale), false);
-    assert.equal(readFileSync(service, 'utf8'), content);
+    // Device setup names the workspace by its canonical path (macOS /var is /private/var),
+    // and still recognized the services that spelled it differently as this computer.
+    const canonicalContent = content.replace(`<string>${workspace}</string>`, `<string>${realpathSync.native(workspace)}</string>`);
+    assert.equal(readFileSync(service, 'utf8'), canonicalContent);
 
     // Foreground reuse must stop the background service before registering as the same node.
     foreground = true;
@@ -234,7 +237,7 @@ test('installer verifies authentication and writes a service using the real pack
     assert.match(deviceSetup.stdout, /Confirm this computer in your browser/);
     assert.doesNotMatch(deviceSetup.stdout + deviceSetup.stderr, /device-fixture-secret|fixture-token/);
     assert.equal(registrations.length, 0);
-    assert.equal(readFileSync(service, 'utf8'), content);
+    assert.equal(readFileSync(service, 'utf8'), canonicalContent);
 
     // Exercise the actual CLI: 410 is an intentional shutdown (exit 0), not a crash.
     deleted = true;

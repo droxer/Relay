@@ -62,6 +62,17 @@ export function writeRuntimeProfile(stateDir: string, profile: RuntimeProfile): 
   return path;
 }
 
+/**
+ * A saved profile with the installing shell's PATH in front, so re-running the
+ * installer (`relay update`) finds agent CLIs installed since setup while
+ * keeping directories only the original shell had.
+ */
+export function withCurrentPath(profile: RuntimeProfile, currentPath: string | undefined, separator: string): RuntimeProfile {
+  if (!currentPath) return profile;
+  const entries = [...currentPath.split(separator), ...(profile.environment.PATH ?? "").split(separator)].filter(Boolean);
+  return { ...profile, environment: { ...profile.environment, PATH: [...new Set(entries)].join(separator) } };
+}
+
 export function loadRuntimeProfile(path: string): Record<string, string> {
   return runtimeProfileEnvironment(readPrivateJson(path));
 }

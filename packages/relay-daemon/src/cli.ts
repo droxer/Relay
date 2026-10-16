@@ -6,6 +6,7 @@ import { applyLocalRuntimeEnvironment, loadPackageEnv } from "relay-core";
 import { resolveSandboxMode, runRelayDaemon, runRelayDaemonDoctor } from "./index.js";
 
 import { loadRuntimeProfile } from "./runtime-profile.js";
+import { serviceLogPath, watchServiceLog } from "./service-log.js";
 import { isUserIdFlag, userIdFromEnv } from "./legacy-names.js";
 
 loadPackageEnv("relay-daemon");
@@ -246,6 +247,11 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     }
     if (!report.ok) process.exitCode = 1;
     return;
+  }
+  const stateDir = process.env.RELAY_DAEMON_STATE_DIR;
+  // launchd and the Windows service host append to service.log; systemd's journal bounds itself.
+  if (stateDir && (process.platform === "darwin" || process.platform === "win32")) {
+    watchServiceLog(serviceLogPath(stateDir), (message) => console.error(message));
   }
   await runRelayDaemon({
     backendUrl: args.backendUrl ?? process.env.RELAY_BACKEND_URL,
