@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type MouseEvent, type ReactNode } from "react";
+import { useEffect, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
 import { useResolvedTheme } from "../../hooks/useResolvedTheme";
@@ -14,7 +14,6 @@ import {
   LANDING_TOUR,
   LANDING_TOUR_SIZES,
   RELAY_CLONE_COMMAND,
-  RELAY_GITHUB_URL,
   landingCtas,
   landingShotSrc,
   landingShotSrcSet,
@@ -25,7 +24,7 @@ import { Chevrons } from "../AuthCanvas";
 import { RelayMark } from "../RelayMark";
 import { ICON, ThemeDark, ThemeLight } from "../icons";
 import { PublicLink } from "../waitlist/PublicLink";
-import { GithubMark } from "./GithubMark";
+import { GithubLink, GithubMark } from "./GithubMark";
 
 const HOW_ID = "landing-how";
 const PRODUCT_ID = "landing-product";
@@ -79,16 +78,6 @@ function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string;
         decoding="async"
       />
     </figure>
-  );
-}
-
-/** The public repository, opened in a new tab: it is a different site, and
-    a visitor reading the code should not lose their place on this page. */
-function GithubLink({ className, children, label }: { className: string; children: ReactNode; label?: string }) {
-  return (
-    <a className={className} href={RELAY_GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={label}>
-      {children}
-    </a>
   );
 }
 
