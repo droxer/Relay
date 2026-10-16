@@ -4,6 +4,8 @@ import { describe, it } from "node:test";
 import {
   mergeSessionSnapshotIntoSessions,
   mergeSessionSummaries,
+  sessionTrailsSummary,
+  summaryEventCountOf,
 } from "../src/lib/sessionPollMerge.js";
 import type { RelaySession, SessionSummary } from "../src/types.js";
 
@@ -69,6 +71,27 @@ describe("session poll merging", () => {
 
     assert.equal(merged[0].title, "Renamed");
     assert.equal(merged[0].events, current[0].events);
+  });
+
+  it("marks a session whose events trail the summary until its detail catches up", () => {
+    const current = [session({ events: [] })];
+
+    const merged = mergeSessionSummaries(current, [summary({ eventCount: 2, status: "completed" })]);
+    assert.equal(merged[0].status, "completed");
+    assert.equal(summaryEventCountOf(merged[0]), 2);
+    assert.equal(sessionTrailsSummary(merged[0]), true);
+
+    const caughtUp = mergeSessionSummaries(current, [summary({ eventCount: 0 })]);
+    assert.equal(sessionTrailsSummary(caughtUp[0]), false);
+    assert.equal(sessionTrailsSummary(session()), false);
+    assert.equal(sessionTrailsSummary(undefined), false);
+  });
+
+  it("clears the trailing mark when a fetched snapshot replaces the session", () => {
+    const polled = mergeSessionSummaries([session()], [summary({ eventCount: 2 })]);
+    const snapshot = session({ events: [] });
+    const [refetched] = mergeSessionSnapshotIntoSessions(polled, snapshot);
+    assert.equal(sessionTrailsSummary(refetched), false);
   });
 
   it("inflates a newly discovered summary until its detail is fetched", () => {

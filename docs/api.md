@@ -309,6 +309,9 @@ replay. Submit a new recovery after inspecting the current task.
 Daemon-originated task status, activity, round/continuation, and workspace-wait
 writes check that owner inside the task write transaction. Stale writes append
 no task event; stale redispatch is refused even after a replacement finishes.
+Round verdicts are recorded once per execution owner, so retrying closeout does
+not spend the continuation budget again. Recovery repairs a partial thread/task
+completion before retiring the execution request.
 Prepared legacy requests use revision zero and cannot write over a versioned
 owner. These are control-plane write fences, not filesystem/process leases or
 restrictions on deliberate human edits. Upgrade all backend replicas together:
@@ -321,7 +324,7 @@ work or overwrite a replacement's result.
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note
-and prior-context excerpts, and run/artifact/progress-file references. Retrying
+and prior-context excerpts, and run/artifact/handoff-notes references (`progressFile`). Retrying
 an accepted operation preserves that context even if the thread later changes.
 Versions 2 and 3 require `handoffContext.receipt`, using
 `relay.handoff.receipt` version 1. The receipt preserves the work scope, verbatim

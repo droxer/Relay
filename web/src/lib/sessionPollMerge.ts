@@ -3,10 +3,31 @@ import { omit } from "./omit.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
+/**
+ * A session as the summary poll leaves it. `summaryEventCount` is the event
+ * count the last summary reported: the summary carries status but not the
+ * runs or rounds, so a session whose events trail that count holds stale run
+ * data until its detail is fetched again. A fetched snapshot or streamed
+ * events clear the gap.
+ */
+type PolledSession = RelaySession & { summaryEventCount?: number };
+
+/** Whether the poll has seen events this cached session does not hold yet. */
+export function sessionTrailsSummary(session: RelaySession | undefined): boolean {
+  const count = (session as PolledSession | undefined)?.summaryEventCount;
+  return session !== undefined && count !== undefined && count > session.events.length;
+}
+
+/** The summary's event count, kept so a stale session can be refetched. */
+export function summaryEventCountOf(session: RelaySession | undefined): number | undefined {
+  return (session as PolledSession | undefined)?.summaryEventCount;
+}
+
 function inflateSessionSummary(summary: SessionSummary): RelaySession {
   const { artifactCount, ...fields } = omit(summary, "eventCount", "runCount");
   return {
     ...fields,
+    summaryEventCount: summary.eventCount,
     workOutcome: summary.workOutcome ?? undefined,
     participants: ["human"],
     agentRuns: [],
@@ -17,7 +38,7 @@ function inflateSessionSummary(summary: SessionSummary): RelaySession {
     decisions: [],
     collaborationRounds: [],
     events: [],
-  } as RelaySession;
+  } as PolledSession;
 }
 
 export function mergeSessionSummaries(
@@ -35,12 +56,13 @@ export function mergeSessionSummaries(
     return {
       ...existing,
       ...fields,
+      summaryEventCount: summary.eventCount,
       workOutcome: summary.workOutcome ?? undefined,
       // A newer summary has no outcome text. Do not pair its new result with
       // an earlier round's reason while the detailed event stream catches up.
       finalOutcome: summary.eventCount > existing.events.length ? undefined : existing.finalOutcome,
       workspaceArtifactCount: artifactCount,
-    } as RelaySession;
+    } as PolledSession;
   });
 }
 

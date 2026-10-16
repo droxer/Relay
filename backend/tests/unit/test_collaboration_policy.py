@@ -336,3 +336,85 @@ def test_runtime_and_findings_repairs_share_one_budget():
         max_repairs=1,
     )
     assert decision.kind == "fail"
+
+
+def test_an_unaddressed_answer_still_resumes_the_requester():
+    prior = {
+        WORK_RESULTS: {"lead": result(), "build": result()},
+        QUESTION_RESUME: 2,
+        QUESTION_TARGET: 1,
+    }
+    unaddressed = answer(to=None)
+    state = record_work_result(prior, assignments()[1], unaddressed, answering=True)
+
+    transition = next_work_transition(
+        request(1, prior), assignments()[1], unaddressed, state, max_repairs=2
+    )
+
+    assert transition.next_index == 2
+    assert WORK_PLAN_ERROR not in transition.state
+
+
+def test_an_answer_addressed_to_someone_else_does_not_resume_the_requester():
+    prior = {
+        WORK_RESULTS: {"lead": result(), "build": result()},
+        QUESTION_RESUME: 2,
+        QUESTION_TARGET: 1,
+    }
+    misaddressed = answer(to="final")
+    state = record_work_result(prior, assignments()[1], misaddressed, answering=True)
+
+    transition = next_work_transition(
+        request(1, prior), assignments()[1], misaddressed, state, max_repairs=2
+    )
+
+    assert transition.next_index is None
+
+
+def test_a_consultation_drops_the_askers_earlier_round_verdict():
+    """The asker reruns once answered; a stale verdict would close the round
+    on the old question and ignore the answer."""
+    asking = result(
+        "continue",
+        messages=[{"kind": "question", "toWorkItemId": "build", "text": "Reject empty input?"}],
+    )
+    prior = {"_relay_round_result": {"status": "blocked", "note": "old question"}}
+    state = record_work_result(
+        {**prior, WORK_RESULTS: {"lead": result(), "build": result()}}, assignments()[3], asking
+    )
+
+    transition = next_work_transition(
+        request(3, prior), assignments()[3], asking, state, max_repairs=2
+    )
+
+    assert transition.next_index == 1
+    assert transition.state[QUESTION_RESUME] == 3
+    assert "_relay_round_result" not in transition.state
+
+
+def test_a_solo_coordinator_plan_does_not_queue_itself_again():
+    solo = [{**assignments()[0], "synthesizer": True}]
+    state = {COLLABORATION_MANIFEST_STATE_KEY: {"roundId": "round_1"}}
+
+    transition = next_work_transition(
+        {"assignments": solo, "currentIndex": 0, "state": {}},
+        solo[0],
+        result(plan=[{"agentId": "lead", "objective": "Do it again"}]),
+        state,
+        max_repairs=2,
+    )
+
+    assert transition.plan is None
+    assert transition.next_index == 1
+
+
+def test_repair_notes_reach_only_the_repaired_item_and_the_work_after_it():
+    from relay.collaboration.work import WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, work_repair_notes
+
+    state = {WORK_REPAIR_NOTE: "Repair: handle empty input", WORK_REPAIR_TARGET: "build"}
+    items = assignments()
+
+    assert work_repair_notes(items, 0, state) == {}
+    assert work_repair_notes(items, 1, state) == {"repair_note": "Repair: handle empty input"}
+    assert "revalidate" in work_repair_notes(items, 2, state)["work_revalidation_note"]
+    assert work_repair_notes(items, 1, {}) == {}

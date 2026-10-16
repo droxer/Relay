@@ -17,6 +17,17 @@ def test_bridge_bounds_long_current_turn_and_preserves_latest_result() -> None:
     assert "NEXT: verify migration" in bridge
 
 
+def test_bridge_omission_names_this_threads_handoff_notes() -> None:
+    session = {"id": "s", "events": [], "agentRuns": [
+        {"agent": "codex", "agentLog": f"● result-{i}"} for i in range(40)
+    ]}
+    shared_root = compute_prior_agent_bridge(
+        session, "claude", _FakeStore({}), progress_file="HANDOFF-s.md"
+    )
+    assert "(HANDOFF-s.md)" in shared_root
+    assert "(HANDOFF.md)" in compute_prior_agent_bridge(session, "claude", _FakeStore({}))
+
+
 def test_bridge_bounds_one_oversized_result_without_losing_attribution() -> None:
     session = {"id": "s", "events": [], "agentRuns": [
         {"agent": "codex", "status": "cancelled", "agentLog": "● " + "x" * 50000 + "NEXT STEP"},

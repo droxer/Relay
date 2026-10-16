@@ -23,6 +23,16 @@ def prepare_execution_events(
         legacy = owner is None and execution_owner.get("revision") == 0
         if task.get("deletedAt") or (not legacy and owner != execution_owner):
             return []
+        # A closeout can be retried after its verdict persisted. Deduplicate
+        # under the write lock, including across backend replicas, so the
+        # same execution cannot consume the continuation budget twice.
+        events = [
+            {**event, "executionOwner": dict(execution_owner)}
+            if event.get("type") == "task.round" else event
+            for event in events
+            if event.get("type") != "task.round"
+            or task.get("lastRoundExecutionOwner") != execution_owner
+        ]
     claims = [
         event for event in events if event.get("type") == "task.execution.claimed"
     ]

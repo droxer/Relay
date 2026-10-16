@@ -1368,7 +1368,9 @@ class LocalDaemonStore:
             command = self._get_command(event["commandId"])
             if (
                 not command
-                or command.get("status") not in ("queued", "dispatched")
+                or command.get("status") not in ("pending", "queued", "dispatched")
+                or (command.get("status") == "pending" and not event.get("_requireUndelivered"))
+                or (event.get("_requireUndelivered") and command.get("status") == "dispatched")
                 or (
                     event.get("leaseId") is not None
                     and (
@@ -3452,7 +3454,7 @@ class DatabaseDaemonStore:
                 conn.execute(
                     select(self.commands).where(
                         self.commands.c.id == event["commandId"]
-                    )
+                    ).with_for_update()
                 )
                 .mappings()
                 .first()
@@ -3460,7 +3462,11 @@ class DatabaseDaemonStore:
             if not row:
                 return False
             command = row_to_command(row)
-            if command.get("status") not in ("queued", "dispatched") or (
+            if command.get("status") not in ("pending", "queued", "dispatched") or (
+                command.get("status") == "pending" and not event.get("_requireUndelivered")
+            ) or (
+                event.get("_requireUndelivered") and command.get("status") == "dispatched"
+            ) or (
                 event.get("leaseId") is not None
                 and (
                     command.get("status") != "dispatched"

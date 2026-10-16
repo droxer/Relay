@@ -176,3 +176,37 @@ def test_receipt_marks_partial_evidence_and_prioritizes_checkpoint():
     assert len(receipt["workspace"]["artifacts"]) == 24
     assert receipt["workspace"]["referencesOmitted"] is True
     assert receipt["workspace"]["coverage"] == "partial"
+
+
+@pytest.mark.parametrize(
+    ("layout", "legacy_path"),
+    [("thread", "PROGRESS.md.handoff.json"), ("node-root", "PROGRESS-thread.md.handoff.json")],
+)
+def test_receipt_finds_a_checkpoint_written_before_the_handoff_rename(layout, legacy_path):
+    """The source run was dispatched while the notes were PROGRESS.md; a
+    handoff captured after the deploy must still find its checkpoint."""
+    session = source()
+    session["workspaceLayout"] = layout
+    session["artifacts"][0]["workspaceRelativePath"] = legacy_path
+    receipt = capture_handoff_context(
+        session, TARGET, None,
+        Snapshots({"checkpoint": b'{"assignmentId":"source","pending":["Finish work"]}'}),
+    )["receipt"]
+    assert receipt["checkpoint"]["status"] == "recorded"
+    assert receipt["checkpoint"]["path"] == legacy_path
+
+
+def test_receipt_prefers_the_current_checkpoint_name_over_a_legacy_one():
+    session = source()
+    session["artifacts"].append({
+        "id": "legacy", "kind": "workspace_file", "agentRunId": "run",
+        "workspaceRelativePath": "PROGRESS.md.handoff.json",
+    })
+    receipt = capture_handoff_context(
+        session, TARGET, None,
+        Snapshots({
+            "checkpoint": b'{"assignmentId":"source","pending":["Current"]}',
+            "legacy": b'{"assignmentId":"source","pending":["Legacy"]}',
+        }),
+    )["receipt"]
+    assert receipt["checkpoint"]["path"] == "HANDOFF.json"

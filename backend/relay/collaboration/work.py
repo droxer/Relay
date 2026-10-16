@@ -293,6 +293,36 @@ def repair_transition(
     return start, updated
 
 
+def work_repair_notes(
+    assignments: list[dict[str, Any]], index: int, state: dict[str, Any]
+) -> dict[str, str]:
+    """The repair prompt notes for the member at ``index``, if any.
+
+    The repaired item gets the findings; only work after it went stale, so only
+    those members revalidate. An earlier member (a consultation target, the
+    coordinator after a runtime repair) has nothing to revalidate.
+    """
+    note = state.get(WORK_REPAIR_NOTE)
+    if not note:
+        return {}
+    repaired = next(
+        (
+            position
+            for position, item in enumerate(assignments)
+            if item["assignmentId"] == state.get(WORK_REPAIR_TARGET)
+        ),
+        None,
+    )
+    if repaired is None or index < repaired:
+        return {}
+    if index == repaired:
+        return {"repair_note": note}
+    return {
+        "work_revalidation_note": "Earlier evidence is stale; revalidate the updated work within your own role. "
+        + note
+    }
+
+
 def question_transition(
     assignments: list[dict[str, Any]],
     index: int,
@@ -317,7 +347,9 @@ def question_transition(
             or result.get("status") != "done"
             or not any(
                 message.get("kind") == "answer"
-                and message.get("toWorkItemId") == requester
+                # One question is open, so an unaddressed answer can only be
+                # for its asker; refusing it ended the whole round.
+                and message.get("toWorkItemId") in (requester, None, "")
                 for message in result.get("messages", [])
             )
         ):
@@ -348,8 +380,13 @@ def question_transition(
                 assignments[index].get("workItemId")
                 or assignments[index]["assignmentId"]
             )
+            # The asker reruns once answered and reports afresh; an earlier
+            # verdict left here would close the round on the old question.
+            consult_state = {
+                key: value for key, value in state.items() if key != "_relay_round_result"
+            }
             return target, {
-                **state,
+                **consult_state,
                 QUESTION_RESUME: index,
                 QUESTION_TARGET: target,
                 QUESTION_COUNT: int(state.get(QUESTION_COUNT) or 0) + 1,

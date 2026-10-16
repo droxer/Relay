@@ -11,6 +11,8 @@ import json
 import re
 from typing import Any, Protocol
 
+from .handoff_files import HANDOFF_FILE
+
 
 class ArtifactReader(Protocol):
     def read_artifact(self, session_id: str, artifact_id: str) -> str: ...
@@ -196,6 +198,8 @@ def compute_prior_agent_bridge(
     session: dict[str, Any],
     agent: str,
     store: ArtifactReader,
+    *,
+    progress_file: str = HANDOFF_FILE,
 ) -> str | None:
     """Build the bridge string for the next run of ``agent`` on ``session``.
 
@@ -222,7 +226,7 @@ def compute_prior_agent_bridge(
 
     if len(blocks) <= _MAX_BRIDGE_BLOCKS and len("\n\n".join(blocks)) <= _MAX_BRIDGE_CHARS:
         return "\n\n".join(blocks)
-    marker = "[Earlier agent context omitted; consult the shared handoff notes (HANDOFF.md) if present and prior run logs.]"
+    marker = f"[Earlier agent context omitted; consult the shared handoff notes ({progress_file}) if present and prior run logs.]"
     budget = _MAX_BRIDGE_CHARS - len(marker) - 2
     kept: list[str] = []
     for block in reversed(blocks):
