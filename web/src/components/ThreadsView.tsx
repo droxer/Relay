@@ -40,6 +40,7 @@ import { DecisionBar } from "./composer/DecisionBar";
 import { Composer, type ComposerHandle } from "./composer/Composer";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
 import { buildSpaceItems, threadHasMultipleProducers } from "../lib/threadSpace";
+import { latestThreadArtifacts } from "../lib/threadArtifacts";
 import { ProjectDrawer } from "./ProjectDrawer";
 // The project page carries the whole task board (records, board, filters,
 // date picker); load it with the first project opened, not with every thread.
@@ -293,10 +294,16 @@ export function ThreadsView({
       : activeAgentDisplayName,
     [activeSession, activeAgentDisplayName, logicalAgentNames, agentDisplayNames],
   );
-  const spaceItems = useMemo(
+  // Every version stays selectable — a transcript chip opens the version its
+  // run produced — but the list names each file once, at its newest version.
+  const spaceSelectableItems = useMemo(
     () => buildSpaceItems(visibleArtifacts, activeSession?.agentRuns, logicalAgentNames, agentDisplayNames),
     [visibleArtifacts, activeSession?.agentRuns, logicalAgentNames, agentDisplayNames],
   );
+  const spaceItems = useMemo(() => {
+    const latest = new Set(latestThreadArtifacts(visibleArtifacts));
+    return spaceSelectableItems.filter((item) => latest.has(item.artifact));
+  }, [spaceSelectableItems, visibleArtifacts]);
   const spaceShowProducer = useMemo(
     () => threadHasMultipleProducers(activeSession?.agentRuns),
     [activeSession?.agentRuns],
@@ -555,6 +562,7 @@ export function ThreadsView({
           sessionId={activeSession.id}
           projectId={activeSession.projectId ?? null}
           items={spaceItems}
+          selectableItems={spaceSelectableItems}
           showProducer={spaceShowProducer}
           selectedArtifactId={spaceArtifactId}
           onSelectArtifact={onSelectSpaceArtifact}

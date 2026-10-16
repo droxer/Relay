@@ -44,7 +44,7 @@ import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ThreadsView } from "./components/ThreadsView";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
-import { visibleThreadArtifacts } from "./lib/threadArtifacts";
+import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
 import { resolveNewThreadComputer } from "./lib/threadRuntime";
 import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
@@ -169,6 +169,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   });
 
   const visibleArtifacts = useMemo(() => visibleThreadArtifacts(activeSession), [activeSession]);
+  const threadFileCount = useMemo(() => latestThreadArtifacts(visibleArtifacts).length, [visibleArtifacts]);
 
   useEffect(() => {
     if (!initializingThread) return;
@@ -459,7 +460,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       threadListWidth={panels.threadListWidth}
       threadListResizing={panels.threadListResizing}
       mobileChatChrome={threadChromeVisible ? {
-        artifactCount: visibleArtifacts.length,
+        artifactCount: threadFileCount,
         inProject: Boolean(activeSession?.projectId),
         spaceOpen: spaceVisible,
         spaceDisabled: !activeSession,
@@ -549,7 +550,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             composerTeams={composerTeams}
             activeTeamId={roundTeamId}
             onTeamPicked={handleTeamPicked}
-            artifactCount={visibleArtifacts.length}
+            artifactCount={threadFileCount}
             visibleArtifacts={visibleArtifacts}
             spaceOpen={spaceVisible}
             spaceArtifactId={space.artifactId}
