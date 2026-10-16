@@ -58,7 +58,17 @@ export function archiveProject(projectId: string, expectedVersion: number): Prom
   });
 }
 
-export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued" | "waiting_for_upgrade" | "kept"; cleanupCommandId: string | null }> {
+export type ProjectWorkspaceCleanup = "queued" | "waiting_for_upgrade" | "waiting_for_computer" | "orphaned" | "kept";
+
+export interface ProjectDeletion {
+  deletedProjectId: string;
+  workspaceCleanup: ProjectWorkspaceCleanup;
+  cleanupCommandId: string | null;
+  /** Tasks outside the project that lost a thread but were kept. */
+  detachedTaskIds?: string[];
+}
+
+export function deleteProject(projectId: string, expectedVersion: number): Promise<ProjectDeletion> {
   const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
   return apiJson(`/projects/${encodeURIComponent(projectId)}?${query.toString()}`, { method: "DELETE" });
 }

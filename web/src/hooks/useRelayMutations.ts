@@ -38,6 +38,8 @@ import { applySessionEventUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects } from "../lib/projectDirectory";
+import { projectCleanupNotice, projectDeleteErrorMessage } from "../lib/projectDeletion";
+import { threadLabel } from "../lib/threads";
 
 type TokenArg = { token?: string };
 
@@ -367,7 +369,7 @@ export function useRelayMutations() {
   const deleteProjectMutation = useMutation({
     mutationFn: ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) =>
       deleteProject(projectId, expectedVersion),
-    onSuccess: async ({ deletedProjectId, workspaceCleanup }) => {
+    onSuccess: async ({ deletedProjectId, workspaceCleanup, detachedTaskIds }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY }),
         queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY }),
@@ -384,18 +386,25 @@ export function useRelayMutations() {
       queryClient.removeQueries({ queryKey: ["workspace-file", `project:${deletedProjectId}`] });
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "task-record"
         && (query.state.data as RelayTask | undefined)?.projectId === deletedProjectId });
+      const cleanup = projectCleanupNotice(workspaceCleanup);
+      const detached = detachedTaskIds?.length
+        ? ` ${t("project.tasks_detached", { count: detachedTaskIds.length })}`
+        : "";
       announce({
-        message: `${t("project.deleted")}. ${t(workspaceCleanup === "waiting_for_upgrade"
-          ? "project.cleanup_waiting_for_upgrade"
-          : workspaceCleanup === "kept" ? "project.cleanup_kept" : "project.cleanup_queued")}`,
-        tone: workspaceCleanup === "waiting_for_upgrade" ? "warn" : "info",
+        message: `${t("project.deleted")}. ${t(cleanup.key)}${detached}`,
+        tone: cleanup.tone,
       });
     },
     onError: (error: unknown) => {
-      const code = error instanceof Error ? error.message : "";
-      const key = code.includes("project_execution_active") ? "project.delete_active"
-        : code.includes("project_cleanup_unavailable") ? "project.delete_unavailable" : "errors.delete_project";
-      reportMutationError("Failed to delete project", error, t(key));
+      // A stale version means the project changed underneath the dialog; load
+      // the current one so the next attempt can succeed.
+      if (error instanceof RelayApiError && error.code === "project_version_conflict") void invalidateProjects();
+      const sessions = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY) ?? [];
+      const message = projectDeleteErrorMessage(error, (sessionId) => {
+        const session = sessions.find((candidate) => candidate.id === sessionId);
+        return session ? threadLabel(session) : undefined;
+      });
+      reportMutationError("Failed to delete project", error, t(message.key, message.values));
     },
   });
 

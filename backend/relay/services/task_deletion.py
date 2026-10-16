@@ -9,6 +9,9 @@ from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_ac
 from ..sessions.controller import SessionController, SessionRunInFlightError
 
 TERMINAL_SESSION_STATUSES = frozenset({"completed", "failed", "cancelled"})
+# Every cascade that deletes tasks takes this lock first, so deletions that
+# share a thread see each other and lock rows in the same order.
+TASK_DELETION_LOCK = "relay.task-deletion"
 
 
 class TaskDeletionContext(Protocol):
@@ -58,7 +61,7 @@ def delete_task(
     # share a thread must see each other's committed tombstones before deciding
     # whether to preserve it. A common lock also keeps cascade lock order stable.
     transaction = (
-        resource_transaction(engine, "relay.task-deletion")
+        resource_transaction(engine, TASK_DELETION_LOCK)
         if engine is not None else nullcontext()
     )
     with transaction:
