@@ -53,6 +53,7 @@ export function ThreadSpacePanel({
   sessionId,
   projectId,
   items,
+  selectableItems = items,
   showProducer,
   selectedArtifactId,
   onSelectArtifact,
@@ -66,6 +67,9 @@ export function ThreadSpacePanel({
    *  shared record the thread contributes to, so the panel leads with it. */
   projectId?: string | null;
   items: SpaceItem[];
+  /** Every version the selection may land on — older versions of a listed
+   *  file are not rows, but a transcript chip can still open one. */
+  selectableItems?: SpaceItem[];
   showProducer: boolean;
   selectedArtifactId: string | null;
   onSelectArtifact: (artifactId: string | null) => void;
@@ -75,7 +79,7 @@ export function ThreadSpacePanel({
   onResizeActive: (active: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const selected = resolveSelectedSpaceItem(items, selectedArtifactId);
+  const selected = resolveSelectedSpaceItem(selectableItems, selectedArtifactId);
   const isOverlay = useMediaQuery(SPACE_OVERLAY_QUERY);
   /* Modal only where the panel actually covers the viewport — the same query
      responsive.css uses to make it `fixed`, so the two cannot drift. Above
