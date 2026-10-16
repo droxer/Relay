@@ -99,7 +99,10 @@ def resolve_project_task_assignments(
     ]
     member_ids = [member.get("agentId") for member in members]
     lead_agent_id = project.get("leadAgentId")
-    if not members or lead_agent_id not in member_ids:
+    # Only a task that names no one falls back to the roster; one assigned to an
+    # agent or team on the project's computer runs even when the crew is empty.
+    names_runner = task.get("assignedAgentId") or task.get("assignedTeamId")
+    if not names_runner and (not members or lead_agent_id not in member_ids):
         raise ProjectDispatchError("project_roster_invalid", permanent=True)
     node = project_runtime_node(project, daemon_nodes)
     if node is None:

@@ -134,3 +134,46 @@ def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style
                for item in assignments)
     assert all(item["projectSnapshot"] == snapshot for item in assignments)
     assert snapshot["projectId"] == project["id"]
+
+
+_NODE = {
+    "id": "node", "userId": "alice", "workspaceId": "main", "online": True,
+    "status": "ready", "capabilities": ["project-workspaces"],
+}
+
+
+def _crewless_project() -> dict:
+    return {**_project(), "members": [], "leadAgentId": None}
+
+
+def test_crewless_project_runs_a_task_assigned_to_an_agent_on_its_computer(monkeypatch):
+    monkeypatch.setattr(
+        "relay.services.project_runtime.resolve_agent_assignments",
+        lambda assignments, **kwargs: assignments,
+    )
+    assignments, snapshot = resolve_project_task_assignments(
+        {"projectId": "project-1", "ownerUserId": "alice", "assignedAgentId": "alex"},
+        project_store=SimpleNamespace(get_project=lambda _: _crewless_project()),
+        agent_store=SimpleNamespace(get_agent=lambda _: {"id": "alex", "defaultRole": "implementer"}),
+        placement_store=None,
+        daemon_nodes=[_NODE],
+    )
+
+    assert [item["agentId"] for item in assignments] == ["alex"]
+    assert assignments[0]["coordinator"] is True
+    assert snapshot["leadAgentId"] is None
+    assert snapshot["members"] == []
+
+
+def test_crewless_project_refuses_a_task_that_names_no_one():
+    with pytest.raises(ProjectDispatchError) as raised:
+        resolve_project_task_assignments(
+            {"projectId": "project-1", "ownerUserId": "alice"},
+            project_store=SimpleNamespace(get_project=lambda _: _crewless_project()),
+            agent_store=None,
+            placement_store=None,
+            daemon_nodes=[_NODE],
+        )
+
+    assert raised.value.code == "project_roster_invalid"
+    assert raised.value.permanent is True
