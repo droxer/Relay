@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .handoff_files import handoff_file
 from .handoff_receipt import capture_handoff_receipt
 
 from .bridge import (
@@ -146,9 +147,7 @@ def capture_handoff_context(
         "computerId": session.get("computerId"),
         "workspaceLayout": layout,
         "workspaceSubpath": session.get("workspaceSubpath"),
-        "progressFile": "PROGRESS.md"
-        if layout == "thread"
-        else f"PROGRESS-{session['id']}.md",
+        "progressFile": handoff_file(session["id"], layout),
         "objective": objective,
         "note": instruction,
         "priorContext": prior,

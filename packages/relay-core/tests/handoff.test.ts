@@ -361,25 +361,26 @@ describe("prompts", () => {
     assert.match(prompt, /answer directly, investigate, plan, modify the workspace, validate, or ask for missing input/);
     assert.match(prompt, /Respond to the prior teammates' work directly/);
   });
-  it("points task work at its durable progress log and asks for an update", () => {
+  it("points task work at its durable handoff notes and asks for an update", () => {
     const taskState = state({
       task_goal: "Migrate the billing tables",
-      progress_file: "PROGRESS.md",
+      progress_file: "HANDOFF.md",
     });
 
     const prompt = claudeTaskPrompt(taskState);
 
-    assert.match(prompt, /\[Progress log\]\n`PROGRESS\.md` in the workspace/);
+    assert.match(prompt, /\[Handoff notes\]\n`HANDOFF\.md` in the workspace/);
+    assert.match(prompt, /If an older `PROGRESS\.md` is in the workspace, .* carry what still applies into `HANDOFF\.md`/);
     assert.match(prompt, /Read it before you start/);
     assert.match(prompt, /Before you finish, update it/);
     assert.match(prompt, /after each meaningful milestone/);
     assert.match(prompt, /exact next action/);
     assert.match(prompt, /simple exchange/);
   });
-  it("asks every task run to update the progress log", () => {
+  it("asks every task run to update the handoff notes", () => {
     const taskState = state({
       task_goal: "What is left here?",
-      progress_file: "PROGRESS.md",
+      progress_file: "HANDOFF.md",
     });
 
     const prompt = buildClaudeCommand(taskState);

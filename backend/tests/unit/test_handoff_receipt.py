@@ -38,7 +38,7 @@ def source():
                 "id": "checkpoint",
                 "kind": "workspace_file",
                 "agentRunId": "run",
-                "workspaceRelativePath": "PROGRESS.md.handoff.json",
+                "workspaceRelativePath": "HANDOFF.json",
             }
         ],
     }

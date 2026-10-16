@@ -10,6 +10,8 @@ import hashlib
 import json
 from typing import Any
 
+from .handoff_files import handoff_checkpoint_file
+
 CONTRACT = {"name": "relay.handoff.receipt", "version": 1}
 REQUIREMENTS_LIMIT = 16000
 RECEIPT_LIMIT = 32000
@@ -92,7 +94,7 @@ def capture_handoff_receipt(
         )
     run_id = context["sourceRunId"]
     assignment_id = context["sourceAssignmentId"]
-    checkpoint_path = context["progressFile"] + ".handoff.json"
+    checkpoint_path = handoff_checkpoint_file(context["progressFile"])
     checkpoint: dict[str, Any] = {"status": "missing", "path": checkpoint_path}
     evidence: list[dict[str, Any]] = []
     artifacts = [

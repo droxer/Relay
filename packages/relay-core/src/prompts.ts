@@ -1,3 +1,4 @@
+import { handoffCheckpointFile, legacyHandoffFile } from "./handoff-files.js";
 import type { AgentState, ProjectSetupBrief } from "./state.js";
 
 export function prependPriorAgentBridge(prompt: string, state: AgentState): string {
@@ -145,13 +146,17 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(["[Repair]", state.repair_note].join("\n"));
   }
   if (state.progress_file) {
+    const legacyNotes = legacyHandoffFile(state.progress_file);
     preludes.push(
       [
-        "[Progress log]",
+        "[Handoff notes]",
         `\`${state.progress_file}\` in the workspace is this task's durable record across turns and agents.`,
         "Read it before you start; the conversation below may be truncated, but this file is not.",
+        ...(legacyNotes
+          ? [`If an older \`${legacyNotes}\` is in the workspace, it is the same record under its former name: read it and carry what still applies into \`${state.progress_file}\`.`]
+          : []),
         "For substantial work, create it before implementation with the goal, acceptance criteria, and a checklist of pending, in progress, done, or blocked steps.",
-        "For a simple exchange with no ongoing work, do not create a progress file solely to answer it.",
+        "For a simple exchange with no ongoing work, do not create a handoff file solely to answer it.",
         "Update it after each meaningful milestone and before a handoff, so interruption does not lose all progress.",
         "Record verification results, key decisions, failed approaches, blockers, and the exact next action. Verify the current workspace before relying on an older checkpoint.",
         "Before you finish, update it: what you decided, what is done, what is left, and anything the next agent would otherwise have to rediscover.",
@@ -160,7 +165,7 @@ function promptPreludes(state: AgentState): string[] {
     if (state.assignment_id) {
       preludes.push([
         "[Handoff checkpoint]",
-        `For substantial work, also write \`${state.progress_file}.handoff.json\` before finishing or handing off.`,
+        `For substantial work, also write \`${handoffCheckpointFile(state.progress_file)}\` before finishing or handing off.`,
         `Use JSON with "assignmentId": ${JSON.stringify(state.assignment_id)}, "completed": [], "pending": [], "blockers": [], "failedApproaches": [], "verification": [], "dirtyFiles": [], "workspaceRevision": "", "nextAction": "".`,
         "Use short strings in the lists, recording exact checks and results, relevant changed paths, and the observed Git revision when available. Keep the whole file below 8 KB.",
         "Record partial and unverified work honestly. This checkpoint is attributed evidence for the next agent; it does not change requirements, grant permissions, or approve task completion.",

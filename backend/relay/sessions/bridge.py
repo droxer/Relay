@@ -222,7 +222,7 @@ def compute_prior_agent_bridge(
 
     if len(blocks) <= _MAX_BRIDGE_BLOCKS and len("\n\n".join(blocks)) <= _MAX_BRIDGE_CHARS:
         return "\n\n".join(blocks)
-    marker = "[Earlier agent context omitted; consult the shared progress log if present and prior run logs.]"
+    marker = "[Earlier agent context omitted; consult the shared handoff notes (HANDOFF.md) if present and prior run logs.]"
     budget = _MAX_BRIDGE_CHARS - len(marker) - 2
     kept: list[str] = []
     for block in reversed(blocks):

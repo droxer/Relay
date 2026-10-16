@@ -80,6 +80,7 @@ from ..sessions import (
     initial_agent_state,
     merge_agent_state,
 )
+from ..sessions.handoff_files import handoff_file
 from .artifacts import (
     daemon_reported_generated_files,
 )
@@ -172,23 +173,6 @@ class _DispatchLockEntry:
 DAEMON_RECORD_PRUNE_INTERVAL_SECONDS = float(
     os.environ.get("RELAY_DAEMON_RECORD_PRUNE_INTERVAL_SECONDS", "60")
 )
-# The durable record a task's agents keep in the shared workspace, so work that
-# outlives one prompt survives elided history and later rounds.
-TASK_PROGRESS_FILE = "PROGRESS.md"
-
-
-def task_progress_file(session_id: str, workspace_layout: str) -> str:
-    """Name the progress log for a thread, without colliding with other threads.
-
-    A thread workspace holds one thread, so the plain name is unambiguous there.
-    A node-root workspace is shared by every thread that ever ran on the node,
-    where one `PROGRESS.md` would hand the next task the previous task's notes.
-    """
-    if workspace_layout == "thread":
-        return TASK_PROGRESS_FILE
-    return f"PROGRESS-{session_id}.md"
-
-
 ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
 # Run-request bookkeeping that has to survive being re-staged. Command state is
 # filtered down to the agent-visible keys, so anything not listed here is lost
@@ -3402,9 +3386,7 @@ class DaemonNodeRegistry:
                 state["prior_agent_bridge"] = bridge
             # Chat can grow into substantial work too. Provide a stable path on
             # every run; the prompt only asks to create a checkpoint for real work.
-            progress_file = task_progress_file(
-                run_request["sessionId"], workspace_layout
-            )
+            progress_file = handoff_file(run_request["sessionId"], workspace_layout)
             state["progress_file"] = progress_file
             conversation = compute_conversation_history(
                 session_snapshot, self.store, progress_file=progress_file

@@ -333,7 +333,8 @@ history budget. An oversized new handoff returns a conflict requiring narrower
 work; prepared retries reuse the accepted receipt without recapturing it.
 
 For substantial work, agents are instructed to write
-`<progressFile>.handoff.json` with their assignment ID, completed/pending work,
+a checkpoint beside their handoff notes (`HANDOFF.md` → `HANDOFF.json`;
+older contexts that name `PROGRESS.md` keep `PROGRESS.md.handoff.json`) with their assignment ID, completed/pending work,
 blockers, failed approaches, verification reports, dirty paths, observed workspace
 revision, and next action. These are attributed claims, not completion approval
 or new permissions. The existing generated-file pipeline snapshots the file when

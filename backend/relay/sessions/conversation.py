@@ -36,7 +36,7 @@ def _elision(progress_file: str | None) -> str:
 
     Elision is silent loss: on a task that runs for hours the decisions made
     early are exactly the ones that fall off the front. When the run keeps a
-    durable progress log, the marker points at it instead of stopping at
+    durable handoff notes file, the marker points at it instead of stopping at
     "omitted".
     """
     if not progress_file:

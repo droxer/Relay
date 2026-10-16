@@ -10,7 +10,7 @@ const receipt = {
   workDefinition: { objective: "Build", requirements: "Keyboard access", currentRequest: "Verify", handoffInstruction: "Check failures" },
   source: { runId: "prior", assignmentId: "source", sessionEventId: "event", taskEventId: "revision", taskEventCount: 2 },
   targetAssignmentId: "a",
-  checkpoint: { status: "recorded", path: "PROGRESS.md.handoff.json", artifactId: "snapshot", sha256: "abc", claims: { assignmentId: "source", pending: ["Verify keyboard access"] } },
+  checkpoint: { status: "recorded", path: "HANDOFF.json", artifactId: "snapshot", sha256: "abc", claims: { assignmentId: "source", pending: ["Verify keyboard access"] } },
   workspace: { computerId: "computer", layout: "thread", subpath: null, artifacts: [], coverage: "partial", referencesOmitted: false },
   verificationRequired: true,
 };
