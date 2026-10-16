@@ -17,7 +17,7 @@ from ..services.agent_routing import (
 )
 from ..services.project_runtime import (
     ProjectDispatchError,
-    project_member_assignments,
+    project_thread_assignments,
     project_runtime_node,
     project_task_assignment_error,
     project_runtime_snapshot,
@@ -349,11 +349,14 @@ class CollaborationConductor:
                 )
             else:
                 try:
-                    raw_assignments = project_member_assignments(
+                    raw_assignments = project_thread_assignments(
                         project,
                         mode=intent.mode,
                         selected_agent_ids=selected_ids,
+                        room_agent_ids=_room_agent_ids(session) if session else [],
                         snapshot=project_snapshot,
+                        agent_store=self.ctx.agent_store,
+                        placement_store=self.ctx.agent_placement_store,
                     )
                 except ProjectDispatchError as error:
                     raise CollaborationError(error.code, status=400) from error

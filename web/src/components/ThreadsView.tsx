@@ -38,6 +38,7 @@ import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { DecisionBar } from "./composer/DecisionBar";
 import { Composer, type ComposerHandle } from "./composer/Composer";
+import type { ProjectRoomOption } from "./composer/AgentSelect";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
 import { buildSpaceItems, threadHasMultipleProducers } from "../lib/threadSpace";
 import { latestThreadArtifacts } from "../lib/threadArtifacts";
@@ -133,7 +134,7 @@ type ThreadsViewProps = {
   initializingThread: boolean;
   projectName?: string;
   /** The project's roster offered as one composer target. */
-  projectRoom?: { memberCount: number } | null;
+  projectRoom?: ProjectRoomOption | null;
   projectRoomSelected?: boolean;
   onProjectRoomPicked?: () => void;
   projectReadOnly?: boolean;

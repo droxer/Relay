@@ -160,18 +160,15 @@ def _project_task_assignments(
         ]
     assigned_agent_id = task.get("assignedAgentId")
     if assigned_agent_id and assigned_agent_id not in project_listed_agent_ids(project):
-        agent = agent_store.get_agent(assigned_agent_id) or {}
-        role = agent.get("defaultRole") or "implementer"
         return [
-            {
-                "agentId": assigned_agent_id,
-                "role": role,
-                "mode": "action",
-                "phase": _phase(role),
-                "coordinator": True,
-                "brief": "Complete this project task in the shared project workspace.",
-                "projectSnapshot": snapshot,
-            }
+            _outside_agent_assignment(
+                assigned_agent_id,
+                mode="action",
+                coordinator=True,
+                brief="Complete this project task in the shared project workspace.",
+                snapshot=snapshot,
+                agent_store=agent_store,
+            )
         ]
     return project_member_assignments(
         project,
@@ -234,6 +231,83 @@ def project_member_assignments(
         }
         for member in members
     ]
+
+
+def project_thread_assignments(
+    project: dict[str, Any],
+    *,
+    mode: str,
+    selected_agent_ids: list[str] | None,
+    room_agent_ids: list[str],
+    snapshot: dict[str, Any],
+    agent_store: Any,
+    placement_store: Any,
+) -> list[dict[str, Any]]:
+    """Who answers a message in a project thread.
+
+    Crew members answer as the roster configures them. Any other agent on the
+    project's computer may be addressed by name — the rule a project task's
+    assignee already follows — so the agent that ran a task can be asked to
+    continue it. A bare message goes to the crew, or, in a project without
+    one, to the agents already in the thread.
+    """
+    member_ids = project_member_ids(project)
+    selected = selected_agent_ids
+    if selected is None and not member_ids:
+        selected = list(room_agent_ids)
+    if selected is None:
+        return project_member_assignments(project, mode=mode, snapshot=snapshot)
+    assignments: list[dict[str, Any]] = []
+    for agent_id in selected:
+        if agent_id in member_ids:
+            assignments.extend(
+                project_member_assignments(
+                    project, mode=mode, selected_agent_ids=[agent_id], snapshot=snapshot
+                )
+            )
+            continue
+        code = project_task_assignment_error(
+            project, agent_id=agent_id, team=None, placement_store=placement_store
+        )
+        if code:
+            raise ProjectDispatchError(code, permanent=True)
+        assignments.append(
+            _outside_agent_assignment(
+                agent_id,
+                mode=mode,
+                coordinator=False,
+                brief="Work in the shared project workspace; you are not on its crew.",
+                snapshot=snapshot,
+                agent_store=agent_store,
+            )
+        )
+    # Without the lead in the round, the first agent addressed coordinates it.
+    if assignments and not any(item["coordinator"] for item in assignments):
+        assignments[0] = {**assignments[0], "coordinator": True}
+    return assignments
+
+
+def _outside_agent_assignment(
+    agent_id: str,
+    *,
+    mode: str,
+    coordinator: bool,
+    brief: str,
+    snapshot: dict[str, Any],
+    agent_store: Any,
+) -> dict[str, Any]:
+    """An agent off the roster, working in the project workspace on its own role."""
+    agent = agent_store.get_agent(agent_id) or {}
+    role = agent.get("defaultRole") or "implementer"
+    return {
+        "agentId": agent_id,
+        "role": role,
+        "mode": mode,
+        "phase": "discussion" if mode == "ask" else _phase(role),
+        "coordinator": coordinator,
+        "brief": brief,
+        "projectSnapshot": snapshot,
+    }
 
 
 def project_runtime_snapshot(project: dict[str, Any]) -> dict[str, Any]:

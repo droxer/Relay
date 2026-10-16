@@ -1533,3 +1533,95 @@ def test_empty_project_can_add_and_remove_its_last_member(monkeypatch) -> None:
         assert cleared.status_code == 200, cleared.text
         assert cleared.json()["project"]["members"] == []
         assert cleared.json()["project"]["leadAgentId"] is None
+
+
+def _finish_only_command(app, computer: dict) -> None:
+    daemon = TestClient(app)
+    auth = {"Authorization": f"Bearer token_{computer['id']}"}
+    [command] = daemon.get(
+        f"/api/v1/daemon-nodes/{computer['id']}/commands?leaseMode=explicit&leaseSeconds=10",
+        headers=auth,
+    ).json()["commands"]
+    finished = daemon.post(
+        f"/api/v1/daemon-nodes/{computer['id']}/events",
+        json={
+            "type": "run.completed", "commandId": command["id"], "leaseId": command["leaseId"],
+            "sessionId": command["sessionId"], "runId": command["runId"],
+            "agent": command["agent"], "exitCode": 0, "agentLog": "Done.",
+            "roundResult": {"status": "done"},
+        },
+        headers=auth,
+    )
+    assert finished.status_code < 300, finished.text
+
+
+@pytest.mark.parametrize("address", [False, True])
+def test_crewless_project_task_thread_continues_with_the_agent_that_ran_it(
+    monkeypatch, address
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        alex = _agent(client, app, computer, "Alex", "claude")
+        _login_alice(client)
+        created = client.post(
+            "/api/v1/projects",
+            json={"name": "No crew", "daemonNodeId": computer["id"], "members": []},
+        )
+        assert created.status_code == 201, created.text
+        project = created.json()["project"]
+        task = client.post(
+            "/api/v1/tasks",
+            json={"title": "Do it", "projectId": project["id"], "assignedAgentId": alex["id"]},
+        ).json()
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert started.status_code == 202, started.text
+        session_id = started.json()["session"]["id"]
+        _finish_only_command(app, computer)
+
+        message = {"text": "One more thing", "intent": "accomplish"}
+        if address:
+            message["addressAgentIds"] = [alex["id"]]
+        followed_up = client.post(f"/api/v1/threads/{session_id}/messages", json=message)
+
+        assert followed_up.status_code == 202, followed_up.text
+        [command] = app.state.registry.take_commands(
+            computer["id"], f"token_{computer['id']}"
+        )
+        assert command["logicalAgentId"] == alex["id"]
+        assert command["workspaceSubpath"] == project["workspaceSubpath"]
+
+
+def test_project_thread_refuses_to_address_an_agent_on_another_computer(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer_a = _register_computer(app, "node_alice_a", "machine-a")
+        computer_b = _register_computer(app, "node_alice_b", "machine-b")
+        lead = _agent(client, app, computer_a, "Lead", "codex")
+        stranger = _agent(client, app, computer_b, "Stranger", "claude")
+        _login_alice(client)
+        project = _project(client, computer_a, lead)
+        task = client.post(
+            "/api/v1/tasks", json={"title": "Plan it", "projectId": project["id"]}
+        ).json()
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert started.status_code == 202, started.text
+        _finish_only_command(app, computer_a)
+
+        response = client.post(
+            f"/api/v1/threads/{started.json()['session']['id']}/messages",
+            json={
+                "text": "@Stranger help",
+                "intent": "accomplish",
+                "addressAgentIds": [stranger["id"]],
+            },
+        )
+
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == "project_agent_off_computer"
