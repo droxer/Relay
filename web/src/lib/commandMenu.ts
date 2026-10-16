@@ -14,7 +14,8 @@ export type CommandId =
   | "toggle-sidebar"
   | "toggle-theme"
   | "open-preferences"
-  | "shortcuts-help";
+  | "shortcuts-help"
+  | "get-started";
 
 export type CommandItem = {
   id: CommandId;
@@ -72,6 +73,13 @@ export function buildCommands({
       label: t("backlog.new_task"),
       hint: "C",
       keywords: ["new", "task", "create"],
+    },
+    {
+      // Always offered: once the wizard is dismissed this is the only way back.
+      id: "get-started",
+      group: "create",
+      label: t("onboarding.command"),
+      keywords: ["get started", "onboarding", "setup", "guide", "tour", "help"],
     },
     {
       id: "toggle-sidebar",

@@ -69,6 +69,10 @@ type AppShellProps = {
   onLogout: () => void;
   /** Starts a fresh thread in the composer (the `n` chord / palette command). */
   onNewThread: () => void;
+  /** Setup progress for the rail's "Get started" chip; null hides it. */
+  onboarding: { done: number; total: number } | null;
+  /** Opens the onboarding wizard, reopening it if it was dismissed. */
+  onOpenOnboarding: () => void;
   children: ReactNode;
   /** The theme lives here for the `toggle-theme` command only; the settings
    *  route owns the full appearance and language controls. */
@@ -103,6 +107,8 @@ export function AppShell({
   user,
   onLogout,
   onNewThread,
+  onboarding,
+  onOpenOnboarding,
   children,
   theme,
   onThemeChange,
@@ -144,8 +150,11 @@ export function AppShell({
       case "shortcuts-help":
         setShortcutsOpen(true);
         break;
+      case "get-started":
+        onOpenOnboarding();
+        break;
     }
-  }, [onNavigateRoute, onNewThread, onThemeChange, queueNewTask, setSidenavExpanded, sidenavExpanded, theme]);
+  }, [onNavigateRoute, onNewThread, onOpenOnboarding, onThemeChange, queueNewTask, setSidenavExpanded, sidenavExpanded, theme]);
 
   const handleShortcut = useCallback((action: ShortcutAction) => {
     switch (action.kind) {
@@ -272,6 +281,8 @@ export function AppShell({
         isAdmin={isAdmin}
         onLogout={onLogout}
         onOpenCommandMenu={() => setCommandOpen(true)}
+        onboarding={onboarding}
+        onOpenOnboarding={onOpenOnboarding}
       />
 
       {/* display:contents (owned by shell.css, .messenger-shell > main) keeps

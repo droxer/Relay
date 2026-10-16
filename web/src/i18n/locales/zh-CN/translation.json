@@ -2643,5 +2643,79 @@
     "dead_body": "重置链接仅可使用一次，并会在短时间后失效。请重新申请。",
     "request_new": "发送新链接",
     "error_rate_limited": "尝试次数过多，请几分钟后再试。"
+  },
+  "onboarding": {
+    "eyebrow": "快速上手",
+    "count": "已完成 {{done}}/{{total}}",
+    "chip": "快速上手 · {{done}}/{{total}}",
+    "command": "开始使用 Relay",
+    "step_done": "（已完成）",
+    "next": "继续",
+    "skip_step": "暂时跳过",
+    "hide": "隐藏此指南",
+    "hide_hint": "随时可在命令菜单中选择「快速上手」重新打开。",
+    "save_error": "无法保存设置进度，请重试。",
+    "intro": {
+      "title": "Relay 如何运作",
+      "body": "三个部分，大约五分钟即可完成设置。",
+      "relay_title": "Relay",
+      "relay_body": "负责记录和协调你的工作，它本身从不运行智能体。",
+      "computer_title": "你的电脑",
+      "computer_body": "负责运行智能体——可以是你的笔记本，也可以是管理员分配给你的电脑。",
+      "agents_title": "智能体",
+      "agents_body": "在对话（对话）和任务（可跟踪的工作）中完成工作。",
+      "start": "开始设置",
+      "skip": "我已经用过 Relay"
+    },
+    "computer": {
+      "label": "连接电脑",
+      "title": "连接一台电脑",
+      "body": "电脑是智能体实际运行的地方。Relay 通过一个后台服务（守护进程）与它连接。",
+      "connected": "{{name}} 已连接。可运行：{{runtimes}}。",
+      "waiting": "正在等待你的电脑连接…",
+      "limit": "你的组织统一管理电脑。请联系管理员为你分配一台，分配后此步骤会自动完成。",
+      "no_runtime": "{{name}} 已连接，但上面还没有就绪的智能体 CLI。请在这台电脑上安装 Claude Code、Codex、Pi 或 Kimi，然后刷新运行时。",
+      "open_settings": "打开电脑设置"
+    },
+    "agent": {
+      "label": "创建智能体",
+      "title": "创建你的第一个智能体",
+      "body": "智能体是你拥有的一名具名工作者。它在你的某台电脑上通过一个运行时（Claude、Codex、Pi 或 Kimi）运行，这种绑定称为运行位置。",
+      "create": "创建智能体"
+    },
+    "thread": {
+      "label": "开始对话",
+      "title": "开始你的第一个对话",
+      "body": "对话是你与智能体的对话。它们写下的所有内容都保存在你电脑上该对话的工作区中。",
+      "starter_label": "试试这个",
+      "starter": "浏览这个文件夹，写一份 RELAY-TOUR.md，用五条要点总结其中的内容。",
+      "hint": "它会填入下方的输入框——你可以修改或自己写，然后发送。留意输出的实时流，以及运行结束时出现的文件。"
+    },
+    "explore": {
+      "title": "第一次运行已完成",
+      "body": "这就是完整的流程。接下来可以看看这些：",
+      "tasks_title": "任务",
+      "tasks_body": "把需要反复跟进的工作变成任务，拥有独立的工作区和状态。",
+      "projects_title": "项目",
+      "projects_body": "让多个智能体共享一个工作区和一份项目简介。",
+      "teams_title": "团队",
+      "teams_body": "在同一台电脑上组建负责人和成员，让他们分工协作。",
+      "automations_title": "自动化",
+      "automations_body": "按计划或在特定事件发生时运行任务。",
+      "open": "打开",
+      "close": "关闭{{name}}",
+      "done": "完成"
+    },
+    "needs": {
+      "computer": "智能体需要一台电脑来运行。",
+      "agent": "对话需要一个可以对话的智能体。",
+      "go_back": "先完成这一步"
+    },
+    "announce": {
+      "computer": "下一步：连接电脑。",
+      "agent": "电脑已连接。下一步：创建智能体。",
+      "thread": "智能体已就绪。下一步：开始你的第一个对话。",
+      "explore": "第一次运行已完成，设置全部完成。"
+    }
   }
 }

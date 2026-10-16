@@ -5,6 +5,7 @@
    a11y.css stays last. */
 
 @import "./empty-state.css" layer(relay);
+@import "./onboarding.css" layer(relay);
 @import "./shell.css" layer(relay);
 @import "./routes.css" layer(relay);
 @import "./sidenav.css" layer(relay);

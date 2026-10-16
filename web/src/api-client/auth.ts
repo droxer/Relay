@@ -1,4 +1,5 @@
 import type { Language, Theme } from "../lib/appStorage.ts";
+import type { OnboardingPatch } from "../lib/onboarding.ts";
 import type { CurrentUser } from "../types.ts";
 import { apiJson } from "./client.ts";
 
@@ -29,7 +30,7 @@ export function getMe(signal?: AbortSignal): Promise<{ authenticated: boolean; u
   return apiJson<{ authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities }>("/auth/me", { signal });
 }
 
-export function updateUserPreferences(input: { theme?: Theme; language?: Language }): Promise<{ user: CurrentUser }> {
+export function updateUserPreferences(input: { theme?: Theme; language?: Language; onboarding?: OnboardingPatch }): Promise<{ user: CurrentUser }> {
   return apiJson<{ user: CurrentUser }>("/auth/preferences", {
     method: "PATCH",
     body: input,

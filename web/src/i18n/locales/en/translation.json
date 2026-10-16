@@ -2701,5 +2701,79 @@
     "dead_body": "Reset links work once and expire after a short time. Ask for a new one.",
     "request_new": "Send a new link",
     "error_rate_limited": "Too many attempts. Wait a few minutes and try again."
+  },
+  "onboarding": {
+    "eyebrow": "Get started",
+    "count": "{{done}} of {{total}} done",
+    "chip": "Get started · {{done}}/{{total}}",
+    "command": "Get started with Relay",
+    "step_done": "(done)",
+    "next": "Continue",
+    "skip_step": "Skip for now",
+    "hide": "Hide this guide",
+    "hide_hint": "Bring it back any time from the command menu: Get started.",
+    "save_error": "Couldn't save your setup progress. Try again.",
+    "intro": {
+      "title": "How Relay works",
+      "body": "Three pieces, about five minutes to set up.",
+      "relay_title": "Relay",
+      "relay_body": "keeps track of your work. It never runs agents itself.",
+      "computer_title": "Your Computer",
+      "computer_body": "runs them — your laptop, or a Computer your admin assigned to you.",
+      "agents_title": "Agents",
+      "agents_body": "do the work in Threads (conversations) and Tasks (tracked work).",
+      "start": "Start setup",
+      "skip": "I've used Relay before"
+    },
+    "computer": {
+      "label": "Connect a Computer",
+      "title": "Connect a Computer",
+      "body": "A Computer is where your agents actually run. Relay reaches it through a small background service, the daemon.",
+      "connected": "{{name}} is connected. Ready to run: {{runtimes}}.",
+      "waiting": "Waiting for your Computer to connect…",
+      "limit": "Your organization manages Computers for you. Ask an admin to assign one, and this step completes on its own.",
+      "no_runtime": "{{name}} is connected, but no agent CLI on it is ready yet. Install Claude Code, Codex, Pi, or Kimi there, then refresh its runtimes.",
+      "open_settings": "Open Computers"
+    },
+    "agent": {
+      "label": "Create an Agent",
+      "title": "Create your first Agent",
+      "body": "An Agent is a named worker you own. It runs on one runtime — Claude, Codex, Pi, or Kimi — on one of your Computers; that link is its placement.",
+      "create": "Create agent"
+    },
+    "thread": {
+      "label": "Run a Thread",
+      "title": "Run your first Thread",
+      "body": "A Thread is a conversation with your agents. Everything they write lands in the Thread's workspace on your Computer.",
+      "starter_label": "Try this",
+      "starter": "Look around this folder and write RELAY-TOUR.md summarizing what's here in five bullets.",
+      "hint": "It goes into the composer below — edit it or write your own, then send. Watch the output stream in, and the file appear when the run finishes."
+    },
+    "explore": {
+      "title": "Your first run is done",
+      "body": "That's the whole loop. Here's where to go next.",
+      "tasks_title": "Tasks",
+      "tasks_body": "Turn work you'll come back to into a Task with its own workspace and status.",
+      "projects_title": "Projects",
+      "projects_body": "Give several agents one shared workspace and a brief.",
+      "teams_title": "Teams",
+      "teams_body": "Put a lead and members on one Computer and let them split the work.",
+      "automations_title": "Automations",
+      "automations_body": "Run a Task on a schedule or when something happens.",
+      "open": "Open",
+      "close": "Close {{name}}",
+      "done": "Done"
+    },
+    "needs": {
+      "computer": "Agents need a Computer to run on.",
+      "agent": "A Thread needs an Agent to talk to.",
+      "go_back": "Set that up first"
+    },
+    "announce": {
+      "computer": "Next: connect a Computer.",
+      "agent": "Computer connected. Next: create an Agent.",
+      "thread": "Agent ready. Next: run your first Thread.",
+      "explore": "Your first run finished. Setup is complete."
+    }
   }
 }

@@ -29,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from .onboarding import apply_onboarding_patch, normalize_onboarding
 from .passwords import (  # noqa: F401  (re-exported: one policy, one module)
     MAX_PASSWORD_LENGTH,
     MIN_PASSWORD_LENGTH,
@@ -48,6 +49,7 @@ from ..persistence.store_common import (
     create_all_tables,
     database_id_column,
     entity_uuid_type,
+    json_type,
     shared_engine,
     store_transaction,
 )
@@ -322,6 +324,7 @@ class AccountAuthStore:
         *,
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
+        onboarding: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             _validate_user_preferences(theme=theme, language=language)
@@ -329,11 +332,16 @@ class AccountAuthStore:
             account = next((entry for entry in accounts if entry["id"] == account_id), None)
             if not account:
                 raise KeyError(account_id)
+            now = now_iso()
+            if onboarding is not None:
+                account["onboarding"] = apply_onboarding_patch(
+                    account.get("onboarding"), onboarding, now
+                )
             if theme is not None:
                 account["theme"] = theme
             if language is not None:
                 account["language"] = language
-            account["updatedAt"] = now_iso()
+            account["updatedAt"] = now
             self._write_accounts(accounts)
             return self._public_account(account)
 
@@ -475,6 +483,7 @@ class AccountAuthStore:
             "displayName": account.get("displayName"),
             "theme": account.get("theme", DEFAULT_USER_THEME),
             "language": normalize_user_language(account.get("language")),
+            "onboarding": normalize_onboarding(account.get("onboarding")),
             "createdAt": account["createdAt"],
         }
 
@@ -539,6 +548,9 @@ class DatabaseAccountAuthStore:
         ),
         Column("theme", Text, nullable=False, server_default=DEFAULT_USER_THEME),
         Column("language", Text, nullable=False, server_default=DEFAULT_USER_LANGUAGE),
+        # The onboarding wizard's stored choices (security/onboarding.py);
+        # NULL until the person first acts on the wizard.
+        Column("onboarding", json_type(), nullable=True),
         Column("password_hash", Text, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
@@ -677,19 +689,34 @@ class DatabaseAccountAuthStore:
         *,
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
+        onboarding: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _validate_user_preferences(theme=theme, language=language)
-        patch: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+        now = datetime.now(timezone.utc)
+        patch: dict[str, Any] = {"updated_at": now}
         if theme is not None:
             patch["theme"] = theme
         if language is not None:
             patch["language"] = language
         with store_transaction(self.engine) as conn:
+            # Write the scalar preferences first to acquire the account's row
+            # lock (or SQLite's writer lock) before reading its onboarding JSON.
+            # Invalid onboarding still rolls the entire transaction back.
             result = conn.execute(
                 update(self.accounts).where(self.accounts.c.id == account_id).values(**patch)
             )
             if result.rowcount == 0:
                 raise KeyError(account_id)
+            if onboarding is not None:
+                current = conn.execute(
+                    select(self.accounts.c.onboarding).where(self.accounts.c.id == account_id)
+                ).scalar_one()
+                merged = apply_onboarding_patch(current, onboarding, _format_iso(now))
+                conn.execute(
+                    update(self.accounts)
+                    .where(self.accounts.c.id == account_id)
+                    .values(onboarding=merged)
+                )
             row = (
                 conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))
                 .mappings()
@@ -1229,6 +1256,7 @@ def database_account_to_row(
         "user_id": user_pk,
         "theme": account.get("theme", DEFAULT_USER_THEME),
         "language": normalize_user_language(account.get("language")),
+        "onboarding": normalize_onboarding(account.get("onboarding")) or None,
         "password_hash": account["passwordHash"],
         "created_at": _parse_iso(account["createdAt"]),
         "updated_at": _parse_iso(account["updatedAt"]),
@@ -1316,6 +1344,7 @@ def row_to_database_account(row: Any) -> dict[str, Any]:
         "userId": str(row["user_id"]) if row["user_id"] else None,
         "theme": row["theme"],
         "language": normalize_user_language(row["language"]),
+        "onboarding": normalize_onboarding(row["onboarding"]),
         "passwordHash": row["password_hash"],
         "createdAt": _format_iso(row["created_at"]),
         "updatedAt": _format_iso(row["updated_at"]),

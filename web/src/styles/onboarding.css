@@ -1,0 +1,271 @@
+/* The onboarding wizard (components/onboarding/). It occupies the empty
+   transcript, so it borrows that surface's measure and the starter tiles'
+   flat outline chrome; the step strip uses the rail's --action-soft "you are
+   here" fill. Left-aligned rather than centred: it is instructions to follow,
+   not a hero. */
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: 100%;
+  max-width: 600px;
+  margin: auto;
+  padding: var(--sp-8) var(--sp-5);
+  color: var(--ink-1);
+}
+
+.onboarding-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.onboarding-count {
+  color: var(--ink-4);
+  text-transform: none;
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-2);
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--control-h-xs);
+  padding: 0 var(--sp-3) 0 var(--sp-1-5);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.onboarding-step:hover { background: var(--row-hover); color: var(--ink-1); }
+
+.onboarding-step[aria-current="step"] {
+  border-color: transparent;
+  background: var(--action-soft);
+  color: var(--ink-1);
+}
+
+.onboarding-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sp-5);
+  height: var(--sp-5);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-full);
+  font: var(--type-micro);
+  color: var(--ink-3);
+}
+
+.onboarding-step.is-done .onboarding-step-mark {
+  border-color: transparent;
+  color: var(--ok);
+}
+
+.onboarding-title {
+  margin: 0;
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
+  text-wrap: balance;
+}
+
+.onboarding-title:focus { outline: none; }
+
+.onboarding-body {
+  margin: 0;
+  max-width: 60ch;
+  font: var(--type-body);
+  color: var(--ink-2);
+}
+
+.onboarding-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.onboarding-model {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--type-body);
+  color: var(--ink-2);
+}
+
+.onboarding-model li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.onboarding-model strong { font-weight: 500; color: var(--ink-1); }
+
+.onboarding-model-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  color: var(--ink-3);
+}
+
+.onboarding-fact,
+.onboarding-waiting,
+.onboarding-hint,
+.onboarding-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font: var(--type-body-sm);
+  color: var(--ink-3);
+}
+
+.onboarding-fact { color: var(--ink-1); }
+.onboarding-fact > svg { color: var(--ok); }
+
+.onboarding-waiting-dot {
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--live);
+  animation: onboarding-pulse 1.6s var(--ease) infinite;
+}
+
+@keyframes onboarding-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-waiting-dot { animation: none; }
+  .onboarding-step { transition: none; }
+}
+
+.onboarding-footer {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line-2);
+}
+
+.onboarding-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.onboarding-link:hover { color: var(--action-hover); }
+
+/* Same single layer of chrome as the empty transcript's starter tiles. */
+button.onboarding-starter {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  height: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-3);
+  white-space: normal;
+  text-align: left;
+}
+
+.onboarding-starter-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font: var(--type-label-strong);
+  color: var(--ink-1);
+}
+
+.onboarding-starter-label > svg { color: var(--ink-4); }
+
+.onboarding-starter-text {
+  font: var(--type-body-sm);
+  color: var(--ink-2);
+}
+
+.onboarding-cards {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+}
+
+.onboarding-card-copy { min-width: 0; }
+
+.onboarding-card-copy h4 {
+  margin: 0;
+  font: var(--type-label-strong);
+  color: var(--ink-1);
+}
+
+.onboarding-card-copy p {
+  margin: var(--sp-0-5) 0 0;
+  font: var(--type-body-sm);
+  color: var(--ink-3);
+}
+
+.onboarding-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* The rail chip: a square like its footer neighbours whose face is the
+   progress fraction itself — an icon under a badge read as neither. */
+.sidenav-btn.sidenav-onboarding {
+  background: var(--action-soft);
+  color: var(--action);
+}
+
+.sidenav-onboarding-count {
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
