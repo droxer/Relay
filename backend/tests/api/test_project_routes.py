@@ -1625,3 +1625,53 @@ def test_project_thread_refuses_to_address_an_agent_on_another_computer(monkeypa
 
         assert response.status_code == 400, response.text
         assert response.json()["detail"]["code"] == "project_agent_off_computer"
+
+
+def test_answer_to_an_outside_agents_question_goes_back_to_that_agent(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        lead = _agent(client, app, computer, "Lead", "codex")
+        alex = _agent(client, app, computer, "Alex", "claude")
+        _login_alice(client)
+        project = _project(client, computer, lead)
+        task = client.post(
+            "/api/v1/tasks",
+            json={"title": "Ask first", "projectId": project["id"], "assignedAgentId": alex["id"]},
+        ).json()
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert started.status_code == 202, started.text
+        session_id = started.json()["session"]["id"]
+        daemon = TestClient(app)
+        auth = {"Authorization": f"Bearer token_{computer['id']}"}
+        [command] = daemon.get(
+            f"/api/v1/daemon-nodes/{computer['id']}/commands?leaseMode=explicit&leaseSeconds=10",
+            headers=auth,
+        ).json()["commands"]
+        asked = daemon.post(
+            f"/api/v1/daemon-nodes/{computer['id']}/events",
+            json={
+                "type": "run.completed", "commandId": command["id"], "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": command["agent"], "exitCode": 0, "agentLog": "Need input.",
+                "roundResult": {"status": "blocked", "question": "Which database?"},
+            },
+            headers=auth,
+        )
+        assert asked.status_code < 300, asked.text
+        waiting = client.get(f"/api/v1/tasks/{task['id']}").json()
+        question_id = waiting["awaiting"]["questionId"]
+
+        answered = client.post(
+            f"/api/v1/threads/{session_id}/messages",
+            json={"text": "Postgres", "intent": "accomplish", "questionId": question_id},
+        )
+
+        assert answered.status_code == 202, answered.text
+        [resumed] = app.state.registry.take_commands(
+            computer["id"], f"token_{computer['id']}"
+        )
+        assert resumed["logicalAgentId"] == alex["id"]
