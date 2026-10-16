@@ -98,6 +98,33 @@
   animation: rise var(--t-slow) var(--ease);
 }
 
+/* Brand left, repository right — the landing nav's two ends. */
+.login-cover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+/* The repository door: muted until hovered, so it never competes with the
+   gate's one action. Same mark-plus-label as the landing nav. */
+.login-github,
+.login-foot-github {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  color: var(--lg-muted);
+  text-decoration: none;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.login-github:hover,
+.login-foot-github:hover {
+  color: var(--lg-ink);
+}
+
 /* The brand is the link home to the landing page — a name, not an
    underlined text link. */
 .login-brand {
@@ -461,6 +488,8 @@
   grid-area: foot;
   display: flex;
   align-items: center;
+  /* The year beside the bare repository mark, as the landing foot pairs them. */
+  gap: var(--sp-3);
   width: 100%;
   max-width: var(--lg-cover-measure);
   margin-inline: auto;
