@@ -145,6 +145,51 @@ export function resetAgentReadiness(executionManager?: ExecutionManager): void {
   else readyAgentsByManager = new WeakMap();
 }
 
+/**
+ * Re-run an agent's preflight in this guest even if it already passed. A
+ * pooled guest outlives the credentials it was readied with, so capability
+ * discovery must not trust the cache: a runtime that stopped working has to
+ * be reported, and a failed probe makes the next run re-check as well.
+ *
+ * Skills are left alone: the probe may share the guest with another agent's
+ * run, and rewriting the shared skills tree would truncate files under it.
+ */
+export async function probeAgentReadiness(
+  agent: AgentName,
+  signal?: AbortSignal,
+  executionManager: ExecutionManager = defaultExecutionManager,
+): Promise<void> {
+  try {
+    await runAgentPreflight(agent, signal, executionManager, { provisionSkills: false });
+  } catch (error) {
+    readyAgentsFor(executionManager).delete(agent);
+    throw error;
+  }
+}
+
+async function runAgentPreflight(
+  agent: AgentName,
+  signal: AbortSignal | undefined,
+  executionManager: ExecutionManager,
+  options: { provisionSkills: boolean },
+): Promise<void> {
+  const def = getAgent(agent);
+  if (def.needsGuestAuth) {
+    await executionManager.prepareAgentAuth([agent], signal);
+  }
+  // Skills are shared across every agent under ~/.claude/skills.
+  if (options.provisionSkills) await executionManager.prepareAgentSkills(signal);
+  const result = await executionManager.runShell(
+    def.preflight.command(),
+    signal,
+    Object.fromEntries(agentCredentialEnv(agent)),
+  );
+  if (result.exit_code !== 0) {
+    const detail = (result.stderr || result.stdout).trim();
+    throw new Error(`${def.preflight.label} preflight failed. ${detail}`);
+  }
+}
+
 export async function shutdownBoxliteRuntime(runtime: BoxliteRuntimeLifecycle): Promise<void> {
   try {
     await runtime.shutdown?.();
@@ -162,21 +207,7 @@ export async function ensureAgentReady(
   const ready = readyAgentsFor(executionManager);
   if (ready.has(agent)) return;
   if (signal?.aborted) throw new Error(`${agent} readiness cancelled.`);
-  const def = getAgent(agent);
-  if (def.needsGuestAuth) {
-    await executionManager.prepareAgentAuth([agent], signal);
-  }
-  // Skills are shared across every agent under ~/.claude/skills.
-  await executionManager.prepareAgentSkills(signal);
-  const result = await executionManager.runShell(
-    def.preflight.command(),
-    signal,
-    Object.fromEntries(agentCredentialEnv(agent)),
-  );
-  if (result.exit_code !== 0) {
-    const detail = (result.stderr || result.stdout).trim();
-    throw new Error(`${def.preflight.label} preflight failed. ${detail}`);
-  }
+  await runAgentPreflight(agent, signal, executionManager, { provisionSkills: true });
   ready.add(agent);
 }
 
