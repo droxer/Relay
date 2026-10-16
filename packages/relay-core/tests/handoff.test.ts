@@ -411,6 +411,19 @@ describe("prompts", () => {
 
     assert.match(buildClaudeCommand(roundState), /\[Finishing\]/);
   });
+  it("keeps the work report in the verdict file, out of the reply", () => {
+    const workState = state({
+      task_goal: "Review the JEV overview",
+      work_result_required: true,
+      round_result_file: ".relay/round-result.json",
+    });
+
+    const prompt = claudeTaskPrompt(workState);
+    // "the finishing JSON" alone read as the end of the answer, so agents
+    // pasted the raw work object into the reply the user sees.
+    assert.match(prompt, /Add a "work" field to the JSON you write to `\.relay\/round-result\.json`, never to your reply/);
+    assert.doesNotMatch(prompt, /finishing JSON/);
+  });
   it("tells a lead sent back to repair what it is fixing", () => {
     const repairState = state({
       task_goal: "Ship the migration",
