@@ -92,6 +92,14 @@ A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
 _Avoid_: Folder, Team
 
+**Linked Directory**:
+An existing directory on a Project's Computer that the Project uses as its
+persistent workspace instead of one Relay creates under the Node Workspace
+Root. The Computer decides which directories may be linked; deleting the
+Project forgets the link and leaves the directory in place. UI copy calls it
+the project's folder — the folder is the directory, never the Project itself.
+_Avoid_: Project path, mount, external workspace
+
 **Project Agent**:
 A Logical Agent enlisted in a Project with a project-specific role and
 responsibilities. The role is an orchestration directive (pipeline stage and

@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..core.computer_identity import computer_id
 from ..services.event_notifier import workspace_response_key
+from ..services.workspace_capabilities import required_workspace_capabilities
 from ..services.workspace_query import WORKSPACE_COMMAND_TIMEOUT_SECONDS
 from .deps import AppContext
 
@@ -63,17 +64,20 @@ def workspace_binding_target(
                 {"reason": "placement-unavailable", "code": "placement-unavailable"},
             )
     layout = binding["layout"]
-    required = {
-        "task": "task-workspaces",
-        "project": "project-workspaces",
-        "thread": "thread-workspaces",
-    }.get(layout)
+    required = (
+        ("thread-workspaces",)
+        if layout == "thread"
+        else required_workspace_capabilities(layout, binding.get("subpath"))
+    )
     node = next(
         (
             node
             for node in candidates
             if "workspace-read-shared" in (node.get("capabilities") or [])
-            and (not required or required in (node.get("capabilities") or []))
+            and all(
+                capability in (node.get("capabilities") or [])
+                for capability in required
+            )
         ),
         None,
     )

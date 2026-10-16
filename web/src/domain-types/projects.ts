@@ -91,6 +91,8 @@ export interface ProjectRecord {
   computerId: string;
   workspaceLayout: "project";
   workspaceSubpath: string;
+  /** The existing directory on the computer the project links, when it links one. */
+  workspaceHostPath?: string;
   leadAgentId: string | null;
   members: ProjectMember[];
   enabled: boolean;
@@ -110,6 +112,8 @@ export interface CreateProjectInput {
   goal?: string;
   context?: string;
   daemonNodeId: string;
+  /** An existing absolute directory on that computer; omitted creates a new one. */
+  workspaceHostPath?: string;
   leadAgentId?: string | null;
   members: Array<{
     agentId: string;

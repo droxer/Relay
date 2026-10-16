@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from ..core.ids import new_database_id
 from ..persistence.project_store import (
@@ -34,6 +35,11 @@ from ..services.project_deletion import delete_project as delete_project_record
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, request_actor
 from .project_helpers import project_for_owner
+from .project_links import (
+    link_existing_directory,
+    new_linked_workspace_subpath,
+    requested_host_path,
+)
 from .workspace_transport import (
     dispatch_workspace_command,
     live_workspace_file,
@@ -100,21 +106,65 @@ def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     }
 
 
-@router.post("/projects", status_code=201)
-def create_project(
+@router.post("/projects/workspace-check")
+async def check_project_workspace(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    """Ask the selected computer whether an existing directory may be linked."""
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = _request_body
+    host_path = requested_host_path(body)
+    if host_path is None:
+        raise HTTPException(400, "project_workspace_path_invalid")
+    canonical = await link_existing_directory(
+        ctx,
+        owner_user_id=actor["userId"],
+        node_id=body.get("daemonNodeId"),
+        host_path=host_path,
+        workspace_subpath=new_linked_workspace_subpath(),
+        dry_run=True,
+    )
+    return {"workspaceHostPath": canonical}
+
+
+@router.post("/projects", status_code=201)
+async def create_project(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    body = _request_body
+    host_path = requested_host_path(body)
     try:
-        payload = create_project_payload(
+        payload = await run_in_threadpool(
+            create_project_payload,
             actor["userId"],
             body,
             registry=ctx.registry,
             agent_store=ctx.agent_store,
             placement_store=ctx.agent_placement_store,
         )
-        project = ctx.project_store.create_project(actor["userId"], payload)
+    except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
+        raise _project_error(error) from error
+    if host_path is not None:
+        # The computer validates and records the link before the project
+        # exists, so the project's first run already finds its directory.
+        workspace_subpath = new_linked_workspace_subpath()
+        canonical = await link_existing_directory(
+            ctx,
+            owner_user_id=actor["userId"],
+            node_id=body.get("daemonNodeId"),
+            host_path=host_path,
+            workspace_subpath=workspace_subpath,
+        )
+        payload = {
+            **payload,
+            "workspaceSubpath": workspace_subpath,
+            "workspaceHostPath": canonical,
+        }
+    try:
+        project = await run_in_threadpool(
+            ctx.project_store.create_project, actor["userId"], payload
+        )
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     return {"project": project}

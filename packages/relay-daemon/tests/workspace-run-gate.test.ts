@@ -133,6 +133,26 @@ test("independent daemon gates share a filesystem project lock", async () => {
   }
 });
 
+test("daemons with different roots serialize runs in the same linked directory", async () => {
+  const base = mkdtempSync(join(tmpdir(), "relay-linked-workspace-gate-"));
+  const roots = [join(base, "node-a"), join(base, "node-b")];
+  const linked = join(base, "repo");
+  for (const path of [...roots, linked]) mkdirSync(path);
+  let active = 0;
+  let peak = 0;
+  try {
+    await Promise.all(roots.map((root) => new WorkspaceRunGate(root).run(linked, undefined, async () => {
+      peak = Math.max(peak, ++active);
+      await new Promise<void>((resolve) => setTimeout(resolve, 40));
+      active -= 1;
+    })));
+    assert.equal(peak, 1);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+    for (const path of [...roots, linked]) rmSync(workspaceLockDirectory(path), { recursive: true, force: true });
+  }
+});
+
 test("a replacement daemon reclaims a crashed owner's project lock", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-workspace-gate-"));
   const lockDirectory = workspaceLockDirectory(root);

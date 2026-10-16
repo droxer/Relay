@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
+from .workspace_capabilities import required_workspace_capabilities
 
 TASK_WORKSPACE_ROOT = "tasks"
 WORKSPACE_LAYOUT_TASK = "task"
@@ -142,14 +143,11 @@ def resolve_task_workspace(
         layout, subpath = WORKSPACE_LAYOUT_PROJECT, project_snapshot["workspaceSubpath"]
     else:
         layout, subpath = WORKSPACE_LAYOUT_TASK, task_workspace_subpath(task)
-    required = {
-        "task": DAEMON_CAPABILITY_TASK_WORKSPACES,
-        "project": "project-workspaces",
-    }.get(layout)
-    if required and required not in capabilities:
-        raise ValueError(
-            f"workspace_unavailable: this Computer needs {required} support; upgrade its daemon."
-        )
+    for required in required_workspace_capabilities(layout, subpath):
+        if required not in capabilities:
+            raise ValueError(
+                f"workspace_unavailable: this Computer needs {required} support; upgrade its daemon."
+            )
     if layout in ("task", "project") and not subpath:
         raise ValueError(
             "workspace_unavailable: the recorded workspace path is missing."

@@ -34,6 +34,25 @@ def test_project_wins_over_the_task_workspace():
     ) == ("project", "projects/prj_one")
 
 
+def test_linked_project_requires_link_support_for_new_and_recorded_workspaces():
+    import pytest
+    node = {"id": "one", **TASK_CAPABLE_NODE}
+    snapshot = {"workspaceSubpath": "links/repo"}
+    tasks = [
+        {"id": "new"},
+        {"id": "old", "workspaceBinding": {
+            "computerId": "node:one", "layout": "project", "subpath": "links/repo",
+        }},
+    ]
+    for task in tasks:
+        with pytest.raises(ValueError, match="project-links"):
+            resolve_task_workspace(task, node=node, project_snapshot=snapshot)
+        assert resolve_task_workspace(
+            task, node={**node, "capabilities": [*node["capabilities"], "project-links"]},
+            project_snapshot=snapshot,
+        ) == ("project", "links/repo")
+
+
 def test_new_task_requires_durable_workspace_support():
     import pytest
     with pytest.raises(ValueError, match="workspace_unavailable"):

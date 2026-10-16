@@ -633,10 +633,31 @@ def _runtime_session_field(value: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+WORKSPACE_ERROR_CODES = frozenset(
+    {
+        "invalid-path",
+        "not-found",
+        "is-directory",
+        "io-error",
+        # A `workspace.link` refusal (see `DaemonProjectLinkErrorCode`).
+        "not-directory",
+        "not-allowed",
+        "not-writable",
+        "protected",
+    }
+)
+
+
 def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
     event_type = string_field(value, "type")
     command_id = string_field(value, "commandId")
-    if event_type in {"workspace.listing", "workspace.file", "workspace.error", "workspace.deleted"}:
+    if event_type in {
+        "workspace.listing",
+        "workspace.file",
+        "workspace.error",
+        "workspace.deleted",
+        "workspace.linked",
+    }:
         agent_id = string_field(value, "agentId")
         path = string_field(value, "path")
         if not command_id:
@@ -651,6 +672,11 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
         }
         if event_type == "workspace.deleted":
             return common
+        if event_type == "workspace.linked":
+            host_path = string_field(value, "hostPath")
+            if not host_path:
+                raise ValueError("invalid daemon workspace.linked event.")
+            return {**common, "hostPath": host_path}
         if event_type == "workspace.listing":
             entries = value.get("entries")
             if not isinstance(value.get("exists"), bool) or not isinstance(
@@ -677,7 +703,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         code = string_field(value, "code")
-        if code not in {"invalid-path", "not-found", "is-directory", "io-error"}:
+        if code not in WORKSPACE_ERROR_CODES:
             raise ValueError("invalid daemon workspace.error event.")
         return {**common, "code": code, "message": string_field(value, "message")}
     session_id = string_field(value, "sessionId")

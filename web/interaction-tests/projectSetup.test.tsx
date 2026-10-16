@@ -6,10 +6,10 @@ import { ProjectDrawer } from "../src/components/ProjectDrawer";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
-const { create, startSetup, update, createTask, getProjectSetup } = vi.hoisted(() => ({
-  create: vi.fn(), startSetup: vi.fn(), update: vi.fn(), createTask: vi.fn(), getProjectSetup: vi.fn(),
+const { create, startSetup, update, createTask, getProjectSetup, checkProjectWorkspace } = vi.hoisted(() => ({
+  create: vi.fn(), startSetup: vi.fn(), update: vi.fn(), createTask: vi.fn(), getProjectSetup: vi.fn(), checkProjectWorkspace: vi.fn(),
 }));
-vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProjectSetup }));
+vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProjectSetup, checkProjectWorkspace }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   createProjectMutation: { isPending: false, mutateAsync: create },
   startProjectSetupMutation: { isPending: false, mutateAsync: startSetup },
@@ -48,6 +48,7 @@ beforeEach(() => {
   update.mockReset().mockResolvedValue({ project: created });
   createTask.mockReset().mockResolvedValue({});
   getProjectSetup.mockReset();
+  checkProjectWorkspace.mockReset();
 });
 
 it("opens on intent and asks for one before drafting", () => {
@@ -87,6 +88,69 @@ it("keeps the manual form one click away", () => {
   fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
   expect(screen.getByRole("textbox", { name: "project.name" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "project.create" })).toBeTruthy();
+});
+
+const linkingComputers = [{ ...computers[0], capabilities: ["project-workspaces", "project-links"] }] as unknown as DaemonNodeMonitorRecord[];
+
+function openManualForm(list: DaemonNodeMonitorRecord[]) {
+  render(<ProjectDrawer open computers={list} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Existing repo" } });
+  fireEvent.click(screen.getByRole("button", { name: "node" }));
+}
+
+const folderBox = () => screen.getByRole("textbox", { name: /^project\.folder/ });
+
+it("offers a folder only on a computer that can link one", () => {
+  openManualForm(computers);
+  expect(screen.queryByRole("textbox", { name: /^project\.folder/ })).toBeNull();
+});
+
+it("checks the folder with the computer and creates the project in it", async () => {
+  checkProjectWorkspace.mockResolvedValue({ workspaceHostPath: "/Users/alice/code/app" });
+  openManualForm(linkingComputers);
+  fireEvent.change(folderBox(), { target: { value: " /Users/alice/code/app/ " } });
+  fireEvent.blur(folderBox());
+  await waitFor(() => expect(checkProjectWorkspace).toHaveBeenCalledWith("node", "/Users/alice/code/app/"));
+  await screen.findByText(/^project\.folder_linkable/);
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  await waitFor(() => expect(create).toHaveBeenCalled());
+  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "node", workspaceHostPath: "/Users/alice/code/app/" });
+});
+
+it("refuses a relative folder without asking the computer", () => {
+  openManualForm(linkingComputers);
+  fireEvent.change(folderBox(), { target: { value: "code/app" } });
+  fireEvent.blur(folderBox());
+  expect(checkProjectWorkspace).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("project.folder_invalid");
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  expect(create).not.toHaveBeenCalled();
+});
+
+it("clears the folder when switching computers before creating the project", async () => {
+  const other = { ...linkingComputers[0], id: "other", workspaceId: "other-machine" };
+  openManualForm([...linkingComputers, other]);
+  fireEvent.change(folderBox(), { target: { value: "/Users/alice/code/app" } });
+  fireEvent.click(screen.getByRole("button", { name: "other" }));
+  expect((folderBox() as HTMLInputElement).value).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  await waitFor(() => expect(create).toHaveBeenCalled());
+  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "other" });
+  expect(create.mock.calls[0][0]).not.toHaveProperty("workspaceHostPath");
+});
+
+it("pins the computer's refusal to the folder field", async () => {
+  const refusal = Object.assign(new Error("outside"), { status: 422, code: "project_workspace_not_allowed" });
+  checkProjectWorkspace.mockRejectedValue(refusal);
+  create.mockRejectedValue(refusal);
+  openManualForm(linkingComputers);
+  fireEvent.change(folderBox(), { target: { value: "/etc" } });
+  fireEvent.blur(folderBox());
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("project.folder_not_allowed"));
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  await waitFor(() => expect(create).toHaveBeenCalled());
+  expect(screen.getByRole("alert").textContent).toBe("project.folder_not_allowed");
 });
 
 const proposedSetup: ProjectSetup = {

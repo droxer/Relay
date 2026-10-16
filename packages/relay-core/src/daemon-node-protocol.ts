@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -79,6 +79,12 @@ export const DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS: DaemonNodeCapability = "
 export const DAEMON_CAPABILITY_THREAD_WORKSPACES: DaemonNodeCapability = "thread-workspaces";
 /** The daemon can map multiple threads onto one validated project directory. */
 export const DAEMON_CAPABILITY_PROJECT_WORKSPACES: DaemonNodeCapability = "project-workspaces";
+/**
+ * A project may link an existing directory on the computer (`links/<id>`
+ * workspace subpaths). The daemon validates each one against roots configured
+ * locally, through `workspace.link` and the registration response's `projectLinks`.
+ */
+export const DAEMON_CAPABILITY_PROJECT_LINKS: DaemonNodeCapability = "project-links";
 /** The daemon can map every round of one task onto a single validated task directory. */
 export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-workspaces";
 /**
@@ -246,7 +252,23 @@ export interface DaemonNodeRegistrationResponse {
   heartbeat?: DaemonNodeHeartbeatSettings;
   /** Journaled runs the backend has accounted for; the daemon may forget them. */
   acknowledgedJournalIds?: string[];
+  /** Every linked project directory on this computer; replaces the daemon's map. */
+  projectLinks?: DaemonProjectLink[];
 }
+
+/** A project's `links/<id>` workspace subpath and the existing directory it names. */
+export interface DaemonProjectLink {
+  workspaceSubpath: string;
+  hostPath: string;
+}
+
+export type DaemonProjectLinkErrorCode =
+  | "invalid-path"
+  | "not-found"
+  | "not-directory"
+  | "not-allowed"
+  | "not-writable"
+  | "protected";
 
 export interface DaemonNodeHeartbeatResponse {
   heartbeat: DaemonNodeHeartbeatSettings;
@@ -357,12 +379,31 @@ export interface DaemonWorkspaceDeleteCommand {
   path: "";
 }
 
-export type DaemonWorkspaceErrorCode = "invalid-path" | "not-found" | "is-directory" | "io-error";
+/** Validates an existing directory and, unless `dryRun`, links it to `workspaceSubpath`. */
+export interface DaemonProjectLinkCommand {
+  id: string;
+  type: "workspace.link";
+  leaseId?: string;
+  leaseExpiresAt?: string;
+  attempt?: number;
+  workspaceSubpath: string;
+  hostPath: string;
+  dryRun?: boolean;
+}
 
-export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand;
+export type DaemonWorkspaceErrorCode =
+  | "invalid-path"
+  | "not-found"
+  | "is-directory"
+  | "io-error"
+  | Exclude<DaemonProjectLinkErrorCode, "invalid-path" | "not-found">;
+
+export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand | DaemonProjectLinkCommand;
 
 export type DaemonNodeEvent =
   | { type: "workspace.deleted"; commandId: string; leaseId?: string; path: string }
+  /** `hostPath` is the directory's canonical path on the computer. */
+  | { type: "workspace.linked"; commandId: string; leaseId?: string; path: ""; hostPath: string }
   | {
       type: "run.executing";
       commandId: string;

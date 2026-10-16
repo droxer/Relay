@@ -7,7 +7,10 @@ from sqlalchemy import delete, select
 
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id
-from ..persistence.project_store import ProjectVersionConflict
+from ..persistence.project_store import (
+    LINKED_WORKSPACE_PREFIX,
+    ProjectVersionConflict,
+)
 from ..persistence.store_common import store_transaction
 from ..persistence.task_store import dispatch_claim_active
 from ..sessions.controller import SessionController, SessionRunInFlightError
@@ -37,21 +40,26 @@ def delete_project(
     initial = projects.get_project(project_id)
     if initial is None:
         raise KeyError(project_id)
+    # A linked directory existed before the project and belongs to the user;
+    # deleting the project forgets the link and never removes the directory.
+    linked = initial["workspaceSubpath"].startswith(LINKED_WORKSPACE_PREFIX)
     nodes = [
         node for node in ctx.registry.monitor_nodes()
         if computer_id(node) == initial["computerId"]
         and not node.get("retiredAt")
     ]
-    if not nodes:
+    if not nodes and not linked:
         raise ProjectDeletionError("project_cleanup_unavailable")
     node = min(nodes, key=lambda node: (
         "project-workspace-delete" not in (node.get("capabilities") or []),
         not node.get("online"), node["id"],
-    ))
-    cleanup_ready = "project-workspace-delete" in (node.get("capabilities") or [])
+    ), default=None)
+    cleanup_ready = node is not None and "project-workspace-delete" in (
+        node.get("capabilities") or []
+    )
     with (
         ctx.registry.dispatch_lock,
-        ctx.registry.dispatch_scope([node["id"]]),
+        ctx.registry.dispatch_scope([node["id"]] if node else []),
         lifecycle.admission_scope(),
         store_transaction(projects.engine) as conn,
     ):
@@ -66,7 +74,9 @@ def delete_project(
             raise ProjectDeletionError("project_delete_forbidden")
         if project["version"] != expected_version:
             raise ProjectVersionConflict(project_id)
-        if project["workspaceSubpath"] != f"projects/{project_id}":
+        if project["workspaceSubpath"] != initial["workspaceSubpath"] or (
+            not linked and project["workspaceSubpath"] != f"projects/{project_id}"
+        ):
             raise ProjectDeletionError("project_workspace_invalid")
         project_tasks = conn.execute(
             select(tasks.tasks.c.snapshot)
@@ -102,21 +112,28 @@ def delete_project(
         for table in (projects.members, projects.events_table):
             conn.execute(delete(table).where(table.c.project_id == project_id))
         conn.execute(delete(projects.projects).where(projects.projects.c.id == project_id))
-        command_id = new_database_id()
-        # Polling discovers this durable command without replica-local state.
-        ctx.daemon_store.enqueue_command(node["id"], {
-            "id": command_id,
-            "type": "workspace.delete",
-            "sessionId": project_id,
-            "workspaceLayout": "project",
-            "workspaceSubpath": project["workspaceSubpath"],
-            "path": "",
-        })
+        if linked:
+            command_id = None
+        else:
+            command_id = new_database_id()
+            # Polling discovers this durable command without replica-local state.
+            ctx.daemon_store.enqueue_command(node["id"], {
+                "id": command_id,
+                "type": "workspace.delete",
+                "sessionId": project_id,
+                "workspaceLayout": "project",
+                "workspaceSubpath": project["workspaceSubpath"],
+                "path": "",
+            })
     # File-backed chat bindings must only change after SQL commits.
     for session in project_sessions:
         ctx.chat_store.clear_conversation_sessions(session["id"])
     return {
         "deletedProjectId": project_id,
-        "workspaceCleanup": "queued" if cleanup_ready else "waiting_for_upgrade",
+        "workspaceCleanup": "kept"
+        if linked
+        else "queued"
+        if cleanup_ready
+        else "waiting_for_upgrade",
         "cleanupCommandId": command_id,
     }

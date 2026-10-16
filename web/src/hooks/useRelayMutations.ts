@@ -386,7 +386,8 @@ export function useRelayMutations() {
         && (query.state.data as RelayTask | undefined)?.projectId === deletedProjectId });
       announce({
         message: `${t("project.deleted")}. ${t(workspaceCleanup === "waiting_for_upgrade"
-          ? "project.cleanup_waiting_for_upgrade" : "project.cleanup_queued")}`,
+          ? "project.cleanup_waiting_for_upgrade"
+          : workspaceCleanup === "kept" ? "project.cleanup_kept" : "project.cleanup_queued")}`,
         tone: workspaceCleanup === "waiting_for_upgrade" ? "warn" : "info",
       });
     },

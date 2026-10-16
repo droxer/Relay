@@ -27,6 +27,7 @@ from ..services.node_agents import (
 )
 from .computer_installer_routes import computer_install_command, computer_windows_install_command
 from .deps import AppContextDep
+from .project_links import registration_project_links
 from .helpers import (
     USER_DEVICE_SANDBOX_MODE,
     JsonBodyDep,
@@ -46,7 +47,13 @@ from .helpers import (
 
 router = APIRouter()
 WORKSPACE_EVENT_TYPES = frozenset(
-    {"workspace.listing", "workspace.file", "workspace.error", "workspace.deleted"}
+    {
+        "workspace.listing",
+        "workspace.file",
+        "workspace.error",
+        "workspace.deleted",
+        "workspace.linked",
+    }
 )
 
 # A self-enrolled personal computer is direct-run only; the rule is shared with
@@ -592,6 +599,9 @@ def register_daemon_node(
             **sandbox,
             "heartbeat": ctx.registry.heartbeat_settings(),
             **({"acknowledgedJournalIds": acknowledged} if journaled else {}),
+            **registration_project_links(
+                ctx, sandbox, list(sandbox.get("capabilities") or [])
+            ),
         }
     except DeletedDaemonNodeError as error:
         logger.info(
