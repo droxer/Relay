@@ -3,6 +3,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { listControlPanelUsers } from "../api";
 import type { ControlPanelDaemonNodeRecord, UserRecord } from "../types";
 import {
+  ADMIN_ROSTER_POLL_MS,
   ADMIN_USERS_KEY,
   CONTROL_PANEL_NODES_KEY,
   CONTROL_PANEL_POLL_MS,
@@ -47,7 +48,7 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
         queryFn: async ({ signal }: { signal: AbortSignal }) =>
           (await listControlPanelUsers(signal)).users ?? [],
         enabled,
-        refetchInterval: live ? CONTROL_PANEL_POLL_MS : false,
+        refetchInterval: live ? ADMIN_ROSTER_POLL_MS : false,
       },
     ],
   });

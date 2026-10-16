@@ -42,6 +42,7 @@ deploy/deploy.sh railway     # project, Postgres, services, variables, volume, c
 deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
 deploy/deploy.sh release     # deploy the backend, then build and publish the web UI Worker
 deploy/deploy.sh verify      # probe the live hostnames
+deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION (see below)
 ```
 
 Every step looks before it writes, so re-running converges and changes nothing
@@ -96,6 +97,43 @@ public API directly and does not evaluate `.railway/railway.ts`.
 Connecting a repository may trigger an automatic deployment. The release phase
 also requests an explicit deployment pinned to the intended SHA and waits for
 that ID; it does not assume an implicit build is the requested release.
+
+## Region
+
+Every API call crosses the distance between Cloudflare and Railway, so the
+services run in `RAILWAY_REGION`, near the users (default
+`asia-southeast1-eqsg3a`, Singapore; production moved there from US East on
+2026-10-16, which cut a warm API call from ~300 ms to ~110 ms from Shanghai).
+`railway` applies it to every service it configures as `multiRegionConfig`,
+clearing any other region so a changed value moves a service rather than
+adding a second copy; it takes effect on the next deploy. A new Postgres is
+redeployed into the region right away, while it is still empty. An existing
+Postgres is never moved by `railway`: that migrates its volume offline, so a
+re-run only warns when the database sits elsewhere.
+
+### Moving region
+
+`deploy.sh region` moves Postgres, then the backend, then the Railway web
+service if there is one, redeploying each in `RAILWAY_REGION` and stopping at
+the first that does not come up. The API is down while the Postgres volume
+migrates (about a minute for 125 MB). It refuses to run unless
+`CONFIRM_REGION_MOVE` names the target region. Back up first:
+
+1. Railway → *Postgres* → *Settings* → *Networking* → add a **TCP proxy** on
+   port 5432 (the database is private otherwise; Hobby workspaces have no
+   manual volume backups).
+2. Dump with a `pg_dump` of the server's major version (Postgres 18 here):
+   `docker run --rm -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -v "$HOME/relay-backups:/out" postgres:18 pg_dump --format=custom --no-owner -f /out/prod.dump`
+   with the proxy host/port and the service's `PGUSER`/`PGPASSWORD`/`PGDATABASE`.
+3. Prove it restores: load it into a throwaway `postgres:18` container and
+   compare row counts (`sessions`, `users`, `session_events`, `alembic_version`)
+   with production.
+4. `RAILWAY_REGION=<region> CONFIRM_REGION_MOVE=<region> deploy/deploy.sh region`,
+   then `deploy/deploy.sh verify`, and compare the row counts again.
+5. **Delete the TCP proxy.**
+
+Set `RAILWAY_REGION` in `deploy/.env` too, or the next `railway` run will
+place the services back in the old region.
 
 ## Interrupted runs
 

@@ -36,6 +36,7 @@ load_config() {
   : "${WEB_HOSTING:=workers}"
   : "${WORKERS_SCRIPT:=relay-web}"
   : "${POSTGRES_SERVICE:=Postgres}"
+  : "${RAILWAY_REGION:=asia-southeast1-eqsg3a}"
   : "${CLOUDFLARE_ZONE:=get-relay.cc}"
   : "${WEB_DOMAIN:=get-relay.cc}"
   : "${API_DOMAIN:=api.get-relay.cc}"

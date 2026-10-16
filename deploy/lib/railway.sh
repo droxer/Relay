@@ -90,6 +90,8 @@ railway_ensure_postgres() {
   id=$(railway_service_id "$POSTGRES_SERVICE")
   if [ -n "$id" ]; then
     info "service $POSTGRES_SERVICE exists ($id)"
+    railway_in_region "$id" ||
+      warn "$POSTGRES_SERVICE runs in $(railway_service_regions "$id" | jq -r 'keys | join(", ")'), not $RAILWAY_REGION; 'deploy.sh region' moves it (README: Moving region)"
     return
   fi
   data=$(gql 'query PostgresTemplate { template(code: "postgres") { id serializedConfig } }')
@@ -103,13 +105,67 @@ railway_ensure_postgres() {
     waited=$((waited + 5))
   done
   info "created service $POSTGRES_SERVICE ($id)"
+  # The template deploys to Railway's default region. A new database is empty,
+  # so it moves now; an existing one moves only through 'deploy.sh region'.
+  railway_move_service "$POSTGRES_SERVICE" "$id" || die "$POSTGRES_SERVICE did not come up in $RAILWAY_REGION"
+}
+
+# Regions a service is deployed in, as its multiRegionConfig ({} before the
+# first deployment).
+railway_service_regions() {
+  gql 'query ServiceRegions($s: String!, $e: String!) { serviceInstance(serviceId: $s, environmentId: $e) { latestDeployment { meta } } }' \
+    "$(jq -nc --arg s "$1" --arg e "$ENVIRONMENT_ID" '{s: $s, e: $e}')" \
+    | jq -c '.serviceInstance.latestDeployment.meta.serviceManifest.deploy.multiRegionConfig // {}'
+}
+
+railway_in_region() {
+  railway_service_regions "$1" | jq -e --arg r "$RAILWAY_REGION" 'keys == [$r]' >/dev/null
+}
+
+# railway_region_config <service-id> <replicas>: every region the service runs
+# in now is cleared, so a changed RAILWAY_REGION moves it instead of adding a
+# second copy. A bare numReplicas would land in Railway's default region.
+railway_region_config() {
+  railway_service_regions "$1" | jq -c --arg r "$RAILWAY_REGION" --argjson n "$2" \
+    'map_values(null) + {($r): {numReplicas: $n}}'
+}
+
+# railway_set_region <service-id> <replicas>. Takes effect on the next deploy.
+railway_set_region() {
+  gql 'mutation ServiceRegion($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
+         serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }' \
+    "$(jq -nc --arg s "$1" --arg e "$ENVIRONMENT_ID" --argjson m "$(railway_region_config "$1" "$2")" \
+      '{serviceId: $s, environmentId: $e, input: {multiRegionConfig: $m}}')" >/dev/null
+}
+
+# railway_move_service <service-name> <service-id>: places the service in
+# RAILWAY_REGION and redeploys it there, keeping its replica count. Railway
+# migrates an attached volume during that deploy, offline.
+railway_move_service() {
+  local name=$1 id=$2 current replicas before newest waited=0
+  current=$(railway_service_regions "$id")
+  if jq -e --arg r "$RAILWAY_REGION" 'keys == [$r]' >/dev/null <<<"$current"; then
+    info "$name already runs in $RAILWAY_REGION"
+    return
+  fi
+  replicas=$(jq '[.[] | .numReplicas // 1] | add // 1' <<<"$current")
+  before=$(railway_deployments "$id" | jq -r '.[0].id // ""')
+  railway_set_region "$id" "$replicas"
+  gql 'mutation ServiceRedeploy($s: String!, $e: String!) { serviceInstanceRedeploy(serviceId: $s, environmentId: $e) }' \
+    "$(jq -nc --arg s "$id" --arg e "$ENVIRONMENT_ID" '{s: $s, e: $e}')" >/dev/null
+  info "moving $name from $(jq -r 'keys | join(", ")' <<<"$current") to $RAILWAY_REGION"
+  until newest=$(railway_deployments "$id" | jq -r '.[0].id // ""') && [ -n "$newest" ] && [ "$newest" != "$before" ]; do
+    [ "$waited" -lt "$DEPLOY_TIMEOUT_SECONDS" ] || { warn "$name: no new deployment after ${DEPLOY_TIMEOUT_SECONDS}s"; return 1; }
+    sleep "$DEPLOY_POLL_SECONDS"
+    waited=$((waited + DEPLOY_POLL_SECONDS))
+  done
+  railway_wait_deployment "$name" "$id" "$newest"
 }
 
 # Configure services directly before connecting their repo. New services cannot
 # opt into Config as Code. Profiles use ServiceInstanceUpdateInput fields.
 railway_ensure_service() {
-  local name=$1 profile=$2 id data settings
-  settings=$(cat "$DEPLOY_DIR/services/$profile.json")
+  local name=$1 profile=$2 id data settings regions
   id=$(railway_service_id "$name")
   if [ -n "$id" ]; then
     info "service $name exists ($id)"
@@ -119,6 +175,9 @@ railway_ensure_service() {
     id=$(jq -r '.serviceCreate.id' <<<"$data")
     info "created service $name ($id)"
   fi
+  settings="$DEPLOY_DIR/services/$profile.json"
+  regions=$(railway_region_config "$id" "$(jq '.numReplicas' "$settings")")
+  settings=$(jq -c --argjson m "$regions" '. + {multiRegionConfig: $m} | del(.numReplicas)' "$settings")
   gql 'mutation ServiceConfig($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
          serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }' \
     "$(jq -nc --arg s "$id" --arg e "$ENVIRONMENT_ID" --argjson settings "$settings" \

@@ -91,8 +91,13 @@ def domain_status(domain):
     }
 
 
+# Where Railway puts a service that names no region.
+DEFAULT_REGION = "us-west2"
+
+
 def add_service(name, deployed=False):
     sid = new_id("svc")
+    regions = {DEFAULT_REGION: {"numReplicas": 1}} if deployed else {}
     project()["services"][sid] = {
         "name": name,
         "config": {},
@@ -100,9 +105,28 @@ def add_service(name, deployed=False):
         "branch": None,
         "variables": {},
         "domains": [],
-        "deployments": [{"id": new_id("dep"), "status": "SUCCESS"}] if deployed else [],
+        # Configured regions; each deployment snapshots them, as Railway's
+        # deployment manifest does.
+        "regions": regions,
+        "deployments": [{"id": new_id("dep"), "status": "SUCCESS", "regions": dict(regions)}] if deployed else [],
     }
     return sid
+
+
+def merge_regions(svc, update):
+    """Railway merges multiRegionConfig; a null region is removed."""
+    for region, value in update.items():
+        if value is None:
+            svc["regions"].pop(region, None)
+        else:
+            svc["regions"][region] = value
+
+
+def add_deployment(svc, **extra):
+    status = STATE.get("deployment_status", {}).get(svc["name"], "SUCCESS")
+    dep = {"id": new_id("dep"), "status": status, "regions": dict(svc["regions"]), **extra}
+    svc["deployments"].insert(0, dep)
+    return dep
 
 
 def edges(nodes):
@@ -137,8 +161,25 @@ def railway(op, v):
     if op == "ServiceConfig":
         assert not v["input"].get("railwayConfigFile"), "Config as Code is deprecated"
         assert v["input"].get("builder") in {"HEROKU", "NIXPACKS", "PAKETO", "RAILPACK"}, "Problem processing request: invalid GraphQL Builder enum"
-        service(v["serviceId"])["config"] = v["input"]
+        svc = service(v["serviceId"])
+        svc["config"] = v["input"]
+        merge_regions(svc, v["input"].get("multiRegionConfig") or {})
         return {"serviceInstanceUpdate": True}
+    if op == "ServiceRegion":
+        assert set(v["input"]) == {"multiRegionConfig"}, "a region update must not touch other settings"
+        merge_regions(service(v["serviceId"]), v["input"]["multiRegionConfig"])
+        return {"serviceInstanceUpdate": True}
+    if op == "ServiceRegions":
+        deployments = service(v["s"])["deployments"]
+        if not deployments:
+            return {"serviceInstance": {"latestDeployment": None}}
+        manifest = {"serviceManifest": {"deploy": {"multiRegionConfig": deployments[0]["regions"]}}}
+        return {"serviceInstance": {"latestDeployment": {"meta": manifest}}}
+    if op == "ServiceRedeploy":
+        svc = service(v["s"])
+        assert svc["deployments"], "redeploy of a service that was never deployed"
+        add_deployment(svc, commitSha=svc["deployments"][0].get("commitSha"))
+        return {"serviceInstanceRedeploy": True}
     if op == "Variables":
         return {"variables": service(v["s"])["variables"]}
     if op == "VariablesUpsert":
@@ -170,8 +211,7 @@ def railway(op, v):
         svc = service(v["s"])
         assert svc["repo"], "deploy before the repo was connected"
         assert re.fullmatch(r"[0-9a-f]{40}", v.get("commitSha", "")), "release must pin a commit"
-        dep = {"id": new_id("dep"), "status": STATE.get("deployment_status", {}).get(svc["name"], "SUCCESS"), "commitSha": v["commitSha"]}
-        svc["deployments"].insert(0, dep)
+        dep = add_deployment(svc, commitSha=v["commitSha"])
         return {"serviceInstanceDeployV2": dep["id"]}
     if op == "FailureLogs":
         for svc in project()["services"].values():
