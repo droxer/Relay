@@ -103,13 +103,28 @@ railway_ensure_postgres() {
     waited=$((waited + 5))
   done
   info "created service $POSTGRES_SERVICE ($id)"
+  # Only a new database is placed: moving an existing one migrates its volume
+  # and takes it offline, which a converging re-run must never do unasked.
+  railway_set_region "$id" 1
+  info "$POSTGRES_SERVICE placed in $RAILWAY_REGION"
+}
+
+# railway_set_region <service-id> <replicas>. Railway keeps each region's
+# replicas in multiRegionConfig; a bare numReplicas lands in its default region.
+railway_set_region() {
+  gql 'mutation ServiceRegion($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
+         serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }' \
+    "$(jq -nc --arg s "$1" --arg e "$ENVIRONMENT_ID" --arg r "$RAILWAY_REGION" --argjson n "$2" \
+      '{serviceId: $s, environmentId: $e, input: {multiRegionConfig: {($r): {numReplicas: $n}}}}')" >/dev/null
 }
 
 # Configure services directly before connecting their repo. New services cannot
 # opt into Config as Code. Profiles use ServiceInstanceUpdateInput fields.
 railway_ensure_service() {
   local name=$1 profile=$2 id data settings
-  settings=$(cat "$DEPLOY_DIR/services/$profile.json")
+  settings=$(jq -c --arg r "$RAILWAY_REGION" \
+    '. + {multiRegionConfig: {($r): {numReplicas: .numReplicas}}} | del(.numReplicas)' \
+    "$DEPLOY_DIR/services/$profile.json")
   id=$(railway_service_id "$name")
   if [ -n "$id" ]; then
     info "service $name exists ($id)"

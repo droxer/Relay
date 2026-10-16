@@ -161,10 +161,11 @@ WEB=$(svc relay-web)
 check "one project named relay" '.projects | length == 1 and ([.[] | .name] == ["relay"])'
 check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend"]'
 
-check "backend Dockerfile, migration, healthcheck and one replica" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\"] and .healthcheckPath == \"/healthz\" and .numReplicas == 1 and .sleepApplication == false"
+check "backend Dockerfile, migration, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
 check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
+check "a new Postgres is placed in the region" "$(svc Postgres) | .region == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""

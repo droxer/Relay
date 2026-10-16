@@ -139,6 +139,10 @@ def railway(op, v):
         assert v["input"].get("builder") in {"HEROKU", "NIXPACKS", "PAKETO", "RAILPACK"}, "Problem processing request: invalid GraphQL Builder enum"
         service(v["serviceId"])["config"] = v["input"]
         return {"serviceInstanceUpdate": True}
+    if op == "ServiceRegion":
+        assert set(v["input"]) == {"multiRegionConfig"}, "a region update must not touch other settings"
+        service(v["serviceId"])["region"] = v["input"]["multiRegionConfig"]
+        return {"serviceInstanceUpdate": True}
     if op == "Variables":
         return {"variables": service(v["s"])["variables"]}
     if op == "VariablesUpsert":
