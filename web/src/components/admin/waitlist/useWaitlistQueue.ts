@@ -1,13 +1,22 @@
 import { keepPreviousData, useQueries } from "@tanstack/react-query";
 import { listWaitlist } from "../../../api";
 import type { WaitlistEntry, WaitlistStatus } from "../../../types";
-import { CONTROL_PANEL_POLL_MS } from "../../../lib/controlPanelQueries";
+import { ADMIN_ROSTER_POLL_MS, CONTROL_PANEL_POLL_MS } from "../../../lib/controlPanelQueries";
 import { LANE_PAGE_SIZE } from "../../../lib/pagination";
 import { pageOffset, WAITLIST_STATUS_ORDER } from "../../../lib/waitlist";
 
 /** Every waitlist read sits under this key, so one invalidation after an
     invite, decline, note, or erase refreshes every band at once. */
 export const WAITLIST_QUERY_KEY = ["admin", "waitlist"] as const;
+
+/** Invite emails send in the background, so a band still holding a queued
+    delivery polls at node pace until the outcome lands; otherwise only other
+    admins change it. */
+export function waitlistPollIntervalMs(entries: readonly WaitlistEntry[] | undefined): number {
+  return entries?.some((entry) => entry.lastDeliveryStatus === "queued")
+    ? CONTROL_PANEL_POLL_MS
+    : ADMIN_ROSTER_POLL_MS;
+}
 
 export interface WaitlistBand {
   status: WaitlistStatus;
@@ -45,7 +54,8 @@ export function useWaitlistQueue(query: string, lanePages: Record<string, number
           signal,
         ),
         placeholderData: keepPreviousData,
-        refetchInterval: CONTROL_PANEL_POLL_MS,
+        refetchInterval: (query: { state: { data?: { entries?: WaitlistEntry[] } } }) =>
+          waitlistPollIntervalMs(query.state.data?.entries),
       };
     }),
     combine: (results) => {

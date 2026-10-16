@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, useState, type ReactNode } from "react";
 import { expect, it, vi } from "vitest";
+import { waitlistPollIntervalMs } from "../src/components/admin/waitlist/useWaitlistQueue";
 import { WaitlistView } from "../src/components/admin/waitlist/WaitlistView";
+import { ADMIN_ROSTER_POLL_MS, CONTROL_PANEL_POLL_MS } from "../src/lib/controlPanelQueries";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { WaitlistEntry, WaitlistInviteResult, WaitlistStatus } from "../src/types";
 
@@ -130,4 +132,13 @@ it("refreshes background delivery failures without leaving stale queued results 
   const reveal = screen.getByRole("region", { name: "admin.waitlist.reveal_title" });
   expect(within(reveal).queryByText("admin.waitlist.delivery_queued")).toBeNull();
   expect(within(reveal).getByText("https://relay.test/join#token=pending")).toBeTruthy();
+});
+
+it("polls a band quickly only while one of its invite emails is still queued", () => {
+  expect(waitlistPollIntervalMs(undefined)).toBe(ADMIN_ROSTER_POLL_MS);
+  expect(waitlistPollIntervalMs([entry("a", "invited", { lastDeliveryStatus: "failed" })])).toBe(ADMIN_ROSTER_POLL_MS);
+  expect(waitlistPollIntervalMs([
+    entry("a", "invited", { lastDeliveryStatus: "sent" }),
+    entry("b", "invited", { lastDeliveryStatus: "queued" }),
+  ])).toBe(CONTROL_PANEL_POLL_MS);
 });
