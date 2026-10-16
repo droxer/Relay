@@ -43,6 +43,22 @@ _Avoid_: Machine, worker
 The execution-plane runtime registered for one computer.
 _Avoid_: Sandbox, agent
 
+**Outdated Client**:
+A Computer whose Daemon Node did not advertise every capability this backend
+knows at its last registration — it runs an older Relay client than the server
+ships. Derived on read (`clientOutdated` on node records), never stored.
+_Avoid_: Old version, stale daemon (stale means it stopped heartbeating)
+
+**Notification**:
+A notice in one person's inbox that something they own changed while they may
+not have been looking: a Task they own or are assigned finished
+(`task_completed`), a Computer they hold went online or offline
+(`computer_status`), or a Computer runs an Outdated Client
+(`client_outdated`). Shared hardware no User holds notifies every admin. It
+carries facts, not prose; muting a kind hides its notices without deleting
+them.
+_Avoid_: Alert, message (a Thread message), event (an event-log record)
+
 **Logical Agent**:
 The durable user-owned identity built on an Agent Runtime through a
 Placement. Its configuration is independent of the computer that executes it,

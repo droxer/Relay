@@ -7,8 +7,10 @@ import { PageHeader } from "./PageHeader";
 import { SectionNav, type SectionNavItem } from "./SectionNav";
 import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
+import { NotificationsSection } from "./settings/NotificationsSection";
 import {
   NavComputer,
+  NavNotifications,
   NavSkills,
   PrefAppearance,
   PrefLanguage,
@@ -31,10 +33,10 @@ type SettingsPageProps = {
 
 /**
  * Personal settings: one destination holding the sections a person owns for
- * themselves — their computers, the skills they publish, and how the app
- * looks and speaks. The rail-and-content shape is the shared one (see
- * section-rail.css), the same the control panel uses for the org-level
- * equivalents.
+ * themselves — their computers, the skills they publish, what the app tells
+ * them about, and how it looks and speaks. The rail-and-content shape is the
+ * shared one (see section-rail.css), the same the control panel uses for the
+ * org-level equivalents.
  *
  * Computers and Skills bring their own page frame (a roster with its own
  * header, a library with its own rail), so they fill the content column
@@ -57,6 +59,7 @@ export function SettingsPage({
   const items: SectionNavItem<SettingsSection>[] = [
     { id: "computers", label: t("computer.title"), Icon: NavComputer, href: hrefForSettingsSection("computers") },
     { id: "skills", label: t("skills.title"), Icon: NavSkills, href: hrefForSettingsSection("skills") },
+    { id: "notifications", label: t("notifications.title"), Icon: NavNotifications, href: hrefForSettingsSection("notifications") },
     { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
     { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
   ];
@@ -97,7 +100,9 @@ export function SettingsPage({
           <>
             <PageHeader title={sectionLabel} titleAs="h2" titleVariant="title" />
             <div className="sec-section-body">
-              {section === "appearance" ? (
+              {section === "notifications" ? (
+                <NotificationsSection />
+              ) : section === "appearance" ? (
                 <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
               ) : (
                 <LanguageSection language={language} onLanguageChange={onLanguageChange} />

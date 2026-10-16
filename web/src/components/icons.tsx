@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
   ArrowUp,
   ArrowUpRight,
+  Bell,
   BookOpen,
   Bot,
   Building2,
@@ -294,6 +295,7 @@ export const NavTeams = identityGlyph("team", "NavTeams");
 export const NavSkills = withStandardStroke(BookOpen, "NavSkills");
 export const NavPreferences = withStandardStroke(Settings, "NavPreferences");
 export const NavLogout = withStandardStroke(LogOut, "NavLogout");
+export const NavNotifications = withStandardStroke(Bell, "NavNotifications");
 export const NavRefresh = withStandardStroke(RefreshCw, "NavRefresh");
 export const NavSidebarCollapse = withStandardStroke(PanelLeftClose, "NavSidebarCollapse");
 export const NavSidebarExpand = withStandardStroke(PanelLeftOpen, "NavSidebarExpand");

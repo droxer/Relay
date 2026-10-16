@@ -914,7 +914,9 @@
     "token_reissue_message": "当前令牌将立即失效。已在这台电脑上运行的守护进程必须使用新令牌重启。",
     "token_reissued_note": "已签发新令牌——旧令牌已失效。请使用此令牌重启守护进程。",
     "token_unrecoverable": "电脑令牌仅在签发时显示。重新签发令牌以连接电脑，旧令牌将失效。",
-    "token_error": "无法加载令牌：{{message}}"
+    "token_error": "无法加载令牌：{{message}}",
+    "client_outdated": "有可用更新",
+    "client_outdated_hint": "此计算机运行的 Relay 客户端版本低于服务器。请在该计算机上更新 Relay 客户端，以确保所有功能正常使用。"
   },
   "routine": {
     "schedule": "触发器",
@@ -2733,5 +2735,47 @@
       "thread": "智能体已就绪。下一步：开始你的第一个对话。",
       "explore": "第一次运行已完成，设置全部完成。"
     }
+  },
+  "notifications": {
+    "title": "通知",
+    "bell_unread_one": "通知，{{count}} 条未读",
+    "bell_unread_other": "通知，{{count}} 条未读",
+    "mark_all_read": "全部标为已读",
+    "settings_link": "通知设置",
+    "loading": "正在加载通知…",
+    "load_failed": "无法加载通知。",
+    "empty": "暂无新通知。",
+    "unread": "未读",
+    "mark_failed": "无法将通知标为已读。",
+    "task_review": "等待你审阅",
+    "task_done": "任务已完成",
+    "task_detail": "{{ref}} {{title}}",
+    "task_detail_untitled": "{{ref}}",
+    "computer_online": "计算机已恢复在线",
+    "computer_offline": "计算机已离线",
+    "computer_detail": "{{name}}",
+    "client_outdated": "Relay 客户端版本过旧",
+    "client_outdated_detail": "请更新 {{name}} 上的 Relay 客户端",
+    "desktop_more_one": "另有 {{count}} 条通知",
+    "desktop_more_other": "另有 {{count}} 条通知",
+    "desktop_more_body": "打开 Relay 查看全部。",
+    "kinds_group": "通知我以下内容",
+    "kind": {
+      "task_completed": "已完成的任务",
+      "task_completed_sub": "智能体完成任务，或任务等待你审阅时。",
+      "computer_status": "计算机状态",
+      "computer_status_sub": "你的计算机离线或恢复在线时。",
+      "client_outdated": "Relay 客户端更新",
+      "client_outdated_sub": "计算机运行的 Relay 客户端版本低于服务器时。"
+    },
+    "prefs_loading": "正在加载通知设置…",
+    "prefs_load_failed": "无法加载通知设置。",
+    "prefs_failed": "无法保存通知设置。",
+    "desktop_group": "此浏览器",
+    "desktop": "桌面通知",
+    "desktop_sub": "Relay 在后台时，有新通知会显示系统通知。",
+    "desktop_on": "已开启。Relay 在后台时，新通知会以系统通知显示。",
+    "desktop_blocked": "此网站的通知已被阻止。请在浏览器的网站设置中允许通知后再开启。",
+    "desktop_unsupported": "此浏览器不支持桌面通知。"
   }
 }

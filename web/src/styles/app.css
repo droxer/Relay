@@ -54,6 +54,7 @@
 @import "./avatar-stack.css" layer(relay);
 @import "./overlay.css" layer(relay);
 @import "./command.css" layer(relay);
+@import "./notifications.css" layer(relay);
 @import "./preferences.css" layer(relay);
 @import "./dialog.css" layer(relay);
 @import "./section-rail.css" layer(relay);

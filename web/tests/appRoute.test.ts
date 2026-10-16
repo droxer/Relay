@@ -51,6 +51,9 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/settings/skills"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
     });
+    assert.deepEqual(parseAppPath("/settings/notifications"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "notifications",
+    });
     assert.deepEqual(parseAppPath("/settings/appearance"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
     });

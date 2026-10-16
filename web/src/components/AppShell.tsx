@@ -20,6 +20,7 @@ import type { ShortcutAction } from "@/lib/shortcuts";
 import type { AppRoute, MobileView } from "@/lib/viewTypes";
 import type { CurrentUser } from "@/types";
 import { Button } from "@/components/ui/button";
+import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
 
 const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "nav.backlog",
@@ -73,6 +74,7 @@ type AppShellProps = {
   onboarding: { done: number; total: number } | null;
   /** Opens the onboarding wizard, reopening it if it was dismissed. */
   onOpenOnboarding: () => void;
+  notifications: NotificationBellBinding;
   children: ReactNode;
   /** The theme lives here for the `toggle-theme` command only; the settings
    *  route owns the full appearance and language controls. */
@@ -109,6 +111,7 @@ export function AppShell({
   onNewThread,
   onboarding,
   onOpenOnboarding,
+  notifications,
   children,
   theme,
   onThemeChange,
@@ -266,6 +269,10 @@ export function AppShell({
             />
           ) : null}
           <div className="mobile-topbar-actions" ref={setActionsSlot} />
+          {/* The rail's footer, where the desktop bell lives, is hidden on
+              phones; the inbox rides at the end of the top bar instead, on
+              every route, after the screen's own actions. */}
+          <NotificationBell {...notifications} className="mobile-topbar-bell" variant="icon" side="bottom" align="end" />
         </div>
       </div>
 
@@ -283,6 +290,7 @@ export function AppShell({
         onOpenCommandMenu={() => setCommandOpen(true)}
         onboarding={onboarding}
         onOpenOnboarding={onOpenOnboarding}
+        notifications={notifications}
       />
 
       {/* display:contents (owned by shell.css, .messenger-shell > main) keeps

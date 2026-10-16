@@ -9,6 +9,7 @@ import { NodeMeta } from "./NodeMeta";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { TonePill } from "../StatusPill";
+import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 import { isNodeOnline } from "../../lib/adminHelpers";
 
 interface NodeCardProps {
@@ -76,6 +77,7 @@ export function NodeCard({
           ) : (
             <NodePresence node={node} t={t} withLabel />
           )}
+          <ClientOutdatedBadge node={node} t={t} />
           <NodeActions
             node={node}
             onReveal={onReveal}

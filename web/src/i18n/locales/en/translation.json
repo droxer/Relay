@@ -930,7 +930,9 @@
     "token_reissue_message": "The current token stops working immediately. A daemon already running on this computer must be restarted with the new token.",
     "token_reissued_note": "New token issued — the previous one no longer works. Restart the daemon with this token.",
     "token_unrecoverable": "Computer tokens are shown only when issued. Reissue a token to reconnect; the previous token will stop working.",
-    "token_error": "Could not load the token: {{message}}"
+    "token_error": "Could not load the token: {{message}}",
+    "client_outdated": "Update available",
+    "client_outdated_hint": "This computer runs an older Relay client than the server. Update the Relay client on it to keep every feature working."
   },
   "routine": {
     "schedule": "Trigger",
@@ -2791,5 +2793,47 @@
       "thread": "Agent ready. Next: run your first Thread.",
       "explore": "Your first run finished. Setup is complete."
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "bell_unread_one": "Notifications, {{count}} unread",
+    "bell_unread_other": "Notifications, {{count}} unread",
+    "mark_all_read": "Mark all as read",
+    "settings_link": "Notification settings",
+    "loading": "Loading notifications…",
+    "load_failed": "Couldn't load notifications.",
+    "empty": "You're all caught up.",
+    "unread": "Unread",
+    "mark_failed": "Couldn't mark notifications as read.",
+    "task_review": "Ready for your review",
+    "task_done": "Task finished",
+    "task_detail": "{{ref}} {{title}}",
+    "task_detail_untitled": "{{ref}}",
+    "computer_online": "Computer back online",
+    "computer_offline": "Computer went offline",
+    "computer_detail": "{{name}}",
+    "client_outdated": "Relay client out of date",
+    "client_outdated_detail": "Update the Relay client on {{name}}",
+    "desktop_more_one": "{{count}} more notification",
+    "desktop_more_other": "{{count}} more notifications",
+    "desktop_more_body": "Open Relay to see them all.",
+    "kinds_group": "Notify me about",
+    "kind": {
+      "task_completed": "Finished tasks",
+      "task_completed_sub": "When agents finish a task, or it is ready for your review.",
+      "computer_status": "Computer status",
+      "computer_status_sub": "When one of your computers goes offline or comes back online.",
+      "client_outdated": "Relay client updates",
+      "client_outdated_sub": "When a computer runs an older Relay client than the server."
+    },
+    "prefs_loading": "Loading notification settings…",
+    "prefs_load_failed": "Couldn't load notification settings.",
+    "prefs_failed": "Couldn't save notification settings.",
+    "desktop_group": "This browser",
+    "desktop": "Desktop notifications",
+    "desktop_sub": "Show a system notification when something arrives while Relay is in the background.",
+    "desktop_on": "On. New notices appear as system notifications while Relay is in the background.",
+    "desktop_blocked": "Notifications are blocked for this site. Allow them in your browser's site settings, then turn this on.",
+    "desktop_unsupported": "This browser doesn't support desktop notifications."
   }
 }

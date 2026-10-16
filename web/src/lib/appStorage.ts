@@ -156,6 +156,24 @@ export function writeThreadListBesideSpace(visible: boolean): void {
   writeLayoutFlag(threadListBesideSpaceKey, visible);
 }
 
+/* Desktop notifications are a per-browser choice, not an account setting:
+   the browser's own permission is per-origin-per-browser, so a choice that
+   followed the account would claim notices a second browser never allowed.
+   Off by default; the settings toggle turns it on alongside asking for
+   permission. */
+const desktopNotificationsKey = "relay-web.desktopNotifications";
+export const DESKTOP_NOTIFICATIONS_CHANGE_EVENT = "relay:desktop-notifications";
+
+export function readDesktopNotifications(): boolean {
+  return readLayoutFlag(desktopNotificationsKey);
+}
+
+export function writeDesktopNotifications(enabled: boolean): void {
+  writeLayoutFlag(desktopNotificationsKey, enabled);
+  // Same-tab listeners; other tabs hear the storage event.
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DESKTOP_NOTIFICATIONS_CHANGE_EVENT));
+}
+
 
 /** Dragged expanded-rail width in px, or null when never resized. Kept
  *  separate from the expanded flag: the rail remembers how wide the user
