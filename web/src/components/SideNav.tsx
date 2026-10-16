@@ -54,7 +54,7 @@ const MORE_ROUTES: readonly {
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
-export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu }: {
+export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding }: {
   sidenavExpanded: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
   width: number;
@@ -66,6 +66,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   isAdmin: boolean;
   onLogout: () => void;
   onOpenCommandMenu: () => void;
+  /** Setup progress while the onboarding wizard is active; null hides the chip. */
+  onboarding?: { done: number; total: number } | null;
+  onOpenOnboarding?: () => void;
 }) {
   const { t } = useTranslation();
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -295,6 +298,24 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
         </div>
       </nav>
       <div className="sidenav-bottom">
+        {/* Setup is still underway: one square back to the wizard, wherever
+            the person has wandered. Hidden once the wizard is dismissed. */}
+        {onboarding && onOpenOnboarding ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="sidenav-btn sidenav-onboarding"
+            data-nav="onboarding"
+            tooltip={t("onboarding.chip", onboarding)}
+            onClick={() => {
+              hideNavTooltip();
+              onOpenOnboarding();
+            }}
+          >
+            <span className="sidenav-onboarding-count" aria-hidden="true">{onboarding.done}/{onboarding.total}</span>
+            <span className="sr-only">{t("onboarding.chip", onboarding)}</span>
+          </Button>
+        ) : null}
         {/* The palette's visible trigger lives with the other rail-level
             controls, not the destination list: it opens a command surface,
             it does not navigate anywhere. */}

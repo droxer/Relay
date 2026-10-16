@@ -148,6 +148,27 @@ def test_user_preferences_persist_across_login_sessions(monkeypatch) -> None:
         assert current.json()["user"]["language"] == "zh-CN"
 
 
+def test_onboarding_preference_is_server_stamped_and_validated(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        assert client.get("/api/v1/auth/me").json()["user"]["onboarding"] == {}
+
+        response = client.patch("/api/v1/auth/preferences", json={
+            "onboarding": {"introSeen": True, "closedCards": ["teams"]},
+        })
+
+        assert response.status_code == 200
+        onboarding = response.json()["user"]["onboarding"]
+        assert onboarding["closedCards"] == ["teams"]
+        assert onboarding["introSeenAt"]
+
+        for body in ({"onboarding": "dismiss"}, {"onboarding": {"dismissedAt": "x"}}, {}):
+            assert client.patch("/api/v1/auth/preferences", json=body).status_code == 400
+        assert client.get("/api/v1/auth/me").json()["user"]["onboarding"] == onboarding
+
+
 def test_login_and_session_cookie(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

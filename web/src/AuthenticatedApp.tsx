@@ -43,6 +43,9 @@ import { useTeams } from "./hooks/useTeams";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ThreadsView } from "./components/ThreadsView";
+import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
+import { useOnboarding } from "./hooks/useOnboarding";
+import { SETUP_STEPS } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
 import { resolveNewThreadComputer } from "./lib/threadRuntime";
@@ -137,6 +140,13 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => myThreadSessions(sessions, selectedUser),
     [sessions, selectedUser],
   );
+  const onboarding = useOnboarding({
+    user,
+    setUser,
+    nodes: runtimeNodes,
+    agents: logicalAgents,
+    threads: myThreads,
+  });
   const { activeSessionId } = useActiveSession(selectedUser, myThreads);
   const activeSession = useMemo(
     () => pickActiveThreadSession({
@@ -371,6 +381,31 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     navigateToProject,
   });
 
+  // The rail chip and the palette's "Get started" both land here: a fresh
+  // thread is the empty transcript the wizard lives in, and a dismissed
+  // wizard is brought back first.
+  const openOnboarding = useStableEvent(() => {
+    if (!onboarding.progress.visible) onboarding.reopen();
+    startNewThread();
+  });
+  const onboardingPanel = onboarding.progress.visible && route === "main" && user.userId ? (
+    <OnboardingPanel
+      controls={onboarding}
+      userId={user.userId}
+      onUseStarter={(text, target) => {
+        if (target) {
+          setNewThreadNodeId(target.nodeId);
+          pickAgent(target.agent);
+        }
+        composerRef.current?.setText(text);
+        composerRef.current?.focus();
+      }}
+      onOpenRoute={navigateToRoute}
+      onOpenComputers={() => navigateToSettings("computers")}
+      onChanged={() => void refresh()}
+    />
+  ) : null;
+
   const { renameThread, deleteThread } = useThreadEditing({
     threads: myThreads,
     activeSessionId: activeSession?.id,
@@ -469,6 +504,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       user={user}
       onLogout={() => void handleLogout()}
       onNewThread={startNewThread}
+      onboarding={onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null}
+      onOpenOnboarding={openOnboarding}
       onNewTask={() => {
         taskCreateIntent()?.queue();
         // The queued intent is picked up by the tasks board, which is no
@@ -519,6 +556,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
             currentUser={user}
+            onboardingPanel={onboardingPanel}
             filteredThreads={directoryThreads}
             projects={route === "projects" ? directoryProjects : []}
             selectedProjectId={route === "projects" ? routedProjectId : null}

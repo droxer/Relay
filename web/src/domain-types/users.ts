@@ -90,4 +90,16 @@ export interface CurrentUser {
   effectiveMaxLocalComputers?: number;
   /** Live local computers this user owns, decorated by /auth/me. */
   localComputerCount?: number;
+  /** The onboarding wizard's stored choices; progress itself is derived
+      (lib/onboarding.ts). */
+  onboarding?: OnboardingPrefs;
+}
+
+export type OnboardingCard = "tasks" | "projects" | "teams" | "automations";
+
+/** The account's onboarding choices, stamped by the server. */
+export interface OnboardingPrefs {
+  introSeenAt?: string;
+  dismissedAt?: string;
+  closedCards?: readonly OnboardingCard[];
 }

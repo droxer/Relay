@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, RefObject, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionRoute,
@@ -76,6 +76,9 @@ type ThreadsViewProps = {
    *  rather than opening a second observer on the same query. */
   tasks: RelayTaskListItem[];
   currentUser: CurrentUser;
+  /** The onboarding wizard, shown instead of the empty transcript while the
+   *  person is still setting up. */
+  onboardingPanel?: ReactNode;
   filteredThreads: ThreadItem[];
   projects: ProjectRecord[];
   selectedProjectId: string | null;
@@ -159,6 +162,7 @@ export function ThreadsView({
   directoryMode,
   tasks,
   currentUser,
+  onboardingPanel,
   filteredThreads,
   projects,
   selectedProjectId,
@@ -437,6 +441,14 @@ export function ThreadsView({
 
         {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
 
+        {/* The wizard is instructions, not a chat log: it gets a plain scroller,
+            so the transcript's pin-to-bottom (and its live log role) cannot
+            scroll it past its own heading as the install command loads in. */}
+        {onboardingPanel && !activeSession && !pendingUserMessage ? (
+          <div className="transcript">
+            <div className="transcript-inner">{onboardingPanel}</div>
+          </div>
+        ) : (
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="polite" aria-atomic="false">
           <div className="transcript-inner">
             {activeSession || pendingUserMessage ? (
@@ -516,6 +528,7 @@ export function ThreadsView({
             )}
           </div>
         </div>
+        )}
 
         <Composer
           ref={composerRef}
