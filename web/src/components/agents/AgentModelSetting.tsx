@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
-import { modelHintKey, modelIdProblem, suggestedModels } from "../../lib/agentModels.ts";
+import { modelHintKey, modelIdProblem } from "../../lib/agentModels.ts";
 import type { AgentName } from "../../types";
 import { AgentModelField } from "./AgentModelField";
 
@@ -24,9 +24,9 @@ interface AgentModelSettingProps {
 }
 
 /**
- * The model row on an agent's profile. Picking the default or a reported
- * model is a complete decision and saves at once; a custom id is typed, so it
- * waits for Enter or Save. Mount with `key={savedModel}` so a saved change
+ * The model row on an agent's profile. Picking a listed model or clearing to
+ * the default is a complete decision and saves at once; a typed id waits for
+ * Enter or Save. Mount with `key={savedModel}` so a saved change
  * resets the draft.
  */
 export function AgentModelSetting({
@@ -48,7 +48,6 @@ export function AgentModelSetting({
   const locked = !canSelectModel && !savedModel;
   const problem = modelIdProblem(draft);
   const dirty = draft.trim() !== savedModel;
-  const suggestions = suggestedModels(models, { customEndpoint });
   const hintKey = modelHintKey(executorKind, { customEndpoint });
 
   function commit(model: string) {
@@ -60,10 +59,8 @@ export function AgentModelSetting({
     <div className="agent-model-setting">
       <AgentModelField
         value={draft}
-        onChange={(next) => {
-          setDraft(next);
-          if (next === "" || suggestions.includes(next)) commit(next);
-        }}
+        onChange={setDraft}
+        onPick={commit}
         onSubmitCustom={() => commit(draft)}
         models={models}
         customEndpoint={customEndpoint}
@@ -81,7 +78,7 @@ export function AgentModelSetting({
         // The default hint restates the picker; only runtime-specific advice shows here.
         <p id={hintId} className="adm-form-hint">{t(hintKey)}</p>
       ) : null}
-      {dirty && draft.trim() && !suggestions.includes(draft.trim()) ? (
+      {dirty ? (
         <div className="agent-model-setting-actions">
           <Button type="button" variant="ghost" size="dense" onClick={() => setDraft(savedModel)} disabled={saving}>
             {t("admin.v2.cancel")}
