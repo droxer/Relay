@@ -92,11 +92,41 @@
   white-space: nowrap;
 }
 
-/* Shared by the create drawer and the profile row: the custom-id input sits
-   directly under the select it was revealed by. */
+/* Shared by the create drawer and the profile row: one searchable input whose
+   clear and browse buttons sit inside its right edge. */
 .agent-model-field {
-  display: grid;
-  gap: var(--sp-2);
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.agent-model-field-actions {
+  position: absolute;
+  inset-block: 0;
+  right: var(--sp-1);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.agent-model-field-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  border-radius: var(--r-1);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.agent-model-field-button:hover {
+  color: var(--ink-1);
+}
+
+.agent-model-field-button:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
 }
 
 .create-agent-runtime-picker {
