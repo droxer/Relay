@@ -1,7 +1,7 @@
 {
   "builder": "RAILPACK",
   "dockerfilePath": "backend/Dockerfile",
-  "startCommand": "relay serve-with-worker",
+  "startCommand": "relay serve",
   "preDeployCommand": [
     "/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'"
   ],

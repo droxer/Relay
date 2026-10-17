@@ -56,19 +56,25 @@ and task/session automation event production, regardless of background mode.
 
 ## Container deployment
 
-`backend/Dockerfile` defaults to `relay serve-with-worker`. This supervises
-`relay serve` and `relay worker` as separate processes with external mode,
-sharing the same configuration and local skill directory. A separate Railway
-service is not needed. If either process exits unexpectedly, the supervisor
-stops its sibling and fails so the platform can restart both. Termination is
-forwarded to both children, with a 30-second shutdown limit.
+The Railway deployment scripts run two services from `backend/Dockerfile`:
+`relay-backend` runs `relay serve` and `relay-worker` runs `relay worker`.
+Both use external background mode, the same PostgreSQL database, and R2 for
+shared skill files. The worker references the backend's runtime variables and
+has no HTTP healthcheck or public domain. Each service restarts independently.
 
 The deploy profile applies Alembic migrations and `relay worker-schema` before
 launching the container. This is the installed-CLI equivalent of preparing the
 database and starting `make backend-worker`; the image does not need Make.
 The scripts configure at least 35 seconds of Railway draining time. An
 existing service is upgraded by `deploy/deploy.sh release` after the selected
-source is validated. See [Deployment setup](../deploy/README.md).
+source is validated. The worker deploys after the API's migrations and health
+check succeed, using the same commit. Migrate existing volume-only skill files
+to R2 before splitting; see [Deployment setup](../deploy/README.md).
+
+For other container hosts the image still defaults to `relay serve-with-worker`,
+which supervises both processes together and supports a local skill directory.
+If either child exits unexpectedly, it stops its sibling and fails the container.
+Termination is forwarded to both, with a 30-second shutdown limit.
 
 ## Scheduled work
 

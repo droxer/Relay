@@ -375,14 +375,17 @@ calls the backend origin directly with `credentials: "include"`.
 
 ### Background processing
 
-The deployed image runs the API and Procrastinate worker as separate processes
-under `relay serve-with-worker`, sharing `/data` when skill objects are not in
-R2. It forces `RELAY_BACKGROUND_MODE=external` in both children so the API does
-not also run embedded periodic loops. The worker invokes the existing task
+The Railway deployment scripts run the API (`relay serve`) and Procrastinate
+worker (`relay worker`) as separate services, sharing PostgreSQL and R2.
+Both use `RELAY_BACKGROUND_MODE=external` so the API starts no embedded periodic
+loops. The worker deploys after API migrations and health checks succeed.
+For other container hosts, the image's default `relay serve-with-worker`
+supervises both processes together and supports local `/data` skill files.
+The worker invokes the existing task
 scheduler for automations and project tasks, plus notification and execution
 recovery checks. See [Background jobs](background-jobs.md).
 
-Keep one replica initially, as `deploy/services/backend.json` configures.
+Keep one replica initially, as the backend and worker service profiles configure.
 Procrastinate coordinates normal checks through database locks, and domain
 claims remain necessary for recovery after heartbeat loss. Do not disable
 `RELAY_TASK_SCHEDULER_ENABLED` merely to select external mode: that setting
@@ -446,7 +449,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `HOST` / `BACKEND_HOST` | `127.0.0.1` | Listen interface; the image sets `0.0.0.0`. |
 | `DATABASE_URL` / `RELAY_DATABASE_URL` | — | Postgres URL. Bare `postgres://` and `postgresql://` are normalized to psycopg 3. |
 | `RELAY_BACKGROUND_MODE` | `external` in the image | API periodic work is handled by the separate Procrastinate worker; local installs default to `embedded`. |
-| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | at least `35` from deploy scripts | Platform grace period for the supervised API/worker shutdown. |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | at least `35` from deploy scripts | Grace period for each API/worker service to finish store writes. |
 | `RELAY_PUBLIC_BACKEND_URL` | request base URL | Public HTTPS API origin for enrollment/reconnect commands and daemon environment. No path, credentials, query, or fragment. HTTP allowed only for loopback development. |
 | `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/settings/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | unset | Exact browser origins allowed to send credentials. |

@@ -10,8 +10,9 @@ directly, so it needs only `curl`, `jq`, `openssl`, `git`, `python3`, and
 | --- | --- | --- |
 | `get-relay.cc` | web UI (static export) | Cloudflare Worker `relay-web` |
 | `api.get-relay.cc` | API, SSE, daemons, install script (`backend/Dockerfile`) | Railway `relay-backend` |
-| — | Procrastinate background jobs | Separate process in the same `relay-backend` container |
+| — | Procrastinate background jobs (`backend/Dockerfile`) | Railway `relay-worker` |
 | — | database | Railway `Postgres` (template) |
+| — | skill files and artifact snapshots | Cloudflare R2 |
 
 Set `WEB_HOSTING=railway` to serve the UI from a Railway `relay-web` service
 (`web/Dockerfile`, the export behind Caddy) instead; `docker` is then not
@@ -30,8 +31,8 @@ needed.
 3. **Config:** `cp deploy/config.example.env deploy/.env` (or
    `deploy/config.env`) and fill in the two tokens. Git ignores both; never
    commit them.
-4. **Optional R2:** to keep skill bundles and artifact snapshots in R2 instead
-   of a Railway volume, create the bucket and its token by hand
+4. **R2:** the API and worker share skill files and artifact snapshots through
+   R2. Create the bucket and its token by hand
    ([§ 6](../docs/deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional))
    and set the four `RELAY_R2_*` keys.
 
@@ -39,9 +40,9 @@ needed.
 
 ```bash
 deploy/deploy.sh up          # everything below, in order
-deploy/deploy.sh railway     # project, Postgres, services, variables, volume, custom domains
+deploy/deploy.sh railway     # project, Postgres, API/worker services, variables, custom domains
 deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
-deploy/deploy.sh release     # deploy the backend, then build and publish the web UI Worker
+deploy/deploy.sh release     # deploy the API, then the background worker, then publish the UI
 deploy/deploy.sh verify      # probe the live hostnames
 deploy/deploy.sh agent-ids   # read Computer ID migration status from backend startup logs
 deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION (see below)
@@ -50,9 +51,10 @@ deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION 
 Every step looks before it writes, so re-running converges and changes nothing
 that is already right. After the first run, `deploy.sh release` is the whole
 redeploy. It resolves `GITHUB_BRANCH` once and passes the same commit SHA to
-both deployments. It also updates an existing backend's startup settings for
-the supervised API/worker pair, so this upgrade needs no separate `railway`
-phase. For private repositories configure Git credentials, or set
+all services. It also changes an existing backend's start command to
+`relay serve`, creates `relay-worker` if missing, and sets its start command
+to `relay worker`, so this upgrade needs no separate `railway` phase.
+For private repositories configure Git credentials, or set
 `RAILWAY_DEPLOY_COMMIT` to a full 40-character SHA. Railway also autodeploys
 pushes to the connected branch; changing the branch on an existing service
 requires updating its source settings in Railway.
@@ -99,13 +101,14 @@ someone else's route.
 
 ## Railway service configuration
 
-The script sends explicit settings from `deploy/services/backend.json` and
-`deploy/services/web.json` to `serviceInstanceUpdate`. It clears the legacy
+The script sends explicit settings from `deploy/services/backend.json`,
+`deploy/services/worker.json`, and `deploy/services/web.json` to
+`serviceInstanceUpdate`. It clears the legacy
 Config as Code path, sets the Dockerfile, migration command, health check,
 restart policy, and replica count before connecting the repository. The API
 builder is `RAILPACK`; Railway uses the specified Dockerfile when present.
 `DOCKERFILE` was a config-file value and is not a GraphQL `Builder` enum. The backend
-stays always-on for its scheduler. No `railway.json` or `railway.toml` is used.
+and worker stay always-on. No `railway.json` or `railway.toml` is used.
 Railway's CLI IaC is an alternative management workflow; this script uses the
 public API directly and does not evaluate `.railway/railway.ts`.
 
@@ -117,26 +120,50 @@ The backend's single pre-deploy command runs `/bin/sh -c` to apply Relay's
 Alembic migrations and then initialize the Procrastinate schema
 (`relay worker-schema`, idempotent), joined with `&&` so a failed migration
 stops deployment. Railway accepts at most one entry in `preDeployCommand`.
-`relay serve-with-worker` starts the API (`relay serve`) and background worker
-(`relay worker`) as supervised processes, with `RELAY_BACKGROUND_MODE=external`.
-They share the database, configuration, and `/data` skill files; no additional
-Railway service or domain is needed. This also works without R2, since separate
-Railway containers cannot share the backend's local skill directory.
+The API runs `relay serve` with `RELAY_BACKGROUND_MODE=external`, so it starts
+no embedded scheduling loops. The separate `relay-worker` service runs
+`relay worker` from the same image and commit. The worker references the API's
+variables through [Railway references](https://docs.railway.com/variables/reference),
+including custom scheduler settings, database credentials,
+R2 keys, mail, and domain settings. Listener settings (`PORT`, `HOST`) and
+Railway platform variables stay service-specific. Each service gets at least
+35 seconds of draining time, preserving a longer configured value.
 
-If either child exits unexpectedly, the supervisor stops the other and exits
-with an error so Railway restarts the complete service. On SIGTERM/SIGINT it
-forwards termination and allows 30 seconds for shutdown before killing any
-remaining child. The script sets `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` to at
-least 35, preserving a longer existing value. The `/healthz` check stays on
-the API process. Deployment success is not a check that a scheduled job has
-completed; inspect worker/job logs and PostgreSQL heartbeats for that.
+The release waits for the API's migrations and health check before connecting
+or deploying the worker. A failed API release leaves the previous worker
+deployment running. A failed worker release stops publication of the
+Cloudflare-hosted UI. With `WEB_HOSTING=railway`, the UI builds alongside the
+API and the release reports failures from all attempted services. Connected
+GitHub services can also autodeploy independently; the ordering above applies
+to the explicit scripted release.
 
-For an operational rollback to embedded scheduling, use start command `relay`
-and `RELAY_BACKGROUND_MODE=embedded`, then redeploy. Keep the queue schema and
-records. The next scripted `railway` or `release` run restores the supervised
-configuration; reverting permanently also requires reverting these settings
-in the deployment scripts. No production changes are made just by editing
-the files locally.
+The worker has no HTTP listener, healthcheck, public domain, or volume. Railway
+restarts either service independently on failure. A successful worker deployment
+confirms process startup, not completion of a scheduled job; inspect its logs
+and PostgreSQL heartbeats for job health.
+
+### Upgrade from the combined service
+
+Before the first split release, configure the four `RELAY_R2_*` keys in the
+deploy config and set `RELAY_BLOB_STORE=r2` plus those keys on the existing
+backend service. Keep its current volume and combined start command while
+migrating. In that running backend's shell, run:
+
+```bash
+relay migrate-blobs-to-r2 --data-dir /data --dry-run
+relay migrate-blobs-to-r2 --data-dir /data
+```
+
+Repeat the dry run until no objects remain to move, then run
+`deploy/deploy.sh release`. Existing volume-only files cannot be read by the
+new worker until migrated. The script neither detaches nor deletes the old
+volume. New installations need no migration.
+
+For rollback to a combined service, stop the separate worker first, then set
+the backend start command to `relay serve-with-worker` and redeploy. Keep the
+queue schema and R2 configuration. The next scripted `railway` or `release`
+run restores separate services; a permanent rollback also requires reverting
+the deployment profiles. Local edits alone change no production resources.
 
 ## Region
 
@@ -197,7 +224,9 @@ deploy/deploy.sh verify
 `RELAY_PUBLIC_BACKEND_URL`, `RELAY_PUBLIC_WEB_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,
 `RELAY_EDGE_SECRET`, `RELAY_CLIENT_IP_HEADER=CF-Connecting-IP`,
-`RELAY_ADMIN_TOKEN`, and the R2 keys when configured. **Web:**
+`RELAY_ADMIN_TOKEN`, and the required R2 keys. **Background worker:** references
+the backend variables, uses external background mode, and has its own draining
+time. **Web:**
 `NEXT_PUBLIC_RELAY_API_ORIGIN` and `NEXT_PUBLIC_RELAY_SITE_URL` (the web
 origin, which makes the landing page indexable) are baked into the export at
 build time (build arguments for the Worker, service variables with
@@ -241,8 +270,8 @@ cache-mount constraints, including the worker and process-supervisor modules.
 This happens before upgrading service configuration or requesting deployments.
 It never checks out or runs remote files outside a
 container: Railway builds the services, and the web export builds inside
-Docker. With `WEB_HOSTING=railway`, both services are checked even when one
-fails; failure output includes deployment IDs, the
+Docker. With `WEB_HOSTING=railway`, every attempted service deployment is
+checked even when another fails; failure output includes deployment IDs, the
 commit SHA, and build/runtime log tails. Log retrieval is best effort. Commit
 and push Dockerfile or source fixes to the connected branch before releasing,
 or push a commit and select its full SHA with `RAILWAY_DEPLOY_COMMIT`.

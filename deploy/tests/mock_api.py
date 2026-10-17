@@ -24,6 +24,7 @@ ZONE = "get-relay.cc"
 
 STATE = {
     "calls": {},
+    "observed_successful_deployments": [],
     "workspaces": [{"id": "ws-1", "name": "Personal"}],
     "projects": {},
     "volumes": [],
@@ -213,6 +214,11 @@ def railway(op, v):
         svc = service(v["s"])
         assert svc["repo"], "deploy before the repo was connected"
         assert re.fullmatch(r"[0-9a-f]{40}", v.get("commitSha", "")), "release must pin a commit"
+        if svc["config"].get("startCommand") == "relay worker":
+            backend = next(s for s in project()["services"].values() if s["config"].get("startCommand") == "relay serve")
+            dep = backend["deployments"][0]
+            assert dep["id"] in STATE["observed_successful_deployments"], "worker deployed before API readiness was checked"
+            assert dep["commitSha"] == v["commitSha"], "worker must use the API release commit"
         dep = add_deployment(svc, commitSha=v["commitSha"])
         return {"serviceInstanceDeployV2": dep["id"]}
     if op == "FailureLogs":
@@ -236,7 +242,9 @@ def railway(op, v):
                 ]}
         raise ValueError("unknown deployment")
     if op == "Deployments":
-        return {"deployments": edges(service(v["input"]["serviceId"])["deployments"])}
+        deployments = service(v["input"]["serviceId"])["deployments"]
+        STATE["observed_successful_deployments"].extend(d["id"] for d in deployments if d["status"] == "SUCCESS")
+        return {"deployments": edges(deployments)}
     raise ValueError(f"unhandled Railway operation {op}")
 
 
@@ -372,6 +380,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {})
         if url.path == "/__seed_route" and method == "POST":
             STATE["routes"].append({"id": new_id("route"), **self.body()})
+            return self.send(200, {})
+        if url.path == "/__remove_service" and method == "POST":
+            name = self.body()["name"]
+            services = project()["services"]
+            for sid in list(services):
+                if services[sid]["name"] == name:
+                    del services[sid]
             return self.send(200, {})
         if url.path == "/__state":
             return self.send(200, STATE)
