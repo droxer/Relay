@@ -23,14 +23,20 @@ backend = (root / "backend/Dockerfile").read_text()
 profile = json.loads((root / "deploy/services/backend.json").read_text())
 # Railway's published schema limits the command array to one entry.
 # https://backboard.railway.app/railway.schema.json
-for name in ("backend", "web"):
+for name in ("backend", "worker", "web"):
     commands = json.loads((root / f"deploy/services/{name}.json").read_text())["preDeployCommand"]
     assert isinstance(commands, list) and len(commands) <= 1, (
         f"{name}: Error in preDeployCommand - Invalid input (at most one command)"
     )
 assert 'CMD ["relay", "serve-with-worker"]' in backend
 assert "RELAY_BACKGROUND_MODE=external" in backend
-assert profile["startCommand"] == "relay serve-with-worker"
+assert profile["startCommand"] == "relay serve"
+worker = json.loads((root / "deploy/services/worker.json").read_text())
+assert worker["dockerfilePath"] == "backend/Dockerfile"
+assert worker["startCommand"] == "relay worker"
+assert worker["preDeployCommand"] == []
+assert worker["healthcheckPath"] is None
+assert worker["sleepApplication"] is False
 assert profile["preDeployCommand"] == [
     "/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'",
 ]
@@ -60,4 +66,4 @@ with tempfile.TemporaryDirectory() as directory:
         if not migration_exit:
             expected.append("relay worker-schema")
         assert log.read_text().splitlines() == expected
-print("ok    backend deploy migrates, prepares jobs, and supervises the API and worker")
+print("ok    API deploy prepares the database; the separate worker binds no HTTP port")
