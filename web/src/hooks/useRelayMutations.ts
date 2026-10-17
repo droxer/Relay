@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   assignTask,
+  answerPermissionRequest,
   archiveProject,
   deleteProject,
   cancelRun,
@@ -128,6 +129,25 @@ export function useRelayMutations() {
       void invalidateTasks();
     },
     onError: onRelayError("Failed to record decision", "errors.record_decision"),
+  });
+
+  const answerPermissionMutation = useMutation({
+    mutationFn: ({
+      sessionId,
+      requestId,
+      decision,
+      note,
+      token,
+    }: { sessionId: string; requestId: string; decision: "allow" | "deny"; note?: string } & TokenArg) =>
+      answerPermissionRequest(sessionId, requestId, decision, note, token),
+    onSuccess: (session) => cacheSession(session),
+    onError: (error: unknown) => {
+      // Someone answered first, or the run ended: the stream will drop the card.
+      const messageKey = error instanceof RelayApiError && error.code === "permission_request_closed"
+        ? "errors.permission_request_closed"
+        : "errors.answer_permission";
+      onRelayError("Failed to answer permission request", messageKey)(error);
+    },
   });
 
   const runLogicalAgentsMutation = useMutation({
@@ -432,6 +452,7 @@ export function useRelayMutations() {
     deleteSessionMutation,
     cancelRunMutation,
     recordDecisionMutation,
+    answerPermissionMutation,
     runLogicalAgentsMutation,
     submitThreadMessageMutation,
     requestThreadRecoveryMutation,

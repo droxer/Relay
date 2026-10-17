@@ -89,7 +89,9 @@
     "save_project": "Could not save the project. Check its computer and agent roles, then try again.",
     "delete_project": "Could not delete the project. Refresh it and try again.",
     "archive_project": "Could not archive the project. Refresh it and try again.",
-    "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually."
+    "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
+    "answer_permission": "Could not send your answer. The run is still waiting — try again.",
+    "permission_request_closed": "This request already closed: it was answered elsewhere or its run ended."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -454,6 +456,16 @@
     "pending": "Working…",
     "reject_confirm_title": "Reject this turn?",
     "reject_confirm_message": "This records a rejection for the current turn. The agent won’t rerun automatically."
+  },
+  "permission": {
+    "title": "{{agent}} wants to use {{tool}}",
+    "summary": "The run is paused until you answer.",
+    "input_label": "Requested input",
+    "allow": "Allow once",
+    "deny": "Deny",
+    "note_label": "Reason (optional)",
+    "note_placeholder": "Tell the agent what to do instead",
+    "region": "Permission requests"
   },
   "handoff": {
     "status_accepted": "Handoff to {{agent}} accepted",

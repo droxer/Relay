@@ -17,6 +17,7 @@ from starlette.requests import ClientDisconnect
 
 from ..core.deploy_config import public_backend_url
 from ..core.legacy_names import upgrade_legacy_names
+from ..core.permission_requests import parse_permission_request
 from ..daemon_registry import (
     DaemonNodeRegistry,
     sandbox_ui_token_matches,
@@ -767,6 +768,16 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "agent": agent,
             "waiting": value["waiting"],
             **({"blockingSessionId": blocker} if blocker else {}),
+        }
+    if event_type == "run.permission_requested":
+        return {
+            "type": event_type,
+            "commandId": command_id,
+            **lease_field,
+            "sessionId": session_id,
+            "runId": run_id,
+            "agent": agent,
+            "request": parse_permission_request(value.get("request")),
         }
     if value.get("replayed") is True and event_type in {"run.output", "run.output.batch", "run.collaboration"}:
         lease_field = {**lease_field, "replayed": True}

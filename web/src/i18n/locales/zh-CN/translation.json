@@ -89,7 +89,9 @@
     "save_project": "无法保存项目。请检查项目电脑与智能体角色后重试。",
     "delete_project": "无法删除项目。请刷新后重试。",
     "archive_project": "无法归档项目。请刷新后重试。",
-    "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。"
+    "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
+    "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
+    "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {
@@ -451,6 +453,16 @@
     "pending": "正在处理…",
     "reject_confirm_title": "要拒绝本轮吗？",
     "reject_confirm_message": "将把本轮标记为已拒绝，智能体不会自动重新运行。"
+  },
+  "permission": {
+    "title": "{{agent}} 请求使用 {{tool}}",
+    "summary": "运行已暂停，等待你的答复。",
+    "input_label": "请求的输入",
+    "allow": "允许一次",
+    "deny": "拒绝",
+    "note_label": "原因（可选）",
+    "note_placeholder": "告诉智能体改做什么",
+    "region": "权限请求"
   },
   "handoff": {
     "status_accepted": "已接受移交给 {{agent}}",

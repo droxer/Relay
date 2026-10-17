@@ -1565,6 +1565,7 @@ class DatabaseSessionStore:
             "computerId",
             "currentAgent",
             "pendingDecision",
+            "permissionRequests",
             "archived",
             "deletionRequestedAt",
             "title",

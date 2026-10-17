@@ -400,6 +400,25 @@ export type DaemonWorkspaceErrorCode =
 
 export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand | DaemonProjectLinkCommand;
 
+/** Longest tool input, in characters, a permission request carries. */
+export const PERMISSION_INPUT_LIMIT = 4000;
+
+/** One tool use a runtime wants a person to approve. */
+export interface DaemonPermissionRequest {
+  /** Daemon-minted id, `perm_<hex>`; the poll route names it. */
+  id: string;
+  toolName: string;
+  toolUseId?: string;
+  /** The tool input as JSON, capped at PERMISSION_INPUT_LIMIT characters. */
+  input: string;
+}
+
+/** Answer to `GET /daemon-nodes/{id}/permission-requests/{requestId}`. */
+export interface DaemonPermissionDecision {
+  status: "pending" | "allow" | "deny" | "expired";
+  note?: string;
+}
+
 export type DaemonNodeEvent =
   | { type: "workspace.deleted"; commandId: string; leaseId?: string; path: string }
   /** `hostPath` is the directory's canonical path on the computer. */
@@ -412,6 +431,16 @@ export type DaemonNodeEvent =
       runId: string;
       agent: AgentName;
       skillsSkipped?: DaemonSkippedSkill[];
+    }
+  | {
+      /** A local run's runtime asked to use a tool; a person decides in Relay. */
+      type: "run.permission_requested";
+      commandId: string;
+      leaseId?: string;
+      sessionId: string;
+      runId: string;
+      agent: AgentName;
+      request: DaemonPermissionRequest;
     }
   | {
       type: "run.workspace";

@@ -18,6 +18,7 @@ from ..collaboration.awaiting import task_awaiting
 from ..core.computer_identity import computer_id as resolve_computer_id
 from ..core.ids import new_database_id
 from ..core.models import AGENT_NAMES
+from ..core.permission_requests import PERMISSION_DECISIONS, PERMISSION_NOTE_MAX_CHARS
 from ..persistence.stores import valid_agent
 from ..services.event_notifier import session_event_key
 from ..services.team_dispatch import (
@@ -138,6 +139,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "computerId": session.get("computerId"),
         "currentAgent": session.get("currentAgent"),
         "pendingDecision": session.get("pendingDecision"),
+        "permissionRequests": session.get("permissionRequests") or [],
         "archived": session.get("archived", False),
         "artifactCount": session.get(
             "artifactCount", len(workspace_artifacts(session))
@@ -941,6 +943,34 @@ def decision(
         actor_user_id=actor["userId"],
     )
     logger.info("Session decision recorded", session_id=session_id, kind=kind)
+    return result
+
+
+@router.post("/threads/{session_id}/permission-requests/{request_id}")
+def answer_permission_request(
+    session_id: str,
+    request_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    # Like a decision, only a person answers: the node token an agent can
+    # reach never authenticates as one.
+    actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
+    get_session_for_actor(ctx.session_store, session_id, actor)
+    body = _request_body
+    decision = body.get("decision")
+    if decision not in PERMISSION_DECISIONS:
+        raise HTTPException(400, "decision must be allow or deny.")
+    note = string_field(body, "note")
+    if len(note) > PERMISSION_NOTE_MAX_CHARS:
+        raise HTTPException(400, "note is too long.")
+    result = SessionController(ctx.session_store).resolve_permission_request(
+        session_id, request_id, decision, note or None, actor_user_id=actor["userId"]
+    )
+    if result is None:
+        raise HTTPException(409, "permission_request_closed")
     return result
 
 

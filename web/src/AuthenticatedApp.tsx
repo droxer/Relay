@@ -75,6 +75,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const { t } = useTranslation();
   const { reportMutationError } = useMutationError();
   const {
+    answerPermissionMutation,
     cancelRunMutation,
     recordDecisionMutation,
     runLogicalAgentsMutation,
@@ -487,6 +488,14 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => sendMessage(style, intent, options));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
+  const handleAnswerPermission = useStableEvent(async (requestId: string, decision: "allow" | "deny", note?: string) => {
+    if (!activeSession) return;
+    try {
+      await answerPermissionMutation.mutateAsync({ sessionId: activeSession.id, requestId, decision, note, token: selectedToken });
+    } catch {
+      // mutation onError surfaces a toast.
+    }
+  });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleResumeAgent = useStableEvent((agent: AgentName, agentId?: string) => { void resumeAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
@@ -668,6 +677,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onRuntimeNodeChange={setNewThreadNodeId}
             sendDecision={sendDecision}
             sendHandoff={sendHandoff}
+            onAnswerPermission={handleAnswerPermission}
             onSend={handleComposerSend}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}
