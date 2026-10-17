@@ -102,6 +102,16 @@ def capture_handoff_receipt(
         for path in (legacy_handoff_checkpoint_file(context["progressFile"]), checkpoint_path)
         if path
     ]
+    if context["progressFile"] == f"threads/{session['id']}/HANDOFF.md":
+        old_notes = (
+            "HANDOFF.md" if context.get("workspaceLayout") == "thread"
+            else f"HANDOFF-{session['id']}.md"
+        )
+        checkpoint_paths = [
+            legacy_handoff_checkpoint_file(old_notes),
+            handoff_checkpoint_file(old_notes),
+            *checkpoint_paths,
+        ]
     checkpoint: dict[str, Any] = {"status": "missing", "path": checkpoint_path}
     evidence: list[dict[str, Any]] = []
     artifacts = [

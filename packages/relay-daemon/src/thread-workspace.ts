@@ -93,6 +93,18 @@ export class ThreadWorkspaceManager {
     return this.resolveSubpath(sessionId, workspaceSubpath);
   }
 
+  /** Record ownership follows the thread; deliverables follow the bound workspace. */
+  ensureRecords(workspace: ThreadWorkspace): void {
+    validateThreadId(workspace.sessionId);
+    for (const segments of [["threads", workspace.sessionId], ["artifacts"]]) {
+      rejectSymlinkComponents(workspace.hostPath, segments);
+      const path = resolve(workspace.hostPath, ...segments);
+      mkdirSync(path, { recursive: true });
+      rejectSymlinkComponents(workspace.hostPath, segments);
+      assertContainedRealPath(workspace.hostPath, path, "Thread records");
+    }
+  }
+
   private resolveLinked(sessionId: string, workspaceSubpath: string): ThreadWorkspace {
     if (!this.projectLinks) {
       throw new ProjectLinkError("not-allowed", "This daemon does not support linked project directories.");

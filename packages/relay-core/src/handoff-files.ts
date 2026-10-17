@@ -1,8 +1,8 @@
 /**
  * Names of the handoff notes a thread's agents keep in the shared workspace.
  *
- * The backend picks the notes file (`HANDOFF.md`, or `HANDOFF-<sessionId>.md`
- * in a shared node root) and sends it as `progress_file`; these helpers derive
+ * The backend picks `threads/<sessionId>/HANDOFF.md` and sends it as
+ * `progress_file`; older accepted contexts keep their root-level paths. These helpers derive
  * the names beside it. They mirror `backend/relay/sessions/handoff_files.py`:
  * the backend validates the checkpoint at the path the prompt names.
  */
