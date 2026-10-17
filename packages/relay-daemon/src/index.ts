@@ -1244,6 +1244,13 @@ async function executeCommand(
   // preparation, cleanup, or agent execution can change the inherited files.
   const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
+  threadWorkspaces.ensureRecords(threadWorkspace);
+  state.artifacts_dir = "artifacts";
+  if (state.progress_file === `threads/${command.sessionId}/HANDOFF.md`) {
+    state.legacy_progress_file = command.workspaceLayout === "thread"
+      ? "HANDOFF.md"
+      : `HANDOFF-${command.sessionId}.md`;
+  }
   // Discard control state from an interrupted previous run before execution.
   consumeRoundResult(threadWorkspace.hostPath);
   syncProjectContext(threadWorkspace.hostPath, command.workspaceLayout, state.project_brief);
@@ -1469,7 +1476,7 @@ async function executeCommand(
     if (command.logicalAgentId) {
       ensureAgentWorkspaceDir(threadWorkspace.hostPath, command.logicalAgentId);
     }
-    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir };
+    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: command.sessionId };
     const options = {
       execStream: execution.execStream,
       eventSink,

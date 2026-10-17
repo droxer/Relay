@@ -245,7 +245,7 @@ describe("prompts", () => {
 
     const prompt = claudeTaskPrompt(sharedWorkspaceState);
 
-    assert.match(prompt, /\[Workspace\]\n.*workspace for this thread/);
+    assert.match(prompt, /\[Workspace\]\n.*execution workspace/);
     assert.match(prompt, /Your private directory is `agents\/agent-YWdlbnRfMQ\/`/);
     assert.match(prompt, /\[User\]\nDraft the report$/);
   });

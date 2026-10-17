@@ -1,6 +1,6 @@
 """Names of the handoff notes a thread's agents keep in the shared workspace.
 
-`HANDOFF.md` is the free-form record every agent reads before it starts and
+`threads/<threadId>/HANDOFF.md` is the free-form record every agent reads before it starts and
 updates before it finishes; `HANDOFF.json` beside it is the structured
 checkpoint a handoff receipt validates. Both were once `PROGRESS.md` and
 `PROGRESS.md.handoff.json`: a handoff context accepted before the rename still
@@ -20,13 +20,10 @@ _LEGACY_CHECKPOINT_SUFFIX = ".handoff.json"
 def handoff_file(session_id: str, workspace_layout: str) -> str:
     """Name the handoff notes for a thread, without colliding with other threads.
 
-    A thread workspace holds one thread, so the plain name is unambiguous there.
-    A node-root workspace is shared by every thread that ever ran on the node,
-    where one `HANDOFF.md` would hand the next task the previous task's notes.
+    Keep records separate even when task rounds or project threads share a cwd.
+    workspace_layout remains an argument for callers and older stored contexts.
     """
-    if workspace_layout == "thread":
-        return HANDOFF_FILE
-    return f"{_STEM}-{session_id}.md"
+    return f"threads/{session_id}/{HANDOFF_FILE}"
 
 
 def handoff_checkpoint_file(notes_file: str) -> str:

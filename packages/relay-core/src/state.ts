@@ -84,11 +84,15 @@ export interface AgentState {
    */
   repair_note?: string;
   /**
-   * Workspace-relative handoff notes for task work, e.g. "HANDOFF.md". The
+   * Workspace-relative handoff notes, e.g. "threads/<threadId>/HANDOFF.md". The
    * transcript is capped, so this is what carries decisions past the point
    * where earlier turns are elided.
    */
   progress_file?: string;
+  /** Previous root-level record, retained for threads started before directories. */
+  legacy_progress_file?: string;
+  /** Workspace-relative deliverables directory, shared by the workspace scope. */
+  artifacts_dir?: string;
   /**
    * Personal home subdir (slash-separated, under the shared thread workspace)
    * for this run's logical agent, e.g. "agents/agent-<b64>". Runs execute at
