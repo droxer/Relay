@@ -1,4 +1,4 @@
-import { WORKSPACE_FILE_TAB_ROOT } from "../../lib/workspaceFileTabs.js";
+import { WORKSPACE_FILE_TAB_ROOT } from "../../lib/workspaceFileTabs.ts";
 
 /** Distinguish workspace availability from its directory contents.
  *
