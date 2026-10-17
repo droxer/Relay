@@ -12,6 +12,42 @@
   flex-direction: column;
 }
 
+/* The Artifacts / Activity switch heading the browse pane — a segmented
+   control, not section tabs: it changes which area of one workspace is on
+   screen, and the path bar below still names the folder. Same language as
+   .code-view-toggle so the browser reads as one control family. */
+.workspace-files-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: var(--sp-2) var(--sp-4) 0;
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  overflow: hidden;
+}
+
+.workspace-files-tab {
+  min-height: var(--control-h-2xs);
+  padding: 0 var(--sp-3);
+  border: 0;
+  background: var(--surface-0);
+  color: var(--ink-3);
+  cursor: pointer;
+  font: var(--type-label-strong);
+}
+
+.workspace-files-tab + .workspace-files-tab {
+  border-left: 0.5px solid var(--line-1);
+}
+
+.workspace-files-tab:hover {
+  color: var(--ink-1);
+}
+
+.workspace-files-tab.is-active {
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+
 /* One toolbar carries scope, location, thread, and source. It replaced four
    stacked strips that pushed the first filename ~140px down the pane. */
 .workspace-files-bar {

@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { WorkspaceFileList, WorkspacePathBreadcrumb } from "./WorkspaceFileList";
 import { WorkspaceFilePreview } from "./WorkspaceFilePreview";
 import { WorkspaceFileActions } from "./WorkspaceFileActions";
+import { WorkspaceFileTabs } from "./WorkspaceFileTabs";
+import {
+  WORKSPACE_FILE_TAB_ROOT,
+  workspaceFileTabForPath,
+} from "../../lib/workspaceFileTabs";
 import type { workspaceHomeStatus } from "../../lib/workspaceHome";
 
 function PaneHeader({
@@ -47,10 +52,15 @@ export function WorkspaceFilePanes({
 }) {
   const { t } = useTranslation();
   const selected = selectedPath ? { name: selectedPath.split("/").at(-1) || selectedPath } : null;
+  const activeTab = workspaceFileTabForPath(path) ?? "artifacts";
   return (
     <div className={`workspace-panes${selected ? "" : " is-browse-only"}`}>
       <section className="workspace-pane workspace-pane-browse" aria-label={t("workspace.tab_files")}>
         <div className="workspace-tabpanel-files">
+          <WorkspaceFileTabs
+            tab={activeTab}
+            onSelect={(tab) => openDirectory(WORKSPACE_FILE_TAB_ROOT[tab])}
+          />
           <div className="workspace-files-bar">
             <WorkspacePathBreadcrumb path={path} rootLabel={rootLabel} onNavigate={openDirectory} />
             <div className="workspace-files-bar-end">

@@ -39,7 +39,7 @@ function WorkspaceFileBrowser({
   projectId: string;
   refreshVersion: number;
 }) {
-  const [filePath, setFilePath] = useUrlSearchState("path", "", parseString, (value) => value || null);
+  const [filePath, setFilePath] = useUrlSearchState("path", "artifacts", parseString, (value) => value || null);
   const [selectedKey, setSelectedKey] = useUrlSearchState("item", "", parseString, (value) => value || null);
   const selectedPath = selectedKey.startsWith("file:") ? selectedKey.slice(5) : "";
   const fileQuery = useQuery({

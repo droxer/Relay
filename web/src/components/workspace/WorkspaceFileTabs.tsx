@@ -1,0 +1,47 @@
+"use client";
+
+import { useTranslation } from "react-i18next";
+
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { WorkspaceFileTab } from "../../lib/workspaceFileTabs";
+
+/** The Artifacts / Activity switch at the head of the workspace file browser.
+ *
+ *  A toggle group, not tabs and not radios: this switches which area of one
+ *  workspace is on screen, and nothing is submitted. `value` is an array
+ *  because a toggle group can be multi-select; this one is not, so it holds
+ *  exactly the active tab, and an attempt to unpress the active item is
+ *  ignored rather than leaving no tab at all. */
+export function WorkspaceFileTabs({
+  tab,
+  onSelect,
+}: {
+  tab: WorkspaceFileTab;
+  onSelect: (tab: WorkspaceFileTab) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ToggleGroup
+      className="workspace-files-tabs"
+      aria-label={t("workspace.files_sections")}
+      value={[tab]}
+      onValueChange={(next) => {
+        const picked = next[0];
+        if (picked) onSelect(picked as WorkspaceFileTab);
+      }}
+    >
+      <ToggleGroupItem
+        value="artifacts"
+        className={`workspace-files-tab${tab === "artifacts" ? " is-active" : ""}`}
+      >
+        {t("workspace.tab_artifacts")}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="activities"
+        className={`workspace-files-tab${tab === "activities" ? " is-active" : ""}`}
+      >
+        {t("workspace.tab_activity")}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
