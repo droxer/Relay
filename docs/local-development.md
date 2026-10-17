@@ -313,6 +313,14 @@ until it resumes (or retention removes them). Override the port with:
 make backend BACKEND_PORT=9000
 ```
 
+For a separate Procrastinate background process, see
+[Background jobs](background-jobs.md). Set `RELAY_STORAGE=postgres` and
+`RELAY_BACKGROUND_MODE=external` in `backend/.env`, apply the Relay migrations,
+and start `make backend-worker` alongside `make backend`. The worker command
+initializes the queue schema if needed before starting. External mode stops the API's
+periodic consumers while keeping automation event production enabled;
+`RELAY_TASK_SCHEDULER_ENABLED=0` still disables task scheduling globally.
+
 Failed task dispatches block immediately and require an explicit manual retry.
 Use **Retry** on the blocked task card/row, or **Run** on its routine. The manual
 start endpoint reopens the existing blocked task/occurrence only when no active

@@ -1,5 +1,6 @@
 """Check Railway's cache-mount requirements before submitting a build."""
 import re
+import json
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
@@ -13,3 +14,13 @@ for dockerfile in (root / "backend/Dockerfile", root / "web/Dockerfile"):
                 "an explicit literal service-scoped id; omit cache mounts for portable images"
             )
 print("ok    Dockerfiles satisfy Railway cache-mount constraints")
+
+backend = (root / "backend/Dockerfile").read_text()
+profile = json.loads((root / "deploy/services/backend.json").read_text())
+assert 'CMD ["relay", "serve-with-worker"]' in backend
+assert "RELAY_BACKGROUND_MODE=external" in backend
+assert profile["startCommand"] == "relay serve-with-worker"
+assert profile["preDeployCommand"] == [
+    "alembic -c backend/alembic.ini upgrade head", "relay worker-schema",
+]
+print("ok    backend deploy migrates, prepares jobs, and supervises the API and worker")

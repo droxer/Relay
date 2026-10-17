@@ -234,7 +234,16 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_with_security_headers)
 
 
-def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
+def create_app(
+    root_dir: str | Path = DEFAULT_RELAY_DATA_DIR,
+    *,
+    background_mode: str | None = None,
+) -> FastAPI:
+    from .background import background_mode_from_env
+
+    mode = background_mode if background_mode is not None else background_mode_from_env()
+    if mode not in ("embedded", "external"):
+        raise ValueError("background_mode must be embedded or external.")
     from .persistence.task_lifecycle import wip_limit
 
     wip_limit()  # Validate the shared admission policy before starting services.
@@ -363,17 +372,19 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if notification_bridge:
             notification_bridge.start()
-        execution_lifecycle.start()
-        computer_notifications.start()
-        if scheduler:
-            scheduler.start()
+        if mode == "embedded":
+            execution_lifecycle.start()
+            computer_notifications.start()
+            if scheduler:
+                scheduler.start()
         try:
             yield
         finally:
-            if scheduler:
-                await scheduler.stop()
-            await computer_notifications.stop()
-            await execution_lifecycle.stop()
+            if mode == "embedded":
+                if scheduler:
+                    await scheduler.stop()
+                await computer_notifications.stop()
+                await execution_lifecycle.stop()
             if notification_bridge:
                 await notification_bridge.stop()
             control_plane_notifier.close()

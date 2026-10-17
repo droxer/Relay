@@ -23,7 +23,7 @@ SUPERVISOR_INTERVAL_MS ?=
 SUPERVISOR_ONCE ?=
 ADMIN_TOKEN ?=
 
-.PHONY: devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
+.PHONY: devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
 
 devbox-image:
 	docker build --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t $(DEVBOX_IMAGE) -f $(DOCKERFILE) .
@@ -65,6 +65,10 @@ backend-test:
 
 backend-migrate:
 	$(if $(DATABASE_URL),RELAY_DATABASE_URL="$(DATABASE_URL)" )UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev alembic -c backend/alembic.ini upgrade head
+
+backend-worker:
+	$(if $(DATABASE_URL),RELAY_DATABASE_URL="$(DATABASE_URL)" )UV_CACHE_DIR=.uv-cache uv run --project backend relay worker-schema
+	$(if $(DATABASE_URL),RELAY_DATABASE_URL="$(DATABASE_URL)" )UV_CACHE_DIR=.uv-cache uv run --project backend relay worker
 
 daemon-install:
 	npm install -w relay-daemon

@@ -1,9 +1,10 @@
 {
   "builder": "RAILPACK",
   "dockerfilePath": "backend/Dockerfile",
-  "startCommand": "relay",
+  "startCommand": "relay serve-with-worker",
   "preDeployCommand": [
-    "alembic -c backend/alembic.ini upgrade head"
+    "alembic -c backend/alembic.ini upgrade head",
+    "relay worker-schema"
   ],
   "healthcheckPath": "/healthz",
   "healthcheckTimeout": 120,

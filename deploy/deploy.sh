@@ -52,6 +52,20 @@ resolve_services() {
   [ -n "$WEB_ID" ] || die "service $WEB_SERVICE not found — run 'deploy.sh railway' first"
 }
 
+# Settings shared by provisioning and upgrades during a release. Railway's
+# default drain is zero; allow the supervisor's 30-second shutdown and keep
+# any longer period the operator already configured.
+backend_process_variables() {
+  jq -c '{
+    RELAY_STORAGE: "postgres",
+    RELAY_BACKGROUND_MODE: "external",
+    RAILWAY_DEPLOYMENT_DRAINING_SECONDS: (
+      (.RAILWAY_DEPLOYMENT_DRAINING_SECONDS | tonumber? // 35)
+      | if . < 35 then 35 else ceil end | tostring
+    )
+  }' <<<"$1"
+}
+
 # The backend variables from deployment.md § 1 and deployment-cloudflare.md
 # § 2, 6 and 8. Secrets are generated once and then left alone, so a re-run
 # never rotates them; set them in deploy/.env to rotate deliberately.
@@ -65,6 +79,7 @@ backend_variables() {
     printf '\n    RELAY_ADMIN_TOKEN (shown once; it seeds the admin token on first boot):\n    %s\n\n' "$admin_token" >&2
   fi
   jq -nc \
+    --argjson processes "$(backend_process_variables "$current")" \
     --arg db "\${{${POSTGRES_SERVICE}.DATABASE_URL}}" \
     --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" --arg cookie "$COOKIE_DOMAIN" \
     --arg edge "$edge_secret" --arg admin "$admin_token" \
@@ -86,6 +101,7 @@ backend_variables() {
       RELAY_ADMIN_TOKEN: $admin,
       RELAY_WAITLIST_ENABLED: $waitlist
     }
+    + $processes
     + (if $pg != "" then {PG_CLIENT_MAJOR: $pg} else {} end)
     + (if $r2_bucket != "" then {
         RELAY_BLOB_STORE: "r2",
@@ -173,14 +189,22 @@ phase_cloudflare() {
 
 phase_release() {
   log "Release: $GITHUB_REPO@$GITHUB_BRANCH"
-  local postgres_id
+  local postgres_id backend_repo
   RELEASE_COMMIT=$(railway_release_commit)
   info "release commit $RELEASE_COMMIT (GitHub source; local edits are not uploaded)"
   railway_validate_release
   resolve_services
+  backend_repo=$(railway_service_repo "$BACKEND_ID")
+  [ -z "$backend_repo" ] || [ "$backend_repo" = "$GITHUB_REPO" ] \
+    || die "$BACKEND_SERVICE is connected to $backend_repo, expected $GITHUB_REPO"
   postgres_id=$(railway_service_id "$POSTGRES_SERVICE")
   [ -n "$postgres_id" ] || die "service $POSTGRES_SERVICE not found — run 'deploy.sh railway' first"
   railway_wait_deployment "$POSTGRES_SERVICE" "$postgres_id"
+  # A release also upgrades existing services to the supervised worker entry
+  # point. Do this only after the selected source passed validation, and leave
+  # unrelated runtime variables and secrets untouched.
+  railway_ensure_service "$BACKEND_SERVICE" backend
+  railway_upsert_variables "$BACKEND_ID" "$(backend_process_variables "$(railway_variables "$BACKEND_ID")")"
   if workers_enabled; then
     release_backend_and_worker
   else

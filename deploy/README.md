@@ -10,6 +10,7 @@ directly, so it needs only `curl`, `jq`, `openssl`, `git`, `python3`, and
 | --- | --- | --- |
 | `get-relay.cc` | web UI (static export) | Cloudflare Worker `relay-web` |
 | `api.get-relay.cc` | API, SSE, daemons, install script (`backend/Dockerfile`) | Railway `relay-backend` |
+| — | Procrastinate background jobs | Separate process in the same `relay-backend` container |
 | — | database | Railway `Postgres` (template) |
 
 Set `WEB_HOSTING=railway` to serve the UI from a Railway `relay-web` service
@@ -48,7 +49,9 @@ deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION 
 Every step looks before it writes, so re-running converges and changes nothing
 that is already right. After the first run, `deploy.sh release` is the whole
 redeploy. It resolves `GITHUB_BRANCH` once and passes the same commit SHA to
-both deployments. For private repositories configure Git credentials, or set
+both deployments. It also updates an existing backend's startup settings for
+the supervised API/worker pair, so this upgrade needs no separate `railway`
+phase. For private repositories configure Git credentials, or set
 `RAILWAY_DEPLOY_COMMIT` to a full 40-character SHA. Railway also autodeploys
 pushes to the connected branch; changing the branch on an existing service
 requires updating its source settings in Railway.
@@ -97,6 +100,29 @@ public API directly and does not evaluate `.railway/railway.ts`.
 Connecting a repository may trigger an automatic deployment. The release phase
 also requests an explicit deployment pinned to the intended SHA and waits for
 that ID; it does not assume an implicit build is the requested release.
+
+The backend's pre-deploy commands apply Relay's Alembic migrations and then
+initialize the Procrastinate schema (`relay worker-schema`, idempotent).
+`relay serve-with-worker` starts the API (`relay serve`) and background worker
+(`relay worker`) as supervised processes, with `RELAY_BACKGROUND_MODE=external`.
+They share the database, configuration, and `/data` skill files; no additional
+Railway service or domain is needed. This also works without R2, since separate
+Railway containers cannot share the backend's local skill directory.
+
+If either child exits unexpectedly, the supervisor stops the other and exits
+with an error so Railway restarts the complete service. On SIGTERM/SIGINT it
+forwards termination and allows 30 seconds for shutdown before killing any
+remaining child. The script sets `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` to at
+least 35, preserving a longer existing value. The `/healthz` check stays on
+the API process. Deployment success is not a check that a scheduled job has
+completed; inspect worker/job logs and PostgreSQL heartbeats for that.
+
+For an operational rollback to embedded scheduling, use start command `relay`
+and `RELAY_BACKGROUND_MODE=embedded`, then redeploy. Keep the queue schema and
+records. The next scripted `railway` or `release` run restores the supervised
+configuration; reverting permanently also requires reverting these settings
+in the deployment scripts. No production changes are made just by editing
+the files locally.
 
 ## Region
 
@@ -152,6 +178,8 @@ deploy/deploy.sh verify
 ## What it sets
 
 **Backend variables:** `DATABASE_URL` (a reference to `Postgres`),
+`RELAY_STORAGE=postgres`, `RELAY_BACKGROUND_MODE=external`,
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS` (minimum 35),
 `RELAY_PUBLIC_BACKEND_URL`, `RELAY_PUBLIC_WEB_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,
 `RELAY_EDGE_SECRET`, `RELAY_CLIENT_IP_HEADER=CF-Connecting-IP`,
@@ -195,7 +223,9 @@ to `<new>` alone and run `railway` and `release` again.
 `release` builds the selected GitHub commit, not the local working tree.
 Before any deployment request, it fetches that exact commit into a temporary
 Git object database and checks required backend/web build files and Railway
-cache-mount constraints. It never checks out or runs remote files outside a
+cache-mount constraints, including the worker and process-supervisor modules.
+This happens before upgrading service configuration or requesting deployments.
+It never checks out or runs remote files outside a
 container: Railway builds the services, and the web export builds inside
 Docker. With `WEB_HOSTING=railway`, both services are checked even when one
 fails; failure output includes deployment IDs, the

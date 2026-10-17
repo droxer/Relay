@@ -17,6 +17,8 @@ required = [
     "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock",
     "packages/relay-core/package.json", "packages/relay-daemon/package.json",
     "web/package.json",
+    "backend/relay/processes.py", "backend/relay/background.py",
+    "backend/relay/cli.py", "backend/relay/__main__.py",
 ]
 errors = []
 contents = {}
