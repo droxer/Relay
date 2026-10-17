@@ -10,13 +10,15 @@ import type { WorkspaceFileTab } from "../../lib/workspaceFileTabs";
  *  A toggle group, not tabs and not radios: this switches which area of one
  *  workspace is on screen, and nothing is submitted. `value` is an array
  *  because a toggle group can be multi-select; this one is not, so it holds
- *  exactly the active tab, and an attempt to unpress the active item is
+ *  at most the active tab, and an attempt to unpress the active item is
  *  ignored rather than leaving no tab at all. */
 export function WorkspaceFileTabs({
   tab,
   onSelect,
 }: {
-  tab: WorkspaceFileTab;
+  /** Null when the browse path sits outside both areas — the workspace root
+   *  reached from the path bar — so neither item claims what is on screen. */
+  tab: WorkspaceFileTab | null;
   onSelect: (tab: WorkspaceFileTab) => void;
 }) {
   const { t } = useTranslation();
@@ -24,7 +26,7 @@ export function WorkspaceFileTabs({
     <ToggleGroup
       className="workspace-files-tabs"
       aria-label={t("workspace.files_sections")}
-      value={[tab]}
+      value={tab ? [tab] : []}
       onValueChange={(next) => {
         const picked = next[0];
         if (picked) onSelect(picked as WorkspaceFileTab);

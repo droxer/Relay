@@ -736,6 +736,8 @@
     "empty_file": "此文件为空。",
     "file_truncated": "预览已截断至 {{limit}}。被截断的文件无法下载。",
     "no_files": "此目录中没有文件。",
+    "artifacts_empty": "暂无产物。智能体交付的文件会显示在这里。",
+    "activity_empty": "暂无对话记录。每个对话的交接笔记会显示在这里。",
     "loading_files": "正在加载文件…",
     "files_unavailable": "尚未选择对话工作区。",
     "source_live": "实时",
