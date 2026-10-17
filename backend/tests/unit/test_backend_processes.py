@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import signal
 import sys
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,6 +14,7 @@ from relay.processes import serve_with_worker
 
 class Process:
     def __init__(self):
+        self.pid = 12345
         self.returncode = None
         self.finished = asyncio.Event()
         self.terminated = False
@@ -139,3 +141,57 @@ def test_cancellation_stops_the_children(monkeypatch):
         assert all(child.terminated for child in children)
 
     asyncio.run(run())
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("exit_role", ["worker", "serve", "signal"])
+def test_real_child_processes_exit_together(monkeypatch, tmp_path, exit_role):
+    executable = tmp_path / "fake-python"
+    executable.write_text(f"#!{sys.executable}\n" + '''
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+import time
+
+root = Path(os.environ["PROCESS_TEST_ROOT"])
+role = sys.argv[3]
+def stop(sig, frame):
+    (root / (role + ".stopped")).touch()
+    sys.exit(0)
+signal.signal(signal.SIGTERM, stop)
+(root / (role + ".json")).write_text(json.dumps({"mode": os.environ.get("RELAY_BACKGROUND_MODE"), "pid": os.getpid()}))
+while not all((root / (name + ".json")).exists() for name in ("worker", "serve")):
+    time.sleep(0.01)
+if role == os.environ["PROCESS_TEST_EXIT_ROLE"]:
+    sys.exit(7)
+while True:
+    time.sleep(0.01)
+''')
+    executable.chmod(0o755)
+    monkeypatch.setenv("PROCESS_TEST_ROOT", str(tmp_path))
+    monkeypatch.setenv("PROCESS_TEST_EXIT_ROLE", exit_role)
+    monkeypatch.setattr(sys, "executable", str(executable))
+
+    async def run():
+        task = asyncio.create_task(serve_with_worker(host="0.0.0.0", port=8790, shutdown_timeout=2))
+        try:
+            if exit_role == "signal":
+                async def ready():
+                    while not all((tmp_path / (role + ".json")).exists() for role in ("worker", "serve")):
+                        await asyncio.sleep(0.01)
+                await asyncio.wait_for(ready(), 5)
+                os.kill(os.getpid(), signal.SIGTERM)
+            code = await asyncio.wait_for(task, 5)
+            assert code == (0 if exit_role == "signal" else 7)
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
+    for role in ("worker", "serve"):
+        assert json.loads((tmp_path / (role + ".json")).read_text())["mode"] == "external"
+        if role != exit_role:
+            assert (tmp_path / (role + ".stopped")).exists()

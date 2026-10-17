@@ -315,9 +315,9 @@ make backend BACKEND_PORT=9000
 
 For a separate Procrastinate background process, see
 [Background jobs](background-jobs.md). Set `RELAY_STORAGE=postgres` and
-`RELAY_BACKGROUND_MODE=external` in `backend/.env`, run
-`make backend-worker-schema` after the Relay migrations, and start
-`make backend-worker` alongside `make backend`. External mode stops the API's
+`RELAY_BACKGROUND_MODE=external` in `backend/.env`, apply the Relay migrations,
+and start `make backend-worker` alongside `make backend`. The worker command
+initializes the queue schema if needed before starting. External mode stops the API's
 periodic consumers while keeping automation event production enabled;
 `RELAY_TASK_SCHEDULER_ENABLED=0` still disables task scheduling globally.
 

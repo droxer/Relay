@@ -21,7 +21,7 @@ from pathlib import Path
 import shutil
 import sys
 source, target = map(Path, sys.argv[1:])
-for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json"]:
+for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py"]:
     (target / name).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / name, target / name)
 PY_SOURCE
@@ -168,6 +168,7 @@ check "backend deployed once" "$BACKEND | .deployments | length == 1"
 check "a new Postgres is redeployed into the region" "$(svc Postgres) | .deployments | length == 2 and .[0].regions == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
 check "backend uses the external worker and shared database stores" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.RELAY_STORAGE == \"postgres\""
+check "Railway allows the supervisor time to stop both children" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"35\""
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
@@ -223,6 +224,24 @@ BEFORE=$(state | jq '.calls["cf.workers.script"]')
 expect_failure "backend failure stops the release" "the web UI was not published" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
 check "no Worker upload after a failed backend" '.before == .after'
+
+echo "--- release upgrades an existing backend without a separate provisioning run"
+start_mock
+write_config
+deploy railway 2>/dev/null
+LEGACY_BACKEND_ID=$(state | jq -r '.projects[].services | to_entries[] | select(.value.name == "relay-backend") | .key')
+LEGACY_CONFIG=$(state | jq -c "$BACKEND | .config | .startCommand = \"relay\" | .preDeployCommand = [\"alembic -c backend/alembic.ini upgrade head\"]")
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" --argjson config "$LEGACY_CONFIG" \
+  '{query: "mutation ServiceConfig { serviceInstanceUpdate }", variables: {serviceId: $id, input: $config}}')" >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" \
+  '{query: "mutation VariablesUpsert { variableCollectionUpsert }", variables: {input: {serviceId: $id, variables: {RELAY_BACKGROUND_MODE: "embedded", CUSTOM_RUNTIME_SETTING: "keep-me", RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "90"}, skipDeploys: true}}}')" >/dev/null
+deploy release 2>"$WORK/legacy-release.log" || { cat "$WORK/legacy-release.log"; exit 1; }
+STATE=$(state)
+check "release installs the supervisor and queue setup" "$BACKEND | .config.startCommand == \"relay serve-with-worker\" and .config.preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\", \"relay worker-schema\"]"
+check "release enables external mode without replacing custom variables" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.CUSTOM_RUNTIME_SETTING == \"keep-me\""
+check "release preserves a longer configured drain period" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"90\""
 
 echo "--- moving region"
 start_mock
@@ -356,15 +375,21 @@ expect_failure "invalid release SHA is refused" "must be a full lowercase commit
 write_config
 deploy release 2>/dev/null
 write_config 'GITHUB_REPO=someone/else'
+BEFORE_CONFIG=$(state | jq '.calls.ServiceConfig')
 expect_failure "connected repository mismatch is refused" "expected someone/else" deploy release
+STATE=$(jq -nc --argjson before "$BEFORE_CONFIG" --argjson after "$(state | jq '.calls.ServiceConfig')" '{before: $before, after: $after}')
+check "a repository mismatch never changes service configuration" '.before == .after'
 expect_failure "unknown command" "unknown command" deploy nonsense
 
 echo "--- release validates source before creating deployments"
 write_config "RAILWAY_DEPLOY_COMMIT=$BAD_SOURCE_COMMIT"
 BEFORE=$(state | jq '.calls.Deploy')
+BEFORE_CONFIG=$(state | jq '.calls.ServiceConfig')
 expect_failure "unfixed selected commit is rejected" "missing required build input: web/Dockerfile" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls.Deploy')" '{before: $before, after: $after}')
 check "invalid source creates no deployments" '.before == .after'
+STATE=$(jq -nc --argjson before "$BEFORE_CONFIG" --argjson after "$(state | jq '.calls.ServiceConfig')" '{before: $before, after: $after}')
+check "invalid source never changes the running service configuration" '.before == .after'
 write_config 'WEB_HOSTING=railway'
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" \
   -d '{"relay-backend":"FAILED","relay-web":"CRASHED"}' >/dev/null

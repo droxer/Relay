@@ -75,3 +75,15 @@ def test_worker_commands_do_not_start_an_http_server(monkeypatch, command, tmp_p
     else:
         schema.assert_awaited_once()
         worker.assert_not_awaited()
+
+
+def test_combined_command_delegates_to_supervisor_and_returns_its_exit_code(monkeypatch, tmp_path):
+    from relay import processes
+    supervisor = AsyncMock(return_value=7)
+    monkeypatch.setattr(processes, "serve_with_worker", supervisor)
+    monkeypatch.setattr(cli, "setup_logging", lambda: None)
+    monkeypatch.setattr(cli, "create_app", lambda *args: pytest.fail("parent started an HTTP app"))
+    with pytest.raises(SystemExit) as exit:
+        cli.main(["serve-with-worker", "--host", "0.0.0.0", "--port", "9001", "--data-dir", str(tmp_path)])
+    assert exit.value.code == 7
+    supervisor.assert_awaited_once_with(host="0.0.0.0", port=9001, data_dir=str(tmp_path))

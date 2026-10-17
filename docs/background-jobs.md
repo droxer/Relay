@@ -20,11 +20,10 @@ Use your installation's actual database URL. `DATABASE_URL` is also accepted;
 driver-qualified URL into psycopg connection parameters, preserving encoded
 credentials, SSL settings, and connection options.
 
-Apply Relay migrations and the queue schema, in order:
+Apply Relay migrations first:
 
 ```bash
 make backend-migrate
-make backend-worker-schema
 ```
 
 Then start each long-running process in its own terminal:
@@ -37,10 +36,13 @@ make backend
 make backend-worker
 ```
 
-The equivalent installed CLI commands are `relay worker-schema` and
-`relay worker`. The worker initializes Relay's stores and services using the
+`make backend-worker` initializes the queue schema if needed, then starts the
+worker. You do not need a separate schema setup command. The equivalent
+installed CLI sequence is `relay worker-schema` followed by `relay worker`.
+The worker initializes Relay's stores and services using the
 same application factory as the API, but binds no HTTP socket. Startup fails
-if shared PostgreSQL storage is not configured or the queue schema is absent.
+if shared PostgreSQL storage is not configured. When invoking `relay worker`
+directly, the queue schema must already be installed.
 Use the same domain configuration, credentials, and data directory for both
 processes. `--data-dir` is accepted by the worker.
 
@@ -51,6 +53,22 @@ computer-notification, or execution-recovery loop. It still produces durable
 automation outbox events. Keep `RELAY_TASK_SCHEDULER_ENABLED=1` on both
 processes when scheduling is desired; setting it to `0` disables scheduling
 and task/session automation event production, regardless of background mode.
+
+## Container deployment
+
+`backend/Dockerfile` defaults to `relay serve-with-worker`. This supervises
+`relay serve` and `relay worker` as separate processes with external mode,
+sharing the same configuration and local skill directory. A separate Railway
+service is not needed. If either process exits unexpectedly, the supervisor
+stops its sibling and fails so the platform can restart both. Termination is
+forwarded to both children, with a 30-second shutdown limit.
+
+The deploy profile applies Alembic migrations and `relay worker-schema` before
+launching the container. This is the installed-CLI equivalent of preparing the
+database and starting `make backend-worker`; the image does not need Make.
+The scripts configure at least 35 seconds of Railway draining time. An
+existing service is upgraded by `deploy/deploy.sh release` after the selected
+source is validated. See [Deployment setup](../deploy/README.md).
 
 ## Scheduled work
 
@@ -97,8 +115,9 @@ crashed maintenance worker cannot prevent its own recovery.
 
 `relay worker-schema` installs the vendor schema only if the main queue table
 does not exist. It is an initial-install command, not a schema repair or
-upgrade tool. Run it once during provisioning, before starting workers. API
-and worker startup never apply DDL. Queue tables, enums, functions, and
+upgrade tool. `make backend-worker` runs this check before launching the
+worker, and stops if schema setup fails. The API and the direct `relay worker`
+command never apply DDL. Queue tables, enums, functions, and
 triggers are owned by Procrastinate, outside Relay's Alembic metadata, in the
 configured PostgreSQL search path. Alembic autogeneration excludes reflected
 `procrastinate_*` tables so it does not propose deleting them. Other unknown

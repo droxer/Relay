@@ -62,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         choices=[
             "relay",
             "serve",
+            "serve-with-worker",
             "worker",
             "worker-schema",
             "migrate-local-sessions",
@@ -78,6 +79,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     setup_logging()
+    if args.command == "serve-with-worker":
+        from .processes import serve_with_worker
+
+        raise SystemExit(asyncio.run(serve_with_worker(
+            host=args.host, port=args.port, data_dir=args.data_dir,
+        )))
     if args.command in ("worker", "worker-schema"):
         from .background import apply_worker_schema, run_worker
 

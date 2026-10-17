@@ -62,6 +62,7 @@ ENV HOST=0.0.0.0 \
     RELAY_AUTH_STORE=database \
     RELAY_DAEMON_STORE=database \
     RELAY_CHAT_STORE=database \
+    RELAY_BACKGROUND_MODE=external \
     RELAY_DATA_DIR=/data
 
 # With the database stores above, everything but skill bundles lives in
@@ -75,4 +76,6 @@ USER relay
 
 EXPOSE 8790
 
-CMD ["relay"]
+# The API and worker share /data when skill objects are not in R2. The
+# supervisor fails the container if either child exits unexpectedly.
+CMD ["relay", "serve-with-worker"]
