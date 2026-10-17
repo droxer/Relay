@@ -50,6 +50,10 @@ from ..core.computer_identity import computer_id, local_enrollment_key
 from ..core.model_policy import is_model_id
 from ..core.environment import load_backend_env
 from ..core.human_waits import question_id_for_run, wait_record
+from ..core.permission_requests import (
+    permission_request_node,
+    permission_request_status,
+)
 from ..core.ids import new_database_id, new_relay_id, new_sandbox_id, now_iso
 from ..core.models import (
     AGENT_NAMES,
@@ -1633,6 +1637,50 @@ class DaemonNodeRegistry:
         )
         self._track_active_command(sandbox_id, command)
 
+    def _record_permission_request(
+        self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]
+    ) -> None:
+        """Put a live run's permission prompt in front of its thread's person."""
+        request = {
+            **event["request"],
+            "runId": event["runId"],
+            "agent": event["agent"],
+            "daemonNodeId": sandbox_id,
+            **(
+                {"logicalAgentId": command["logicalAgentId"]}
+                if command.get("logicalAgentId")
+                else {}
+            ),
+        }
+        logger.info(
+            "Run asked for permission",
+            session_id=event["sessionId"],
+            run_id=event["runId"],
+            request_id=request["id"],
+            tool=request["toolName"],
+        )
+        self.store.append_event(
+            event["sessionId"],
+            relay_event(
+                "agent.permission_requested", event["sessionId"], {"request": request}
+            ),
+        )
+
+    def permission_request_status(
+        self, sandbox_id: str, token: str | None, session_id: str, request_id: str
+    ) -> dict[str, Any] | None:
+        """The answer a daemon polls for, or None when the prompt is not its own."""
+        self._hydrate_node(sandbox_id)
+        self._assert_authorized(sandbox_id, token)
+        self._mark_seen(sandbox_id)
+        try:
+            session = self.store.get_session(session_id)
+        except (KeyError, FileNotFoundError):
+            return None
+        if permission_request_node(session, request_id) != sandbox_id:
+            return None
+        return permission_request_status(session, request_id)
+
     def _record_handoff_delivery(self, command: dict[str, Any], status: str) -> None:
         if not command.get("reportExecutionStarted"):
             return
@@ -2589,6 +2637,12 @@ class DaemonNodeRegistry:
             )
         if event["type"] == "run.exit_unconfirmed":
             self._record_exit_unconfirmed(sandbox_id, command, event)
+            return
+        if event["type"] == "run.permission_requested":
+            if late_output:
+                return
+            self._record_permission_request(sandbox_id, command, event)
+            self._note_run_progress(command)
             return
         if event["type"] == "run.workspace":
             from ..persistence.store_common import relay_task_event

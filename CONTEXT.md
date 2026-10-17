@@ -155,3 +155,13 @@ A message sent in the Thread a Wait names, carrying that Wait's `questionId`.
 It resumes the Task as its next round only while the Task still waits on that
 question; an Answer to a replaced question is refused (`question_superseded`).
 _Avoid_: Reply (any message), approval
+
+**Permission Prompt**:
+A live run paused before a tool call, asking a person to allow or deny it
+(`permissionRequests` on the Thread). Unlike a Wait, the run is still
+executing and no Task changes status; it closes once — allowed, denied, or
+expired when its run ends first. Only a local computer with the native
+permission policy produces one; every runtime asks through its own adapter
+on one broker.
+_Avoid_: approval request, pending approval (both read as a turn decision),
+Wait

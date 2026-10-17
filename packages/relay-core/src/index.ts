@@ -64,6 +64,7 @@ export {
   type AgentExecutor,
   type AgentRunOptions,
   type AgentState,
+  type PermissionPromptLaunch,
   type ProjectSetupBrief,
   type StreamExecResult,
 } from "./state.js";
@@ -85,6 +86,8 @@ export {
   getAgent,
   isAgentName,
   type AgentDefinition,
+  type PermissionPromptAdapter,
+  type PermissionPromptSupport,
   type SkillDelivery,
   type StreamRenderer,
 } from "./agents.js";
@@ -141,6 +144,9 @@ export {
   type DaemonNodeRunCommand,
   type DaemonNodeSandboxMode,
   type DaemonNodeStatus,
+  type DaemonPermissionDecision,
+  type DaemonPermissionRequest,
+  PERMISSION_INPUT_LIMIT,
 } from "./daemon-node-protocol.js";
 
 export {
@@ -248,6 +254,10 @@ export {
   type AgentRun,
   type HumanDecision,
   type HumanDecisionKind,
+  type PermissionDecision,
+  type PermissionDecisionKind,
+  type PermissionRequest,
+  PERMISSION_HISTORY_LIMIT,
   type RelayArtifact,
   type RelayArtifactKind,
   type RelayEvent,

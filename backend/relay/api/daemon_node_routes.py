@@ -801,6 +801,29 @@ def daemon_skill_blob(
     return Response(content=content, media_type="application/octet-stream")
 
 
+@router.get("/daemon-nodes/{sandbox_id}/permission-requests/{request_id}")
+def daemon_permission_request(
+    sandbox_id: str, request_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """The answer to a run's permission prompt, polled while the run waits."""
+    session_id = request.query_params.get("sessionId") or ""
+    if not session_id:
+        raise HTTPException(400, "sessionId is required.")
+    try:
+        status = ctx.registry.permission_request_status(
+            sandbox_id, bearer_token(request), session_id, request_id
+        )
+    except DeletedDaemonNodeError as error:
+        raise HTTPException(410, str(error)) from error
+    except UnknownDaemonNodeError as error:
+        raise HTTPException(404, "Daemon node not found.") from error
+    except PermissionError as error:
+        raise HTTPException(401, "Unauthorized daemon node.") from error
+    if status is None:
+        raise HTTPException(404, "Permission request not found.")
+    return status
+
+
 @router.post("/daemon-nodes/{sandbox_id}/events")
 async def daemon_events(
     sandbox_id: str, request: Request, ctx: AppContextDep

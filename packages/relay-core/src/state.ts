@@ -1,3 +1,4 @@
+import type { PermissionPromptAdapter } from "./agents.js";
 import type { AgentOutputSink } from "./format.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
@@ -101,6 +102,26 @@ export interface AgentState {
   skill_paths?: string[];
   /** Per-run config directories. Command builders accept only their declared key. */
   skill_env?: Record<string, string>;
+  /**
+   * Launch spec for the stdio MCP server a local, native-policy Claude run
+   * asks through (`--permission-prompt-tool`). Set by the daemon only when it
+   * started a permission broker for this run; never set for BoxLite or a
+   * trusted local policy.
+   */
+  permission_prompt?: PermissionPromptLaunch;
+}
+
+/**
+ * How a runtime reaches the run's permission broker: one launch for the run's
+ * adapter (`command args…` with `env`, the broker socket and secret). Claude
+ * mounts it as an MCP server; Codex and Kimi run it in place of their CLI; Pi
+ * loads `args[0]` as an extension and never runs `command`.
+ */
+export interface PermissionPromptLaunch {
+  adapter: PermissionPromptAdapter;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
 }
 
 export interface AgentRunOptions {

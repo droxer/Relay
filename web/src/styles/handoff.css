@@ -121,3 +121,69 @@
   justify-content: flex-end;
   gap: var(--sp-2);
 }
+
+/* ============================ runtime permission prompts ============================ */
+
+/* A live run paused on a tool call: what it wants to run, an optional reason
+   for the agent, and the two answers. The answers reuse the decision bar so
+   Allow is the bar's one filled control, like Approve. */
+.permission-prompts {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.permission-prompt {
+  width: min(100%, 720px);
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-0);
+}
+
+.permission-prompt-head {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.permission-prompt-title {
+  font: var(--type-label-strong);
+  color: var(--ink-1);
+  overflow-wrap: anywhere;
+}
+
+.permission-prompt-summary {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+.permission-prompt-input {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--sp-3);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font: var(--type-code);
+  letter-spacing: var(--type-code-track);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.permission-prompt-note {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.permission-prompt-note [data-slot="label"] {
+  color: var(--ink-3);
+  font: var(--type-label);
+}
+
+.permission-prompt .decision-bar {
+  padding: 0;
+  background: none;
+}

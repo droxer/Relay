@@ -1,5 +1,6 @@
 import type { RelaySession } from "../types.js";
 import { mergeTokenUsage } from "./tokenUsage.ts";
+import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -140,9 +141,18 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           delete updated.tokenUsage;
         }
         delete updated.currentAgent;
-        return updated;
+        return withPermissionsExpired(updated, event.timestamp, event.runId);
       }
     }
+    case "agent.permission_requested":
+      return withPermissionRequested(next, event.request, event.timestamp);
+    case "agent.permission_resolved":
+      return withPermissionResolved(next, event.requestId, {
+        decision: event.decision,
+        resolvedAt: event.timestamp,
+        ...(event.note ? { note: event.note } : {}),
+        ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
+      });
     case "artifact.created": {
       const artifacts = next.artifacts.some((artifact) => artifact.id === event.artifact.id)
         ? next.artifacts
@@ -168,6 +178,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           delete updated.pendingDecision;
           delete updated.workOutcome;
           clearInputRequest(updated);
+          return withPermissionsExpired(updated, event.timestamp);
         }
         return updated;
       }
@@ -180,7 +191,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.inputNotes?.length) updated.inputNotes = [...event.inputNotes];
         delete updated.currentAgent;
         delete updated.pendingDecision;
-        return updated;
+        return withPermissionsExpired(updated, event.timestamp);
       }
     case "session.failed":
       {
@@ -188,7 +199,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         clearInputRequest(updated);
         delete updated.currentAgent;
         delete updated.pendingDecision;
-        return updated;
+        return withPermissionsExpired(updated, event.timestamp);
       }
     case "session.archived":
       return { ...next, archived: true };

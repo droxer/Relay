@@ -91,6 +91,41 @@ export interface HumanDecision {
   actorUserId?: string;
 }
 
+/**
+ * A live run's runtime permission prompt, open until a person answers it or
+ * its run ends (backend/relay/core/permission_requests.py is the reducer).
+ */
+export interface PermissionRequest {
+  id: string;
+  runId: string;
+  agent: AgentName;
+  logicalAgentId?: string;
+  daemonNodeId?: string;
+  /** The runtime's tool name, e.g. `Bash` or `mcp__github__create_issue`. */
+  toolName: string;
+  /** The tool input as JSON text, capped by the backend. */
+  input: string;
+  toolUseId?: string;
+  requestedAt: string;
+}
+
+export type PermissionDecisionKind = "allow" | "deny" | "expired";
+
+/** How a permission prompt closed; `expired` when its run ended first. */
+export interface PermissionDecision {
+  requestId: string;
+  runId?: string;
+  daemonNodeId?: string;
+  toolName: string;
+  decision: PermissionDecisionKind;
+  resolvedAt: string;
+  note?: string;
+  decidedBy?: string;
+}
+
+/** How many closed prompts the snapshot remembers. */
+export const PERMISSION_HISTORY_LIMIT = 50;
+
 export type CollaborationPurpose = "accomplish" | "discuss" | "review";
 export type CollaborationStyle = "solo" | "build_review" | "pipeline" | "lead_led";
 export type CollaborationStrategy = "direct" | "room" | "review" | "coordinate";
@@ -254,6 +289,10 @@ export interface RelaySession {
   updatedAt: string;
   currentAgent?: AgentName;
   pendingDecision?: "feedback";
+  /** Runtime permission prompts a live run is waiting on. */
+  permissionRequests?: PermissionRequest[];
+  /** How recent prompts closed, newest last. */
+  permissionDecisions?: PermissionDecision[];
   agentRuns: AgentRun[];
   artifacts: RelayArtifact[];
   /**
@@ -429,6 +468,23 @@ export type RelayEvent =
     }
   | {
       id: string;
+      type: "agent.permission_requested";
+      sessionId: string;
+      timestamp: string;
+      request: Omit<PermissionRequest, "requestedAt">;
+    }
+  | {
+      id: string;
+      type: "agent.permission_resolved";
+      sessionId: string;
+      timestamp: string;
+      requestId: string;
+      decision: "allow" | "deny";
+      note?: string;
+      actorUserId?: string;
+    }
+  | {
+      id: string;
       type: "agent.completed";
       workResult?: CollaborationWorkResult;
       sessionId: string;
@@ -521,6 +577,35 @@ function applyInputRequest(
   if (event.inputQuestion) session.inputQuestion = event.inputQuestion;
   if (event.inputOptions?.length) session.inputOptions = [...event.inputOptions];
   if (event.inputNotes?.length) session.inputNotes = [...event.inputNotes];
+}
+
+/** Close the open prompts of `runId` (or every one) — their run is gone. */
+function expirePermissionRequests(session: RelaySession, timestamp: string, runId?: string): void {
+  for (const request of session.permissionRequests ?? []) {
+    if (runId === undefined || request.runId === runId) {
+      closePermissionRequest(session, request, { decision: "expired", resolvedAt: timestamp });
+    }
+  }
+}
+
+function closePermissionRequest(
+  session: RelaySession,
+  request: PermissionRequest,
+  outcome: Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy">,
+): void {
+  const remaining = (session.permissionRequests ?? []).filter((item) => item.id !== request.id);
+  if (remaining.length) session.permissionRequests = remaining;
+  else delete session.permissionRequests;
+  session.permissionDecisions = [
+    ...(session.permissionDecisions ?? []),
+    {
+      requestId: request.id,
+      runId: request.runId,
+      ...(request.daemonNodeId ? { daemonNodeId: request.daemonNodeId } : {}),
+      toolName: request.toolName,
+      ...outcome,
+    },
+  ].slice(-PERMISSION_HISTORY_LIMIT);
 }
 
 function clearInputRequest(session: RelaySession): void {
@@ -621,6 +706,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       }
       session.tokenUsage = mergeTokenUsage(session.agentRuns.map((item) => item.tokenUsage));
       session.currentAgent = undefined;
+      expirePermissionRequests(session, event.timestamp, event.runId);
       session.phase = event.status === "completed"
         ? "agent_completed"
         : event.status === "cancelled" ? "cancelled" : "agent_failed";
@@ -641,6 +727,24 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
         delete session.workOutcome;
         clearInputRequest(session);
         delete session.pendingDecision;
+        expirePermissionRequests(session, event.timestamp);
+      }
+    } else if (event.type === "agent.permission_requested") {
+      const id = event.request.id;
+      const known = (session.permissionRequests ?? []).some((item) => item.id === id)
+        || (session.permissionDecisions ?? []).some((item) => item.requestId === id);
+      if (!known) {
+        session.permissionRequests = [...(session.permissionRequests ?? []), { ...event.request, requestedAt: event.timestamp }];
+      }
+    } else if (event.type === "agent.permission_resolved") {
+      const request = session.permissionRequests?.find((item) => item.id === event.requestId);
+      if (request) {
+        closePermissionRequest(session, request, {
+          decision: event.decision,
+          resolvedAt: event.timestamp,
+          ...(event.note ? { note: event.note } : {}),
+          ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
+        });
       }
     } else if (event.type === "session.completed") {
       session.status = "completed";
@@ -650,6 +754,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       applyInputRequest(session, event);
       session.currentAgent = undefined;
       delete session.pendingDecision;
+      expirePermissionRequests(session, event.timestamp);
     } else if (event.type === "session.failed") {
       session.status = "failed";
       session.phase = "failed";
@@ -658,6 +763,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       clearInputRequest(session);
       session.currentAgent = undefined;
       delete session.pendingDecision;
+      expirePermissionRequests(session, event.timestamp);
     } else if (event.type === "session.archived") {
       session.archived = true;
     } else if (event.type === "session.runtime_affinity") {

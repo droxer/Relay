@@ -25,6 +25,18 @@ export type SkillDelivery =
   | { kind: "skills-dir-flag"; flag: string }
   | { kind: "skill-path-flag"; flag: string; disableDiscoveryFlag: string };
 
+/**
+ * The translator between a runtime's own approval protocol and Relay's
+ * permission broker. Claude mounts its adapter as an MCP server, Codex and
+ * Kimi run theirs in place of their CLI, and Pi loads its adapter as an
+ * extension (`--extension <script>`): the launch's script is handed to `pi`
+ * rather than run by node.
+ */
+export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "kimi-acp" | "pi-extension";
+
+/** Whether a local, native-policy run of this runtime can ask a person before a tool use. */
+export type PermissionPromptSupport = { kind: "none" } | { kind: "adapter"; adapter: PermissionPromptAdapter };
+
 export interface AgentDefinition {
   name: AgentName;
   /** Human-facing name used in readiness output and avatars. */
@@ -40,6 +52,8 @@ export interface AgentDefinition {
   /** Whether the daemon must provision guest auth files before this agent can run. */
   needsGuestAuth: boolean;
   skillDelivery: SkillDelivery;
+  /** How live permission prompts reach a person on a local, native-policy run. */
+  permissionPrompts: PermissionPromptSupport;
   preflight: { label: string; command(): string };
 }
 
@@ -60,6 +74,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
       subdir: ".claude",
       skillsSubpath: "skills",
     },
+    // Claude asks through its --permission-prompt-tool MCP hook.
+    permissionPrompts: { kind: "adapter", adapter: "claude-mcp" },
     preflight: {
       label: "Claude Code auth",
       command: () => runAsAgent(
@@ -82,6 +98,10 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
       flag: "--skill",
       disableDiscoveryFlag: "--no-skills",
     },
+    // Pi has no permission system of its own, so the extension gives it the
+    // posture Claude's default has: every command and edit asks a person;
+    // reads pass.
+    permissionPrompts: { kind: "adapter", adapter: "pi-extension" },
     preflight: { label: "Pi coding agent", command: buildPiPreflightCommand },
   },
   codex: {
@@ -100,6 +120,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
       subdir: ".codex",
       skillsSubpath: "skills",
     },
+    // `codex exec` never asks; approvals exist only over `codex app-server`.
+    permissionPrompts: { kind: "adapter", adapter: "codex-app-server" },
     preflight: {
       label: "Codex auth",
       command: () => runAsAgent(
@@ -118,6 +140,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     needsGuestAuth: true,
     // Each path is a container whose direct children are skill directories.
     skillDelivery: { kind: "skills-dir-flag", flag: "--skills-dir" },
+    // Kimi asks over ACP `session/request_permission`.
+    permissionPrompts: { kind: "adapter", adapter: "kimi-acp" },
     preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
   },
 };

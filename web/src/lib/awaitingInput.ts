@@ -85,6 +85,8 @@ export function threadAwaitsHuman(
 ): boolean {
   if (!session) return false;
   if (session.status === "waiting_for_human") return true;
+  // A live run paused on a runtime permission prompt needs its person too.
+  if (session.permissionRequests?.length) return true;
   return session.status === "completed" && threadWait(session, tasks) !== null;
 }
 

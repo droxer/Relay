@@ -37,6 +37,8 @@ import { TeamHandoffCue } from "./TeamHandoffCue";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { DecisionBar } from "./composer/DecisionBar";
+import { PermissionPrompts } from "./composer/PermissionPrompts";
+import { openPermissionRequests } from "../lib/permissionRequests";
 import { Composer, type ComposerHandle } from "./composer/Composer";
 import type { ProjectRoomOption } from "./composer/AgentSelect";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
@@ -149,6 +151,8 @@ type ThreadsViewProps = {
   onRuntimeNodeChange: (nodeId: string) => void;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
+  /** Answer a live run's runtime permission prompt. */
+  onAnswerPermission: (requestId: string, decision: "allow" | "deny", note?: string) => Promise<void>;
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
@@ -228,6 +232,7 @@ export function ThreadsView({
   onRuntimeNodeChange,
   sendDecision,
   sendHandoff,
+  onAnswerPermission,
   onSend,
   onCancelRun,
   onRetryAgent,
@@ -510,6 +515,15 @@ export function ThreadsView({
                 />
                 <HandoffStatus session={activeSession} />
                 <CollaborationStatus session={activeSession} />
+                <PermissionPrompts
+                  requests={openPermissionRequests(activeSession)}
+                  agentLabel={(request) => labelForAgentRun(
+                    { agent: request.agent, agentId: request.logicalAgentId },
+                    logicalAgentNames,
+                    agentDisplayNames,
+                  )}
+                  onAnswer={onAnswerPermission}
+                />
                 {awaitingDecision ? (
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}

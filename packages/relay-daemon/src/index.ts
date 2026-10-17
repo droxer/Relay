@@ -21,6 +21,7 @@ import type {
   DaemonNodeRunCommand,
   DaemonNodeSandboxMode,
   AgentName,
+  AgentState,
   StreamExecResult,
   CodexCollaborationEvent,
   TokenUsage,
@@ -107,6 +108,8 @@ import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.j
 import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeSkills } from "./agent-skills.js";
+import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
+import { permissionAdapterLaunch } from "./permission-adapters/index.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
 const DEFAULT_DAEMON_SANDBOX_MODE: DaemonSandboxMode = "boxlite";
@@ -1290,6 +1293,43 @@ async function executeCommand(
     execution.release();
   }
 
+  /**
+   * A local, native-policy run asks a person before using a tool, through the
+   * permission adapter its registry entry names. The broker lives exactly as
+   * long as the run; every other run is unchanged.
+   */
+  async function runWithPermissionPrompts<T>(runState: AgentState, run: (state: AgentState) => Promise<T>): Promise<T> {
+    const support = getAgent(command.agent).permissionPrompts;
+    if (support.kind !== "adapter" || !permissionPromptsApply(command.agent, environment.sandboxMode)) return await run(runState);
+    let broker;
+    try {
+      broker = await startPermissionBroker({
+        fetchFn,
+        backendUrl,
+        sandboxId,
+        token,
+        command,
+        postEvent: (event, eventSignal) => postJsonWithRetry(fetchFn, eventUrl, event, token, eventSignal),
+        signal,
+        logger,
+      });
+    } catch (error) {
+      // Without a broker the run keeps its runtime's usual headless command,
+      // which asks no one: Claude denies, Codex stays inside its sandbox, and
+      // Kimi and Pi decide on their own.
+      logger.warn("permission broker unavailable; the run will not ask a person", {
+        ...commandLogFields(sandboxId, command),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return await run(runState);
+    }
+    try {
+      return await run({ ...runState, permission_prompt: permissionAdapterLaunch(support.adapter, broker) });
+    } finally {
+      await broker.close();
+    }
+  }
+
   async function runInWorkspace(execution: WorkspaceExecution): Promise<DaemonNodeEvent> {
     await execution.ensureAgentReady(command.agent, signal);
     if (signal?.aborted) {
@@ -1502,7 +1542,7 @@ async function executeCommand(
           } : {}),
         } satisfies DaemonNodeEvent, token, signal);
       }
-      patch = await runAgentNode(command.agent, runState, options);
+      patch = await runWithPermissionPrompts(runState, (promptState) => runAgentNode(command.agent, promptState, options));
     } catch (error) {
       consumeRoundResult(threadWorkspace.hostPath);
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);

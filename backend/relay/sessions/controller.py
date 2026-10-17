@@ -9,6 +9,7 @@ from loguru import logger
 from ..collaboration.models import COLLABORATION_ADMISSION_EXPIRED_OUTCOME
 from ..core.human_waits import ensure_wait_record
 from ..core.ids import new_relay_id, now_iso
+from ..core.permission_requests import open_permission_request
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.store_common import INPUT_REQUEST_FIELDS, store_transaction
 from ..persistence.task_lifecycle import acceptance_status
@@ -418,6 +419,39 @@ class SessionController:
         self._update_task_status("blocked", note, {"sessionId": session_id, "code": "execution_cancelled"})
         logger.info("Session cancelled", session_id=session_id, note=note)
         return session
+
+    def resolve_permission_request(
+        self,
+        session_id: str,
+        request_id: str,
+        decision: str,
+        note: str | None = None,
+        *,
+        actor_user_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Answer a live run's permission prompt; None when it is no longer open."""
+        with self.store.mutation_scope(session_id):
+            if not open_permission_request(self.store.get_session(session_id), request_id):
+                return None
+            logger.info(
+                "Permission request answered",
+                session_id=session_id,
+                request_id=request_id,
+                decision=decision,
+            )
+            return self._append(
+                session_id,
+                relay_event(
+                    "agent.permission_resolved",
+                    session_id,
+                    {
+                        "requestId": request_id,
+                        "decision": decision,
+                        **({"note": note} if note else {}),
+                        **_decided_by(actor_user_id),
+                    },
+                ),
+            )
 
     def record_decision(
         self,

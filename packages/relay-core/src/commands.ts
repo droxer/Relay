@@ -8,7 +8,8 @@ import {
 } from "./prompts.js";
 import { kimiApiKey, kimiModel, localRuntimeEnvironment } from "./env.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
-import type { AgentState } from "./state.js";
+import type { PermissionPromptAdapter } from "./agents.js";
+import type { AgentState, PermissionPromptLaunch } from "./state.js";
 import { isResumableSessionId } from "./runtime-session.js";
 
 /** Only a well-formed id is ever placed on a command line. */
@@ -25,12 +26,44 @@ function withResumeNote(prompt: string, state: AgentState): string {
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
   const resume = resumeId(state);
+  const prompt = withResumeNote(nativeSkillPrompt(codexTaskPrompt(state), state), state);
+  const launch = permissionPromptLaunch(state, "codex-app-server");
+  if (launch) {
+    return runAsAgent(withSkillEnv(codexAppServerCommand(launch, { workspacePath, model: state.agent_model, resume, prompt }), state, "CODEX_HOME"), workspacePath);
+  }
   const argv = [
     ...codexBaseArgv({ workspacePath, model: state.agent_model, resume }),
     ...(resume ? [resume] : []),
-    withResumeNote(nativeSkillPrompt(codexTaskPrompt(state), state), state),
+    prompt,
   ];
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CODEX_HOME"), workspacePath);
+}
+
+/**
+ * `codex exec` never asks for approval, so a run that asks a person goes
+ * through the Codex app-server adapter instead. It takes exec's options and
+ * prints exec's `--json` stream, so rendering and parsing are unchanged.
+ */
+function codexAppServerCommand(
+  launch: PermissionPromptLaunch,
+  { workspacePath, model: pinned, resume, prompt }: { workspacePath?: string; model?: string; resume?: string; prompt: string },
+): string {
+  const argv = [
+    launch.command,
+    ...launch.args,
+    ...codexCliConfigOverrides(pinned),
+    "--cwd",
+    workspacePath ?? agentWorkspacePath(),
+  ];
+  const model = runtimeModel(pinned, openaiModel);
+  if (model) argv.push("--model", model);
+  if (resume) argv.push("--resume", resume);
+  argv.push("--", prompt);
+  return [...envExports(launch.env), shellCommand(argv)].join(" && ");
+}
+
+function envExports(env: Record<string, string>): string[] {
+  return Object.entries(env).map(([key, value]) => `export ${key}=${shellQuote(value)}`);
 }
 
 function codexBaseArgv({ workspacePath, model: pinned, resume }: { workspacePath?: string; model?: string; resume?: string } = {}): string[] {
@@ -65,6 +98,9 @@ function buildClaudeInvocation(
     ...agentArgv("claude"),
     "-p",
     ...(trustedExecution() ? ["--permission-mode", "bypassPermissions"] : []),
+    // `--mcp-config` is variadic: the `--add-dir` after it ends its values, so
+    // it can never swallow the prompt.
+    ...claudePermissionPromptArgv(state),
     "--add-dir",
     workspace,
     "--verbose",
@@ -80,16 +116,51 @@ function buildClaudeInvocation(
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
 }
 
-export function buildPiCommand(state: AgentState, workspacePath?: string): string {
-  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model);
+/** Claude's full name for the `approve` tool of the MCP server named "relay". */
+export const CLAUDE_PERMISSION_PROMPT_TOOL = "mcp__relay__approve";
+
+/**
+ * Headless Claude denies any tool that needs permission. Under a native local
+ * policy the daemon can instead route those prompts to a person through a
+ * stdio MCP server; isolated and trusted runs already bypass permissions.
+ */
+function claudePermissionPromptArgv(state: AgentState): string[] {
+  const launch = permissionPromptLaunch(state, "claude-mcp");
+  if (!launch) return [];
+  const mcpConfig = {
+    mcpServers: {
+      relay: { type: "stdio", command: launch.command, args: launch.args, env: launch.env },
+    },
+  };
+  return ["--permission-prompt-tool", CLAUDE_PERMISSION_PROMPT_TOOL, "--mcp-config", JSON.stringify(mcpConfig)];
 }
+
+/** The run's adapter launch, when it is this builder's adapter and the run asks a person. */
+function permissionPromptLaunch(state: AgentState, adapter: PermissionPromptAdapter): PermissionPromptLaunch | undefined {
+  const launch = state.permission_prompt;
+  if (!launch || launch.adapter !== adapter || trustedExecution()) return undefined;
+  return launch;
+}
+
+export function buildPiCommand(state: AgentState, workspacePath?: string): string {
+  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model, permissionPromptLaunch(state, "pi-extension"));
+}
+/**
+ * Pi has no permission system, so a run that asks a person loads the Pi
+ * extension adapter (`--extension <script>`), whose `tool_call` hook puts
+ * every command and edit in front of a person. The launch's script rides the
+ * pi argv in every fallback command; its env is exported ahead of them and
+ * the extension removes it from the process before any tool runs.
+ */
 function buildPiInvocation(
   prompt: string,
   skillPaths: string[] | undefined,
   workspacePath?: string,
   pinnedModel?: string,
+  launch?: PermissionPromptLaunch,
 ): string {
   const argv = [...agentArgv("pi"), "--no-session"];
+  if (launch) argv.push("--extension", launch.args[0]);
   if (skillPaths !== undefined) {
     argv.push("--no-skills");
     for (const path of skillPaths) argv.push("--skill", path);
@@ -107,15 +178,18 @@ function buildPiInvocation(
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])--mode([=,[:space:]]|$)'";
   const supportsStreamingPrint =
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])(-P|--print-streaming)([=,[:space:]]|$)'";
+  const invocation = `if ${supportsJsonMode}; then ${jsonCommand}; elif ${supportsStreamingPrint}; then ${streamingCommand}; else ${printCommand}; fi`;
   return runAsAgent(
-    `if ${supportsJsonMode}; then ${jsonCommand}; elif ${supportsStreamingPrint}; then ${streamingCommand}; else ${printCommand}; fi`,
+    launch ? [...envExports(launch.env), invocation].join(" && ") : invocation,
     workspacePath,
   );
 }
 
-// Kimi (Moonshot AI) CLI. Flags verified against kimi-code 0.39; re-check
+// Kimi (Moonshot AI) CLI. Flags verified against kimi-code 2.0; re-check
 // `--auto`/`--output-format` against the installed version when bumping it.
 export function buildKimiCommand(state: AgentState, workspacePath?: string): string {
+  const launch = permissionPromptLaunch(state, "kimi-acp");
+  if (launch) return buildKimiAcpInvocation(launch, nativeSkillPrompt(kimiTaskPrompt(state), state), workspacePath, state.agent_model);
   return buildKimiInvocation(kimiTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model);
 }
 function buildKimiInvocation(
@@ -124,25 +198,55 @@ function buildKimiInvocation(
   workspacePath?: string,
   pinnedModel?: string,
 ): string {
-  // Kimi asks before tool calls by default. The run is headless, so nothing can
-  // answer and the agent would stall; --auto is its equivalent of Claude's
-  // bypassPermissions and Codex's approval bypass.
+  // `kimi -p` runs in Kimi's "Never Ask" mode whatever the flags: it never
+  // asks a person, and only static deny rules stop a tool. --auto makes that
+  // explicit where the run is isolated or trusted; a local native run that
+  // asks a person goes through the ACP adapter instead.
   const argv = ["kimi", ...(trustedExecution() ? ["--auto"] : [])];
   for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
-  // With an API key (or KIMI_MODEL_NAME) the model is configured through the
-  // KIMI_MODEL_* environment rather than --model, so a pinned model overrides
-  // KIMI_MODEL_NAME there instead of adding a flag Kimi would not resolve.
-  const envConfigured = kimiModelFromEnvironment();
-  const model = runtimeModel(pinnedModel, kimiModel);
-  if (model && !envConfigured) argv.push("--model", model);
+  const { model, envModel } = kimiModelSelection(pinnedModel);
+  if (model) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
   // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
   argv.push("--output-format", "stream-json", "--prompt", prompt);
   const command = shellCommand(argv);
   return runAsAgent(
-    pinnedModel && envConfigured ? `export KIMI_MODEL_NAME=${shellQuote(pinnedModel)} && ${command}` : command,
+    envModel ? `export KIMI_MODEL_NAME=${shellQuote(envModel)} && ${command}` : command,
     workspacePath,
   );
+}
+
+/**
+ * `kimi -p` never asks, so a run that asks a person drives `kimi acp` through
+ * the Kimi ACP adapter, which prints `kimi -p`'s stream-json. ACP takes no
+ * --skills-dir, so assigned skills ride the prompt as for Claude and Codex.
+ */
+function buildKimiAcpInvocation(
+  launch: PermissionPromptLaunch,
+  prompt: string,
+  workspacePath?: string,
+  pinnedModel?: string,
+): string {
+  const argv = [launch.command, ...launch.args, "--cwd", workspacePath ?? agentWorkspacePath()];
+  const { model, envModel } = kimiModelSelection(pinnedModel);
+  if (model) argv.push("--model", model);
+  argv.push("--prompt", prompt);
+  const exports = [...envExports(launch.env), ...(envModel ? [`export KIMI_MODEL_NAME=${shellQuote(envModel)}`] : [])];
+  return runAsAgent([...exports, shellCommand(argv)].join(" && "), workspacePath);
+}
+
+/**
+ * With an API key (or KIMI_MODEL_NAME) the model is configured through the
+ * KIMI_MODEL_* environment rather than --model, so a pinned model overrides
+ * KIMI_MODEL_NAME there instead of adding a flag Kimi would not resolve.
+ */
+function kimiModelSelection(pinnedModel: string | undefined): { model?: string; envModel?: string } {
+  const envConfigured = kimiModelFromEnvironment();
+  const model = runtimeModel(pinnedModel, kimiModel);
+  return {
+    ...(model && !envConfigured ? { model } : {}),
+    ...(pinnedModel && envConfigured ? { envModel: pinnedModel } : {}),
+  };
 }
 
 /**

@@ -38,6 +38,7 @@ after(() => {
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
 import { AgentNotInstalledError } from "../src/agent-preflight.js";
+import { askBroker } from "../src/permission-adapters/protocol.js";
 import { requestUpdatePause } from "../src/update-pause.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
@@ -899,6 +900,79 @@ test("relay daemon reports structured Codex collaboration events", async () => {
   assert.ok(collaboration && collaboration.type === "run.collaboration");
   assert.equal(collaboration.collaboration.tool, "spawnAgent");
   assert.deepEqual(collaboration.collaboration.receiverThreadIds, ["child-thread"]);
+});
+
+test("a native local Claude run asks a person through the daemon's permission broker", async () => {
+  const previous = captureEnv(["RELAY_AGENT_HOME", "RELAY_RUN_AS_CURRENT_USER", "RELAY_AGENT_WORKSPACE", "RELAY_LOCAL_PERMISSION_POLICY"]);
+  delete process.env.RELAY_LOCAL_PERMISSION_POLICY;
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  const polls: string[] = [];
+  let commandServed = false;
+  let answer: unknown;
+  const command = { ...runCommand("cmd_permission"), agent: "claude" as const, leaseId: "lease_permission" };
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_permission",
+      userId: "alice",
+      workspacePath: process.cwd(),
+      sandbox: "none",
+      token: "node_token",
+      pollIntervalMs: 5,
+      shutdownGraceMs: 50,
+      logger: testLogger(),
+      signal: stop.signal,
+      environment: fakeEnvironment({
+        exec: async (_cmd, args) => {
+          const script = args?.[1] ?? "";
+          const config = /--mcp-config '([^']*)'/.exec(script)?.[1];
+          if (!isInventoryProbe(args) && config) {
+            // Stand in for Claude's MCP server: ask the broker it was pointed at.
+            const env = (JSON.parse(config) as { mcpServers: { relay: { env: Record<string, string> } } }).mcpServers.relay.env;
+            answer = await askBroker({ kind: "command", toolName: "Bash", input: { command: "ls" }, toolUseId: "toolu_1" }, env);
+          }
+          return { exit_code: 0, stdout: "done\n", stderr: "" };
+        },
+      }),
+      fetchFn: async (url, init) => {
+        const parsed = new URL(String(url));
+        const path = parsed.pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!commandServed) {
+            commandServed = true;
+            return jsonResponse({ commands: [command] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.includes("/permission-requests/")) {
+          polls.push(`${path}?${parsed.searchParams}`);
+          return jsonResponse({ status: polls.length < 2 ? "pending" : "allow" });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.completed" || event.type === "run.failed") stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+  } finally {
+    restoreCapturedEnv(previous);
+  }
+
+  assert.deepEqual(answer, { behavior: "allow" });
+  const requested = events.find((event) => event.type === "run.permission_requested");
+  assert.ok(requested && requested.type === "run.permission_requested");
+  assert.equal(requested.commandId, "cmd_permission");
+  assert.equal(requested.leaseId, "lease_permission");
+  assert.equal(requested.agent, "claude");
+  assert.deepEqual({ ...requested.request, id: "" }, { id: "", toolName: "Bash", toolUseId: "toolu_1", input: "{\"command\":\"ls\"}" });
+  assert.equal(polls[0], `/api/v1/daemon-nodes/sbx_permission/permission-requests/${requested.request.id}?sessionId=ses_1`);
+  assert.ok(events.some((event) => event.type === "run.completed"));
 });
 
 test("relay daemon advertises active delivery leases while polling", async () => {

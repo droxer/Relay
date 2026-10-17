@@ -131,6 +131,20 @@ export function recordDecision(
   });
 }
 
+/** Answer a live run's runtime permission prompt; 409 once it has closed. */
+export function answerPermissionRequest(
+  sessionId: string,
+  requestId: string,
+  decision: "allow" | "deny",
+  note?: string,
+  token?: string,
+): Promise<RelaySession> {
+  return apiJson<RelaySession>(
+    `/threads/${encodeURIComponent(sessionId)}/permission-requests/${encodeURIComponent(requestId)}`,
+    { method: "POST", token, body: { decision, ...(note ? { note } : {}) } },
+  );
+}
+
 export function archiveSession(sessionId: string, token?: string): Promise<RelaySession> {
   return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}`, {
     method: "PATCH",

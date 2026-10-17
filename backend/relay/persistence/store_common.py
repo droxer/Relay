@@ -15,6 +15,11 @@ from sqlalchemy.engine import make_url
 
 from ..core.legacy_names import upgrade_legacy_names
 from ..core.ids import new_database_id, now_iso
+from ..core.permission_requests import (
+    apply_permission_requested,
+    apply_permission_resolved,
+    expire_permission_requests,
+)
 from .task_numbering import NUMBERED_EVENT, apply_task_number
 from ..core.models import (
     AGENT_NAMES,
@@ -542,6 +547,8 @@ def _apply_agent_completed(session: dict[str, Any], event: dict[str, Any]) -> No
     else:
         session.pop("tokenUsage", None)
     session.pop("currentAgent", None)
+    # The run that asked is gone, so nothing is left to answer its prompts.
+    expire_permission_requests(session, event["timestamp"], run_id=event["runId"])
     if event["status"] == "completed":
         session["phase"] = "agent_completed"
     elif event["status"] == "cancelled":
@@ -572,6 +579,7 @@ def _apply_human_decision(session: dict[str, Any], event: dict[str, Any]) -> Non
         for field in INPUT_REQUEST_FIELDS:
             session.pop(field, None)
         session.pop("pendingDecision", None)
+        expire_permission_requests(session, event["timestamp"])
 
 
 def _apply_session_terminal(session: dict[str, Any], event: dict[str, Any]) -> None:
@@ -590,6 +598,7 @@ def _apply_session_terminal(session: dict[str, Any], event: dict[str, Any]) -> N
             session.pop(field, None)
     session.pop("currentAgent", None)
     session.pop("pendingDecision", None)
+    expire_permission_requests(session, event["timestamp"])
 
 
 def _apply_session_archived(session: dict[str, Any], _event: dict[str, Any]) -> None:
@@ -649,6 +658,8 @@ SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "session.renamed": _apply_session_renamed,
     "session.deletion_requested": _apply_deletion_requested,
     "thread.participants_joined": _apply_participants_joined,
+    "agent.permission_requested": apply_permission_requested,
+    "agent.permission_resolved": apply_permission_resolved,
 }
 
 # Streamed run output has no reducer: it changes nothing in the projection, so
