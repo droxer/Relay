@@ -218,6 +218,21 @@ def railway(op, v):
             if any(dep["id"] == v["id"] for dep in svc["deployments"]):
                 return {"buildLogs": [{"message": svc["name"] + " build failure detail"}], "deploymentLogs": []}
         raise ValueError("unknown deployment")
+    if op == "DeploymentLogs":
+        # Per service, as the backend would have printed them while running.
+        for svc in project()["services"].values():
+            if any(dep["id"] == v["id"] for dep in svc["deployments"]):
+                successful = next(dep for dep in svc["deployments"] if dep["status"] == "SUCCESS")
+                assert successful["id"] == v["id"], \
+                    "logs read from a deployment that is not the newest successful one"
+                messages = STATE.get("deployment_logs", {}).get(svc["name"], [])
+                # Return newest first so the client must use timestamps.
+                return {"deploymentLogs": [
+                    {"timestamp": f"2026-10-17T00:00:{i:02d}Z", "message": m}
+                    for i, m in reversed(list(enumerate(messages)))
+                    if v.get("filter", "") in m
+                ]}
+        raise ValueError("unknown deployment")
     if op == "Deployments":
         return {"deployments": edges(service(v["input"]["serviceId"])["deployments"])}
     raise ValueError(f"unhandled Railway operation {op}")
@@ -349,6 +364,9 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/__scenario" and method == "POST":
             STATE["deployment_status"] = self.body()
+            return self.send(200, {})
+        if url.path == "/__logs" and method == "POST":
+            STATE["deployment_logs"] = self.body()
             return self.send(200, {})
         if url.path == "/__seed_route" and method == "POST":
             STATE["routes"].append({"id": new_id("route"), **self.body()})

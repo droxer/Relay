@@ -61,6 +61,7 @@ from .core.environment import load_backend_env
 from .core.storage_config import database_url_from_env, use_postgres_storage
 from .daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
 from .migrations_runtime.agent_computer_id import (
+    log_agent_computer_id_status,
     migrate_agent_computer_ids,
     migrate_agent_placement_computer_ids,
 )
@@ -340,6 +341,7 @@ def create_app(
         )
         if migrated:
             logger.info("Migrated compatibility agents", count=migrated)
+        log_agent_computer_id_status(agent_store, agent_placement_store)
     except Exception as error:  # noqa: BLE001 - migration failure must not block startup
         logger.warning("Agent computer-id migration deferred", error=str(error))
 

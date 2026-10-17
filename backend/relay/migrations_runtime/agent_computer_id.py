@@ -31,10 +31,7 @@ def migrate_agent_placement_computer_ids(
     nodes = {node["id"]: node for node in registry.monitor_nodes()}
     migrated = 0
     for placement in placement_store.list_placements():
-        current_computer_id = placement.get("computerId")
-        if current_computer_id and not is_provisional_computer_id(
-            current_computer_id
-        ):
+        if not _placement_needs_migration(placement):
             continue
         node = nodes.get(placement.get("daemonNodeId"))
         if not node:
@@ -75,11 +72,7 @@ def migrate_agent_computer_ids(
     """
     migrated = 0
     for agent in agent_store.list_agents():
-        if agent.get("deletedAt"):
-            continue
-        if not agent.get("compatibilityKey") and not is_provisional_computer_id(
-            agent.get("computerId")
-        ):
+        if not _agent_needs_migration(agent):
             continue
         try:
             agent_computer_id = _computer_id_from_placements(
@@ -107,6 +100,68 @@ def migrate_agent_computer_ids(
             )
             continue
     return migrated
+
+
+def pending_agent_computer_id_migrations(
+    agent_store: Any, placement_store: Any
+) -> dict[str, Any]:
+    """What the startup migration would still touch, without writing.
+
+    Uses the migration's own predicates, so an empty report means both
+    functions above are no-ops on this data and can be deleted.
+    """
+    agents = [
+        agent["id"]
+        for agent in agent_store.list_agents()
+        if _agent_needs_migration(agent)
+    ]
+    placements = [
+        {
+            "id": placement.get("id"),
+            "agentId": placement.get("agentId"),
+            "daemonNodeId": placement.get("daemonNodeId"),
+        }
+        for placement in placement_store.list_placements()
+        if _placement_needs_migration(placement)
+    ]
+    return {
+        "agents": agents,
+        "placements": placements,
+        "converged": not agents and not placements,
+    }
+
+
+def log_agent_computer_id_status(agent_store: Any, placement_store: Any) -> str:
+    """Log, and return, one line saying whether the migration is still needed.
+
+    ``deploy/deploy.sh agent-ids`` reads this line from the backend's
+    deployment logs, since production's database is not reachable from
+    outside Railway. Keep the wording in step with that command.
+    """
+    report = pending_agent_computer_id_migrations(agent_store, placement_store)
+    if report["converged"]:
+        line = "agent-computer-ids converged"
+        logger.info(line)
+    else:
+        line = (
+            f"agent-computer-ids pending agents={len(report['agents'])} "
+            f"placements={len(report['placements'])}"
+        )
+        logger.warning(line)
+    return line
+
+
+def _agent_needs_migration(agent: dict[str, Any]) -> bool:
+    if agent.get("deletedAt"):
+        return False
+    return bool(agent.get("compatibilityKey")) or is_provisional_computer_id(
+        agent.get("computerId")
+    )
+
+
+def _placement_needs_migration(placement: dict[str, Any]) -> bool:
+    current_computer_id = placement.get("computerId")
+    return not current_computer_id or is_provisional_computer_id(current_computer_id)
 
 
 def _computer_id_from_placements(

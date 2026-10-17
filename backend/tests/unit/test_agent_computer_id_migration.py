@@ -8,6 +8,8 @@ import pytest
 from relay.migrations_runtime.agent_computer_id import (
     migrate_agent_computer_ids,
     migrate_agent_placement_computer_ids,
+    log_agent_computer_id_status,
+    pending_agent_computer_id_migrations,
 )
 from relay.persistence.agent_placement_store import (
     DatabaseAgentPlacementStore,
@@ -42,9 +44,7 @@ def test_migrates_a_compatibility_agent_into_a_plain_agent(
     tmp_path: Path, store_kind: str
 ) -> None:
     agents, placements = _stores(tmp_path, store_kind)
-    agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-1", computer_id="device:alice:machine-a"
-    )
+    agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     create_node_placement(placements, agent, _node())
 
     assert migrate_agent_computer_ids(agents, placements) == 1
@@ -59,9 +59,7 @@ def test_migrates_a_compatibility_agent_into_a_plain_agent(
 @pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_migration_is_idempotent(tmp_path: Path, store_kind: str) -> None:
     agents, placements = _stores(tmp_path, store_kind)
-    agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-1", computer_id="device:alice:machine-a"
-    )
+    agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     create_node_placement(placements, agent, _node())
 
     assert migrate_agent_computer_ids(agents, placements) == 1
@@ -75,9 +73,7 @@ def test_agent_without_a_placement_is_skipped_without_crashing(
     """Legacy reasons leave some records with no placement; skip instead of
     crashing, and they later surface as computer_gone."""
     agents, placements = _stores(tmp_path, store_kind)
-    agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-1", computer_id="device:alice:machine-a"
-    )
+    agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
 
     assert migrate_agent_computer_ids(agents, placements) == 0
     assert agents.get_agent(agent["id"])["compatibilityKey"]
@@ -90,9 +86,7 @@ def test_legacy_placement_without_computer_id_falls_back_to_the_registry(
     """spec ① only wrote computerId onto newly created placements; legacy
     ones must derive it from the registry instead."""
     agents, placements = _stores(tmp_path, store_kind)
-    agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-1", computer_id="device:alice:machine-a"
-    )
+    agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     placements.create_placement(agent, "node-1")  # bypasses create_node_placement, so no computerId
     registry = SimpleNamespace(monitor_nodes=lambda: [_node()])
 
@@ -205,13 +199,9 @@ def test_one_agent_failing_to_migrate_does_not_block_the_rest(
     otherwise-valid agent must still migrate in the same run.
     """
     agents, placements = _stores(tmp_path, store_kind)
-    broken_agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-1", computer_id="device:alice:machine-a"
-    )
+    broken_agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     create_node_placement(placements, broken_agent, _node("node-1"))
-    healthy_agent = agents.ensure_compatibility_agent(
-        "bob", "claude", "node-2", computer_id="device:bob:machine-b"
-    )
+    healthy_agent = agents.ensure_compatibility_agent("bob", "claude", "node-2")
     node_2 = {
         "id": "node-2",
         "userId": "bob",
@@ -273,9 +263,7 @@ def test_migration_picks_the_active_placement_over_a_removed_one(
         agents, placements = _stores(
             tmp_path, store_kind, db_name=f"active-pick-{attempt}.db"
         )
-        agent = agents.ensure_compatibility_agent(
-            "alice", "claude", "node-old", computer_id="device:alice:machine-a"
-        )
+        agent = agents.ensure_compatibility_agent("alice", "claude", "node-old")
         # First placement, then move the agent to a new computer: the store
         # marks the old placement "removed" and creates a new active one.
         create_node_placement(placements, agent, old_node)
@@ -300,12 +288,61 @@ def test_active_legacy_placement_wins_over_removed_stable_history(
     agents, placements = _stores(tmp_path, store_kind)
     old_node = _node("node-old")
     current_node = {**_node("node-current"), "workspaceId": "machine-b"}
-    agent = agents.ensure_compatibility_agent(
-        "alice", "claude", "node-old", computer_id="device:alice:machine-a"
-    )
+    agent = agents.ensure_compatibility_agent("alice", "claude", "node-old")
     create_node_placement(placements, agent, old_node)
     placements.create_placement(agent, "node-current")
     registry = SimpleNamespace(monitor_nodes=lambda: [old_node, current_node])
 
     assert migrate_agent_computer_ids(agents, placements, registry) == 1
     assert agents.get_agent(agent["id"])["computerId"] == "device:alice:machine-b"
+
+
+@pytest.mark.parametrize("store_kind", ["local", "database"])
+def test_pending_report_names_what_the_migration_would_still_touch(
+    tmp_path: Path, store_kind: str
+) -> None:
+    agents, placements = _stores(tmp_path, store_kind)
+    keyed = agents.ensure_compatibility_agent("alice", "claude", "node-1")
+    placements.create_placement(keyed, "node-1")  # no computerId
+    declared = agents.ensure_compatibility_agent(
+        "alice", "codex", "node-1", computer_id="device:alice:machine-a"
+    )
+    create_node_placement(placements, declared, _node())
+
+    report = pending_agent_computer_id_migrations(agents, placements)
+
+    assert report["agents"] == [keyed["id"]]
+    assert [item["agentId"] for item in report["placements"]] == [keyed["id"]]
+    assert report["converged"] is False
+
+
+@pytest.mark.parametrize("store_kind", ["local", "database"])
+def test_pending_report_is_converged_once_the_migration_has_run(
+    tmp_path: Path, store_kind: str
+) -> None:
+    agents, placements = _stores(tmp_path, store_kind)
+    keyed = agents.ensure_compatibility_agent("alice", "claude", "node-1")
+    create_node_placement(placements, keyed, _node())
+    migrate_agent_computer_ids(agents, placements)
+
+    report = pending_agent_computer_id_migrations(agents, placements)
+
+    assert report == {"agents": [], "placements": [], "converged": True}
+
+
+@pytest.mark.parametrize("store_kind", ["local", "database"])
+def test_startup_status_line_is_what_deploy_agent_ids_reads(
+    tmp_path: Path, store_kind: str
+) -> None:
+    # deploy/deploy.sh agent-ids greps deployment logs for these exact words.
+    agents, placements = _stores(tmp_path, store_kind)
+    assert log_agent_computer_id_status(agents, placements) == (
+        "agent-computer-ids converged"
+    )
+
+    keyed = agents.ensure_compatibility_agent("alice", "claude", "node-1")
+    placements.create_placement(keyed, "node-1")
+
+    assert log_agent_computer_id_status(agents, placements) == (
+        "agent-computer-ids pending agents=1 placements=1"
+    )

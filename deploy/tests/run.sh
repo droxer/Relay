@@ -150,6 +150,9 @@ run_phases() {
 echo "--- first run provisions everything (web UI on Workers)"
 start_mock
 write_config
+expect_failure "agent-ids does not provision a missing project" 'not found' deploy agent-ids
+STATE=$(state)
+check "agent-ids leaves an unprovisioned account untouched" '.projects | length == 0'
 run_phases 2>"$WORK/first.log" || { cat "$WORK/first.log"; exit 1; }
 FIRST=$(state)
 STATE=$FIRST
@@ -405,6 +408,30 @@ for expected in 'relay-backend deployment' 'relay-web deployment' 'relay-backend
     FAILURES=$((FAILURES + 1))
   fi
 done
+
+echo "--- agent-ids reads the startup migration status from the backend's logs"
+# The newest backend deployment FAILED above; the line must come from the
+# newest successful one.
+seed_logs() {
+  curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__logs" -d "$1" >/dev/null
+}
+seed_logs '{"relay-backend": ["Application startup complete."]}'
+expect_failure "agent-ids without a status line says why" 'no agent-computer-ids line' deploy agent-ids
+seed_logs '{"relay-backend": ["2026-10-17 | WARNING | agent-computer-ids pending agents=2 placements=1"]}'
+expect_failure "agent-ids fails while records are pending" 'pending agents=2 placements=1' deploy agent-ids
+seed_logs '{"relay-backend": ["x | WARNING | agent-computer-ids pending agents=2 placements=1", "x | INFO | agent-computer-ids converged"]}'
+if output=$(deploy agent-ids 2>&1) && grep -q 'converged' <<<"$output"; then
+  echo "ok    agent-ids reports the newest line once converged"
+else
+  echo "FAIL  agent-ids reports the newest line once converged: $output"
+  FAILURES=$((FAILURES + 1))
+fi
+seed_logs '{"relay-backend": ["x | INFO | agent-computer-ids converged", "x | WARNING | agent-computer-ids pending agents=1 placements=0"]}'
+expect_failure "a later pending status supersedes convergence" 'pending agents=1 placements=0' deploy agent-ids
+start_mock
+write_config
+deploy railway 2>/dev/null
+expect_failure "agent-ids requires a successful deployment" 'no successful deployment' deploy agent-ids
 
 echo "--- branch resolution without a network connection"
 resolved=$(
