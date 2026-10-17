@@ -32,6 +32,9 @@ export type AwaitingInput = {
   /** Acceptance-gate reasons the question stood in front of — not what to
    *  answer, but what the person answering should know. */
   notes: string[];
+  /** A check whose agent ended without filing its report, so its last
+   *  message — not the recorded gate reason — is what to answer. */
+  unreported?: boolean;
   /** The wait a reply answers. An answer names it, so a stale reply is
    *  refused rather than answering whatever the task asks next. Absent for a
    *  thread-only wait or one recorded before waits carried ids. */
@@ -68,6 +71,7 @@ export function awaitingInput(
     text: awaiting.text,
     options: awaiting.options,
     notes: awaiting.notes,
+    ...(awaiting.unreported ? { unreported: true } : {}),
     ...(awaiting.questionId ? { questionId: awaiting.questionId } : {}),
     run,
     task,

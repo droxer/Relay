@@ -2267,6 +2267,8 @@
   "awaiting": {
     "question_title": "{{agent}} needs your answer",
     "check_title": "{{agent}} stopped before finishing",
+    "unreported_title": "{{agent}} ended without filing its report",
+    "unreported_text": "Its last message above says where it stopped and what it needs from you. Answer it here, or pick a next step.",
     "budget_title": "{{agent}} used its round budget",
     "no_question": "{{agent}} asked for help without saying what it needs. Reply with how to proceed.",
     "hint_task": "Your reply resumes {{ref}}.",

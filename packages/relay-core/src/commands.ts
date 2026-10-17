@@ -101,6 +101,7 @@ function buildClaudeInvocation(
     // `--mcp-config` is variadic: the `--add-dir` after it ends its values, so
     // it can never swallow the prompt.
     ...claudePermissionPromptArgv(state),
+    ...claudeRelayPathArgv(state, workspace),
     "--add-dir",
     workspace,
     "--verbose",
@@ -133,6 +134,37 @@ function claudePermissionPromptArgv(state: AgentState): string[] {
     },
   };
   return ["--permission-prompt-tool", CLAUDE_PERMISSION_PROMPT_TOOL, "--mcp-config", JSON.stringify(mcpConfig)];
+}
+
+/**
+ * Files Relay itself hands a native local run: its assigned skills, which live
+ * outside the workspace, and its round-result file. Headless Claude refuses a
+ * read outside its directories and any write it cannot ask about, and a run
+ * that cannot file its report leaves its person a stop with nothing to act on
+ * — so these exact paths are allowed up front, and nothing else is.
+ */
+function claudeRelayPathArgv(state: AgentState, workspace: string): string[] {
+  if (trustedExecution()) return [];
+  const rules = [
+    ...(state.skill_paths ?? []).map((path) => `Read(${claudeAbsoluteRulePath(path)}/**)`),
+    ...(state.round_result_file
+      ? [`Edit(${claudeAbsoluteRulePath(`${workspace.replace(/[\\/]+$/, "")}/${state.round_result_file}`)})`]
+      : []),
+  ];
+  // `--allowedTools` is variadic; the `--add-dir` after it ends its values.
+  return rules.length ? ["--allowedTools", ...rules] : [];
+}
+
+/**
+ * Claude's permission-rule form of an absolute path: `//` anchors the rule at
+ * the filesystem root instead of the project. A Windows path keeps its drive
+ * (`//C:/work/...`); a relative path has no such form, so it is refused rather
+ * than silently anchored somewhere else.
+ */
+function claudeAbsoluteRulePath(path: string): string {
+  const slashed = path.replace(/\\/g, "/");
+  if (!/^(?:\/|[A-Za-z]:\/)/.test(slashed)) throw new Error(`Relay path for a Claude permission rule must be absolute: ${path}`);
+  return `//${slashed.replace(/^\//, "")}`;
 }
 
 /** The run's adapter launch, when it is this builder's adapter and the run asks a person. */

@@ -128,3 +128,17 @@ def test_a_reason_recorded_once_per_step_is_quoted_once() -> None:
 def test_acceptance_status_sends_human_acceptance_work_to_review(policy, status, human, expected) -> None:
     task = {"acceptancePolicy": policy}
     assert acceptance_status(task, status, accepted_by_human=human) == expected
+
+
+def test_an_unreported_check_says_so_and_only_a_check_can_be_unreported() -> None:
+    missing = "A required step ended without reporting what it did."
+    task = _waiting(
+        waitingReason=f"The work can't be accepted yet. {missing}",
+        waitingRequest=wait_record("check", "q_req_1", unreported=True),
+    )
+    awaiting = task_awaiting(task)
+    assert awaiting is not None
+    assert awaiting["kind"] == "check" and awaiting["unreported"] is True
+    assert awaiting["text"] == missing
+    assert "unreported" not in wait_record("question", "q_req_2", question="Which?", unreported=True)
+    assert "unreported" not in (task_awaiting(_waiting(waitingRequest=wait_record("check", "q_3"))) or {})

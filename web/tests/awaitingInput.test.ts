@@ -71,6 +71,14 @@ describe("awaitingInput — a task's wait", () => {
     assert.equal(waiting?.run?.logicalAgentId, "agt_reviewer");
   });
 
+  it("carries an unreported check so the prompt points at the agent's last message", () => {
+    const unreported = awaitingInput(session(), [task({ awaiting: wait({ kind: "check", text: "A required step ended without reporting what it did.", unreported: true }) })]);
+    assert.equal(unreported?.kind, "check");
+    assert.equal(unreported?.unreported, true);
+    const gated = awaitingInput(session(), [task({ awaiting: wait({ kind: "check", text: "A required step failed to run." }) })]);
+    assert.equal(gated?.unreported, undefined);
+  });
+
   it("renders gate checks and spent budgets as their own kinds", () => {
     const check = awaitingInput(session(), [task({ awaiting: wait({ kind: "check", text: "A required step failed to run." }) })]);
     assert.equal(check?.kind, "check");

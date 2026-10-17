@@ -118,7 +118,13 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : null)
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));
-  const title = t(TITLE_KEYS[waiting.kind], { agent: agentName });
+  // An agent that never filed its report usually said why in its last
+  // message — a question, a blocker. Quoting the gate instead would put
+  // bookkeeping in front of what the agent actually asked.
+  const unreported = waiting.unreported === true;
+  const title = unreported
+    ? t("awaiting.unreported_title", { agent: agentName })
+    : t(TITLE_KEYS[waiting.kind], { agent: agentName });
   return (
     <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
       <p role="status" className="sr-only">{announced ? title : ""}</p>
@@ -141,7 +147,9 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
           >{ref}</a>
         ) : null}
       </div>
-      {waiting.text ? (
+      {unreported ? (
+        <p className="awaiting-input-quote" data-empty="true">{t("awaiting.unreported_text", { agent: agentName })}</p>
+      ) : waiting.text ? (
         <blockquote className="awaiting-input-quote">{waiting.text}</blockquote>
       ) : (
         <p className="awaiting-input-quote" data-empty="true">{t("awaiting.no_question", { agent: agentName })}</p>
