@@ -1925,6 +1925,7 @@
     "create_runtime_placeholder": "选择运行时…",
     "create_runtime_ready": "可立即使用",
     "create_runtime_empty": "这台电脑没有就绪的运行时。",
+    "create_runtime_pending": "选择一台电脑以查看其运行时。",
     "create_runtime_required": "请选择运行时。",
     "model_label": "模型",
     "model_hint": "运行时默认：使用这台电脑上该运行时已配置的模型。",

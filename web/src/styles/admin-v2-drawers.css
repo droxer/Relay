@@ -82,13 +82,26 @@
   to { transform: translateX(16px); opacity: 0; }
 }
 
+/* 24px above and below the title block, the 32px gutter on the sides. A full
+   32px all round put 64px of air around the header rule and made a two-line
+   title a 107px band — taller than the page header it sits beside. */
 .adm-drawer-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding: var(--sp-7);
+  padding: var(--sp-6) var(--sp-7);
   border-bottom: 0.5px solid var(--line-1);
+}
+
+/* Optical alignment for the close button. Its box is a 36px control around a
+   16px glyph, so on the bare padding edge the glyph sat 10px inside the
+   gutter every other element starts on, and its centre dropped 11px below a
+   single-line title. Pulling the box out by --sp-2 on both sides puts the
+   glyph on the gutter and its centre on the first text line. */
+.adm-drawer-head .overlay-close {
+  margin-top: calc(-1 * var(--sp-2));
+  margin-right: calc(-1 * var(--sp-2));
 }
 
 .adm-drawer-head-text {
@@ -192,14 +205,15 @@
   padding-bottom: 0;
 }
 
+/* The same group-title voice as .adm-provision-section-title, so every
+   drawer titles its sections one way. No leading accent bar: in this system
+   that bar marks the SELECTED row, and on a legend it read as a selection. */
 .adm-form-legend {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-3);
   padding: 0;
   margin-bottom: var(--sp-1);
-  padding-left: var(--sp-3);
-  border-left: var(--accent-bar-w) solid var(--action);
 }
 
 /* Admin form fields (.adm-input / select.adm-input) were replaced by the shadcn

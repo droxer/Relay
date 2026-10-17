@@ -8,14 +8,24 @@
 /* Sections separate by space alone. Each used to sit under a dotted rule
    with a micro-caps title and a right-aligned "Optional", which turned a
    short form into a stack of ruled boxes. */
+/* Field rhythm matches every other drawer form (.adm-form's 24px). At 12px a
+   field's hint sat as close to the NEXT label as to its own control, so the
+   guidance read as belonging to the wrong field. Sections open to 32px so
+   they still group above the field gap. */
 .adm-provision-form {
-  gap: var(--sp-6);
+  gap: var(--sp-7);
 }
 
 .adm-provision-section {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--sp-6);
+}
+
+/* A section's title sits tight on the fields it introduces: 12px, not the
+   24px field gap. Every section leads with its title or titled header. */
+.adm-provision-section > :first-child {
+  margin-bottom: calc(var(--sp-3) - var(--sp-6));
 }
 
 .adm-provision-section-head {
@@ -44,19 +54,13 @@
   color: var(--ink-3);
 }
 
-/* Guidance under a field is supporting text, one step below the label it
-   follows — at the body size it out-weighed the labels themselves. */
-.adm-provision-form [data-slot="field"] > p {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-3);
-}
-
 /* Two short, related fields on one row (display name + email). */
 .adm-provision-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-3);
+  /* Rows at the form's field gap (they stack on a phone), columns at the
+     16px every two-up drawer grid uses. */
+  gap: var(--sp-6) var(--sp-4);
 }
 
 @media (max-width: 820px) {
