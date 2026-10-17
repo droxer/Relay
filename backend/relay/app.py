@@ -370,6 +370,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        computer_installer_routes.warn_if_bundle_stale()
         if notification_bridge:
             notification_bridge.start()
         if mode == "embedded":

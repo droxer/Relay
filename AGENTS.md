@@ -105,7 +105,11 @@ newer and `uv` are required for the backend.
   the built JS.
 - Run the Python backend: `make backend` (default port `8790`). Serves the
   exported web UI at the root path `/` and starts the background task scheduler
-  by default.
+  by default. It first rebuilds the computer installer bundle
+  (`backend/relay/computer/daemon.tar.gz`, what `relay update` installs) when
+  the client sources are newer; the backend warns at startup when the bundle's
+  `capabilities.json` lacks a capability it requires, since every computer it
+  installs would read as outdated.
 - Run the backend on a second port: `make serve`; default port is `8787`,
   override with `PORT=9000`. Same full application as `make backend`; only the
   port default differs.
