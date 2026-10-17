@@ -5678,6 +5678,9 @@ def test_a_round_that_reports_no_verdict_waits_for_a_human() -> None:
                 "did not write .relay/round-result.json" in item["message"]
                 for item in waiting["activity"]
             )
+            # Its last message, not the gate, says what it needs.
+            assert waiting["waitingRequest"]["kind"] == "check"
+            assert waiting["waitingRequest"]["unreported"] is True
 
     asyncio.run(run_flow())
 
@@ -8598,6 +8601,8 @@ def test_a_rejected_verdict_file_says_why_on_the_task() -> None:
             assert waiting["status"] == "waiting_for_human"
             messages = [item["message"] for item in waiting["activity"]]
             assert any("runId" in message for message in messages), messages
+            # The agent did file a report; the refusal is the thing to quote.
+            assert "unreported" not in waiting["waitingRequest"]
 
     asyncio.run(run_flow())
 

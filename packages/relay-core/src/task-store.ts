@@ -79,6 +79,8 @@ export interface TaskWaitingRequest {
   inputOptions?: string[];
   /** Acceptance-gate reasons the question stood in front of. */
   inputNotes?: string[];
+  /** A check whose agent ended without filing its report. */
+  unreported?: boolean;
 }
 
 /** What a waiting task asks, as every surface renders it. */
@@ -96,6 +98,9 @@ export interface TaskAwaiting {
   sessionId: string | null;
   /** False for a routine template: shown, never resumed by a reply. */
   resumable: boolean;
+  /** A check whose agent ended its turn without filing its report: its last
+   *  message, not the gate reason, says what it needs. */
+  unreported?: boolean;
 }
 
 export interface RelayTask {

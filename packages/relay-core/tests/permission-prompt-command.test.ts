@@ -115,3 +115,42 @@ test("every runtime declares a permission prompt adapter", () => {
   assert.deepEqual(getAgent("kimi").permissionPrompts, { kind: "adapter", adapter: "kimi-acp" });
   assert.deepEqual(getAgent("pi").permissionPrompts, { kind: "adapter", adapter: "pi-extension" });
 });
+
+/** The `--allowedTools` rules up to the next flag. */
+function allowedToolRules(command: string): string[] {
+  const start = command.indexOf("--allowedTools ");
+  if (start < 0) return [];
+  const rest = command.slice(start + "--allowedTools ".length);
+  return rest.slice(0, rest.indexOf("--add-dir")).trim().split(" ").map((word) => word.replace(/^'|'$/g, ""));
+}
+
+const reporting = {
+  ...initialAgentState("task"),
+  skill_paths: ["/Users/ada/.relay/managed-skills/views/v1/skills/karpathy"],
+  round_result_file: ".relay/round-result.json",
+};
+
+test("a native local Claude run may read its skills and write its report without asking", () => withEnv(LOCAL, () => {
+  const command = buildClaudeCommand(reporting, "/Users/ada/work/");
+  assert.deepEqual(allowedToolRules(command), [
+    "Read(//Users/ada/.relay/managed-skills/views/v1/skills/karpathy/**)",
+    "Edit(//Users/ada/work/.relay/round-result.json)",
+  ]);
+  // The variadic --allowedTools is closed by --add-dir before the prompt.
+  assert.ok(command.indexOf("--allowedTools") < command.indexOf("--add-dir"));
+}));
+
+test("Windows paths keep their drive in Claude's root-anchored rule form", () => withEnv(LOCAL, () => {
+  const command = buildClaudeCommand({ ...reporting, skill_paths: ["C:\\Users\\ada\\skills\\x"] }, "C:\\work");
+  assert.deepEqual(allowedToolRules(command), ["Read(//C:/Users/ada/skills/x/**)", "Edit(//C:/work/.relay/round-result.json)"]);
+}));
+
+test("a relative Relay path is refused rather than anchored at the wrong root", () => withEnv(LOCAL, () => {
+  assert.throws(() => buildClaudeCommand({ ...reporting, skill_paths: ["skills/x"] }, "/w"), /must be absolute/);
+}));
+
+test("a run with nothing of Relay's to touch, or one that bypasses permissions, adds no rules", () => {
+  withEnv(LOCAL, () => assert.doesNotMatch(buildClaudeCommand(initialAgentState("task"), "/w"), /--allowedTools/));
+  withEnv({ ...LOCAL, RELAY_LOCAL_PERMISSION_POLICY: "trusted" }, () => assert.doesNotMatch(buildClaudeCommand(reporting, "/w"), /--allowedTools/));
+  withEnv({}, () => assert.doesNotMatch(buildClaudeCommand(reporting, "/w"), /--allowedTools/));
+});

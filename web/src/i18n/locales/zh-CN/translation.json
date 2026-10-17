@@ -2217,6 +2217,8 @@
   "awaiting": {
     "question_title": "{{agent}} 需要你的回答",
     "check_title": "{{agent}} 在完成前停下了",
+    "unreported_title": "{{agent}} 结束时没有提交报告",
+    "unreported_text": "它在上方的最后一条消息里说明了停在哪里、需要你做什么。请在这里回复，或选择下一步。",
     "budget_title": "{{agent}} 已用完轮次预算",
     "no_question": "{{agent}} 请求帮助，但没有说明需要什么。请回复下一步该怎么做。",
     "hint_task": "回复后将继续 {{ref}}。",
