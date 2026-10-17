@@ -160,8 +160,11 @@
     border-right: 0;
   }
 
-  /* Row rule only when a second row exists below it. */
-  .record-band-cell:nth-child(-n + 2):nth-last-child(n + 3) {
+  /* Row rule only when a second row exists below it. Not on the panel
+     variant: it is a one-column property list with no rules, and this
+     selector out-ranks the panel's `border: 0`, ruling under its first two
+     facts on every phone-width record. */
+  .record-band:not(.record-band--panel) > .record-band-cell:nth-child(-n + 2):nth-last-child(n + 3) {
     border-bottom: 0.5px solid var(--line-1);
   }
 }

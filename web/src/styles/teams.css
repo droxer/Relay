@@ -375,7 +375,7 @@
 .team-member-row-remove {
   display: grid;
   place-items: center;
-  width: 26px;
+  width: var(--control-h-2xs);
   height: var(--control-h-2xs);
   padding: 0;
   border-radius: var(--r-1);
@@ -578,7 +578,7 @@
   align-self: start;
   display: grid;
   place-items: center;
-  width: 26px;
+  width: var(--control-h-2xs);
   height: var(--control-h-2xs);
   padding: 0;
   border-radius: var(--r-1);

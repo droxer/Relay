@@ -242,10 +242,10 @@ export function AddNodeDrawer({
           <header className="adm-provision-section-head">
             <h3 id={assignmentHeadingId} className="adm-provision-section-title">
               {t("admin.v2.section_assignment")}
+              <span className="adm-provision-section-meta">
+                {t(isManaged ? "admin.v2.required" : "admin.v2.optional")}
+              </span>
             </h3>
-            <span className="adm-provision-section-meta">
-              {t(isManaged ? "admin.v2.required" : "admin.v2.optional")}
-            </span>
           </header>
 
           {hasUsers ? (

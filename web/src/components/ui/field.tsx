@@ -77,14 +77,16 @@ function Field({
           </span>
         ) : null}
         {optional ? (
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-xs font-normal text-muted-foreground">
             {optional}
           </span>
         ) : null}
       </Label>
       {children}
+      {/* --type-body-sm: supporting text sits at the label's size, never above
+          it — at text-sm the guidance out-weighed the label and the value. */}
       {hint ? (
-        <p className="m-0 text-sm leading-normal text-muted-foreground">{hint}</p>
+        <p className="m-0 text-xs leading-snug text-muted-foreground">{hint}</p>
       ) : null}
       {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </Wrapper>

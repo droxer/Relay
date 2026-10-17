@@ -281,7 +281,11 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
                 );
               })}
             </RadioGroup>
-            {computerId && runtimeOptions.length === 0 ? (
+            {/* Without a computer the group has no options, so the label
+                would stand over nothing; say what unlocks it. */}
+            {!computerId ? (
+              <p className="adm-form-hint">{t("agents_page.create_runtime_pending")}</p>
+            ) : runtimeOptions.length === 0 ? (
               <p className="adm-form-hint">{t("agents_page.create_runtime_empty")}</p>
             ) : null}
           </Field>

@@ -110,7 +110,9 @@
 .record-run-link {
   flex: 1;
   min-width: 0;
-  min-height: 2.75rem;
+  /* --control-h-lg, not 2.75rem: that was 44px on a 16px root, but the app
+     root is 14px, so it rendered an off-scale 38.5px row. */
+  min-height: var(--control-h-lg);
   padding-block: var(--sp-2);
   border: 0;
   border-radius: var(--r-2);
@@ -193,7 +195,7 @@
   align-items: center;
   justify-content: center;
   width: var(--control-h-xs);
-  height: 2.75rem;
+  height: var(--control-h-lg);
   border-radius: var(--r-2);
   color: var(--ink-4);
 }
@@ -453,12 +455,6 @@
   padding-inline: var(--sp-4);
 }
 
-/* The band runs edge to edge, but its first fact starts on the gutter the
-   tabs above and the section below both start on. */
-.record-drawer .record-band-cell:first-child {
-  padding-left: var(--sp-7);
-}
-
 /* The paused notice under the band starts where the band's first fact does. */
 .record-drawer .record-automation-paused {
   padding-inline: var(--sp-7);
@@ -493,10 +489,6 @@
 
   .record-runs-message {
     padding: var(--sp-4);
-  }
-
-  .record-drawer .record-band-cell:first-child {
-    padding-left: var(--sp-4);
   }
 
   .record-drawer .record-automation-paused {
