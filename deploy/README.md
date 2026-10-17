@@ -113,8 +113,10 @@ Connecting a repository may trigger an automatic deployment. The release phase
 also requests an explicit deployment pinned to the intended SHA and waits for
 that ID; it does not assume an implicit build is the requested release.
 
-The backend's pre-deploy commands apply Relay's Alembic migrations and then
-initialize the Procrastinate schema (`relay worker-schema`, idempotent).
+The backend's single pre-deploy command runs `/bin/sh -c` to apply Relay's
+Alembic migrations and then initialize the Procrastinate schema
+(`relay worker-schema`, idempotent), joined with `&&` so a failed migration
+stops deployment. Railway accepts at most one entry in `preDeployCommand`.
 `relay serve-with-worker` starts the API (`relay serve`) and background worker
 (`relay worker`) as supervised processes, with `RELAY_BACKGROUND_MODE=external`.
 They share the database, configuration, and `/data` skill files; no additional

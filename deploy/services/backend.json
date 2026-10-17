@@ -3,8 +3,7 @@
   "dockerfilePath": "backend/Dockerfile",
   "startCommand": "relay serve-with-worker",
   "preDeployCommand": [
-    "alembic -c backend/alembic.ini upgrade head",
-    "relay worker-schema"
+    "/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'"
   ],
   "healthcheckPath": "/healthz",
   "healthcheckTimeout": 120,

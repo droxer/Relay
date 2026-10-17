@@ -159,6 +159,8 @@ def railway(op, v):
     if op == "ServiceCreate":
         return {"serviceCreate": {"id": add_service(v["input"]["name"])}}
     if op == "ServiceConfig":
+        commands = v["input"].get("preDeployCommand")
+        assert commands is None or (isinstance(commands, list) and len(commands) <= 1), "Error in preDeployCommand - Invalid input"
         assert not v["input"].get("railwayConfigFile"), "Config as Code is deprecated"
         assert v["input"].get("builder") in {"HEROKU", "NIXPACKS", "PAKETO", "RAILPACK"}, "Problem processing request: invalid GraphQL Builder enum"
         svc = service(v["serviceId"])

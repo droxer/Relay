@@ -164,7 +164,7 @@ WEB=$(svc relay-web)
 check "one project named relay" '.projects | length == 1 and ([.[] | .name] == ["relay"])'
 check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend"]'
 
-check "backend Dockerfile, migrations, worker, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve-with-worker\" and .preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\", \"relay worker-schema\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
+check "backend Dockerfile, migrations, worker, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve-with-worker\" and .preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
 check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
@@ -242,7 +242,7 @@ curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer 
   '{query: "mutation VariablesUpsert { variableCollectionUpsert }", variables: {input: {serviceId: $id, variables: {RELAY_BACKGROUND_MODE: "embedded", CUSTOM_RUNTIME_SETTING: "keep-me", RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "90"}, skipDeploys: true}}}')" >/dev/null
 deploy release 2>"$WORK/legacy-release.log" || { cat "$WORK/legacy-release.log"; exit 1; }
 STATE=$(state)
-check "release installs the supervisor and queue setup" "$BACKEND | .config.startCommand == \"relay serve-with-worker\" and .config.preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\", \"relay worker-schema\"]"
+check "release installs the supervisor and queue setup" "$BACKEND | .config.startCommand == \"relay serve-with-worker\" and .config.preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"]"
 check "release enables external mode without replacing custom variables" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.CUSTOM_RUNTIME_SETTING == \"keep-me\""
 check "release preserves a longer configured drain period" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"90\""
 
