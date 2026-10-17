@@ -361,6 +361,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        computer_installer_routes.warn_if_bundle_stale()
         if notification_bridge:
             notification_bridge.start()
         execution_lifecycle.start()

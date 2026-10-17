@@ -404,3 +404,52 @@ def test_windows_commands_quote_every_argument_for_powershell(monkeypatch):
         "& ([scriptblock]::Create((irm 'https://api.example.com/install.ps1'))) "
         "'--sandbox-id' 'node-1' '--user-id' 'alice' '--workspace' 'C:\\Users\\o''brien\\My Work $(evil)'"
     )
+
+
+def _bundle_with(tmp_path, manifest):
+    import io
+    import json
+    import tarfile
+
+    path = tmp_path / "daemon.tar.gz"
+    with tarfile.open(path, "w:gz") as archive:
+        if manifest is not None:
+            data = json.dumps(manifest).encode()
+            info = tarfile.TarInfo("node_modules/relay-daemon/capabilities.json")
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return path
+
+
+def test_a_bundle_lacking_a_required_capability_is_named(tmp_path):
+    from relay.api.computer_installer_routes import bundle_missing_capabilities
+    from relay.daemon_registry.registry import DAEMON_NODE_CAPABILITIES
+
+    current = _bundle_with(tmp_path, {"capabilities": sorted(DAEMON_NODE_CAPABILITIES)})
+    assert bundle_missing_capabilities(current) == []
+    stale = _bundle_with(tmp_path, {"capabilities": sorted(DAEMON_NODE_CAPABILITIES - {"project-links"})})
+    assert bundle_missing_capabilities(stale) == ["project-links"]
+    # Built before the manifest existed: nothing to compare, which is itself stale.
+    assert bundle_missing_capabilities(_bundle_with(tmp_path, None)) is None
+
+
+def test_startup_warns_about_a_stale_bundle(monkeypatch, tmp_path):
+    from loguru import logger
+    from relay.api.computer_installer_routes import warn_if_bundle_stale
+
+    messages: list[str] = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
+    try:
+        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(_bundle_with(tmp_path, {"capabilities": []})))
+        warn_if_bundle_stale()
+        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(tmp_path / "missing"))
+        warn_if_bundle_stale()
+        not_a_tar = tmp_path / "broken.tar.gz"
+        not_a_tar.write_bytes(b"not a tarball")
+        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(not_a_tar))
+        warn_if_bundle_stale()
+    finally:
+        logger.remove(sink)
+    assert len(messages) == 2
+    assert "will read as outdated" in messages[0]
+    assert "unreadable" in messages[1]

@@ -2,20 +2,25 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shlex
+import tarfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from loguru import logger
 
 from ..core.deploy_config import public_web_url
+from ..daemon_registry.registry import DAEMON_NODE_CAPABILITIES
 from .helpers import backend_base_url
 
 router = APIRouter()
 ASSETS = Path(__file__).resolve().parents[1] / "computer"
+BUNDLE_MANIFEST = "node_modules/relay-daemon/capabilities.json"
 
 
 def computer_setup_command(request: Request) -> str:
@@ -57,12 +62,57 @@ def computer_windows_install_command(request: Request, node: dict[str, Any]) -> 
 
 
 def _bundle() -> tuple[Path, str]:
-    path = Path(os.environ.get("RELAY_COMPUTER_BUNDLE", str(ASSETS / "daemon.tar.gz")))
+    path = bundle_path()
     if not path.is_file():
         raise HTTPException(503, "Computer installer is not built. Run npm run build:computer before deploying.")
     with path.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     return path, digest
+
+
+def bundle_path() -> Path:
+    return Path(os.environ.get("RELAY_COMPUTER_BUNDLE", str(ASSETS / "daemon.tar.gz")))
+
+
+def bundle_missing_capabilities(path: Path) -> list[str] | None:
+    """Capabilities this backend requires that the bundled daemon lacks.
+
+    Every computer installed or updated from a bundle missing one reads as
+    outdated forever, so the backend checks at startup. ``None`` means the
+    bundle records no manifest (built before it did) and cannot be checked.
+    """
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            member = archive.extractfile(BUNDLE_MANIFEST)
+            manifest = json.load(member) if member else None
+    except KeyError:
+        return None
+    advertised = set((manifest if isinstance(manifest, dict) else {}).get("capabilities") or [])
+    return sorted(DAEMON_NODE_CAPABILITIES - advertised)
+
+
+def warn_if_bundle_stale() -> None:
+    """Log, never fail: a backend without a usable bundle still serves everything else."""
+    path = bundle_path()
+    if not path.is_file():
+        return
+    # The log format prints only the message, so the details go in it.
+    try:
+        missing = bundle_missing_capabilities(path)
+    except (OSError, tarfile.TarError, ValueError) as error:
+        logger.warning("Computer installer bundle {} is unreadable: {}", path, error)
+        return
+    if missing is None:
+        logger.warning(
+            "Computer installer bundle {} predates this backend; run `npm run build:computer`", path,
+        )
+    elif missing:
+        logger.warning(
+            "Computer installer bundle {} lacks {}; computers it installs or updates will read "
+            "as outdated. Run `npm run build:computer`",
+            path,
+            ", ".join(missing),
+        )
 
 
 def _render(template: str, origin: str, digest: str, quote: Any) -> str:

@@ -22,6 +22,11 @@ SUPERVISOR_WORKSPACE_ROOT ?= .relay/user-workspaces
 SUPERVISOR_INTERVAL_MS ?=
 SUPERVISOR_ONCE ?=
 ADMIN_TOKEN ?=
+# The installer every `relay update` downloads. Rebuilt whenever the client
+# sources are newer, or the backend would keep handing computers an old client.
+COMPUTER_BUNDLE := backend/relay/computer/daemon.tar.gz
+COMPUTER_BUNDLE_SOURCES := $(shell find packages/relay-core/src packages/relay-daemon/src -name '*.ts') \
+	packages/relay-core/package.json packages/relay-daemon/package.json tools/build-computer.mjs
 
 .PHONY: devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
 
@@ -57,7 +62,12 @@ pre-commit-install: backend-install
 pre-commit-run:
 	UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pre-commit run --all-files
 
-backend:
+# A failed build must not keep the backend down; its startup check names the
+# stale bundle instead, and the next `make backend` tries again.
+$(COMPUTER_BUNDLE): $(COMPUTER_BUNDLE_SOURCES)
+	-npm run build:computer
+
+backend: $(COMPUTER_BUNDLE)
 	$(if $(filter command line environment,$(origin BACKEND_PORT)),BACKEND_PORT="$(BACKEND_PORT)" )UV_CACHE_DIR=.uv-cache uv run --project backend relay
 
 backend-test:
@@ -92,7 +102,7 @@ supervisor-test:
 	./node_modules/.bin/tsc -p packages/tsconfig.json
 	node --test dist/packages/relay-supervisor/tests/supervisor.test.js
 
-serve:
+serve: $(COMPUTER_BUNDLE)
 	$(if $(filter command line environment,$(origin PORT)),BACKEND_PORT="$(PORT)" )UV_CACHE_DIR=.uv-cache uv run --project backend relay serve
 
 web-install:
