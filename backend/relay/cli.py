@@ -53,6 +53,20 @@ def rehearse_user_handles(database_url: str) -> dict:
     return {"plan": plan, **summarize(plan)}
 
 
+def check_agent_computer_ids(database_url: str) -> dict:
+    """Which agents and placements the startup migration would still rewrite."""
+    from .migrations_runtime.agent_computer_id import (
+        pending_agent_computer_id_migrations,
+    )
+    from .persistence.agent_placement_store import DatabaseAgentPlacementStore
+    from .persistence.agent_store import DatabaseAgentStore
+
+    return pending_agent_computer_id_migrations(
+        DatabaseAgentStore(database_url),
+        DatabaseAgentPlacementStore(database_url),
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="relay", description="Relay Python backend")
     parser.add_argument(
@@ -71,6 +85,7 @@ def main(argv: list[str] | None = None) -> None:
             "backup-database",
             "rehearse-user-handles",
             "storage-report",
+            "check-agent-computer-ids",
         ],
     )
     parser.add_argument("--host", default=deploy_config.bind_host())
@@ -142,6 +157,15 @@ def main(argv: list[str] | None = None) -> None:
         # suffixed — the questions a backfill can only answer against real data.
         report = rehearse_user_handles(
             database_url_from_env(setting="rehearse-user-handles")
+        )
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "check-agent-computer-ids":
+        # Reads only. Run it against production (or a fresh copy): an empty
+        # report means the startup migration in migrations_runtime/ has
+        # nothing left to convert there and can be removed.
+        report = check_agent_computer_ids(
+            database_url_from_env(setting="check-agent-computer-ids")
         )
         print(json.dumps(report, indent=2))
         return

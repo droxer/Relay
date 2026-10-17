@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..core.agent_names import generate_agent_name
+from ..core.computer_identity import is_provisional_computer_id
 from ..core.ids import new_database_id, now_iso
 from ..core.model_policy import normalize_model_policy, policy_model
 from ..core.models import AGENT_NAMES, AGENT_ROLES
@@ -96,46 +97,10 @@ class LocalAgentStore:
         *,
         computer_id: str | None = None,
     ) -> dict[str, Any]:
-        if executor_kind not in AGENT_NAMES:
-            raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
-        key = _compatibility_key(
-            supervisor_user_id, computer_id or daemon_node_id, executor_kind
-        )
-        legacy_key = _compatibility_key(
-            supervisor_user_id, daemon_node_id, executor_kind
-        )
         with self._lock:
-            owned = self.list_agents(supervisor_user_id=supervisor_user_id)
-            existing = next(
-                (agent for agent in owned if agent.get("compatibilityKey") == key),
-                None,
+            return _ensure_compatibility_agent(
+                self, supervisor_user_id, executor_kind, daemon_node_id, computer_id
             )
-            if existing:
-                return _migrate_compatibility_display_name(
-                    self, existing, supervisor_user_id, executor_kind
-                )
-            legacy = next(
-                (
-                    agent
-                    for agent in owned
-                    if key != legacy_key and agent.get("compatibilityKey") == legacy_key
-                ),
-                None,
-            )
-            if legacy:
-                migrated = self.update_agent(legacy["id"], {"compatibilityKey": key})
-                return _migrate_compatibility_display_name(
-                    self, migrated, supervisor_user_id, executor_kind
-                )
-            agent = _new_agent(
-                supervisor_user_id,
-                {
-                    "displayName": _compatibility_display_name(owned, executor_kind),
-                    "executorKind": executor_kind,
-                    "defaultRole": "implementer",
-                },
-            )
-            return self._create_agent({**agent, "compatibilityKey": key})
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
         snapshot = self._snapshot_path(agent_id)
@@ -435,44 +400,9 @@ class DatabaseAgentStore:
         *,
         computer_id: str | None = None,
     ) -> dict[str, Any]:
-        if executor_kind not in AGENT_NAMES:
-            raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
-        key = _compatibility_key(
-            supervisor_user_id, computer_id or daemon_node_id, executor_kind
+        return _ensure_compatibility_agent(
+            self, supervisor_user_id, executor_kind, daemon_node_id, computer_id
         )
-        legacy_key = _compatibility_key(
-            supervisor_user_id, daemon_node_id, executor_kind
-        )
-        owned = self.list_agents(supervisor_user_id=supervisor_user_id)
-        existing = next(
-            (agent for agent in owned if agent.get("compatibilityKey") == key), None
-        )
-        if existing:
-            return _migrate_compatibility_display_name(
-                self, existing, supervisor_user_id, executor_kind
-            )
-        legacy = next(
-            (
-                agent
-                for agent in owned
-                if key != legacy_key and agent.get("compatibilityKey") == legacy_key
-            ),
-            None,
-        )
-        if legacy:
-            migrated = self.update_agent(legacy["id"], {"compatibilityKey": key})
-            return _migrate_compatibility_display_name(
-                self, migrated, supervisor_user_id, executor_kind
-            )
-        agent = _new_agent(
-            supervisor_user_id,
-            {
-                "displayName": _compatibility_display_name(owned, executor_kind),
-                "executorKind": executor_kind,
-                "defaultRole": "implementer",
-            },
-        )
-        return self._create_agent({**agent, "compatibilityKey": key})
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
@@ -896,6 +826,79 @@ def _normalized_agent_snapshot(
         or supervisor_user_id
     )
     return {**agent, "supervisorUserId": owner} if owner else agent
+
+
+def _ensure_compatibility_agent(
+    store: Any,
+    supervisor_user_id: str,
+    executor_kind: str,
+    daemon_node_id: str,
+    computer_id: str | None,
+) -> dict[str, Any]:
+    """The agent a legacy ``assignments: [{agent}]`` run executes as.
+
+    On a stable Computer the run gets a declared agent — reused when one of
+    this runtime already lives there, else born with its ``computerId`` — so
+    nothing is left for the startup migration to convert. Only a provisional
+    ``node:`` identity still mints a keyed compatibility agent; daemon sync
+    promotes it once the node reports a stable identity.
+    """
+    if executor_kind not in AGENT_NAMES:
+        raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
+    key = _compatibility_key(
+        supervisor_user_id, computer_id or daemon_node_id, executor_kind
+    )
+    legacy_key = _compatibility_key(supervisor_user_id, daemon_node_id, executor_kind)
+    owned = [
+        agent
+        for agent in store.list_agents(supervisor_user_id=supervisor_user_id)
+        if not agent.get("deletedAt")
+    ]
+    existing = next(
+        (agent for agent in owned if agent.get("compatibilityKey") == key), None
+    )
+    if existing:
+        return _migrate_compatibility_display_name(
+            store, existing, supervisor_user_id, executor_kind
+        )
+    legacy = next(
+        (
+            agent
+            for agent in owned
+            if key != legacy_key and agent.get("compatibilityKey") == legacy_key
+        ),
+        None,
+    )
+    if legacy:
+        migrated = store.update_agent(legacy["id"], {"compatibilityKey": key})
+        return _migrate_compatibility_display_name(
+            store, migrated, supervisor_user_id, executor_kind
+        )
+    stable = bool(computer_id) and not is_provisional_computer_id(computer_id)
+    if stable:
+        declared = sorted(
+            (
+                agent
+                for agent in owned
+                if not agent.get("compatibilityKey")
+                and agent.get("enabled", True)
+                and agent.get("executorKind") == executor_kind
+                and agent.get("computerId") == computer_id
+            ),
+            key=lambda agent: (agent.get("createdAt") or "", agent["id"]),
+        )
+        if declared:
+            return declared[0]
+    agent = _new_agent(
+        supervisor_user_id,
+        {
+            "displayName": _compatibility_display_name(owned, executor_kind),
+            "executorKind": executor_kind,
+            "defaultRole": "implementer",
+            **({"computerId": computer_id} if stable else {}),
+        },
+    )
+    return store._create_agent(agent if stable else {**agent, "compatibilityKey": key})
 
 
 def _compatibility_key(

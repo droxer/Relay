@@ -43,6 +43,7 @@ deploy/deploy.sh railway     # project, Postgres, services, variables, volume, c
 deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
 deploy/deploy.sh release     # deploy the backend, then build and publish the web UI Worker
 deploy/deploy.sh verify      # probe the live hostnames
+deploy/deploy.sh agent-ids   # read Computer ID migration status from backend startup logs
 deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION (see below)
 ```
 
@@ -64,6 +65,17 @@ Railway publishes a custom domain's DNS records shortly after the domain is
 added. If `cloudflare` warns that they are not ready, re-run it a minute later.
 Certificates are issued through the `_acme-challenge` records, which stay
 DNS-only, so the traffic records can be proxied from the start.
+
+The Computer ID data migration runs automatically when the backend starts,
+including production deployments through `up` or `release`. After deployment,
+run `deploy.sh agent-ids` to read its status from the newest successful backend
+deployment's logs, even if a later release failed. This command only reads
+Railway: it does not create resources or require direct database access.
+It exits successfully for `agent-computer-ids converged`, and nonzero for
+pending records, missing status logs, or no recent successful deployment.
+The result is a startup snapshot; daemon registration may repair records
+afterward. For a current read against an accessible database, run
+`relay check-agent-computer-ids` with that database's `DATABASE_URL`.
 
 ## The web UI Worker
 

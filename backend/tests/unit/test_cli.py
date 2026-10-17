@@ -40,6 +40,27 @@ def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
     assert uvicorn_options["forwarded_allow_ips"] == "10.0.0.0/8"
 
 
+def test_agent_computer_id_check_prints_the_read_only_report(
+    monkeypatch, capsys
+) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr(cli, "setup_logging", lambda: None)
+    monkeypatch.setattr(
+        cli, "database_url_from_env", lambda setting: "sqlite:///check.db"
+    )
+    monkeypatch.setattr(
+        cli,
+        "check_agent_computer_ids",
+        lambda url: seen.append(url)
+        or {"agents": [], "placements": [], "converged": True},
+    )
+
+    cli.main(["check-agent-computer-ids"])
+
+    assert seen == ["sqlite:///check.db"]
+    assert '"converged": true' in capsys.readouterr().out
+
+
 def test_storage_report_command_prints_the_read_only_report(
     monkeypatch, capsys
 ) -> None:

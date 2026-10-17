@@ -6,6 +6,7 @@
 #   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache, speed settings
 #   deploy/deploy.sh release     deploy the backend and the web UI, wait
 #   deploy/deploy.sh verify      check the live hostnames
+#   deploy/deploy.sh agent-ids   inspect the backend's startup Computer ID migration status
 #   deploy/deploy.sh region      move Postgres and the services to RAILWAY_REGION
 #                                (offline for minutes; back up first)
 #
@@ -27,7 +28,7 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/verify.sh"
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'
 }
 
 # $DEPLOY_CONFIG, else deploy/.env, else deploy/config.env (both git-ignored).
@@ -265,10 +266,19 @@ phase_verify() {
   verify_deployment "$BACKEND_ID"
 }
 
+phase_agent_ids() {
+  log "Agent Computer IDs: startup migration status"
+  railway_resolve_context existing
+  local backend_id
+  backend_id=$(railway_service_id "$BACKEND_SERVICE")
+  [ -n "$backend_id" ] || die "service $BACKEND_SERVICE not found — run 'deploy.sh railway' first"
+  railway_agent_computer_id_status "$backend_id"
+}
+
 main() {
   local command=${1:-}
   case $command in
-    up | railway | cloudflare | release | verify | region) ;;
+    up | railway | cloudflare | release | verify | region | agent-ids) ;;
     -h | --help | help | "")
       usage
       [ -n "$command" ] || exit 2
@@ -295,6 +305,7 @@ main() {
     release) phase_release ;;
     verify) phase_verify ;;
     region) phase_region ;;
+    agent-ids) phase_agent_ids ;;
   esac
 }
 
