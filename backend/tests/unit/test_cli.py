@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from relay import cli
+import pytest
+from unittest.mock import AsyncMock
 
 
 def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
@@ -56,3 +58,20 @@ def test_storage_report_command_prints_the_read_only_report(
 
     assert seen == ["sqlite:///report.db"]
     assert '"inlineContent"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("command", ["worker", "worker-schema"])
+def test_worker_commands_do_not_start_an_http_server(monkeypatch, command, tmp_path):
+    from relay import background
+    worker, schema = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(background, "run_worker", worker)
+    monkeypatch.setattr(background, "apply_worker_schema", schema)
+    monkeypatch.setattr(cli, "setup_logging", lambda: None)
+    monkeypatch.setattr(cli, "create_app", lambda *args: pytest.fail("HTTP application startup"))
+    cli.main([command, "--data-dir", str(tmp_path)])
+    if command == "worker":
+        worker.assert_awaited_once_with(str(tmp_path))
+        schema.assert_not_awaited()
+    else:
+        schema.assert_awaited_once()
+        worker.assert_not_awaited()

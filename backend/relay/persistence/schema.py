@@ -29,4 +29,16 @@ from . import profile_image_store as _profile_image_store  # noqa: F401
 from . import waitlist_store as _waitlist_store  # noqa: F401
 from .store_common import metadata
 
-__all__ = ["metadata"]
+def include_alembic_object(obj, name, type_, reflected, compare_to) -> bool:
+    """Leave vendor-owned queue tables out of Alembic autogeneration.
+
+    Other unknown tables still surface as drift. An explicitly declared Relay
+    table is always included, even if its name shares the vendor prefix.
+    """
+    return not (
+        type_ == "table" and name.startswith("procrastinate_")
+        and reflected and compare_to is None
+    )
+
+
+__all__ = ["metadata", "include_alembic_object"]
