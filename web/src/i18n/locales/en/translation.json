@@ -749,6 +749,8 @@
     "empty_file": "This file is empty.",
     "file_truncated": "Preview truncated to {{limit}}. Download unavailable for a truncated file.",
     "no_files": "No files in this directory.",
+    "artifacts_empty": "No artifacts yet. Files agents deliver appear here.",
+    "activity_empty": "No thread records yet. Each thread's handoff notes appear here.",
     "loading_files": "Loading files…",
     "files_unavailable": "No thread workspace is selected.",
     "source_live": "Live",

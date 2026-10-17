@@ -186,6 +186,12 @@ describe("app pathname routes", () => {
       canonicalBrowserUrl("/projects/project-1", "?tab=workspace&scope=shared&path=src&item=file%3Aa.ts"),
       "/projects/project-1?tab=workspace&path=src&item=file%3Aa.ts",
     );
+    // The workspace root rides as "/" — an empty value would be dropped and
+    // read back as the default Artifacts tab.
+    assert.equal(
+      canonicalBrowserUrl("/projects/project-1", "?tab=workspace&path=%2F"),
+      "/projects/project-1?tab=workspace&path=%2F",
+    );
     assert.equal(
       canonicalBrowserUrl("/projects/project-1", "?tab=activities&path=stale&item=file%3Aa.ts"),
       "/projects/project-1",

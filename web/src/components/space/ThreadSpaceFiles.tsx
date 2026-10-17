@@ -14,6 +14,7 @@ import {
 } from "../workspace/WorkspaceFileList";
 import { WorkspaceFileTabs } from "../workspace/WorkspaceFileTabs";
 import {
+  DEFAULT_WORKSPACE_BROWSE_PATH,
   WORKSPACE_FILE_TAB_ROOT,
   workspaceFileTabForPath,
 } from "../../lib/workspaceFileTabs";
@@ -51,7 +52,7 @@ export function ThreadSpaceFiles({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [path, setPath] = useState("artifacts");
+  const [path, setPath] = useState(DEFAULT_WORKSPACE_BROWSE_PATH);
   const setSelectedPath = onSelectPath;
   const selectedName = selectedPath ? selectedPath.split("/").at(-1) || selectedPath : "";
 
@@ -131,7 +132,7 @@ export function ThreadSpaceFiles({
   return (
     <div className="thread-space-files">
       <WorkspaceFileTabs
-        tab={workspaceFileTabForPath(path) ?? "artifacts"}
+        tab={workspaceFileTabForPath(path)}
         onSelect={(tab) => openDirectory(WORKSPACE_FILE_TAB_ROOT[tab])}
       />
       <div className="thread-space-files-bar">

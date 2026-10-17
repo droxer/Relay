@@ -10,6 +10,11 @@ import type {
   ProjectWorkspaceFilesResponse,
 } from "../types";
 import { workspaceHomeStatus } from "../lib/workspaceHome";
+import {
+  DEFAULT_WORKSPACE_BROWSE_PATH,
+  parseWorkspaceBrowsePath,
+  serializeWorkspaceBrowsePath,
+} from "../lib/workspaceFileTabs";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { useWorkspaceFileView } from "./workspace/WorkspaceFilePreview";
 import { WorkspaceFilePanes } from "./workspace/WorkspaceFilePanes";
@@ -39,7 +44,12 @@ function WorkspaceFileBrowser({
   projectId: string;
   refreshVersion: number;
 }) {
-  const [filePath, setFilePath] = useUrlSearchState("path", "artifacts", parseString, (value) => value || null);
+  const [filePath, setFilePath] = useUrlSearchState(
+    "path",
+    DEFAULT_WORKSPACE_BROWSE_PATH,
+    parseWorkspaceBrowsePath,
+    serializeWorkspaceBrowsePath,
+  );
   const [selectedKey, setSelectedKey] = useUrlSearchState("item", "", parseString, (value) => value || null);
   const selectedPath = selectedKey.startsWith("file:") ? selectedKey.slice(5) : "";
   const fileQuery = useQuery({

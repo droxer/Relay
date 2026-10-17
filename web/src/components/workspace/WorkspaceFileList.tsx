@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { ProjectWorkspaceFilesResponse, WorkspaceFileEntry } from "../../types";
 import { isWorkspaceRetryableError } from "../../lib/workspaceHome";
 import { compactDate, formatBytes, parentPath } from "../../lib/workspaceFormat";
+import { workspaceTabRootFor } from "../../lib/workspaceFileTabs";
 import { ICON, WorkspaceFile, WorkspaceFolder } from "../icons";
 import { WorkspaceEmpty, WorkspaceLoading } from "./WorkspacePrimitives";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,13 @@ export function WorkspaceFileList({
   const { t } = useTranslation();
   const entries = data?.entries ?? [];
   const sharedUnavailable = isWorkspaceRetryableError(error);
+  /* A tab root that is missing or empty is an area nothing has written to
+     yet, not an unselected workspace: `artifacts/` and `threads/` appear only
+     once a run creates them. */
+  const tabRoot = workspaceTabRootFor(path);
+  const emptyMessage = tabRoot === "artifacts"
+    ? t("workspace.artifacts_empty")
+    : tabRoot === "activities" ? t("workspace.activity_empty") : t("workspace.no_files");
   const message = sharedUnavailable
     ? t("workspace.shared_unavailable")
     : error instanceof Error ? error.message : error ? String(error) : "";
@@ -110,7 +118,7 @@ export function WorkspaceFileList({
           <WorkspaceEmpty title={message} mark={<WorkspaceFile size={ICON.lg} />} announce />
           {sharedUnavailable ? <Button type="button" variant="outline" size="dense" onClick={onRetry}>{t("workspace.retry")}</Button> : null}
         </div>
-      ) : data && !data.exists ? (
+      ) : data && !data.exists && !tabRoot ? (
         <WorkspaceEmpty title={t("workspace.files_unavailable")} mark={<WorkspaceFile size={ICON.lg} />} announce />
       ) : entries.length ? (
         <ul className="workspace-pick-list">
@@ -127,7 +135,7 @@ export function WorkspaceFileList({
         </ul>
       ) : (
         <WorkspaceEmpty
-          title={t("workspace.no_files")}
+          title={emptyMessage}
           mark={<WorkspaceFile size={ICON.lg} />}
           announce
         />
