@@ -48,7 +48,7 @@ export function RecordWorkspace({ taskId, rootLabel }: {
   rootLabel?: string;
 }) {
   const { t } = useTranslation();
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState("artifacts");
   const [selectedPath, setSelectedPath] = useState("");
 
   const fileQuery = useQuery({

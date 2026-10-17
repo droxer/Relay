@@ -69,3 +69,22 @@ describe("task workspace state inside a folder", () => {
     assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "" }), "offline");
   });
 });
+
+describe("task workspace state at a tab root", () => {
+  it("names an offline computer at a tab root", () => {
+    const error = { status: 503, code: "computer-offline" };
+    assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "artifacts" }), "offline");
+  });
+
+  it("treats a missing tab root as an empty area, not a missing workspace", () => {
+    const data = { exists: false, entries: [] };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts" }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads" }), "ready");
+  });
+
+  it("keeps the tabs on screen for an empty tab root", () => {
+    const data = { exists: true, entries: [] };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts" }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads" }), "ready");
+  });
+});
