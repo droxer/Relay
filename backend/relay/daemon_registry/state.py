@@ -136,6 +136,9 @@ class RegistryState:
         def _round_result(event: dict[str, Any]) -> dict[str, Any] | None:
             ...
 
+        def _round_result_was_required(self, run_request: dict[str, Any]) -> bool:
+            ...
+
         def _run_request_command_link(self, command: dict[str, Any]) -> dict[str, Any]:
             ...
 

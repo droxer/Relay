@@ -2265,6 +2265,8 @@
     "hint_choices_task": "选择一项以继续 {{ref}}，或自己填写回答。",
     "write_own": "自己填写",
     "hint_check_task": "选择继续会恢复 {{ref}}；询问进展不会改变任务，它仍等待你的回复。",
+    "hint_check_task_done": "选择继续会恢复 {{ref}}；询问进展不会改变任务，它仍等待你的回复；标记完成会按当前结果关闭它。",
+    "choice_mark_done": "已经完成，将 {{ref}} 标记为完成",
     "notes_title": "同时阻碍这项工作的问题："
   },
   "recovery": {

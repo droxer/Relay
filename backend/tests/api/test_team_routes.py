@@ -2899,25 +2899,34 @@ def test_task_recovery_preserves_round_verdict(
         "taskId": task["id"],
     }
     command = registry.take_commands("test_node_alice", "node_token")[0]
-    registry.handle_event(
-        "test_node_alice",
-        {
-            "type": "run.completed",
-            "commandId": command["id"],
-            "sessionId": session["id"],
-            "runId": command["runId"],
-            "agent": command["agent"],
-            "exitCode": 0,
-            "agentLog": "Work remains unless explicitly verified.",
-            "leaseId": command.get("leaseId"),
-            **(
-                {"roundResult": {"status": verdict, "note": "Reviewed work"}}
-                if verdict
-                else {}
-            ),
-        },
-        "node_token",
-    )
+
+    def complete(turn):
+        registry.handle_event(
+            "test_node_alice",
+            {
+                "type": "run.completed",
+                "commandId": turn["id"],
+                "sessionId": session["id"],
+                "runId": turn["runId"],
+                "agent": turn["agent"],
+                "exitCode": 0,
+                "agentLog": "Work remains unless explicitly verified.",
+                "leaseId": turn.get("leaseId"),
+                **(
+                    {"roundResult": {"status": verdict, "note": "Reviewed work"}}
+                    if verdict
+                    else {}
+                ),
+            },
+            "node_token",
+        )
+
+    complete(command)
+    if verdict is None:
+        # A turn that filed no verdict is asked once to file it.
+        [reminder] = registry.take_commands("test_node_alice", "node_token")
+        assert reminder["assignmentId"] == command["assignmentId"]
+        complete(reminder)
     updated = store.get_task(task["id"])
     assert updated["status"] == expected
     assert command["state"].get("round_result_file")
@@ -3821,6 +3830,11 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
             assert command["logicalAgentId"] == member["id"]
             assert command["state"]["assignment_brief"].startswith(f"Implement {member['displayName']}")
             finish(command, good if member_reports or index else None)
+            if not (member_reports or index):
+                # A step that filed nothing is asked once to file it.
+                [reminder] = app.state.registry.take_commands(node_id, "node_token")
+                assert reminder["logicalAgentId"] == member["id"]
+                finish(reminder, None)
         [final] = app.state.registry.take_commands(node_id, "node_token")
         assert final["logicalAgentId"] == lead["id"]
         assert "Review every delegated contribution" in final["state"]["assignment_brief"]
@@ -3917,6 +3931,16 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
             },
             "node_token",
         )
+        if not builder_reports:
+            # A step that filed nothing is asked once to file it.
+            [reminder] = app.state.registry.take_commands(node_id, "node_token")
+            assert reminder["logicalAgentId"] == builder["id"]
+            _mark_executing(app, node_id, reminder)
+            app.state.registry.handle_event(node_id, {
+                "type": "run.completed", "commandId": reminder["id"],
+                "sessionId": session["id"], "runId": reminder["runId"],
+                "agent": reminder["agent"], "exitCode": 0,
+            }, "node_token")
         [reviewer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert reviewer_command["logicalAgentId"] == reviewer["id"]
         assert reviewer_command["state"]["team_phase"] == "review"
@@ -3985,9 +4009,15 @@ def test_pipeline_continues_to_final_specialist_after_missing_member_report(monk
         [build] = app.state.registry.take_commands(node_id, "node_token")
         assert build["logicalAgentId"] == builder["id"]
         finish(build, False)
+        # A step that filed nothing is asked once to file it.
+        [reminder] = app.state.registry.take_commands(node_id, "node_token")
+        assert reminder["logicalAgentId"] == builder["id"]
+        finish(reminder, False)
         [review] = app.state.registry.take_commands(node_id, "node_token")
         assert review["logicalAgentId"] == reviewer["id"]
         assert review["state"]["work_kind"] == "review"
+        # The reminder spoke to the builder's turn only.
+        assert "repair_note" not in review["state"]
         assert any(item["status"] == "missing" for item in review["state"]["work_predecessor_results"].values())
         finish(review, True)
         assert app.state.registry.take_commands(node_id, "node_token") == []

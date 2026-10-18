@@ -14,6 +14,7 @@ from .work import (
     WORK_REPAIR_NOTE,
     WORK_REPAIR_TARGET,
     WORK_RESULTS,
+    is_answer_turn,
     question_transition,
     repair_transition,
     repairs_used,
@@ -57,6 +58,20 @@ ROUND_RESULT_REJECTIONS = {
 INSPECTING_STYLES = frozenset({"build_review", "pipeline", "lead_led"})
 MISSING_ANSWER_ERROR = "The requested teammate answer was not provided."
 MISSING_PLAN_ERROR = "The coordinator did not provide a bounded work plan."
+# A required step that ended without filing any report is asked once, in the
+# same round, to file it before the round parks on its human: the agent knows
+# whether its work is done, so it decides. Separate from the repair budget,
+# which pays for reruns of work, not for a missing verdict.
+REPORT_REMINDED_STATE_KEY = "_relay_report_reminded"
+REPORT_REMINDER_TARGET_STATE_KEY = "_relay_report_reminder_target"
+REPORT_REMINDER_NOTE = (
+    "Your last turn ended without writing the round result file, so Relay "
+    "cannot tell whether the work is finished. Check the workspace and the "
+    "conversation above, then decide. If real work remains, do it now. Then "
+    'write the file: "done" when the requested work is complete, or '
+    '"blocked" with your question if you need the human. Do not redo work '
+    "that is already finished."
+)
 
 
 @dataclass(frozen=True)
@@ -181,6 +196,7 @@ def next_work_transition(
     prior = run_request.get("state") or {}
     next_index: int | None
     next_index, state = advance_after_success(run_request, next_state)
+    state = without_report_reminder(state)
     reported = work_result or {"status": "missing", "evidence": []}
     question = question_transition(assignments, index, state, reported)
     if question:
@@ -190,6 +206,11 @@ def next_work_transition(
     repair = repair_transition(assignments, index, state, max_repairs=max_repairs)
     if repair:
         return WorkTransition(*repair)
+    reminder = report_reminder_transition(
+        run_request, assignment, state, unreported=work_result is None
+    )
+    if reminder:
+        return WorkTransition(*reminder)
     is_planning_turn = (
         index == 0
         and assignment.get("coordinator") is True
@@ -225,6 +246,43 @@ def next_work_transition(
         else None
     )
     return WorkTransition(next_index, state, plan)
+
+
+def without_report_reminder(state: dict[str, Any]) -> dict[str, Any]:
+    """``state`` without the reminder target: a reminder speaks to one turn."""
+    return {key: value for key, value in state.items() if key != REPORT_REMINDER_TARGET_STATE_KEY}
+
+
+def report_reminder_transition(
+    run_request: dict[str, Any],
+    assignment: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    unreported: bool,
+) -> tuple[int, dict[str, Any]] | None:
+    """Rerun a required step that owed a report and filed none, once per round.
+
+    ``unreported`` is the caller's reading of what this turn owed: a work
+    report under the work protocol, else the round's verdict. A verdict the
+    daemon refused was filed, and an answer turn keeps the contribution it
+    answers for; neither is reminded.
+    """
+    index = run_request.get("currentIndex", 0)
+    reminded = list(state.get(REPORT_REMINDED_STATE_KEY) or [])
+    if (
+        not unreported
+        or not assignment.get("required", True)
+        or assignment["assignmentId"] in reminded
+        or ROUND_RESULT_STATE_KEY in state
+        or ROUND_RESULT_REJECTED_STATE_KEY in state
+        or is_answer_turn(run_request.get("state") or {}, index)
+    ):
+        return None
+    return index, {
+        **without_report_reminder(state),
+        REPORT_REMINDED_STATE_KEY: [*reminded, assignment["assignmentId"]],
+        REPORT_REMINDER_TARGET_STATE_KEY: assignment["assignmentId"],
+    }
 
 
 def assignment_reports_round_result(

@@ -27,7 +27,7 @@ type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
 
 export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPrimary = false }: {
   logicalAgents: UserAgent[];
-  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
+  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<unknown>;
   sendHandoff: () => Promise<void>;
   /** Set while a permission prompt above holds the view's primary action. */
   deferPrimary?: boolean;
@@ -50,7 +50,7 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPri
     approveRef.current?.focus();
   }, []);
 
-  const runAction = async (action: DecisionAction, run: () => Promise<void>) => {
+  const runAction = async (action: DecisionAction, run: () => Promise<unknown>) => {
     if (pendingAction) return;
     setPendingAction(action);
     try {

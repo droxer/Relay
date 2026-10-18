@@ -10,6 +10,7 @@ function setup(
   onSend: (...args: unknown[]) => Promise<boolean>,
   options = ["Staging", "Production"],
   waiting: Waiting = { kind: "question", text: "Which environment?", options, notes: [] },
+  onMarkDone?: () => Promise<boolean>,
 ) {
   const ref = createRef<ComposerHandle>();
   const onReply = vi.fn();
@@ -33,6 +34,7 @@ function setup(
       agentName="Ada"
       onChoose={(reply, sendOptions) => ref.current?.send(reply, sendOptions) ?? Promise.resolve(false)}
       onReply={onReply}
+      onMarkDone={onMarkDone}
     />}
   />);
   return { ref, onReply };
@@ -168,4 +170,38 @@ it("points an unreported stop at the agent's last message instead of quoting the
   expect(screen.getByText("awaiting.unreported_text")).toBeTruthy();
   expect(screen.queryByText("A required step ended without reporting what it did.")).toBeNull();
   expect(screen.getByRole("button", { name: "awaiting.choice_continue" })).toBeTruthy();
+});
+
+const task = { id: "task_2", number: 2 } as NonNullable<Waiting["task"]>;
+const unreportedCheck: Waiting = {
+  kind: "check", text: "A required step ended without reporting what it did.", options: [], notes: [], unreported: true, task,
+};
+
+it("lets the person close a stopped task as done without sending the agent anything", async () => {
+  const onSend = vi.fn(async () => true);
+  const onMarkDone = vi.fn(async () => true);
+  setup(onSend, [], unreportedCheck, onMarkDone);
+  fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_mark_done" }));
+  await waitFor(() => expect(onMarkDone).toHaveBeenCalledOnce());
+  expect(onSend).not.toHaveBeenCalled();
+  expect(screen.getByText("awaiting.hint_check_task_done")).toBeTruthy();
+});
+
+it("marks the task done by its number key and unlocks the prompt if that fails", async () => {
+  const onMarkDone = vi.fn(async () => false);
+  setup(vi.fn(async () => true), [], unreportedCheck, onMarkDone);
+  fireEvent.keyDown(document.body, { key: "3" });
+  await waitFor(() => expect(onMarkDone).toHaveBeenCalledOnce());
+  await waitFor(() => expect((screen.getByRole("button", { name: "awaiting.choice_continue" }) as HTMLButtonElement).disabled).toBe(false));
+});
+
+it("offers mark done only for a stop on a task, never beside an agent's own answers", () => {
+  const onMarkDone = vi.fn(async () => true);
+  setup(vi.fn(async () => true), ["Staging", "Production"], undefined, onMarkDone);
+  expect(screen.queryByRole("button", { name: "awaiting.choice_mark_done" })).toBeNull();
+});
+
+it("offers no mark done for a thread with no task", () => {
+  setup(vi.fn(async () => true), [], { ...unreportedCheck, task: undefined }, vi.fn(async () => true));
+  expect(screen.queryByRole("button", { name: "awaiting.choice_mark_done" })).toBeNull();
 });

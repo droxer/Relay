@@ -33,6 +33,8 @@ from ..collaboration.policy import (
     decide_failure,
     is_question,
     next_work_transition,
+    report_reminder_transition,
+    without_report_reminder,
 )
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.task_execution import (
@@ -639,7 +641,14 @@ class RunProgressionMixin(RegistryState):
             )
         else:
             assignments = run_request["assignments"]
-            next_index, next_state = self._next_index_after_success(run_request, next_state)
+            reminder = report_reminder_transition(
+                run_request, assignment, next_state,
+                unreported=decision.round_result is None
+                and self._owes_round_result(run_request),
+            )
+            next_index, next_state = reminder or self._next_index_after_success(
+                run_request, without_report_reminder(next_state)
+            )
         updated = self.daemon_store.update_run_request_if_claimed(
             run_request["id"],
             TERMINAL_CLAIM_ID_STATE_KEY,
@@ -649,6 +658,12 @@ class RunProgressionMixin(RegistryState):
         if not updated:
             return
         self._follow_up_run_request(updated)
+
+    def _owes_round_result(self, run_request: dict[str, Any]) -> bool:
+        """Whether the turn that just finished had to file the round's verdict."""
+        return self._round_result_was_required(run_request) and self._assignment_reports_round_result(
+            run_request["assignments"], run_request.get("currentIndex", 0)
+        )
 
     def _apply_work_transition(
         self,
