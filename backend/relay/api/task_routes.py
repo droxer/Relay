@@ -44,6 +44,7 @@ from ..services.task_update import TaskPatchRequest
 from ..services.task_update import update_task as update_task_record
 from ..services.task_workspace import (
     recorded_task_workspace,
+    task_artifacts_dir,
     task_workspace_subpath,
 )
 from ..services.team_dispatch import TeamDispatchError, task_thread_ownership
@@ -82,9 +83,14 @@ router = APIRouter()
 
 
 def public_task(task: dict[str, Any]) -> dict[str, Any]:
-    """A task as the API answers it: legacy routine keys removed, and the wait
-    it is parked on projected once (`awaiting`) so no client re-derives it."""
-    return with_awaiting(without_legacy_fields(task))
+    """A task as the API answers it: legacy routine keys removed, the wait it
+    is parked on projected once (`awaiting`) so no client re-derives it, and
+    the folder its deliverables live in (`workspaceArtifactsDir`, null when
+    the workspace itself is that folder)."""
+    return {
+        **with_awaiting(without_legacy_fields(task)),
+        "workspaceArtifactsDir": task_artifacts_dir(task),
+    }
 
 
 def public_task_envelope(result: Any) -> Any:
@@ -904,6 +910,9 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         "sessionIds": session_ids,
         "latestSessionId": session_ids[-1] if session_ids else None,
         "artifactCount": len(artifacts),
+        # The folder this run's deliverables live in, relative to the shared
+        # workspace the Runs tab browses; null when the workspace is that folder.
+        "artifactsDir": task_artifacts_dir(task),
         "triggerKind": task.get("routineTriggerKind"),
         "triggerSummary": task.get("routineTriggerSummary"),
     }

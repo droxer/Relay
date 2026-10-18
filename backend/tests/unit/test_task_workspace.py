@@ -1,19 +1,51 @@
 from relay.services.task_workspace import (
     resolve_task_workspace,
+    task_artifacts_dir,
     task_workspace_subpath,
+    workspace_artifacts_dir,
 )
 
 TASK_CAPABLE_NODE = {"capabilities": ["thread-workspaces", "task-workspaces", "project-workspaces"]}
+LAYOUT_NODE = {"capabilities": [*TASK_CAPABLE_NODE["capabilities"], "artifact-layout"]}
 OLD_NODE = {"capabilities": ["thread-workspaces"]}
+OCCURRENCE = {"id": "tsk_run", "sourceRoutineId": "tsk_routine"}
 
 
 def test_backlog_task_gets_its_own_directory():
     assert task_workspace_subpath({"id": "tsk_one"}) == "tasks/tsk_one"
 
 
-def test_routine_occurrence_nests_under_its_routine():
-    occurrence = {"id": "tsk_run", "sourceRoutineId": "tsk_routine"}
-    assert task_workspace_subpath(occurrence) == "tasks/tsk_routine/tsk_run"
+def test_routine_occurrences_share_their_automation_directory():
+    assert task_workspace_subpath(OCCURRENCE) == "tasks/tsk_routine"
+
+
+def test_a_daemon_without_artifact_layout_keeps_one_directory_per_occurrence():
+    assert task_workspace_subpath(OCCURRENCE, shared_automation=False) == "tasks/tsk_routine/tsk_run"
+    assert resolve_task_workspace(OCCURRENCE, node=TASK_CAPABLE_NODE) == ("task", "tasks/tsk_routine/tsk_run")
+    assert resolve_task_workspace(OCCURRENCE, node=LAYOUT_NODE) == ("task", "tasks/tsk_routine")
+
+
+def test_artifacts_follow_the_workspace_scope():
+    # A thread or backlog task keeps `artifacts/`.
+    assert workspace_artifacts_dir("thread", None) == "artifacts"
+    assert workspace_artifacts_dir("task", "tasks/tsk_one", task={"id": "tsk_one"}) == "artifacts"
+    # Each automation run keeps its own folder under the shared automation directory.
+    assert workspace_artifacts_dir("task", "tasks/tsk_routine", task=OCCURRENCE) == "artifacts/tsk_run"
+    # An occurrence bound before the shared layout keeps its own `artifacts/`.
+    assert workspace_artifacts_dir("task", "tasks/tsk_routine/tsk_run", task=OCCURRENCE) == "artifacts"
+    # A project directory is the deliverable location; there is no `artifacts/`.
+    assert workspace_artifacts_dir("project", "projects/prj_one", task={"id": "tsk_one"}) is None
+
+
+def test_task_artifacts_dir_reads_the_binding_else_predicts_the_layout():
+    bound = {**OCCURRENCE, "workspaceBinding": {"layout": "task", "subpath": "tasks/tsk_routine"}}
+    assert task_artifacts_dir(bound) == "artifacts/tsk_run"
+    legacy = {**OCCURRENCE, "workspaceBinding": {"layout": "task", "subpath": "tasks/tsk_routine/tsk_run"}}
+    assert task_artifacts_dir(legacy) == "artifacts"
+    assert task_artifacts_dir(OCCURRENCE) == "artifacts/tsk_run"
+    assert task_artifacts_dir({"id": "tsk_one"}) == "artifacts"
+    assert task_artifacts_dir({"id": "tsk_one", "projectId": "prj_one"}) is None
+    assert task_artifacts_dir({"id": "tsk_one", "workspaceBinding": {"layout": "project", "subpath": "links/repo"}}) is None
 
 
 def test_blank_source_routine_id_is_treated_as_absent():

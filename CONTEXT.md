@@ -103,22 +103,26 @@ The `threads/<threadId>/` directory inside a Thread's bound workspace.
 records even when several Threads share a Task or Project workspace.
 
 **Artifacts Directory**:
-The `artifacts/` directory inside the bound execution workspace for generated
-deliverables. A standalone Thread uses `<threadId>/artifacts/`; a backlog Task
-uses `tasks/<taskId>/artifacts/`; each Automation occurrence uses
-`tasks/<routineId>/<taskId>/artifacts/`, grouping occurrences under the same
-Automation. Every Task and Conversation in a Project shares its workspace's
-`artifacts/`, including when that workspace is a Linked Directory. Source code
-stays in its project location. Existing files keep their paths; this convention
-guides new deliverables rather than moving files that may already be referenced.
+Where a run writes generated deliverables, relative to its bound execution
+workspace. A standalone Thread uses `<threadId>/artifacts/`; a backlog Task
+uses `tasks/<taskId>/artifacts/`; each Automation run keeps its own
+`tasks/<routineId>/artifacts/<taskId>/` inside the one Automation directory its
+runs share. A Project has no artifacts directory: the Project workspace itself
+(including a Linked Directory) is the deliverable location, and files go where
+they belong in it. The backend names the directory on every `run.start`
+(`artifactsDir`, null for a Project); a Computer without the `artifact-layout`
+capability keeps the older per-run Automation directory and an `artifacts/` in
+every workspace. Source code stays in its project location. Existing files keep
+their paths; this convention guides new deliverables rather than moving files
+that may already be referenced.
 
 **Task Workspace**:
 The writable work context shared by every round of one backlog Task
-(`tasks/<taskId>/`), or of one Automation occurrence
-(`tasks/<routineId>/<taskId>/`). It is bound once at first dispatch
-(`task.workspace_bound`) and reused by every later round; a Computer without
-task-workspace support is refused rather than degraded. A Task in a Project
-uses the Project's workspace instead.
+(`tasks/<taskId>/`), or by every run of one Automation (`tasks/<routineId>/`,
+with per-run Artifacts Directories under it). It is bound once at first
+dispatch (`task.workspace_bound`) and reused by every later round; a Computer
+without task-workspace support is refused rather than degraded. A Task in a
+Project uses the Project's workspace instead.
 _Avoid_: Thread Workspace (for task rounds), round directory
 
 **Node Workspace Root**:

@@ -261,7 +261,9 @@ export function TaskRecordPage({
             whole tab — and, beside it, the durable record of what runs
             produced, which outlives the computer being online. */}
         <TabsContent value="workspace" className="record-workspace-panel">
-          <RecordWorkspace taskId={task.id} />
+          {/* Keyed by the deliverables folder: a queued task predicts it, and the
+              binding written at dispatch may differ, so the browser reopens there. */}
+          <RecordWorkspace key={task.workspaceArtifactsDir ?? ""} taskId={task.id} artifactsDir={task.workspaceArtifactsDir} />
         </TabsContent>
         <TabsContent value="artifacts">
           <RecordArtifacts taskId={task.id} />

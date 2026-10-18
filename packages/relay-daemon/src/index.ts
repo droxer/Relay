@@ -80,7 +80,7 @@ import {
 } from "relay-core";
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
 import { workspaceCommandEvent } from "./workspace-read.js";
-import { ThreadWorkspaceManager } from "./thread-workspace.js";
+import { DEFAULT_ARTIFACTS_DIR, ThreadWorkspaceManager } from "./thread-workspace.js";
 import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
@@ -1244,8 +1244,18 @@ async function executeCommand(
   // preparation, cleanup, or agent execution can change the inherited files.
   const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
-  threadWorkspaces.ensureRecords(threadWorkspace);
-  state.artifacts_dir = "artifacts";
+  // The backend names the deliverables directory; a command from an older
+  // backend carries none and keeps `artifacts/`. Null is a project: its
+  // directory is the deliverable location, so no `artifacts/` is created.
+  const artifactsDir = command.artifactsDir === undefined ? DEFAULT_ARTIFACTS_DIR : command.artifactsDir;
+  threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir);
+  if (artifactsDir === null) {
+    delete state.artifacts_dir;
+    state.deliverables_in_workspace = true;
+  } else {
+    state.artifacts_dir = artifactsDir;
+    delete state.deliverables_in_workspace;
+  }
   if (state.progress_file === `threads/${command.sessionId}/HANDOFF.md`) {
     state.legacy_progress_file = command.workspaceLayout === "thread"
       ? "HANDOFF.md"

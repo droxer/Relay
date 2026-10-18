@@ -102,8 +102,14 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push([
       "[Artifacts]",
       `Write generated deliverables to \`${state.artifacts_dir}/\` (including nested folders). Reuse existing artifacts when continuing work.`,
-      "Standalone threads keep their own artifacts; automation occurrences keep separate artifacts under the same automation; project tasks share the project's artifacts.",
+      "A standalone thread keeps its own artifacts; each automation run keeps its own artifacts folder under the shared automation directory.",
       "Keep source code in its existing project location. Keep status, progress, decisions, and handoff notes in the thread record directory named by the progress file.",
+    ].join("\n"));
+  } else if (state.deliverables_in_workspace) {
+    preludes.push([
+      "[Artifacts]",
+      "This project's workspace is the deliverable location: write generated files where they belong in the project, and do not create an `artifacts/` directory.",
+      "Keep status, progress, decisions, and handoff notes in the thread record directory named by the progress file, not beside the project's files.",
     ].join("\n"));
   }
   if (state.work_result_required) {

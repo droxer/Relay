@@ -41,6 +41,10 @@ DAEMON_CAPABILITY_AGENT_RESUME = "agent-resume"
 DAEMON_CAPABILITY_PROJECT_SETUP = "project-setup"
 # The daemon links existing directories as project workspaces (`links/<id>`).
 DAEMON_CAPABILITY_PROJECT_LINKS = "project-links"
+# The daemon honours the backend's `artifactsDir` on run.start: an automation's
+# occurrences share one directory with per-run artifacts, and a project
+# workspace is its own deliverable location with no `artifacts/` directory.
+DAEMON_CAPABILITY_ARTIFACT_LAYOUT = "artifact-layout"
 
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
@@ -63,6 +67,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_AGENT_RESUME,
         DAEMON_CAPABILITY_PROJECT_SETUP,
         DAEMON_CAPABILITY_PROJECT_LINKS,
+        DAEMON_CAPABILITY_ARTIFACT_LAYOUT,
     }
 )
 

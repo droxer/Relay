@@ -852,6 +852,7 @@ def test_task_dispatch_carries_shared_workspace_subpath() -> None:
             [command] = registry.take_commands("sbx_alice", "node_token")
             assert command["workspaceLayout"] == "task"
             assert command["workspaceSubpath"] == "tasks/tsk_one"
+            assert command["artifactsDir"] == "artifacts"
             registry.handle_event(
                 "sbx_alice",
                 {

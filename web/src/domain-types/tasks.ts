@@ -61,6 +61,9 @@ export interface TaskRun {
   sessionIds: string[];
   latestSessionId: string | null;
   artifactCount: number;
+  /** The folder this run's deliverables live in, relative to the workspace
+   *  the Runs tab browses; null when the workspace is that folder. */
+  artifactsDir?: string | null;
 }
 
 export interface TaskRunsResponse {

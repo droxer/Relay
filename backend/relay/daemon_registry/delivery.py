@@ -24,6 +24,7 @@ from ..collaboration.policy import (
 )
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id, new_relay_id, now_iso
+from ..core.workspace_layout import workspace_artifacts_dir
 from ..persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ..persistence.task_execution import (
     request_execution_owner,
@@ -386,6 +387,7 @@ def _run_start_command(
     state: dict[str, Any],
     role: str | None,
     workspace_layout: str,
+    artifacts_dir: str | None,
     context: dict[str, Any] | None,
     handoff_validation: dict[str, Any] | None,
 ) -> dict[str, Any]:
@@ -405,6 +407,9 @@ def _run_start_command(
             if workspace_layout in ("project", "task")
             else {}
         ),
+        # None tells the daemon the workspace itself holds deliverables (a
+        # project); an older daemon ignores the field and keeps `artifacts/`.
+        "artifactsDir": artifacts_dir,
         **({"role": role} if role else {}),
         **_optional_fields(
             assignment,
@@ -769,11 +774,36 @@ class AssignmentDeliveryMixin(RegistryState):
             state=state,
             role=role,
             workspace_layout=workspace_layout,
+            artifacts_dir=self._artifacts_dir(run_request, workspace_layout, session_snapshot),
             context=context,
             handoff_validation=handoff_validation,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
         return {**command, **_delivery_command_fields(request_state, assignment, run_id)}
+
+    def _artifacts_dir(
+        self,
+        run_request: dict[str, Any],
+        workspace_layout: str,
+        session_snapshot: dict[str, Any],
+    ) -> str | None:
+        """Where this run's deliverables go; an occurrence needs its task to know."""
+        task = None
+        task_id = run_request.get("taskId")
+        if task_id and self.task_store and workspace_layout == "task":
+            try:
+                task = self.task_store.get_task(task_id)
+            except (KeyError, FileNotFoundError):
+                # Without the task an occurrence cannot be told from a backlog
+                # task, so its run falls back to the shared `artifacts/`.
+                logger.warning(
+                    "run.start task lookup failed; deliverables fall back to artifacts/",
+                    task_id=task_id,
+                    session_id=run_request.get("sessionId"),
+                )
+        return workspace_artifacts_dir(
+            workspace_layout, session_snapshot.get("workspaceSubpath"), task=task
+        )
 
     def _conversation_prelude_state(
         self,

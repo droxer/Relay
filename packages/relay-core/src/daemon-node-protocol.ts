@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -85,6 +85,12 @@ export const DAEMON_CAPABILITY_PROJECT_WORKSPACES: DaemonNodeCapability = "proje
  * locally, through `workspace.link` and the registration response's `projectLinks`.
  */
 export const DAEMON_CAPABILITY_PROJECT_LINKS: DaemonNodeCapability = "project-links";
+/**
+ * The daemon honours `artifactsDir` on `run.start`: an automation's
+ * occurrences share one directory with per-run `artifacts/<taskId>/`, and a
+ * project workspace holds its deliverables itself, with no `artifacts/`.
+ */
+export const DAEMON_CAPABILITY_ARTIFACT_LAYOUT: DaemonNodeCapability = "artifact-layout";
 /** The daemon can map every round of one task onto a single validated task directory. */
 export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-workspaces";
 /**
@@ -315,6 +321,12 @@ export interface DaemonNodeRunCommand {
   workspaceLayout?: DaemonWorkspaceLayout;
   /** Required when workspaceLayout is project. */
   workspaceSubpath?: string;
+  /**
+   * Workspace-relative deliverables directory. `null` means the workspace
+   * itself is the deliverable location (a project); missing means an older
+   * backend, which expects `artifacts/`.
+   */
+  artifactsDir?: string | null;
   state?: AgentState;
   skills?: DaemonRunSkillBundle;
   skillsSkipped?: DaemonSkippedSkill[];

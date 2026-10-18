@@ -11,10 +11,14 @@ import type {
 } from "../types";
 import { workspaceHomeStatus } from "../lib/workspaceHome";
 import {
-  DEFAULT_WORKSPACE_BROWSE_PATH,
+  PROJECT_WORKSPACE_FILE_ROOTS,
   parseWorkspaceBrowsePath,
   serializeWorkspaceBrowsePath,
 } from "../lib/workspaceFileTabs";
+
+/* A project's directory is its deliverable location, so the browser opens
+   on the project root rather than an `artifacts/` folder. */
+const PROJECT_BROWSE_ROOT = PROJECT_WORKSPACE_FILE_ROOTS.artifacts;
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { useWorkspaceFileView } from "./workspace/WorkspaceFilePreview";
 import { WorkspaceFilePanes } from "./workspace/WorkspaceFilePanes";
@@ -46,9 +50,9 @@ function WorkspaceFileBrowser({
 }) {
   const [filePath, setFilePath] = useUrlSearchState(
     "path",
-    DEFAULT_WORKSPACE_BROWSE_PATH,
-    parseWorkspaceBrowsePath,
-    serializeWorkspaceBrowsePath,
+    PROJECT_BROWSE_ROOT,
+    (value) => parseWorkspaceBrowsePath(value, PROJECT_BROWSE_ROOT),
+    (path) => serializeWorkspaceBrowsePath(path, PROJECT_BROWSE_ROOT),
   );
   const [selectedKey, setSelectedKey] = useUrlSearchState("item", "", parseString, (value) => value || null);
   const selectedPath = selectedKey.startsWith("file:") ? selectedKey.slice(5) : "";
@@ -74,6 +78,7 @@ function WorkspaceFileBrowser({
   return (
     <WorkspaceFilePanes
       path={filePath}
+      roots={PROJECT_WORKSPACE_FILE_ROOTS}
       selectedPath={selectedPath}
       files={{ data: fileQuery.data, error: fileQuery.error, isLoading: fileQuery.isLoading }}
       content={{ data: contentQuery.data, error: contentQuery.error, isLoading: contentQuery.isLoading }}

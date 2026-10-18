@@ -12,7 +12,7 @@ import {
   WorkspaceFileList,
   WorkspacePathBreadcrumb,
 } from "../workspace/WorkspaceFileList";
-import { DEFAULT_WORKSPACE_BROWSE_PATH } from "../../lib/workspaceFileTabs";
+import { PROJECT_WORKSPACE_FILE_ROOTS } from "../../lib/workspaceFileTabs";
 import {
   WorkspaceFilePreview,
   useWorkspaceFileView,
@@ -23,15 +23,23 @@ import { ICON, NavRefresh } from "../icons";
 import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 
-/** The panel browses the project's artifacts only. The Activity side (raw run
- *  folders under `threads/`) stays on the full project workspace page: in a
- *  few hundred pixels a second switch under the Project / This thread tabs was
- *  one level of chrome too many. */
-const PANEL_ROOT = DEFAULT_WORKSPACE_BROWSE_PATH;
+/** The panel browses the project's files: the project directory is its
+ *  deliverable location, so there is no `artifacts/` folder to scope to. The
+ *  Activity switch (thread records under `threads/`) stays on the full project
+ *  workspace page: in a few hundred pixels a second switch under the Project /
+ *  This thread tabs was one level of chrome too many. */
+const PANEL_ROOT = PROJECT_WORKSPACE_FILE_ROOTS.artifacts;
 
 /** `path` relative to the panel root, "" at the root itself. */
 function relativeToRoot(path: string): string {
+  if (PANEL_ROOT === "") return path;
   return path.startsWith(`${PANEL_ROOT}/`) ? path.slice(PANEL_ROOT.length + 1) : "";
+}
+
+/** A panel-relative path back to a workspace path. */
+function fromRoot(relative: string): string {
+  if (!relative) return PANEL_ROOT;
+  return PANEL_ROOT === "" ? relative : `${PANEL_ROOT}/${relative}`;
 }
 
 /** Refetches the project's listing and open file. Lives beside the browser so
@@ -139,8 +147,8 @@ export function ThreadSpaceFiles({
         <div className="thread-space-files-bar is-path">
           <WorkspacePathBreadcrumb
             path={subPath}
-            rootLabel={t("workspace.tab_artifacts")}
-            onNavigate={(next) => openDirectory(next ? `${PANEL_ROOT}/${next}` : PANEL_ROOT)}
+            rootLabel={t("workspace.tab_files")}
+            onNavigate={(next) => openDirectory(fromRoot(next))}
           />
         </div>
       ) : null}
@@ -150,6 +158,7 @@ export function ThreadSpaceFiles({
           error={fileQuery.error}
           isLoading={fileQuery.isLoading}
           path={path}
+          roots={PROJECT_WORKSPACE_FILE_ROOTS}
           rootPath={PANEL_ROOT}
           selectedPath={selectedPath}
           onOpenDirectory={openDirectory}

@@ -19,14 +19,25 @@ test("agent prompts distinguish deliverables from thread progress", () => {
   assert.match(prompt, /previous record `HANDOFF.md`/);
 });
 
+test("agent prompts name the project workspace itself as the deliverable location", () => {
+  const prompt = agentTaskPrompt({
+    ...initialAgentState("Write a report"),
+    deliverables_in_workspace: true,
+    progress_file: "threads/ses_one/HANDOFF.md",
+  });
+  assert.match(prompt, /workspace is the deliverable location/);
+  assert.match(prompt, /do not create an `artifacts\/` directory/);
+  assert.doesNotMatch(prompt, /Write generated deliverables to/);
+});
+
 test("workspace records isolate threads and share artifacts within their durable scope", () => {
   const root = mkdtempSync(join(tmpdir(), "relay-records-"));
   try {
     const manager = new ThreadWorkspaceManager(root, "none");
-    for (const subpath of ["ses_single", "tasks/automation/run_one", "tasks/automation/run_two", "projects/project_one"]) {
+    for (const subpath of ["ses_single", "tasks/tsk_one"]) {
       const workspace = manager.ensureSubpath("ses_one", subpath);
-      manager.ensureRecords(workspace);
-      manager.ensureRecords({ ...workspace, sessionId: "ses_two" });
+      manager.ensureRecords(workspace, "artifacts");
+      manager.ensureRecords({ ...workspace, sessionId: "ses_two" }, "artifacts");
       assert.ok(existsSync(join(workspace.hostPath, "threads/ses_one")));
       assert.ok(existsSync(join(workspace.hostPath, "threads/ses_two")));
       assert.ok(existsSync(join(workspace.hostPath, "artifacts")));
@@ -40,6 +51,55 @@ test("workspace records isolate threads and share artifacts within their durable
       assert.ok(ownFiles.some(file => file.relativePath === "artifacts/report.md"));
       assert.ok(ownFiles.some(file => file.relativePath === "threads/ses_one/HANDOFF.json"));
       assert.ok(ownFiles.every(file => !file.relativePath.startsWith("threads/ses_two/")));
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a backend that names no artifacts directory still gets artifacts/", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensure("ses_one");
+    manager.ensureRecords(workspace);
+    assert.ok(existsSync(join(workspace.hostPath, "artifacts")));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("automation runs share one directory and keep their artifacts apart", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensureSubpath("ses_one", "tasks/automation");
+    manager.ensureRecords(workspace, "artifacts/run_one");
+    manager.ensureRecords({ ...workspace, sessionId: "ses_two" }, "artifacts/run_two");
+    assert.ok(existsSync(join(workspace.hostPath, "artifacts/run_one")));
+    assert.ok(existsSync(join(workspace.hostPath, "artifacts/run_two")));
+    assert.ok(existsSync(join(workspace.hostPath, "threads/ses_one")));
+    assert.ok(existsSync(join(workspace.hostPath, "threads/ses_two")));
+    writeFileSync(join(workspace.hostPath, "artifacts/run_one/report.md"), "result");
+    const files = diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
+    assert.ok(files.some(file => file.relativePath === "artifacts/run_one/report.md" && file.contentBase64));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a project workspace gets thread records but no artifacts directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensureSubpath("ses_one", "projects/project_one");
+    manager.ensureRecords(workspace, null);
+    assert.ok(existsSync(join(workspace.hostPath, "threads/ses_one")));
+    assert.ok(!existsSync(join(workspace.hostPath, "artifacts")));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an escaping artifacts directory is refused", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensure("ses_one");
+    for (const bad of ["../outside", "/tmp/abs", "artifacts/..", ""]) {
+      assert.throws(() => manager.ensureRecords(workspace, bad), /Invalid durable workspace path/);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
