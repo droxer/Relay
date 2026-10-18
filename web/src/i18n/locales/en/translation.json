@@ -2292,6 +2292,8 @@
     "hint_choices_task": "Pick one to resume {{ref}}, or write your own answer.",
     "write_own": "Write my own",
     "hint_check_task": "Keeping going resumes {{ref}}. Asking for status leaves it waiting for you.",
+    "hint_check_task_done": "Keeping going resumes {{ref}}. Asking for status leaves it waiting for you. Marking it done closes it as is.",
+    "choice_mark_done": "It's finished — mark {{ref}} done",
     "notes_title": "Also holding up the work:"
   },
   "recovery": {

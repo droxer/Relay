@@ -149,7 +149,7 @@ type ThreadsViewProps = {
   /** Agents in the thread's room, resolved for the header strip. */
   threadParticipants: UserAgent[];
   onRuntimeNodeChange: (nodeId: string) => void;
-  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
+  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<boolean>;
   sendHandoff: () => Promise<void>;
   /** Answer a live run's runtime permission prompt. */
   onAnswerPermission: (requestId: string, decision: "allow" | "deny", note?: string) => Promise<void>;
@@ -579,6 +579,7 @@ export function ThreadsView({
               agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
+              onMarkDone={() => sendDecision("mark_done")}
             />
           ) : null}
         />

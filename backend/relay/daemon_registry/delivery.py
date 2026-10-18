@@ -19,6 +19,8 @@ from ..collaboration.work import (
 )
 from ..collaboration.policy import (
     REPAIR_NOTE_STATE_KEY,
+    REPORT_REMINDER_NOTE,
+    REPORT_REMINDER_TARGET_STATE_KEY,
 )
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id, new_relay_id, now_iso
@@ -361,6 +363,10 @@ def _work_protocol_state(
         next_state = {**next_state, **work_repair_notes(assignments, index, request_state)}
     if request_state.get(REPAIR_NOTE_STATE_KEY) and index == 0:
         next_state["repair_note"] = request_state[REPAIR_NOTE_STATE_KEY]
+    if request_state.get(REPORT_REMINDER_TARGET_STATE_KEY) == assignment["assignmentId"]:
+        next_state["repair_note"] = "\n\n".join(
+            note for note in (next_state.get("repair_note"), REPORT_REMINDER_NOTE) if note
+        )
     return next_state
 
 

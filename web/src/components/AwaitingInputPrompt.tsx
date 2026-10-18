@@ -12,10 +12,13 @@ import { ProfileImage } from "./ProfileImagePicker";
 
 type Choice = {
   label: string;
+  /** Sent as the reply. A choice with `act` sends nothing to the agent. */
   reply: string;
   /** `discuss` asks without resuming: a status question must not hand the
    *  agent a task round whose verdict could continue or close the task. */
   intent?: "discuss";
+  /** Acts on the task instead of replying; resolves false when it did not. */
+  act?: () => Promise<boolean>;
 };
 
 const TITLE_KEYS = {
@@ -44,7 +47,7 @@ const ANNOUNCE_DELAY_MS = 150;
  * else has focus (or focus is on the prompt itself). Typing stays available
  * for anything else.
  */
-export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, onReply }: {
+export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, onReply, onMarkDone }: {
   waiting: AwaitingInput;
   agentName: string;
   agentImage?: string;
@@ -52,6 +55,8 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   onChoose: (reply: string, options?: { intent?: "discuss" }) => Promise<boolean>;
   /** Put the caret in the composer. */
   onReply: () => void;
+  /** Accept the task as it stands — the person's own mark done. */
+  onMarkDone?: () => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const headingId = useId();
@@ -71,10 +76,17 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   // A gate stop and a spent budget both leave the next step to the person;
   // only an agent's question brings its own answers.
   const asked = waiting.kind === "question";
+  // The person may judge the work finished whatever the agent left unsaid;
+  // beside an agent's own answers it would read as one of them, so a
+  // question keeps only those.
+  const markDone: Choice | null = !asked && ref && onMarkDone
+    ? { label: t("awaiting.choice_mark_done", { ref }), reply: "mark_done", act: onMarkDone }
+    : null;
   const choices: Choice[] = !asked
     ? [
       { label: t("awaiting.choice_continue"), reply: t("awaiting.choice_continue_reply") },
       { label: t("awaiting.choice_status"), reply: t("awaiting.choice_status_reply"), intent: "discuss" },
+      ...(markDone ? [markDone] : []),
     ]
     : waiting.options.map((option) => ({ label: option, reply: option }));
   const choose = async (index: number) => {
@@ -82,7 +94,10 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     if (!choice || chosen !== null) return;
     setChosen(index);
     try {
-      if (!await onChoose(choice.reply, choice.intent ? { intent: choice.intent } : undefined)) setChosen(null);
+      const done = choice.act
+        ? await choice.act()
+        : await onChoose(choice.reply, choice.intent ? { intent: choice.intent } : undefined);
+      if (!done) setChosen(null);
     } catch {
       setChosen(null);
     }
@@ -114,7 +129,7 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   // or that a bare reply box continues the work. "Pick one or write your
   // own" is already said by the answers and the button beside them.
   const hint = !asked
-    ? (ref ? t("awaiting.hint_check_task", { ref }) : null)
+    ? (ref ? t(markDone ? "awaiting.hint_check_task_done" : "awaiting.hint_check_task", { ref }) : null)
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : null)
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));

@@ -4660,14 +4660,17 @@ def test_single_agent_work_outcome_is_independent_of_execution(task_bound, repor
                 "taskGoal": "Resolve the failure", "assignments": [{"agent": "codex"}],
                 **({"taskId": task["id"]} if task else {}),
             })
-            [command] = registry.take_commands("sbx_alice", "node_token")
-            assert command["state"].get("work_result_required") is True
-            _start_run(registry, command)
-            registry.handle_event("sbx_alice", {
-                "type": "run.completed", "commandId": command["id"], "sessionId": session["id"],
-                "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
-                **({"roundResult": report} if report else {}),
-            }, "node_token")
+            # A turn that filed nothing is asked once to file it before the round ends.
+            for _turn in range(1 if report else 2):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["state"].get("work_result_required") is True
+                assert ("repair_note" in command["state"]) is bool(_turn)
+                _start_run(registry, command)
+                registry.handle_event("sbx_alice", {
+                    "type": "run.completed", "commandId": command["id"], "sessionId": session["id"],
+                    "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                    **({"roundResult": report} if report else {}),
+                }, "node_token")
             finished = sessions.get_session(session["id"])
             assert finished["status"] == "completed"
             assert finished["workOutcome"] == expected
@@ -5093,6 +5096,11 @@ def test_lead_repairs_a_failed_teammate_and_the_pipeline_resumes() -> None:
             assert retry["agent"] == "claude"
             assert "repair_note" not in retry["state"]
             _finish_run(registry, retry, 0)
+            # It filed no verdict, so it is asked once to file one.
+            [reminder] = registry.take_commands("sbx_alice", "node_token")
+            assert reminder["agent"] == "claude"
+            assert "round result file" in reminder["state"]["repair_note"]
+            _finish_run(registry, reminder, 0)
 
             assert registry.take_commands("sbx_alice", "node_token") == []
             assert session_store.get_session(session["id"])["status"] == "completed"
@@ -5502,6 +5510,32 @@ async def _run_task_round(registry: Any, backend: Any, task_id: str) -> dict[str
     return command
 
 
+def _complete_round_turn(registry: Any, command: dict[str, Any], **extra: Any) -> None:
+    registry.handle_event(
+        "sbx_alice",
+        {
+            "type": "run.completed",
+            "commandId": command["id"],
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": "codex",
+            "exitCode": 0,
+            "agentLog": "migrated",
+            **extra,
+        },
+        "node_token",
+    )
+
+
+def _take_report_reminder(registry: Any, command: dict[str, Any]) -> dict[str, Any]:
+    """The same step, asked once to file the report its last turn left out."""
+    [reminder] = registry.take_commands("sbx_alice", "node_token")
+    assert reminder["assignmentId"] == command["assignmentId"]
+    assert reminder["sessionId"] == command["sessionId"]
+    assert "without writing the round result file" in reminder["state"]["repair_note"]
+    return reminder
+
+
 def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
     async def run_flow() -> None:
         from relay.persistence.store_common import relay_task_event
@@ -5650,19 +5684,12 @@ def test_a_round_that_reports_no_verdict_waits_for_a_human() -> None:
             backend = ServerDaemonNodeBackend(registry)
             task = task_store.create_task({"title": "Migrate billing"})
             command = await _run_task_round(registry, backend, task["id"])
-            registry.handle_event(
-                "sbx_alice",
-                {
-                    "type": "run.completed",
-                    "commandId": command["id"],
-                    "sessionId": command["sessionId"],
-                    "runId": command["runId"],
-                    "agent": "codex",
-                    "exitCode": 0,
-                    "agentLog": "migrated",
-                },
-                "node_token",
-            )
+            _complete_round_turn(registry, command)
+            # The agent is asked once to decide before its human is.
+            assert task_store.get_task(task["id"])["status"] != "waiting_for_human"
+            reminder = _take_report_reminder(registry, command)
+            _complete_round_turn(registry, reminder)
+            assert registry.take_commands("sbx_alice", "node_token") == []
 
             waiting = task_store.get_task(task["id"])
             assert waiting["status"] == "waiting_for_human"
@@ -5684,20 +5711,9 @@ def test_a_malformed_round_result_is_ignored_rather_than_steering_the_task() -> 
             backend = ServerDaemonNodeBackend(registry)
             task = task_store.create_task({"title": "Migrate billing"})
             command = await _run_task_round(registry, backend, task["id"])
-            registry.handle_event(
-                "sbx_alice",
-                {
-                    "type": "run.completed",
-                    "commandId": command["id"],
-                    "sessionId": command["sessionId"],
-                    "runId": command["runId"],
-                    "agent": "codex",
-                    "exitCode": 0,
-                    "agentLog": "migrated",
-                    "roundResult": {"status": "whatever-i-want", "note": "trust me"},
-                },
-                "node_token",
-            )
+            malformed = {"roundResult": {"status": "whatever-i-want", "note": "trust me"}}
+            _complete_round_turn(registry, command, **malformed)
+            _complete_round_turn(registry, _take_report_reminder(registry, command), **malformed)
 
             assert task_store.get_task(task["id"])["status"] == "waiting_for_human"
 

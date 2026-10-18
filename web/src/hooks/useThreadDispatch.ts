@@ -411,8 +411,9 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     }
   }
 
-  async function sendDecision(kind: "approve" | "reject" | "rerun" | "mark_done") {
-    if (!activeSession) return;
+  /** Resolves whether the decision was recorded; a failure is already toasted. */
+  async function sendDecision(kind: "approve" | "reject" | "rerun" | "mark_done"): Promise<boolean> {
+    if (!activeSession) return false;
     if (kind === "rerun") {
       const assignment = rerunAssignmentForSession(activeSession, useComposerTargetStore.getState().activeAgent);
       await dispatchRecovery({
@@ -422,7 +423,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         failureLabel: "Failed to rerun assignment",
         failureMessageKey: "errors.rerun_assignment",
       });
-      return;
+      return true;
     }
     try {
       const session = await recordDecisionMutation.mutateAsync({
@@ -432,8 +433,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       });
       useRelayStore.getState().setSelectedSessionId(session.id);
       syncThreadUrl(session.id, true, session.projectId ?? activeSession.projectId);
+      return true;
     } catch {
       // mutation onError surfaces a toast.
+      return false;
     }
   }
 

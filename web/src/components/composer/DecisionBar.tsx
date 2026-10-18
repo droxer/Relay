@@ -27,7 +27,7 @@ type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
 
 export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
   logicalAgents: UserAgent[];
-  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
+  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<unknown>;
   sendHandoff: () => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -48,7 +48,7 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
     approveRef.current?.focus();
   }, []);
 
-  const runAction = async (action: DecisionAction, run: () => Promise<void>) => {
+  const runAction = async (action: DecisionAction, run: () => Promise<unknown>) => {
     if (pendingAction) return;
     setPendingAction(action);
     try {

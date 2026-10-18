@@ -4,6 +4,9 @@ from copy import deepcopy
 
 from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
 from relay.collaboration.policy import (
+    REPORT_REMINDED_STATE_KEY,
+    REPORT_REMINDER_TARGET_STATE_KEY,
+    ROUND_RESULT_REJECTED_STATE_KEY,
     REPAIR_COUNT_STATE_KEY,
     REPAIR_NOTE_STATE_KEY,
     REPAIR_RESUME_INDEX_STATE_KEY,
@@ -248,20 +251,84 @@ def test_a_blocked_answer_does_not_resume_the_requester():
     assert transition.state[WORK_PLAN_ERROR]
 
 
-def test_missing_required_report_ends_the_round():
+def test_missing_required_report_asks_the_same_agent_to_file_it_once():
     transition = next_work_transition(
         request(1), assignments()[1], None, {}, max_repairs=2
     )
+
+    assert transition.next_index == 1
+    assert transition.state[REPORT_REMINDER_TARGET_STATE_KEY] == "build"
+    assert transition.state[REPORT_REMINDED_STATE_KEY] == ["build"]
+
+
+def test_report_reminder_spends_no_repair_budget():
+    spent = {WORK_REPAIRS: 2}
+
+    transition = next_work_transition(
+        request(1, spent), assignments()[1], None, dict(spent), max_repairs=2
+    )
+
+    assert transition.next_index == 1
+    assert transition.state[WORK_REPAIRS] == 2
+
+
+def test_missing_report_after_its_reminder_ends_the_round():
+    reminded = {
+        REPORT_REMINDED_STATE_KEY: ["build"],
+        REPORT_REMINDER_TARGET_STATE_KEY: "build",
+    }
+
+    transition = next_work_transition(
+        request(1, reminded), assignments()[1], None, dict(reminded), max_repairs=2
+    )
+
     assert transition.next_index is None
+    assert REPORT_REMINDER_TARGET_STATE_KEY not in transition.state
+
+
+def test_a_filed_report_clears_the_reminder_target():
+    reminded = {
+        REPORT_REMINDED_STATE_KEY: ["build"],
+        REPORT_REMINDER_TARGET_STATE_KEY: "build",
+    }
+
+    transition = next_work_transition(
+        request(1, reminded), assignments()[1], result(), dict(reminded), max_repairs=2
+    )
+
+    assert transition.next_index == 2
+    assert REPORT_REMINDER_TARGET_STATE_KEY not in transition.state
+
+
+def test_a_rejected_verdict_is_not_reminded():
+    rejected = {ROUND_RESULT_REJECTED_STATE_KEY: "malformed"}
+
+    transition = next_work_transition(
+        request(1), assignments()[1], None, rejected, max_repairs=2
+    )
+
+    assert transition.next_index is None
+
+
+def test_an_optional_step_is_not_reminded():
+    items = assignments()
+    items[1]["required"] = False
+    run_request = {**request(1), "assignments": items}
+
+    transition = next_work_transition(run_request, items[1], None, {}, max_repairs=2)
+
+    assert transition.next_index == 2
+    assert REPORT_REMINDER_TARGET_STATE_KEY not in transition.state
 
 
 def test_missing_report_in_a_styled_round_lets_the_next_member_inspect():
     items = assignments()
     for item in items:
         item["teamSnapshot"] = {"collaborationStyle": "lead_led"}
-    run_request = {**request(1), "assignments": items}
+    reminded = {REPORT_REMINDED_STATE_KEY: ["build"]}
+    run_request = {**request(1, reminded), "assignments": items}
 
-    transition = next_work_transition(run_request, items[1], None, {}, max_repairs=2)
+    transition = next_work_transition(run_request, items[1], None, dict(reminded), max_repairs=2)
 
     assert transition.next_index == 2
 
