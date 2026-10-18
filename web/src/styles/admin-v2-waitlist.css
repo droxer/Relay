@@ -40,3 +40,28 @@
   flex-direction: column;
   gap: var(--sp-3);
 }
+
+.adm-waitlist-reveal-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+/* Each invite's email outcome, with the provider's reason when it failed. */
+.adm-waitlist-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+.adm-waitlist-delivery-error {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--err);
+  overflow-wrap: anywhere;
+}

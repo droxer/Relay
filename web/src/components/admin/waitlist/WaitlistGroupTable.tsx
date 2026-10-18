@@ -6,7 +6,7 @@ import type { WaitlistEntry, WaitlistInviteResult } from "../../../types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TonePill } from "../../StatusPill";
 import { formatRelativeTime } from "../../../lib/adminHelpers";
-import { deliveryLabelKey, deliveryTone, inviteState, isAdminInvite } from "../../../lib/waitlist";
+import { deliveryFailed, deliveryLabelKey, deliveryTone, inviteState, isAdminInvite } from "../../../lib/waitlist";
 import { WaitlistActions } from "./WaitlistActions";
 
 /** Company and role on one line — whichever the person gave. */
@@ -39,6 +39,9 @@ function StatusDetail({ entry, t }: { entry: WaitlistEntry; t: TFunction }) {
           label={t(deliveryLabelKey(entry.lastDeliveryStatus))}
           title={entry.lastDeliveryError ?? undefined}
         />
+      ) : null}
+      {entry.status === "invited" && deliveryFailed(entry.lastDeliveryStatus) && entry.lastDeliveryError ? (
+        <span className="adm-waitlist-delivery-error">{entry.lastDeliveryError}</span>
       ) : null}
     </div>
   );

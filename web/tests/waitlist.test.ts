@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import {
+  deliveryFailed,
   deliveryLabelKey,
   deliveryTone,
   EMPTY_WAITLIST_FIELDS,
@@ -42,6 +43,14 @@ describe("waitlist email shape", () => {
 });
 
 describe("invite by email", () => {
+  it("treats only a failed or bounced email as needing the admin", () => {
+    assert.equal(deliveryFailed("failed"), true);
+    assert.equal(deliveryFailed("bounced"), true);
+    for (const status of ["sent", "queued", "skipped", null, undefined] as const) {
+      assert.equal(deliveryFailed(status), false);
+    }
+  });
+
   it("names a missing or malformed address and passes a real one", () => {
     assert.equal(inviteEmailProblem("   "), "required");
     assert.equal(inviteEmailProblem("ada@"), "invalid");
