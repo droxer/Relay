@@ -4,6 +4,11 @@ This is the one place that decides a waitlist transition. Routes parse,
 authorize, and delegate; the store applies the conditional writes. Email goes
 through the injected ``Mailer`` and never decides an outcome — a failed send
 leaves the entry invited, and the admin still gets the link.
+
+An invite reaches a person two ways: an admin invites someone who asked
+(``invite``, ``invite_batch``), or invites an address directly
+(``invite_email``). Only the public join depends on ``RELAY_WAITLIST_ENABLED``;
+inviting works on every install.
 """
 
 from __future__ import annotations
@@ -20,10 +25,14 @@ from typing import Any
 
 from loguru import logger
 
-from ..notifications.mailer import DeliveryResult, Mailer
+from ..notifications.mailer import DeliveryResult, Mailer, NullMailer
 from ..notifications.templates import confirmation_email, invite_email
 from ..persistence.store_common import _parse_iso
-from ..persistence.waitlist_store import WaitlistConflictError, WaitlistFullError as WaitlistFullError
+from ..persistence.waitlist_store import (
+    ADMIN_INVITE_SOURCE,
+    WaitlistConflictError,
+    WaitlistFullError as WaitlistFullError,
+)
 
 MAX_EMAIL_LENGTH = 254
 FIELD_LIMITS = {"name": 120, "company": 120, "role": 80, "useCase": 1000}
@@ -55,6 +64,19 @@ class InviteNotLiveError(LookupError):
 
 
 @dataclass(frozen=True)
+class InviteOrigin:
+    """Where an invite link points, and whether that link may be emailed.
+
+    Only a configured public origin is ``trusted``. Without one the link is
+    built on the request's own origin, which the admin sees before handing it
+    over, but it is never mailed: a forged Host would put a live token in a
+    genuine-looking email to someone else's site."""
+
+    url: str
+    trusted: bool
+
+
+@dataclass(frozen=True)
 class PendingInvite:
     """An issued invite whose email has not been sent yet."""
 
@@ -64,6 +86,8 @@ class PendingInvite:
     locale: str | None
     url: str
     expires_on: str
+    token_hash: str
+    emailable: bool
 
 
 @dataclass(frozen=True)
@@ -108,6 +132,17 @@ def join_fields(body: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+def invitee_fields(body: dict[str, Any]) -> dict[str, Any]:
+    """The columns an admin's invite-by-email request may set, validated."""
+    locale = body.get("locale")
+    return {
+        "email": normalize_email(body.get("email")),
+        "name": _bounded_text(body.get("name"), "name", FIELD_LIMITS["name"]),
+        "locale": locale if locale in SUPPORTED_LOCALES else None,
+        "source": ADMIN_INVITE_SOURCE,
+    }
+
+
 def invite_url(web_origin: str, token: str) -> str:
     # The token rides in the fragment, which browsers never send to a server,
     # so it stays out of the Worker's, the edge's, and the backend's logs.
@@ -127,6 +162,12 @@ class WaitlistService:
         self.mailer = mailer
         self.config = config or WaitlistConfig()
         self._clock = clock or (lambda: datetime.now(UTC))
+
+    @property
+    def mail_configured(self) -> bool:
+        """Whether an invite can go out by email at all; without it the admin
+        copies each link by hand."""
+        return not isinstance(self.mailer, NullMailer)
 
     # --- public -------------------------------------------------------------
 
@@ -161,14 +202,13 @@ class WaitlistService:
     def accept(
         self, token: str, create_account: Callable[[dict[str, Any]], dict[str, Any]]
     ) -> dict[str, Any]:
-        # The account is created before the entry is linked to it, so a
-        # failure while linking must not turn a working signup into a 500.
         """Redeem an invite by creating its account.
 
         The invite is claimed first with one conditional update, so two
         concurrent accepts cannot both create an account. If creating the
         account fails (weak password, taken handle) the claim is released and
-        the link keeps working."""
+        the link keeps working. The account exists before the entry is linked
+        to it, so a failure while linking must not turn a signup into a 500."""
         if not _TOKEN_PATTERN.match(token or ""):
             raise InviteNotLiveError()
         token_hash = hash_invite_token(token)
@@ -204,12 +244,32 @@ class WaitlistService:
             "counts": self.store.counts(),
         }
 
-    def invite(self, entry_id: str, *, invited_by: str | None, web_origin: str) -> dict[str, Any]:
+    def invite(self, entry_id: str, *, invited_by: str | None, origin: InviteOrigin) -> dict[str, Any]:
         """Invite one entry and email it now, so the admin sees the outcome."""
-        pending = self._issue_invite(entry_id, invited_by=invited_by, web_origin=web_origin)
+        pending = self._issue_invite(entry_id, invited_by=invited_by, origin=origin)
         result = self._deliver(pending)
         entry = self.store.record_delivery(entry_id, status=result.status, error=result.error, now=self._clock())
         return {"entry": self.public_entry(entry), "inviteUrl": pending.url, "delivery": _delivery(result)}
+
+    def invite_email(
+        self,
+        body: dict[str, Any],
+        *,
+        invited_by: str | None,
+        origin: InviteOrigin,
+        email_in_use: Callable[[str], bool],
+    ) -> dict[str, Any]:
+        """Invite an address that never asked: the admin's own invitation.
+
+        The address gets (or reuses) its entry, so a person who already asked
+        is invited in place rather than twice, and a joined one is refused
+        like any re-invite. An address an Account already holds is refused
+        too — that person signs in, or resets their password."""
+        fields = invitee_fields(body)
+        if email_in_use(fields["email"]):
+            raise WaitlistConflictError("An account already uses this email.")
+        entry = self.store.admit_invitee(fields, self._clock())
+        return self.invite(entry["id"], invited_by=invited_by, origin=origin)
 
     def invite_batch(
         self,
@@ -217,7 +277,7 @@ class WaitlistService:
         count: int | None,
         ids: builtins.list[str] | None,
         invited_by: str | None,
-        web_origin: str,
+        origin: InviteOrigin,
     ) -> tuple[builtins.list[dict[str, Any]], builtins.list[PendingInvite]]:
         """Issue a batch of invites without sending them.
 
@@ -235,23 +295,31 @@ class WaitlistService:
         # De-duplicated, so one request never mints a link it then kills.
         for entry_id in dict.fromkeys(ids):
             try:
-                issued = self._issue_invite(entry_id, invited_by=invited_by, web_origin=web_origin)
+                issued = self._issue_invite(entry_id, invited_by=invited_by, origin=origin)
             except (KeyError, WaitlistConflictError):
                 continue
-            entry = self.store.record_delivery(entry_id, status="queued", error=None, now=self._clock())
-            invites.append(
-                {
-                    "entry": self.public_entry(entry),
-                    "inviteUrl": issued.url,
-                    "delivery": {"status": "queued", "error": None},
-                }
+            # Nothing is queued when nothing will be sent: the link is the
+            # whole invite, and the row says so at once.
+            delivery = {"status": "queued", "error": None} if issued.emailable else _delivery(_unsent(issued))
+            entry = self.store.record_delivery(
+                entry_id, status=delivery["status"], error=delivery["error"], now=self._clock()
             )
+            invites.append({"entry": self.public_entry(entry), "inviteUrl": issued.url, "delivery": delivery})
             pending.append(issued)
         return invites, pending
 
     def deliver_invites(self, pending: builtins.list[PendingInvite]) -> None:
-        """Send queued invites one recipient at a time, recording each result."""
+        """Send queued invites one recipient at a time, recording each result.
+
+        An entry re-invited, declined, or accepted since its link was issued is
+        skipped: its queued email would carry a dead link, and its row already
+        records what replaced it."""
         for issued in pending:
+            if not issued.emailable:
+                continue
+            current = self.store.get(issued.entry_id)
+            if current is None or current.get("inviteTokenHash") != issued.token_hash:
+                continue
             result = self._deliver(issued)
             try:
                 self.store.record_delivery(
@@ -260,13 +328,14 @@ class WaitlistService:
             except KeyError:
                 continue  # Erased while its email was in flight.
 
-    def _issue_invite(self, entry_id: str, *, invited_by: str | None, web_origin: str) -> PendingInvite:
+    def _issue_invite(self, entry_id: str, *, invited_by: str | None, origin: InviteOrigin) -> PendingInvite:
         token = secrets.token_urlsafe(_TOKEN_BYTES)
+        token_hash = hash_invite_token(token)
         now = self._clock()
         expires_at = now + self.config.invite_ttl
         entry = self.store.set_invite(
             entry_id,
-            token_hash=hash_invite_token(token),
+            token_hash=token_hash,
             expires_at=expires_at,
             invited_by_user_id=invited_by,
             now=now,
@@ -277,11 +346,15 @@ class WaitlistService:
             email=entry["email"],
             name=entry.get("name"),
             locale=entry.get("locale"),
-            url=invite_url(web_origin, token),
+            url=invite_url(origin.url, token),
             expires_on=expires_at.date().isoformat(),
+            token_hash=token_hash,
+            emailable=origin.trusted,
         )
 
     def _deliver(self, issued: PendingInvite) -> DeliveryResult:
+        if not issued.emailable:
+            return _unsent(issued)
         result = self.mailer.send(
             invite_email(
                 to=issued.email,
@@ -321,6 +394,11 @@ class WaitlistService:
 
 def _delivery(result: DeliveryResult) -> dict[str, Any]:
     return {"status": result.status, "error": result.error}
+
+
+def _unsent(issued: PendingInvite) -> DeliveryResult:
+    logger.info("Waitlist invite not emailed: no public web URL", entry_id=issued.entry_id)
+    return DeliveryResult("skipped", "No public web URL is configured, so the link was not emailed.")
 
 
 def _bounded_text(value: Any, field: str, limit: int) -> str | None:

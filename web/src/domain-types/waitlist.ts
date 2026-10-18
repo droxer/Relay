@@ -43,6 +43,13 @@ export interface WaitlistInviteResult {
   delivery: { status: WaitlistDeliveryStatus; error: string | null };
 }
 
+/** An admin's direct invitation; `locale` picks the email's language. */
+export interface InviteByEmailInput {
+  email: string;
+  name?: string;
+  locale?: string;
+}
+
 export interface WaitlistJoinInput {
   email: string;
   name?: string;

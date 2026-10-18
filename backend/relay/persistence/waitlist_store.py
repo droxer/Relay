@@ -29,6 +29,9 @@ from .sql import metadata as shared_metadata
 from .tables import waitlist as waitlist_tables
 
 WAITLIST_STATUSES = ("waiting", "invited", "joined", "declined")
+# The source an entry an admin invited by email carries, so the queue can tell
+# it from a person who asked.
+ADMIN_INVITE_SOURCE = "admin-invite"
 
 
 class WaitlistConflictError(ValueError):
@@ -76,6 +79,38 @@ class DatabaseWaitlistStore:
                 )
             )
             return self._require(conn, entry_id), True
+
+    def admit_invitee(self, fields: dict[str, Any], now: datetime) -> dict[str, Any]:
+        """The entry an admin is about to invite by email, created if absent.
+
+        Unlike ``join`` there is no capacity check: the cap bounds the public
+        write path, and an admin invitation never waits in the queue. On an
+        existing entry the admin's name and language replace what the person
+        typed, since they decide the invite's greeting and copy. It holds the
+        same admission lock as ``join``, so a public join and an admin invite
+        of one new address cannot both insert it.
+        """
+        with resource_transaction(self.engine, "waitlist-admission") as conn:
+            row = conn.execute(
+                select(self.entries).where(self.entries.c.email == fields["email"])
+            ).mappings().first()
+            if row is None:
+                entry_id = new_database_id()
+                conn.execute(
+                    insert(self.entries).values(
+                        id=entry_id, status="waiting", created_at=now, updated_at=now, **fields
+                    )
+                )
+                return self._require(conn, entry_id)
+            entry_id = str(row["id"])
+            patch = {key: fields[key] for key in ("name", "locale") if fields.get(key)}
+            if patch and row["status"] != "joined":
+                conn.execute(
+                    update(self.entries)
+                    .where(self.entries.c.id == entry_id)
+                    .values(**patch, updated_at=now)
+                )
+            return self._require(conn, entry_id)
 
     def count(self, status: str) -> int:
         with store_transaction(self.engine) as conn:

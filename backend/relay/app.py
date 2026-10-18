@@ -117,7 +117,7 @@ def create_app(
     # One mailer for every transactional email; a half-configured mail setup
     # fails startup here rather than silently dropping invites and resets.
     mailer = mailer_from_env()
-    waitlist = waitlist_service_from_env(mailer) if settings.waitlist_enabled else None
+    waitlist = waitlist_service_from_env(mailer)
     password_reset = PasswordResetService(
         password_reset_store_for(stores.auth), mailer, config=password_reset_config_from_env()
     )
@@ -263,7 +263,7 @@ def _publish_state(
     computer_notifications: ComputerNotificationWatcher,
     notifier: KeyedEventNotifier,
     notification_bridge: PostgresNotificationBridge | None,
-    waitlist: WaitlistService | None,
+    waitlist: WaitlistService,
     password_reset: PasswordResetService,
 ) -> None:
     """Build the one ``AppContext`` request handlers read (see api/deps.py).

@@ -25,7 +25,9 @@ _Avoid_: Lead, Signup, Applicant, Pending user
 
 **Invite**:
 A single-use, expiring credential issued to one Waitlist Entry. Redeeming it
-creates an Account; only its SHA-256 is stored, and re-inviting rotates it.
+creates an Account; only its SHA-256 is stored, and re-inviting rotates it. An
+admin can invite an address that never asked; it still gets a Waitlist Entry,
+so one address has one invite at a time.
 _Avoid_: Invitation code, access key
 
 **Password Reset**:

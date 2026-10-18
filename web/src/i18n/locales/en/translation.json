@@ -1549,7 +1549,9 @@
       "password_reset_not_sent": "Not emailed — share this link with them directly.",
       "password_reset_failed": "Email delivery failed — share this link with them directly.",
       "password_reset_error": "Couldn't create a reset link: {{message}}",
-      "password_reset_copy": "Copy reset link"
+      "password_reset_copy": "Copy reset link",
+      "nav_invitations": "Invitations",
+      "title_invitations": "Invitations"
     },
     "signing_in": "Signing in…",
     "waitlist": {
@@ -1603,7 +1605,24 @@
       "empty_title": "Nobody has asked yet",
       "empty_body": "Requests from the access page appear here, oldest first.",
       "empty_search": "No requests match this search.",
-      "unavailable": "The waitlist isn’t turned on for this server."
+      "invite_email_cta": "Invite by email",
+      "invite_email_kicker": "Invitations",
+      "invite_email_title": "Invite someone",
+      "invite_email_sub": "They get an email with a link to create their account. You’ll also see the link once, to copy.",
+      "invite_email_sub_link": "Email isn’t set up on this server, so you’ll get a link to send them yourself. It’s shown once.",
+      "invite_email_name_hint": "Used to greet them in the email.",
+      "invite_email_language": "Email language",
+      "invite_email_language_en": "English",
+      "invite_email_language_zh": "简体中文",
+      "invite_email_send": "Send invite",
+      "invite_email_create_link": "Create invite link",
+      "invite_email_required": "Enter an email address.",
+      "invite_email_invalid": "Enter a valid email address.",
+      "invite_email_error": "Couldn’t send the invite: {{message}}",
+      "invited_directly": "Invited by an admin",
+      "added": "Added {{when}}",
+      "empty_title_closed": "No invitations yet",
+      "empty_body_closed": "Invite someone by email. Their invite and whether they joined show up here."
     }
   },
   "pref": {

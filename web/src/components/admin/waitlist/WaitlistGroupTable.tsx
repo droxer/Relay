@@ -6,7 +6,7 @@ import type { WaitlistEntry, WaitlistInviteResult } from "../../../types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TonePill } from "../../StatusPill";
 import { formatRelativeTime } from "../../../lib/adminHelpers";
-import { deliveryLabelKey, deliveryTone, inviteState } from "../../../lib/waitlist";
+import { deliveryLabelKey, deliveryTone, inviteState, isAdminInvite } from "../../../lib/waitlist";
 import { WaitlistActions } from "./WaitlistActions";
 
 /** Company and role on one line — whichever the person gave. */
@@ -28,7 +28,9 @@ function StatusDetail({ entry, t }: { entry: WaitlistEntry; t: TFunction }) {
         </span>
       ) : (
         <span className="adm-waitlist-when">
-          {t("admin.waitlist.requested", { when: formatRelativeTime(entry.createdAt, t) })}
+          {t(isAdminInvite(entry) ? "admin.waitlist.added" : "admin.waitlist.requested", {
+            when: formatRelativeTime(entry.createdAt, t),
+          })}
         </span>
       )}
       {entry.lastDeliveryStatus && entry.status === "invited" ? (
@@ -76,7 +78,11 @@ export function WaitlistGroupTable({
               <p className="adm-emp-meta">
                 {entry.name ? <span className="code" translate="no">{entry.email}</span> : null}
                 {affiliation(entry) ? <span>{affiliation(entry)}</span> : null}
-                {entry.source ? <span>{t("admin.waitlist.via", { source: entry.source })}</span> : null}
+                {isAdminInvite(entry) ? (
+                  <span>{t("admin.waitlist.invited_directly")}</span>
+                ) : entry.source ? (
+                  <span>{t("admin.waitlist.via", { source: entry.source })}</span>
+                ) : null}
               </p>
             </TableCell>
             <TableCell>

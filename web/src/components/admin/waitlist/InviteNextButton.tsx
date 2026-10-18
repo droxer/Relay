@@ -15,8 +15,8 @@ import { WAITLIST_QUERY_KEY } from "./useWaitlistQueue";
 /** The suggested batch — small enough that an admin reads every link. */
 const DEFAULT_BATCH = 10;
 
-/** "Invite next N": the waiting queue's oldest N, in one request. The section
-    header's one primary action, like Add user on the Users section. */
+/** "Invite next N": the waiting queue's oldest N, in one request. An outline
+    beside the section's primary, Invite by email — one cobalt fill per fold. */
 export function InviteNextButton({ onInvited }: { onInvited: (results: WaitlistInviteResult[]) => void }) {
   const { t } = useTranslation();
   const { prompt, announce } = useDialogs();
@@ -52,6 +52,7 @@ export function InviteNextButton({ onInvited }: { onInvited: (results: WaitlistI
   return (
     <Button
       type="button"
+      variant="outline"
       className="adm-create-action"
       onClick={() => void handleClick()}
       disabled={pending}
