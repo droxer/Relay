@@ -44,6 +44,7 @@ deploy/deploy.sh railway     # project, Postgres, API/worker services, variables
 deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
 deploy/deploy.sh release     # deploy the API, then the background worker, then publish the UI
 deploy/deploy.sh verify      # probe the live hostnames
+deploy/deploy.sh mail        # check the invite email token and sender (also run by verify)
 deploy/deploy.sh agent-ids   # read Computer ID migration status from backend startup logs
 deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION (see below)
 ```

@@ -81,9 +81,11 @@ validate_config() {
   fi
   if mail_enabled; then
     local key
-    for key in RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID RELAY_MAIL_CLOUDFLARE_API_TOKEN RELAY_MAIL_FROM; do
+    for key in $MAIL_KEYS; do
       eval "[ -n \"\${$key:-}\" ]" || die "$key is required when any RELAY_MAIL_* key is set"
     done
+    mail_sender_address >/dev/null \
+      || die "RELAY_MAIL_FROM must be an address such as invites@mail.$CLOUDFLARE_ZONE (a display name needs quotes: RELAY_MAIL_FROM=\"Relay <invites@mail.$CLOUDFLARE_ZONE>\")"
   fi
 }
 
@@ -108,10 +110,32 @@ require_r2_storage() {
   r2_enabled || die "separate API and worker services require R2; set all four RELAY_R2_* keys in the deploy config (see deploy/README.md)"
 }
 
+MAIL_KEYS="RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID RELAY_MAIL_CLOUDFLARE_API_TOKEN RELAY_MAIL_FROM"
+
 # Waitlist email is on when any of its keys is configured; the backend refuses
 # to start half-configured, so validate_config demands all three first.
 mail_enabled() {
   [ -n "${RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID:-}${RELAY_MAIL_CLOUDFLARE_API_TOKEN:-}${RELAY_MAIL_FROM:-}" ]
+}
+
+# Email is explicitly off: every key is present in the config and empty.
+# Absent keys say nothing — they may have been set in Railway by hand — so only
+# this form lets a deploy remove them.
+mail_disabled_explicitly() {
+  [ -n "${RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID+x}" ] && [ -n "${RELAY_MAIL_CLOUDFLARE_API_TOKEN+x}" ] \
+    && [ -n "${RELAY_MAIL_FROM+x}" ] && ! mail_enabled
+}
+
+# The bare address in RELAY_MAIL_FROM ("Name <a@b>" or "a@b"); fails when
+# there is none.
+mail_sender_address() {
+  local from=${RELAY_MAIL_FROM:-} address
+  case $from in
+    *"<"*">"*) address=${from##*<}; address=${address%%>*} ;;
+    *) address=$from ;;
+  esac
+  printf '%s' "$address" | grep -Eq '^[^@[:space:]<>"]+@[^@[:space:]<>"]+\.[^@[:space:]<>"]+$' || return 1
+  printf '%s\n' "$address"
 }
 
 random_secret() {

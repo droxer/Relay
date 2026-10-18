@@ -4,6 +4,7 @@ import { createElement, useState, type ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import { waitlistPollIntervalMs } from "../src/components/admin/waitlist/useWaitlistQueue";
 import { WaitlistView } from "../src/components/admin/waitlist/WaitlistView";
+import { InviteReveal } from "../src/components/admin/waitlist/InviteReveal";
 import { ADMIN_ROSTER_POLL_MS, CONTROL_PANEL_POLL_MS } from "../src/lib/controlPanelQueries";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { WaitlistEntry, WaitlistInviteResult, WaitlistStatus } from "../src/types";
@@ -101,6 +102,22 @@ it("offers re-invite, not invite, on an invited row", async () => {
   const invited = await screen.findByRole("region", { name: "admin.waitlist.status_invited" });
   expect(within(invited).getByText("admin.waitlist.reinvite")).toBeTruthy();
   expect(within(invited).queryByText("admin.waitlist.invite")).toBeNull();
+});
+
+it("shows a single invite's failed email and its reason beside the link", async () => {
+  const issued = entry("solo", "invited", { lastDeliveryStatus: "failed", lastDeliveryError: "Email service error: sender not verified" });
+  render(<InviteReveal
+    invites={[{
+      entry: issued,
+      inviteUrl: "https://relay.test/join#token=solo",
+      delivery: { status: "failed", error: "Email service error: sender not verified" },
+    }]}
+    onDismiss={() => {}}
+  />);
+  const reveal = screen.getByRole("region", { name: "admin.waitlist.reveal_title" });
+  expect(within(reveal).getByText("admin.waitlist.delivery_failed")).toBeTruthy();
+  expect(within(reveal).getByText("Email service error: sender not verified")).toBeTruthy();
+  expect(within(reveal).getByText("https://relay.test/join#token=solo")).toBeTruthy();
 });
 
 it("refreshes background delivery failures without leaving stale queued results in the reveal", async () => {

@@ -41,6 +41,12 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
+  /* `items` maps a value to its label: without it the trigger shows the raw
+     locale code (`zh-CN`) until the popup has mounted once. */
+  const localeItems = INVITE_LOCALES.map((option) => ({
+    value: option,
+    label: t(`admin.waitlist.invite_email_language_${option === "zh-CN" ? "zh" : "en"}`),
+  }));
   const confirmDiscardChanges = useUnsavedChangesGuard(open && Boolean(email.trim() || name.trim()) && !isBusy);
 
   useOnOpen(open, () => {
@@ -136,15 +142,17 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
           </Field>
 
           <Field label={t("admin.waitlist.invite_email_language")} labelId={localeLabelId} wrapper="div">
-            <Select value={locale} onValueChange={(value) => { if (value) setLocale(value as InviteLocale); }}>
+            <Select
+              value={locale}
+              items={localeItems}
+              onValueChange={(value) => { if (value) setLocale(value as InviteLocale); }}
+            >
               <SelectTrigger className="w-full" aria-labelledby={localeLabelId}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {INVITE_LOCALES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {t(`admin.waitlist.invite_email_language_${option === "zh-CN" ? "zh" : "en"}`)}
-                  </SelectItem>
+                {localeItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

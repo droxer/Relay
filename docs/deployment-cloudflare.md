@@ -416,10 +416,18 @@ creates a reset link from the user's edit drawer and hands it over.
    ```bash
    RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=<account id>
    RELAY_MAIL_CLOUDFLARE_API_TOKEN=<send-only token>
-   RELAY_MAIL_FROM=Relay <invites@mail.get-relay.cc>
+   RELAY_MAIL_FROM=invites@mail.get-relay.cc
    ```
 
-   The deploy and the backend both refuse a partial set.
+   The deploy and the backend both refuse a partial set. `deploy/.env` is
+   sourced by bash, so a display name must be quoted
+   (`RELAY_MAIL_FROM="Relay <invites@mail.get-relay.cc>"`); unquoted, the `<`
+   and `>` are shell redirections and the deploy stops. Cloudflare documents
+   only the bare form, so prefer it. `deploy/deploy.sh mail` (also part of
+   `verify`) checks that the token is active and the sender sits in the zone;
+   onboarding and the send permission show only on a real send. To turn email
+   off, set the three keys empty — deleting the lines leaves Railway's values
+   as they are.
 5. Invite one entry whose address is a verified destination in the account,
    confirm the admin list shows **sent**, then invite in small batches: new
    accounts start with a conservative daily quota that grows with reputation.

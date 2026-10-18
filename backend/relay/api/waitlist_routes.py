@@ -85,11 +85,18 @@ def _invite_origin(request: Request) -> InviteOrigin:
 
 
 def _email_in_use(ctx: Any, email: str) -> bool:
-    """Whether an Account already answers to ``email`` — its own address, or
-    its User's."""
+    """Whether a live Account already answers to ``email`` — its own address,
+    or its User's. A deleted User is soft-deleted and keeps its Account row,
+    so only Accounts of live Users count; their address can be invited again."""
+    users = ctx.auth_store.list_users()  # live Users only
+    live_user_ids = {user["id"] for user in users}
     addresses = (
-        *(account.get("email") for account in ctx.auth_store.list_accounts()),
-        *(user.get("email") for user in ctx.auth_store.list_users()),
+        *(
+            account.get("email")
+            for account in ctx.auth_store.list_accounts()
+            if account.get("userId") in live_user_ids
+        ),
+        *(user.get("email") for user in users),
     )
     return any(isinstance(address, str) and address.strip().lower() == email for address in addresses)
 
@@ -255,6 +262,7 @@ def invite_by_email(
             invited_by=account.get("userId"),
             origin=_invite_origin(request),
             email_in_use=lambda email: _email_in_use(ctx, email),
+            account_live=lambda account_id: ctx.auth_store.get_account_by_id(account_id) is not None,
         )
 
 

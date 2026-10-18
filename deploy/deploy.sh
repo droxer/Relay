@@ -5,7 +5,8 @@
 #   deploy/deploy.sh railway     project, Postgres, services, variables, domains
 #   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache, speed settings
 #   deploy/deploy.sh release     deploy the API, background worker, and web UI, wait
-#   deploy/deploy.sh verify      check the live hostnames
+#   deploy/deploy.sh verify      check the live hostnames (and email, as `mail` does)
+#   deploy/deploy.sh mail        check the invite email settings against Cloudflare
 #   deploy/deploy.sh agent-ids   inspect the backend's startup Computer ID migration status
 #   deploy/deploy.sh region      move Postgres and the services to RAILWAY_REGION
 #                                (offline for minutes; back up first)
@@ -79,10 +80,40 @@ worker_variables() {
 }
 
 configure_worker_service() {
+  local backend current name
   railway_ensure_service "$WORKER_SERVICE" worker
   WORKER_ID=$(railway_service_id "$WORKER_SERVICE")
-  railway_upsert_variables "$WORKER_ID" "$(worker_variables "$(railway_variables "$BACKEND_ID")" "$(railway_variables "$WORKER_ID")")"
+  backend=$(railway_variables "$BACKEND_ID")
+  current=$(railway_variables "$WORKER_ID")
+  railway_upsert_variables "$WORKER_ID" "$(worker_variables "$backend" "$current")"
+  # A reference to a variable the API no longer has resolves to an empty
+  # string; drop it so the worker's settings keep matching the API's.
+  for name in $(jq -r --arg service "$BACKEND_SERVICE" --argjson backend "$backend" '
+      to_entries[]
+      | .key as $key
+      | select(.value == ("${{" + $service + "." + $key + "}}") and ($backend | has($key) | not))
+      | $key' <<<"$current"); do
+    railway_delete_variable "$WORKER_ID" "$name"
+    info "removed $name from $WORKER_SERVICE ($BACKEND_SERVICE no longer sets it)"
+  done
   info "worker variables reference $BACKEND_SERVICE; shared storage is R2"
+}
+
+# Mail keys left in Railway after the config turned email off. An empty key
+# set (RELAY_MAIL_FROM= …) is the explicit off; keys merely missing from the
+# config are left alone, since they may have been set in Railway by hand.
+reconcile_mail_variables() {
+  local current name
+  current=$(railway_variables "$BACKEND_ID")
+  if mail_disabled_explicitly; then
+    for name in $MAIL_KEYS; do
+      jq -e --arg n "$name" 'has($n)' >/dev/null <<<"$current" || continue
+      railway_delete_variable "$BACKEND_ID" "$name"
+      info "removed $name from $BACKEND_SERVICE (the config turns email off)"
+    done
+  elif ! mail_enabled && jq -e 'has("RELAY_MAIL_FROM")' >/dev/null <<<"$current"; then
+    info "$BACKEND_SERVICE keeps RELAY_MAIL_* set outside the config; set them empty here to remove them"
+  fi
 }
 
 # The backend variables from deployment.md § 1 and deployment-cloudflare.md
@@ -144,6 +175,7 @@ phase_railway() {
   railway_ensure_service "$BACKEND_SERVICE" backend
   BACKEND_ID=$(railway_service_id "$BACKEND_SERVICE")
   railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
+  reconcile_mail_variables
   info "backend variables set"
   configure_worker_service
   if workers_enabled; then
@@ -299,6 +331,13 @@ phase_verify() {
   verify_deployment "$BACKEND_ID"
 }
 
+phase_mail() {
+  log "Checking invite email settings"
+  verify_mail
+  [ "$VERIFY_FAILURES" -eq 0 ] || die "$VERIFY_FAILURES email check(s) failed"
+  log "Email settings look right; confirm delivery by inviting a verified address"
+}
+
 phase_agent_ids() {
   log "Agent Computer IDs: startup migration status"
   railway_resolve_context existing
@@ -311,7 +350,7 @@ phase_agent_ids() {
 main() {
   local command=${1:-}
   case $command in
-    up | railway | cloudflare | release | verify | region | agent-ids) ;;
+    up | railway | cloudflare | release | verify | mail | region | agent-ids) ;;
     -h | --help | help | "")
       usage
       [ -n "$command" ] || exit 2
@@ -337,6 +376,7 @@ main() {
     cloudflare) phase_cloudflare ;;
     release) phase_release ;;
     verify) phase_verify ;;
+    mail) phase_mail ;;
     region) phase_region ;;
     agent-ids) phase_agent_ids ;;
   esac

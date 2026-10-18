@@ -5,6 +5,8 @@ import type { WaitlistInviteResult } from "../../../types";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
+import { TonePill } from "../../StatusPill";
+import { deliveryFailed, deliveryLabelKey, deliveryTone } from "../../../lib/waitlist";
 import { CredCopyRow } from "../CredCopyRow";
 
 /**
@@ -28,15 +30,28 @@ export function InviteReveal({ invites, onDismiss }: { invites: WaitlistInviteRe
       </Alert>
       {invites.length === 0 ? (
         <p className="adm-cred-hint">{t("admin.waitlist.reveal_none")}</p>
-      ) : invites.map(({ entry, inviteUrl }) => (
-        <CredCopyRow
-          key={entry.id}
-          label={entry.name ? `${entry.name} · ${entry.email}` : entry.email}
-          value={inviteUrl}
-          copyLabel={t("admin.waitlist.copy_link")}
-          copied={copiedField === entry.id}
-          onCopy={() => void copy(entry.id, inviteUrl)}
-        />
+      ) : invites.map(({ entry, inviteUrl, delivery }) => (
+        <div key={entry.id} className="adm-waitlist-reveal-item">
+          <CredCopyRow
+            label={entry.name ? `${entry.name} · ${entry.email}` : entry.email}
+            value={inviteUrl}
+            copyLabel={t("admin.waitlist.copy_link")}
+            copied={copiedField === entry.id}
+            onCopy={() => void copy(entry.id, inviteUrl)}
+          />
+          {/* What happened to the email, said where the link is: a failed
+              send is exactly when the admin needs to copy it by hand. Only a
+              final outcome — a batch's "queued" is a snapshot that goes stale,
+              so its result shows in the refreshing queue instead. */}
+          {delivery.status === "queued" ? null : <p className="adm-waitlist-delivery">
+            <TonePill tone={deliveryTone(delivery.status)} label={t(deliveryLabelKey(delivery.status))} />
+            {delivery.error && (deliveryFailed(delivery.status) || delivery.status === "skipped") ? (
+              <span className={deliveryFailed(delivery.status) ? "adm-waitlist-delivery-error" : undefined}>
+                {delivery.error}
+              </span>
+            ) : null}
+          </p>}
+        </div>
       ))}
     </section>
   );

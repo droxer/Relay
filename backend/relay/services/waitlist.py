@@ -258,17 +258,23 @@ class WaitlistService:
         invited_by: str | None,
         origin: InviteOrigin,
         email_in_use: Callable[[str], bool],
+        account_live: Callable[[str], bool],
     ) -> dict[str, Any]:
         """Invite an address that never asked: the admin's own invitation.
 
         The address gets (or reuses) its entry, so a person who already asked
-        is invited in place rather than twice, and a joined one is refused
-        like any re-invite. An address an Account already holds is refused
-        too — that person signs in, or resets their password."""
+        is invited in place rather than twice. An address a live Account holds
+        is refused — that person signs in, or resets their password. A joined
+        entry whose account has since been deleted is reopened and invited
+        again; any other joined entry is refused like any re-invite."""
         fields = invitee_fields(body)
         if email_in_use(fields["email"]):
             raise WaitlistConflictError("An account already uses this email.")
         entry = self.store.admit_invitee(fields, self._clock())
+        account_id = entry.get("accountId")
+        if entry["status"] == "joined" and account_id and not account_live(account_id):
+            entry = self.store.reopen_departed(entry["id"], account_id, self._clock())
+            logger.info("Waitlist entry reopened: its account was deleted", entry_id=entry["id"])
         return self.invite(entry["id"], invited_by=invited_by, origin=origin)
 
     def invite_batch(

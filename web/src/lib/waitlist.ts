@@ -184,3 +184,9 @@ export function inviteEmailProblem(raw: string): "required" | "invalid" | null {
   if (!raw.trim()) return "required";
   return isWaitlistEmail(raw) ? null : "invalid";
 }
+
+/** A delivery the admin has to act on: the link reached nobody, so the
+    reason is shown in full rather than behind a tooltip. */
+export function deliveryFailed(status: WaitlistDeliveryStatus | null | undefined): boolean {
+  return status === "failed" || status === "bounced";
+}

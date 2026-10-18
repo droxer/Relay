@@ -80,6 +80,51 @@ verify_worker_assets() {
   expect_code "a missing asset is a 404, not the app shell" 404 "$(http_code "$WEB_ORIGIN/_next/static/relay-verify-missing.js")"
 }
 
+# Whether the send token is a live Cloudflare token. An account-owned token
+# verifies under its account — which also proves RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID
+# is its account; a user-owned one only under /user.
+mail_token_active() {
+  local path resp
+  for path in "/accounts/$RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID/tokens/verify" "/user/tokens/verify"; do
+    resp=$(curl -sS --max-time 30 "$CLOUDFLARE_API_URL$path" \
+      -H @<(bearer_header "$RELAY_MAIL_CLOUDFLARE_API_TOKEN") 2>/dev/null) || continue
+    if jq -e '.success == true and .result.status == "active"' >/dev/null 2>&1 <<<"$resp"; then
+      printf '%s\n' "${path%%/tokens/verify}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# What can be checked about invite email without sending one. Whether the
+# sender domain is onboarded and the token may send only shows on a real send.
+verify_mail() {
+  local address scope
+  if ! mail_enabled; then
+    info "skip  email: no RELAY_MAIL_* settings, so admins copy invite links by hand"
+    return
+  fi
+  address=$(mail_sender_address)
+  if scope=$(mail_token_active); then
+    case $scope in
+      /accounts/*) info "ok    email token is active on account $RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID" ;;
+      *) info "ok    email token is active (a user token; its account is not checked)" ;;
+    esac
+  else
+    info "FAIL  RELAY_MAIL_CLOUDFLARE_API_TOKEN is not an active Cloudflare token (revoked, expired, or mistyped)"
+    VERIFY_FAILURES=$((VERIFY_FAILURES + 1))
+  fi
+  if in_zone "${address##*@}"; then
+    info "ok    sender $address is inside $CLOUDFLARE_ZONE"
+  else
+    warn "sender $address is outside $CLOUDFLARE_ZONE; its domain must be onboarded in Email Sending on this account"
+  fi
+  case $RELAY_MAIL_FROM in
+    *"<"*) warn "RELAY_MAIL_FROM has a display name; Cloudflare documents only a bare address — if sends fail with a schema error, set RELAY_MAIL_FROM=$address" ;;
+  esac
+  info "note  onboarding of ${address##*@} and the token's Email Sending permission show only on a send (deployment-cloudflare.md § 10)"
+}
+
 # verify_deployment <backend-service-id>
 verify_deployment() {
   log "Verifying $WEB_ORIGIN and $API_ORIGIN"
@@ -89,6 +134,7 @@ verify_deployment() {
   verify_cors
   verify_origin_lock "$1"
   verify_edge_cache
+  verify_mail
   [ "$VERIFY_FAILURES" -eq 0 ] || die "$VERIFY_FAILURES verification check(s) failed"
   log "All checks passed"
 }

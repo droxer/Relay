@@ -265,7 +265,8 @@ describe("reviewed design regressions", () => {
     // Workspace is its own tab, flush, and gives the explorer the drawer's
     // height; the durable artifacts list is a separate tab beside it.
     const page = readWeb("src/components/task-record/TaskRecordPage.tsx");
-    assert.match(page, /<TabsContent value="workspace" className="record-workspace-panel">\s*<RecordWorkspace/);
+    // A leading JSX comment is allowed; nothing else may sit before the explorer.
+    assert.match(page, /<TabsContent value="workspace" className="record-workspace-panel">\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<RecordWorkspace/);
     assert.match(page, /<TabsContent value="artifacts">\s*<RecordArtifacts/);
     assert.match(styles, /\.record-drawer \.workspace-body > \.record-workspace-panel\s*\{[^}]*padding:\s*0/);
   });
