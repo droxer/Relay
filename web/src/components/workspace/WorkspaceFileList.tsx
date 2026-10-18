@@ -75,6 +75,7 @@ export function WorkspaceFileList({
   error,
   isLoading,
   path,
+  rootPath = "",
   selectedPath,
   onOpenDirectory,
   onSelectFile,
@@ -88,6 +89,9 @@ export function WorkspaceFileList({
   onOpenDirectory: (path: string) => void;
   onSelectFile: (entry: WorkspaceFileEntry) => void;
   onRetry: () => void;
+  /** The highest folder this browser may climb to — the parent row hides
+   *  there. The thread panel scopes itself to `artifacts/`. */
+  rootPath?: string;
 }) {
   const { t } = useTranslation();
   const entries = data?.entries ?? [];
@@ -105,7 +109,7 @@ export function WorkspaceFileList({
 
   return (
     <div className="workspace-pane-body">
-      {path ? (
+      {path && path !== rootPath ? (
         <Button variant="ghost" type="button" className="workspace-file-up h-auto justify-start rounded-none" onClick={() => onOpenDirectory(parentPath(path))}>
           {t("workspace.parent_directory")}
         </Button>

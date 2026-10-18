@@ -279,6 +279,19 @@ describe("thread space panel wiring", () => {
     assert.match(panel, /useKeyChange\(`\$\{projectId \?\? ""\}\\u0000\$\{sessionId\}`, \(\) => setProjectFile\(""\)\)/);
   });
 
+  it("keeps the project tab to one chrome row above the list", () => {
+    /* It used to stack the panel header, the Project / This thread tabs, an
+       Artifacts / Activity switch, and a path bar with its own refresh. The
+       panel now browses artifacts/ only, refresh rides the header, and the
+       path bar appears only inside a folder. */
+    const files = readWeb("src/components/space/ThreadSpaceFiles.tsx");
+    assert.ok(!/WorkspaceFileTabs/.test(files), "the panel grew a second switch under its tabs again");
+    assert.match(files, /\{subPath \? \(\s*<div className="thread-space-files-bar is-path">/);
+    assert.match(files, /rootPath=\{PANEL_ROOT\}/);
+    const panel = readWeb("src/components/space/ThreadSpacePanel.tsx");
+    assert.match(panel, /activeTab === "project" && projectId \? <RefreshFilesButton/);
+  });
+
   it("gives the empty state an action, not just a sentence", () => {
     const panel = readWeb("src/components/space/ThreadSpacePanel.tsx");
     assert.match(panel, /space\.empty_cta_files/);

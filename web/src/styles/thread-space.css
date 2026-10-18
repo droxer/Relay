@@ -88,6 +88,12 @@
   letter-spacing: var(--type-heading-track);
 }
 
+.thread-space-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .thread-space-list {
   min-height: 0;
   overflow-y: auto;
@@ -223,6 +229,12 @@
   min-height: 0;
 }
 
+/* At the artifacts root the list is the only child: without this the lone
+   body would land in the `auto` row and lose its scroller. */
+.thread-space-files.is-root {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 /* Back, name, actions — the file's own header row, and the same three slots
    in the same order as the full-page pane's .workspace-pane-head. The name
    takes the slack (it is the 1fr), so `space-between` has nothing left to do. */
@@ -249,6 +261,13 @@
   height: auto;
   min-height: var(--header-h);
   padding-inline: var(--sp-4);
+}
+
+/* Inside a folder the path bar is a slim sub-row under the panel header and
+   tabs, not a second header — it does not take the header height. */
+.thread-space-panel .thread-space-files-bar.is-path {
+  min-height: 0;
+  padding-block: var(--sp-2);
 }
 
 /* The name yields, the controls do not: at panel width the filename is the
