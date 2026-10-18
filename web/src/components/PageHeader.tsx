@@ -35,7 +35,7 @@ export function PageHeader({
    *  keep their actions in place. */
   topbarActions?: boolean | "inactive";
   /** "display" is the 28px hero tier for page-owning nouns; "title" is the
-   *  19px tier for a fixed UI noun heading a subordinate pane (the thread
+   *  17px tier for a fixed UI noun heading a subordinate pane (the thread
    *  rail — same rung a drawer title takes); "record" is regular sans for a
    *  name the user or an agent authored. See shell.css. */
   titleVariant?: "default" | "display" | "title" | "record";

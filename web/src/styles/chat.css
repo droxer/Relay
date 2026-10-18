@@ -61,12 +61,12 @@
   color: var(--ink-1);
   /* CONTENT, NOT CHROME. A thread name is written by a person or an agent and
      runs to a full sentence — "Fix billing export race condition on concurrent
-     invoice writes" set at the tightened 24px/700 display tier would shout
+     invoice writes" set at the tightened display tier would shout
      someone's words. --type-title keeps that tier for fixed UI nouns
      (Threads, Backlog, the wordmark), where it reads as the brand's
      brand; content-derived strings take the calmer sans role. */
-  /* One rung under the 19px record title: the header sits over a 14px
-     transcript (--fs-transcript), and at 19px the thread name outweighed
+  /* One rung under the 16px record title: the header sits over a 14px
+     transcript (--fs-transcript), and at 16px the thread name outweighed
      every turn below it. Same calm sans voice as --type-title-content. */
   font: 400 var(--fs-heading)/var(--leading-normal) var(--font-sans);
   letter-spacing: var(--type-title-content-track);
@@ -130,6 +130,7 @@
      trigger's border. The words give way, the mark and chevron do not. */
   min-width: 0;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .chat-agent-select-unavailable-text {
@@ -176,6 +177,7 @@
   gap: var(--sp-2);
   color: var(--ink-2);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .chat-artifacts-button[aria-expanded="true"] {
@@ -400,6 +402,7 @@
   align-items: center;
   min-width: 0;
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .team-handoff-text {
@@ -678,6 +681,7 @@
   margin: 0;
   color: var(--ink-1);
   font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   word-break: break-word;
 }
 
@@ -766,6 +770,7 @@
   max-width: 100%;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* An agent turn's header row — mark, name, time — sits on grid row 1; the
@@ -835,6 +840,7 @@
   border-radius: var(--r-2);
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .attachment-marker:hover {
@@ -953,6 +959,7 @@
 
 .msg-turn-action-label {
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* Icon-only: the button's label stays for assistive tech (the tooltip shows

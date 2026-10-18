@@ -240,8 +240,8 @@
      its left side bearing was shaved off ("Split" rendered as "plit"). A 4px
      inline pad moves the ink off the clip edge; the matching negative margin
      keeps the title optically aligned with the badges and meta above/below. */
-  margin: 0 -4px;
-  padding: 0 4px;
+  margin: 0 calc(var(--sp-1) * -1);
+  padding: 0 var(--sp-1);
   border: 0;
   background: transparent;
   color: var(--ink-1);
@@ -276,6 +276,7 @@
   margin-top: var(--sp-3);
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* On a tile the facts line rides the BOTTOM of the frame: `margin-top: auto`
@@ -380,6 +381,7 @@
   border-radius: var(--r-3);
   color: var(--ink-4);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   text-align: center;
 }
 

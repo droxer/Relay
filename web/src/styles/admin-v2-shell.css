@@ -42,6 +42,7 @@
   gap: var(--sp-2);
   max-width: 28rem;
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .adm-command-status-text { overflow-wrap: anywhere; }

@@ -101,7 +101,7 @@ function DatePicker({
       {canClear ? (
         <button
           type="button"
-          className="absolute end-1 inline-flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+          className="absolute end-1 inline-flex size-(--control-h-xs) items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
           aria-label={t("date_picker.clear")}
           onClick={() => {
             onValueChange("")

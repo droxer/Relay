@@ -16,7 +16,7 @@ const NumberFieldContext = createContext<{
 } | null>(null)
 
 const numberFieldGroupVariants = cva(
-  "relative flex w-full justify-between border border-input data-disabled:pointer-events-none data-disabled:opacity-50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive focus-within:has-aria-invalid:border-destructive focus-within:has-aria-invalid:ring-destructive/20 dark:focus-within:has-aria-invalid:ring-destructive/40 rounded-lg bg-transparent transition-colors focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3",
+  "relative flex w-full justify-between border border-input data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive focus-within:has-aria-invalid:border-destructive focus-within:has-aria-invalid:ring-destructive/20 dark:focus-within:has-aria-invalid:ring-destructive/40 rounded-md bg-transparent transition-colors focus-within:border-ring",
   {
     variants: {
       // Ladders restored from the pre-rename source. Rhea was added after they
@@ -135,7 +135,7 @@ function NumberFieldDecrement({
     <NumberFieldPrimitive.Decrement
       className={cn(
         numberFieldButtonVariants({ size }),
-        "rounded-s-lg border-e-0",
+        "rounded-s-md border-e-0",
         className
       )}
       data-slot="number-field-decrement"
@@ -169,7 +169,7 @@ function NumberFieldIncrement({
     <NumberFieldPrimitive.Increment
       className={cn(
         numberFieldButtonVariants({ size }),
-        "rounded-e-lg border-s-0",
+        "rounded-e-md border-s-0",
         className
       )}
       data-slot="number-field-increment"
@@ -228,7 +228,7 @@ function NumberFieldScrubArea({
       <Label className="cursor-ew-resize" htmlFor={context.fieldId}>
         {label}
       </Label>
-      <NumberFieldPrimitive.ScrubAreaCursor className="drop-shadow-[0_1px_1px_#0008] filter">
+      <NumberFieldPrimitive.ScrubAreaCursor className="text-foreground">
         <CursorGrowIcon />
       </NumberFieldPrimitive.ScrubAreaCursor>
     </NumberFieldPrimitive.ScrubArea>
@@ -238,9 +238,9 @@ function NumberFieldScrubArea({
 function CursorGrowIcon(props: React.ComponentProps<"svg">) {
   return (
     <svg
-      fill="black"
+      className="stroke-background"
+      fill="currentColor"
       height="14"
-      stroke="white"
       viewBox="0 0 24 14"
       width="26"
       xmlns="http://www.w3.org/2000/svg"

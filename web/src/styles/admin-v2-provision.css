@@ -48,9 +48,8 @@
 }
 
 .adm-provision-section-meta {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  font-weight: 400;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
@@ -93,6 +92,7 @@
 .create-agent-computer-kind {
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   white-space: nowrap;
 }
 
@@ -110,7 +110,7 @@
   right: var(--sp-1);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-0-5);
 }
 
 .agent-model-field-button {
@@ -212,6 +212,7 @@
 .create-agent-runtime-option-meta {
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .create-agent-runtime-check {
@@ -292,7 +293,7 @@
   appearance: none;
   background: transparent;
   border: 0;
-  border-radius: calc(var(--r-2) - 2px);
+  border-radius: var(--r-1);
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -307,10 +308,11 @@
   height: var(--control-h-sm);
   padding: 0 var(--sp-3);
   border: none;
-  border-radius: calc(var(--r-2) - 2px);
+  border-radius: var(--r-1);
   background: transparent;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),

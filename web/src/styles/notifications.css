@@ -12,7 +12,9 @@
 }
 
 /* The unread count, pinned to the glyph's top corner. A capsule, so it may
-   take --r-full: it grows from a circle ("3") to a short pill ("9+"). */
+   take --r-full: it grows from a circle ("3") to a short pill ("9+"). The
+   neutral ink plate, not cobalt: a count is a fact, and --action is the
+   primary action and selection only. */
 .notif-bell-badge {
   position: absolute;
   top: calc(var(--sp-1) * -1);
@@ -21,8 +23,8 @@
   height: var(--icon-md);
   padding: 0 var(--sp-1);
   border-radius: var(--r-full);
-  background: var(--action);
-  color: var(--on-action);
+  background: var(--ink-1);
+  color: var(--surface-0);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   line-height: var(--icon-md);
@@ -121,6 +123,7 @@
   flex: 0 0 auto;
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .notif-empty {

@@ -88,10 +88,9 @@ function CardTitle({
     defaultTagName: "h3",
     props: mergeProps<"h3">(
       {
-        // Card title — the source system's subtitle-lg tier, worn as the
-        // --type-heading role (700 / 18px / --leading-heading): not the display
-        // tier — only the 24px rung tracks tight, and font-display aliases the
-        // sans the card already inherits.
+        // Card title — the --type-heading role (700 / 15px /
+        // --leading-heading): not the display tier, which is the only one
+        // that tracks tight.
         className: cn(
           "m-0 text-lg leading-(--leading-heading) font-bold tracking-(--track-0) text-ink",
           className

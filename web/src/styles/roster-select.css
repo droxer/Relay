@@ -30,11 +30,12 @@
   min-height: var(--control-h-sm);
   padding: 0 var(--sp-3);
   border: 0;
-  border-radius: calc(var(--r-2) - 2px);
+  border-radius: var(--r-1);
   background: transparent;
   color: var(--ink-3);
   cursor: pointer;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   white-space: nowrap;
   transition:
     background var(--t-fast) var(--ease),
@@ -106,8 +107,14 @@
   content: none;
 }
 
+/* Action rows are menu commands, not prose anchors, so they sit one ink tier
+   above the entity rows' meta and take the menu's highlight like any row. */
 .roster-option.is-action .roster-option-copy > span:first-child {
-  color: var(--link);
+  color: var(--ink-2);
+}
+
+[data-highlighted] .roster-option.is-action .roster-option-copy > span:first-child {
+  color: var(--ink-1);
 }
 
 .roster-option-copy {

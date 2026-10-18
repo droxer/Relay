@@ -307,9 +307,8 @@
   max-width: var(--ld-measure);
   margin-inline: auto;
   padding: var(--ld-section-gap) var(--ld-gutter) 0;
-  /* Focus lands here after an in-page jump; the section is not a control,
-     so it shows no ring. */
-  outline: none;
+  /* Focus lands here after an in-page jump (tabIndex -1), so a keyboard jump
+     takes base.css's [tabindex]:focus-visible ring like any other target. */
   scroll-margin-top: var(--sp-8);
 }
 

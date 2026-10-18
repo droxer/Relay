@@ -129,6 +129,7 @@
   gap: var(--sp-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
 }
 
@@ -183,6 +184,7 @@
   overflow: hidden;
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -197,6 +199,7 @@
   margin: 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   white-space: pre-wrap;
 }
 
@@ -216,6 +219,7 @@
   margin: 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   white-space: pre-wrap;
 }
 
@@ -622,6 +626,7 @@
   white-space: nowrap;
   color: var(--ink-1);
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .project-settings-fact dd.code {
@@ -692,6 +697,7 @@
 
 .project-settings-danger-copy strong {
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   color: var(--ink-1);
 }
 
@@ -736,7 +742,7 @@
   margin: 0;
   color: var(--ink-2);
   font: var(--type-label-strong);
-  letter-spacing: var(--type-label-track);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .project-setup-rationale {

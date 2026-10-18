@@ -24,6 +24,7 @@
 .task-project-label {
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 @media (max-width: 820px) {
@@ -64,4 +65,5 @@
   padding: var(--sp-3) var(--page-gutter);
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }

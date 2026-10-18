@@ -141,7 +141,7 @@
   right: -7px;
   display: grid;
   place-items: center;
-  width: 24px;
+  width: var(--control-h-2xs);
   height: var(--control-h-2xs);
   padding: 0;
   border: 0.5px solid var(--line-1);
@@ -191,6 +191,7 @@
   background: var(--surface-0);
   color: var(--err);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   box-shadow: var(--shadow-2);
 }
 
@@ -239,7 +240,7 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 24px;
+    width: var(--control-h-2xs);
     height: var(--control-h-2xs);
     transform: translate(-50%, -50%);
     border: 0.5px solid var(--line-1);
@@ -276,6 +277,7 @@
 .preset-avatar-section-title {
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* Column counts divide each set evenly (16 per agent style, 12 team grids)
@@ -343,6 +345,7 @@
   margin: 0;
   color: var(--ink-2);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .profile-image-presets .preset-avatar-grid {

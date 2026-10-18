@@ -420,7 +420,7 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
           title={nodes.length === 0 ? t("admin.no_nodes") : t("admin.v2.no_nodes_for_filter")}
           illustration={<AdminNode size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
           actions={nodes.length === 0 && onAddNode ? (
-            <Button type="button" onClick={onAddNode}>
+            <Button type="button" variant="outline" onClick={onAddNode}>
               {t("admin.v2.add_node_cta")}
             </Button>
           ) : undefined}

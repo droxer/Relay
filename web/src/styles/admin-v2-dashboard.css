@@ -230,6 +230,7 @@
   padding: 0 var(--sp-3) var(--sp-2) var(--sp-8);
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .adm-dash-chart--empty { opacity: var(--opacity-dormant); }

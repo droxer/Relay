@@ -33,6 +33,7 @@ export function PermissionPrompts({ requests, agentLabel, onAnswer }: {
           request={request}
           agent={agentLabel(request)}
           autoFocus={index === 0}
+          primary={index === 0}
           onAnswer={onAnswer}
         />
       ))}
@@ -40,10 +41,11 @@ export function PermissionPrompts({ requests, agentLabel, onAnswer }: {
   );
 }
 
-function PermissionPrompt({ request, agent, autoFocus, onAnswer }: {
+function PermissionPrompt({ request, agent, autoFocus, primary, onAnswer }: {
   request: PermissionRequest;
   agent: string;
   autoFocus: boolean;
+  primary: boolean;
   onAnswer: Answer;
 }) {
   const { t } = useTranslation();
@@ -97,7 +99,9 @@ function PermissionPrompt({ request, agent, autoFocus, onAnswer }: {
         </div>
       ) : null}
       <div className="decision-bar">
-        <Button variant="default" type="button" ref={allowRef} disabled={busy} loading={pending === "allow"} loadingLabel={pendingLabel} onClick={() => void answer("allow")}>
+        {/* One accent fill per view: only the first open prompt's Allow is
+            the primary; the rest wait in the outline tier. */}
+        <Button variant={primary ? "default" : "outline"} type="button" ref={allowRef} disabled={busy} loading={pending === "allow"} loadingLabel={pendingLabel} onClick={() => void answer("allow")}>
           <ActionApprove size={ICON.sm} /> {t("permission.allow")}
         </Button>
         <Button variant="destructive" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>

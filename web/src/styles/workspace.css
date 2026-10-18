@@ -97,6 +97,7 @@
   color: var(--ink-3);
   cursor: pointer;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   white-space: nowrap;
   transition:
     color var(--t-fast) var(--ease),
@@ -185,6 +186,7 @@
   overflow: hidden;
   color: var(--ink-1);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -549,6 +551,7 @@
 .workspace-dossier-field-value {
   color: var(--ink-1);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .workspace-dossier-stamp {
@@ -557,6 +560,7 @@
   border-top: 0.5px solid var(--line-2);
   color: var(--ink-4);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   text-wrap: pretty;
 }
 
@@ -665,6 +669,7 @@
 .workspace-profile .adm-cred-value {
   color: var(--ink-1);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .workspace-profile .adm-cred-note {
@@ -673,6 +678,7 @@
   border-top: 0.5px solid var(--line-2);
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .workspace-profile .adm-drawer-section {

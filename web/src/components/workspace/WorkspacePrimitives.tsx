@@ -106,7 +106,7 @@ export function WorkspaceError({
       <div className="workspace-error" role="alert">
         {eyebrow ? <span className="workspace-eyebrow">{eyebrow}</span> : null}
         <p>{message}</p>
-        <Button variant="default" type="button" className="h-auto" onClick={onRetry}>
+        <Button variant="outline" type="button" className="h-auto" onClick={onRetry}>
           {t("workspace.retry")}
         </Button>
       </div>

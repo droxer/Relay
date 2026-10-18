@@ -81,6 +81,7 @@
   color: var(--ink-2);
   cursor: pointer;
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-align: start;
   transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }

@@ -325,6 +325,7 @@
     border-radius: var(--r-2);
     color: var(--ink-2);
     font: var(--type-label-strong);
+    letter-spacing: var(--type-label-strong-track);
   }
 
   .mobile-topbar button span {

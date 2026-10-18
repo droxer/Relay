@@ -25,10 +25,12 @@ import { useHandoffStore } from "@/lib/handoffStore";
 
 type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
 
-export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
+export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPrimary = false }: {
   logicalAgents: UserAgent[];
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
+  /** Set while a permission prompt above holds the view's primary action. */
+  deferPrimary?: boolean;
 }) {
   const { t } = useTranslation();
   const handoffOpen = useHandoffStore((s) => s.open);
@@ -88,7 +90,10 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
   return (
     <>
       <div className="decision-bar">
-        <Button variant="default" type="button" ref={approveRef} disabled={busy} loading={pendingAction === "approve"} loadingLabel={pendingLabel} onClick={() => void runAction("approve", () => sendDecision("approve"))}><ActionApprove size={ICON.sm} /> {t("decision.approve")}</Button>
+        {/* One accent fill per view: while the handoff panel is open its Send
+            is the action in hand, and while a permission prompt is open its
+            Allow is, so Approve steps down to the outline tier. */}
+        <Button variant={handoffOpen || deferPrimary ? "outline" : "default"} type="button" ref={approveRef} disabled={busy} loading={pendingAction === "approve"} loadingLabel={pendingLabel} onClick={() => void runAction("approve", () => sendDecision("approve"))}><ActionApprove size={ICON.sm} /> {t("decision.approve")}</Button>
         <Button variant="ghost" type="button" disabled={busy} loading={pendingAction === "rerun"} loadingLabel={pendingLabel} onClick={() => void runAction("rerun", () => sendDecision("rerun"))}>{t("decision.rerun")}</Button>
         <Button variant="ghost" type="button" disabled={busy} loading={pendingAction === "mark_done"} loadingLabel={pendingLabel} onClick={() => void runAction("mark_done", () => sendDecision("mark_done"))}>{t("decision.mark_done")}</Button>
         <Button variant="destructive" type="button" disabled={busy} loading={pendingAction === "reject"} loadingLabel={pendingLabel} onClick={() => void handleReject()}>{t("decision.reject")}</Button>

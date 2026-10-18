@@ -68,6 +68,8 @@ export function ResetPasswordScreen() {
           <p className="login-error" role="alert">{resetError(lookupError, t)}</p>
           <Button
             type="button"
+            className="login-submit w-full"
+            size="cta"
             loading={resetQuery.isFetching}
             onClick={() => void resetQuery.refetch()}
           >

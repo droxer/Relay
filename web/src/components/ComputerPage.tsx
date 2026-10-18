@@ -112,12 +112,10 @@ export function ComputerPage({
   const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
     <div className="computer-connect-cta">
       {/* Connecting a computer is what this page is for, so the CTA carries
-          the cobalt in both places it appears — the header and the empty
-          state. It used to take the ghost tier in the header to match the
-          control panel's, but the control panel's header actions are cobalt
-          now too: one primary per fold, and this is that one. The usage
-          readout (2/3) and limit reason stay attached to the action either
-          way. */}
+          the cobalt — once. With no computers the empty state's CTA is the
+          primary and the header's steps down to ghost, so the two never
+          compete. The usage readout (2/3) and limit reason stay attached to
+          the action either way. */}
       <Button
         type="button"
         size={size}
@@ -204,7 +202,7 @@ export function ComputerPage({
         count={t("computer.count", { count: myNodes.length })}
         titleAs="h2"
         titleVariant="title"
-        actions={connectCta("sm")}
+        actions={connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
       />
       {/* The shell clips its children, so the roster needs its own scroll
           container — see computer.css. */}

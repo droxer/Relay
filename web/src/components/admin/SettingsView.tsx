@@ -302,7 +302,9 @@ function NumberSettingCard({
               setSavedAt(null);
             }}
           />
-          <Button type="submit" disabled={isBusy || !isDirty || !isValid}>
+          {/* Outline: each setting card saves on its own, and two dirty cards
+              must not show two accent fills. */}
+          <Button type="submit" variant="outline" disabled={isBusy || !isDirty || !isValid}>
             {isBusy ? t("admin.v2.settings_saving") : t("admin.v2.settings_save")}
           </Button>
           {isDirty && !isBusy ? (

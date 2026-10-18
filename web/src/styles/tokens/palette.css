@@ -1,8 +1,8 @@
 /* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
    Near-black and near-white canvases, achromatic grey elevation and borders,
-   and accessible neutral text keep the workspace quiet. The primary action is
-   a neutral fill that inverts with the theme; blue is reserved for selection
-   and links; semantic hues identify status, liveness, and syntax.
+   and accessible neutral text keep the workspace quiet. The primary action
+   wears the cobalt accent (Linear-style, one per view), which also marks
+   selection; links take their own blue; semantic hues identify status, liveness, and syntax.
    This is the only file allowed to originate a color.
    Reference: https://vercel.com/geist/colors
 
@@ -98,8 +98,9 @@
      the light one, with the canvas ink on top (16.9:1 dark / 17.9:1 light).
      No longer the primary action: shadcn's --primary now points at --action
      (shadcn-bridge.css), so the default Button leads with the accent. These
-     remain for the few emphasis fills that read them directly (the profile
-     image picker's hover disc). No disabled hex: disabled is
+     remain for the few fills that read them directly (the composer's send
+     button, the landing page's primary plate, the profile image picker's
+     hover disc). No disabled hex: disabled is
      --opacity-disabled or the Button's explicit disabled surface. */
   --cta-fill: #ededed;
   --cta-hover: #d4d4d4;
@@ -220,8 +221,10 @@
   --dark-surface: #171717;
   --dark-ink: #ededed;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
+  --dark-action: #4c9aff;
 
   --light-canvas: #fafafa;
+  --light-action: #0052b8;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's

@@ -63,6 +63,7 @@ export function SkillPreviewDrawer({
     <Drawer
       open
       onClose={onClose}
+      titleVariant="record"
       title={skill?.displayName || fallbackTitle}
       subtitle={skill ? skill.slug : undefined}
       subtitleMono

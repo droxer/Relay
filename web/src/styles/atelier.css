@@ -57,7 +57,7 @@
      generic containers for arbitrary translated copy and stay SENTENCE
      CASE — the carve-out .eyebrow documents in tokens/base.css, pinned by
      typographyTokens.test.ts. */
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-micro-track);
 }
 
 body {

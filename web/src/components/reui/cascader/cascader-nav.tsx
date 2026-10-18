@@ -96,7 +96,7 @@ function CascaderBack({ className, children, ...props }: CascaderBackProps) {
     "aria-label": labels.back,
     onClick: () => popLevel(),
     className: cn(
-      "text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 flex shrink-0 items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2",
+      "text-muted-foreground hover:bg-accent hover:text-accent-foreground flex shrink-0 items-center justify-center rounded-md outline-hidden transition-colors",
       // A notch under the row height: an affordance, not a second field.
       "size-6",
       className
@@ -205,7 +205,7 @@ function CascaderBreadcrumb({
             type="button"
             data-slot="cascader-breadcrumb-item"
             onClick={() => goTo(segment.node)}
-            className="hover:text-foreground focus-visible:ring-ring/50 max-w-32 truncate rounded-sm outline-hidden transition-colors focus-visible:ring-2"
+            className="hover:text-foreground max-w-32 truncate rounded-sm outline-hidden transition-colors"
           >
             {segment.node.label}
           </button>
@@ -506,7 +506,7 @@ function CascaderInput({
         /* No trigger to carry the invalid state in the `inline` case. */
         {...(invalid ? { "aria-invalid": true, "data-invalid": "" } : null)}
         className={cn(
-          "placeholder:text-muted-foreground h-full w-full min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+          "placeholder:text-muted-foreground h-full w-full min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
           backVisible && "ps-0",
           className
         )}

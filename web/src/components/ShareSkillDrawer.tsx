@@ -124,6 +124,7 @@ export function ShareSkillDrawer({
     <Drawer
       open
       onClose={onClose}
+      titleVariant="record"
       title={skill.displayName}
       kicker={t("skills.share_managed")}
       closeLabel={t("skills.close")}

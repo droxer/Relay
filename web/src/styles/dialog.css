@@ -36,10 +36,6 @@
   outline: none;
 }
 
-.dialog-modal:focus-visible {
-  box-shadow: var(--shadow-2);
-}
-
 .dialog-modal[data-ending-style] {
   animation: overlay-panel-out var(--t-fast) var(--ease) forwards;
 }

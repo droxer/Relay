@@ -186,9 +186,9 @@
   color: var(--ink-1);
 }
 
-/* A page title is display-tier mono when it names a FIXED UI noun (Teams,
-   Backlog, Computers) and sans when it prints a user- or agent-authored
-   string — a team, agent, or project name. The h1 sits at 22px: 28px against
+/* A page title takes the display tier (500, tightened) when it names a FIXED
+   UI noun (Teams, Backlog, Computers) and the calmer content role when it
+   prints a user- or agent-authored string — a team, agent, or project name. The h1 sits at 22px: 28px against
    a 17px h2 made the page title shout over its own sections. */
 .page-header-title--display {
   font: var(--type-page);

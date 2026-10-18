@@ -23,6 +23,7 @@
   padding: 0 var(--sp-4);
   border-radius: var(--r-2);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
@@ -69,6 +70,7 @@
 
 .handoff-panel-title {
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
 }
 
@@ -84,36 +86,14 @@
 .handoff-row [data-slot="label"] {
   color: var(--ink-3);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
-/* The row's own selects/inputs are now the <Select> and <Input> primitives,
-   which own their chrome (control border, radius, focus ring). Only the
-   panel-level bare input below still needs the hand-built field treatment. */
-.handoff-panel > input {
-  min-width: 0;
-  height: var(--control-h);
-  /* 1px, not 0.5px: --control-border is translucent ink now, and a sub-pixel
-     translucent edge renders as nothing. Matches the Input primitive. */
-  border: 1px solid var(--control-border);
-  border-radius: var(--r-2);
-  outline: 0;
-  background: var(--surface-0);
-  padding: 0 var(--sp-4);
-  color: var(--ink-1);
-  font-size: var(--fs-transcript);
-  transition: border-color var(--t-fast) var(--ease);
-}
-
-.handoff-panel > input:hover {
-  border-color: var(--control-border-hover);
-}
-
+/* The row's own selects/inputs are the <Select> and <Input> primitives,
+   which own their chrome (control border, radius, focus ring); the note
+   field only needs its grid placement. */
 .handoff-row--note [data-slot="input"] {
   grid-column: 2 / span 2;
-}
-
-.handoff-panel > input:focus-visible {
-  border-color: var(--link);
 }
 
 .handoff-actions {
@@ -149,6 +129,7 @@
 
 .permission-prompt-title {
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
   overflow-wrap: anywhere;
 }
@@ -181,6 +162,7 @@
 .permission-prompt-note [data-slot="label"] {
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .permission-prompt .decision-bar {

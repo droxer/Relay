@@ -55,9 +55,16 @@
   color: var(--ink-3);
 }
 
+/* The wrap draws the one ring: the field inside is bare, so its own ring is
+   suppressed to keep the two from doubling up (the .command-menu pattern in
+   command.css). The suppression carries :focus-visible to outrank base.css. */
 .backlog-filter-search-wrap:focus-within {
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
+}
+
+.backlog-filter-search:focus-visible {
+  outline: none;
 }
 
 .backlog-filter-search {
@@ -69,6 +76,7 @@
   padding: 0;
   color: var(--ink-1);
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .backlog-filter-search::placeholder {
@@ -84,6 +92,7 @@
   padding: var(--sp-2) var(--sp-1);
   color: var(--link);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -226,7 +235,7 @@
 .backlog-lane-label {
   color: var(--ink-1);
   font: var(--type-label);
-  font-weight: 500;
+  letter-spacing: var(--type-label-track);
 }
 
 .backlog-lane-count {
@@ -331,6 +340,7 @@
 .task-card-id {
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   overflow-wrap: anywhere;
   /* Room for the corner checkbox when it appears, so it never covers the ID. */
   padding-right: var(--sp-6);

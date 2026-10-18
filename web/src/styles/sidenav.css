@@ -148,7 +148,7 @@
   clip-path: none;
   color: var(--ink-3);
   font: var(--type-micro);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-micro-track);
 }
 
 /* Rail CHROME, not destinations: search, collapse, preferences act on the
@@ -231,6 +231,7 @@
   gap: var(--sp-3);
   padding: 0 var(--sp-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* A nav button is a CONTROL, not a container: --r-2 puts it on the same
@@ -311,6 +312,7 @@
   border: 0.5px solid var(--line-1);
   color: var(--ink-1);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   box-shadow: var(--shadow-2);
   pointer-events: none;
   z-index: var(--z-float);
@@ -390,6 +392,7 @@
   clip-path: none;
   white-space: nowrap;
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   opacity: 1;
   flex: 1;
   text-align: left;

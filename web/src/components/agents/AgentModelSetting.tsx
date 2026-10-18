@@ -83,8 +83,11 @@ export function AgentModelSetting({
           <Button type="button" variant="ghost" size="dense" onClick={() => setDraft(savedModel)} disabled={saving}>
             {t("admin.v2.cancel")}
           </Button>
+          {/* Outline: the profile's personality Save can be showing too, and
+              the panel keeps one accent fill. */}
           <Button
             type="button"
+            variant="outline"
             size="dense"
             onClick={() => commit(draft)}
             disabled={Boolean(problem)}

@@ -150,7 +150,7 @@ function CascaderColumnPanel({
           type="button"
           data-slot="cascader-retry"
           onClick={() => retryLevel(columnKey)}
-          className="text-foreground hover:bg-accent focus-visible:ring-ring/50 rounded-md px-1 font-medium outline-hidden transition-colors focus-visible:ring-2"
+          className="text-foreground hover:bg-accent rounded-md px-1 font-medium outline-hidden transition-colors"
         >
           {labels.retry}
         </button>
@@ -165,7 +165,7 @@ function CascaderColumnPanel({
           hugeicons="Loading02Icon"
           phosphor="CircleNotchIcon"
           remixicon="RiLoader4Line"
-          className="size-3.5 animate-spin"
+          className="size-3.5 spin"
           aria-hidden
         />
         {labels.loading}

@@ -46,7 +46,7 @@
 
 .relay-search:focus-within,
 .adm-search:focus-within {
-  border-color: var(--action);
+  border-color: var(--ink-4);
   background: var(--surface-0);
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
@@ -98,6 +98,7 @@
   padding: var(--sp-1) 0;
   color: var(--ink-1);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .list-filter-search input::placeholder {

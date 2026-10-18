@@ -65,7 +65,7 @@ body {
   background: var(--surface-0);
   color: var(--ink-2);
   font-family: var(--font-sans);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
   letter-spacing: var(--track-body);
 }
 
