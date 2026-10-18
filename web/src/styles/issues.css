@@ -45,6 +45,7 @@
 .issues-band-hint {
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .issue-status {
@@ -53,6 +54,7 @@
   gap: var(--sp-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   white-space: nowrap;
 }
 
@@ -63,6 +65,7 @@
   overflow: hidden;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

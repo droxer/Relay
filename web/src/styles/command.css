@@ -54,6 +54,7 @@
   padding: var(--sp-3) 0;
   color: var(--ink-1);
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .command-input::placeholder {
@@ -63,7 +64,7 @@
 /* The container draws the one ring for this surface: focus lives on the
    input, but the menu is what the eye reads as focused, so :focus-within
    carries the ring and the field's own is suppressed to keep the two from
-   doubling up (the .composer-input-wrap focus pattern in composer.css). */
+   doubling up (the .backlog-filter-search-wrap pattern in backlog.css). */
 .command-menu:focus-within {
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
@@ -98,6 +99,7 @@
   border-radius: var(--r-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
   user-select: none;
 }
@@ -107,7 +109,7 @@
    attribute. Keying on the old one left the palette with no visible
    selection at all — which looks like nothing rather than like a bug. */
 .command-item[data-highlighted] {
-  background: var(--action-soft);
+  background: var(--accent);
   color: var(--ink-1);
 }
 
@@ -138,6 +140,7 @@
   text-align: center;
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .command-footer {
@@ -148,6 +151,7 @@
   border-top: 0.5px solid var(--line-1);
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .command-footer-hint {
@@ -198,6 +202,7 @@
   border-radius: var(--r-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .shortcuts-row-label {

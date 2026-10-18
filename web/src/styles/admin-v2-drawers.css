@@ -131,6 +131,13 @@
   overflow-wrap: anywhere;
 }
 
+/* A title someone wrote — a task or skill name — takes the content role:
+   the fixed-noun tier would shout their words back at them. */
+.adm-drawer-title--record {
+  font: var(--type-title-content);
+  letter-spacing: var(--type-title-content-track);
+}
+
 .adm-drawer-sub {
   margin: 0;
   font: var(--type-body-sm);
@@ -334,7 +341,6 @@
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-6);
   border: 0.5px solid var(--line-1);
-  border-left: var(--accent-bar-w) solid var(--action);
   border-radius: var(--r-3);
   background: var(--surface-0);
 }
@@ -373,9 +379,8 @@
 }
 
 .adm-assign-operator-name {
-  /* The 18px tier is the source system's subtitle-lg, which is 700 — at a lighter
-     weight the drawer subject sat BELOW the 16px/700 name role beneath it. That
-     pairing is exactly --type-heading; say so instead of rebuilding it. */
+  /* The drawer subject leads the 14px name rows beneath it, so it takes the
+     700 heading role rather than a lighter title. */
   font: var(--type-heading);
   letter-spacing: var(--type-heading-track);
   color: var(--ink-1);

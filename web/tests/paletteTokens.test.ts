@@ -123,8 +123,8 @@ describe("Meta commerce palette tokens", () => {
     // chrome) read these instead of re-declaring literals.
     for (const name of [
       "--dark-canvas", "--dark-surface",
-      "--dark-ink",
-      "--light-canvas",
+      "--dark-ink", "--dark-action",
+      "--light-canvas", "--light-action",
     ]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `${name} is not pinned`);
     }
@@ -141,6 +141,8 @@ describe("Meta commerce palette tokens", () => {
     assert.equal(declared(darkRegister, "--dark-surface"), declared(darkRegister, "--surface-1"));
     assert.equal(declared(darkRegister, "--dark-ink"), declared(darkRegister, "--ink-1"));
     assert.equal(declared(darkRegister, "--light-canvas"), declared(lightRegister, "--surface-0"));
+    assert.equal(declared(darkRegister, "--dark-action"), declared(darkRegister, "--action"));
+    assert.equal(declared(darkRegister, "--light-action"), declared(lightRegister, "--action"));
   });
 
   it("marks live work in the Oculus purple, legible as small text in both registers", () => {
@@ -300,16 +302,22 @@ describe("theme-picker swatches", () => {
     assert.match(preferences, /\.pref-theme-swatch\[data-tone="dark"\] \{\s*background: var\(--dark-canvas\);/);
   });
 
-  it("shows one register-invariant cobalt strip, not a per-register split", () => {
-    // The action is the SAME cobalt on both canvases, so every swatch strip is
-    // simply var(--action) and the per-register gradient split is gone.
-    for (const tone of ["light", "dark", "system"]) {
+  it("shows each register's own pinned cobalt, never the live --action", () => {
+    // The cobalt is tuned per register, so var(--action) would paint the
+    // active register's cobalt on both canvases. Each swatch reads its pinned
+    // twin, and the system swatch splits on the canvas diagonal.
+    for (const tone of ["light", "dark"]) {
       assert.match(
         preferences,
-        new RegExp(`\\.pref-theme-swatch\\[data-tone="${tone}"\\]::after \\{[^}]*background: var\\(--action\\);`, "s"),
-        `${tone} swatch strip must be the register-invariant --action cobalt`,
+        new RegExp(`\\.pref-theme-swatch\\[data-tone="${tone}"\\]::after \\{[^}]*background: var\\(--${tone}-action\\);`, "s"),
+        `${tone} swatch strip must be the pinned --${tone}-action cobalt`,
       );
     }
+    assert.match(
+      preferences,
+      /\.pref-theme-swatch\[data-tone="system"\]::after \{[^}]*background: linear-gradient\(135deg, var\(--light-action\) 0 50%, var\(--dark-action\) 50% 100%\);/s,
+    );
+    assert.doesNotMatch(preferences, /\.pref-theme-swatch[^{]*::after \{[^}]*var\(--action\)/s);
     assert.doesNotMatch(
       preferences,
       /linear-gradient\(90deg, var\(--light-ink\) 0 50%, var\(--dark-ink\) 50% 100%\)/,

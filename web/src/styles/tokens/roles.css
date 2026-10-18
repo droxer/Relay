@@ -132,23 +132,23 @@
   --focus-outline-danger: var(--focus-w) dashed var(--err);
 
   /* Type roles — the platform UI face carries every tier. Hierarchy
-     comes from WEIGHT and SIZE, not face: display and heading tiers are 500,
-     emphasis and control tiers are 700, and reading is 400. The mono face is
+     comes from WEIGHT and SIZE, not face: display and title tiers are 500,
+     heading and emphasis tiers are 700, and reading is 400. The mono face is
      technical text only, set 400 untracked.
 
      EVERY role ships a paired *-track token. The `font:` shorthand cannot carry
      letter-spacing, so a role applied as `font: var(--type-title)` silently
      loses its tracking unless the call site remembers a second declaration —
      which is exactly how an untracked login headline shipped once. Pairing the
-     tokens by name makes the omission greppable, and typographyTokens.test.ts
-     sweeps every stylesheet to make it fail loudly:
+     tokens by name makes the omission greppable (typographyTokens.test.ts
+     sweeps the display-tier rules), so every call site pairs them:
 
        font: var(--type-title);
        letter-spacing: var(--type-title-track);
 
      Most paired tracks resolve to 0 — that is the design, not a missing
-     value: the system faces track themselves, so only the uppercase captions
-     carry a track. The tokens stay explicit so a role's tracking is decided
+     value: the system faces track themselves, so only the display tier
+     (display, page, title, number, title-content) carries a track. The tokens stay explicit so a role's tracking is decided
      here, once, not re-derived at every call site. */
   --type-display:      500 var(--fs-6)/var(--leading-display) var(--font-display);
   /* The display tier is 28px/500 — the display weight in this system is the
@@ -157,10 +157,8 @@
      signature: size carries hierarchy, weight carries emphasis. (The brand
      publishes this tier at 48px; palette.css documents why the app ladder
      runs a console-density step below the marketing one.) */
-  /* Page titles sit at 16px/500 — the tier this app uses for card titles,
-     pane titles, and feature-tile headers. The 22px rung above it is reserved
-     for KPI numerals and subsection headlines, where an oversized figure is
-     the point. */
+  /* --type-title is 17px/500 — the fixed-noun tier for rail, section,
+     drawer and dialog titles. The page h1 takes the 22px rung below. */
   --type-title:        500 var(--fs-title-lg)/var(--leading-tight) var(--font-display);
   /* Page h1: 22px/500. 28px (--type-display) against a 17px h2 made the page
      title shout over its own sections; 22 sits one clean rung above. */
@@ -170,10 +168,8 @@
   --type-body-sm:      400 var(--fs-1)/var(--leading-snug) var(--font-sans);
   --type-label:        500 var(--fs-1)/var(--leading-snug) var(--font-sans);
   --type-label-strong: 700 var(--fs-1)/var(--leading-snug) var(--font-sans);
-  /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier.
-     text-transform: uppercase is already the marking on this role — 700 on top
-     of it double-marks the quietest text in the app, and at 12px in a variable
-     face the counters close up. It is also the app's most-applied role (63
+  /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier —
+     at 12px in a variable face the counters close up. It is also the app's most-applied role (63
      rules), and the inverted ramp documented above only reads as emphasis
      while 700 stays SCARCE: with micro on it, two elements in five were bold.
 
@@ -181,7 +177,7 @@
      on purpose — shadcn-bridge.css maps font-semibold onto 700 precisely so a
      fourth weight cannot creep back in, and dimensionScales.test.ts pins the
      set. Sharing 500 with --type-label is fine: micro is separated from it by
-     CASE and size, which is the separator this role has always led with. */
+     its dimmer ink and caption leading. */
   /* Group labels are SENTENCE CASE now (2026-10-09). Forty-odd rules set
      their lane, band and field labels in tracked capitals — BACKLOG, RUNTIME,
      TEAM ROLE — so the quietest structure on a page was its loudest shape, and
@@ -206,19 +202,17 @@
      roles split the question by ORIGIN rather than by size.
 
      --type-name  the identity of the thing a row or card is ABOUT —
-                  The source system's body-md-bold (16px/700), the exact role the
-                  source system uses for a variant name above its price. It
-                  sits one rung above --type-label-strong because a card title
-                  that differs from its own description by weight alone does
-                  not lead.
+                  14px/500 (see the note below for why not 700). It sits
+                  above the 12px label tier because a card title that differs
+                  from its own description by weight alone does not lead.
      --type-title-content
-                  a title whose text comes from a user or an agent. Same 19px
-                  rung as --type-title, one weight calmer (400 vs 500) —
+                  a title whose text comes from a user or an agent. 16px,
+                  one rung under --type-title and one weight calmer (400) —
                   The source system's editorial-subhead move, where a lighter weight
                   at a display size introduces visual rest rather than
                   shouting someone's words back at them.
-     Structural group labels are NOT a fourth role: --type-micro above already
-     documents itself as "+ uppercase", so it was the register all along. The
+     Structural group labels are NOT a fourth role: --type-micro above is
+     the register for them, in sentence case. The
      .eyebrow and .page-header-kicker utilities deliberately stay SENTENCE CASE
      on the same size: they are generic containers for arbitrary translated
      copy, where forced uppercase is a localization hazard. That carve-out is
@@ -231,9 +225,8 @@
   --type-name:          500 var(--fs-4)/var(--leading-normal) var(--font-sans);
   /* --type-meta  supporting text at the caption size, in SENTENCE case: row
      meta lines ("3 agents · updated 2h ago"), eyebrows, kickers. It shares the
-     box with --type-micro and differs in TRACKING, which is the whole point —
-     micro is uppercase and needs the caps track, meta is prose and must not
-     get it. Six rules used to hand-roll this as `font: var(--type-label)`
+     box with --type-micro; micro marks structure (group and field labels),
+     meta carries prose. Six rules used to hand-roll this as `font: var(--type-label)`
      followed by `font-size: var(--fs-1)`, which is how a role announces it is
      missing. */
   --type-meta:          500 var(--fs-1)/var(--leading-caps) var(--font-sans);

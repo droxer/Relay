@@ -79,6 +79,7 @@
   min-width: 0;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .composer-context > svg {
@@ -160,6 +161,7 @@
 .thread-runtime-option-name {
   overflow: hidden;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -399,13 +401,12 @@
   color: var(--ink-1);
 }
 
-/* The card draws the one ring for this surface: focus lives on the field,
-   but .composer-input-wrap is what the eye reads as focused, so its
-   :focus-within carries the ring and the field's own is suppressed to keep
-   the two from doubling up (the .command-menu focus pattern in command.css).
-   A bare `outline: 0` on the class loses to base.css's textarea:focus-visible
-   reset inside the same @layer relay — the suppression must carry
-   :focus-visible itself to win. */
+/* The field draws no ring: focus lives on the field, but the card is what the
+   eye reads as focused, so `.composer-input-wrap:has(.composer-textarea:focus)`
+   darkens the card's own edge instead (see the rule above for why the card
+   takes no ring either). A bare `outline: 0` on the class loses to base.css's
+   textarea:focus-visible ring inside the same @layer relay — the suppression
+   must carry :focus-visible itself to win. */
 .composer-textarea:focus-visible {
   outline: none;
 }
@@ -424,8 +425,8 @@
 /* iOS zooms any focused field under 16px; coarse pointers get the bump. The
    mirror takes the same bump or the pills stop lining up on phones. The 16px
    must stay a hard literal floor — the desktop draft reads at
-   --fs-transcript (14px), and var(--fs-4) collapses to 15px under
-   [data-density=compact]; either would reintroduce the zoom bug. */
+   --fs-transcript (14px), and var(--fs-4) is 14px as well; either would
+   reintroduce the zoom bug. */
 @media (pointer: coarse) {
   .composer-textarea,
   .composer-highlight { font-size: 16px; }
@@ -551,6 +552,7 @@
   background: transparent;
   color: var(--ink-1);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   text-align: left;
   cursor: pointer;
 }
@@ -560,7 +562,7 @@
    through the list — or accepting with Enter or Tab — moved a highlight the
    author could not see. */
 .mention-option[data-highlighted] {
-  background: var(--action-soft);
+  background: var(--accent);
 }
 
 /* `[data-disabled]`, not `:disabled`: the row is a div with an option role,
@@ -583,6 +585,7 @@
   margin-left: auto;
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* The `@Name` pill inside the draft. Painted by the mirror layer, so it can

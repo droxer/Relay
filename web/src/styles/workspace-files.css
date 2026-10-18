@@ -33,6 +33,7 @@
   color: var(--ink-3);
   cursor: pointer;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .workspace-files-tab + .workspace-files-tab {
@@ -379,6 +380,7 @@
   margin: var(--sp-3) var(--doc-inset-inline) 0;
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .code-view-toolbar {
@@ -396,6 +398,7 @@
   color: var(--ink-3);
   cursor: pointer;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .code-view-toggle + .code-view-toggle {
@@ -437,6 +440,7 @@
   padding: var(--sp-2) var(--sp-4) 0;
   color: var(--ink-3);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   text-transform: lowercase;
 }
 
@@ -554,7 +558,7 @@
   padding-block: var(--sp-hairline);
   color: color-mix(in srgb, var(--info) 80%, transparent);
   font: var(--type-label-strong);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .artifacts-empty-line {
@@ -602,6 +606,7 @@
   padding: var(--sp-7);
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .workspace-loading-bar {

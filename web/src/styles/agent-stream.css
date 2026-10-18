@@ -440,6 +440,7 @@
   align-self: flex-start;
   color: var(--tone, var(--ink-3));
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .agent-status > svg {
@@ -496,13 +497,14 @@
   align-self: flex-start;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* The live label shimmers: a lighter band sweeps across the words while the
    text itself stays at --ink-3, so it is legible at every frame. Under
-   reduced motion or forced colours it is plain text. */
-.agent-stream-shimmer,
-.agent-thinking.is-live .agent-thinking-headline {
+   reduced motion or forced colours it is plain text. Live reasoning headers
+   do not shimmer — they blink (see .agent-thinking.is-live above). */
+.agent-stream-shimmer {
   background: linear-gradient(
     90deg,
     var(--ink-3) 0%,
@@ -523,8 +525,7 @@
 }
 
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
-  .agent-stream-shimmer,
-  .agent-thinking.is-live .agent-thinking-headline {
+  .agent-stream-shimmer {
     background: none;
     color: var(--ink-3);
     animation: none;
@@ -598,6 +599,7 @@
 
 .artifact-plan-agent {
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
 }
 
@@ -627,12 +629,14 @@
   gap: var(--sp-2);
   color: var(--ink-2);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .msg-system-detail {
   max-width: 360px;
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -683,7 +683,7 @@ function KanbanColumn({
         style,
         className: cn(
           "group/kanban-column flex flex-col",
-          isSortableDragging && "opacity-50 z-50",
+          isSortableDragging && "opacity-(--opacity-ghost) z-(--z-float)",
           disabled && "opacity-50",
           className
         ),
@@ -813,7 +813,7 @@ function KanbanItem({
         ...attributes,
         ...(asHandle ? listeners : undefined),
         className: cn(
-          isSortableDragging && "opacity-50 z-50",
+          isSortableDragging && "opacity-(--opacity-ghost) z-(--z-float)",
           disabled && "opacity-50",
           className
         ),

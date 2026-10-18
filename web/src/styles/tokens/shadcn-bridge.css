@@ -9,6 +9,13 @@
      one device pixel, so the floor is the old rendering, never invisible. */
   --default-border-width: 0.5px;
 
+  /* The bare `transition` / `transition-*` utilities fall back to these when
+     no duration or ease utility is given. Tailwind's stock values (150ms,
+     cubic-bezier(0.4, 0, 0.2, 1)) are a second ease the motion contract does
+     not have, so they point at the one ease and the fast rung. */
+  --default-transition-duration: var(--t-fast);
+  --default-transition-timing-function: var(--ease);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -67,7 +74,9 @@
      to the container radius rather than reaching for a 24/32px step that no
      longer exists. That is the guard doing its job: a stray `rounded-3xl`
      lands on the app's largest real corner instead of silently inheriting
-     Tailwind's 1.5rem. */
+     Tailwind's 1.5rem. The bare `rounded` reads `--radius` (Tailwind's
+     deprecated 0.25rem, 3.5px on the 14px root), so it is pinned too. */
+  --radius: var(--r-1);
   --radius-xs: var(--r-1);
   --radius-sm: var(--r-1);
   --radius-md: var(--r-2);
@@ -102,12 +111,12 @@
 
   /* Type sizes → text-* utilities. One name per rung, and the stock names
      keep the sizes Tailwind gives them: xs is the 12px caption, sm the 14px
-     chrome, base the 16px reading size. The old map shifted every stock name
+     chrome, base the reading size (14px today). The old map shifted every stock name
      up a rung (xs 14, sm and base both 15) and added micro / 2xs / md aliases
      beside them, so `text-xs` was larger than `text-micro` and vendored code
      (components/reui) written against Tailwind's names rendered 2px over its
-     design. `text-dense` is the one Relay-only name: the 15px dense-prose
-     rung, which Tailwind has no word for. */
+     design. `text-dense` is the one Relay-only name: the dense-prose
+     rung (--fs-3, 14px today), which Tailwind has no word for. */
   --text-xs: var(--fs-1);
   --text-sm: var(--fs-2);
   --text-dense: var(--fs-3);
@@ -127,7 +136,7 @@
   --text-4xl: var(--fs-6);
 
   /* Weights → font-* utilities. THE LADDER IS THREE RUNGS: 400 reading, 500
-     display/heading, 700 emphasis and controls (roles.css). Tailwind ships
+     display/title, 700 heading and emphasis (roles.css). Tailwind ships
      nine weight utilities and this block previously overrode none of them, so
      the six rungs the system does not have stayed reachable by default —
      `font-semibold` (600) shipped in field.tsx and syntax.css set three rules

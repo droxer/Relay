@@ -21,13 +21,11 @@
   margin: 0;
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
 .onboarding-count {
   color: var(--ink-4);
-  text-transform: none;
 }
 
 .onboarding-steps {
@@ -50,6 +48,7 @@
   background: transparent;
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -71,6 +70,7 @@
   border: 1px solid var(--line-1);
   border-radius: var(--r-full);
   font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
 }
 
@@ -92,6 +92,7 @@
   margin: 0;
   max-width: 60ch;
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-2);
 }
 
@@ -115,6 +116,7 @@
   padding: 0;
   list-style: none;
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-2);
 }
 
@@ -148,27 +150,24 @@
   gap: var(--sp-2);
   margin: 0;
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
 .onboarding-fact { color: var(--ink-1); }
 .onboarding-fact > svg { color: var(--ok); }
 
+/* Waiting for a computer is passive presence, not agent work: neutral ink on
+   the calm tempo, breathing on the shared `blink` keyframe. Reduced motion is
+   handled globally (a11y.css). */
 .onboarding-waiting-dot {
+  --blink-from: 0.35;
+
   width: var(--sp-2);
   height: var(--sp-2);
   border-radius: var(--r-full);
-  background: var(--live);
-  animation: onboarding-pulse 1.6s var(--ease) infinite;
-}
-
-@keyframes onboarding-pulse {
-  50% { opacity: 0.35; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .onboarding-waiting-dot { animation: none; }
-  .onboarding-step { transition: none; }
+  background: var(--ink-4);
+  animation: blink var(--t-pulse-calm) var(--ease) infinite;
 }
 
 .onboarding-footer {
@@ -181,14 +180,14 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--action);
+  color: var(--link);
   font: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
 }
 
-.onboarding-link:hover { color: var(--action-hover); }
+.onboarding-link:hover { color: var(--link-hover); }
 
 /* Same single layer of chrome as the empty transcript's starter tiles. */
 button.onboarding-starter {
@@ -209,6 +208,7 @@ button.onboarding-starter {
   justify-content: space-between;
   gap: var(--sp-2);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
 }
 
@@ -216,6 +216,7 @@ button.onboarding-starter {
 
 .onboarding-starter-text {
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--ink-2);
 }
 
@@ -242,12 +243,14 @@ button.onboarding-starter {
 .onboarding-card-copy h4 {
   margin: 0;
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
 }
 
 .onboarding-card-copy p {
   margin: var(--sp-0-5) 0 0;
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
@@ -259,10 +262,17 @@ button.onboarding-starter {
 }
 
 /* The rail chip: a square like its footer neighbours whose face is the
-   progress fraction itself — an icon under a badge read as neither. */
+   progress fraction itself — an icon under a badge read as neither. A
+   neutral control fill marks it apart from the bare glyph buttons around it;
+   cobalt would read as the active nav item, which it never is. */
 .sidenav-btn.sidenav-onboarding {
-  background: var(--action-soft);
-  color: var(--action);
+  background: var(--control-fill);
+  color: var(--ink-2);
+}
+
+.sidenav-btn.sidenav-onboarding:hover {
+  background: var(--control-fill-hover);
+  color: var(--ink-1);
 }
 
 .sidenav-onboarding-count {

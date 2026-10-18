@@ -252,6 +252,7 @@ export function TaskRecordView({
       onClosed={drawer.onClosed}
       width="wide"
       kicker={kicker}
+      titleVariant="record"
       title={task ? recordTitle(task, parentRoutine, i18n.language, t) : placeholder?.title ?? t("record.loading")}
       closeLabel={t("drawer.close")}
       /* Flush: the tabs sit on the header's rule and the band runs edge to

@@ -79,7 +79,7 @@
   stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.55;
+  opacity: var(--opacity-dormant);
 }
 
 .collab-diagram-return path {
@@ -100,7 +100,7 @@
   align-self: flex-start;
   width: 72px;
   height: 40px;
-  padding: 2px var(--sp-1);
+  padding: var(--sp-0-5) var(--sp-1);
 }
 
 .collab-style-card-art {
@@ -162,6 +162,7 @@
   gap: var(--sp-2);
   color: var(--ink-1);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .collab-style-card-hint {
@@ -301,6 +302,7 @@
   background: var(--surface-1);
   color: var(--ink-2);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .collab-style-sequence li[data-slot="lead"] .collab-style-step-avatar {
@@ -318,6 +320,7 @@
 .collab-style-step-name {
   color: var(--ink-1);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   overflow-wrap: anywhere;
 }
 

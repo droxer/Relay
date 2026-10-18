@@ -194,9 +194,10 @@
   border-top: 0.5px solid var(--line-2);
 }
 
-/* A staged change is the row the reader has to remember to save. */
+/* A staged change is the row the reader has to remember to save: a stronger
+   edge, not a wash — a cobalt fill would read as the selected row. */
 .adm-agent-toggle-item[data-pending="true"] {
-  background: var(--action-soft);
+  box-shadow: inset var(--accent-bar-w) 0 0 var(--line-strong);
 }
 
 .adm-agent-toggle-row {
@@ -245,7 +246,7 @@
 }
 
 .adm-agent-toggle-pending {
-  color: var(--action);
+  color: var(--warn);
 }
 
 /* Inventory sits behind its count. Indented to the name column so the

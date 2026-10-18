@@ -42,6 +42,10 @@ interface DrawerProps {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
+  /** "record" sets a title a user or an agent authored (a task or skill
+   *  name) in the calmer content role, as `PageHeader titleVariant="record"`
+   *  does; the default is the fixed-noun tier. */
+  titleVariant?: "default" | "record";
   subtitle?: ReactNode;
   /** Render the subtitle in the mono face — for ID/handle subtitles. */
   subtitleMono?: boolean;
@@ -81,6 +85,7 @@ export function Drawer({
   open,
   onClose,
   title,
+  titleVariant = "default",
   subtitle,
   subtitleMono = false,
   kicker,
@@ -159,7 +164,7 @@ export function Drawer({
             <header className="adm-drawer-head">
               <div className="adm-drawer-head-text">
                 {kicker ? <p className="adm-drawer-kicker">{kicker}</p> : null}
-                <DialogTitle id={titleId} className="adm-drawer-title" render={<h2 />}>
+                <DialogTitle id={titleId} className={titleVariant === "record" ? "adm-drawer-title adm-drawer-title--record" : "adm-drawer-title"} render={<h2 />}>
                   {title}
                 </DialogTitle>
                 {subtitle ? (

@@ -21,10 +21,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  width: var(--control-h-xs);
   height: var(--control-h-xs);
   border: 0;
-  border-radius: calc(var(--r-2) - 2px);
+  border-radius: var(--r-1);
   background: transparent;
   color: var(--ink-3);
   cursor: pointer;
@@ -177,6 +177,7 @@ tr[data-routine-state="paused"] .backlog-row-title,
   white-space: nowrap;
   color: var(--ink-1);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .task-assignee[data-unassigned="true"] .task-assignee-name {
@@ -236,6 +237,7 @@ tr[data-routine-state="paused"] .backlog-row-title,
   background: transparent;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   white-space: nowrap;
 }
 
@@ -425,6 +427,7 @@ button.inline-field[aria-expanded="true"] {
   border-radius: var(--r-2);
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   cursor: pointer;
 }
 
@@ -498,6 +501,7 @@ tr[data-selected="true"] > td:first-child {
 .task-trigger-label {
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 /* ── Selection checkboxes appear on demand ─────────────────────────────
@@ -678,6 +682,7 @@ tr[data-selected="true"] > td:first-child {
     margin-right: var(--sp-3);
     color: var(--ink-3);
     font: var(--type-body-sm);
+    letter-spacing: var(--type-body-sm-track);
   }
 
   .task-table > tbody > tr > td[data-slot="table-cell"].task-col-ref { order: 10; min-width: 0; }

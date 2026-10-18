@@ -94,6 +94,7 @@
   max-width: var(--measure-tight);
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   line-height: var(--leading-loose);
   text-wrap: pretty;
   overflow-wrap: anywhere;
@@ -155,6 +156,7 @@
 .transcript-empty .relay-empty-body {
   max-width: 440px;
   font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .transcript-empty-suggestions {
@@ -205,6 +207,7 @@ button.transcript-empty-suggestion {
 .transcript-empty-suggestion-detail {
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   line-height: var(--leading-normal);
   text-wrap: balance;
 }

@@ -25,10 +25,12 @@ export function CredCopyRow({ label, value, copyLabel, copied, onCopy, hint }: C
       {hint ? <span className="adm-cred-hint">{hint}</span> : null}
       <div className="adm-cred-value-line">
         <code className="adm-cred-value code" translate="no">{value}</code>
-        {/* Filled cobalt pill. The variant paints the plate now — the class
-            carries only the confirmed state. */}
+        {/* Outline, not the accent: copying is a utility, and a drawer that
+            shows two or three credentials would otherwise stack as many
+            primaries beside its own submit. The class carries only the
+            confirmed state. */}
         <Button
-          variant="default"
+          variant="outline"
           size="dense"
           type="button"
           className={`adm-copy-pill ${copied ? "copied" : ""}`}

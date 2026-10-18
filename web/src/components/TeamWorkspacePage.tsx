@@ -445,8 +445,11 @@ function TeamProfile({
                   >
                     {t("dialog.cancel")}
                   </Button>
+                  {/* Outline: an inline rename can sit open beside the roster's
+                      own Save, and the view keeps one accent fill. */}
                   <Button
                     type="button"
+                    variant="outline"
                     size="dense"
                     onClick={() => void saveRename()}
                     disabled={busy}

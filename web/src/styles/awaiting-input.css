@@ -23,17 +23,13 @@
   border-radius: var(--r-3) var(--r-3) 0 0;
   background: var(--surface-2);
   color: var(--ink-2);
-  animation: awaiting-input-dock var(--t-slow) var(--ease) both;
+  /* Rises out from behind the card on the shared `rise` (pane travel): the
+     one motion, and it says where the prompt belongs. Reduced motion is
+     handled globally (a11y.css). */
+  animation: rise var(--t-slow) var(--ease) both;
 }
 
 .awaiting-input:is([data-kind="check"], [data-kind="budget"]) { --awaiting-rail: var(--warn); }
-
-/* Rises out from behind the card: the one motion, and it says where the
-   prompt belongs. Reduced motion is handled globally (a11y.css). */
-@keyframes awaiting-input-dock {
-  from { opacity: 0; transform: translateY(var(--sp-2)); }
-  to { opacity: 1; transform: none; }
-}
 
 .awaiting-input-head {
   display: flex;
@@ -72,6 +68,7 @@
   overflow: hidden;
   color: var(--ink-1);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -80,6 +77,7 @@
   flex: 0 0 auto;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
@@ -116,6 +114,7 @@
   min-width: 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .awaiting-input-notes-title {
@@ -154,7 +153,7 @@
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  min-height: 32px;
+  min-height: var(--control-h-sm);
   padding: var(--sp-1) var(--sp-3);
   border: 0;
   border-radius: 0;
@@ -175,7 +174,8 @@
   border: 0;
   background: none;
   color: var(--ink-4);
-  font: 500 var(--fs-1)/1 var(--font-mono);
+  font: 500 var(--fs-1)/var(--leading-none) var(--font-mono);
+  letter-spacing: var(--track-0);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -232,6 +232,7 @@
   margin: 0;
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 @media (max-width: 820px) {

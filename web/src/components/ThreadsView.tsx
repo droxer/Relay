@@ -529,6 +529,7 @@ export function ThreadsView({
                     logicalAgents={selectableLogicalAgents}
                     sendDecision={sendDecision}
                     sendHandoff={sendHandoff}
+                    deferPrimary={openPermissionRequests(activeSession).length > 0}
                   />
                 ) : null}
               </>

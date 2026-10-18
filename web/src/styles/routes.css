@@ -59,7 +59,7 @@
   padding: var(--sp-7);
   color: var(--ink-3);
   font: var(--type-body-sm);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-body-sm-track);
   text-align: center;
 }
 

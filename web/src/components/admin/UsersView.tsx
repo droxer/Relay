@@ -181,7 +181,7 @@ export function UsersView({
         body={t("admin.v2.empty_users_body")}
         illustration={<AdminUsers size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
         actions={(
-          <Button type="button" onClick={onAddUser}>
+          <Button type="button" variant="outline" onClick={onAddUser}>
             {t("admin.v2.add_user_cta")}
           </Button>
         )}

@@ -293,6 +293,7 @@ tr.is-pulse > td:first-child::after {
   margin: var(--sp-1) 0 0;
   color: var(--ink-3);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .adm-node-history-count {
@@ -383,6 +384,7 @@ tr.is-pulse > td:first-child::after {
   margin: var(--sp-3) 0 0;
   color: var(--err);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 @media (max-width: 820px) {
@@ -492,6 +494,7 @@ tr.is-pulse > td:first-child::after {
 
 .adm-emp-card-metric .tnum {
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   font-variant-numeric: tabular-nums;
 }
 

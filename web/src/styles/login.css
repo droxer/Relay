@@ -453,7 +453,7 @@
 .login-optional {
   color: var(--lg-muted);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: var(--track-0);
 }
 
 /* The textarea shares the field skin but sizes to its content. */

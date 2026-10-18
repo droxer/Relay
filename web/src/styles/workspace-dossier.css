@@ -162,6 +162,7 @@
 .agent-personality-editor-guide li strong {
   color: var(--ink-2);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .agent-personality-editor {
@@ -211,7 +212,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 28px;
+  min-height: var(--control-h-xs);
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -227,7 +228,7 @@
      yellow onto a non-action control (and failed AA on the light register,
      where the raw yellow is fill-only). */
   font: var(--type-label-strong);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-label-strong-track);
   text-transform: none;
   cursor: pointer;
 }
@@ -406,7 +407,7 @@
   margin-bottom: var(--sp-2);
   color: var(--ink-3);
   font: var(--type-micro);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-micro-track);
 }
 
 .workspace-error p {
@@ -530,7 +531,7 @@
 }
 
 .agent-skill:hover .agent-skill-preview {
-  color: var(--action);
+  color: var(--link-hover);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }

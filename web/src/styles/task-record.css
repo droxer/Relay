@@ -60,7 +60,7 @@
   border-bottom: 0.5px solid var(--line-1);
   color: var(--ink-3);
   font: var(--type-micro);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-micro-track);
 }
 
 .record-run-head > span {
@@ -285,7 +285,7 @@
   margin: 0 0 var(--sp-3);
   color: var(--ink-3);
   font: var(--type-micro);
-  letter-spacing: var(--track-0);
+  letter-spacing: var(--type-micro-track);
 }
 
 .record-facts {
@@ -534,6 +534,7 @@
   border-bottom: 0.5px solid var(--line-1);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .record-automation-paused p {
