@@ -27,6 +27,8 @@ from .persistence.session_store import DatabaseSessionStore
 from .persistence.storage_report import storage_report
 from .persistence.operational_import import migrate_local_operational_state
 from .persistence.file_store_import import migrate_local_file_stores
+from .security.auth_file_import import migrate_legacy_accounts
+from .bootstrap.stores import retired_settings_chose_database_accounts
 
 load_backend_env()
 
@@ -118,12 +120,16 @@ def main(argv: list[str] | None = None) -> None:
         # or resolves a conflict the boot import refused.
         if not args.data_dir:
             parser.error("migrate-local-file-stores requires --data-dir")
-        report = migrate_local_file_stores(
+        database_url = database_url_from_env(setting="migrate-local-file-stores")
+        # Accounts first: the other stores' rows reference their users.
+        accounts = migrate_legacy_accounts(
             args.data_dir,
-            database_url_from_env(setting="migrate-local-file-stores"),
+            database_url,
             dry_run=args.dry_run,
+            accounts_already_in_database=retired_settings_chose_database_accounts(),
         )
-        print(json.dumps(report, indent=2))
+        report = migrate_local_file_stores(args.data_dir, database_url, dry_run=args.dry_run)
+        print(json.dumps({**report, "accounts": accounts}, indent=2))
         return
     if args.command == "backup-database":
         client, bucket = backup_target_from_env()

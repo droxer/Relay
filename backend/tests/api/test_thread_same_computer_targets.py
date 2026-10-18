@@ -26,11 +26,17 @@ def _bootstrap_admin(client: TestClient) -> None:
     assert response.status_code == 200, response.text
 
 
+def _admin_id(app) -> str:
+    # The bootstrapped admin's User row has a random id, not one derived
+    # from its handle.
+    return app.state.auth_store.resolve_user_id("admin")
+
+
 def _node(app, sandbox_id: str) -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": sandbox_id,
-            "userId": "admin",
+            "userId": _admin_id(app),
             "token": f"token_{sandbox_id}",
             "workspacePath": f"/workspace/{sandbox_id}",
             "protocolVersion": 1,
@@ -43,7 +49,7 @@ def _node(app, sandbox_id: str) -> dict[str, Any]:
 
 def _agent(app, node: dict[str, Any], name: str, executor: str) -> dict[str, Any]:
     return app.state.agent_store.create_agent(
-        "admin",
+        _admin_id(app),
         {
             "displayName": name,
             "executorKind": executor,
@@ -55,7 +61,7 @@ def _agent(app, node: dict[str, Any], name: str, executor: str) -> dict[str, Any
 
 def _team(app, name: str, lead: dict[str, Any], *members: dict[str, Any]) -> dict[str, Any]:
     return app.state.team_store.create_team(
-        "admin",
+        _admin_id(app),
         {
             "name": name,
             "leadAgentId": lead["id"],
@@ -69,7 +75,7 @@ def _thread(app, node: dict[str, Any], owner: dict[str, Any], **fields: Any) -> 
         {
             "daemonNodeId": node["id"],
             "workspacePath": node["workspacePath"],
-            "ownerUserId": "admin",
+            "ownerUserId": _admin_id(app),
             "ownerAgentId": owner["id"],
             "taskGoal": "Keep one room",
             **fields,
@@ -218,7 +224,7 @@ def test_addressing_team_members_records_the_lead_led_style_it_runs(monkeypatch)
         helper = _agent(app, here, "Helper", "codex")
         _sync(app, here, there)
         team = app.state.team_store.create_team(
-            "admin",
+            _admin_id(app),
             {
                 "name": "Crew",
                 "leadAgentId": lead["id"],

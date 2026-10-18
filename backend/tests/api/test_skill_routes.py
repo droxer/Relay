@@ -8,6 +8,11 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 
+from user_ids import user_id
+
+ALICE = user_id("alice")
+BOB = user_id("bob")
+
 
 def bundle(name: str = "review", visibility: str = "private") -> dict:
     content = f"---\nname: {name}\ndescription: Reviews code\n---\nReview carefully.\n"
@@ -49,7 +54,7 @@ def publish(client: TestClient, **kwargs) -> dict:
 
 def test_publish_list_detail_revision_and_delete(client):
     skill = publish(client)
-    assert skill["ownerUserId"] == "alice"
+    assert skill["ownerUserId"] == ALICE
     assert skill["slug"] == "review"
     assert [item["id"] for item in client.get("/api/v1/skills").json()["skills"]] == [skill["id"]]
     url = f"/api/v1/skills/{skill['id']}"
@@ -100,12 +105,12 @@ def test_invalid_publish_is_atomic(client, mutation, expected):
 
 
 def test_caller_cannot_override_owner_or_identity(client):
-    response = client.post("/api/v1/skills", json={**bundle(), "ownerUserId": "bob"})
+    response = client.post("/api/v1/skills", json={**bundle(), "ownerUserId": BOB})
     assert response.status_code == 422
     skill = publish(client)
     url = f"/api/v1/skills/{skill['id']}"
-    assert client.patch(url, json={"ownerUserId": "bob", "slug": "other"}).status_code == 422
-    assert client.get(url).json()["ownerUserId"] == "alice"
+    assert client.patch(url, json={"ownerUserId": BOB, "slug": "other"}).status_code == 422
+    assert client.get(url).json()["ownerUserId"] == ALICE
 
 
 def test_skill_routes_require_login(client):
@@ -166,7 +171,7 @@ def test_import_failure_does_not_publish(client, monkeypatch):
 def create_agent(client, owner="alice", executor="claude", name="Reviewer", supports_skills=True):
     from relay.core.computer_identity import computer_id
     node = client.app.state.registry.register({
-        "sandboxId": f"skill-node-{owner}", "userId": owner, "token": f"skill-token-{owner}",
+        "sandboxId": f"skill-node-{owner}", "userId": user_id(owner), "token": f"skill-token-{owner}",
         "protocolVersion": 1, "supportedAgents": ["claude", "codex"],
         "capabilities": ["thread-workspaces", *(["agent-skills"] if supports_skills else [])], "status": "ready",
         "workspacePath": "/workspace/skills", "workspaceId": f"skill-machine-{owner}",
@@ -175,7 +180,7 @@ def create_agent(client, owner="alice", executor="claude", name="Reviewer", supp
     client.post("/api/v1/auth/logout")
     assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
     response = client.post("/api/v1/admin/agents", json={
-        "supervisorUserId": owner, "displayName": name, "executorKind": executor,
+        "supervisorUserId": user_id(owner), "displayName": name, "executorKind": executor,
         "defaultRole": "implementer", "computerId": computer_id(node),
     })
     assert response.status_code == 201, response.text
@@ -284,7 +289,7 @@ def test_user_assignment_dynamically_delivers_to_current_and_future_agents(clien
         f"/api/v1/skills/{skill['id']}/assignments",
         json={
             "targetType": "user",
-            "targetId": "alice",
+            "targetId": ALICE,
             "mode": "optional",
             "pin": "stable",
             "invocation": "implicit",
@@ -330,7 +335,7 @@ def test_assignment_api_prevents_cross_user_targeting(client):
     skill = publish(client, visibility="org")
     response = client.post(
         f"/api/v1/skills/{skill['id']}/assignments",
-        json={"targetType": "user", "targetId": "bob"},
+        json={"targetType": "user", "targetId": BOB},
     )
     assert response.status_code == 403, response.text
     assert response.json()["detail"] == "not-target-owner"
@@ -341,13 +346,13 @@ def test_assignment_api_rejects_unknown_fields_and_invalid_policy(client):
     url = f"/api/v1/skills/{skill['id']}/assignments"
     assert client.post(
         url,
-        json={"targetType": "user", "targetId": "alice", "unexpected": True},
+        json={"targetType": "user", "targetId": ALICE, "unexpected": True},
     ).status_code == 422
     response = client.post(
         url,
         json={
             "targetType": "user",
-            "targetId": "alice",
+            "targetId": ALICE,
             "mode": "suggested",
             "invocation": "implicit",
         },

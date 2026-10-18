@@ -14,10 +14,7 @@ affected entries are snapshotted and restored if the transaction fails.
 
 from __future__ import annotations
 
-import shutil
-from contextlib import ExitStack, contextmanager, nullcontext
-from pathlib import Path
-from tempfile import TemporaryDirectory
+from contextlib import nullcontext
 from typing import Any
 
 from loguru import logger
@@ -34,12 +31,10 @@ CASCADE_STORES = (
 
 
 def cascade_engine(ctx: Any) -> Any | None:
-    """The engine shared by every database-backed store in the cascade.
+    """The engine shared by every store in the cascade.
 
-    File-backed participants (the file auth store) have no engine and are
-    restored by ``local_store_rollback`` instead, so they do not stop the
-    database participants from sharing one transaction. Returns None when no
-    participant is database-backed or they point at different databases.
+    Returns None when no participant has an engine (a test double) or they
+    point at different databases.
     """
     participants = [getattr(ctx, name, None) for name in CASCADE_STORES]
     participants.append(getattr(getattr(ctx, "registry", None), "daemon_store", None))
@@ -74,93 +69,11 @@ def soft_delete_user(ctx: Any, user_id: str) -> dict[str, Any]:
     with registry_scope:
         restore = _registry_snapshot(registry, registry_node_ids)
         try:
-            with local_store_rollback(ctx), scope:
+            with scope:
                 return _cascade(ctx, user_id, managed_nodes)
         except Exception:
             _restore_registry(registry, restore)
             raise
-
-
-@contextmanager
-def local_store_rollback(ctx: Any):
-    """Restore file-backed cascade participants when a later write fails.
-
-    Database stores join ``store_transaction`` above. Local stores expose no
-    transaction API, so their durable directories are snapshotted while their
-    in-process locks are held and restored as one unit on failure.
-    """
-    stores = [
-        getattr(ctx, "auth_store", None),
-        getattr(ctx, "agent_store", None),
-        getattr(ctx, "agent_placement_store", None),
-        getattr(ctx, "team_store", None),
-        getattr(ctx, "managed_node_store", None),
-        getattr(getattr(ctx, "registry", None), "daemon_store", None),
-    ]
-    local_stores = [
-        store
-        for store in stores
-        if store is not None and getattr(store, "engine", None) is None
-    ]
-    paths = _local_store_paths(local_stores)
-    if not paths:
-        yield
-        return
-
-    with ExitStack() as stack, TemporaryDirectory(prefix="relay-delete-") as temp:
-        locks = sorted(
-            {
-                id(lock): lock
-                for store in local_stores
-                if (lock := getattr(store, "_lock", None))
-            }.values(),
-            key=id,
-        )
-        for lock in locks:
-            stack.enter_context(lock)
-        backup_root = Path(temp)
-        snapshots: list[tuple[Path, Path, bool]] = []
-        for index, path in enumerate(paths):
-            backup = backup_root / str(index)
-            existed = path.exists()
-            if existed:
-                if path.is_dir():
-                    shutil.copytree(path, backup)
-                else:
-                    shutil.copy2(path, backup)
-            snapshots.append((path, backup, existed))
-        try:
-            yield
-        except Exception:
-            for path, backup, existed in snapshots:
-                if path.exists():
-                    if path.is_dir():
-                        shutil.rmtree(path)
-                    else:
-                        path.unlink()
-                if existed:
-                    if backup.is_dir():
-                        shutil.copytree(backup, path)
-                    else:
-                        path.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(backup, path)
-            logger.warning("Restored file-backed stores after a failed user delete")
-            raise
-
-
-def _local_store_paths(stores: list[Any]) -> list[Path]:
-    paths: set[Path] = set()
-    for store in stores:
-        candidate = None
-        if hasattr(store, "deleted_users_path"):
-            candidate = store.deleted_users_path
-        elif hasattr(store, "root"):
-            candidate = store.root
-        elif hasattr(store, "nodes_dir"):
-            candidate = store.nodes_dir.parent
-        if candidate is not None:
-            paths.add(Path(candidate))
-    return sorted(paths, key=lambda path: str(path.resolve()))
 
 
 def _cascade(

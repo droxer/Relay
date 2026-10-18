@@ -47,14 +47,19 @@ from ..security.auth import (
     configure_admin_token,
 )
 from dataclasses import dataclass
-from typing import Any
 
 
-# Daemon, agent, team, placement, and chat state used to have file-backed
-# twins selected by these variables. They are database-only now; any existing
-# JSON under the data directory is imported once at boot
-# (relay/persistence/file_store_import.py).
-RETIRED_STORE_SETTINGS = ("RELAY_DAEMON_STORE", "RELAY_CHAT_STORE")
+# Accounts, daemon, agent, team, placement, and chat state used to have
+# file-backed twins selected by these variables. They are database-only now;
+# any existing JSON under the data directory is imported once at boot
+# (relay/security/auth_file_import.py, relay/persistence/file_store_import.py).
+RETIRED_STORE_SETTINGS = (
+    "RELAY_STORAGE",
+    "RELAY_AUTH_STORE",
+    "RELAY_DAEMON_STORE",
+    "RELAY_CHAT_STORE",
+)
+_DATABASE_STORAGE_VALUES = frozenset({"postgres", "postgresql", "database", "db"})
 
 
 def warn_retired_store_settings() -> None:
@@ -64,6 +69,18 @@ def warn_retired_store_settings() -> None:
                 "{} is ignored: that state is always kept in the configured database.",
                 name,
             )
+
+
+def retired_settings_chose_database_accounts() -> bool:
+    """Whether the retired switches still say accounts lived in the database.
+
+    They chose the database account store, so any account files under the
+    data directory are leftovers the backend never read and must not be
+    imported over the real accounts.
+    """
+    storage = os.environ.get("RELAY_STORAGE", "").strip().lower()
+    auth = os.environ.get("RELAY_AUTH_STORE", "").strip().lower()
+    return storage in _DATABASE_STORAGE_VALUES or auth == "database"
 
 
 def _aggregate_database_url(aggregate: str) -> tuple[str, bool]:
@@ -185,7 +202,7 @@ class Stores:
     automations: DatabaseAutomationStore
     daemon: DaemonStore
     chat: ChatStore
-    auth: Any
+    auth: DatabaseAccountAuthStore
     managed_nodes: DatabaseManagedNodeStore
     agents: AgentStore
     teams: TeamStore
@@ -195,21 +212,6 @@ class Stores:
     profile_images: DatabaseProfileImageStore
     org_settings: DatabaseOrgSettingsStore
     notifications: DatabaseNotificationStore
-
-
-def _require_database_accounts_on_postgres(dialect: str, auth_store: Any) -> None:
-    """Refuse file-backed accounts beside a Postgres database.
-
-    Agents, teams, placements, nodes, projects, and skills reference
-    ``users.id`` with foreign keys Postgres enforces, so users kept in a JSON
-    file would fail those writes one at a time at runtime. (SQLite leaves
-    foreign keys off, so the default local install is unaffected.)
-    """
-    if dialect == "postgresql" and not isinstance(auth_store, DatabaseAccountAuthStore):
-        raise RuntimeError(
-            "A Postgres database needs database-backed accounts: set "
-            "RELAY_AUTH_STORE=database (or RELAY_STORAGE=postgres)."
-        )
 
 
 def build_stores(root_dir: Path) -> Stores:
@@ -222,8 +224,7 @@ def build_stores(root_dir: Path) -> Stores:
     configure_admin_token(root_dir, admin_token_store_from_env())
     database_url = session_store.engine.url.render_as_string(hide_password=False)
     create_schema = session_store.engine.dialect.name == "sqlite"
-    auth_store = auth_store_from_env(root_dir)
-    _require_database_accounts_on_postgres(session_store.engine.dialect.name, auth_store)
+    auth_store = auth_store_from_env()
     return Stores(
         blob=blob_store,
         sessions=session_store,

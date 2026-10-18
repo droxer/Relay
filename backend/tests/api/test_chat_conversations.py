@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.app import create_app
+from user_ids import user_id
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +52,7 @@ def _active_integration(client: TestClient) -> str:
         "secrets": {"botToken": "discord-secret-token"},
     }).json()["integration"]["id"]
     client.post(f"/api/v1/admin/chat-integrations/{integration_id}/identity-links", json={
-        "externalUserId": "discord_user_1", "userId": "alice", "defaultSandboxId": "sbx_alice",
+        "externalUserId": "discord_user_1", "userId": user_id("alice"), "defaultSandboxId": "sbx_alice",
     })
     client.post(f"/api/v1/admin/chat-integrations/{integration_id}/allowed-conversations", json={
         "conversationId": "channel_123", "label": "team-agents",
@@ -78,7 +79,7 @@ def test_conversation_mapping_round_trip(monkeypatch) -> None:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _active_integration(client)
-        session_id = _create_session(client, "alice")
+        session_id = _create_session(client, user_id("alice"))
 
         # No binding yet.
         unbound = client.post("/api/v1/internal/chat/conversation/session", headers=CHAT_HEADERS, json=CONVERSATION)
@@ -93,7 +94,7 @@ def test_conversation_mapping_round_trip(monkeypatch) -> None:
         )
         assert bind.status_code == 200
         assert bind.json()["mapping"]["sessionId"] == session_id
-        assert bind.json()["mapping"]["ownerUserId"] == "alice"
+        assert bind.json()["mapping"]["ownerUserId"] == user_id("alice")
         assert bind.json()["mapping"]["providerMessageId"] == "provider_reply_1"
 
         # Resolving now returns the bound session.
@@ -114,7 +115,7 @@ def test_conversation_mapping_rejects_foreign_session(monkeypatch) -> None:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _active_integration(client)
-        bob_session = _create_session(client, "bob")
+        bob_session = _create_session(client, user_id("bob"))
 
         # alice's thread may not bind to bob's session.
         rejected = client.post("/api/v1/internal/chat/conversation/mapping", headers=CHAT_HEADERS, json={**CONVERSATION, "sessionId": bob_session})

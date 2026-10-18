@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -8,6 +8,7 @@ from ..automations.service import automation_triggers_enabled
 from ..core import deploy_config
 from ..security.auth import (
     USER_COOKIE_NAME,
+    public_account,
     require_admin_session,
     require_user_session,
     user_session_cookie_attrs_for_request,
@@ -16,21 +17,10 @@ from ..security.auth import (
 )
 from ..security.edge import client_ip
 from ..services.computer_limits import decorate_account_limits
-from .deps import AppContext, AppContextDep, app_context
+from .deps import AppContextDep, app_context
 from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
-
-
-class _AccountPresenter(Protocol):
-    """The public account projection both auth stores provide, which the
-    ``AuthStore`` protocol does not declare."""
-
-    def _public_account(self, account: dict[str, Any]) -> dict[str, Any]: ...
-
-
-def _public_account(ctx: AppContext, account: dict[str, Any]) -> dict[str, Any]:
-    return cast(_AccountPresenter, ctx.auth_store)._public_account(account)
 
 
 def _auth_rate_key(request: Request, scope: str, identity: str = "") -> str:
@@ -64,7 +54,7 @@ def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     account = require_user_session(request, ctx.auth_store)
     return {
         "authenticated": True,
-        "user": decorate_account_limits(ctx, _public_account(ctx, account)),
+        "user": decorate_account_limits(ctx, public_account(account)),
         # Server switches every signed-in user's UI depends on; admin
         # settings are admin-only, and users edit automations too.
         "capabilities": {"automationTriggers": automation_triggers_enabled()},
@@ -148,7 +138,7 @@ def auth_login(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds
     )
     response.set_cookie(value=session["token"], **attrs)
-    return {"user": decorate_account_limits(ctx, _public_account(ctx, account))}
+    return {"user": decorate_account_limits(ctx, public_account(account))}
 
 
 @router.post("/auth/logout")

@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from datetime import datetime, UTC
 
 from test_automation_triggers_api import _client, _routine
+from user_ids import user_id
 
 HEADER = "X-Relay-Automation-Token"
 
@@ -166,8 +167,8 @@ def test_non_owner_assignee_cannot_rotate_secret(monkeypatch):
     with TemporaryDirectory() as root:
         client, _ = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
-        agent = _create_agent(client, "bob")
-        routine = _routine(client, agent, assigneeUserId="bob", routineTriggers=[{"kind": "webhook"}])
+        agent = _create_agent(client, user_id("bob"))
+        routine = _routine(client, agent, assigneeUserId=user_id("bob"), routineTriggers=[{"kind": "webhook"}])
         _login(client, "bob")
         path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
         assert client.get(path).status_code == 403

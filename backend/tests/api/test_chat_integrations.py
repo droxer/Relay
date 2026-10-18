@@ -19,6 +19,9 @@ from relay.chat.provider_health import (
     provision_chat_integration,
 )
 from relay.core.computer_identity import computer_id
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 _CHAT_SECRET_KEY = Fernet.generate_key().decode()
@@ -167,7 +170,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
         node = client.app.state.registry.register(
             {
                 "sandboxId": "offline_node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -180,7 +183,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Chat agent",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -223,7 +226,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "discord_user_1",
-                "userId": "alice",
+                "userId": ALICE,
                 "displayName": "Alice",
                 "defaultAgentId": agent["id"],
             },
@@ -276,7 +279,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
             },
         )
         assert resolved.status_code == 200
-        assert resolved.json()["identity"]["userId"] == "alice"
+        assert resolved.json()["identity"]["userId"] == ALICE
         assert resolved.json()["identity"]["defaultAgentId"] == agent["id"]
 
         disallowed = client.post(
@@ -338,7 +341,7 @@ def test_chat_integration_check_rejects_invalid_provider_credentials(
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "42",
-                "userId": "alice",
+                "userId": ALICE,
             },
         )
         client.post(
@@ -437,7 +440,7 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "42",
-                "userId": "alice",
+                "userId": ALICE,
             },
         )
         client.post(

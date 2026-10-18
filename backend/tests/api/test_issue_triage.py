@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 @pytest.fixture
@@ -75,7 +78,7 @@ def test_projectless_issue_cannot_be_assigned_or_started(triage_context, request
 
 def _legacy_ready(app, lead) -> dict:
     return app.state.task_store.create_task({
-        "title": "Legacy ready", "ownerUserId": "alice", "assigneeUserId": "alice",
+        "title": "Legacy ready", "ownerUserId": ALICE, "assigneeUserId": ALICE,
         "assignedAgent": "codex", "assignedAgentId": lead["id"], "status": "assigned",
     })
 
@@ -166,7 +169,7 @@ def test_clearing_legacy_intake_assignment_returns_it_to_backlog(triage_context)
 
 def test_intake_cannot_move_to_another_users_project(triage_context):
     app, client, _node, project, _lead = triage_context
-    other = app.state.project_store.create_project("bob", {
+    other = app.state.project_store.create_project(user_id("bob"), {
         "name": "Private", "computerId": project["computerId"],
         "leadAgentId": project["leadAgentId"], "members": project["members"],
     })

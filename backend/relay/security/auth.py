@@ -29,15 +29,12 @@ from .passwords import (  # noqa: F401  (re-exported: one policy, one module)
     validate_password,
 )
 from ..core import deploy_config
-from ..core.ids import new_database_id, now_iso
-from ..core.legacy_names import upgrade_legacy_session
-from ..core.storage_config import database_url_from_env, use_postgres_storage
+from ..core.ids import new_database_id
+from ..core.storage_config import database_url_from_env
 from ..persistence.admin_token_store import DatabaseAdminTokenStore
 from ..persistence.store_common import (
     _format_iso,
     _parse_iso,
-    _read_json,
-    _write_json,
     create_all_tables,
     shared_engine,
     store_transaction,
@@ -123,11 +120,6 @@ def hash_password(password: str) -> str:
     return f"{PW_HASH_ALGORITHM}${PW_HASH_ITERATIONS}${salt}${digest}"
 
 
-def _session_expired(session: dict[str, Any], now: datetime) -> bool:
-    expires_at = _parse_iso(session.get("expiresAt"))
-    return expires_at is not None and expires_at <= now
-
-
 def verify_password(password: str, hashed: str) -> bool:
     try:
         algorithm, iterations, salt, digest = hashed.split("$")
@@ -209,281 +201,20 @@ def reissue_admin_token() -> str:
     return token
 
 
-class AccountAuthStore:
-    def __init__(
-        self,
-        root_dir: str | Path,
-        *,
-        session_ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS,
-    ):
-        self.root_dir = Path(root_dir)
-        self.auth_dir = self.root_dir / "auth"
-        self.auth_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(self.auth_dir, 0o700)
-        self.accounts_path = self.auth_dir / "users.json"
-        self.sessions_path = self.auth_dir / "sessions.json"
-        self.deleted_users_path = self.auth_dir / "deleted_users.json"
-        legacy_deleted_path = self.auth_dir / "deleted_employees.json"
-        if legacy_deleted_path.exists() and not self.deleted_users_path.exists():
-            legacy_deleted_path.replace(self.deleted_users_path)
-        self.session_ttl_seconds = session_ttl_seconds
-        # Every file read/modify/write uses this shared reentrant lock,
-        # including session migration, so none can restore a pre-reset snapshot.
-        self._lock = _shared_auth_lock(f"local:{self.auth_dir.resolve()}")
-
-    def resolve_user_id(self, user_id: str) -> str:
-        """The id a `user_id` will actually land on in this store.
-
-        The file store keeps the handle verbatim, so resolution is a trim. The
-        database store maps handles onto UUIDs, and callers that need to ask
-        "does this user already exist?" before creating one have to compare
-        the resolved form or the check silently passes on a live collision."""
-        return (user_id or "").strip()
-
-    def deleted_user_ids(self) -> set[str]:
-        if not self.deleted_users_path.exists():
-            return set()
-        raw = _read_json(self.deleted_users_path)
-        return {entry["id"] for entry in raw if entry.get("id")}
-
-    def soft_delete_user(self, user_id: str) -> dict[str, Any]:
-        with self._lock:
-            user_id = (user_id or "").strip()
-            if not user_id:
-                raise ValueError("userId is required.")
-            accounts = self._read_accounts()
-            if not any(account.get("userId") == user_id for account in accounts):
-                raise KeyError(user_id)
-            entries: list[dict[str, Any]] = []
-            if self.deleted_users_path.exists():
-                entries = _read_json(self.deleted_users_path)
-            if any(entry.get("id") == user_id for entry in entries):
-                raise ValueError("User is already deleted.")
-            record = {"id": user_id, "deletedAt": now_iso()}
-            entries.append(record)
-            _write_json(self.deleted_users_path, entries, mode=0o600)
-            logger.info("User soft-deleted", user_id=user_id)
-            return record
-
-    def has_accounts(self) -> bool:
-        return len(self._read_accounts()) > 0
-
-    def create_account(
-        self,
-        username: str,
-        password: str,
-        role: UserRole = "user",
-        email: str | None = None,
-        user_id: str | None = None,
-        display_name: str | None = None,
-        department_id: str | None = None,
-        department_name: str | None = None,
-    ) -> dict[str, Any]:
-        with self._lock:
-            accounts = self._read_accounts()
-            username = username.strip().lower()
-            if not username:
-                raise ValueError("username is required.")
-            validate_password(
-                password, identifiers=(username, user_id, display_name, email)
-            )
-            if role not in ("admin", "user"):
-                raise ValueError("role must be admin or user.")
-            if any(account["username"] == username for account in accounts):
-                raise ValueError("username already exists.")
-            account = {
-                "id": new_database_id(),
-                "username": username,
-                "email": email.strip() if email else None,
-                "role": role,
-                "userId": user_id.strip() if user_id else None,
-                "displayName": display_name.strip() if display_name else None,
-                "departmentId": department_id.strip() if department_id else None,
-                "departmentName": department_name.strip() if department_name else None,
-                "theme": DEFAULT_USER_THEME,
-                "language": DEFAULT_USER_LANGUAGE,
-                "passwordHash": hash_password(password),
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-            }
-            accounts.append(account)
-            self._write_accounts(accounts)
-            if account.get("userId") and self.deleted_users_path.exists():
-                entries = [
-                    entry
-                    for entry in _read_json(self.deleted_users_path)
-                    if entry.get("id") != account["userId"]
-                ]
-                _write_json(self.deleted_users_path, entries, mode=0o600)
-            logger.info("Account created", account_id=account["id"], username=username, role=role)
-            return self._public_account(account)
-
-    def update_user_preferences(
-        self,
-        account_id: str,
-        *,
-        theme: UserTheme | None = None,
-        language: UserLanguage | None = None,
-        onboarding: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        with self._lock:
-            _validate_user_preferences(theme=theme, language=language)
-            accounts = self._read_accounts()
-            account = next((entry for entry in accounts if entry["id"] == account_id), None)
-            if not account:
-                raise KeyError(account_id)
-            now = now_iso()
-            if onboarding is not None:
-                account["onboarding"] = apply_onboarding_patch(
-                    account.get("onboarding"), onboarding, now
-                )
-            if theme is not None:
-                account["theme"] = theme
-            if language is not None:
-                account["language"] = language
-            account["updatedAt"] = now
-            self._write_accounts(accounts)
-            return self._public_account(account)
-
-    def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
-        username = username.strip().lower()
-        for account in self._read_accounts():
-            if account["username"] == username and verify_password(
-                password, account["passwordHash"]
-            ):
-                if account.get("userId") in self.deleted_user_ids():
-                    return None
-                return account
-        return None
-
-    def bootstrap_with_token(
-        self, token: str, username: str, password: str
-    ) -> dict[str, Any]:
-        if not admin_token_configured():
-            raise HTTPException(503, "Admin token is not configured.")
-        if not verify_admin_token(token):
-            raise HTTPException(401, "Invalid admin token.")
-        with self._lock:
-            if self.has_accounts():
-                raise HTTPException(
-                    409, "Bootstrap is only allowed before the first user is created."
-                )
-            return self.create_account(username, password, role="admin")
-
-    def create_session(self, account_id: str) -> dict[str, Any]:
-        with self._lock:
-            token = new_session_token()
-            now = datetime.now(UTC)
-            expires_at = now.timestamp() + self.session_ttl_seconds
-            session = {
-                "tokenHash": hash_session_token(token),
-                "accountId": account_id,
-                "createdAt": _format_iso(now),
-                "expiresAt": _format_iso(
-                    datetime.fromtimestamp(expires_at, tz=UTC)
-                ),
-            }
-            sessions = self._read_sessions()
-            sessions.append(session)
-            self._write_sessions(sessions)
-            return {**session, "token": token}
-
-    def get_session_by_token(self, token: str | None) -> dict[str, Any] | None:
-        with self._lock:
-            if not token:
-                return None
-            sessions = self._read_sessions()
-            for session in sessions:
-                expected_hash = session.get("tokenHash")
-                legacy_token = session.get("token")
-                matches = bool(
-                    isinstance(expected_hash, str)
-                    and secrets.compare_digest(expected_hash, hash_session_token(token))
-                ) or bool(
-                    isinstance(legacy_token, str)
-                    and len(legacy_token) == len(token)
-                    and secrets.compare_digest(legacy_token, token)
-                )
-                if matches:
-                    if legacy_token:
-                        session["tokenHash"] = hash_session_token(token)
-                        session.pop("token", None)
-                        self._write_sessions(sessions)
-                    expires_at = _parse_iso(session.get("expiresAt"))
-                    if expires_at and expires_at <= datetime.now(UTC):
-                        self.delete_session(token)
-                        return None
-                    return session
-            return None
-
-    def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
-        account = next(
-            (account for account in self._read_accounts() if account["id"] == account_id), None
-        )
-        if account and account.get("userId") in self.deleted_user_ids():
-            return None
-        return account
-
-    def delete_session(self, token: str) -> bool:
-        with self._lock:
-            sessions = self._read_sessions()
-            before = len(sessions)
-            token_hash = hash_session_token(token)
-            sessions = [
-                session
-                for session in sessions
-                if session.get("tokenHash") != token_hash and session.get("token") != token
-            ]
-            if len(sessions) < before:
-                self._write_sessions(sessions)
-                return True
-            return False
-
-    def cleanup_expired_sessions(self) -> int:
-        with self._lock:
-            sessions = self._read_sessions()
-            now = datetime.now(UTC)
-            kept = [
-                s
-                for s in sessions
-                if not _session_expired(s, now)
-            ]
-            removed = len(sessions) - len(kept)
-            if removed:
-                self._write_sessions(kept)
-            return removed
-
-    def list_accounts(self) -> list[dict[str, Any]]:
-        return [self._public_account(account) for account in self._read_accounts()]
-
-    def _read_accounts(self) -> list[dict[str, Any]]:
-        return _read_json(self.accounts_path) if self.accounts_path.exists() else []
-
-    def _write_accounts(self, accounts: list[dict[str, Any]]) -> None:
-        _write_json(self.accounts_path, accounts, mode=0o600)
-
-    def _read_sessions(self) -> list[dict[str, Any]]:
-        if not self.sessions_path.exists():
-            return []
-        return [upgrade_legacy_session(session) for session in _read_json(self.sessions_path)]
-
-    def _write_sessions(self, sessions: list[dict[str, Any]]) -> None:
-        _write_json(self.sessions_path, sessions, mode=0o600)
-
-    @staticmethod
-    def _public_account(account: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "id": account["id"],
-            "username": account["username"],
-            "email": account.get("email"),
-            "role": account["role"],
-            "userId": account.get("userId"),
-            "displayName": account.get("displayName"),
-            "theme": account.get("theme", DEFAULT_USER_THEME),
-            "language": normalize_user_language(account.get("language")),
-            "onboarding": normalize_onboarding(account.get("onboarding")),
-            "createdAt": account["createdAt"],
-        }
+def public_account(account: dict[str, Any]) -> dict[str, Any]:
+    """An Account as the API shows it: no password hash."""
+    return {
+        "id": account["id"],
+        "username": account["username"],
+        "email": account.get("email"),
+        "role": account["role"],
+        "userId": account.get("userId"),
+        "displayName": account.get("displayName"),
+        "theme": account.get("theme", DEFAULT_USER_THEME),
+        "language": normalize_user_language(account.get("language")),
+        "onboarding": normalize_onboarding(account.get("onboarding")),
+        "createdAt": account["createdAt"],
+    }
 
 
 class DatabaseAccountAuthStore:
@@ -581,7 +312,7 @@ class DatabaseAccountAuthStore:
         except IntegrityError as error:
             raise ValueError("username already exists.") from error
         logger.info("Account created", account_id=account["id"], username=username, role=role)
-        return AccountAuthStore._public_account(account)
+        return public_account(account)
 
     def update_user_preferences(
         self,
@@ -622,7 +353,7 @@ class DatabaseAccountAuthStore:
                 .mappings()
                 .one()
             )
-        return AccountAuthStore._public_account(row_to_database_account(row))
+        return public_account(row_to_database_account(row))
 
     def ensure_department(
         self,
@@ -652,11 +383,13 @@ class DatabaseAccountAuthStore:
         return [row_to_department(row) for row in rows]
 
     def resolve_user_id(self, user_id: str) -> str:
-        """See UserAuthStore.resolve_user_id — here a handle becomes a UUID.
+        """The id a `user_id` (a UUID or a handle) lands on in this store.
 
-        The handle column is consulted first: rows backfilled by the migration
-        carry a handle whose uuid5 is not their id, so the deterministic mapping
-        alone would miss a real collision."""
+        Callers that ask "does this user already exist?" before creating one
+        must compare this form, or the check silently passes on a live
+        collision. The handle column is consulted first: rows backfilled by the
+        migration carry a handle whose uuid5 is not their id, so the
+        deterministic mapping alone would miss a real collision."""
         requested = (user_id or "").strip()
         if not requested:
             return ""
@@ -671,8 +404,11 @@ class DatabaseAccountAuthStore:
                     .mappings()
                     .first()
                 )
+                stored = None if row else self._stored_user_id(conn, requested)
             if row:
                 return str(row["id"])
+            if stored:
+                return stored
         return database_id_for_reference(requested, USER_ENTITY_KIND)
 
     def ensure_user(
@@ -691,7 +427,8 @@ class DatabaseAccountAuthStore:
         with store_transaction(self.engine) as conn:
             return self._ensure_user(
                 conn,
-                database_id_for_reference(requested_user_id, USER_ENTITY_KIND),
+                self._stored_user_id(conn, requested_user_id)
+                or database_id_for_reference(requested_user_id, USER_ENTITY_KIND),
                 # The caller's user_id IS the handle when it is not already
                 # a UUID — that is the only place the spelling survives.
                 handle=None
@@ -948,11 +685,7 @@ class DatabaseAccountAuthStore:
                 .mappings()
                 .all()
             )
-        return [AccountAuthStore._public_account(row_to_database_account(row)) for row in rows]
-
-    @staticmethod
-    def _public_account(account: dict[str, Any]) -> dict[str, Any]:
-        return AccountAuthStore._public_account(account)
+        return [public_account(row_to_database_account(row)) for row in rows]
 
     def _ensure_department(
         self,
@@ -1044,7 +777,7 @@ class DatabaseAccountAuthStore:
             else None
         )
         department_pk = department["id"] if department else None
-        user_id = normalize_database_id(user_id)
+        user_id = self._stored_user_id(conn, user_id)
         row = None
         if user_id:
             row = (
@@ -1112,6 +845,18 @@ class DatabaseAccountAuthStore:
         )
         return user
 
+    def _stored_user_id(self, conn: Any, user_id: str | None) -> str | None:
+        """``user_id`` as the users table keys it, or None.
+
+        A UUID as given. Otherwise only a user imported from the retired file
+        store on SQLite, which kept its handle-shaped id verbatim so the rows
+        that reference it still match (PostgreSQL ids are always UUIDs)."""
+        normalized = normalize_database_id(user_id)
+        if normalized or not user_id or self.engine.dialect.name != "sqlite":
+            return normalized
+        stored = conn.scalar(select(self.users.c.id).where(self.users.c.id == user_id.strip()))
+        return str(stored) if stored is not None else None
+
     def _handle_is_free(self, conn: Any, handle: str) -> bool:
         return (
             conn.execute(
@@ -1129,17 +874,11 @@ class DatabaseAccountAuthStore:
         return account_pk
 
 
-def auth_store_from_env(root_dir: str | Path) -> Any:
-    auth_store = os.environ.get("RELAY_AUTH_STORE", "").strip().lower()
-    if auth_store != "database" and not use_postgres_storage():
-        return AccountAuthStore(root_dir)
-    setting = (
-        "RELAY_AUTH_STORE=database"
-        if auth_store == "database"
-        else "RELAY_STORAGE=postgres"
+def auth_store_from_env() -> DatabaseAccountAuthStore:
+    database_url = database_url_from_env(setting="database-only account storage")
+    return DatabaseAccountAuthStore(
+        database_url, create_schema=database_url.startswith("sqlite")
     )
-    database_url = database_url_from_env(setting=setting)
-    return DatabaseAccountAuthStore(database_url)
 
 
 def database_account_to_row(

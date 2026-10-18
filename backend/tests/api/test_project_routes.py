@@ -9,6 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -44,7 +47,7 @@ def _register_computer(
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "userId": "alice",
+            "userId": ALICE,
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
@@ -66,7 +69,7 @@ def _agent(client: TestClient, app, node: dict, name: str, executor: str) -> dic
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": "alice",
+            "supervisorUserId": ALICE,
             "displayName": name,
             "executorKind": executor,
             "defaultRole": "implementer",
@@ -123,8 +126,8 @@ def test_user_creates_and_updates_computer_bound_project(monkeypatch) -> None:
 
         assert created.status_code == 201, created.text
         project = created.json()["project"]
-        assert project["ownerUserId"] == "alice"
-        assert project["computerId"] == "device:alice:machine-a"
+        assert project["ownerUserId"] == ALICE
+        assert project["computerId"] == f"device:{ALICE}:machine-a"
         assert project["workspaceLayout"] == "project"
         assert project["workspaceSubpath"] == f"projects/{project['id']}"
         assert project["leadAgentId"] == lead["id"]
@@ -534,7 +537,7 @@ def test_user_delete_requires_archival_and_preserves_history(
             == 200
         )
 
-        deleted = client.delete("/api/v1/admin/users/alice")
+        deleted = client.delete(f"/api/v1/admin/users/{ALICE}")
 
         assert deleted.status_code == (200 if archive_first else 409), deleted.text
         saved_project = app.state.project_store.get_project(project["id"])
@@ -542,7 +545,7 @@ def test_user_delete_requires_archival_and_preserves_history(
         assert saved_project["members"] == project["members"]
         assert bool(app.state.agent_store.get_agent(lead["id"]).get("deletedAt")) is archive_first
         users = client.get("/api/v1/admin/users").json()["users"]
-        assert any(user["id"] == "alice" for user in users) is not archive_first
+        assert any(user["id"] == ALICE for user in users) is not archive_first
 
 
 def test_project_routes_are_owner_scoped(monkeypatch) -> None:
@@ -1049,7 +1052,7 @@ def test_project_dispatch_fails_closed_after_incompatible_daemon_replacement(
         app.state.registry.register(
             {
                 "sandboxId": computer["id"],
-                "userId": "alice",
+                "userId": ALICE,
                 "token": f"token_{computer['id']}",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
@@ -1435,7 +1438,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         other = create_project("Other room")
         session = app.state.session_store.create_session(
             {
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "taskGoal": "Scoped thread",
                 "workspacePath": "/workspace/relay",
                 "projectId": project["id"],
@@ -1446,7 +1449,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         app.state.session_store.create_session(
             {
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "taskGoal": "Other thread",
                 "workspacePath": "/workspace/relay",
                 "projectId": other["id"],
@@ -1454,7 +1457,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         task = app.state.task_store.create_task(
             {
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "title": "Scoped task",
                 "projectId": project["id"],
                 "status": "assigned",
@@ -1462,7 +1465,7 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         )
         app.state.task_store.create_task(
             {
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "title": "Other task",
                 "projectId": other["id"],
                 "status": "assigned",

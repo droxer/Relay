@@ -5,14 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
-from store_fixtures import make_agent_placement_store
 from relay.persistence.agent_store import DatabaseAgentStore
-from store_fixtures import make_agent_store
 from relay.persistence.daemon_store import DatabaseDaemonStore
-from store_fixtures import make_daemon_store
 from relay.persistence.team_store import DatabaseTeamStore
-from store_fixtures import make_team_store
-from relay.security.auth import DatabaseAccountAuthStore, AccountAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
 from relay.services.user_lifecycle import cascade_engine, soft_delete_user
 
 
@@ -164,34 +160,3 @@ def test_file_backed_stores_have_no_shared_engine(tmp_path: Path) -> None:
     )
 
     assert cascade_engine(ctx) is None
-
-
-def test_file_auth_failure_restores_user_and_database_agent(tmp_path: Path) -> None:
-    auth_store = AccountAuthStore(tmp_path)
-    agent_store = make_agent_store(tmp_path)
-    placement_store = make_agent_placement_store(tmp_path)
-    team_store = make_team_store(tmp_path)
-    daemon_store = make_daemon_store(tmp_path)
-    ctx = SimpleNamespace(
-        auth_store=auth_store,
-        agent_store=agent_store,
-        agent_placement_store=placement_store,
-        team_store=team_store,
-        registry=SimpleNamespace(
-            daemon_store=daemon_store,
-            sandboxes={},
-            unassign_user_everywhere=lambda user_id: [],
-            get=lambda node_id: None,
-            fence_managed_node=lambda node_id: None,
-        ),
-        managed_node_store=RaisingManagedNodeStore(RuntimeError("provider down")),
-    )
-    user_id, agent_id = seed_user(ctx)
-    add_managed_node(ctx.managed_node_store, user_id)
-
-    with pytest.raises(RuntimeError, match="provider down"):
-        soft_delete_user(ctx, user_id)
-
-    assert auth_store.authenticate("alice", "userpass") is not None
-    assert auth_store.deleted_user_ids() == set()
-    assert [agent["id"] for agent in agent_store.list_agents()] == [agent_id]

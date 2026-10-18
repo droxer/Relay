@@ -58,13 +58,11 @@ RUN uv sync --project backend --extra migration --extra r2 --frozen
 # Bind every interface: the platform routes to the container's published port,
 # which arrives as $PORT and is read by relay.core.deploy_config.
 ENV HOST=0.0.0.0 \
-    RELAY_STORAGE=postgres \
-    RELAY_AUTH_STORE=database \
     RELAY_BACKGROUND_MODE=external \
     RELAY_DATA_DIR=/data
 
-# With the database stores above, everything but skill bundles lives in
-# Postgres. Skill bundles are written under /data/skills/objects unless
+# Every store lives in the configured database, so everything but skill
+# bundles lives in Postgres. Skill bundles are written under /data/skills/objects unless
 # RELAY_BLOB_STORE=r2, so mount a volume at /data when R2 is not configured.
 RUN useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin relay \
     && mkdir -p /data \

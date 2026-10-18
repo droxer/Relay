@@ -314,8 +314,8 @@ make backend BACKEND_PORT=9000
 ```
 
 For a separate Procrastinate background process, see
-[Background jobs](background-jobs.md). Set `RELAY_STORAGE=postgres` and
-`RELAY_BACKGROUND_MODE=external` in `backend/.env`, apply the Relay migrations,
+[Background jobs](background-jobs.md). Point `RELAY_DATABASE_URL` at
+PostgreSQL, set `RELAY_BACKGROUND_MODE=external` in `backend/.env`, apply the Relay migrations,
 and start `make backend-worker` alongside `make backend`. The worker command
 initializes the queue schema if needed before starting. External mode stops the API's
 periodic consumers while keeping automation event production enabled;
@@ -537,11 +537,18 @@ holds tokens and logs:
 ~/.relay/daemon-nodes/<sandbox-id>/logs/*.jsonl                  # daemon structured logs
 ```
 
-Legacy `.relay/daemon/{nodes,commands,runs,run-requests,events}/`,
+Accounts live in the configured database like every other store;
+`RELAY_STORAGE` and `RELAY_AUTH_STORE` are retired and only log a warning when
+set. Legacy `.relay/auth/` account files, `.relay/daemon/{nodes,commands,runs,run-requests,events}/`,
 `.relay/agents/`, `.relay/teams/`, `.relay/agent-placements/`, and
 `.relay/chat/` files are import-only: the backend moves them into the database
-once at startup (or run `relay migrate-local-file-stores --data-dir <path>
-[--dry-run]`) and never writes them again.
+once at startup, accounts first (or run `relay migrate-local-file-stores
+--data-dir <path> [--dry-run]`), and never writes them again. Login sessions
+and password reset links in `.relay/auth/` are not imported, so everyone signs
+in again once. While `RELAY_STORAGE=postgres` or `RELAY_AUTH_STORE=database`
+is still set, the database already held the accounts: leftover account files
+are marked imported without being read, so remove those settings only after
+one start.
 
 Legacy `.relay/sessions/` and `.relay/tasks/` trees are migration inputs only;
 the runtime does not use them as its session/task store. Import them with
@@ -557,7 +564,7 @@ backend/relay/bootstrap/                      store wiring, background runtime, 
 backend/relay/core/                           models, settings, env, ids, logging, storage config
 backend/relay/persistence/                    event-sourced session/task/daemon/agent/team/
                                               project stores; tables/ declares every table
-backend/relay/security/auth.py                auth store and JWT helpers
+backend/relay/security/auth.py                account store and session helpers
 backend/relay/sessions/controller.py          session mutation controller
 backend/relay/sessions/bridge.py              session continuity and handoff
 backend/relay/daemon_registry/node_backend.py daemon admission and run dispatch

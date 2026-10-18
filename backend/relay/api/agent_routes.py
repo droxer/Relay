@@ -338,19 +338,8 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
 
 
 def _user_exists(auth_store: Any, user_id: str) -> bool:
-    if hasattr(auth_store, "list_users"):
-        return any(
-            user.get("id") == user_id
-            for user in auth_store.list_users()
-        )
-    if (
-        hasattr(auth_store, "deleted_user_ids")
-        and user_id in auth_store.deleted_user_ids()
-    ):
-        return False
-    return any(
-        account.get("userId") == user_id for account in auth_store.list_accounts()
-    )
+    # list_users already excludes soft-deleted users.
+    return any(user.get("id") == user_id for user in auth_store.list_users())
 
 
 def _update_agent_and_realize_placements(

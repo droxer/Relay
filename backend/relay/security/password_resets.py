@@ -1,10 +1,9 @@
-"""Password reset links, kept beside whichever auth store holds the accounts.
+"""Password reset links, kept in ``auth_password_resets`` beside the accounts.
 
 A link is a random token whose SHA-256 is stored with the Account it resets.
 Issuing one spends every older open link for that Account, and redeeming one
 spends the rest, so at most one link per Account works at a time. Redeeming
-sets the password and drops every session in one step: in the database store
-that is one transaction, in the file store one hold of the auth lock.
+sets the password and drops every session in one transaction.
 
 Which Accounts a request reaches, how often, and what gets emailed is decided
 by ``relay.services.password_reset``; this module only keeps the records.
@@ -21,15 +20,8 @@ from typing import Any
 from sqlalchemy import delete, func, insert, or_, select, update
 
 from ..core.ids import new_database_id
-from ..persistence.store_common import (
-    _format_iso,
-    _read_json,
-    _require_iso,
-    _write_json,
-    store_transaction,
-)
+from ..persistence.store_common import store_transaction
 from .auth import (
-    AccountAuthStore,
     DatabaseAccountAuthStore,
     hash_password,
     validate_password,
@@ -104,148 +96,6 @@ def _matches(identifier: str, account: ResetAccount) -> bool:
             return False
         return account.email.lower() == identifier
     return account.username == identifier
-
-
-class FilePasswordResetStore:
-    """Reset records in ``<auth dir>/password-resets.json``, under the auth lock."""
-
-    def __init__(self, auth_store: AccountAuthStore):
-        self._auth = auth_store
-        self.path = auth_store.auth_dir / "password-resets.json"
-
-    def accounts_for(self, identifier: str) -> list[ResetAccount]:
-        return [
-            account
-            for account in (self._reset_account(row) for row in self._live_accounts())
-            if _matches(identifier, account)
-        ]
-
-    def account_for_user(self, user_id: str) -> ResetAccount | None:
-        user_id = (user_id or "").strip()
-        row = next((row for row in self._live_accounts() if row.get("userId") == user_id), None)
-        return self._reset_account(row) if row else None
-
-    def issue(
-        self,
-        account_id: str,
-        token_hash: str,
-        *,
-        now: datetime,
-        expires_at: datetime,
-        throttle: ResetThrottle | None,
-    ) -> bool:
-        with self._auth._lock:
-            records = [
-                record
-                for record in self._read()
-                if _require_iso(record["expiresAt"]) > now - RETENTION
-            ]
-            mine = [record for record in records if record["accountId"] == account_id]
-            if _throttled([_require_iso(record["createdAt"]) for record in mine], now, throttle):
-                return False
-            records = [self._spent(record, account_id, now) for record in records]
-            records.append(
-                {
-                    "id": new_database_id(),
-                    "accountId": account_id,
-                    "tokenHash": token_hash,
-                    "createdAt": _format_iso(now),
-                    "expiresAt": _format_iso(expires_at),
-                    "usedAt": None,
-                }
-            )
-            self._write(records)
-        return True
-
-    def peek(self, token_hash: str, *, now: datetime) -> LiveReset | None:
-        record = self._live_record(self._read(), token_hash, now)
-        if record is None:
-            return None
-        account = self._auth.get_account_by_id(record["accountId"])
-        if account is None:
-            return None
-        return LiveReset(self._reset_account(account), _require_iso(record["expiresAt"]))
-
-    def complete(self, token_hash: str, password: str, *, now: datetime) -> ResetAccount:
-        with self._auth._lock:
-            records = self._read()
-            record = self._live_record(records, token_hash, now)
-            if record is None:
-                raise ResetNotLiveError
-            account_id = record["accountId"]
-            account = self._auth.get_account_by_id(account_id)
-            if account is None:
-                raise ResetNotLiveError
-            # Checked before anything is written, so a refused password
-            # leaves the link usable for another try.
-            validate_password(
-                password,
-                identifiers=(
-                    account["username"],
-                    account.get("userId"),
-                    account.get("displayName"),
-                    account.get("email"),
-                ),
-            )
-            stamp = _format_iso(now)
-            self._auth._write_accounts(
-                [
-                    {**row, "passwordHash": hash_password(password), "updatedAt": stamp}
-                    if row["id"] == account_id
-                    else row
-                    for row in self._auth._read_accounts()
-                ]
-            )
-            self._write([self._spent(entry, account_id, now) for entry in records])
-            self._auth._write_sessions(
-                [
-                    session
-                    for session in self._auth._read_sessions()
-                    if session.get("accountId") != account_id
-                ]
-            )
-        return self._reset_account(account)
-
-    def _live_accounts(self) -> list[dict[str, Any]]:
-        deleted = self._auth.deleted_user_ids()
-        return [
-            row
-            for row in self._auth._read_accounts()
-            if not row.get("userId") or row["userId"] not in deleted
-        ]
-
-    @staticmethod
-    def _reset_account(row: dict[str, Any]) -> ResetAccount:
-        return ResetAccount(
-            account_id=row["id"],
-            username=row["username"],
-            email=_recipient(row.get("email")),
-            language=row.get("language"),
-        )
-
-    @staticmethod
-    def _live_record(
-        records: list[dict[str, Any]], token_hash: str, now: datetime
-    ) -> dict[str, Any] | None:
-        for record in records:
-            if not secrets.compare_digest(record["tokenHash"], token_hash):
-                continue
-            if record.get("usedAt") or _require_iso(record["expiresAt"]) <= now:
-                return None
-            return record
-        return None
-
-    @staticmethod
-    def _spent(record: dict[str, Any], account_id: str, now: datetime) -> dict[str, Any]:
-        if record["accountId"] != account_id or record.get("usedAt"):
-            return record
-        return {**record, "usedAt": _format_iso(now)}
-
-    def _read(self) -> list[dict[str, Any]]:
-        return _read_json(self.path) if self.path.exists() else []
-
-    def _write(self, records: list[dict[str, Any]]) -> None:
-        _write_json(self.path, records, mode=0o600)
 
 
 class DatabasePasswordResetStore:
@@ -434,10 +284,5 @@ class DatabasePasswordResetStore:
         )
 
 
-PasswordResetStore = FilePasswordResetStore | DatabasePasswordResetStore
-
-
-def password_reset_store_for(auth_store: Any) -> PasswordResetStore:
-    if isinstance(auth_store, DatabaseAccountAuthStore):
-        return DatabasePasswordResetStore(auth_store)
-    return FilePasswordResetStore(auth_store)
+def password_reset_store_for(auth_store: DatabaseAccountAuthStore) -> DatabasePasswordResetStore:
+    return DatabasePasswordResetStore(auth_store)

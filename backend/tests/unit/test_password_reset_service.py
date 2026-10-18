@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 from loguru import logger
 from relay.notifications.mailer import DeliveryResult, EmailMessage, NullMailer
-from relay.security.auth import AccountAuthStore, DatabaseAccountAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
+from store_fixtures import make_auth_store
 from relay.security.password_resets import ResetThrottle, password_reset_store_for
 from relay.services.password_reset import (
     PasswordResetConfig,
@@ -51,11 +52,9 @@ class Clock:
         self.now += timedelta(**delta)
 
 
-@pytest.fixture(params=["file", "database"])
-def auth_store(request: pytest.FixtureRequest, tmp_path: Path):
-    if request.param == "file":
-        return AccountAuthStore(tmp_path / "state")
-    return DatabaseAccountAuthStore(f"sqlite:///{tmp_path}/auth.db", create_schema=True)
+@pytest.fixture
+def auth_store(tmp_path: Path) -> DatabaseAccountAuthStore:
+    return make_auth_store(tmp_path)
 
 
 @pytest.fixture
@@ -368,63 +367,6 @@ def test_one_request_reaches_at_most_three_accounts(
     service.request("ada@example.com", locale=None, web_origin=WEB)
 
     assert len(mailer.sent) == 3
-
-
-@pytest.mark.parametrize("writer", ["preferences", "session"])
-def test_file_reset_survives_a_concurrent_auth_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, writer: str
-) -> None:
-    from concurrent.futures import ThreadPoolExecutor
-
-    auth = AccountAuthStore(tmp_path / "state")
-    account = _account(auth)
-    old_session = auth.create_session(account["id"])
-    writer_auth = AccountAuthStore(tmp_path / "state")
-    service = PasswordResetService(password_reset_store_for(auth), NullMailer())
-    token = service.admin_issue("ada", web_origin=WEB).url.split("#token=", 1)[1]
-    snapshot_read = threading.Event()
-    release_writer = threading.Event()
-    reset_finished = threading.Event()
-    reader_name = "_read_accounts" if writer == "preferences" else "_read_sessions"
-    original_read = getattr(writer_auth, reader_name)
-
-    def paused_read():
-        snapshot = original_read()
-        if threading.current_thread().name.startswith("auth-writer"):
-            snapshot_read.set()
-            assert release_writer.wait(5)
-        return snapshot
-
-    monkeypatch.setattr(writer_auth, reader_name, paused_read)
-
-    def write():
-        if writer == "preferences":
-            writer_auth.update_user_preferences(account["id"], theme="dark")
-        else:
-            writer_auth.create_session(account["id"])
-
-    def reset():
-        try:
-            service.complete(token, NEW_PASSWORD)
-        finally:
-            reset_finished.set()
-
-    with ThreadPoolExecutor(thread_name_prefix="auth-writer") as writes, ThreadPoolExecutor() as resets:
-        writing = writes.submit(write)
-        try:
-            assert snapshot_read.wait(5)
-            resetting = resets.submit(reset)
-            # A correctly serialized reset waits until the writer releases
-            # its snapshot. An unlocked writer can overwrite a finished reset.
-            reset_finished.wait(0.2)
-        finally:
-            release_writer.set()
-        writing.result(timeout=5)
-        resetting.result(timeout=5)
-
-    assert auth.authenticate("ada", NEW_PASSWORD) is not None
-    assert auth.authenticate("ada", OLD_PASSWORD) is None
-    assert auth.get_session_by_token(old_session["token"]) is None
 
 
 def test_database_redemption_rechecks_a_link_after_account_lock(tmp_path):

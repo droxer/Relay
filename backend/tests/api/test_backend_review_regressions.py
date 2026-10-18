@@ -19,6 +19,13 @@ from relay.services.event_notifier import (
     database_notification_bridge,
 )
 from relay.sessions.controller import SessionController
+from user_ids import user_id
+
+
+def _admin_id(app) -> str:
+    # The bootstrapped admin's User row has a random id, not one derived
+    # from its handle.
+    return app.state.auth_store.resolve_user_id("admin")
 
 
 @pytest.fixture
@@ -143,7 +150,7 @@ def test_sandbox_provision_checks_existing_owner(review_app, review_client):
     node = review_app.state.registry.register(
         {
             "sandboxId": "review-alice",
-            "userId": "alice",
+            "userId": user_id("alice"),
             "token": "node_token",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -157,10 +164,10 @@ def test_sandbox_provision_checks_existing_owner(review_app, review_client):
         == 200
     )
     response = review_client.post(
-        "/api/v1/sandboxes", json={"userId": "bob", "sandboxId": node["id"]}
+        "/api/v1/sandboxes", json={"userId": user_id("bob"), "sandboxId": node["id"]}
     )
     assert response.status_code == 403
-    assert review_app.state.registry.get(node["id"])["userId"] == "alice"
+    assert review_app.state.registry.get(node["id"])["userId"] == user_id("alice")
     assert (
         review_client.post(
             "/api/v1/auth/login", json={"username": "alice", "password": "userpass"}
@@ -169,7 +176,7 @@ def test_sandbox_provision_checks_existing_owner(review_app, review_client):
     )
     assert (
         review_client.post(
-            "/api/v1/sandboxes", json={"userId": "alice", "sandboxId": node["id"]}
+            "/api/v1/sandboxes", json={"userId": user_id("alice"), "sandboxId": node["id"]}
         ).status_code
         == 201
     )
@@ -437,13 +444,13 @@ def test_thread_decisions_record_who_decided(review_app, review_client):
     assert response.status_code == 200
     [decision] = response.json()["decisions"]
     assert decision["kind"] == "reject"
-    assert decision["actorUserId"] == "admin"
+    assert decision["actorUserId"] == _admin_id(review_app)
 
 
 def test_cancel_decision_records_who_cancelled(review_app, review_client):
     session = SessionController(
         review_app.state.session_store, workspace_path="/workspace",
-        owner_user_id="admin",
+        owner_user_id=_admin_id(review_app),
     ).create_session("Long job", ["human"])
 
     response = review_client.post(
@@ -451,7 +458,7 @@ def test_cancel_decision_records_who_cancelled(review_app, review_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["decisions"][-1]["actorUserId"] == "admin"
+    assert response.json()["decisions"][-1]["actorUserId"] == _admin_id(review_app)
 
 
 def test_reject_keeps_the_question_the_thread_waits_on(review_app, review_client):
@@ -550,7 +557,9 @@ def test_reject_serializes_validation_with_run_admission(review_app, review_clie
 
 
 def test_admin_stop_preserves_identity_for_backend(review_app, review_client, monkeypatch):
-    session = SessionController(review_app.state.session_store, owner_user_id="admin").create_session("Stop")
+    session = SessionController(
+        review_app.state.session_store, owner_user_id=_admin_id(review_app)
+    ).create_session("Stop")
     monkeypatch.setattr(review_app.state.registry, "monitor_nodes", lambda: [{"id": "node", "activeRuns": [{"sessionId": session["id"]}]}])
     received = {}
     def cancel_run(node_id, session_id, reason, **kwargs):
@@ -559,7 +568,7 @@ def test_admin_stop_preserves_identity_for_backend(review_app, review_client, mo
     monkeypatch.setattr(review_app.state.backend, "cancel_run", cancel_run)
     response = review_client.post(f"/api/v1/threads/{session['id']}/cancellations", json={})
     assert response.status_code == 202
-    assert received["actor_user_id"] == "admin"
+    assert received["actor_user_id"] == _admin_id(review_app)
     assert received["actor_is_admin"] is True
 
 

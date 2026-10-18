@@ -219,7 +219,7 @@ deploy/deploy.sh verify
 ## What it sets
 
 **Backend variables:** `DATABASE_URL` (a reference to `Postgres`),
-`RELAY_STORAGE=postgres`, `RELAY_BACKGROUND_MODE=external`,
+`RELAY_BACKGROUND_MODE=external`,
 `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` (minimum 35),
 `RELAY_PUBLIC_BACKEND_URL`, `RELAY_PUBLIC_WEB_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,

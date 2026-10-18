@@ -10,6 +10,9 @@ from relay.sessions.controller import SessionController
 
 from automation_helpers import WEEKLY_TRIGGERS
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 @pytest.fixture
@@ -77,14 +80,14 @@ def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, sco
         task = app.state.task_store.create_task({
             "title": "Start precreated thread",
             "sourceRoutineId": "routine_nightly",
-            "ownerUserId": "alice",
-            "assigneeUserId": "alice",
+            "ownerUserId": ALICE,
+            "assigneeUserId": ALICE,
             "assignedAgentId": agent["id"],
             "assignedAgent": agent["executorKind"],
         })
         controller = SessionController(
             app.state.session_store, task_store=app.state.task_store,
-            task_id=task["id"], owner_user_id="alice", owner_agent_id=agent["id"],
+            task_id=task["id"], owner_user_id=ALICE, owner_agent_id=agent["id"],
         )
         controller.create_session(task["title"], ["human", "codex"])
         task = app.state.task_store.get_task(task["id"])

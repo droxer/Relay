@@ -34,30 +34,19 @@ def normalize_user_handle(value: str) -> str:
     return handle
 
 
+def user_handle_or_none(value: str | None) -> str | None:
+    """``normalize_user_handle`` for data rather than a request: None, not 400."""
+    try:
+        return normalize_user_handle(value or "")
+    except HTTPException:
+        return None
+
+
 def resolve_user_id(auth_store: Any, user_id: str) -> str:
-    """The id `user_id` resolves to in this store (a UUID under the
-    database store, the handle itself under the file store)."""
-    if hasattr(auth_store, "resolve_user_id"):
-        return auth_store.resolve_user_id(user_id)
-    return (user_id or "").strip()
+    """The id `user_id` resolves to in this store (a handle becomes the
+    user's UUID)."""
+    return auth_store.resolve_user_id(user_id)
 
 
 def user_record(auth_store: Any, user_id: str) -> dict[str, Any] | None:
-    if hasattr(auth_store, "list_users"):
-        for user in auth_store.list_users():
-            if user.get("id") == user_id:
-                return user
-    for account in auth_store.list_accounts():
-        if account.get("userId") == user_id:
-            return {
-                # The file store keeps the handle as the id, so the two agree.
-                "id": user_id,
-                "handle": user_id,
-                "displayName": account.get("displayName")
-                or account.get("username")
-                or user_id,
-                "email": account.get("email"),
-                "createdAt": account.get("createdAt"),
-                "updatedAt": account.get("createdAt"),
-            }
-    return None
+    return next((user for user in auth_store.list_users() if user.get("id") == user_id), None)

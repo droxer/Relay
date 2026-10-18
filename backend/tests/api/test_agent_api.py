@@ -10,16 +10,22 @@ from issue_projects import project_for_agents
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from store_fixtures import overwrite_snapshot
+from user_ids import user_id
 from relay.services.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
 
+ALICE = user_id("alice")
+BOB = user_id("bob")
 
-def _bootstrap_admin(client: TestClient) -> None:
+
+def _bootstrap_admin(client: TestClient) -> str:
+    """Bootstrap the admin account and return its user id."""
     response = client.post(
         "/api/v1/auth/bootstrap",
         json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
     )
     assert response.status_code == 200
+    return response.json()["user"]["userId"]
 
 
 def _register_alice_client(
@@ -45,7 +51,7 @@ def _register_alice_client(
         node = app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -83,7 +89,7 @@ def client_with_offline_node(
 
 def _birth_computer_id(
     client: TestClient,
-    user_id: str,
+    handle: str,
     executor_kind: str,
     *,
     status: str = "stopped",
@@ -93,7 +99,7 @@ def _birth_computer_id(
     auto-placing the agent — callers that need a live node pass
     status="ready" explicitly.
     """
-    node_id = f"admin_test_node_{user_id}"
+    node_id = f"admin_test_node_{handle}"
     existing = client.app.state.registry.get(node_id)
     # supportedAgents is a registration-payload field only; the registry
     # never persists it on the stored node record (it's folded into the
@@ -109,10 +115,10 @@ def _birth_computer_id(
     node = client.app.state.registry.register(
         {
             "sandboxId": node_id,
-            "userId": user_id,
-            "workspaceId": f"machine-{user_id}",
+            "userId": user_id(handle),
+            "workspaceId": f"machine-{handle}",
             "token": "node_token",
-            "workspacePath": f"/workspace/{user_id}",
+            "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor_kind}),
             "capabilities": ["thread-workspaces"],
@@ -163,7 +169,7 @@ def test_admin_manages_agents_and_user_lists_own_agents(
         researcher = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Researcher",
                 "executorKind": "claude",
                 "defaultRole": "planner",
@@ -173,7 +179,7 @@ def test_admin_manages_agents_and_user_lists_own_agents(
         reviewer = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Reviewer",
                 "executorKind": "claude",
                 "defaultRole": "reviewer",
@@ -214,7 +220,7 @@ def test_user_agent_admin_routes_require_admin(monkeypatch) -> None:
             client.post(
                 "/api/v1/admin/agents",
                 json={
-                    "supervisorUserId": "alice",
+                    "supervisorUserId": ALICE,
                     "displayName": "Builder",
                     "executorKind": "codex",
                     "defaultRole": "implementer",
@@ -250,7 +256,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
             headers={"Authorization": "Bearer untrusted_ui_token"},
             json={
                 "sandboxId": "unprovisioned",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "nodeLocation": "user-device",
@@ -270,7 +276,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
             headers={"Authorization": "Bearer untrusted_ui_token"},
             json={
                 "sandboxId": "unprovisioned",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "nodeLocation": "user-device",
@@ -292,7 +298,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
             == 200
         )
         assert (
-            restarted_admin.get("/api/v1/admin/agents?userId=alice").json()[
+            restarted_admin.get(f"/api/v1/admin/agents?userId={ALICE}").json()[
                 "agents"
             ]
             == []
@@ -322,7 +328,7 @@ def test_control_plane_provisioned_node_registration_does_not_materialize_agents
         provisioned = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "userId": "alice",
+                "userId": ALICE,
                 "workspacePath": "/workspace/alice",
                 "sandboxMode": "boxlite",
             },
@@ -342,7 +348,7 @@ def test_control_plane_provisioned_node_registration_does_not_materialize_agents
         )
 
         assert registered.status_code == 200
-        agents = client.get("/api/v1/admin/agents?userId=alice").json()["agents"]
+        agents = client.get(f"/api/v1/admin/agents?userId={ALICE}").json()["agents"]
         assert agents == []
 
 
@@ -369,7 +375,7 @@ def test_agent_policies_are_rejected_until_runtime_enforcement_exists(
         rejected_create = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Restricted",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -383,7 +389,7 @@ def test_agent_policies_are_rejected_until_runtime_enforcement_exists(
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -418,7 +424,7 @@ def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -428,7 +434,7 @@ def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch) -> None:
             }
         )
         agent = app.state.agent_store.ensure_compatibility_agent(
-            "alice", "codex", "node_a"
+            ALICE, "codex", "node_a"
         )
         app.state.agent_placement_store.create_placement(agent, "node_a")
         agent_store = app.state.agent_store
@@ -476,7 +482,7 @@ def test_user_updates_own_agent_meta(monkeypatch) -> None:
         researcher = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Researcher",
                 "executorKind": "claude",
                 "defaultRole": "planner",
@@ -562,7 +568,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token_{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": [executor],
@@ -574,7 +580,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
         client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Researcher",
                 "executorKind": "claude",
                 "defaultRole": "implementer",
@@ -584,7 +590,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
         client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -593,7 +599,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
         )
         # Both computers are live, so creation already auto-placed each
         # agent on its one matching node.
-        agents = client.get("/api/v1/admin/agents?userId=alice").json()["agents"]
+        agents = client.get(f"/api/v1/admin/agents?userId={ALICE}").json()["agents"]
         assert {agent["availability"] for agent in agents} == {"ready"}
         assert {agent["placements"][0]["daemonNodeId"] for agent in agents} == {
             "node_a",
@@ -621,7 +627,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         local_runtime = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "userId": "alice",
+                "userId": ALICE,
                 "workspacePath": "/Users/alice/relay",
                 "sandboxMode": "none",
                 "nodeLocation": "user-device",
@@ -631,7 +637,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         app.state.registry.register(
             {
                 "sandboxId": local_node_id,
-                "userId": "alice",
+                "userId": ALICE,
                 "token": local_runtime["nodeToken"],
                 "workspacePath": "/Users/alice/relay",
                 "sandboxMode": "none",
@@ -643,7 +649,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         )
         managed = client.post(
             "/api/v1/admin/managed-nodes",
-            json={"userId": "alice", "displayName": "Alice managed node"},
+            json={"userId": ALICE, "displayName": "Alice managed node"},
         ).json()["node"]
         attempt = client.post(
             f"/api/v1/admin/managed-nodes/{managed['id']}/attempts"
@@ -675,7 +681,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         managed_agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Managed Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -687,7 +693,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         local_agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Local Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -732,7 +738,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         listed = {
             item["id"]: item
             for item in client.get(
-                "/api/v1/admin/agents?supervisorUserId=alice"
+                f"/api/v1/admin/agents?supervisorUserId={ALICE}"
             ).json()["agents"]
         }
         managed_placement = listed[managed_agent["id"]]["placements"][0]
@@ -766,7 +772,7 @@ def test_user_dispatches_work_by_logical_agent_id(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -778,7 +784,7 @@ def test_user_dispatches_work_by_logical_agent_id(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -865,11 +871,11 @@ def test_mentioning_an_agent_grows_the_room_and_later_messages_reach_it(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -880,7 +886,7 @@ def test_mentioning_an_agent_grows_the_room_and_later_messages_reach_it(
         )
         computer = computer_id(node)
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -889,7 +895,7 @@ def test_mentioning_an_agent_grows_the_room_and_later_messages_reach_it(
             },
         )
         outsider = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Claude",
                 "executorKind": "claude",
@@ -902,7 +908,7 @@ def test_mentioning_an_agent_grows_the_room_and_later_messages_reach_it(
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -930,11 +936,11 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -945,7 +951,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
         )
         computer = computer_id(node)
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Claude",
                 "executorKind": "claude",
@@ -954,7 +960,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
             },
         )
         kimi = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Kimi",
                 "executorKind": "kimi",
@@ -967,7 +973,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -996,11 +1002,11 @@ def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> No
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1011,7 +1017,7 @@ def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> No
         )
         computer = computer_id(node)
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1020,7 +1026,7 @@ def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> No
             },
         )
         other = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Claude",
                 "executorKind": "claude",
@@ -1033,7 +1039,7 @@ def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> No
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -1069,11 +1075,11 @@ def test_message_retry_reconciles_participants_after_post_dispatch_failure(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1084,7 +1090,7 @@ def test_message_retry_reconciles_participants_after_post_dispatch_failure(
         )
         computer = computer_id(node)
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1093,7 +1099,7 @@ def test_message_retry_reconciles_participants_after_post_dispatch_failure(
             },
         )
         joiner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Claude",
                 "executorKind": "claude",
@@ -1106,7 +1112,7 @@ def test_message_retry_reconciles_participants_after_post_dispatch_failure(
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -1146,11 +1152,11 @@ def test_room_message_fans_out_to_every_participant(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1161,7 +1167,7 @@ def test_room_message_fans_out_to_every_participant(monkeypatch) -> None:
         )
         computer = computer_id(node)
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1170,7 +1176,7 @@ def test_room_message_fans_out_to_every_participant(monkeypatch) -> None:
             },
         )
         joiner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Claude",
                 "executorKind": "claude",
@@ -1183,7 +1189,7 @@ def test_room_message_fans_out_to_every_participant(monkeypatch) -> None:
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -1212,11 +1218,11 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1228,7 +1234,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
         other_node = app.state.registry.register(
             {
                 "sandboxId": "node_admin_2",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token_2",
                 "workspacePath": "/workspace/admin-2",
                 "protocolVersion": 1,
@@ -1238,7 +1244,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
             }
         )
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1247,7 +1253,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
             },
         )
         elsewhere = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex Elsewhere",
                 "executorKind": "codex",
@@ -1261,7 +1267,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -1291,11 +1297,11 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1305,7 +1311,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
             }
         )
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1318,7 +1324,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "Keep one room",
             }
@@ -1405,11 +1411,11 @@ def test_new_thread_retry_resumes_the_session_owned_by_its_prepared_admission(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1419,7 +1425,7 @@ def test_new_thread_retry_resumes_the_session_owned_by_its_prepared_admission(
             }
         )
         agent = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1474,11 +1480,11 @@ def test_completed_thread_retry_reopens_after_message_commit_interruption(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
+        admin_id = _bootstrap_admin(client)
         node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": admin_id,
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -1488,7 +1494,7 @@ def test_completed_thread_retry_reopens_after_message_commit_interruption(
             }
         )
         owner = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1501,7 +1507,7 @@ def test_completed_thread_retry_reopens_after_message_commit_interruption(
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": owner["id"],
                 "taskGoal": "finished once",
             }
@@ -1564,7 +1570,7 @@ def test_admin_can_replay_a_scoped_message_for_an_user_owned_thread(
         node = app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1574,7 +1580,7 @@ def test_admin_can_replay_a_scoped_message_for_an_user_owned_thread(
             }
         )
         agent = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1587,7 +1593,7 @@ def test_admin_can_replay_a_scoped_message_for_an_user_owned_thread(
             {
                 "daemonNodeId": node["id"],
                 "workspacePath": "/workspace/alice",
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "ownerAgentId": agent["id"],
                 "taskGoal": "Admin-assisted room",
             }
@@ -1613,8 +1619,8 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        _bootstrap_admin(client)
-        managed = app.state.managed_node_store.create_node({"userId": "admin"})
+        admin_id = _bootstrap_admin(client)
+        managed = app.state.managed_node_store.create_node({"userId": admin_id})
         attempt, _credential = app.state.managed_node_store.create_attempt(
             managed["id"]
         )
@@ -1637,7 +1643,7 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
             }
         )
         agent = app.state.agent_store.create_agent(
-            "admin",
+            admin_id,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -1651,7 +1657,7 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
             {
                 "daemonNodeId": old_runtime_id,
                 "workspacePath": "/workspace/admin",
-                "ownerUserId": "admin",
+                "ownerUserId": admin_id,
                 "ownerAgentId": agent["id"],
                 "taskGoal": "Keep working",
             }
@@ -1688,7 +1694,7 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
         listed_agent = next(
             item
             for item in client.get(
-                "/api/v1/admin/agents?supervisorUserId=admin"
+                f"/api/v1/admin/agents?supervisorUserId={admin_id}"
             ).json()["agents"]
             if item["id"] == agent["id"]
         )
@@ -1739,7 +1745,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1749,7 +1755,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
             }
         )
         agent = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Builder",
                 "executorKind": "codex",
@@ -1757,9 +1763,9 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
             },
         )
         placement = app.state.agent_placement_store.create_placement(agent, "node_a")
-        legacy_agent = {**agent, "userId": "alice"}
+        legacy_agent = {**agent, "userId": ALICE}
         legacy_agent.pop("supervisorUserId")
-        legacy_placement = {**placement, "userId": "alice"}
+        legacy_placement = {**placement, "userId": ALICE}
         legacy_placement.pop("supervisorUserId")
         agent_store = app.state.agent_store
         placement_store = app.state.agent_placement_store
@@ -1773,7 +1779,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
         session = app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "ownerAgentId": agent["id"],
                 "taskGoal": "Build the feature",
             }
@@ -1811,7 +1817,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1821,7 +1827,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
             }
         )
         builder = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Builder",
                 "executorKind": "codex",
@@ -1829,7 +1835,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
             },
         )
         reviewer = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Reviewer",
                 "executorKind": "codex",
@@ -1841,7 +1847,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
         session = app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "taskGoal": "Build the feature",
                 "participants": ["human", "codex"],
             }
@@ -1888,7 +1894,7 @@ def test_user_cannot_dispatch_a_team_across_shared_workspace_nodes(
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token_{node_id}",
                     "workspacePath": "/workspace/shared",
                     "workspaceId": f"machine:alice:{node_id}",
@@ -1900,7 +1906,7 @@ def test_user_cannot_dispatch_a_team_across_shared_workspace_nodes(
                 }
             )
         planner = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Planner",
                 "executorKind": "claude",
@@ -1908,7 +1914,7 @@ def test_user_cannot_dispatch_a_team_across_shared_workspace_nodes(
             },
         )
         builder = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Builder",
                 "executorKind": "codex",
@@ -1974,7 +1980,7 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token_{node_id}",
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
@@ -1984,7 +1990,7 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
                 }
             )
         builder = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Builder",
                 "executorKind": "codex",
@@ -2054,7 +2060,7 @@ def test_new_thread_rejects_an_agent_outside_the_selected_computer(
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token_{node_id}",
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
@@ -2064,7 +2070,7 @@ def test_new_thread_rejects_an_agent_outside_the_selected_computer(
                 }
             )
         builder = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Builder",
                 "executorKind": "codex",
@@ -2099,13 +2105,13 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        for user_id in ("alice", "bob"):
+        for handle in ("alice", "bob"):
             assert (
                 client.post(
                     "/api/v1/admin/users",
                     json={
-                        "userId": user_id,
-                        "username": user_id,
+                        "userId": handle,
+                        "username": handle,
                         "password": "userpass",
                     },
                 ).status_code
@@ -2114,7 +2120,7 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
         node = app.state.registry.register(
             {
                 "sandboxId": "shared_node",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/shared",
                 "protocolVersion": 1,
@@ -2126,7 +2132,7 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2178,7 +2184,7 @@ def test_legacy_sandbox_run_cannot_move_a_thread_to_another_computer(
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token-{node_id}",
                     "workspaceId": machine_id,
                     "workspacePath": f"/workspace/{machine_id}",
@@ -2192,9 +2198,9 @@ def test_legacy_sandbox_run_cannot_move_a_thread_to_another_computer(
             {
                 "workspacePath": "/workspace/machine-a",
                 "taskGoal": "Continue here",
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "daemonNodeId": "node_a",
-                "computerId": "device:alice:machine-a",
+                "computerId": f"device:{ALICE}:machine-a",
             }
         )
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -2250,7 +2256,7 @@ def test_legacy_run_reuses_compatibility_agent_after_device_reregistration(
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "userId": "alice",
+                    "userId": ALICE,
                     "token": f"token-{node_id}",
                     "workspaceId": "machine-a",
                     "workspacePath": "/workspace/alice",
@@ -2272,7 +2278,7 @@ def test_legacy_run_reuses_compatibility_agent_after_device_reregistration(
         agents = client.get("/api/v1/agents").json()["agents"]
         assert len(agents) == 1
         assert agents[0].get("compatibilityKey") is None
-        assert agents[0]["computerId"] == "device:alice:machine-a"
+        assert agents[0]["computerId"] == f"device:{ALICE}:machine-a"
 
 
 def test_agent_stays_on_roster_when_its_computer_is_gone(
@@ -2305,7 +2311,7 @@ def test_agent_stays_on_roster_when_its_computer_is_gone(
         client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Freelancer",
                 "executorKind": "claude",
                 "defaultRole": "implementer",
@@ -2315,7 +2321,7 @@ def test_agent_stays_on_roster_when_its_computer_is_gone(
         node_a = app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2328,7 +2334,7 @@ def test_agent_stays_on_roster_when_its_computer_is_gone(
         declared = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Codex",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2406,7 +2412,7 @@ def test_agent_stays_on_roster_when_its_computer_is_deregistered(
         node_a = app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2419,7 +2425,7 @@ def test_agent_stays_on_roster_when_its_computer_is_deregistered(
         declared = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Codex",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2472,7 +2478,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2484,7 +2490,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
         decoy_agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Earlier Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2494,7 +2500,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Selected Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2511,7 +2517,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
             == 200
         )
 
-        project = project_for_agents(app.state.project_store, "alice", [agent])
+        project = project_for_agents(app.state.project_store, ALICE, [agent])
         task = client.post(
             "/api/v1/tasks", json={"title": "Build it", "projectId": project["id"], "assignedAgentId": agent["id"]}
         )
@@ -2542,26 +2548,26 @@ def test_task_owner_cannot_be_reassigned_to_another_users_agent(
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         agents = {}
-        for user_id in ("alice", "bob"):
+        for handle in ("alice", "bob"):
             assert (
                 client.post(
                     "/api/v1/admin/users",
                     json={
-                        "userId": user_id,
-                        "username": user_id,
+                        "userId": handle,
+                        "username": handle,
                         "password": "userpass",
                     },
                 ).status_code
                 == 201
             )
-            agents[user_id] = client.post(
+            agents[handle] = client.post(
                 "/api/v1/admin/agents",
                 json={
-                    "supervisorUserId": user_id,
+                    "supervisorUserId": user_id(handle),
                     "displayName": "Builder",
                     "executorKind": "codex",
                     "defaultRole": "implementer",
-                    "computerId": _birth_computer_id(client, user_id, "codex"),
+                    "computerId": _birth_computer_id(client, handle, "codex"),
                 },
             ).json()["agent"]
 
@@ -2569,21 +2575,21 @@ def test_task_owner_cannot_be_reassigned_to_another_users_agent(
         task = client.app.state.task_store.create_task({
             "sourceRoutineId": "routine_nightly",
             "title": "Move ownership safely",
-            "ownerUserId": "alice",
-            "assigneeUserId": "alice",
+            "ownerUserId": ALICE,
+            "assigneeUserId": ALICE,
             "assignedAgentId": agents["alice"]["id"],
             "assignedAgent": "codex",
         })
 
         missing_agent = client.patch(
-            f"/api/v1/tasks/{task['id']}", json={"assigneeUserId": "bob"}
+            f"/api/v1/tasks/{task['id']}", json={"assigneeUserId": BOB}
         )
         assert missing_agent.status_code == 400
 
         reassigned = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={
-                "assigneeUserId": "bob",
+                "assigneeUserId": BOB,
                 "assignedAgentId": agents["bob"]["id"],
             },
         )
@@ -2611,7 +2617,7 @@ def test_user_task_writes_require_named_agents_and_preserve_status(
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2643,7 +2649,7 @@ def test_user_task_writes_require_named_agents_and_preserve_status(
         assert agentless_routine.status_code == 400
         assert "requires an agent" in agentless_routine.json()["detail"]
 
-        project = project_for_agents(client.app.state.project_store, "alice", [agent])
+        project = project_for_agents(client.app.state.project_store, ALICE, [agent])
         created = client.post(
             "/api/v1/tasks",
             json={
@@ -2657,7 +2663,7 @@ def test_user_task_writes_require_named_agents_and_preserve_status(
         blocked = client.patch(f"/api/v1/tasks/{created.json()['id']}", json={"status": "blocked", "blockerReason": "Waiting on requirements"})
         assert blocked.status_code == 200
         assert blocked.json()["status"] == "blocked"
-        assert created.json()["assigneeUserId"] == "alice"
+        assert created.json()["assigneeUserId"] == ALICE
 
         cleared = client.patch(
             f"/api/v1/tasks/{created.json()['id']}", json={"assignedAgentId": None}
@@ -2691,7 +2697,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
         node = app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2701,7 +2707,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
             }
         )
         declared = app.state.agent_store.create_agent(
-            "alice",
+            ALICE,
             {
                 "displayName": "Codex",
                 "executorKind": "codex",
@@ -2714,7 +2720,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
                 "title": "Start legacy work",
                 "sourceRoutineId": "routine_nightly",
                 "ownerUserId": "requester",
-                "assigneeUserId": "alice",
+                "assigneeUserId": ALICE,
                 "assignedAgent": "codex",
                 "status": "assigned",
             }
@@ -2764,7 +2770,7 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2776,7 +2782,7 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Elon Musk",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -2853,7 +2859,7 @@ def test_agent_role_is_visible_but_not_patchable(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Reviewer",
                 "executorKind": "claude",
                 "defaultRole": "reviewer",
@@ -2980,7 +2986,7 @@ def test_creation_rejects_another_users_computer(client_with_node) -> None:
     response = client.post(
         "/api/v1/agents",
         json={
-            "computerId": "device:bob:machine-z",
+            "computerId": f"device:{BOB}:machine-z",
             "executorKind": "claude",
             "defaultRole": "implementer",
         },
@@ -3068,7 +3074,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
         offline_node = app.state.registry.register(
             {
                 "sandboxId": "multi_node_offline",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-multi",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -3083,7 +3089,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
         online_node = app.state.registry.register(
             {
                 "sandboxId": "multi_node_online",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-multi",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -3134,15 +3140,15 @@ def test_creation_rejects_a_real_computer_belonging_to_another_user(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        for user_id in ("alice", "bob"):
+        for handle in ("alice", "bob"):
             assert (
                 client.post(
                     "/api/v1/admin/users",
                     json={
-                        "userId": user_id,
-                        "username": user_id,
+                        "userId": handle,
+                        "username": handle,
                         "password": "userpass",
-                        "displayName": user_id.title(),
+                        "displayName": handle.title(),
                     },
                 ).status_code
                 == 201
@@ -3151,7 +3157,7 @@ def test_creation_rejects_a_real_computer_belonging_to_another_user(
         bob_node = app.state.registry.register(
             {
                 "sandboxId": "node_bob",
-                "userId": "bob",
+                "userId": BOB,
                 "workspaceId": "machine-bob",
                 "token": "node_token",
                 "workspacePath": "/workspace/bob",
@@ -3239,7 +3245,7 @@ def test_agent_view_lists_skills_installed_for_its_runtime(monkeypatch) -> None:
         node = app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -3267,7 +3273,7 @@ def test_agent_view_lists_skills_installed_for_its_runtime(monkeypatch) -> None:
         created = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Researcher",
                 "executorKind": "claude",
                 "defaultRole": "planner",
@@ -3324,7 +3330,7 @@ def test_agent_without_placement_reports_no_skills(monkeypatch) -> None:
         created = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Researcher",
                 "executorKind": "claude",
                 "defaultRole": "planner",
@@ -3373,7 +3379,7 @@ def test_admin_placement_on_another_computer_moves_the_agent(
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Mover",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -3383,7 +3389,7 @@ def test_admin_placement_on_another_computer_moves_the_agent(
         target = app.state.registry.register(
             {
                 "sandboxId": "node_alice_laptop",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice-laptop",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice-laptop",
@@ -3437,7 +3443,7 @@ def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -3447,7 +3453,7 @@ def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "name": "Delivery",
                 "computerId": birth,
                 "leadAgentId": agent["id"],
@@ -3458,7 +3464,7 @@ def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
         app.state.registry.register(
             {
                 "sandboxId": "node_alice_laptop",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice-laptop",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice-laptop",

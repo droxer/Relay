@@ -4,9 +4,16 @@ import argparse
 import os
 import sys
 
+from .bootstrap.stores import retired_settings_chose_database_accounts
 from .core.environment import load_backend_env
+from .core.storage_config import database_url_from_env
 from .persistence.stores import DEFAULT_RELAY_DATA_DIR
 from .security.auth import auth_store_from_env
+from .security.auth_file_import import (
+    accounts_imported,
+    legacy_accounts_present,
+    migrate_legacy_accounts,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -17,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--data-dir",
         default=os.environ.get("RELAY_DATA_DIR") or str(DEFAULT_RELAY_DATA_DIR),
+        help="Data directory whose retired account files are imported first.",
     )
     parser.add_argument("--username", default="admin")
     parser.add_argument(
@@ -39,7 +47,23 @@ def main(argv: list[str] | None = None) -> int:
     if not args.password:
         parser.error("--password is required (or set RELAY_INITIAL_ADMIN_PASSWORD).")
 
-    store = auth_store_from_env(args.data_dir)
+    store = auth_store_from_env()
+    # An install still holding the retired account files gets them imported
+    # first, so "--only-if-empty" sees them and a new admin cannot take a
+    # username the import would then refuse as a conflict.
+    database_url = database_url_from_env(setting="relay.init_users")
+    if legacy_accounts_present(args.data_dir) and not accounts_imported(
+        args.data_dir, database_url
+    ):
+        try:
+            migrate_legacy_accounts(
+                args.data_dir,
+                database_url,
+                accounts_already_in_database=retired_settings_chose_database_accounts(),
+            )
+        except ValueError as error:
+            print(f"Failed to import existing accounts: {error}", file=sys.stderr)
+            return 1
     if args.only_if_empty and store.has_accounts():
         print("Users already exist; skipped.")
         return 0

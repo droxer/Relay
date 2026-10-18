@@ -23,7 +23,7 @@ The control plane keeps agent execution on daemons. This change addresses blocki
    ```
 
    Import is transactional, rejects conflicting destination records, preserves source files and grant hashes, and reports counts without printing grant credentials. A source-directory marker prevents replay from overwriting later changes. Startup refuses to silently ignore unimported local state. New installations without local state need no import.
-4. Start the new backend. For independent replicas, use `RELAY_STORAGE=postgres` so daemon operational state is also shared, and use the same database across replicas. Run schedulers/recovery through the application lifespan.
+4. Start the new backend. For independent replicas, use the same PostgreSQL database across replicas; every store, accounts included, lives there. Run schedulers/recovery through the application lifespan.
 
 Budget database connections across processes: each process has its own configured pool and notification connection. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
 

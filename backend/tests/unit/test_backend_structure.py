@@ -83,7 +83,6 @@ def test_app_factory_uses_database_stores_without_local_state(monkeypatch) -> No
         DatabaseDaemonStore(database_url, create_schema=True)
         DatabaseAccountAuthStore(database_url, create_schema=True)
         DatabaseChatIntegrationStore(database_url, create_schema=True)
-        monkeypatch.setenv("RELAY_STORAGE", "postgres")
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
         monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
         app = create_app(root)

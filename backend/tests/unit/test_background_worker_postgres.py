@@ -27,7 +27,6 @@ def postgres_queue(monkeypatch):
     schema = "worker_test_" + uuid.uuid4().hex
     with engine.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA "{schema}"'))
-    monkeypatch.setenv("RELAY_STORAGE", "postgres")
     monkeypatch.setenv("RELAY_DATABASE_URL", url)
     options = conninfo_to_dict(worker_conninfo())
     options["options"] = f"-csearch_path={schema}"

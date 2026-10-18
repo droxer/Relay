@@ -22,7 +22,7 @@ from psycopg.conninfo import make_conninfo
 from sqlalchemy.engine import make_url
 
 from . import app as app_module
-from .core.storage_config import database_url_from_env, use_postgres_storage
+from .core.storage_config import database_url_from_env
 
 CONTROL_QUEUE = "relay_control"
 CONTROL_TASKS = frozenset({
@@ -40,8 +40,6 @@ def background_mode_from_env() -> str:
 
 def worker_conninfo() -> str:
     """Translate SQLAlchemy's URL without losing escaped secrets or options."""
-    if not use_postgres_storage():
-        raise ValueError("The background worker requires RELAY_STORAGE=postgres.")
     url = make_url(database_url_from_env(setting="relay worker"))
     if url.get_backend_name() != "postgresql":
         raise ValueError("The background worker requires a PostgreSQL database.")
@@ -173,7 +171,7 @@ def create_worker_app(
 
 
 async def run_worker(root_dir: str | None = None) -> None:
-    # Validate shared storage before construction can touch private file stores.
+    # Fail on a non-PostgreSQL database before building the app.
     worker_conninfo()
     create_app = app_module.create_app
     api = create_app(root_dir, background_mode="external") if root_dir else create_app(background_mode="external")

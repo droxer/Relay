@@ -4,6 +4,10 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from user_ids import user_id
+
+ALICE = user_id("alice")
+BOB = user_id("bob")
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -30,7 +34,7 @@ def _agent(client: TestClient) -> dict:
     node = client.app.state.registry.register(
         {
             "sandboxId": "offline_node_alice",
-            "userId": "alice",
+            "userId": ALICE,
             "workspaceId": "machine-alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
@@ -43,7 +47,7 @@ def _agent(client: TestClient) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": "alice",
+            "supervisorUserId": ALICE,
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -77,7 +81,7 @@ def test_workspace_brief_accepts_legacy_agent_user_id(monkeypatch, tmp_path):
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
-    assert response.json()["userId"] == "alice"
+    assert response.json()["userId"] == ALICE
 
 
 def test_agent_workspace_brief_includes_owned_session_before_first_run(
@@ -91,7 +95,7 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
     session = app.state.session_store.create_session(
         {
             "workspacePath": "/workspace",
-            "ownerUserId": "alice",
+            "ownerUserId": ALICE,
             "ownerAgentId": agent["id"],
             "taskGoal": "queued work",
         }
@@ -103,7 +107,7 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
     sessions = response.json()["sessions"]
     assert len(sessions) == 1
     assert sessions[0]["id"] == session["id"]
-    assert sessions[0]["ownerUserId"] == "alice"
+    assert sessions[0]["ownerUserId"] == ALICE
     assert sessions[0]["ownerAgentId"] == agent["id"]
     assert sessions[0]["runCount"] == 0
 
@@ -120,7 +124,7 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
         app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace",
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "ownerAgentId": agent["id"],
                 "taskGoal": f"thread {index}",
             }
@@ -154,7 +158,7 @@ def test_agent_workspace_brief_uses_authorized_placements_for_user(
     app.state.registry.register(
         {
             "sandboxId": "node_placed",
-            "userId": "bob",
+            "userId": BOB,
             "token": "placed_token",
             "nodeLocation": "user-device",
             "protocolVersion": 1,
@@ -165,7 +169,7 @@ def test_agent_workspace_brief_uses_authorized_placements_for_user(
     app.state.registry.register(
         {
             "sandboxId": "node_same_user_unplaced",
-            "userId": "alice",
+            "userId": ALICE,
             "token": "unplaced_token",
             "nodeLocation": "user-device",
             "protocolVersion": 1,
@@ -208,7 +212,7 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     app.state.registry.register(
         {
             "sandboxId": "runtime_old",
-            "userId": "alice",
+            "userId": ALICE,
             "workspaceId": "machine-1",
             "token": "old_token",
             "nodeLocation": "user-device",
@@ -226,7 +230,7 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     app.state.registry.register(
         {
             "sandboxId": "runtime_new",
-            "userId": "alice",
+            "userId": ALICE,
             "workspaceId": "machine-1",
             "token": "new_token",
             "nodeLocation": "user-device",

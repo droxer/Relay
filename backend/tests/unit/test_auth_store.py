@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-import stat
 import time
 from concurrent.futures import ThreadPoolExecutor
 from tempfile import TemporaryDirectory
@@ -13,27 +11,11 @@ from relay.persistence.admin_token_store import DatabaseAdminTokenStore
 from relay.security import auth as auth_module
 from relay.security.auth import (
     DatabaseAccountAuthStore,
-    AccountAuthStore,
     configure_admin_token,
     hash_session_token,
     reissue_admin_token,
 )
 from sqlalchemy import create_engine, text
-
-
-def test_local_auth_store_hashes_session_tokens_and_restricts_files() -> None:
-    with TemporaryDirectory() as root:
-        store = AccountAuthStore(root)
-        account = store.create_account("alice", "kestrel-vault-7719")
-        session = store.create_session(account["id"])
-
-        persisted = json.loads(store.sessions_path.read_text(encoding="utf-8"))
-        assert persisted[0]["tokenHash"] == hash_session_token(session["token"])
-        assert "token" not in persisted[0]
-        assert store.get_session_by_token(session["token"])["accountId"] == account["id"]
-        assert stat.S_IMODE(store.auth_dir.stat().st_mode) == 0o700
-        assert stat.S_IMODE(store.accounts_path.stat().st_mode) == 0o600
-        assert stat.S_IMODE(store.sessions_path.stat().st_mode) == 0o600
 
 
 def test_database_auth_store_preserves_utc_timestamps_outside_utc() -> None:
@@ -126,19 +108,13 @@ def test_database_auth_store_maps_human_handles_independently_and_stably() -> No
         assert alice_again["displayName"] == "Renamed Alice"
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
-def test_bootstrap_allows_exactly_one_concurrent_first_admin(store_kind: str) -> None:
+def test_bootstrap_allows_exactly_one_concurrent_first_admin() -> None:
     with TemporaryDirectory() as root:
         configure_admin_token(
             root, DatabaseAdminTokenStore(f"sqlite:///{root}/admin.db", create_schema=True)
         )
         token = reissue_admin_token()
-        if store_kind == "database":
-            store = DatabaseAccountAuthStore(
-                f"sqlite:///{root}/auth.db", create_schema=True
-            )
-        else:
-            store = AccountAuthStore(root)
+        store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
 
         def bootstrap(index: int) -> str:
             try:

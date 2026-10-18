@@ -554,8 +554,9 @@ class TaskDispatcher:
                 self.task, self.ctx.registry, self.ctx.managed_node_store
             )
             if capacity and capacity.provisioning_requested:
-                user_id = task_execution_user_id(self.task)
-                message = f"Managed node provisioning requested for {user_id}."
+                # Activity text is shown as-is, and a user id must never be
+                # rendered as a name; the task already says whose work it is.
+                message = "Managed node provisioning requested."
                 self.ctx.task_store.record_activity(
                     self.task["id"], message, activity_payload
                 )
@@ -564,9 +565,6 @@ class TaskDispatcher:
         )
 
     def _node_unavailable_result(self) -> DispatchResult | None:
-        user_id = self.task.get("assigneeUserId") or self.task.get(
-            "ownerUserId"
-        )
         capacity = ensure_managed_capacity_for_task(
             self.task, self.ctx.registry, self.ctx.managed_node_store
         )
@@ -575,12 +573,14 @@ class TaskDispatcher:
             return None
         label = ", ".join(dict.fromkeys(item["agent"] for item in self.run_assignments))
         message = (
-            f"Managed node provisioning requested for {user_id}."
+            "Managed node provisioning requested."
             if requested_capacity
             else f"No ready node is available for {label}."
         )
         self.ctx.task_store.record_activity(
-            self.task["id"], message, {"agent": self.agent}
+            self.task["id"],
+            message,
+            {"agent": self.agent},
         )
         code = "configuration_pending" if requested_capacity else "agent_offline"
         return _record_result(

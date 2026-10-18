@@ -29,20 +29,21 @@ RELAY_DATABASE_URL=postgresql+psycopg://relay:relay@localhost:5432/relay \
 placeholder URL in `backend/alembic.ini`. Shell values take precedence over
 `backend/.env`.
 
-Sessions, session events, retained artifact content, token usage, tasks, task
-events, thread-task links, daemon nodes and their command queue, agents, teams,
-agent placements, and chat integrations always require the database. Set
-`RELAY_STORAGE=postgres` (or the legacy `RELAY_AUTH_STORE=database`) to store
-accounts there too. `RELAY_DAEMON_STORE` and `RELAY_CHAT_STORE` are retired and
-ignored.
+Accounts, users, departments, login sessions, sessions, session events,
+retained artifact content, token usage, tasks, task events, thread-task links,
+daemon nodes and their command queue, agents, teams, agent placements, and chat
+integrations always live in the database. `RELAY_STORAGE`, `RELAY_AUTH_STORE`,
+`RELAY_DAEMON_STORE`, and `RELAY_CHAT_STORE` are retired and ignored apart from
+a warning.
 
-## Import legacy daemon, agent, team, placement, and chat files
+## Import legacy account, daemon, agent, team, placement, and chat files
 
 Older installs kept those aggregates as JSON under the data directory
-(`daemon/{nodes,commands,runs,run-requests,events}/`, `agents/`, `teams/`,
-`agent-placements/`, `chat/`). The backend imports them automatically, once,
-at startup, logging what it imported; the files are never modified or
-deleted. To preview or run the import by hand:
+(`auth/`, `daemon/{nodes,commands,runs,run-requests,events}/`, `agents/`,
+`teams/`, `agent-placements/`, `chat/`). The backend imports them
+automatically, once, at startup -- accounts first, so the rows imported next
+find the users they reference -- logging what it imported; the files are
+never modified or deleted. To preview or run the import by hand:
 
 ```bash
 uv run --project backend relay migrate-local-file-stores --data-dir .relay --dry-run
@@ -53,6 +54,18 @@ A record that already exists in the database with different content stops the
 import (and startup) with an error naming it; nothing is written until the
 conflict is resolved. Chat provider secrets are encrypted on import, so set
 `RELAY_CHAT_SECRET_KEY` when `chat/secrets.json` exists.
+
+Accounts keep their ids, password hashes, roles, emails, and theme, language,
+and onboarding choices; each account's user and department come with it, and
+soft-deleted users stay deleted. A user keeps the id the file gave it, because
+other tables reference it -- on PostgreSQL that id must already be a UUID.
+Login sessions (`auth/sessions.json`) and password reset links
+(`auth/password-resets.json`) are counted and skipped: everyone signs in again
+once, and an outstanding reset link has to be requested again. An account whose
+username, or a user whose id or handle, the database already holds differently
+is a conflict. While `RELAY_STORAGE=postgres` or `RELAY_AUTH_STORE=database` is
+still set, the database already held the accounts, so the account files are
+leftovers: they are marked imported without being read.
 
 ## Import legacy session files
 
