@@ -283,10 +283,14 @@ def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
 
         command = _take_command(app, node)
         assert command["workspaceLayout"] == "project"
+        # A project directory is the deliverable location: no `artifacts/`.
+        assert command["artifactsDir"] is None
         assert command["workspaceSubpath"] == project["workspaceSubpath"]
 
 
-def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> None:
+def test_routine_occurrence_keeps_its_own_directory_on_an_older_daemon(monkeypatch) -> None:
+    """Without `artifact-layout` every run would share one `artifacts/`, so the
+    occurrence keeps the older per-run directory."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
 
     class FixedDate(date):
@@ -328,6 +332,53 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
             command["workspaceSubpath"]
             == f"tasks/{routine['id']}/{occurrence['id']}"
         )
+        assert command["artifactsDir"] == "artifacts"
+
+
+def test_routine_occurrences_share_the_automation_directory_with_per_run_artifacts(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return cls(2026, 6, 26)
+
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        replace_app_context(app, today=FixedDate.today)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        node = _register_node(
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", "artifact-layout"]
+        )
+        agent = _agent(app, node)
+
+        routine = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Nightly",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
+                "assignedAgentId": agent["id"],
+                "isRoutine": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
+            },
+        ).json()
+
+        started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
+        assert started.status_code == 202, started.text
+        occurrence = started.json()["task"]
+        assert occurrence["sourceRoutineId"] == routine["id"]
+
+        command = _take_command(app, node)
+        assert command["workspaceLayout"] == "task"
+        assert command["workspaceSubpath"] == f"tasks/{routine['id']}"
+        assert command["artifactsDir"] == f"artifacts/{occurrence['id']}"
+        record = client.get(f"/api/v1/tasks/{occurrence['id']}").json()
+        assert record["workspaceArtifactsDir"] == f"artifacts/{occurrence['id']}"
+        runs = client.get(f"/api/v1/tasks/{routine['id']}/runs").json()["runs"]
+        assert [run["artifactsDir"] for run in runs] == [f"artifacts/{occurrence['id']}"]
 
 
 def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:

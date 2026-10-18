@@ -91,8 +91,15 @@ export interface AgentState {
   progress_file?: string;
   /** Previous root-level record, retained for threads started before directories. */
   legacy_progress_file?: string;
-  /** Workspace-relative deliverables directory, shared by the workspace scope. */
+  /**
+   * Workspace-relative deliverables directory: `artifacts` for a thread or
+   * task, `artifacts/<taskId>` for an automation occurrence sharing its
+   * automation's directory. Unset when the workspace is the deliverable
+   * location itself (see `deliverables_in_workspace`).
+   */
   artifacts_dir?: string;
+  /** The workspace itself holds deliverables (a project); there is no `artifacts/`. */
+  deliverables_in_workspace?: boolean;
   /**
    * Personal home subdir (slash-separated, under the shared thread workspace)
    * for this run's logical agent, e.g. "agents/agent-<b64>". Runs execute at

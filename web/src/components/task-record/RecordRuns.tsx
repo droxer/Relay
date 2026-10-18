@@ -171,7 +171,7 @@ export function RecordRuns({
       {/* Keyed by run: a folder path or an open file belongs to the run it
           was browsed in, not to whichever run is selected next. */}
       <div className="record-runs-workspace">
-        <RecordWorkspace key={selected.taskId} taskId={selected.taskId} rootLabel={selectedDate} />
+        <RecordWorkspace key={`${selected.taskId}:${selected.artifactsDir ?? ""}`} taskId={selected.taskId} artifactsDir={selected.artifactsDir} rootLabel={selectedDate} />
       </div>
     </div>
   );

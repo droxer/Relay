@@ -14,6 +14,8 @@ export interface ThreadWorkspace {
 }
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+/** What a run.start from a backend that names no `artifactsDir` expects. */
+export const DEFAULT_ARTIFACTS_DIR = "artifacts";
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 
 /**
@@ -93,10 +95,18 @@ export class ThreadWorkspaceManager {
     return this.resolveSubpath(sessionId, workspaceSubpath);
   }
 
-  /** Record ownership follows the thread; deliverables follow the bound workspace. */
-  ensureRecords(workspace: ThreadWorkspace): void {
+  /**
+   * Record ownership follows the thread; deliverables follow the bound
+   * workspace. `artifactsDir` is where this run's deliverables go, relative
+   * to the workspace: `artifacts/` for a thread or task, `artifacts/<taskId>/`
+   * for an automation occurrence sharing its automation's directory, and null
+   * for a project, whose directory is the deliverable location itself.
+   */
+  ensureRecords(workspace: ThreadWorkspace, artifactsDir: string | null = DEFAULT_ARTIFACTS_DIR): void {
     validateThreadId(workspace.sessionId);
-    for (const segments of [["threads", workspace.sessionId], ["artifacts"]]) {
+    const records = [["threads", workspace.sessionId]];
+    if (artifactsDir !== null) records.push(validateWorkspaceSubpath(artifactsDir));
+    for (const segments of records) {
       rejectSymlinkComponents(workspace.hostPath, segments);
       const path = resolve(workspace.hostPath, ...segments);
       mkdirSync(path, { recursive: true });

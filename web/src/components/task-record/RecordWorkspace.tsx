@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { workspaceHomeStatus } from "../../lib/workspaceHome";
 import { ICON, NavRefresh } from "../icons";
 import { taskWorkspaceState } from "./taskWorkspaceState";
-import { DEFAULT_WORKSPACE_BROWSE_PATH, workspaceTabRootFor } from "../../lib/workspaceFileTabs";
+import { workspaceFileRoots, workspaceTabRootFor } from "../../lib/workspaceFileTabs";
 import { TASK_RECORD_QUERY_KEY } from "../../hooks/useTaskRecord";
 import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
 import { taskWorkspaceStatusPollIntervalMs } from "../../lib/relayPolling";
@@ -43,13 +43,18 @@ function cachedTaskStatus(queryClient: QueryClient, taskId: string): TaskStatus 
  *
  *  A routine never runs, so it has no folder of its own to show here: the
  *  Runs tab mounts this once per selected run, rooted at that run's folder. */
-export function RecordWorkspace({ taskId, rootLabel }: {
+export function RecordWorkspace({ taskId, artifactsDir, rootLabel }: {
   taskId: string;
+  /** Where this task's deliverables live, relative to the workspace it
+   *  browses: `artifacts`, one automation run's `artifacts/<taskId>`, or
+   *  null for a project task, whose workspace is the deliverable location. */
+  artifactsDir?: string | null;
   /** The path bar's root label — a run's date when browsed from the Runs tab. */
   rootLabel?: string;
 }) {
   const { t } = useTranslation();
-  const [path, setPath] = useState(DEFAULT_WORKSPACE_BROWSE_PATH);
+  const roots = workspaceFileRoots(artifactsDir);
+  const [path, setPath] = useState(roots.artifacts);
   const [selectedPath, setSelectedPath] = useState("");
 
   const fileQuery = useQuery({
@@ -60,7 +65,7 @@ export function RecordWorkspace({ taskId, rootLabel }: {
   });
   // A missing tab root says nothing about the workspace itself; its root
   // listing tells "no artifacts yet" from "never created".
-  const atTabRoot = workspaceTabRootFor(path) !== null;
+  const atTabRoot = workspaceTabRootFor(path, roots) !== null;
   const rootQuery = useQuery({
     queryKey: ["workspace-files", `task:${taskId}`, "", 0],
     enabled: atTabRoot && fileQuery.data?.exists === false,
@@ -168,6 +173,7 @@ export function RecordWorkspace({ taskId, rootLabel }: {
         <div className="record-workspace-files">
           <WorkspaceFilePanes
             path={path}
+            roots={roots}
             rootLabel={rootLabel}
             selectedPath={selectedPath}
             files={{ data: fileQuery.data, error: fileQuery.error, isLoading: fileQuery.isLoading }}

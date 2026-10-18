@@ -10,7 +10,8 @@ import { WorkspaceFilePreview } from "./WorkspaceFilePreview";
 import { WorkspaceFileActions } from "./WorkspaceFileActions";
 import { WorkspaceFileTabs } from "./WorkspaceFileTabs";
 import {
-  WORKSPACE_FILE_TAB_ROOT,
+  DEFAULT_WORKSPACE_FILE_ROOTS,
+  type WorkspaceFileRoots,
   workspaceFileTabForPath,
 } from "../../lib/workspaceFileTabs";
 import type { workspaceHomeStatus } from "../../lib/workspaceHome";
@@ -31,10 +32,12 @@ function PaneHeader({
 }
 
 export function WorkspaceFilePanes({
-  path, rootLabel, selectedPath, files, content, view, setView, homeStatus, barActions,
+  path, roots = DEFAULT_WORKSPACE_FILE_ROOTS, rootLabel, selectedPath, files, content, view, setView, homeStatus, barActions,
   openDirectory, onSelectFile, onRetry, onClosePreview,
 }: {
   path: string;
+  /** Where this workspace keeps deliverables and thread records. */
+  roots?: WorkspaceFileRoots;
   /** Replaces "home" at the root of the path bar. */
   rootLabel?: string;
   selectedPath: string;
@@ -57,8 +60,9 @@ export function WorkspaceFilePanes({
       <section className="workspace-pane workspace-pane-browse" aria-label={t("workspace.tab_files")}>
         <div className="workspace-tabpanel-files">
           <WorkspaceFileTabs
-            tab={workspaceFileTabForPath(path)}
-            onSelect={(tab) => openDirectory(WORKSPACE_FILE_TAB_ROOT[tab])}
+            tab={workspaceFileTabForPath(path, roots)}
+            projectFiles={roots.artifacts === ""}
+            onSelect={(tab) => openDirectory(roots[tab])}
           />
           <div className="workspace-files-bar">
             <WorkspacePathBreadcrumb path={path} rootLabel={rootLabel} onNavigate={openDirectory} />
@@ -78,6 +82,7 @@ export function WorkspaceFilePanes({
             error={files.error}
             isLoading={files.isLoading}
             path={path}
+            roots={roots}
             selectedPath={selectedPath}
             onOpenDirectory={openDirectory}
             onSelectFile={onSelectFile}

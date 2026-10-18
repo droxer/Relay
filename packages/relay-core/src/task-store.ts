@@ -171,6 +171,13 @@ export interface RelayTask {
     message?: string;
   };
   workspaceBinding?: TaskWorkspaceBinding;
+  /**
+   * API-only: the folder this task's deliverables live in, relative to the
+   * workspace its rounds share — `artifacts`, one automation run's
+   * `artifacts/<taskId>`, or null for a project task, whose workspace is
+   * the deliverable location itself.
+   */
+  workspaceArtifactsDir?: string | null;
   workspaceWaiting?: { runId: string; sessionId: string; blockingSessionId?: string };
   linkedSessionIds: string[];
   activity: RelayTaskActivity[];

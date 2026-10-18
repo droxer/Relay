@@ -4,7 +4,12 @@ import { useTranslation } from "react-i18next";
 import type { ProjectWorkspaceFilesResponse, WorkspaceFileEntry } from "../../types";
 import { isWorkspaceRetryableError } from "../../lib/workspaceHome";
 import { compactDate, formatBytes, parentPath } from "../../lib/workspaceFormat";
-import { workspaceTabRootFor } from "../../lib/workspaceFileTabs";
+import {
+  DEFAULT_WORKSPACE_FILE_ROOTS,
+  isWorkspaceInternalEntry,
+  type WorkspaceFileRoots,
+  workspaceTabRootFor,
+} from "../../lib/workspaceFileTabs";
 import { ICON, WorkspaceFile, WorkspaceFolder } from "../icons";
 import { WorkspaceEmpty, WorkspaceLoading } from "./WorkspacePrimitives";
 import { Button } from "@/components/ui/button";
@@ -75,6 +80,7 @@ export function WorkspaceFileList({
   error,
   isLoading,
   path,
+  roots = DEFAULT_WORKSPACE_FILE_ROOTS,
   rootPath = "",
   selectedPath,
   onOpenDirectory,
@@ -85,6 +91,8 @@ export function WorkspaceFileList({
   error: unknown;
   isLoading: boolean;
   path: string;
+  /** Where this workspace keeps deliverables and thread records. */
+  roots?: WorkspaceFileRoots;
   selectedPath: string;
   onOpenDirectory: (path: string) => void;
   onSelectFile: (entry: WorkspaceFileEntry) => void;
@@ -94,13 +102,13 @@ export function WorkspaceFileList({
   rootPath?: string;
 }) {
   const { t } = useTranslation();
-  const entries = data?.entries ?? [];
+  const entries = (data?.entries ?? []).filter((entry) => !isWorkspaceInternalEntry(entry.name, path, roots));
   const sharedUnavailable = isWorkspaceRetryableError(error);
   /* A tab root that is missing or empty is an area nothing has written to
      yet, not an unselected workspace: `artifacts/` and `threads/` appear only
      once a run creates them. */
-  const tabRoot = workspaceTabRootFor(path);
-  const emptyMessage = tabRoot === "artifacts"
+  const tabRoot = workspaceTabRootFor(path, roots);
+  const emptyMessage = tabRoot === "artifacts" && roots.artifacts !== ""
     ? t("workspace.artifacts_empty")
     : tabRoot === "activities" ? t("workspace.activity_empty") : t("workspace.no_files");
   const message = sharedUnavailable

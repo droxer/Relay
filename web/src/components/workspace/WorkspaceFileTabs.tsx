@@ -15,11 +15,15 @@ import type { WorkspaceFileTab } from "../../lib/workspaceFileTabs";
 export function WorkspaceFileTabs({
   tab,
   onSelect,
+  projectFiles = false,
 }: {
   /** Null when the browse path sits outside both areas — the workspace root
    *  reached from the path bar — so neither item claims what is on screen. */
   tab: WorkspaceFileTab | null;
   onSelect: (tab: WorkspaceFileTab) => void;
+  /** A project's directory is its deliverable location, so its first area
+   *  is the project's files, not an `artifacts/` folder. */
+  projectFiles?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -36,7 +40,7 @@ export function WorkspaceFileTabs({
         value="artifacts"
         className={`workspace-files-tab${tab === "artifacts" ? " is-active" : ""}`}
       >
-        {t("workspace.tab_artifacts")}
+        {t(projectFiles ? "workspace.tab_files" : "workspace.tab_artifacts")}
       </ToggleGroupItem>
       <ToggleGroupItem
         value="activities"

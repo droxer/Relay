@@ -5,19 +5,68 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_ARTIFACT_LAYOUT,
+    has_capability,
+)
+from ..core.workspace_layout import (
+    TASK_WORKSPACE_ROOT,
+    WORKSPACE_LAYOUT_PROJECT,
+    WORKSPACE_LAYOUT_TASK,
+    WORKSPACE_LAYOUT_THREAD,
+    workspace_artifacts_dir,
+)
 from .workspace_capabilities import required_workspace_capabilities
 
-TASK_WORKSPACE_ROOT = "tasks"
-WORKSPACE_LAYOUT_TASK = "task"
-WORKSPACE_LAYOUT_THREAD = "thread"
-WORKSPACE_LAYOUT_PROJECT = "project"
+__all__ = [
+    "TASK_WORKSPACE_ROOT",
+    "WORKSPACE_LAYOUT_PROJECT",
+    "WORKSPACE_LAYOUT_TASK",
+    "WORKSPACE_LAYOUT_THREAD",
+    "recorded_session_workspace",
+    "recorded_task_workspace",
+    "resolve_task_workspace",
+    "task_artifacts_dir",
+    "task_workspace_nodes",
+    "task_workspace_subpath",
+    "workspace_artifacts_dir",
+]
 
 
-def task_workspace_subpath(task: dict[str, Any]) -> str:
+def task_workspace_subpath(task: dict[str, Any], *, shared_automation: bool = True) -> str:
+    """The durable directory a task's rounds share below the node root.
+
+    An automation's occurrences share the automation's own directory
+    (`tasks/<routineId>/`) and keep their deliverables apart under it
+    (`workspace_artifacts_dir`). A daemon without the `artifact-layout`
+    capability would pile every run into one `artifacts/`, so it keeps the
+    older per-occurrence directory instead.
+    """
     routine_id = task.get("sourceRoutineId")
     if isinstance(routine_id, str) and routine_id:
+        if shared_automation:
+            return f"{TASK_WORKSPACE_ROOT}/{routine_id}"
         return f"{TASK_WORKSPACE_ROOT}/{routine_id}/{task['id']}"
     return f"{TASK_WORKSPACE_ROOT}/{task['id']}"
+
+
+def task_artifacts_dir(task: dict[str, Any]) -> str | None:
+    """The deliverables directory a task's workspace browser opens on.
+
+    Read from the recorded binding when the task has run; otherwise the
+    layout it will be given at dispatch, so an unstarted task still opens on
+    the right folder once files appear.
+    """
+    binding = task.get("workspaceBinding")
+    if binding:
+        return workspace_artifacts_dir(
+            binding.get("layout"), binding.get("subpath"), task=task
+        )
+    if task.get("projectId"):
+        return None
+    return workspace_artifacts_dir(
+        WORKSPACE_LAYOUT_TASK, task_workspace_subpath(task), task=task
+    )
 
 
 def recorded_task_workspace(
@@ -141,7 +190,10 @@ def resolve_task_workspace(
     elif project_snapshot:
         layout, subpath = WORKSPACE_LAYOUT_PROJECT, project_snapshot["workspaceSubpath"]
     else:
-        layout, subpath = WORKSPACE_LAYOUT_TASK, task_workspace_subpath(task)
+        layout, subpath = WORKSPACE_LAYOUT_TASK, task_workspace_subpath(
+            task,
+            shared_automation=has_capability(node, DAEMON_CAPABILITY_ARTIFACT_LAYOUT),
+        )
     for required in required_workspace_capabilities(layout, subpath):
         if required not in capabilities:
             raise ValueError(
