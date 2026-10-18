@@ -438,10 +438,18 @@
       "by_you": "由你操作",
       "by_teammate": "由同事操作",
       "by_relay": "自动",
-      "next_review": "请查看结果，然后在任务中验收。",
+      "next_review": "请查看结果，然后验收或要求修改。",
       "next_blocked": "解决问题后，在任务中重试。",
       "next_assigned": "电脑有空闲时自动开始。",
-      "next_backlog": "在任务中将其移到就绪或直接开始。"
+      "next_backlog": "在任务中将其移到就绪或直接开始。",
+      "open_task": "打开任务 {{ref}}",
+      "history": "历史",
+      "bar_review": "已可审核。",
+      "bar_blocked": "已阻塞。",
+      "request_changes": "要求修改",
+      "accept": "验收",
+      "unblock": "解除阻塞",
+      "action_label": "任务需要你处理"
     }
   },
   "composer": {

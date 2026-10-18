@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { placeLifecycleMarkers, threadLifecycleMarkers } from "../src/lib/taskThreadLifecycle.js";
+import { threadLifecycleMarkers } from "../src/lib/taskThreadLifecycle.js";
 import type { RelayTaskEvent, TaskStatus } from "../src/types.js";
 
 const TASK = "tsk_1";
@@ -92,30 +92,5 @@ describe("threadLifecycleMarkers", () => {
       status("2026-10-18T09:00:00.000Z", "backlog", { actorUserId: ME }),
     ];
     assert.deepEqual(threadLifecycleMarkers(events, window).map((m) => m.to), ["backlog"]);
-  });
-});
-
-describe("placeLifecycleMarkers", () => {
-  const messages = [
-    { id: "goal", timestamp: "2026-10-18T10:00:00.000Z" },
-    { id: "agent", timestamp: "2026-10-18T10:00:02.000Z" },
-  ];
-  const marker = (timestamp: string, to: TaskStatus) => ({ id: timestamp, timestamp, from: "backlog" as const, to, actor: "relay" as const });
-
-  it("draws each move above the first turn not older than it and the rest after the last turn", () => {
-    const placed = placeLifecycleMarkers(messages, [
-      marker("2026-10-18T09:50:00.000Z", "assigned"),
-      marker("2026-10-18T10:00:01.000Z", "running"),
-      marker("2026-10-18T10:05:00.000Z", "review"),
-    ]);
-    assert.deepEqual(placed.before.get("goal")?.map((m) => m.to), ["assigned"]);
-    assert.deepEqual(placed.before.get("agent")?.map((m) => m.to), ["running"]);
-    assert.deepEqual(placed.trailing.map((m) => m.to), ["review"]);
-  });
-
-  it("trails every move when there are no messages yet", () => {
-    const placed = placeLifecycleMarkers([], [marker("2026-10-18T10:00:01.000Z", "running")]);
-    assert.equal(placed.before.size, 0);
-    assert.equal(placed.trailing.length, 1);
   });
 });

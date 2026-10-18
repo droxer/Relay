@@ -27,9 +27,10 @@ import { awaitingInput } from "../lib/awaitingInput";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
-import { TaskLifecycleMarker } from "./TaskLifecycleMarker";
 import { useTaskThreadLifecycle, type OpenTaskRecord } from "../hooks/useTaskThreadLifecycle";
-import type { LifecycleMarker } from "../lib/taskThreadLifecycle";
+import { useTaskStatusActions } from "../hooks/useTaskStatusActions";
+import { TaskStatusTimeline } from "./TaskStatusTimeline";
+import { TaskActionBar, taskNeedsAction } from "./TaskActionBar";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { parseAutomationOpening } from "../lib/automationOpening";
@@ -266,24 +267,14 @@ export function ThreadsView({
     return parseAutomationOpening(activeTaskGoal, { scheduled });
   }, [activeSessionId, activeTaskGoal, tasks]);
   // The thread's task: its status in the header, and each status change it
-  // went through drawn between the turns where it happened.
+  // went through listed in the side panel — never between the turns.
   const lifecycle = useTaskThreadLifecycle({
     tasks,
     session: activeSession,
-    messages: displayMessages,
     currentUserId: currentUser.userId,
     onOpenTaskRecord,
   });
-  const lifecycleMarker = (marker: LifecycleMarker) => (
-    <TaskLifecycleMarker
-      key={marker.id}
-      marker={marker}
-      current={marker.id === lifecycle.currentMarkerId}
-      taskHref={lifecycle.task?.href}
-      taskLabel={lifecycle.task?.ref}
-      onOpenTask={lifecycle.task?.onOpen}
-    />
-  );
+  const taskStatusActions = useTaskStatusActions(lifecycle.task?.id);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
   // A thread is about to render markdown: start the pipeline download now so
@@ -310,6 +301,21 @@ export function ThreadsView({
   // answers that question. Naming it lets the backend refuse a reply that a
   // newer question has overtaken instead of resuming the task with it.
   const waitingQuestionId = waiting?.questionId;
+  // The task's own next move — accept a result, lift a block — offered in the
+  // chip's popover and, while nothing else is asking, docked on the composer.
+  const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
+  const taskActions = actionTask ? (
+    <Button
+      type="button"
+      size="dense"
+      variant={actionTask.status === "review" ? "default" : "outline"}
+      disabled={taskStatusActions.busy !== null}
+      loading={taskStatusActions.busy !== null}
+      onClick={() => void (actionTask.status === "review" ? taskStatusActions.accept() : taskStatusActions.unblock())}
+    >
+      {t(actionTask.status === "review" ? "thread.lifecycle.accept" : "thread.lifecycle.unblock")}
+    </Button>
+  ) : null;
   const sendAnswering = useCallback<typeof onSend>(
     (style, intent, options) => onSend(
       style,
@@ -457,6 +463,13 @@ export function ThreadsView({
             <ThreadMeta
               session={activeSession}
               task={lifecycle.task}
+              taskStatus={lifecycle.task ? (
+                <TaskStatusTimeline
+                  task={lifecycle.task}
+                  markers={lifecycle.markers}
+                  actions={taskActions}
+                />
+              ) : null}
               agentName={bandAgentName}
               participants={threadParticipants}
               computers={runtimeNodes}
@@ -501,7 +514,6 @@ export function ThreadsView({
                   const PhaseIcon = msg.kind === "agent" && isHandoff ? ActionRoute : null;
                   return (
                     <div key={msg.id} className="transcript-turn">
-                      {lifecycle.before.get(msg.id)?.map(lifecycleMarker)}
                       {phaseLabel ? (
                         <div className="transcript-phase" role="separator" aria-label={phaseLabel}>
                           <span className="transcript-phase-node" aria-hidden="true" />
@@ -534,7 +546,6 @@ export function ThreadsView({
                     </div>
                   );
                 })}
-                {lifecycle.trailing.map(lifecycleMarker)}
                 <TeamHandoffCue
                   session={activeSession}
                   logicalAgentNames={logicalAgentNames}
@@ -609,6 +620,14 @@ export function ThreadsView({
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
               onMarkDone={() => sendDecision("mark_done")}
+            />
+          ) : actionTask && !running ? (
+            <TaskActionBar
+              task={actionTask}
+              busy={taskStatusActions.busy}
+              onAccept={() => void taskStatusActions.accept()}
+              onUnblock={() => void taskStatusActions.unblock()}
+              onReply={() => composerRef.current?.focus()}
             />
           ) : null}
         />

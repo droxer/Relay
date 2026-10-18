@@ -4,26 +4,21 @@ import { listTaskEvents } from "../api";
 import { pathForAppState } from "../lib/appRoute";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { taskRef } from "../lib/taskRef";
-import {
-  placeLifecycleMarkers,
-  threadLifecycleMarkers,
-  type LifecycleMarker,
-  type PlacedLifecycle,
-} from "../lib/taskThreadLifecycle";
+import { threadLifecycleMarkers, type LifecycleMarker } from "../lib/taskThreadLifecycle";
 import { threadOriginIndex } from "../lib/threads";
 import type { ThreadTaskFact } from "../components/ThreadMeta";
 import type { RelaySession, RelayTaskListItem } from "../types";
 
 export type OpenTaskRecord = (target: { taskId: string; routineId?: string }) => void;
 
-export type ThreadTaskLifecycle = PlacedLifecycle & {
+export type ThreadTaskLifecycle = {
   /** The header's task chip; undefined for a thread no task owns. */
   task?: ThreadTaskFact;
-  /** The marker the task still sits on — it alone carries a next step. */
-  currentMarkerId?: string;
+  /** The task's status changes in this thread, oldest first. */
+  markers: LifecycleMarker[];
 };
 
-const NONE: ThreadTaskLifecycle = { before: new Map(), trailing: [] };
+const NONE: ThreadTaskLifecycle = { markers: [] };
 
 function taskHref(task: RelayTaskListItem): string {
   return task.sourceRoutineId
@@ -39,11 +34,9 @@ function taskHref(task: RelayTaskListItem): string {
  * not poll: the task list already polls, and a change in the task's status —
  * the only thing these markers show — is what refetches the log.
  */
-export function useTaskThreadLifecycle({ tasks, session, messages, currentUserId, onOpenTaskRecord }: {
+export function useTaskThreadLifecycle({ tasks, session, currentUserId, onOpenTaskRecord }: {
   tasks: readonly RelayTaskListItem[];
   session: Pick<RelaySession, "id" | "createdAt"> | undefined;
-  /** The transcript, oldest first — the markers are slotted between turns. */
-  messages: readonly { id: string; timestamp: string }[];
   currentUserId: string | undefined;
   onOpenTaskRecord?: OpenTaskRecord;
 }): ThreadTaskLifecycle {
@@ -78,19 +71,20 @@ export function useTaskThreadLifecycle({ tasks, session, messages, currentUserId
 
   return useMemo(() => {
     if (!task) return NONE;
-    const last = markers.at(-1);
     const fact: ThreadTaskFact = {
+      id: task.id,
+      current: task.linkedSessionIds.at(-1) === sessionId,
       ref: taskRef(task),
       status: task.status,
+      ...(task.status === "blocked" && task.blockerReason ? { blockerReason: task.blockerReason } : {}),
       href: taskHref(task),
       onOpen: () => onOpenTaskRecord?.(
         task.sourceRoutineId ? { taskId: task.id, routineId: task.sourceRoutineId } : { taskId: task.id },
       ),
     };
     return {
-      ...placeLifecycleMarkers(messages, markers),
+      markers,
       task: fact,
-      ...(last && last.to === task.status ? { currentMarkerId: last.id } : {}),
     };
-  }, [markers, messages, onOpenTaskRecord, task]);
+  }, [markers, onOpenTaskRecord, sessionId, task]);
 }
