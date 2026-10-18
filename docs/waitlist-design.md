@@ -417,9 +417,12 @@ invite anyone by email at all. The revision separates the two:
   a re-invite still rotates it, and a joined entry is still refused. A new
   entry carries source `admin-invite`; an existing one keeps the person's own
   answers and takes the admin's name and language. The queue cap is skipped —
-  it bounds the public write path, not admins. An address an Account already
+  it bounds the public write path, not admins. An address a live Account already
   holds (its own email or its User's) is refused with `409`: that person signs
-  in or resets their password instead.
+  in or resets their password instead. Deleting a User is a soft delete, so a
+  joined entry whose User is gone is reopened (`reopen_departed`) and invited
+  again; a joined entry with no linked account yet stays closed, because that
+  account may be being created.
 - **Emailed links use the trusted origin.** The first version built the link
   on `public_web_url() or` the request's own origin and mailed it either way.
   An emailed link now uses `trusted_web_origin()` (moved to

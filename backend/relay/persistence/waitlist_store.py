@@ -271,6 +271,21 @@ class DatabaseWaitlistStore:
                 .values(status="invited", invite_token_hash=token_hash, updated_at=now)
             )
 
+    def reopen_departed(self, entry_id: str, account_id: str, now: datetime) -> dict[str, Any]:
+        """Reopen a joined entry whose account is gone, so it can be invited.
+
+        Only while it still names that account: an unlinked claim may be an
+        account being created right now and stays closed (``set_invite``)."""
+        return self._conditional_update(
+            entry_id,
+            (self.entries.c.status == "joined") & (self.entries.c.account_id == account_id),
+            status="waiting",
+            account_id=None,
+            invite_token_hash=None,
+            invite_expires_at=None,
+            updated_at=now,
+        )
+
     def link_account(self, entry_id: str, account_id: str, now: datetime) -> dict[str, Any]:
         return self._conditional_update(
             entry_id,

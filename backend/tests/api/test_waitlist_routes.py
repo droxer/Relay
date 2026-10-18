@@ -302,3 +302,27 @@ def test_admin_queue_actions(client: TestClient, mailer: FakeMailer) -> None:
     assert client.delete(f"{API}/admin/waitlist/{third['id']}").status_code == 404
     assert client.post(f"{API}/admin/waitlist/missing/invite").status_code == 404
     assert client.get(f"{API}/admin/waitlist", params={"status": "bogus"}).status_code == 400
+
+
+def test_a_deleted_users_address_can_be_invited_again(client: TestClient, mailer: FakeMailer) -> None:
+    _bootstrap_admin(client)
+    first = client.post(f"{API}/admin/waitlist/invitations", json={"email": "gone@example.com"})
+    token = first.json()["inviteUrl"].split("#token=", 1)[1]
+    client.cookies.clear()
+    accepted = client.post(
+        f"{API}/waitlist/invites/accept",
+        json={"token": token, "handle": "gone", "password": USER_PASSWORD},
+    )
+    assert accepted.status_code == 200, accepted.text
+    user_id = accepted.json()["user"]["userId"]
+    client.cookies.clear()
+    client.post(f"{API}/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+    # Still a live account: refused.
+    assert client.post(f"{API}/admin/waitlist/invitations", json={"email": "gone@example.com"}).status_code == 409
+
+    assert client.delete(f"{API}/admin/users/{user_id}").status_code in (200, 204)
+
+    again = client.post(f"{API}/admin/waitlist/invitations", json={"email": "gone@example.com"})
+    assert again.status_code == 200, again.text
+    assert again.json()["entry"]["status"] == "invited"
+    assert again.json()["entry"]["accountId"] is None

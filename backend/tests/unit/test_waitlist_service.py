@@ -404,6 +404,10 @@ def _nobody(_email: str) -> bool:
     return False
 
 
+def _alive(_account_id: str) -> bool:
+    return True
+
+
 def test_invite_email_creates_an_entry_and_emails_it(
     service: WaitlistService, store: DatabaseWaitlistStore, mailer: FakeMailer
 ) -> None:
@@ -411,7 +415,7 @@ def test_invite_email_creates_an_entry_and_emails_it(
         {"email": " Grace@Example.com ", "name": "Grace", "locale": "zh-CN"},
         invited_by="admin-user",
         origin=ORIGIN,
-        email_in_use=_nobody,
+        email_in_use=_nobody, account_live=_alive,
     )
 
     entry = invite["entry"]
@@ -429,7 +433,7 @@ def test_invite_email_reuses_a_waiting_entry(service: WaitlistService, store: Da
     asked = _join(service, "ada@example.com", name="Ada", company="Acme")
 
     invite = service.invite_email(
-        {"email": "ada@example.com", "locale": "zh-CN"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+        {"email": "ada@example.com", "locale": "zh-CN"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody, account_live=_alive
     )
 
     assert invite["entry"]["id"] == asked["id"]
@@ -445,7 +449,7 @@ def test_invite_email_ignores_the_queue_cap(store: DatabaseWaitlistStore, mailer
     _join(service, "first@example.com")
 
     invite = service.invite_email(
-        {"email": "vip@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+        {"email": "vip@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody, account_live=_alive
     )
     assert invite["entry"]["status"] == "invited"
 
@@ -453,20 +457,20 @@ def test_invite_email_ignores_the_queue_cap(store: DatabaseWaitlistStore, mailer
 def test_invite_email_refuses_accounts_and_joined_entries(service: WaitlistService) -> None:
     with pytest.raises(WaitlistConflictError, match="account"):
         service.invite_email(
-            {"email": "taken@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=lambda _e: True
+            {"email": "taken@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=lambda _e: True, account_live=_alive
         )
     entry = _join(service)
     service.accept(_token(service.invite(entry["id"], invited_by=None, origin=ORIGIN)), lambda _c: {"id": "a1"})
     with pytest.raises(WaitlistConflictError):
-        service.invite_email({"email": "ada@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody)
+        service.invite_email({"email": "ada@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody, account_live=_alive)
 
 
 def test_invite_email_validates_input(service: WaitlistService) -> None:
     with pytest.raises(WaitlistValidationError):
-        service.invite_email({"email": "nope"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody)
+        service.invite_email({"email": "nope"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody, account_live=_alive)
     with pytest.raises(WaitlistValidationError):
         service.invite_email(
-            {"email": "a@b.co", "name": "x" * 121}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+            {"email": "a@b.co", "name": "x" * 121}, invited_by=None, origin=ORIGIN, email_in_use=_nobody, account_live=_alive
         )
 
 
@@ -475,7 +479,7 @@ def test_untrusted_origin_returns_the_link_but_never_mails_it(
 ) -> None:
     untrusted = InviteOrigin("http://forged.example", trusted=False)
     single = service.invite_email(
-        {"email": "ada@example.com"}, invited_by=None, origin=untrusted, email_in_use=_nobody
+        {"email": "ada@example.com"}, invited_by=None, origin=untrusted, email_in_use=_nobody, account_live=_alive
     )
     other = _join(service, "bo@example.com")
     sent_before = len(mailer.sent)
@@ -502,3 +506,41 @@ def test_a_queued_invite_rotated_before_sending_is_not_mailed(
 
     assert len(mailer.sent) == sent_before
     assert service.live_invite(_token(fresh))["id"] == entry["id"]
+
+
+def test_invite_email_reopens_an_entry_whose_account_was_deleted(
+    service: WaitlistService, mailer: FakeMailer
+) -> None:
+    entry = _join(service)
+    service.accept(_token(service.invite(entry["id"], invited_by=None, origin=ORIGIN)), lambda _c: {"id": "a1"})
+
+    invite = service.invite_email(
+        {"email": "ada@example.com"},
+        invited_by=None,
+        origin=ORIGIN,
+        email_in_use=_nobody,
+        account_live=lambda account_id: account_id != "a1",
+    )
+
+    assert invite["entry"]["id"] == entry["id"]
+    assert invite["entry"]["status"] == "invited"
+    assert invite["entry"]["accountId"] is None
+    assert service.live_invite(_token(invite))["id"] == entry["id"]
+
+
+def test_invite_email_keeps_an_unlinked_claim_closed(
+    service: WaitlistService, store: DatabaseWaitlistStore
+) -> None:
+    entry = _join(service)
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
+    # Claimed, account not linked yet: it may be being created right now.
+    store.claim_invite(hash_invite_token(token), START)
+
+    with pytest.raises(WaitlistConflictError):
+        service.invite_email(
+            {"email": "ada@example.com"},
+            invited_by=None,
+            origin=ORIGIN,
+            email_in_use=_nobody,
+            account_live=lambda _id: False,
+        )
