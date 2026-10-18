@@ -5,6 +5,8 @@ import { APP_NAVIGATION_EVENT } from "../src/lib/appRoute";
 
 vi.mock("../src/components/space/ThreadSpaceFiles", () => ({
   ThreadSpaceFiles: () => <div data-testid="project-files" />,
+  RefreshFilesButton: () => null,
+  useRefreshProjectFiles: () => () => undefined,
 }));
 
 function panel(sessionId: string, projectId: string | null) {

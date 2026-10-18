@@ -19,7 +19,7 @@ import {
 import { ArtifactBody } from "../artifact/ArtifactBody";
 import { ArtifactPreviewHeader } from "../artifact/ArtifactPreviewHeader";
 import type { ArtifactView } from "../artifact/ArtifactViewToggle";
-import { ThreadSpaceFiles } from "./ThreadSpaceFiles";
+import { RefreshFilesButton, ThreadSpaceFiles, useRefreshProjectFiles } from "./ThreadSpaceFiles";
 import { ThreadSpaceList } from "./ThreadSpaceList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
@@ -141,6 +141,7 @@ export function ThreadSpacePanel({
   // project's shared workspace, a solo thread's is just its own files. Same
   // word as the header pill that opened it.
   const panelName = projectId ? t("space.title_project") : t("space.title");
+  const refreshProjectFiles = useRefreshProjectFiles(projectId ?? "");
 
   /* Ceiling measured against the live transcript — read once per gesture and
      once per key press, never per pointer move. */
@@ -194,7 +195,12 @@ export function ThreadSpacePanel({
         {fileOpen ? null : (
           <header className="thread-space-header">
             <h2 className="thread-space-title">{panelName}</h2>
-            <OverlayCloseButton label={t("sheet.close")} onClick={onClose} />
+            {/* Refresh rides the header on the Project tab rather than a bar of
+                its own above the list: one chrome row, not two. */}
+            <div className="thread-space-header-actions">
+              {activeTab === "project" && projectId ? <RefreshFilesButton onClick={refreshProjectFiles} /> : null}
+              <OverlayCloseButton label={t("sheet.close")} onClick={onClose} />
+            </div>
           </header>
         )}
         {showTabs ? (
