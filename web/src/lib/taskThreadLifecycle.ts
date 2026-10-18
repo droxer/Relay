@@ -7,11 +7,12 @@ import type { RelayTaskEvent, TaskStatus } from "../types.js";
  * doing: the work went Ready → In progress → Review → Completed (or stopped
  * to ask, or blocked) and the transcript never said so — the reader had to
  * leave for the task record to learn where it stood. This projection turns the
- * task's event log into the status changes that belong to ONE thread, so the
- * transcript can mark each one where it happened.
+ * task's event log into the status changes that belong to ONE thread, which
+ * the thread's side panel lists as the task's timeline — beside the
+ * conversation rather than interleaved with its turns.
  *
- * The lib stays pure (no i18n, no React) so the windowing and placement rules
- * are testable; the wording lives in `TaskLifecycleMarker`.
+ * The lib stays pure (no i18n, no React) so the windowing rule is testable;
+ * the wording lives in `TaskStatusTimeline`.
  */
 export type LifecycleActor = "you" | "teammate" | "relay";
 
@@ -90,7 +91,7 @@ function windowEnd(events: readonly RelayTaskEvent[], window: ThreadWindow): str
  * Everything from the thread's creation until a later thread took the task
  * over, plus the lead-in that queued this run: the moves since the task last
  * became Ready (or, failing that, the one move just before the thread), so the
- * transcript opens on how the work got here rather than mid-stride.
+ * timeline opens on how the work got here rather than mid-stride.
  */
 export function threadLifecycleMarkers(
   events: readonly RelayTaskEvent[],
@@ -115,35 +116,4 @@ export function threadLifecycleMarkers(
       actor: item.actor,
       ...(item.reason ? { reason: item.reason } : {}),
     }));
-}
-
-export type PlacedLifecycle = {
-  /** Markers drawn just above the message with this id. */
-  before: Map<string, LifecycleMarker[]>;
-  /** Markers newer than every message, drawn after the last turn. */
-  trailing: LifecycleMarker[];
-};
-
-/**
- * Slots each marker above the first message that is not older than it. A
- * turn's timestamp is when it began, so a run's own outcome (review, done,
- * blocked) lands after that turn — where the reader finishes reading it.
- */
-export function placeLifecycleMarkers(
-  messages: readonly { id: string; timestamp: string }[],
-  markers: readonly LifecycleMarker[],
-): PlacedLifecycle {
-  const before = new Map<string, LifecycleMarker[]>();
-  const trailing: LifecycleMarker[] = [];
-  let cursor = 0;
-  for (const marker of markers) {
-    while (cursor < messages.length && messages[cursor].timestamp < marker.timestamp) cursor += 1;
-    if (cursor >= messages.length) {
-      trailing.push(marker);
-      continue;
-    }
-    const id = messages[cursor].id;
-    before.set(id, [...(before.get(id) ?? []), marker]);
-  }
-  return { before, trailing };
 }

@@ -441,10 +441,18 @@
       "by_you": "by you",
       "by_teammate": "by a teammate",
       "by_relay": "automatically",
-      "next_review": "Review the result, then accept it on the task.",
+      "next_review": "Check the result, then accept it or ask for changes.",
       "next_blocked": "Fix the cause, then retry from the task.",
       "next_assigned": "Starts when the computer has a free slot.",
-      "next_backlog": "Move it to Ready or start it from the task."
+      "next_backlog": "Move it to Ready or start it from the task.",
+      "open_task": "Open task {{ref}}",
+      "history": "History",
+      "bar_review": "is ready for your review.",
+      "bar_blocked": "is blocked.",
+      "request_changes": "Request changes",
+      "accept": "Accept",
+      "unblock": "Unblock",
+      "action_label": "Task needs you"
     }
   },
   "composer": {

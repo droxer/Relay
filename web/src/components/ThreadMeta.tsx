@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
+import { useKeyChange } from "../hooks/useKeyChange";
 import { useTranslation } from "react-i18next";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { nodeOwnershipProfile } from "../lib/adminHelpers";
 import { pathForAppState } from "../lib/appRoute";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -14,9 +17,15 @@ import { ICON, NavProjects, NodeOwnershipIcon } from "./icons";
 
 /** The task a thread is doing, as the header names it. */
 export type ThreadTaskFact = {
+  id: string;
   /** `#12` / `AUTO-3`. */
   ref: string;
   status: TaskStatus;
+  /** Why it is blocked, while it is. */
+  blockerReason?: string;
+  /** This thread is the task's newest — the one its moves are made from. An
+   *  older linked thread shows the task but never acts on it. */
+  current: boolean;
   href: string;
   onOpen: () => void;
 };
@@ -43,6 +52,7 @@ export function ThreadMeta({
   participants,
   computers,
   onOpenProject,
+  taskStatus,
 }: {
   session: RelaySession;
   /** The task this thread works on, when it has one. */
@@ -53,6 +63,8 @@ export function ThreadMeta({
   participants: UserAgent[];
   computers: DaemonNodeMonitorRecord[];
   onOpenProject: (projectId: string) => void;
+  /** Where the task stands and how it got there, opened from its chip. */
+  taskStatus?: ReactNode;
 }) {
   const { t } = useTranslation();
   const projectOf = useProjectLookup();
@@ -63,7 +75,7 @@ export function ThreadMeta({
 
   return (
     <div className="thread-meta" aria-label={t("thread.band_label")}>
-      {task ? <TaskChip task={task} /> : null}
+      {task ? <TaskChip task={task}>{taskStatus}</TaskChip> : null}
       {project ? (
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
@@ -76,31 +88,28 @@ export function ThreadMeta({
 }
 
 /**
- * The thread's task and where it stands — the status the transcript's
- * lifecycle markers lead up to, readable without scrolling to the last one.
- * It is a link: the task is where a person accepts, retries, or moves it.
+ * The thread's task and where it stands. It opens a popover with the task's
+ * next move and its history in this thread — the moves that once sat between
+ * the transcript's turns — which links on to the task record.
  */
-function TaskChip({ task }: { task: ThreadTaskFact }) {
+function TaskChip({ task, children }: { task: ThreadTaskFact; children: ReactNode }) {
   const { t } = useTranslation();
   const status = t(`backlog.statuses.${task.status}`);
   const label = t("thread.band_task_status", { ref: task.ref, status });
+  // A move made from inside the popover (accept, unblock) changes what it
+  // describes; close it then, and focus goes back to the chip.
+  const [open, setOpen] = useState(false);
+  useKeyChange(task.status, () => setOpen(false));
   return (
-    <a
-      className="thread-meta-chip thread-meta-task"
-      href={task.href}
-      title={label}
-      data-status={task.status}
-      onClick={(event) => {
-        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-        event.preventDefault();
-        task.onOpen();
-      }}
-    >
-      <TaskStatusIcon status={task.status} />
-      <span className="sr-only">{t("thread.band_task")}: </span>
-      <span className="thread-meta-ref" translate="no">{task.ref}</span>
-      <span className="thread-meta-status">{status}</span>
-    </a>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className="thread-meta-chip thread-meta-task" title={label} data-status={task.status}>
+        <TaskStatusIcon status={task.status} />
+        <span className="sr-only">{t("thread.band_task")}: </span>
+        <span className="thread-meta-ref" translate="no">{task.ref}</span>
+        <span className="thread-meta-status">{status}</span>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="task-status-popover">{children}</PopoverContent>
+    </Popover>
   );
 }
 

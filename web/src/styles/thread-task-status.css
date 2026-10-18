@@ -1,0 +1,166 @@
+/* ===================== thread task status ==========================
+   A task thread's status lives off the transcript: the header chip opens a
+   popover (where it stands, its next move, its history here), and while the
+   task waits on a person a one-line bar docks on the composer. */
+
+/* ---- popover -------------------------------------------------------- */
+
+.task-status-popover {
+  width: 320px;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+
+.task-status {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.task-status-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.task-status-head-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.task-status-now {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.task-status-ref {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.task-status-ref:hover {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A reason is a sentence, not a label: two lines, the rest in its tooltip. */
+.task-status-note {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.task-status-actions {
+  display: flex;
+  gap: var(--sp-2);
+  padding-top: var(--sp-1);
+}
+
+/* The history: a rule off from the standing status, then one quiet line per
+   move — glyph, what happened, and when (who, only when a person did it). */
+.task-status-steps {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 0.5px solid var(--line-1);
+  list-style: none;
+}
+
+.task-status-step {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sp-2);
+}
+
+.task-status-step-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.task-status-step-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-status-step-meta {
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+/* ---- composer bar ---------------------------------------------------- */
+
+/* Docks on the composer card's top edge the way the awaiting-input prompt
+   does — same inset, same rise — but stays one line. */
+.task-action-bar {
+  --bar-inset: var(--composer-radius, var(--sp-5));
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: min(100% - var(--bar-inset) * 2, var(--thread-measure) - var(--bar-inset) * 2);
+  margin: 0 auto -1px;
+  padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + 1px) var(--sp-4);
+  border: 0.5px solid var(--line-1);
+  border-bottom: 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  background: var(--surface-2);
+  animation: rise var(--t-slow) var(--ease) both;
+}
+
+.task-action-bar-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.task-action-bar-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-action-bar-reason {
+  color: var(--ink-3);
+}
+
+.task-action-bar-actions {
+  display: flex;
+  flex: none;
+  gap: var(--sp-1);
+}
+
+@media (max-width: 820px) {
+  .task-action-bar {
+    --bar-inset: var(--sp-3);
+    padding-left: var(--sp-3);
+  }
+}
