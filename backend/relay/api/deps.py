@@ -69,8 +69,9 @@ class AppContext:
     execution_lifecycle: ExecutionLifecycleService
     # None when the database has no LISTEN/NOTIFY bridge (SQLite).
     notification_bridge: PostgresNotificationBridge | None
-    # None unless RELAY_WAITLIST_ENABLED, in which case its routes are unmounted.
-    waitlist: WaitlistService | None
+    # Always built: admins invite by email on every install. RELAY_WAITLIST_ENABLED
+    # gates only the public join route.
+    waitlist: WaitlistService
     password_reset: PasswordResetService
     auth_rate_limiter: AuthRateLimiter
     automation_webhook_limiter: AuthRateLimiter

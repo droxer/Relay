@@ -1,7 +1,9 @@
 """Waitlist HTTP routes: the public join and invite pages, and the admin queue.
 
-Mounted only when ``RELAY_WAITLIST_ENABLED`` is on (``is_waitlist_route``).
-The public answers are deliberately uniform — every valid join is a 202 and
+Only the public join (``POST /waitlist``) depends on ``RELAY_WAITLIST_ENABLED``
+(``is_waitlist_route``); the invite pages and the admin queue are always
+mounted, so an admin can invite people by email on any install. The public
+answers are deliberately uniform — every valid join is a 202 and
 every dead invite a 404 — so neither reveals whether an email is known. Invite
 tokens travel in POST bodies, never a path, so no access log records one.
 """
@@ -15,7 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
-from ..core.deploy_config import public_web_url
+from ..core.deploy_config import trusted_web_origin
 from ..persistence.waitlist_store import WAITLIST_STATUSES, WaitlistConflictError
 from ..security.auth import require_admin_session, user_session_cookie_attrs_for_request
 from ..security.edge import client_ip
@@ -23,6 +25,7 @@ from ..security.passwords import validate_password
 from ..services.computer_limits import decorate_account_limits
 from ..services.waitlist import (
     InviteNotLiveError,
+    InviteOrigin,
     WaitlistFullError,
     WaitlistService,
     WaitlistValidationError,
@@ -41,10 +44,7 @@ _HANDLE_UNSAFE = re.compile(r"[^a-z0-9._-]+")
 
 
 def _service(request: Request) -> WaitlistService:
-    service = app_context(request).waitlist
-    if service is None:  # The routes are mounted only with the waitlist on.
-        raise HTTPException(404, "Not Found")
-    return service
+    return app_context(request).waitlist
 
 
 def _limit(request: Request, limiter_name: str, scope: str) -> None:
@@ -75,8 +75,23 @@ def _entry_errors() -> Iterator[None]:
         raise HTTPException(400, str(error)) from error
 
 
-def _web_origin(request: Request) -> str:
-    return public_web_url() or backend_base_url(request)
+def _invite_origin(request: Request) -> InviteOrigin:
+    trusted = trusted_web_origin()
+    if trusted is not None:
+        return InviteOrigin(trusted, trusted=True)
+    # The admin sees this link before handing it over, so the request's own
+    # origin is safe to show — but never to email (InviteOrigin).
+    return InviteOrigin(backend_base_url(request), trusted=False)
+
+
+def _email_in_use(ctx: Any, email: str) -> bool:
+    """Whether an Account already answers to ``email`` — its own address, or
+    its User's."""
+    addresses = (
+        *(account.get("email") for account in ctx.auth_store.list_accounts()),
+        *(user.get("email") for user in ctx.auth_store.list_users()),
+    )
+    return any(isinstance(address, str) and address.strip().lower() == email for address in addresses)
 
 
 # --- public -----------------------------------------------------------------
@@ -210,7 +225,7 @@ def invite_waitlist_batch(
     service = _service(request)
     with _entry_errors():
         invites, pending = service.invite_batch(
-            count=count, ids=ids, invited_by=account.get("userId"), web_origin=_web_origin(request)
+            count=count, ids=ids, invited_by=account.get("userId"), origin=_invite_origin(request)
         )
     # Sent after the response, so the links reach the admin however slow the
     # mail service is; each entry's delivery status moves from queued.
@@ -223,7 +238,23 @@ def invite_waitlist_entry(entry_id: str, request: Request, ctx: AppContextDep) -
     account = require_admin_session(request, ctx.auth_store)
     with _entry_errors():
         return _service(request).invite(
-            entry_id, invited_by=account.get("userId"), web_origin=_web_origin(request)
+            entry_id, invited_by=account.get("userId"), origin=_invite_origin(request)
+        )
+
+
+@router.post("/admin/waitlist/invitations")
+def invite_by_email(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    """Invite an address directly. Sent now, like a single invite, so the
+    admin sees whether the email went out and always gets the link."""
+    account = require_admin_session(request, ctx.auth_store)
+    with _entry_errors():
+        return _service(request).invite_email(
+            _request_body,
+            invited_by=account.get("userId"),
+            origin=_invite_origin(request),
+            email_in_use=lambda email: _email_in_use(ctx, email),
         )
 
 

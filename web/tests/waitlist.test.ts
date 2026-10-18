@@ -5,7 +5,10 @@ import {
   deliveryLabelKey,
   deliveryTone,
   EMPTY_WAITLIST_FIELDS,
+  INVITE_LOCALES,
+  inviteEmailProblem,
   inviteState,
+  isAdminInvite,
   inviteTokenFromHash,
   isWaitlistEmail,
   pageOffset,
@@ -19,7 +22,7 @@ import {
   waitlistSource,
 } from "../src/lib/waitlist.js";
 import { canonicalBrowserUrl, parseAppPath, pathForAppState, validatedReturnTo } from "../src/lib/appRoute.js";
-import { getAuthStatus, listWaitlist } from "../src/api.js";
+import { getAuthStatus, inviteByEmail, listWaitlist } from "../src/api.js";
 
 const ORIGIN = "https://relay.example.com";
 
@@ -35,6 +38,25 @@ describe("waitlist email shape", () => {
   it("refuses an address over the 254-character cap", () => {
     const long = `${"a".repeat(250)}@example.com`;
     assert.equal(isWaitlistEmail(long), false);
+  });
+});
+
+describe("invite by email", () => {
+  it("names a missing or malformed address and passes a real one", () => {
+    assert.equal(inviteEmailProblem("   "), "required");
+    assert.equal(inviteEmailProblem("ada@"), "invalid");
+    assert.equal(inviteEmailProblem(" ada@example.com "), null);
+  });
+
+  it("tells an admin's invitation from a person's request by its source", () => {
+    assert.equal(isAdminInvite({ source: "admin-invite" }), true);
+    assert.equal(isAdminInvite({ source: "hn" }), false);
+    assert.equal(isAdminInvite({ source: null }), false);
+  });
+
+  it("offers exactly the languages the backend writes invites in", () => {
+    assert.deepEqual([...INVITE_LOCALES], ["en", "zh-CN"]);
+    assert.equal(waitlistLocale("zh-TW"), "zh-CN");
   });
 });
 
@@ -198,5 +220,19 @@ describe("waitlist API client", () => {
     assert.equal(url.searchParams.get("q"), "ada");
     assert.equal(url.searchParams.get("limit"), "10");
     assert.equal(url.searchParams.get("offset"), "20");
+  });
+
+  it("posts an invite by email to the admin invitations route", async () => {
+    let requested = "";
+    let sent: unknown = null;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requested = String(input);
+      sent = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ entry: {}, inviteUrl: "https://x/join#token=t", delivery: { status: "sent", error: null } }));
+    }) as typeof fetch;
+    const result = await inviteByEmail({ email: "grace@example.com", name: "Grace", locale: "en" });
+    assert.match(new URL(requested, ORIGIN).pathname, /\/api\/v1\/admin\/waitlist\/invitations$/);
+    assert.deepEqual(sent, { email: "grace@example.com", name: "Grace", locale: "en" });
+    assert.equal(result.delivery.status, "sent");
   });
 });

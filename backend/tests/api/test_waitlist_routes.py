@@ -60,16 +60,95 @@ def _invite(client: TestClient, email: str = "ada@example.com") -> str:
     return response.json()["inviteUrl"].split("#token=", 1)[1]
 
 
-def test_routes_are_absent_unless_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_only_the_public_join_is_gated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("RELAY_WAITLIST_ENABLED", raising=False)
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     client = TestClient(create_app(tmp_path / "state"))
 
     assert client.post(f"{API}/waitlist", json={"email": "ada@example.com"}).status_code == 404
-    assert client.post(f"{API}/waitlist/invites/lookup", json={"token": "a" * 43}).status_code == 404
-    assert client.get(f"{API}/admin/waitlist").status_code == 404
     assert client.get(f"{API}/auth/status").json()["waitlistEnabled"] is False
-    assert not [path for path in client.get("/api/openapi.json").json()["paths"] if "waitlist" in path]
+    paths = client.get("/api/openapi.json").json()["paths"]
+    assert f"{API}/waitlist" not in paths
+    # Inviting does not depend on the public join: an admin can always invite.
+    assert f"{API}/admin/waitlist/invitations" in paths
+    assert f"{API}/waitlist/invites/accept" in paths
+    assert client.get(f"{API}/admin/waitlist").status_code == 401
+
+
+def test_admin_can_invite_by_email_with_the_waitlist_off(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer
+) -> None:
+    monkeypatch.delenv("RELAY_WAITLIST_ENABLED", raising=False)
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://get-relay.cc")
+    app = create_app(tmp_path / "state")
+    app.state.waitlist.mailer = mailer
+    client = TestClient(app)
+    _bootstrap_admin(client)
+
+    response = client.post(
+        f"{API}/admin/waitlist/invitations",
+        json={"email": "Grace@Example.com", "name": "Grace Hopper", "locale": "en"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["entry"]["status"] == "invited"
+    assert body["entry"]["source"] == "admin-invite"
+    assert body["delivery"]["status"] == "sent"
+    assert "inviteTokenHash" not in body["entry"]
+    token = body["inviteUrl"].split("#token=", 1)[1]
+    assert body["inviteUrl"] == f"https://get-relay.cc/join#token={token}"
+    assert [message.to for message in mailer.sent] == ["grace@example.com"]
+
+    client.cookies.clear()
+    accepted = client.post(
+        f"{API}/waitlist/invites/accept",
+        json={"token": token, "handle": "grace", "password": USER_PASSWORD},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["user"]["email"] == "grace@example.com"
+
+
+def test_invite_by_email_refuses_bad_input_and_known_accounts(client: TestClient) -> None:
+    _bootstrap_admin(client)
+    client.post(
+        f"{API}/admin/users",
+        json={"userId": "plain", "username": "plain", "password": USER_PASSWORD, "email": "plain@example.com"},
+    )
+
+    assert client.post(f"{API}/admin/waitlist/invitations", json={"email": "nope"}).status_code == 400
+    taken = client.post(f"{API}/admin/waitlist/invitations", json={"email": "PLAIN@example.com"})
+    assert taken.status_code == 409
+    assert "account" in taken.json()["detail"]
+
+
+def test_invite_by_email_requires_an_admin(client: TestClient) -> None:
+    assert client.post(f"{API}/admin/waitlist/invitations", json={"email": "a@b.co"}).status_code == 401
+
+
+def test_without_a_public_origin_the_link_is_shown_not_mailed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
+    monkeypatch.delenv("RELAY_PUBLIC_BACKEND_URL", raising=False)
+    app = create_app(tmp_path / "state")
+    app.state.waitlist.mailer = mailer
+    client = TestClient(app)
+    _bootstrap_admin(client)
+    assert client.get(f"{API}/admin/settings").json()["capabilities"]["inviteEmail"] is False
+
+    response = client.post(
+        f"{API}/admin/waitlist/invitations",
+        json={"email": "ada@example.com"},
+        headers={"Host": "forged.example"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["delivery"]["status"] == "skipped"
+    assert response.json()["inviteUrl"].startswith("http://forged.example/join#token=")
+    assert mailer.sent == []
 
 
 def test_status_and_capabilities_report_the_switch(client: TestClient) -> None:
@@ -79,7 +158,9 @@ def test_status_and_capabilities_report_the_switch(client: TestClient) -> None:
         "passwordResetEnabled": False,
     }
     _bootstrap_admin(client)
-    assert client.get(f"{API}/admin/settings").json()["capabilities"]["waitlist"] is True
+    capabilities = client.get(f"{API}/admin/settings").json()["capabilities"]
+    assert capabilities["waitlist"] is True
+    assert capabilities["inviteEmail"] is True
 
 
 def test_join_answers_the_same_for_new_known_and_honeypot(client: TestClient, mailer: FakeMailer) -> None:

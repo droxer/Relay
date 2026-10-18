@@ -21,7 +21,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..core.deploy_config import public_backend_url, public_web_url
+from ..core.deploy_config import trusted_web_origin
 from ..notifications.mailer import DeliveryStatus, Mailer, NullMailer
 from ..notifications.templates import password_changed_email, password_reset_email
 from ..security.password_resets import (
@@ -103,15 +103,6 @@ def normalize_reset_identifier(value: Any) -> str:
     ):
         raise ValueError("Enter your username or email.")
     return normalize_email(identifier) if "@" in identifier else identifier
-
-
-def trusted_web_origin() -> str | None:
-    """The configured public origin an emailed link may point at.
-
-    Never the request's Host header: anyone can send a request with a forged
-    Host, and the mail it triggers would carry a genuine-looking link to their
-    site — with a live token in it."""
-    return public_web_url() or public_backend_url()
 
 
 def reset_url(web_origin: str, token: str) -> str:

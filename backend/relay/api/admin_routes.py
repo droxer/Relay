@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
 from ..automations.service import automation_triggers_enabled
+from ..core.deploy_config import trusted_web_origin
 from ..core.legacy_names import with_legacy_user_id
 from ..daemon_registry.records import public_sandbox_record
 from ..persistence.store_common import split_cache_tokens
@@ -90,8 +91,12 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             "userEdits": True,
             # Off: automations may hold only schedule triggers.
             "automationTriggers": automation_triggers_enabled(),
-            # Off: the waitlist routes are not mounted (RELAY_WAITLIST_ENABLED).
+            # Off: the public join is not mounted (RELAY_WAITLIST_ENABLED), so
+            # nobody can ask; admins can still invite people directly.
             "waitlist": ctx.settings.waitlist_enabled,
+            # Whether an invite goes out by email: mail is configured and a
+            # public web origin exists to link to. Off, the admin copies the link.
+            "inviteEmail": ctx.waitlist.mail_configured and trusted_web_origin() is not None,
         },
         # Whether the bootstrap/supervisor bearer token exists. Only its hash
         # is stored, so the value itself is shown once, by the reissue route.

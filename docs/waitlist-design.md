@@ -1,6 +1,7 @@
 # Waitlist Design
 
-Status: implemented behind `RELAY_WAITLIST_ENABLED` (2026-10-15)
+Status: implemented (2026-10-15); revised 2026-10-18 — see
+[Revision: admin invitations](#revision-admin-invitations-2026-10-18)
 
 ## Problem
 
@@ -183,6 +184,7 @@ IP.
 |---|---|
 | `GET /admin/waitlist?status=&q=&cursor=&limit=` | The page plus `counts` per status. `q` matches email, name, or company. Default order is oldest first. |
 | `POST /admin/waitlist/{id}/invite` | `waiting`/`invited`/`declined` → `invited`. Mints a new token (`secrets.token_urlsafe(32)`), stores its hash, sets a 14-day expiry (`RELAY_WAITLIST_INVITE_TTL_DAYS`), and returns `{ entry, inviteUrl }`. **This response is the only place the plaintext appears.** |
+| `POST /admin/waitlist/invitations` `{ "email", "name"?, "locale"? }` | Invite an address directly (see [Revision](#revision-admin-invitations-2026-10-18)). Reuses the address's entry or creates one with source `admin-invite`, ignores the queue cap, and sends now. `409` when an Account already uses the email or the entry has joined. |
 | `POST /admin/waitlist/invite-batch` `{ "count": n }` (n ≤ 50) or `{ "ids": [...] }` | Invites the oldest `n` waiting entries, or the given ids (de-duplicated). Returns one `inviteUrl` per entry with delivery `queued`; the emails are sent after the response, so a slow mail service can't push the request past the edge timeout and lose the one-time links. |
 | `POST /admin/waitlist/{id}/decline` | → `declined`, clearing any live invite. |
 | `PATCH /admin/waitlist/{id}` `{ "adminNote" }` | Admin note only. |
@@ -396,6 +398,45 @@ is the same split the collaboration policy uses.
    `docs/deployment-cloudflare.md`, and `docs/api.md`.
 5. Later: Turnstile if needed, a dashboard tile, and bounce handling via
    Cloudflare's suppression list API.
+
+## Revision: admin invitations (2026-10-18)
+
+The first version only let an admin invite someone who had asked, and only
+when the public waitlist was on — on a default install there was no way to
+invite anyone by email at all. The revision separates the two:
+
+- **Only the public join is gated.** `RELAY_WAITLIST_ENABLED` now publishes
+  just `POST /waitlist` (`is_waitlist_route`). The invite lookup/accept routes
+  and the admin queue are always mounted: neither is an open write path —
+  redeeming needs a token, and only an admin can mint one. The service is
+  always built.
+- **Invite by email.** `POST /admin/waitlist/invitations` takes an address,
+  an optional name (the email's greeting), and a language. It goes through the
+  same entry and token machinery (`WaitlistService.invite_email` →
+  `store.admit_invitee` → `invite`), so one address still has one live invite,
+  a re-invite still rotates it, and a joined entry is still refused. A new
+  entry carries source `admin-invite`; an existing one keeps the person's own
+  answers and takes the admin's name and language. The queue cap is skipped —
+  it bounds the public write path, not admins. An address an Account already
+  holds (its own email or its User's) is refused with `409`: that person signs
+  in or resets their password instead.
+- **Emailed links use the trusted origin.** The first version built the link
+  on `public_web_url() or` the request's own origin and mailed it either way.
+  An emailed link now uses `trusted_web_origin()` (moved to
+  `core/deploy_config.py`, shared with password reset); without a configured
+  origin the link is still built and shown to the admin, but never mailed, and
+  its delivery reads `skipped`. `GET /admin/settings` reports
+  `capabilities.inviteEmail` (mail configured and a trusted origin) so the
+  console can say up front whether the invite will be emailed.
+- **Stale batch sends are dropped.** A batch's emails go out after the
+  response; one whose entry was re-invited, declined, accepted, or erased in
+  between is no longer sent, since its link is dead.
+- **Web.** The admin section is always in the rail — "Waitlist" when the
+  public join is open, "Invitations" when it is not — with **Invite by email**
+  as its primary action (a drawer: email, name, language) and "Invite next N"
+  beside it only while people can ask. The one-time link reveal is shared with
+  the other invite actions, and rows invited directly read "Invited by an
+  admin" instead of "via <source>".
 
 ## Open questions
 

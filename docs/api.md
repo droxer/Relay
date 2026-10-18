@@ -60,7 +60,7 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/internal/chat` | Chat-service identity and conversation operations. Mounted, together with `/api/v1/admin/chat-integrations`, only when `RELAY_CHANNELS_ENABLED=1` |
 | `/api/v1/daemon-node-registrations` | Daemon heartbeat registration |
 | `/api/v1/daemon-node-enrollments` | Managed and local daemon enrollment |
-| `/api/v1/waitlist`, `/api/v1/admin/waitlist` | Public waitlist join and invite redemption, and the admin queue. Mounted only when `RELAY_WAITLIST_ENABLED=1` |
+| `/api/v1/waitlist`, `/api/v1/admin/waitlist` | Public waitlist join and invite redemption, and the admin queue and invitations. Only the public join (`POST /waitlist`) depends on `RELAY_WAITLIST_ENABLED=1` |
 
 Persisted media uses `/profile-images/{kind}/{id}` and intentionally stays
 outside the JSON version namespace.
@@ -1025,9 +1025,14 @@ and Threads share the same conversation and provide access to its owning task.
 
 ## Waitlist
 
-Mounted only when `RELAY_WAITLIST_ENABLED=1`; `GET /api/v1/auth/status`
-reports it as `waitlistEnabled` and `GET /api/v1/admin/settings` as
-`capabilities.waitlist`. Rules and rationale: `docs/waitlist-design.md`.
+Only the public join is gated: `POST /waitlist` is mounted when
+`RELAY_WAITLIST_ENABLED=1`, which `GET /api/v1/auth/status` reports as
+`waitlistEnabled` and `GET /api/v1/admin/settings` as `capabilities.waitlist`.
+The invite routes and the admin queue are always mounted. An invite is emailed
+only when a public web URL is configured (`RELAY_PUBLIC_WEB_URL`, else
+`RELAY_PUBLIC_BACKEND_URL`) and mail is set up — `capabilities.inviteEmail`;
+otherwise `delivery.status` is `skipped` and the admin hands the link over.
+Rules and rationale: `docs/waitlist-design.md`.
 
 | Method and path | Auth | Answer |
 | :- | :- | :- |
@@ -1036,7 +1041,8 @@ reports it as `waitlistEnabled` and `GET /api/v1/admin/settings` as
 | `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken, `404` dead invite; a refused accept leaves the invite live |
 | `GET /admin/waitlist?status=&q=&limit=&offset=` | admin | `{entries, total, counts}`, oldest first |
 | `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and emails it. `{entry, inviteUrl, delivery: {status, error}}`; `inviteUrl` is the only time the token appears |
-| `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service |
+| `POST /admin/waitlist/invitations` | admin | Body `{email, name?, locale?}` (`en`/`zh-CN`). Invites an address directly, reusing its entry if it asked (source `admin-invite` otherwise) and ignoring the queue cap; emailed now. `{entry, inviteUrl, delivery}`. `400` malformed, `409` an account already uses the email or the entry already joined |
+| `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service. A queued email whose entry was re-invited, declined, accepted, or erased meanwhile is not sent |
 | `POST /admin/waitlist/{id}/decline` | admin | `{entry}`; clears any live invite |
 | `PATCH /admin/waitlist/{id}` | admin | Body `{adminNote}`. `{entry}` |
 | `DELETE /admin/waitlist/{id}` | admin | Erases the entry (an account it created is untouched) |

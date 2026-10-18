@@ -1,5 +1,6 @@
 import type {
   CurrentUser,
+  InviteByEmailInput,
   WaitlistEntry,
   WaitlistInvite,
   WaitlistInviteResult,
@@ -60,6 +61,12 @@ export function listWaitlist(query: WaitlistListQuery, signal?: AbortSignal): Pr
 /** Invite, re-invite, or resend — each rotates the token. */
 export function inviteWaitlistEntry(id: string): Promise<WaitlistInviteResult> {
   return apiJson<WaitlistInviteResult>(`/admin/waitlist/${encodeURIComponent(id)}/invite`, { method: "POST" });
+}
+
+/** Invite an address directly. The server reuses the person's entry if they
+    already asked, and refuses an address an account already holds. */
+export function inviteByEmail(input: InviteByEmailInput): Promise<WaitlistInviteResult> {
+  return apiJson<WaitlistInviteResult>("/admin/waitlist/invitations", { method: "POST", body: input });
 }
 
 export function inviteWaitlistBatch(count: number): Promise<{ invites: WaitlistInviteResult[] }> {

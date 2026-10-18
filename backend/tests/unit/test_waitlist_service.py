@@ -14,6 +14,7 @@ from relay.persistence.waitlist_store import (
 )
 from relay.services.waitlist import (
     InviteNotLiveError,
+    InviteOrigin,
     WaitlistConfig,
     WaitlistFullError,
     WaitlistService,
@@ -23,6 +24,7 @@ from relay.services.waitlist import (
 
 START = datetime(2026, 10, 16, 9, 0, tzinfo=UTC)
 WEB = "https://get-relay.cc"
+ORIGIN = InviteOrigin(WEB, trusted=True)
 
 
 class FakeMailer:
@@ -158,7 +160,7 @@ def test_invite_emails_a_link_and_stores_only_a_hash(
     service: WaitlistService, store: DatabaseWaitlistStore, mailer: FakeMailer
 ) -> None:
     entry = _join(service, name="<Ada>")
-    invite = service.invite(entry["id"], invited_by="admin-user", web_origin=WEB)
+    invite = service.invite(entry["id"], invited_by="admin-user", origin=ORIGIN)
     token = _token(invite)
 
     assert invite["inviteUrl"].startswith(f"{WEB}/join#token=")
@@ -176,7 +178,7 @@ def test_invite_emails_a_link_and_stores_only_a_hash(
 def test_failed_delivery_still_invites(store, clock) -> None:
     mailer = FakeMailer(DeliveryResult("failed", "Email service error: throttled", retryable=True))
     service = WaitlistService(store, mailer, clock=clock)
-    invite = service.invite(_join(service)["id"], invited_by=None, web_origin=WEB)
+    invite = service.invite(_join(service)["id"], invited_by=None, origin=ORIGIN)
 
     assert invite["entry"]["status"] == "invited"
     assert invite["delivery"]["status"] == "failed"
@@ -186,8 +188,8 @@ def test_failed_delivery_still_invites(store, clock) -> None:
 
 def test_reinvite_rotates_the_token(service: WaitlistService) -> None:
     entry = _join(service)
-    old = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
-    new = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    old = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
+    new = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
 
     with pytest.raises(InviteNotLiveError):
         service.live_invite(old)
@@ -196,7 +198,7 @@ def test_reinvite_rotates_the_token(service: WaitlistService) -> None:
 
 def test_expired_invite_is_dead_and_flagged(service: WaitlistService, clock: Clock) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
     clock.advance(days=15)
 
     with pytest.raises(InviteNotLiveError):
@@ -209,7 +211,7 @@ def test_expired_invite_is_dead_and_flagged(service: WaitlistService, clock: Clo
 
 def test_decline_kills_the_invite_and_rejoin_stays_declined(service: WaitlistService) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
     assert service.decline(entry["id"])["status"] == "declined"
 
     with pytest.raises(InviteNotLiveError):
@@ -222,7 +224,7 @@ def test_accept_links_the_account_and_spends_the_token(
     service: WaitlistService, store: DatabaseWaitlistStore
 ) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
 
     account = service.accept(token, lambda claimed: {"id": "acct-1", "email": claimed["email"]})
 
@@ -232,14 +234,14 @@ def test_accept_links_the_account_and_spends_the_token(
     with pytest.raises(InviteNotLiveError):
         service.accept(token, lambda claimed: {"id": "acct-2"})
     with pytest.raises(WaitlistConflictError):
-        service.invite(entry["id"], invited_by=None, web_origin=WEB)
+        service.invite(entry["id"], invited_by=None, origin=ORIGIN)
     with pytest.raises(WaitlistConflictError):
         service.decline(entry["id"])
 
 
 def test_failed_account_creation_keeps_the_invite_live(service: WaitlistService) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
 
     def reject(claimed: dict) -> dict:
         raise ValueError("username already exists.")
@@ -251,7 +253,7 @@ def test_failed_account_creation_keeps_the_invite_live(service: WaitlistService)
 
 def test_concurrent_accepts_create_one_account(service: WaitlistService) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
     created: list[str] = []
     gate = threading.Barrier(4)
 
@@ -278,7 +280,7 @@ def test_batch_issues_links_first_and_sends_later(
         _join(service, f"{name}@example.com")
         clock.advance(minutes=1)
 
-    invites, pending = service.invite_batch(count=2, ids=None, invited_by=None, web_origin=WEB)
+    invites, pending = service.invite_batch(count=2, ids=None, invited_by=None, origin=ORIGIN)
 
     assert [invite["entry"]["email"] for invite in invites] == ["first@example.com", "second@example.com"]
     assert all(invite["delivery"]["status"] == "queued" for invite in invites)
@@ -290,17 +292,17 @@ def test_batch_issues_links_first_and_sends_later(
     assert [message.to for message in mailer.sent] == ["first@example.com", "second@example.com"]
     assert store.get(invites[0]["entry"]["id"])["lastDeliveryStatus"] == "sent"
     with pytest.raises(WaitlistValidationError):
-        service.invite_batch(count=51, ids=None, invited_by=None, web_origin=WEB)
+        service.invite_batch(count=51, ids=None, invited_by=None, origin=ORIGIN)
 
 
 def test_batch_skips_missing_and_joined_entries(service: WaitlistService) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
     service.accept(token, lambda claimed: {"id": "acct-1"})
     other = _join(service, "bo@example.com")
 
     invites, _ = service.invite_batch(
-        count=None, ids=[entry["id"], "missing", other["id"], other["id"]], invited_by=None, web_origin=WEB
+        count=None, ids=[entry["id"], "missing", other["id"], other["id"]], invited_by=None, origin=ORIGIN
     )
     assert [invite["entry"]["email"] for invite in invites] == ["bo@example.com"]
     assert service.live_invite(_token(invites[0]))["email"] == "bo@example.com"
@@ -308,28 +310,29 @@ def test_batch_skips_missing_and_joined_entries(service: WaitlistService) -> Non
 
 def test_delivering_to_an_erased_entry_is_skipped(service: WaitlistService, mailer: FakeMailer) -> None:
     entry = _join(service)
-    _, pending = service.invite_batch(count=None, ids=[entry["id"]], invited_by=None, web_origin=WEB)
+    _, pending = service.invite_batch(count=None, ids=[entry["id"]], invited_by=None, origin=ORIGIN)
     service.erase(entry["id"])
 
     service.deliver_invites(pending)
-    assert len(mailer.sent) == 1
+    # An erased person is not emailed a link to an entry that no longer exists.
+    assert mailer.sent == []
 
 
 def test_an_unlinked_claim_stays_closed(service: WaitlistService, store: DatabaseWaitlistStore) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
     # A claim whose process died before the account existed.
     store.claim_invite(hash_invite_token(token), START)
 
     with pytest.raises(WaitlistConflictError):
-        service.invite(entry["id"], invited_by=None, web_origin=WEB)
+        service.invite(entry["id"], invited_by=None, origin=ORIGIN)
 
 
 def test_linking_failure_does_not_fail_a_created_account(
     service: WaitlistService, store: DatabaseWaitlistStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
 
     def erased(*args, **kwargs):
         raise KeyError(entry["id"])
@@ -361,11 +364,11 @@ def test_note_and_erase(service: WaitlistService) -> None:
 
 def test_active_claim_cannot_be_reinvited(service: WaitlistService) -> None:
     entry = _join(service)
-    token = _token(service.invite(entry["id"], invited_by=None, web_origin=WEB))
+    token = _token(service.invite(entry["id"], invited_by=None, origin=ORIGIN))
 
     def create_account(claimed: dict) -> dict:
         with pytest.raises(WaitlistConflictError):
-            service.invite(claimed["id"], invited_by=None, web_origin=WEB)
+            service.invite(claimed["id"], invited_by=None, origin=ORIGIN)
         return {"id": "only-account"}
 
     assert service.accept(token, create_account)["id"] == "only-account"
@@ -395,3 +398,107 @@ def test_concurrent_joins_respect_capacity(store, mailer, clock, monkeypatch) ->
         outcomes = list(pool.map(attempt, range(2)))
     assert sorted(outcomes) == ["created", "full"]
     assert store.count("waiting") == 1
+
+
+def _nobody(_email: str) -> bool:
+    return False
+
+
+def test_invite_email_creates_an_entry_and_emails_it(
+    service: WaitlistService, store: DatabaseWaitlistStore, mailer: FakeMailer
+) -> None:
+    invite = service.invite_email(
+        {"email": " Grace@Example.com ", "name": "Grace", "locale": "zh-CN"},
+        invited_by="admin-user",
+        origin=ORIGIN,
+        email_in_use=_nobody,
+    )
+
+    entry = invite["entry"]
+    assert entry["email"] == "grace@example.com"
+    assert entry["status"] == "invited"
+    assert entry["source"] == "admin-invite"
+    assert entry["invitedByUserId"] == "admin-user"
+    assert invite["delivery"] == {"status": "sent", "error": None}
+    assert [message.to for message in mailer.sent] == ["grace@example.com"]
+    assert invite["inviteUrl"] in mailer.sent[0].text
+    assert service.live_invite(_token(invite))["name"] == "Grace"
+
+
+def test_invite_email_reuses_a_waiting_entry(service: WaitlistService, store: DatabaseWaitlistStore) -> None:
+    asked = _join(service, "ada@example.com", name="Ada", company="Acme")
+
+    invite = service.invite_email(
+        {"email": "ada@example.com", "locale": "zh-CN"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+    )
+
+    assert invite["entry"]["id"] == asked["id"]
+    # The person's own answers stay; the admin's language choice wins.
+    assert invite["entry"]["name"] == "Ada"
+    assert invite["entry"]["company"] == "Acme"
+    assert invite["entry"]["locale"] == "zh-CN"
+    assert store.counts()["invited"] == 1
+
+
+def test_invite_email_ignores_the_queue_cap(store: DatabaseWaitlistStore, mailer: FakeMailer, clock: Clock) -> None:
+    service = WaitlistService(store, mailer, config=WaitlistConfig(max_waiting=1), clock=clock)
+    _join(service, "first@example.com")
+
+    invite = service.invite_email(
+        {"email": "vip@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+    )
+    assert invite["entry"]["status"] == "invited"
+
+
+def test_invite_email_refuses_accounts_and_joined_entries(service: WaitlistService) -> None:
+    with pytest.raises(WaitlistConflictError, match="account"):
+        service.invite_email(
+            {"email": "taken@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=lambda _e: True
+        )
+    entry = _join(service)
+    service.accept(_token(service.invite(entry["id"], invited_by=None, origin=ORIGIN)), lambda _c: {"id": "a1"})
+    with pytest.raises(WaitlistConflictError):
+        service.invite_email({"email": "ada@example.com"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody)
+
+
+def test_invite_email_validates_input(service: WaitlistService) -> None:
+    with pytest.raises(WaitlistValidationError):
+        service.invite_email({"email": "nope"}, invited_by=None, origin=ORIGIN, email_in_use=_nobody)
+    with pytest.raises(WaitlistValidationError):
+        service.invite_email(
+            {"email": "a@b.co", "name": "x" * 121}, invited_by=None, origin=ORIGIN, email_in_use=_nobody
+        )
+
+
+def test_untrusted_origin_returns_the_link_but_never_mails_it(
+    service: WaitlistService, store: DatabaseWaitlistStore, mailer: FakeMailer
+) -> None:
+    untrusted = InviteOrigin("http://forged.example", trusted=False)
+    single = service.invite_email(
+        {"email": "ada@example.com"}, invited_by=None, origin=untrusted, email_in_use=_nobody
+    )
+    other = _join(service, "bo@example.com")
+    sent_before = len(mailer.sent)
+    invites, pending = service.invite_batch(count=None, ids=[other["id"]], invited_by=None, origin=untrusted)
+    service.deliver_invites(pending)
+
+    assert single["inviteUrl"].startswith("http://forged.example/join#token=")
+    assert single["delivery"]["status"] == "skipped"
+    assert invites[0]["delivery"]["status"] == "skipped"
+    assert store.get(other["id"])["lastDeliveryStatus"] == "skipped"
+    assert len(mailer.sent) == sent_before
+    assert all("invite" not in message.subject.lower() for message in mailer.sent)
+
+
+def test_a_queued_invite_rotated_before_sending_is_not_mailed(
+    service: WaitlistService, store: DatabaseWaitlistStore, mailer: FakeMailer
+) -> None:
+    entry = _join(service)
+    _, pending = service.invite_batch(count=None, ids=[entry["id"]], invited_by=None, origin=ORIGIN)
+    fresh = service.invite(entry["id"], invited_by=None, origin=ORIGIN)
+    sent_before = len(mailer.sent)
+
+    service.deliver_invites(pending)
+
+    assert len(mailer.sent) == sent_before
+    assert service.live_invite(_token(fresh))["id"] == entry["id"]

@@ -391,7 +391,9 @@ and confirm the stream stays live for several minutes, and connect a daemon to
 ## 10. Transactional email: waitlist invites and password resets (optional)
 
 `deploy/deploy.sh` turns the waitlist on (`RELAY_WAITLIST_ENABLED=1`) unless
-`deploy/.env` sets it to `0`. With it on, the backend emails waitlist invites and "you're
+`deploy/.env` sets it to `0`. That switch only opens the public join; admins can
+invite people by email from the console (Invitations / Waitlist → Invite by email)
+either way. The backend emails invites and, with the waitlist on, "you're
 on the list" confirmations through [Cloudflare Email
 Service](https://developers.cloudflare.com/email-service/) (Email Sending is in
 beta). It calls the REST API from Railway; no Worker is involved. Without the

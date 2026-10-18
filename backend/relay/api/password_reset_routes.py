@@ -15,14 +15,13 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-from ..core.deploy_config import public_web_url
+from ..core.deploy_config import public_web_url, trusted_web_origin
 from ..security.auth import require_admin_session
 from ..security.edge import client_ip
 from ..services.password_reset import (
     PasswordResetService,
     ResetNotLiveError,
     normalize_reset_identifier,
-    trusted_web_origin,
 )
 from .deps import AppContextDep, app_context
 from .node_install import backend_base_url

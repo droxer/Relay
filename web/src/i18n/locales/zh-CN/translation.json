@@ -1518,7 +1518,9 @@
       "password_reset_not_sent": "未发送邮件，请直接把链接发给对方。",
       "password_reset_failed": "邮件发送失败，请直接把链接发给对方。",
       "password_reset_error": "无法生成重置链接：{{message}}",
-      "password_reset_copy": "复制重置链接"
+      "password_reset_copy": "复制重置链接",
+      "nav_invitations": "邀请",
+      "title_invitations": "邀请"
     },
     "signing_in": "正在登录…",
     "waitlist": {
@@ -1571,7 +1573,24 @@
       "empty_title": "还没有人申请",
       "empty_body": "来自访问申请页的申请会按先后顺序显示在这里。",
       "empty_search": "没有匹配此搜索的申请。",
-      "unavailable": "此服务器未开启等候名单。"
+      "invite_email_cta": "通过邮件邀请",
+      "invite_email_kicker": "邀请",
+      "invite_email_title": "邀请成员",
+      "invite_email_sub": "对方会收到一封邮件，其中的链接可用于创建账号。链接也会在这里显示一次，供你复制。",
+      "invite_email_sub_link": "此服务器未配置邮件发送，你将获得一个链接，需要自行发送给对方。链接仅显示一次。",
+      "invite_email_name_hint": "用于邮件中的称呼。",
+      "invite_email_language": "邮件语言",
+      "invite_email_language_en": "English",
+      "invite_email_language_zh": "简体中文",
+      "invite_email_send": "发送邀请",
+      "invite_email_create_link": "生成邀请链接",
+      "invite_email_required": "请输入邮箱地址。",
+      "invite_email_invalid": "请输入有效的邮箱地址。",
+      "invite_email_error": "邀请发送失败：{{message}}",
+      "invited_directly": "由管理员邀请",
+      "added": "{{when}}添加",
+      "empty_title_closed": "暂无邀请",
+      "empty_body_closed": "通过邮件邀请成员。邀请状态及对方是否已加入会显示在这里。"
     }
   },
   "pref": {

@@ -52,6 +52,15 @@ def public_web_url() -> str | None:
     return _public_origin("RELAY_PUBLIC_WEB_URL")
 
 
+def trusted_web_origin() -> str | None:
+    """The configured public origin an emailed link may point at.
+
+    Never the request's Host header: anyone can send a request with a forged
+    Host, and the mail it triggers would carry a genuine-looking link to their
+    site — with a live token in it."""
+    return public_web_url() or public_backend_url()
+
+
 def _public_origin(name: str) -> str | None:
     raw = os.environ.get(name, "")
     value = raw.strip()

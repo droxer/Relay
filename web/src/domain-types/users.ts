@@ -33,8 +33,12 @@ export interface OrgSettingsResponse {
   capabilities?: {
     /** False when the auth store cannot hold user edits (name, email, limit). */
     userEdits?: boolean;
-    /** True when the waitlist routes are mounted (feature on, database store). */
+    /** True when the public waitlist join is open. Inviting by email works
+        either way; this only decides whether people can ask. */
     waitlist?: boolean;
+    /** True when an invite goes out by email (mail and a public web URL are
+        configured). False, the admin copies each link by hand. */
+    inviteEmail?: boolean;
   };
   /** Whether an admin bearer token exists. Only its hash is stored, so the
       value itself comes back once, from the reissue route. */

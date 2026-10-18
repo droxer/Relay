@@ -21,6 +21,9 @@ import { useWaitlistQueue } from "./useWaitlistQueue";
 const SEARCH_DEBOUNCE_MS = 250;
 
 interface WaitlistViewProps {
+  /** Whether people can ask to join; off, the section holds only the
+      invitations admins sent, and its empty state says so. */
+  waitlistOpen: boolean;
   /** Links minted this visit, held by the page so the header's "Invite next N"
       and a row's Invite land in the same reveal. */
   invites: WaitlistInviteResult[] | null;
@@ -34,7 +37,7 @@ interface WaitlistViewProps {
  * the server, oldest first — that is the order people asked in — and the
  * search narrows every band at once.
  */
-export function WaitlistView({ invites, onInvited, onDismissInvites }: WaitlistViewProps) {
+export function WaitlistView({ waitlistOpen, invites, onInvited, onDismissInvites }: WaitlistViewProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const settledQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
@@ -77,8 +80,12 @@ export function WaitlistView({ invites, onInvited, onDismissInvites }: WaitlistV
         <RelayEmptyState
           className="adm-users-empty"
           fill
-          title={settledQuery ? t("admin.waitlist.empty_search") : t("admin.waitlist.empty_title")}
-          body={settledQuery ? undefined : t("admin.waitlist.empty_body")}
+          title={settledQuery
+            ? t("admin.waitlist.empty_search")
+            : t(waitlistOpen ? "admin.waitlist.empty_title" : "admin.waitlist.empty_title_closed")}
+          body={settledQuery
+            ? undefined
+            : t(waitlistOpen ? "admin.waitlist.empty_body" : "admin.waitlist.empty_body_closed")}
           illustration={<AdminInbox size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
         />
       ) : (

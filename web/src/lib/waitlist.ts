@@ -109,7 +109,7 @@ export function waitlistSource(
 }
 
 /** The UI language as the backend's locale enum. */
-export function waitlistLocale(language: string | undefined): "en" | "zh-CN" {
+export function waitlistLocale(language: string | undefined): InviteLocale {
   return language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
 }
 
@@ -164,4 +164,23 @@ export function parseInviteBatch(raw: string): number | null {
   if (!/^\d+$/.test(raw.trim())) return null;
   const count = Number(raw.trim());
   return count >= MIN_INVITE_BATCH && count <= MAX_INVITE_BATCH ? count : null;
+}
+
+/** The languages an invite email is written in, mirroring the backend's
+    `SUPPORTED_LOCALES`. */
+export const INVITE_LOCALES = ["en", "zh-CN"] as const;
+export type InviteLocale = (typeof INVITE_LOCALES)[number];
+
+/** The `source` the backend stamps on an entry an admin invited by email
+    (`ADMIN_INVITE_SOURCE`), so the queue can tell it from a request. */
+export const ADMIN_INVITE_SOURCE = "admin-invite";
+
+export function isAdminInvite(entry: Pick<WaitlistEntry, "source">): boolean {
+  return entry.source === ADMIN_INVITE_SOURCE;
+}
+
+/** Why the invite-by-email address would be refused, or `null` to send it. */
+export function inviteEmailProblem(raw: string): "required" | "invalid" | null {
+  if (!raw.trim()) return "required";
+  return isWaitlistEmail(raw) ? null : "invalid";
 }

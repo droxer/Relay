@@ -48,14 +48,15 @@ def is_channel_route(path: str) -> bool:
     return path.startswith(CHANNEL_ROUTE_PREFIXES)
 
 
-# The waitlist: a public, unauthenticated write path, so it is published only
-# when an operator opts in.
-WAITLIST_ROUTE_PREFIXES = ("/waitlist", "/admin/waitlist")
+# The public waitlist join: an unauthenticated write path, so it is published
+# only when an operator opts in. Invites are not gated — redeeming one needs
+# its token, and only an admin can issue one.
+WAITLIST_JOIN_ROUTE = "/waitlist"
 
 
 def is_waitlist_route(path: str) -> bool:
-    """True for a route that belongs to the waitlist feature."""
-    return path.startswith(WAITLIST_ROUTE_PREFIXES)
+    """True for the route the waitlist switch publishes: the public join."""
+    return path == WAITLIST_JOIN_ROUTE
 
 
 @dataclass
