@@ -59,6 +59,7 @@ railway_ensure_project() {
   if [ -n "$id" ]; then
     info "project $RAILWAY_PROJECT_NAME exists ($id)"
   else
+    [ "${1:-}" != existing ] || die "project $RAILWAY_PROJECT_NAME not found — run 'deploy.sh railway' first"
     data=$(gql 'mutation ProjectCreate($input: ProjectCreateInput!) { projectCreate(input: $input) { id } }' \
       "$(jq -nc --arg n "$RAILWAY_PROJECT_NAME" --arg w "$workspace" --arg e "$RAILWAY_ENVIRONMENT" \
         '{input: {name: $n, workspaceId: $w, defaultEnvironmentName: $e}}')")
@@ -68,9 +69,9 @@ railway_ensure_project() {
   printf '%s' "$id"
 }
 
-# Sets PROJECT_ID and ENVIRONMENT_ID for the rest of the run.
+# Sets PROJECT_ID and ENVIRONMENT_ID. Pass `existing` to forbid provisioning.
 railway_resolve_context() {
-  PROJECT_ID=$(railway_ensure_project)
+  PROJECT_ID=$(railway_ensure_project "${1:-}") || return 1
   local data
   data=$(gql 'query Environments($id: String!) { project(id: $id) { environments { edges { node { id name } } } } }' \
     "$(jq -nc --arg id "$PROJECT_ID" '{id: $id}')")
@@ -318,6 +319,27 @@ railway_deployments() {
   gql 'query Deployments($input: DeploymentListInput!) { deployments(first: 10, input: $input) { edges { node { id status } } } }' \
     "$(jq -nc --arg p "$PROJECT_ID" --arg e "$ENVIRONMENT_ID" --arg s "$1" '{input: {projectId: $p, environmentId: $e, serviceId: $s}}')" \
     | jq -c '[.deployments.edges[].node]'
+}
+
+# Startup migration status from the newest successful backend deployment.
+# Filter at the API so normal traffic cannot crowd the startup line out of
+# the bounded result; sort by timestamp rather than relying on API ordering.
+railway_agent_computer_id_status() {
+  local service_id=$1 deployment_id data status
+  data=$(railway_deployments "$service_id") || return 1
+  deployment_id=$(jq -r '[.[] | select(.status == "SUCCESS")][0].id // empty' <<<"$data")
+  [ -n "$deployment_id" ] || die "$BACKEND_SERVICE has no successful deployment in recent history"
+  info "$BACKEND_SERVICE deployment $deployment_id (startup snapshot)"
+  data=$(gql 'query DeploymentLogs($id: String!, $filter: String!) {
+      deploymentLogs(deploymentId: $id, filter: $filter, limit: 100) { timestamp message }
+    }' "$(jq -nc --arg id "$deployment_id" '{id: $id, filter: "agent-computer-ids"}')") || return 1
+  status=$(jq -r '[.deploymentLogs[]?]
+    | sort_by(.timestamp // "")
+    | [.[].message | capture("agent-computer-ids (?<status>converged|pending agents=[0-9]+ placements=[0-9]+)") | .status]
+    | last // empty' <<<"$data")
+  [ -n "$status" ] || die "no agent-computer-ids line in deployment $deployment_id; deploy a backend with startup status logging, check RELAY_LOG_LEVEL and log retention, then retry"
+  info "agent-computer-ids $status"
+  [ "$status" = converged ]
 }
 
 # railway_wait_deployment <service-name> <service-id> [deployment-id]. Without

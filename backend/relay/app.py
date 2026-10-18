@@ -98,9 +98,18 @@ load_backend_env()
 WEB_UI_PATH = "/"
 
 
-def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
+def create_app(
+    root_dir: str | Path = DEFAULT_RELAY_DATA_DIR,
+    *,
+    background_mode: str | None = None,
+) -> FastAPI:
     settings = AppSettings.from_env()  # Every bad value at once, before any service starts.
     _validate_deploy_config()
+    # "external": a separate `relay worker` owns the scheduler, recovery, and
+    # computer-notification loops, so this process starts none of them.
+    mode = background_mode if background_mode is not None else settings.background_mode
+    if mode not in ("embedded", "external"):
+        raise ValueError("background_mode must be embedded or external.")
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
     stores = build_stores(root_dir)
@@ -160,16 +169,18 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     computer_notifications = ComputerNotificationWatcher(
         registry, stores.auth, stores.notifications, interval_seconds=watch_interval_from_env(),
     )
-    background = [service for service in (notification_bridge, execution_lifecycle, computer_notifications, scheduler) if service]
+    loops = (execution_lifecycle, computer_notifications, scheduler) if mode == "embedded" else ()
+    services = [service for service in (notification_bridge, *loops) if service]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        for service in background:
+        computer_installer_routes.warn_if_bundle_stale(settings.computer_bundle)
+        for service in services:
             service.start()
         try:
             yield
         finally:
-            for service in reversed(background):
+            for service in reversed(services):
                 await service.stop()
             notifier.close()
 

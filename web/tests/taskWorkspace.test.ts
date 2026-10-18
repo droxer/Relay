@@ -69,3 +69,42 @@ describe("task workspace state inside a folder", () => {
     assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "" }), "offline");
   });
 });
+
+describe("task workspace state at a tab root", () => {
+  it("names an offline computer at a tab root", () => {
+    const error = { status: 503, code: "computer-offline" };
+    assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "artifacts" }), "offline");
+  });
+
+  it("keeps the tabs on screen for an empty tab root", () => {
+    const data = { exists: true, entries: [] };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts" }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads" }), "ready");
+  });
+
+  it("treats a missing tab root in an existing workspace as an empty area", () => {
+    const data = { exists: false, entries: [] };
+    const root = { isLoading: false, error: null, data: { exists: true } };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts", root }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads", root }), "ready");
+  });
+
+  it("reports a workspace that was never created, not an empty tab", () => {
+    const data = { exists: false, entries: [] };
+    const root = { isLoading: false, error: null, data: { exists: false } };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts", root }), "not-created");
+  });
+
+  it("waits for the root check before deciding", () => {
+    const data = { exists: false, entries: [] };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts" }), "loading");
+    const root = { isLoading: true, error: null, data: undefined };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts", root }), "loading");
+  });
+
+  it("falls back to the tab view when the root check fails", () => {
+    const data = { exists: false, entries: [] };
+    const root = { isLoading: false, error: { status: 500 }, data: undefined };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts", root }), "ready");
+  });
+});

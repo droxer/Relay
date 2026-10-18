@@ -21,7 +21,11 @@ from ..persistence.file_store_import import (
     local_file_stores_present,
 )
 from ..services.team_membership import reconcile_team_memberships
-from .agent_computer_id import migrate_agent_computer_ids, migrate_agent_placement_computer_ids
+from .agent_computer_id import (
+    log_agent_computer_id_status,
+    migrate_agent_computer_ids,
+    migrate_agent_placement_computer_ids,
+)
 
 
 def import_file_stores_before_serving(
@@ -68,5 +72,6 @@ def migrate_legacy_computer_ids(
         migrated = migrate_agent_computer_ids(agent_store, agent_placement_store, registry)
         if migrated:
             logger.info("Migrated compatibility agents", count=migrated)
+        log_agent_computer_id_status(agent_store, agent_placement_store)
     except Exception:  # noqa: BLE001 - legacy ids only affect display; startup must not depend on them
         logger.exception("Agent computer-id migration deferred")

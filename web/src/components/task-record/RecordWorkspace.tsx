@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { workspaceHomeStatus } from "../../lib/workspaceHome";
 import { ICON, NavRefresh } from "../icons";
 import { taskWorkspaceState } from "./taskWorkspaceState";
+import { DEFAULT_WORKSPACE_BROWSE_PATH, workspaceTabRootFor } from "../../lib/workspaceFileTabs";
 import { TASK_RECORD_QUERY_KEY } from "../../hooks/useTaskRecord";
 import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
 import { taskWorkspaceStatusPollIntervalMs } from "../../lib/relayPolling";
@@ -48,7 +49,7 @@ export function RecordWorkspace({ taskId, rootLabel }: {
   rootLabel?: string;
 }) {
   const { t } = useTranslation();
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState(DEFAULT_WORKSPACE_BROWSE_PATH);
   const [selectedPath, setSelectedPath] = useState("");
 
   const fileQuery = useQuery({
@@ -56,6 +57,16 @@ export function RecordWorkspace({ taskId, rootLabel }: {
     retry: false,
     queryFn: ({ signal }): Promise<TaskWorkspaceFilesResponse> =>
       listTaskWorkspaceFiles({ taskId, path }, signal),
+  });
+  // A missing tab root says nothing about the workspace itself; its root
+  // listing tells "no artifacts yet" from "never created".
+  const atTabRoot = workspaceTabRootFor(path) !== null;
+  const rootQuery = useQuery({
+    queryKey: ["workspace-files", `task:${taskId}`, "", 0],
+    enabled: atTabRoot && fileQuery.data?.exists === false,
+    retry: false,
+    queryFn: ({ signal }): Promise<TaskWorkspaceFilesResponse> =>
+      listTaskWorkspaceFiles({ taskId, path: "" }, signal),
   });
   const contentQuery = useQuery({
     queryKey: ["workspace-file", `task:${taskId}`, selectedPath, 0],
@@ -90,10 +101,12 @@ export function RecordWorkspace({ taskId, rootLabel }: {
     error: fileQuery.error,
     data: fileQuery.data,
     path,
+    root: { isLoading: rootQuery.isLoading, error: rootQuery.error, data: rootQuery.data },
   });
 
   function refresh(): void {
     void fileQuery.refetch();
+    if (rootQuery.data || rootQuery.error) void rootQuery.refetch();
     if (selectedPath) void contentQuery.refetch();
   }
 

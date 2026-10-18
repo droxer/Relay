@@ -30,4 +30,16 @@ from .tables import teams as _teams  # noqa: F401
 from .tables import waitlist as _waitlist  # noqa: F401
 from .sql import metadata
 
-__all__ = ["metadata"]
+def include_alembic_object(obj, name, type_, reflected, compare_to) -> bool:
+    """Leave vendor-owned queue tables out of Alembic autogeneration.
+
+    Other unknown tables still surface as drift. An explicitly declared Relay
+    table is always included, even if its name shares the vendor prefix.
+    """
+    return not (
+        type_ == "table" and name.startswith("procrastinate_")
+        and reflected and compare_to is None
+    )
+
+
+__all__ = ["metadata", "include_alembic_object"]

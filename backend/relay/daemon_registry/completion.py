@@ -13,8 +13,8 @@ from ..collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
 )
 from ..collaboration.work import (
-    WORK_PROTOCOL, WORK_RESULTS, WORK_NEEDS_ATTENTION, unaccepted_work_reason,
-    completion_blockers,
+    MISSING_REPORT_REASON, WORK_PROTOCOL, WORK_RESULTS, WORK_NEEDS_ATTENTION,
+    unaccepted_work_reason, completion_blockers,
 )
 from ..collaboration.policy import (
     BLOCKED_ROUND_PREAMBLE,
@@ -246,6 +246,9 @@ class RunCompletionMixin(RegistryState):
             else wait_record(
                 "question" if outcome.startswith(BLOCKED_ROUND_PREAMBLE) else "check",
                 question_id_for_run(run_request["id"]),
+                unreported=self._round_unreported(
+                    run_request, round_result, blockers, participant_failures
+                ),
             )
         ) if task_status == "waiting_for_human" else None
         if (
@@ -269,6 +272,30 @@ class RunCompletionMixin(RegistryState):
         self.update_status(
             run_request["nodeId"], {"status": "ready", "lastError": None}
         )
+
+    def _round_unreported(
+        self,
+        run_request: dict[str, Any],
+        round_result: Any,
+        blockers: list[str],
+        participant_failures: Any,
+    ) -> bool:
+        """Whether the only thing wrong with this round is that no report
+        reached Relay — so whatever the agent needs is in its last message.
+
+        A verdict Relay refused was still filed, and a step that failed to run
+        or a plan error left a reason worth quoting; neither is this case.
+        """
+        if isinstance(round_result, dict):
+            return False
+        state = run_request.get("state") or {}
+        if state.get(ROUND_RESULT_REJECTED_STATE_KEY) in ROUND_RESULT_REJECTIONS:
+            return False
+        if isinstance(participant_failures, list) and participant_failures:
+            return False
+        if any(blocker != MISSING_REPORT_REASON for blocker in blockers):
+            return False
+        return self._round_result_was_required(run_request)
 
     @staticmethod
     def _input_request(

@@ -75,26 +75,10 @@ import {
   agentHomePath,
   agentCredentialEnv,
   customModelEndpointAgents,
-  DAEMON_CAPABILITY_GENERATED_FILES,
-  DAEMON_CAPABILITY_AGENT_SKILLS,
-  DAEMON_CAPABILITY_HANDOFF_VALIDATION,
-  DAEMON_CAPABILITY_PRODUCED_FILES,
-  DAEMON_CAPABILITY_PROJECT_LINKS,
-  DAEMON_CAPABILITY_PROJECT_WORKSPACES,
-  DAEMON_CAPABILITY_ROUND_RESULT,
-  DAEMON_CAPABILITY_PROJECT_SETUP,
-  DAEMON_CAPABILITY_WORK_RESULTS,
-  DAEMON_CAPABILITY_AGENT_MODEL,
-  DAEMON_CAPABILITY_ENDPOINT_MODELS,
-  DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
-  DAEMON_CAPABILITY_AGENT_RESUME,
-  DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
-  DAEMON_CAPABILITY_TASK_WORKSPACES,
-  DAEMON_CAPABILITY_THREAD_WORKSPACES,
-  DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
   DAEMON_NODE_PROTOCOL_VERSION,
   relayApiUrl,
 } from "relay-core";
+import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
 import { workspaceCommandEvent } from "./workspace-read.js";
 import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
@@ -394,27 +378,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     })),
     runtimeRefreshCommands: refreshedCommands,
     ...(unreportedExecutions.size > 0 ? { journaledCommandIds: [...unreportedExecutions].slice(0, JOURNAL_REPORT_LIMIT) } : {}),
-    capabilities: [
-      "runtime-refresh",
-      DAEMON_CAPABILITY_AGENT_SKILLS,
-      DAEMON_CAPABILITY_HANDOFF_VALIDATION,
-      DAEMON_CAPABILITY_GENERATED_FILES,
-      DAEMON_CAPABILITY_PRODUCED_FILES,
-      DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
-      DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
-      DAEMON_CAPABILITY_THREAD_WORKSPACES,
-      DAEMON_CAPABILITY_PROJECT_WORKSPACES,
-      DAEMON_CAPABILITY_PROJECT_LINKS,
-      "project-workspace-delete",
-      DAEMON_CAPABILITY_TASK_WORKSPACES,
-      DAEMON_CAPABILITY_ROUND_RESULT,
-      DAEMON_CAPABILITY_PROJECT_SETUP,
-  DAEMON_CAPABILITY_WORK_RESULTS,
-      DAEMON_CAPABILITY_AGENT_MODEL,
-      DAEMON_CAPABILITY_ENDPOINT_MODELS,
-      DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
-      DAEMON_CAPABILITY_AGENT_RESUME,
-    ],
+    capabilities: [...DAEMON_ADVERTISED_CAPABILITIES],
     agentHealth,
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
     customModelEndpoints: customModelEndpointAgents(),
@@ -1280,6 +1244,13 @@ async function executeCommand(
   // preparation, cleanup, or agent execution can change the inherited files.
   const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
+  threadWorkspaces.ensureRecords(threadWorkspace);
+  state.artifacts_dir = "artifacts";
+  if (state.progress_file === `threads/${command.sessionId}/HANDOFF.md`) {
+    state.legacy_progress_file = command.workspaceLayout === "thread"
+      ? "HANDOFF.md"
+      : `HANDOFF-${command.sessionId}.md`;
+  }
   // Discard control state from an interrupted previous run before execution.
   consumeRoundResult(threadWorkspace.hostPath);
   syncProjectContext(threadWorkspace.hostPath, command.workspaceLayout, state.project_brief);
@@ -1505,7 +1476,7 @@ async function executeCommand(
     if (command.logicalAgentId) {
       ensureAgentWorkspaceDir(threadWorkspace.hostPath, command.logicalAgentId);
     }
-    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir };
+    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: command.sessionId };
     const options = {
       execStream: execution.execStream,
       eventSink,

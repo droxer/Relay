@@ -168,6 +168,11 @@ With R2 both go to the bucket (`session-artifacts/…`, `skills/objects/…`) an
 Postgres keeps only keys and SHA-256 digests, so the backend needs no volume.
 Profile images stay in Postgres: they are small and bounded.
 
+The scripted deployment in `deploy/deploy.sh` requires R2 because its API and
+background worker are separate Railway services. Both use the same bucket.
+For an existing volume-backed install, migrate the files below before the
+first split release; see [the upgrade steps](../deploy/README.md#upgrade-from-the-combined-service).
+
 1. Cloudflare → *R2* → create a bucket, e.g. `relay-artifacts`. Keep it
    private — no public access, no custom domain. The backend reads it and
    serves downloads itself, with the same authorization and headers as before.

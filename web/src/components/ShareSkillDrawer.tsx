@@ -234,7 +234,7 @@ export function ShareSkillDrawer({
               {t("skills.select_target_required")}
             </p>
           ) : null}
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             {t("skills.cancel")}
           </Button>
           <Button

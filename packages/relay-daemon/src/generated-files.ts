@@ -140,6 +140,8 @@ interface GeneratedFileCandidate {
 type GeneratedFileSnapshot = Record<string, { mtimeMs: number; bytes: number }>;
 
 interface GeneratedFileScanOptions {
+  /** Shared project/task workspaces contain records belonging to other threads. */
+  ownThreadId?: string;
   /**
    * The running agent's own personal-home subdir (slash-separated, e.g.
    * "agents/agent-<b64>"). When set, sibling agents/* homes are skipped so a
@@ -156,7 +158,8 @@ function fileExtension(name: string): string {
 /**
  * Text documents count only near a workspace root: directly in the thread
  * workspace, directly in the running agent's own home, or under an `output/`
- * directory in either. Paths are thread-relative here, so an agent that writes
+ * directory in either, under `artifacts/`, or the thread's handoff records.
+ * Paths are workspace-relative here, so an agent that writes
  * `guide.md` beside its work is reported, while `somecheckout/README.md` — a
  * repo file the run merely touched — is not. Mirrored in
  * `is_snapshotable_path` (backend/relay/daemon_registry/artifacts.py);
@@ -169,7 +172,8 @@ function isTextDocumentFile(relativePath: string, extension: string): boolean {
     parts.length >= 3 && parts[0] === "agents" && parts[1].startsWith("agent-")
       ? parts.slice(2)
       : parts;
-  return scoped.length === 1 || scoped[0] === "output";
+  return scoped.length === 1 || scoped[0] === "output" || scoped[0] === "artifacts"
+    || (scoped.length === 3 && scoped[0] === "threads" && /^HANDOFF\.(md|json)$/.test(scoped[2]));
 }
 
 function isSiblingAgentHome(relativeDir: string, ownAgentHomeSubdir: string | undefined): boolean {
@@ -245,6 +249,8 @@ function listCandidates(
         const relativeDir = relative(workspacePath, path).split(sep).join("/");
         if (GENERATED_FILE_EXCLUDED_DIRS.has(entry.name)) continue;
         if (isSiblingAgentHome(relativeDir, ownAgentHomeSubdir)) continue;
+        if (options.ownThreadId && /^threads\/[^/]+$/.test(relativeDir)
+          && relativeDir !== `threads/${options.ownThreadId}`) continue;
         pending.push(path);
         continue;
       }

@@ -227,6 +227,9 @@ def completion_blockers(
 # The preamble a gate stop puts before its reasons. The web strips it (the
 # prompt's title already says the work stopped) — keep the two in step.
 WORK_NEEDS_ATTENTION = "The work can't be accepted yet."
+# The reason a required step that filed no report blocks on. Named so a
+# closeout can recognise the case without matching the sentence.
+MISSING_REPORT_REASON = "A required step ended without reporting what it did."
 
 
 def unaccepted_work_reason(result: dict[str, Any]) -> str:
@@ -237,7 +240,7 @@ def unaccepted_work_reason(result: dict[str, Any]) -> str:
     status = result.get("status")
     note = result.get("note")
     if status in (None, "missing"):
-        return "A required step ended without reporting what it did."
+        return MISSING_REPORT_REASON
     if status == "done":
         return "A required step says it is done but showed no checks to back that up."
     if status == "blocked":

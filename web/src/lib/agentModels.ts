@@ -27,6 +27,25 @@ export function suggestedModels(
 }
 
 /**
+ * The offered models that match what was typed, case-insensitively: ids that
+ * start with it first, then ids that contain it, each in the runtime's order.
+ * A field that already holds an offered id lists them all, so reopening the
+ * picker after a pick shows the alternatives rather than the pick alone.
+ */
+export function filterModels(models: readonly string[], query: string): readonly string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle || models.includes(query.trim())) return models;
+  const prefix: string[] = [];
+  const contains: string[] = [];
+  for (const model of models) {
+    const id = model.toLowerCase();
+    if (id.startsWith(needle)) prefix.push(model);
+    else if (id.includes(needle)) contains.push(model);
+  }
+  return [...prefix, ...contains];
+}
+
+/**
  * The i18n key explaining what to enter for `kind`. Pi picks the provider
  * from a qualified id ("openai/gpt-5"); a custom endpoint needs an id it serves.
  */

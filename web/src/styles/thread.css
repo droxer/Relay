@@ -224,10 +224,12 @@
    ~160px, and the single-column fallback keyed off the viewport so it never
    fired on desktop where the squeeze actually happened. A container query
    asks the panel instead. */
+/* Rows at the drawer form's 24px field gap — in a `form` drawer this stacks
+   to one column, where 16px rows sat tighter than the fields around them. */
 .project-setup-basics-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--sp-4);
+  gap: var(--sp-6) var(--sp-4);
 }
 
 @container drawer-body (min-width: 480px) {

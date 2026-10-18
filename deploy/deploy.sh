@@ -4,8 +4,9 @@
 #   deploy/deploy.sh up          railway → cloudflare → release → verify
 #   deploy/deploy.sh railway     project, Postgres, services, variables, domains
 #   deploy/deploy.sh cloudflare  DNS, TLS, origin-lock header, cache, speed settings
-#   deploy/deploy.sh release     deploy the backend and the web UI, wait
+#   deploy/deploy.sh release     deploy the API, background worker, and web UI, wait
 #   deploy/deploy.sh verify      check the live hostnames
+#   deploy/deploy.sh agent-ids   inspect the backend's startup Computer ID migration status
 #   deploy/deploy.sh region      move Postgres and the services to RAILWAY_REGION
 #                                (offline for minutes; back up first)
 #
@@ -27,7 +28,7 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/verify.sh"
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'
 }
 
 # $DEPLOY_CONFIG, else deploy/.env, else deploy/config.env (both git-ignored).
@@ -52,6 +53,39 @@ resolve_services() {
   [ -n "$WEB_ID" ] || die "service $WEB_SERVICE not found — run 'deploy.sh railway' first"
 }
 
+# Settings shared by provisioning and upgrades. Give each process time to
+# finish store writes on shutdown; preserve any longer configured grace.
+backend_process_variables() {
+  jq -c '{
+    RELAY_STORAGE: "postgres",
+    RELAY_BACKGROUND_MODE: "external",
+    RAILWAY_DEPLOYMENT_DRAINING_SECONDS: (
+      (.RAILWAY_DEPLOYMENT_DRAINING_SECONDS | tonumber? // 35)
+      | if . < 35 then 35 else ceil end | tostring
+    )
+  }' <<<"$1"
+}
+
+# Reference the API's effective variables so custom scheduler settings, mail,
+# database credentials and R2 settings stay consistent without copying secrets.
+# Platform variables and listener settings belong to each service separately.
+worker_variables() {
+  local backend=$1 current=$2
+  jq -nc --arg service "$BACKEND_SERVICE" --argjson backend "$backend" \
+    --argjson processes "$(backend_process_variables "$current")" '
+    ($backend | to_entries
+      | map(select((.key | startswith("RAILWAY_") | not) and .key != "PORT" and .key != "HOST"))
+      | map({key: .key, value: ("${{" + $service + "." + .key + "}}")})
+      | from_entries) + $processes'
+}
+
+configure_worker_service() {
+  railway_ensure_service "$WORKER_SERVICE" worker
+  WORKER_ID=$(railway_service_id "$WORKER_SERVICE")
+  railway_upsert_variables "$WORKER_ID" "$(worker_variables "$(railway_variables "$BACKEND_ID")" "$(railway_variables "$WORKER_ID")")"
+  info "worker variables reference $BACKEND_SERVICE; shared storage is R2"
+}
+
 # The backend variables from deployment.md § 1 and deployment-cloudflare.md
 # § 2, 6 and 8. Secrets are generated once and then left alone, so a re-run
 # never rotates them; set them in deploy/.env to rotate deliberately.
@@ -65,6 +99,7 @@ backend_variables() {
     printf '\n    RELAY_ADMIN_TOKEN (shown once; it seeds the admin token on first boot):\n    %s\n\n' "$admin_token" >&2
   fi
   jq -nc \
+    --argjson processes "$(backend_process_variables "$current")" \
     --arg db "\${{${POSTGRES_SERVICE}.DATABASE_URL}}" \
     --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" --arg cookie "$COOKIE_DOMAIN" \
     --arg edge "$edge_secret" --arg admin "$admin_token" \
@@ -86,6 +121,7 @@ backend_variables() {
       RELAY_ADMIN_TOKEN: $admin,
       RELAY_WAITLIST_ENABLED: $waitlist
     }
+    + $processes
     + (if $pg != "" then {PG_CLIENT_MAJOR: $pg} else {} end)
     + (if $r2_bucket != "" then {
         RELAY_BLOB_STORE: "r2",
@@ -102,6 +138,7 @@ backend_variables() {
 }
 
 phase_railway() {
+  require_r2_storage
   log "Railway: project $RAILWAY_PROJECT_NAME / $RAILWAY_ENVIRONMENT"
   railway_resolve_context
   railway_ensure_postgres
@@ -109,6 +146,7 @@ phase_railway() {
   BACKEND_ID=$(railway_service_id "$BACKEND_SERVICE")
   railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
   info "backend variables set"
+  configure_worker_service
   if workers_enabled; then
     info "the web UI is a Cloudflare Worker (WEB_HOSTING=workers); no Railway web service"
     if [ -n "$(railway_service_id "$WEB_SERVICE")" ]; then
@@ -121,11 +159,7 @@ phase_railway() {
       '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}')"
     info "web variables set"
   fi
-  if r2_enabled; then
-    info "R2 holds skill bundles and artifact snapshots; no volume needed"
-  else
-    railway_ensure_volume "$BACKEND_ID" /data
-  fi
+  info "R2 holds skill bundles and artifact snapshots; existing volumes are left attached"
 
   railway_ensure_custom_domain "$BACKEND_ID" "$API_DOMAIN"
   workers_enabled || railway_ensure_custom_domain "$WEB_ID" "$WEB_DOMAIN"
@@ -172,15 +206,29 @@ phase_cloudflare() {
 }
 
 phase_release() {
+  require_r2_storage
   log "Release: $GITHUB_REPO@$GITHUB_BRANCH"
-  local postgres_id
+  local postgres_id service_id service_repo name
   RELEASE_COMMIT=$(railway_release_commit)
   info "release commit $RELEASE_COMMIT (GitHub source; local edits are not uploaded)"
   railway_validate_release
   resolve_services
+  for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+    if [ "$name" = "$WEB_SERVICE" ] && workers_enabled; then continue; fi
+    service_id=$(railway_service_id "$name")
+    [ -n "$service_id" ] || continue
+    service_repo=$(railway_service_repo "$service_id")
+    [ -z "$service_repo" ] || [ "$service_repo" = "$GITHUB_REPO" ] \
+      || die "$name is connected to $service_repo, expected $GITHUB_REPO"
+  done
   postgres_id=$(railway_service_id "$POSTGRES_SERVICE")
   [ -n "$postgres_id" ] || die "service $POSTGRES_SERVICE not found — run 'deploy.sh railway' first"
   railway_wait_deployment "$POSTGRES_SERVICE" "$postgres_id"
+  # Upgrade an existing combined deployment, including creating a worker when
+  # release is run without a separate provisioning phase.
+  railway_ensure_service "$BACKEND_SERVICE" backend
+  railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
+  configure_worker_service
   if workers_enabled; then
     release_backend_and_worker
   else
@@ -191,7 +239,7 @@ phase_release() {
 # The UI builds locally (in Docker) while Railway builds the backend, and is
 # published only once the backend it calls is live.
 release_backend_and_worker() {
-  local backend_deployment zone build
+  local backend_deployment worker_deployment zone build
   require_cmd docker python3
   zone=$(cf_zone_id)
   backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
@@ -202,18 +250,29 @@ release_backend_and_worker() {
   workers_build_export "$build/out"
   railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment" \
     || die "backend deployment failed for commit $RELEASE_COMMIT ($backend_deployment); the web UI was not published"
+  # Connect only after the API's migrations and queue schema have succeeded:
+  # connecting a repository can itself trigger an automatic deployment.
+  worker_deployment=$(railway_deploy_service "$WORKER_SERVICE" "$WORKER_ID")
+  railway_wait_deployment "$WORKER_SERVICE" "$WORKER_ID" "$worker_deployment" \
+    || die "worker deployment failed for commit $RELEASE_COMMIT ($worker_deployment); the web UI was not published"
   info "publishing the web UI to Worker $WORKERS_SCRIPT"
   workers_publish "$zone" "$build/out"
 }
 
 release_backend_and_web_service() {
-  local backend_deployment web_deployment failures=0
+  local backend_deployment web_deployment worker_deployment=skipped failures=0
   backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
   web_deployment=$(railway_deploy_service "$WEB_SERVICE" "$WEB_ID")
   info "building $BACKEND_SERVICE and $WEB_SERVICE (this takes a few minutes)"
-  if ! railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment"; then failures=$((failures + 1)); fi
+  if railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment"; then
+    worker_deployment=$(railway_deploy_service "$WORKER_SERVICE" "$WORKER_ID")
+    if ! railway_wait_deployment "$WORKER_SERVICE" "$WORKER_ID" "$worker_deployment"; then failures=$((failures + 1)); fi
+  else
+    failures=$((failures + 1))
+    warn "$WORKER_SERVICE was not deployed because the API migration/deployment failed"
+  fi
   if ! railway_wait_deployment "$WEB_SERVICE" "$WEB_ID" "$web_deployment"; then failures=$((failures + 1)); fi
-  [ "$failures" -eq 0 ] || die "$failures service deployment(s) failed for commit $RELEASE_COMMIT (backend: $backend_deployment; web: $web_deployment)"
+  [ "$failures" -eq 0 ] || die "$failures service deployment(s) failed for commit $RELEASE_COMMIT (backend: $backend_deployment; worker: $worker_deployment; web: $web_deployment)"
 }
 
 # Moving Postgres migrates its volume offline, so this is never part of `up`:
@@ -225,7 +284,7 @@ phase_region() {
     die "moving $POSTGRES_SERVICE takes the API offline while its volume migrates; back it up first (README: Moving region), then re-run with CONFIRM_REGION_MOVE=$RAILWAY_REGION"
   railway_resolve_context
   # The database first: a failed move stops before the backend follows it.
-  for name in "$POSTGRES_SERVICE" "$BACKEND_SERVICE" "$WEB_SERVICE"; do
+  for name in "$POSTGRES_SERVICE" "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
     id=$(railway_service_id "$name")
     if [ -z "$id" ]; then
       info "no $name service; skipped"
@@ -241,10 +300,19 @@ phase_verify() {
   verify_deployment "$BACKEND_ID"
 }
 
+phase_agent_ids() {
+  log "Agent Computer IDs: startup migration status"
+  railway_resolve_context existing
+  local backend_id
+  backend_id=$(railway_service_id "$BACKEND_SERVICE")
+  [ -n "$backend_id" ] || die "service $BACKEND_SERVICE not found — run 'deploy.sh railway' first"
+  railway_agent_computer_id_status "$backend_id"
+}
+
 main() {
   local command=${1:-}
   case $command in
-    up | railway | cloudflare | release | verify | region) ;;
+    up | railway | cloudflare | release | verify | region | agent-ids) ;;
     -h | --help | help | "")
       usage
       [ -n "$command" ] || exit 2
@@ -271,6 +339,7 @@ main() {
     release) phase_release ;;
     verify) phase_verify ;;
     region) phase_region ;;
+    agent-ids) phase_agent_ids ;;
   esac
 }
 

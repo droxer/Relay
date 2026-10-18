@@ -6,10 +6,12 @@
 /* Two-up only when the PANEL can hold it. The drawer body is the query
    container (.adm-drawer-body); a viewport media query cannot see how wide
    this particular drawer is. */
+/* Rows at the form stack's 24px field gap, so a field inside the grid sits
+   as far from the next as one outside it; columns at 16px. */
 .task-drawer-form-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--sp-4);
+  gap: var(--sp-6) var(--sp-4);
 }
 
 @container drawer-body (min-width: 480px) {

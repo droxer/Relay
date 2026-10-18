@@ -21,7 +21,7 @@ from pathlib import Path
 import shutil
 import sys
 source, target = map(Path, sys.argv[1:])
-for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json"]:
+for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py"]:
     (target / name).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / name, target / name)
 PY_SOURCE
@@ -108,6 +108,10 @@ RAILWAY_API_URL=http://127.0.0.1:$PORT/graphql/v2
 CLOUDFLARE_API_URL=http://127.0.0.1:$PORT/client/v4
 RAILWAY_API_TOKEN=test-railway-token
 CLOUDFLARE_API_TOKEN=test-cloudflare-token
+RELAY_R2_ACCOUNT_ID=acct
+RELAY_R2_ACCESS_KEY_ID=key
+RELAY_R2_SECRET_ACCESS_KEY=secret
+RELAY_R2_BUCKET=relay-artifacts
 RAILWAY_DEPLOY_COMMIT=$SOURCE_COMMIT
 DEPLOY_POLL_SECONDS=0
 DEPLOY_TIMEOUT_SECONDS=5
@@ -150,29 +154,40 @@ run_phases() {
 echo "--- first run provisions everything (web UI on Workers)"
 start_mock
 write_config
+expect_failure "agent-ids does not provision a missing project" 'not found' deploy agent-ids
+STATE=$(state)
+check "agent-ids leaves an unprovisioned account untouched" '.projects | length == 0'
 run_phases 2>"$WORK/first.log" || { cat "$WORK/first.log"; exit 1; }
 FIRST=$(state)
 STATE=$FIRST
 
 svc() { printf '(.projects[] | .services[] | select(.name == "%s"))' "$1"; }
 BACKEND=$(svc relay-backend)
+WORKER=$(svc relay-worker)
 WEB=$(svc relay-web)
 
 check "one project named relay" '.projects | length == 1 and ([.[] | .name] == ["relay"])'
-check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend"]'
+check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-worker"]'
 
-check "backend Dockerfile, migration, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .preDeployCommand == [\"alembic -c backend/alembic.ini upgrade head\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
+check "backend Dockerfile, migrations, queue schema, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve\" and .preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
 check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
+check "separate worker uses the backend image without HTTP or schema setup" "$WORKER | .config | .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay worker\" and .preDeployCommand == [] and .healthcheckPath == null and .sleepApplication == false and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
+check "worker uses the same release" "$WORKER | .repo == \"droxer/Relay\" and .deployments[0].commitSha == \"$SOURCE_COMMIT\""
+check "worker references API database and R2 secrets" "$WORKER | .variables | .DATABASE_URL == \"\${{relay-backend.DATABASE_URL}}\" and .RELAY_R2_SECRET_ACCESS_KEY == \"\${{relay-backend.RELAY_R2_SECRET_ACCESS_KEY}}\" and .RELAY_BLOB_STORE == \"\${{relay-backend.RELAY_BLOB_STORE}}\" and .RELAY_STORAGE == \"postgres\" and .RELAY_BACKGROUND_MODE == \"external\""
+check "worker has no public domain" "$WORKER | .domains == []"
+
 check "a new Postgres is redeployed into the region" "$(svc Postgres) | .deployments | length == 2 and .[0].regions == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
+check "backend uses the external worker and shared database stores" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.RELAY_STORAGE == \"postgres\""
+check "Railway allows graceful API shutdown" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"35\""
 check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
 check "waitlist on by default" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\""
-check "no R2 variables without R2 config" "$BACKEND | .variables | has(\"RELAY_BLOB_STORE\") | not"
-check "backend volume at /data" "[.volumes[] | select(.mountPath == \"/data\")] | length == 1"
+check "R2 holds shared skill objects" "$BACKEND | .variables.RELAY_BLOB_STORE == \"r2\""
+check "R2 needs no new volume" ".volumes | length == 0"
 check "api domain on the backend" "$BACKEND | [.domains[].domain] == [\"api.get-relay.cc\"]"
 check "apex is a proxied Worker-only record" '[.dns[] | select(.name == "get-relay.cc")] | length == 1 and .[0].type == "AAAA" and .[0].content == "100::" and .[0].proxied'
 check "api CNAME proxied" '[.dns[] | select(.name == "api.get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'
@@ -222,6 +237,36 @@ BEFORE=$(state | jq '.calls["cf.workers.script"]')
 expect_failure "backend failure stops the release" "the web UI was not published" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
 check "no Worker upload after a failed backend" '.before == .after'
+STATE=$(state)
+check "API failure leaves the previous worker deployment running" "$WORKER | .deployments | length == 2"
+curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" -d '{"relay-worker":"CRASHED"}' >/dev/null
+expect_failure "worker failure stops the release" "worker deployment failed" deploy release
+STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
+check "no UI publish after a failed worker" '.before == .after'
+
+
+echo "--- release upgrades an existing backend without a separate provisioning run"
+start_mock
+write_config
+deploy railway 2>/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__remove_service" -d '{"name":"relay-worker"}' >/dev/null
+LEGACY_BACKEND_ID=$(state | jq -r '.projects[].services | to_entries[] | select(.value.name == "relay-backend") | .key')
+LEGACY_CONFIG=$(state | jq -c "$BACKEND | .config | .startCommand = \"relay\" | .preDeployCommand = [\"alembic -c backend/alembic.ini upgrade head\"]")
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" --argjson config "$LEGACY_CONFIG" \
+  '{query: "mutation ServiceConfig { serviceInstanceUpdate }", variables: {serviceId: $id, input: $config}}')" >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" \
+  '{query: "mutation VariablesUpsert { variableCollectionUpsert }", variables: {input: {serviceId: $id, variables: {RELAY_BACKGROUND_MODE: "embedded", CUSTOM_RUNTIME_SETTING: "keep-me", RELAY_TASK_SCHEDULER_INTERVAL_SECONDS: "30", PORT: "9000", RAILWAY_RUN_UID: "0", RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "90"}, skipDeploys: true}}}')" >/dev/null
+deploy release 2>"$WORK/legacy-release.log" || { cat "$WORK/legacy-release.log"; exit 1; }
+STATE=$(state)
+check "release installs API-only startup and queue setup" "$BACKEND | .config.startCommand == \"relay serve\" and .config.preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"]"
+check "release enables external mode without replacing custom variables" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.CUSTOM_RUNTIME_SETTING == \"keep-me\""
+check "release preserves a longer configured drain period" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"90\""
+check "release creates a missing worker" "$WORKER | .config.startCommand == \"relay worker\" and .deployments[0].commitSha == \"$SOURCE_COMMIT\""
+check "custom scheduler configuration follows the API" "$WORKER | .variables.RELAY_TASK_SCHEDULER_INTERVAL_SECONDS == \"\${{relay-backend.RELAY_TASK_SCHEDULER_INTERVAL_SECONDS}}\""
+check "worker does not inherit API listener or platform settings" "$WORKER | .variables | (has(\"PORT\") or has(\"RAILWAY_RUN_UID\")) | not"
+
 
 echo "--- moving region"
 start_mock
@@ -245,7 +290,7 @@ RAILWAY_REGION=europe-west4-drams3a
 CONFIRM_REGION_MOVE=europe-west4-drams3a'
 deploy region 2>"$WORK/region.log" || { cat "$WORK/region.log"; exit 1; }
 STATE=$(state)
-check "every service is redeployed into the new region" "[$(svc Postgres), $BACKEND, $WEB] | all(.deployments[0].regions == {\"europe-west4-drams3a\": {\"numReplicas\": 1}})"
+check "every service is redeployed into the new region" "[$(svc Postgres), $BACKEND, $WORKER, $WEB] | all(.deployments[0].regions == {\"europe-west4-drams3a\": {\"numReplicas\": 1}})"
 check "a moved service keeps its commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 BEFORE=$(state | jq '.calls.ServiceRedeploy')
 deploy region 2>/dev/null || exit 1
@@ -282,10 +327,10 @@ start_mock
 write_config 'WEB_HOSTING=railway'
 run_phases 2>"$WORK/railway.log" || { cat "$WORK/railway.log"; exit 1; }
 STATE=$(state)
-check "three services" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-web"]'
+check "four services" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-web", "relay-worker"]'
 check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"web/Dockerfile\" and .healthcheckPath == \"/healthz\" and .preDeployCommand == []"
-check "both services track droxer/Relay@main" "[$BACKEND, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
-check "both deployments pin the requested commit" "[$BACKEND, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
+check "all services track droxer/Relay@main" "[$BACKEND, $WORKER, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
+check "all deployments pin the requested commit" "[$BACKEND, $WORKER, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
 check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
 check "web build declares its public address" "$WEB | .variables.NEXT_PUBLIC_RELAY_SITE_URL == \"https://get-relay.cc\""
 check "apex domain on the web service" "$WEB | [.domains[].domain] == [\"get-relay.cc\"]"
@@ -322,7 +367,17 @@ STATE=$(state)
 check "waitlist off when opted out" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"0\""
 
 echo "--- failures stop the run"
-write_config 'RELAY_R2_BUCKET=relay-artifacts'
+write_config 'RELAY_R2_ACCOUNT_ID=
+RELAY_R2_ACCESS_KEY_ID=
+RELAY_R2_SECRET_ACCESS_KEY=
+RELAY_R2_BUCKET='
+BEFORE=$(state | jq '.calls.ServiceConfig')
+expect_failure "missing shared R2 storage stops provisioning" "separate API and worker services require R2" deploy railway
+expect_failure "missing shared R2 storage stops release" "separate API and worker services require R2" deploy release
+STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls.ServiceConfig')" '{before: $before, after: $after}')
+check "missing R2 changes no service configuration" '.before == .after'
+
+write_config 'RELAY_R2_ACCOUNT_ID='
 expect_failure "partial R2 config is refused" "RELAY_R2_ACCOUNT_ID is required" deploy railway
 write_config 'RELAY_MAIL_FROM=invites@mail.get-relay.cc'
 expect_failure "partial mail config is refused" "RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID is required" deploy railway
@@ -355,15 +410,21 @@ expect_failure "invalid release SHA is refused" "must be a full lowercase commit
 write_config
 deploy release 2>/dev/null
 write_config 'GITHUB_REPO=someone/else'
+BEFORE_CONFIG=$(state | jq '.calls.ServiceConfig')
 expect_failure "connected repository mismatch is refused" "expected someone/else" deploy release
+STATE=$(jq -nc --argjson before "$BEFORE_CONFIG" --argjson after "$(state | jq '.calls.ServiceConfig')" '{before: $before, after: $after}')
+check "a repository mismatch never changes service configuration" '.before == .after'
 expect_failure "unknown command" "unknown command" deploy nonsense
 
 echo "--- release validates source before creating deployments"
 write_config "RAILWAY_DEPLOY_COMMIT=$BAD_SOURCE_COMMIT"
 BEFORE=$(state | jq '.calls.Deploy')
+BEFORE_CONFIG=$(state | jq '.calls.ServiceConfig')
 expect_failure "unfixed selected commit is rejected" "missing required build input: web/Dockerfile" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls.Deploy')" '{before: $before, after: $after}')
 check "invalid source creates no deployments" '.before == .after'
+STATE=$(jq -nc --argjson before "$BEFORE_CONFIG" --argjson after "$(state | jq '.calls.ServiceConfig')" '{before: $before, after: $after}')
+check "invalid source never changes the running service configuration" '.before == .after'
 write_config 'WEB_HOSTING=railway'
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" \
   -d '{"relay-backend":"FAILED","relay-web":"CRASHED"}' >/dev/null
@@ -379,6 +440,30 @@ for expected in 'relay-backend deployment' 'relay-web deployment' 'relay-backend
     FAILURES=$((FAILURES + 1))
   fi
 done
+
+echo "--- agent-ids reads the startup migration status from the backend's logs"
+# The newest backend deployment FAILED above; the line must come from the
+# newest successful one.
+seed_logs() {
+  curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__logs" -d "$1" >/dev/null
+}
+seed_logs '{"relay-backend": ["Application startup complete."]}'
+expect_failure "agent-ids without a status line says why" 'no agent-computer-ids line' deploy agent-ids
+seed_logs '{"relay-backend": ["2026-10-17 | WARNING | agent-computer-ids pending agents=2 placements=1"]}'
+expect_failure "agent-ids fails while records are pending" 'pending agents=2 placements=1' deploy agent-ids
+seed_logs '{"relay-backend": ["x | WARNING | agent-computer-ids pending agents=2 placements=1", "x | INFO | agent-computer-ids converged"]}'
+if output=$(deploy agent-ids 2>&1) && grep -q 'converged' <<<"$output"; then
+  echo "ok    agent-ids reports the newest line once converged"
+else
+  echo "FAIL  agent-ids reports the newest line once converged: $output"
+  FAILURES=$((FAILURES + 1))
+fi
+seed_logs '{"relay-backend": ["x | INFO | agent-computer-ids converged", "x | WARNING | agent-computer-ids pending agents=1 placements=0"]}'
+expect_failure "a later pending status supersedes convergence" 'pending agents=1 placements=0' deploy agent-ids
+start_mock
+write_config
+deploy railway 2>/dev/null
+expect_failure "agent-ids requires a successful deployment" 'no successful deployment' deploy agent-ids
 
 echo "--- branch resolution without a network connection"
 resolved=$(

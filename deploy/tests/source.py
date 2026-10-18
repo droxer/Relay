@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory() as temporary:
     git("init", "-q")
     git("config", "user.email", "test@example.invalid")
     git("config", "user.name", "Deployment test")
-    required = ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json"]
+    required = ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py"]
     for name in required:
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,3 +35,14 @@ with tempfile.TemporaryDirectory() as temporary:
         if expected:
             assert "web/Dockerfile" in result.stderr and "cache" in result.stderr, result.stderr
     print("ok    source validation reads the selected commit, not repaired local files")
+
+    git("add", "-A")
+    git("commit", "-qm", "repair source")
+    (repo / "backend/relay/processes.py").unlink()
+    git("add", "-A")
+    git("commit", "-qm", "missing supervisor")
+    missing_worker = git("rev-parse", "HEAD")
+    (repo / "backend/relay/processes.py").write_bytes((root / "backend/relay/processes.py").read_bytes())
+    result = subprocess.run(["python3", str(validator), "--git-dir", str(repo / ".git"), "--commit", missing_worker], capture_output=True, text=True)
+    assert result.returncode == 1 and "backend/relay/processes.py" in result.stderr, result.stdout + result.stderr
+    print("ok    a release without the worker supervisor is refused before deployment")

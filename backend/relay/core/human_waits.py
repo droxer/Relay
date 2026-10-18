@@ -41,7 +41,11 @@ def wait_record(
     question: str | None = None,
     options: list[str] | None = None,
     notes: list[str] | None = None,
+    unreported: bool = False,
 ) -> dict[str, Any]:
+    """A wait record. `unreported` marks a check whose agent ended its turn
+    without filing its report: its last message, not the gate, says what it
+    needs, so a surface points there instead of quoting the gate."""
     if kind not in WAIT_KINDS:
         raise ValueError(f"Unknown wait kind: {kind}")
     return {
@@ -50,6 +54,7 @@ def wait_record(
         **({"inputQuestion": question} if question else {}),
         **({"inputOptions": list(options)} if options else {}),
         **({"inputNotes": list(notes)} if notes else {}),
+        **({"unreported": True} if unreported and kind == "check" else {}),
     }
 
 

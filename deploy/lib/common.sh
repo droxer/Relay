@@ -32,6 +32,7 @@ load_config() {
   : "${GITHUB_REPO:=droxer/Relay}"
   : "${GITHUB_BRANCH:=main}"
   : "${BACKEND_SERVICE:=relay-backend}"
+  : "${WORKER_SERVICE:=relay-worker}"
   : "${WEB_SERVICE:=relay-web}"
   : "${WEB_HOSTING:=workers}"
   : "${WORKERS_SCRIPT:=relay-web}"
@@ -56,6 +57,8 @@ validate_config() {
   in_zone "$WEB_DOMAIN" || die "WEB_DOMAIN ($WEB_DOMAIN) is not inside CLOUDFLARE_ZONE ($CLOUDFLARE_ZONE)"
   in_zone "$API_DOMAIN" || die "API_DOMAIN ($API_DOMAIN) is not inside CLOUDFLARE_ZONE ($CLOUDFLARE_ZONE)"
   [ "$WEB_DOMAIN" != "$API_DOMAIN" ] || die "WEB_DOMAIN and API_DOMAIN must differ"
+  [ "$WORKER_SERVICE" != "$BACKEND_SERVICE" ] && [ "$WORKER_SERVICE" != "$WEB_SERVICE" ] \
+    && [ "$WORKER_SERVICE" != "$POSTGRES_SERVICE" ] || die "WORKER_SERVICE must differ from the API, web, and database service names"
   case $WEB_HOSTING in
     workers | railway) ;;
     *) die "WEB_HOSTING must be workers or railway, not $WEB_HOSTING" ;;
@@ -99,6 +102,10 @@ in_zone() {
 # R2 is on when any of its keys is configured; validate_config demands all four.
 r2_enabled() {
   [ -n "${RELAY_R2_BUCKET:-}${RELAY_R2_ACCOUNT_ID:-}${RELAY_R2_ACCESS_KEY_ID:-}${RELAY_R2_SECRET_ACCESS_KEY:-}" ]
+}
+
+require_r2_storage() {
+  r2_enabled || die "separate API and worker services require R2; set all four RELAY_R2_* keys in the deploy config (see deploy/README.md)"
 }
 
 # Waitlist email is on when any of its keys is configured; the backend refuses

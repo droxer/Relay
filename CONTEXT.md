@@ -96,6 +96,22 @@ Project. Every Agent participating in that Thread shares it; no Agent workspace
 survives or spans Threads.
 _Avoid_: Agent Workspace, shared Computer workspace
 
+**Thread Records**:
+The `threads/<threadId>/` directory inside a Thread's bound workspace.
+`HANDOFF.md` records status, progress, decisions, blockers, and next actions;
+`HANDOFF.json` is the structured handoff checkpoint. Each Thread has its own
+records even when several Threads share a Task or Project workspace.
+
+**Artifacts Directory**:
+The `artifacts/` directory inside the bound execution workspace for generated
+deliverables. A standalone Thread uses `<threadId>/artifacts/`; a backlog Task
+uses `tasks/<taskId>/artifacts/`; each Automation occurrence uses
+`tasks/<routineId>/<taskId>/artifacts/`, grouping occurrences under the same
+Automation. Every Task and Conversation in a Project shares its workspace's
+`artifacts/`, including when that workspace is a Linked Directory. Source code
+stays in its project location. Existing files keep their paths; this convention
+guides new deliverables rather than moving files that may already be referenced.
+
 **Task Workspace**:
 The writable work context shared by every round of one backlog Task
 (`tasks/<taskId>/`), or of one Automation occurrence

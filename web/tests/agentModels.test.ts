@@ -3,13 +3,28 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { agentModel, modelHintKey, modelIdProblem, modelPolicyFor, suggestedModels } from "../src/lib/agentModels.js";
+import { agentModel, filterModels, modelHintKey, modelIdProblem, modelPolicyFor, suggestedModels } from "../src/lib/agentModels.js";
 
 describe("agent model selection", () => {
   it("offers exactly the models the runtime reports, in its order", () => {
     assert.deepEqual(suggestedModels(["gpt-6-luna", "gpt-5.6-terra"]), ["gpt-6-luna", "gpt-5.6-terra"]);
     assert.deepEqual(suggestedModels(undefined), []);
     assert.deepEqual(suggestedModels([]), []);
+  });
+
+  it("filters the offered models by what was typed, prefix matches first", () => {
+    const models = ["gpt-5.6-terra", "claude-opus-5-5", "gpt-6-luna", "opus"];
+    assert.deepEqual(filterModels(models, ""), models);
+    assert.deepEqual(filterModels(models, "  "), models);
+    assert.deepEqual(filterModels(models, "GPT"), ["gpt-5.6-terra", "gpt-6-luna"]);
+    assert.deepEqual(filterModels(models, "op"), ["opus", "claude-opus-5-5"]);
+    assert.deepEqual(filterModels(models, "luna"), ["gpt-6-luna"]);
+    assert.deepEqual(filterModels(models, "mistral"), []);
+  });
+
+  it("offers every model again once the field holds an offered id, so a pick can be changed", () => {
+    const models = ["gpt-5.6-terra", "gpt-6-luna"];
+    assert.deepEqual(filterModels(models, "gpt-6-luna"), models);
   });
 
   it("suggests no vendor ids behind a custom endpoint and says what to enter instead", () => {

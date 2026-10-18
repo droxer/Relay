@@ -147,20 +147,21 @@ def test_deleted_agent_releases_compatibility_identity(
             f"sqlite:///{tmp_path}/agents.db", create_schema=True
         )
     )
+    # Only a provisional Computer identity still mints a keyed agent.
     original = store.ensure_compatibility_agent(
-        "alice", "claude", "runtime-1", computer_id="computer-1"
+        "alice", "claude", "runtime-1", computer_id="node:computer-1"
     )
 
     deleted = store.delete_agent(original["id"])
     replacement = store.ensure_compatibility_agent(
-        "alice", "claude", "runtime-2", computer_id="computer-1"
+        "alice", "claude", "runtime-2", computer_id="node:computer-1"
     )
 
     # The identity is released because uniqueness is scoped to live agents, not
     # because the deleted agent forgets which Computer it belonged to.
-    assert deleted["compatibilityKey"] == "alice:computer-1:claude"
+    assert deleted["compatibilityKey"] == "alice:node:computer-1:claude"
     assert replacement["id"] != original["id"]
-    assert replacement["compatibilityKey"] == "alice:computer-1:claude"
+    assert replacement["compatibilityKey"] == "alice:node:computer-1:claude"
 
 
 def test_database_agent_store_normalizes_legacy_owner_snapshot(tmp_path: Path) -> None:
@@ -289,3 +290,109 @@ def test_database_enforces_user_scoped_normalized_agent_names() -> None:
         "supervisor_user_id",
     )
     assert unique_indexes["uq_agents_live_compatibility_key"] == ("compatibility_key",)
+
+
+def _agent_store(tmp_path: Path):
+    return make_agent_store(tmp_path)
+
+
+def test_legacy_run_on_a_stable_computer_declares_a_plain_agent(tmp_path: Path) -> None:
+    store = _agent_store(tmp_path)
+
+    agent = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-1", computer_id="device:alice:machine-a"
+    )
+
+    # Born declared: nothing is left for the startup migration to convert.
+    assert agent.get("compatibilityKey") is None
+    assert agent["computerId"] == "device:alice:machine-a"
+    assert agent["defaultRole"] == "implementer"
+    assert store.get_agent(agent["id"]).get("compatibilityKey") is None
+
+
+def test_legacy_run_reuses_the_declared_agent_on_its_computer(tmp_path: Path) -> None:
+    store = _agent_store(tmp_path)
+    first = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-1", computer_id="device:alice:machine-a"
+    )
+
+    # A reprovisioned runtime on the same Computer is the same agent, not a
+    # duplicate — this is what used to happen once migration cleared the key.
+    again = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-2", computer_id="device:alice:machine-a"
+    )
+
+    assert again["id"] == first["id"]
+    assert [item["id"] for item in store.list_agents(supervisor_user_id="alice")] == [
+        first["id"]
+    ]
+
+
+def test_legacy_run_reuses_a_migrated_compatibility_agent(tmp_path: Path) -> None:
+    store = _agent_store(tmp_path)
+    keyed = store.ensure_compatibility_agent(
+        "alice", "codex", "runtime-1", computer_id="node:runtime-1"
+    )
+    migrated = store.set_birth_certificate(
+        keyed["id"], computer_id="device:alice:machine-a", default_role="implementer"
+    )
+
+    again = store.ensure_compatibility_agent(
+        "alice", "codex", "runtime-1", computer_id="device:alice:machine-a"
+    )
+
+    assert migrated.get("compatibilityKey") is None
+    assert again["id"] == keyed["id"]
+
+
+def test_legacy_run_reuses_an_enabled_agent_when_an_older_one_is_disabled(tmp_path: Path) -> None:
+    store = _agent_store(tmp_path)
+    disabled = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-1", computer_id="device:alice:machine-a"
+    )
+    store.update_agent(disabled["id"], {"enabled": False})
+    enabled = store.create_agent(
+        "alice",
+        {
+            "displayName": "Active agent",
+            "executorKind": "claude",
+            "defaultRole": "implementer",
+            "computerId": "device:alice:machine-a",
+        },
+    )
+
+    again = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-2", computer_id="device:alice:machine-a"
+    )
+
+    assert again["id"] == enabled["id"]
+
+
+def test_legacy_run_ignores_declared_agents_on_other_computers_or_runtimes(tmp_path: Path) -> None:
+    store = _agent_store(tmp_path)
+    elsewhere = store.create_agent(
+        "alice",
+        {
+            "displayName": "Elsewhere",
+            "executorKind": "claude",
+            "defaultRole": "implementer",
+            "computerId": "device:alice:machine-b",
+        },
+    )
+    other_runtime = store.create_agent(
+        "alice",
+        {
+            "displayName": "Reviewer",
+            "executorKind": "codex",
+            "defaultRole": "implementer",
+            "computerId": "device:alice:machine-a",
+        },
+    )
+
+    agent = store.ensure_compatibility_agent(
+        "alice", "claude", "runtime-1", computer_id="device:alice:machine-a"
+    )
+
+    assert agent["id"] not in {elsewhere["id"], other_runtime["id"]}
+    assert agent["executorKind"] == "claude"
+    assert agent["computerId"] == "device:alice:machine-a"

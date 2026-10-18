@@ -156,28 +156,6 @@ export function Drawer({
                 : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? true
             }
           >
-            {/* The left edge doubles as a splitter: the drawer sits at the
-                viewport's inline-end, so it grows inline-start. Numeric
-                widths are one-off layouts and stay fixed. Hidden by CSS at
-                the mobile breakpoint, where the drawer takes full width.
-                The ceiling mirrors the 92vw cap in .adm-drawer
-                (admin-v2-drawers.css) — a wider value than the CSS cap
-                would drag dead. */}
-            {widthRole !== null ? (
-              <ResizeHandle
-                className="adm-drawer-resize"
-                label={t("drawer.resize_label")}
-                width={resolvedWidth}
-                min={DRAWER_WIDTH_MIN}
-                max={DRAWER_WIDTH_MAX}
-                defaultWidth={DRAWER_WIDTHS[widthRole]}
-                grows="inline-start"
-                clamp={(next, limit) => Math.min(Math.max(next, DRAWER_WIDTH_MIN), Math.min(limit, DRAWER_WIDTH_MAX))}
-                ceiling={() => Math.floor(window.innerWidth * 0.92)}
-                onResize={onResize}
-                onResizeActive={() => {}}
-              />
-            ) : null}
             <header className="adm-drawer-head">
               <div className="adm-drawer-head-text">
                 {kicker ? <p className="adm-drawer-kicker">{kicker}</p> : null}
@@ -202,6 +180,32 @@ export function Drawer({
               />
             </header>
             <div className={`adm-drawer-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
+            {/* The left edge doubles as a splitter: the drawer sits at the
+                viewport's inline-end, so it grows inline-start. Numeric
+                widths are one-off layouts and stay fixed. Hidden by CSS at
+                the mobile breakpoint, where the drawer takes full width.
+                The ceiling mirrors the 92vw cap in .adm-drawer
+                (admin-v2-drawers.css) — a wider value than the CSS cap
+                would drag dead.
+                Last in DOM order on purpose: it is absolutely positioned, so
+                order is invisible, but it decides tab order. Placed first, it
+                was the panel's first tabbable — every drawer without a marked
+                field opened with focus (and a focus ring) on the splitter. */}
+            {widthRole !== null ? (
+              <ResizeHandle
+                className="adm-drawer-resize"
+                label={t("drawer.resize_label")}
+                width={resolvedWidth}
+                min={DRAWER_WIDTH_MIN}
+                max={DRAWER_WIDTH_MAX}
+                defaultWidth={DRAWER_WIDTHS[widthRole]}
+                grows="inline-start"
+                clamp={(next, limit) => Math.min(Math.max(next, DRAWER_WIDTH_MIN), Math.min(limit, DRAWER_WIDTH_MAX))}
+                ceiling={() => Math.floor(window.innerWidth * 0.92)}
+                onResize={onResize}
+                onResizeActive={() => {}}
+              />
+            ) : null}
           </DialogContent>
         </DialogViewport>
       </DialogPortal>

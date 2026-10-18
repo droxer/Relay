@@ -696,7 +696,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               </p>
             ) : null}
             <footer>
-              <Button variant="outline" disabled={busy} onClick={resetCreate}>
+              <Button variant="ghost" disabled={busy} onClick={resetCreate}>
                 {t("skills.cancel")}
               </Button>
               <Button

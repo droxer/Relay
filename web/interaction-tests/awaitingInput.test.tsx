@@ -159,3 +159,13 @@ it("shows what else held the work up under the question", () => {
   });
   expect(screen.getByRole("group", { name: "awaiting.notes_title" }).textContent).toContain("A required step failed to run.");
 });
+
+it("points an unreported stop at the agent's last message instead of quoting the gate", () => {
+  setup(vi.fn(async () => true), [], {
+    kind: "check", text: "A required step ended without reporting what it did.", options: [], notes: [], unreported: true,
+  });
+  expect(screen.getByRole("heading", { name: "awaiting.unreported_title" })).toBeTruthy();
+  expect(screen.getByText("awaiting.unreported_text")).toBeTruthy();
+  expect(screen.queryByText("A required step ended without reporting what it did.")).toBeNull();
+  expect(screen.getByRole("button", { name: "awaiting.choice_continue" })).toBeTruthy();
+});

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 
@@ -8,6 +9,11 @@ import uvicorn
 from loguru import logger
 
 from .app import create_app
+from .background import apply_worker_schema, run_worker
+from .processes import serve_with_worker
+from .migrations_runtime.agent_computer_id import pending_agent_computer_id_migrations
+from .persistence.agent_placement_store import DatabaseAgentPlacementStore
+from .persistence.agent_store import DatabaseAgentStore
 from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
@@ -54,6 +60,14 @@ def rehearse_user_handles(database_url: str) -> dict:
     return {"plan": plan, **summarize(plan)}
 
 
+def check_agent_computer_ids(database_url: str) -> dict:
+    """Which agents and placements the startup migration would still rewrite."""
+    return pending_agent_computer_id_migrations(
+        DatabaseAgentStore(database_url),
+        DatabaseAgentPlacementStore(database_url),
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="relay", description="Relay Python backend")
     parser.add_argument(
@@ -63,6 +77,9 @@ def main(argv: list[str] | None = None) -> None:
         choices=[
             "relay",
             "serve",
+            "serve-with-worker",
+            "worker",
+            "worker-schema",
             "migrate-local-sessions",
             "migrate-local-operational-state",
             "migrate-local-file-stores",
@@ -70,6 +87,7 @@ def main(argv: list[str] | None = None) -> None:
             "backup-database",
             "rehearse-user-handles",
             "storage-report",
+            "check-agent-computer-ids",
         ],
     )
     parser.add_argument("--host", default=deploy_config.bind_host())
@@ -78,6 +96,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     setup_logging()
+    if args.command == "serve-with-worker":
+        raise SystemExit(asyncio.run(serve_with_worker(
+            host=args.host, port=args.port, data_dir=args.data_dir,
+        )))
+    if args.command in ("worker", "worker-schema"):
+        if args.command == "worker-schema":
+            asyncio.run(apply_worker_schema())
+        else:
+            asyncio.run(run_worker(args.data_dir))
+        return
     if args.command == "migrate-local-operational-state":
         if not args.data_dir:
             parser.error("migrate-local-operational-state requires --data-dir")
@@ -138,6 +166,15 @@ def main(argv: list[str] | None = None) -> None:
         # suffixed — the questions a backfill can only answer against real data.
         report = rehearse_user_handles(
             database_url_from_env(setting="rehearse-user-handles")
+        )
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "check-agent-computer-ids":
+        # Reads only. Run it against production (or a fresh copy): an empty
+        # report means the startup migration in migrations_runtime/ has
+        # nothing left to convert there and can be removed.
+        report = check_agent_computer_ids(
+            database_url_from_env(setting="check-agent-computer-ids")
         )
         print(json.dumps(report, indent=2))
         return

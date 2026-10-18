@@ -2271,7 +2271,8 @@ def test_legacy_run_reuses_compatibility_agent_after_device_reregistration(
 
         agents = client.get("/api/v1/agents").json()["agents"]
         assert len(agents) == 1
-        assert agents[0]["compatibilityKey"] == "alice:device:alice:machine-a:codex"
+        assert agents[0].get("compatibilityKey") is None
+        assert agents[0]["computerId"] == "device:alice:machine-a"
 
 
 def test_agent_stays_on_roster_when_its_computer_is_gone(

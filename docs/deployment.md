@@ -17,7 +17,7 @@ the hosting:
 | Component | Host | Why |
 | --- | --- | --- |
 | `web/` (Next.js UI) | **Vercel**, a **Cloudflare Worker**, or its own **Railway** service (`web/Dockerfile`) | Static/edge-friendly client app; no server state. For Cloudflare or Railway, see [deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui). |
-| `backend/` (FastAPI) | **Railway** | Long-lived process: SSE streams, daemon command queue, background task scheduler. |
+| `backend/` (FastAPI + Procrastinate) | **Railway** | Supervised API and background-worker processes sharing the database and local skill files. |
 | Postgres | **Railway** | Sessions, tasks, events, auth, daemon registry. |
 | `relay-daemon` | **Neither** | Runs where the sandbox lives — see below. |
 | `relay-supervisor` | **Depends on its provider** | Control plane with `--provider command`, execution plane with `--provider local`. See [The supervisor](#the-supervisor). |
@@ -135,9 +135,9 @@ This is the better steady state once you have a domain. Requires DNS.
    script sets them through the API):
    - builder `RAILPACK`, with Dockerfile path `backend/Dockerfile` (Railway
      builds the Dockerfile when present; no agent CLIs or BoxLite);
-   - start command `relay`;
-   - pre-deploy command `alembic -c backend/alembic.ini upgrade head`, so
-     migrations land before the new container takes traffic;
+   - start command `relay serve-with-worker`;
+   - pre-deploy commands `alembic -c backend/alembic.ini upgrade head`, then
+     `relay worker-schema`, so domain and queue schemas are ready before startup;
    - health check `/healthz`, timeout 120 seconds;
    - one replica, sleeping disabled, restart on failure (10 retries).
 
@@ -373,15 +373,28 @@ calls the backend origin directly with `credentials: "include"`.
 
 ## Operational notes
 
-### Run one replica
+### Background processing
 
-The backend runs a background `TaskScheduler` that promotes due automations and
-dispatches assigned tasks. It is not leader-elected: a second replica would
-promote and dispatch the same work twice. Keep `numReplicas: 1` (as
-`deploy/services/backend.json` sets), and scale up only after giving the
-scheduler a lock — or
-by running extra replicas with `RELAY_TASK_SCHEDULER_ENABLED=0` and keeping
-exactly one scheduler instance.
+The Railway deployment scripts run the API (`relay serve`) and Procrastinate
+worker (`relay worker`) as separate services, sharing PostgreSQL and R2.
+Both use `RELAY_BACKGROUND_MODE=external` so the API starts no embedded periodic
+loops. The worker deploys after API migrations and health checks succeed.
+For other container hosts, the image's default `relay serve-with-worker`
+supervises both processes together and supports local `/data` skill files.
+The worker invokes the existing task
+scheduler for automations and project tasks, plus notification and execution
+recovery checks. See [Background jobs](background-jobs.md).
+
+Keep one replica initially, as the backend and worker service profiles configure.
+Procrastinate coordinates normal checks through database locks, and domain
+claims remain necessary for recovery after heartbeat loss. Do not disable
+`RELAY_TASK_SCHEDULER_ENABLED` merely to select external mode: that setting
+also stops automation event production.
+
+The supervisor stops both processes on termination and restarts the service
+through the platform if either child exits unexpectedly. Set
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS=35` or higher to allow its 30-second
+shutdown period; the deployment script sets this minimum automatically.
 
 ### SSE through a proxy
 
@@ -435,6 +448,8 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `PORT` / `BACKEND_PORT` | `8790` | Listen port; Railway injects `PORT`. `BACKEND_PORT` wins if both are set. |
 | `HOST` / `BACKEND_HOST` | `127.0.0.1` | Listen interface; the image sets `0.0.0.0`. |
 | `DATABASE_URL` / `RELAY_DATABASE_URL` | — | Postgres URL. Bare `postgres://` and `postgresql://` are normalized to psycopg 3. |
+| `RELAY_BACKGROUND_MODE` | `external` in the image | API periodic work is handled by the separate Procrastinate worker; local installs default to `embedded`. |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | at least `35` from deploy scripts | Grace period for each API/worker service to finish store writes. |
 | `RELAY_PUBLIC_BACKEND_URL` | request base URL | Public HTTPS API origin for enrollment/reconnect commands and daemon environment. No path, credentials, query, or fragment. HTTP allowed only for loopback development. |
 | `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/settings/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | unset | Exact browser origins allowed to send credentials. |

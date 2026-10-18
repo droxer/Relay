@@ -24,6 +24,7 @@ ZONE = "get-relay.cc"
 
 STATE = {
     "calls": {},
+    "observed_successful_deployments": [],
     "workspaces": [{"id": "ws-1", "name": "Personal"}],
     "projects": {},
     "volumes": [],
@@ -159,6 +160,8 @@ def railway(op, v):
     if op == "ServiceCreate":
         return {"serviceCreate": {"id": add_service(v["input"]["name"])}}
     if op == "ServiceConfig":
+        commands = v["input"].get("preDeployCommand")
+        assert commands is None or (isinstance(commands, list) and len(commands) <= 1), "Error in preDeployCommand - Invalid input"
         assert not v["input"].get("railwayConfigFile"), "Config as Code is deprecated"
         assert v["input"].get("builder") in {"HEROKU", "NIXPACKS", "PAKETO", "RAILPACK"}, "Problem processing request: invalid GraphQL Builder enum"
         svc = service(v["serviceId"])
@@ -211,6 +214,11 @@ def railway(op, v):
         svc = service(v["s"])
         assert svc["repo"], "deploy before the repo was connected"
         assert re.fullmatch(r"[0-9a-f]{40}", v.get("commitSha", "")), "release must pin a commit"
+        if svc["config"].get("startCommand") == "relay worker":
+            backend = next(s for s in project()["services"].values() if s["config"].get("startCommand") == "relay serve")
+            dep = backend["deployments"][0]
+            assert dep["id"] in STATE["observed_successful_deployments"], "worker deployed before API readiness was checked"
+            assert dep["commitSha"] == v["commitSha"], "worker must use the API release commit"
         dep = add_deployment(svc, commitSha=v["commitSha"])
         return {"serviceInstanceDeployV2": dep["id"]}
     if op == "FailureLogs":
@@ -218,8 +226,25 @@ def railway(op, v):
             if any(dep["id"] == v["id"] for dep in svc["deployments"]):
                 return {"buildLogs": [{"message": svc["name"] + " build failure detail"}], "deploymentLogs": []}
         raise ValueError("unknown deployment")
+    if op == "DeploymentLogs":
+        # Per service, as the backend would have printed them while running.
+        for svc in project()["services"].values():
+            if any(dep["id"] == v["id"] for dep in svc["deployments"]):
+                successful = next(dep for dep in svc["deployments"] if dep["status"] == "SUCCESS")
+                assert successful["id"] == v["id"], \
+                    "logs read from a deployment that is not the newest successful one"
+                messages = STATE.get("deployment_logs", {}).get(svc["name"], [])
+                # Return newest first so the client must use timestamps.
+                return {"deploymentLogs": [
+                    {"timestamp": f"2026-10-17T00:00:{i:02d}Z", "message": m}
+                    for i, m in reversed(list(enumerate(messages)))
+                    if v.get("filter", "") in m
+                ]}
+        raise ValueError("unknown deployment")
     if op == "Deployments":
-        return {"deployments": edges(service(v["input"]["serviceId"])["deployments"])}
+        deployments = service(v["input"]["serviceId"])["deployments"]
+        STATE["observed_successful_deployments"].extend(d["id"] for d in deployments if d["status"] == "SUCCESS")
+        return {"deployments": edges(deployments)}
     raise ValueError(f"unhandled Railway operation {op}")
 
 
@@ -350,8 +375,18 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/__scenario" and method == "POST":
             STATE["deployment_status"] = self.body()
             return self.send(200, {})
+        if url.path == "/__logs" and method == "POST":
+            STATE["deployment_logs"] = self.body()
+            return self.send(200, {})
         if url.path == "/__seed_route" and method == "POST":
             STATE["routes"].append({"id": new_id("route"), **self.body()})
+            return self.send(200, {})
+        if url.path == "/__remove_service" and method == "POST":
+            name = self.body()["name"]
+            services = project()["services"]
+            for sid in list(services):
+                if services[sid]["name"] == name:
+                    del services[sid]
             return self.send(200, {})
         if url.path == "/__state":
             return self.send(200, STATE)

@@ -15,6 +15,7 @@ from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 REPO = Path(__file__).parents[3]
 PROTOCOL = (REPO / "packages/relay-core/src/daemon-node-protocol.ts").read_text()
 DAEMON = (REPO / "packages/relay-daemon/src/index.ts").read_text()
+ADVERTISED = (REPO / "packages/relay-daemon/src/capabilities.ts").read_text()
 
 
 def _protocol_capabilities() -> set[str]:
@@ -27,8 +28,10 @@ def _advertised_capabilities() -> set[str]:
     constants = dict(re.findall(
         r'export const (DAEMON_CAPABILITY_[A-Z_]+): DaemonNodeCapability = "([a-z-]+)";', PROTOCOL,
     ))
-    match = re.search(r"capabilities: \[([^\]]+)\]", DAEMON)
-    assert match, "daemon registration capabilities not found"
+    # The bundle manifest is built from the same list, so registration must send it whole.
+    assert "capabilities: [...DAEMON_ADVERTISED_CAPABILITIES]" in DAEMON
+    match = re.search(r"DAEMON_ADVERTISED_CAPABILITIES[^=]*= \[([^\]]+)\]", ADVERTISED)
+    assert match, "daemon advertised capabilities not found"
     advertised = set()
     for entry in (item.strip() for item in match.group(1).split(",")):
         if not entry:

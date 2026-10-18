@@ -93,10 +93,18 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(
       [
         "[Workspace]",
-        "The current directory is the workspace for this thread; files here are shared with the other agents participating in this thread.",
+        "The current directory is the execution workspace. Task rounds and project threads may share it.",
         `Your private directory is \`${state.agent_home_subdir}/\`; keep personal state there and collaborate through the shared workspace.`,
       ].join("\n"),
     );
+  }
+  if (state.artifacts_dir) {
+    preludes.push([
+      "[Artifacts]",
+      `Write generated deliverables to \`${state.artifacts_dir}/\` (including nested folders). Reuse existing artifacts when continuing work.`,
+      "Standalone threads keep their own artifacts; automation occurrences keep separate artifacts under the same automation; project tasks share the project's artifacts.",
+      "Keep source code in its existing project location. Keep status, progress, decisions, and handoff notes in the thread record directory named by the progress file.",
+    ].join("\n"));
   }
   if (state.work_result_required) {
     preludes.push([
@@ -152,8 +160,11 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(
       [
         "[Handoff notes]",
-        `\`${state.progress_file}\` in the workspace is this task's durable record across turns and agents.`,
+        `\`${state.progress_file}\` in the workspace is this thread's durable status and progress record across turns and agents. Create its parent directory if needed.`,
         "Read it before you start; the conversation below may be truncated, but this file is not.",
+        ...(state.legacy_progress_file ? [
+          `If \`${state.progress_file}\` does not exist, read the previous record \`${state.legacy_progress_file}\` and its PROGRESS-named predecessor if present; carry relevant progress into the new record.`,
+        ] : []),
         ...(legacyNotes
           ? [`If an older \`${legacyNotes}\` is in the workspace, it is the same record under its former name: read it and carry what still applies into \`${state.progress_file}\`.`]
           : []),

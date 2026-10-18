@@ -63,7 +63,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
   const runtimeTriggerRef = useRef<HTMLButtonElement>(null);
   const roleTriggerRef = useRef<HTMLButtonElement>(null);
-  const modelTriggerRef = useRef<HTMLButtonElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
 
   const computers = useComputerOptions(userId, open);
   const { nodeLikes, options: computerOptions } = computers;
@@ -169,7 +169,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
       // screen-reader users land on the problem, not back at the top.
       if (!computerId) computerTriggerRef.current?.focus();
       else if (!executorKind) runtimeTriggerRef.current?.focus();
-      else if (modelProblem) modelTriggerRef.current?.focus();
+      else if (modelProblem) modelInputRef.current?.focus();
       else roleTriggerRef.current?.focus();
       return;
     }
@@ -281,7 +281,11 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
                 );
               })}
             </RadioGroup>
-            {computerId && runtimeOptions.length === 0 ? (
+            {/* Without a computer the group has no options, so the label
+                would stand over nothing; say what unlocks it. */}
+            {!computerId ? (
+              <p className="adm-form-hint">{t("agents_page.create_runtime_pending")}</p>
+            ) : runtimeOptions.length === 0 ? (
               <p className="adm-form-hint">{t("agents_page.create_runtime_empty")}</p>
             ) : null}
           </Field>
@@ -305,7 +309,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
                   clearFieldError("model");
                 }}
                 labelId={modelLabelId}
-                triggerRef={modelTriggerRef}
+                inputRef={modelInputRef}
                 disabled={isBusy || !canSelectModel}
                 error={Boolean(fieldErrors.model)}
                 errorId="create-agent-model-error"

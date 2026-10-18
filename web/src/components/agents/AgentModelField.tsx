@@ -1,31 +1,26 @@
 "use client";
 
-import { useId, useState, type Ref } from "react";
+import { useRef, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { MODEL_ID_MAX_LENGTH, suggestedModels } from "../../lib/agentModels.ts";
+import { Autocomplete } from "@base-ui/react/autocomplete";
+import { cn } from "@/lib/utils";
+import { ChevronDownIcon, XIcon } from "../icons";
+import { MODEL_ID_MAX_LENGTH, filterModels, suggestedModels } from "../../lib/agentModels.ts";
 
-/** Select values that are not model ids; real ids cannot start with "_". */
-const DEFAULT_CHOICE = "__default__";
-const CUSTOM_CHOICE = "__custom__";
 
 interface AgentModelFieldProps {
   /** The pinned model id, or "" for the runtime default. */
   value: string;
+  /** Every edit, typed or picked. */
   onChange: (model: string) => void;
+  /** A finished choice: a listed model picked, or the field cleared to the default. */
+  onPick?: (model: string) => void;
   labelId: string;
   disabled?: boolean;
   errorId?: string;
   error?: boolean;
-  triggerRef?: Ref<HTMLButtonElement>;
-  /** Commits a typed custom id (Enter in the custom input). */
+  inputRef?: Ref<HTMLInputElement>;
+  /** Commits a typed id (Enter while no listed model is highlighted). */
   onSubmitCustom?: () => void;
   /** The models the runtime itself reports on the agent's computer. */
   models?: readonly string[];
@@ -34,94 +29,109 @@ interface AgentModelFieldProps {
 }
 
 /**
- * Model picker scoped to one runtime: its default, the models the runtime
- * reports, or any other id the computer's provider serves. The choice is
- * derived from `value`, so only "Custom with nothing typed yet" needs state.
+ * Model picker scoped to one runtime: type to search the models the runtime
+ * reports, or keep typing to enter any other id the computer's provider
+ * serves. Empty is the runtime default. The listed models are a shortcut, not
+ * an allowlist, so the field is free text rather than a closed select.
  */
 export function AgentModelField({
   value,
   onChange,
+  onPick,
   labelId,
   disabled = false,
   errorId,
   error = false,
-  triggerRef,
+  inputRef,
   onSubmitCustom,
   models,
   customEndpoint = false,
 }: AgentModelFieldProps) {
   const { t } = useTranslation();
-  const customInputId = useId();
   const suggestions = suggestedModels(models, { customEndpoint });
-  const [customPicked, setCustomPicked] = useState(false);
-  const isCustom = customPicked || (value !== "" && !suggestions.includes(value));
-  const choice = isCustom ? CUSTOM_CHOICE : value || DEFAULT_CHOICE;
-
-  function choiceLabel(next: string | null): string {
-    if (next === CUSTOM_CHOICE) return t("agents_page.model_custom");
-    if (!next || next === DEFAULT_CHOICE) return t("agents_page.model_default");
-    return next;
-  }
+  const visible = filterModels(suggestions, value);
+  const hasSuggestions = suggestions.length > 0;
+  // Enter on a highlighted option picks it; only a bare Enter commits the text.
+  const highlighted = useRef(false);
 
   return (
-    <div className="agent-model-field">
-      <Select
-        value={choice}
-        onValueChange={(next) => {
-          if (next === CUSTOM_CHOICE) {
-            setCustomPicked(true);
-            // Keep an already-typed custom id; a suggestion is not a custom id.
-            if (suggestions.includes(value)) onChange("");
-            return;
-          }
-          setCustomPicked(false);
-          onChange(!next || next === DEFAULT_CHOICE ? "" : next);
-        }}
-        disabled={disabled}
-      >
-        <SelectTrigger
-          ref={triggerRef}
-          className="w-full"
+    <Autocomplete.Root
+      items={visible}
+      filter={null}
+      value={value}
+      onValueChange={(next, details) => {
+        onChange(next);
+        // Clearing returns to the default, a finished choice; typing is a draft.
+        if (details.reason === "clear-press") onPick?.(next);
+      }}
+      onItemHighlighted={(item) => { highlighted.current = item !== undefined; }}
+      openOnInputClick
+      disabled={disabled}
+    >
+      <Autocomplete.InputGroup className="agent-model-field">
+        <Autocomplete.Input
+          ref={inputRef}
+          name="agent-model"
           aria-labelledby={labelId}
           aria-invalid={error || undefined}
-          aria-describedby={error && !isCustom ? errorId : undefined}
-        >
-          <SelectValue>{(next: string | null) => choiceLabel(next)}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={DEFAULT_CHOICE}>{t("agents_page.model_default")}</SelectItem>
-          {suggestions.map((model) => (
-            <SelectItem key={model} value={model}>
-              <span translate="no">{model}</span>
-            </SelectItem>
-          ))}
-          <SelectItem value={CUSTOM_CHOICE}>{t("agents_page.model_custom")}</SelectItem>
-        </SelectContent>
-      </Select>
-      {isCustom ? (
-        <Input
-          id={customInputId}
-          name="agent-model-custom"
-          aria-label={t("agents_page.model_custom_label")}
+          aria-describedby={error ? errorId : undefined}
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
           translate="no"
           maxLength={MODEL_ID_MAX_LENGTH}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          placeholder={hasSuggestions ? t("agents_page.model_search_placeholder") : t("agents_page.model_custom_placeholder")}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && onSubmitCustom) {
-              event.preventDefault();
-              onSubmitCustom();
-            }
+            if (event.key !== "Enter" || highlighted.current || !onSubmitCustom) return;
+            event.preventDefault();
+            onSubmitCustom();
           }}
-          placeholder={t("agents_page.model_custom_placeholder")}
-          aria-invalid={error || undefined}
-          aria-describedby={error ? errorId : undefined}
-          disabled={disabled}
+          className={cn(
+            "h-(--control-h) w-full min-w-0 rounded-md border border-input bg-background py-2 pl-3 pr-16 text-xs text-foreground transition-[color,box-shadow,border-color] outline-none hover:border-(--control-border-hover) placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
+            "focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)]",
+            "aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)]",
+          )}
         />
+        <span className="agent-model-field-actions">
+          {value ? (
+            <Autocomplete.Clear className="agent-model-field-button" aria-label={t("agents_page.model_reset")}>
+              <XIcon className="size-4" aria-hidden="true" />
+            </Autocomplete.Clear>
+          ) : null}
+          {hasSuggestions ? (
+            <Autocomplete.Trigger className="agent-model-field-button" aria-label={t("agents_page.model_browse")}>
+              <ChevronDownIcon className="size-4" aria-hidden="true" />
+            </Autocomplete.Trigger>
+          ) : null}
+        </span>
+      </Autocomplete.InputGroup>
+      {hasSuggestions ? (
+        <Autocomplete.Portal>
+          <Autocomplete.Positioner sideOffset={4} className="isolate z-(--z-float)">
+            <Autocomplete.Popup className="max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-y-auto rounded-md bg-popover p-1 text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[open]:opacity-100 data-[closed]:opacity-0 data-[closed]:scale-95">
+              <Autocomplete.Empty className="px-2 py-1.5 text-dense text-muted-foreground empty:hidden">
+                {value.trim() ? t("agents_page.model_no_match", { model: value.trim() }) : null}
+              </Autocomplete.Empty>
+              <Autocomplete.List>
+                {(model: string) => (
+                  <Autocomplete.Item
+                    key={model}
+                    value={model}
+                    // Fires for a click and for Enter on the highlighted item.
+                    onClick={() => {
+                      onChange(model);
+                      onPick?.(model);
+                    }}
+                    className="flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-dense outline-hidden select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+                  >
+                    <span translate="no" className="min-w-0 [overflow-wrap:anywhere]">{model}</span>
+                  </Autocomplete.Item>
+                )}
+              </Autocomplete.List>
+            </Autocomplete.Popup>
+          </Autocomplete.Positioner>
+        </Autocomplete.Portal>
       ) : null}
-    </div>
+    </Autocomplete.Root>
   );
 }

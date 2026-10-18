@@ -53,6 +53,16 @@ class EnvReader:
     def text(self, name: str, default: str = "") -> str:
         return self._raw(name) or default
 
+    def choice(self, name: str, default: str, choices: tuple[str, ...]) -> str:
+        raw = self._raw(name)
+        if raw is None:
+            return default
+        lowered = raw.lower()
+        if lowered in choices:
+            return lowered
+        self.problems.append(f"{name} must be one of {', '.join(choices)}, got {raw!r}.")
+        return default
+
     def flag(self, name: str, default: bool) -> bool:
         raw = self._raw(name)
         if raw is None:
@@ -142,6 +152,9 @@ class AppSettings:
     automation_outbox_batch: int
     # Idempotent record repairs at boot (migrations_runtime/startup.py).
     startup_repairs_enabled: bool
+    # "embedded" runs the scheduler, recovery, and notification loops in the
+    # API process; "external" leaves them to `relay worker` (background.py).
+    background_mode: str
     automation_webhook_limit: RateLimit
     automation_webhook_failure_limit: RateLimit
     waitlist_limit: RateLimit
@@ -170,6 +183,7 @@ class AppSettings:
             task_scheduler_timezone=env.timezone("RELAY_TASK_SCHEDULER_TIMEZONE"),
             automation_outbox_batch=env.integer("RELAY_AUTOMATION_OUTBOX_BATCH", 200, minimum=1),
             startup_repairs_enabled=env.flag("RELAY_STARTUP_REPAIRS", True),
+            background_mode=env.choice("RELAY_BACKGROUND_MODE", "embedded", ("embedded", "external")),
             automation_webhook_limit=RateLimit(
                 env.integer("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", 60, minimum=1), 60
             ),

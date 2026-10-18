@@ -90,10 +90,11 @@ def is_snapshotable_path(relative_path: str) -> bool:
 
     Binary/document types count anywhere. Text documents count only near a
     workspace root: directly in the thread workspace, directly in an agent's
-    own home, or under an ``output/`` directory in either — so a guide an agent
+    own home, under an ``output/`` or ``artifacts/`` directory in either,
+    or in a thread's handoff records — so a guide an agent
     writes beside its work is stored while a checkout's ``README.md`` is not.
-    This set has deliberately not widened along with candidacy: it is the
-    surface the secret scanner was audited against. Mirrored in
+    Source files elsewhere remain metadata-only; stored text still passes the
+    secret scanner. Mirrored in
     ``isSnapshotableFile`` (packages/relay-daemon/src/generated-files.ts);
     change both together.
     """
@@ -106,7 +107,10 @@ def is_snapshotable_path(relative_path: str) -> bool:
     parts = path.parts
     if len(parts) >= 3 and parts[0] == "agents" and parts[1].startswith("agent-"):
         parts = parts[2:]
-    return len(parts) == 1 or parts[0] == "output"
+    return (
+        len(parts) == 1 or parts[0] in ("output", "artifacts")
+        or (len(parts) == 3 and parts[0] == "threads" and parts[2] in ("HANDOFF.md", "HANDOFF.json"))
+    )
 
 
 def _clean_workspace_relative_path(value: Any) -> str | None:
