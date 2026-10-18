@@ -10,7 +10,6 @@ checks. Daemon Nodes continue to execute every Agent Runtime.
 Set these in `backend/.env` for both processes:
 
 ```dotenv
-RELAY_STORAGE=postgres
 RELAY_BACKGROUND_MODE=external
 RELAY_DATABASE_URL=postgresql+psycopg://relay:relay@localhost:5432/relay
 ```

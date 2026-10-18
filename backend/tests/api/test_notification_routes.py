@@ -8,9 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 
+from user_ids import user_id
+
 API = "/api/v1"
 ADMIN_PASSWORD = "kestrel-vault-7719"
 USER_PASSWORD = "harbor-lantern-5521"
+ADA = user_id("ada")
 
 
 @pytest.fixture
@@ -45,7 +48,7 @@ def _finish_task(client: TestClient, owner: str) -> str:
 
 
 def test_a_finished_task_reaches_its_owners_inbox_only(admin: TestClient, ada: TestClient) -> None:
-    task_id = _finish_task(ada, "ada")
+    task_id = _finish_task(ada, ADA)
 
     inbox = ada.get(f"{API}/notifications").json()
     [notice] = inbox["notifications"]
@@ -58,8 +61,8 @@ def test_a_finished_task_reaches_its_owners_inbox_only(admin: TestClient, ada: T
 
 
 def test_marking_read_by_id_and_all(admin: TestClient, ada: TestClient) -> None:
-    _finish_task(ada, "ada")
-    _finish_task(ada, "ada")
+    _finish_task(ada, ADA)
+    _finish_task(ada, ADA)
     first, _ = (item["id"] for item in ada.get(f"{API}/notifications").json()["notifications"])
 
     # Someone else's id is ignored, never reported.
@@ -74,7 +77,7 @@ def test_mark_read_rejects_malformed_bodies(ada: TestClient, body: dict) -> None
 
 
 def test_muted_kinds_hide_notices_until_unmuted(ada: TestClient) -> None:
-    _finish_task(ada, "ada")
+    _finish_task(ada, ADA)
 
     muted = ada.put(f"{API}/notifications/preferences", json={"mutedKinds": ["task_completed"]})
     assert muted.status_code == 200

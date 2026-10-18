@@ -26,7 +26,7 @@ from ..notifications.mailer import DeliveryStatus, Mailer, NullMailer
 from ..notifications.templates import password_changed_email, password_reset_email
 from ..security.password_resets import (
     LiveReset,
-    PasswordResetStore,
+    DatabasePasswordResetStore,
     ResetAccount,
     ResetNotLiveError,
     ResetThrottle,
@@ -123,7 +123,7 @@ def reset_url(web_origin: str, token: str) -> str:
 class PasswordResetService:
     def __init__(
         self,
-        store: PasswordResetStore,
+        store: DatabasePasswordResetStore,
         mailer: Mailer,
         *,
         config: PasswordResetConfig | None = None,

@@ -20,6 +20,11 @@ from ..persistence.file_store_import import (
     import_local_file_stores_before_serving,
     local_file_stores_present,
 )
+from ..security.auth_file_import import (
+    accounts_imported,
+    legacy_accounts_present,
+    migrate_legacy_accounts,
+)
 from ..services.team_membership import reconcile_team_memberships
 from .agent_computer_id import (
     log_agent_computer_id_status,
@@ -29,24 +34,70 @@ from .agent_computer_id import (
 
 
 def import_file_stores_before_serving(
-    root_dir: Path, database_url: str, *, repairs_enabled: bool
+    root_dir: Path,
+    database_url: str,
+    *,
+    repairs_enabled: bool,
+    accounts_already_in_database: bool = False,
 ) -> None:
-    """Move the retired daemon/agent/team/placement/chat files into the database.
+    """Move the retired file stores into the database.
 
-    Runs before anything reads those aggregates. With startup repairs off this
-    replica may not write at boot, so a pending import stops startup instead.
+    Accounts go first, so the daemon/agent/team/placement rows imported next
+    find the users they reference. Runs before anything reads those
+    aggregates. With startup repairs off this replica may not write at boot,
+    so a pending import stops startup instead.
     """
     if repairs_enabled:
+        _import_accounts_before_serving(root_dir, database_url, accounts_already_in_database)
         import_local_file_stores_before_serving(root_dir, database_url)
         return
-    if local_file_stores_present(root_dir) and not file_stores_imported(
-        root_dir, database_url
-    ):
+    pending = (
+        legacy_accounts_present(root_dir) and not accounts_imported(root_dir, database_url)
+    ) or (
+        local_file_stores_present(root_dir) and not file_stores_imported(root_dir, database_url)
+    )
+    if pending:
         raise RuntimeError(
             f"File-backed stores under {root_dir} have not been imported into the "
             f"database. Run {CLI_COMMAND} (use --dry-run to preview), or start one "
             "replica with RELAY_STARTUP_REPAIRS enabled."
         )
+
+
+def _import_accounts_before_serving(
+    root_dir: Path, database_url: str, accounts_already_in_database: bool
+) -> None:
+    """Boot-time account import: a no-op without legacy files or once imported."""
+    if not legacy_accounts_present(root_dir) or accounts_imported(root_dir, database_url):
+        return
+    try:
+        report = migrate_legacy_accounts(
+            root_dir,
+            database_url,
+            accounts_already_in_database=accounts_already_in_database,
+        )
+    except ValueError as error:
+        raise RuntimeError(
+            f"Importing the file-backed accounts under {root_dir / 'auth'} failed: "
+            f"{error} Resolve the conflict -- or, if those files are leftovers "
+            "from before the database held the accounts, move them aside -- then "
+            f"rerun {CLI_COMMAND} (use --dry-run to preview) against the "
+            "configured database."
+        ) from error
+    if report["accountsAlreadyInDatabase"]:
+        logger.info(
+            "Ignored file-backed accounts: the database already held the accounts",
+            root_dir=str(root_dir),
+        )
+        return
+    logger.info(
+        "Imported file-backed accounts into the database",
+        root_dir=str(root_dir),
+        accounts=report["accounts"],
+        users=report["users"],
+        departments=report["departments"],
+        skipped=report["skipped"],
+    )
 
 
 def repair_records_before_serving(

@@ -19,11 +19,20 @@ from relay.core.computer_identity import computer_id
 from relay.services.node_agents import sync_node_agents
 
 
-def _node(app, sandbox_id: str, user_id: str = "admin") -> dict[str, Any]:
+def _admin_id(app) -> str:
+    """The bootstrapped admin's user id; bootstrap mints a fresh one."""
+    return next(
+        account["userId"]
+        for account in app.state.auth_store.list_accounts()
+        if account["username"] == "admin"
+    )
+
+
+def _node(app, sandbox_id: str, owner: str | None = None) -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": sandbox_id,
-            "userId": user_id,
+            "userId": owner or _admin_id(app),
             "token": f"token_{sandbox_id}",
             "workspacePath": f"/workspace/{sandbox_id}",
             "protocolVersion": 1,
@@ -36,7 +45,7 @@ def _node(app, sandbox_id: str, user_id: str = "admin") -> dict[str, Any]:
 
 def _agent(app, node: dict[str, Any], name: str) -> dict[str, Any]:
     return app.state.agent_store.create_agent(
-        "admin",
+        _admin_id(app),
         {
             "displayName": name,
             "executorKind": "codex",
@@ -131,7 +140,7 @@ def test_team_computer_must_belong_to_the_owner(monkeypatch) -> None:
     with _world(monkeypatch) as (app, client, here, there):
         lead = _agent(app, here, "Lead")
         _sync(app, here, there)
-        foreign = _node(app, "node_foreign", user_id="someone-else")
+        foreign = _node(app, "node_foreign", owner="someone-else")
 
         response = _create(client, lead, computerId=computer_id(foreign))
 
@@ -181,7 +190,7 @@ def test_renaming_a_legacy_split_team_still_works(monkeypatch) -> None:
         far = _agent(app, there, "Far")
         _sync(app, here, there)
         legacy = app.state.team_store.create_team(
-            "admin",
+            _admin_id(app),
             {"name": "Legacy", "leadAgentId": lead["id"], "memberAgentIds": [lead["id"], far["id"]]},
         )
 
@@ -198,7 +207,7 @@ def test_saving_a_legacy_split_team_with_its_unchanged_roster_still_works(monkey
         _sync(app, here, there)
         roster = [lead["id"], far["id"]]
         legacy = app.state.team_store.create_team(
-            "admin",
+            _admin_id(app),
             {"name": "Legacy", "leadAgentId": lead["id"], "memberAgentIds": roster},
         )
 

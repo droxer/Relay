@@ -2,6 +2,8 @@
 
 Status: implemented (2026-10-16)
 
+> Note (2026-10-18): the file-backed accounts store this plan mentions has since been retired; accounts and reset links are database-only, and an install's old `auth/` files are imported once at boot (`backend/relay/security/auth_file_import.py`).
+
 ## Problem
 
 A person who forgets their password has no way back in on their own. Today an

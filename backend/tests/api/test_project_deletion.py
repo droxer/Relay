@@ -8,6 +8,9 @@ from relay.app import create_app
 from relay.persistence.store_common import relay_event
 
 from test_project_routes import _bootstrap, _login_alice, _register_computer, _agent
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 @pytest.fixture
@@ -19,16 +22,16 @@ def project_env(monkeypatch):
         _bootstrap(client)
         node = _register_computer(app, "node_delete", "delete-machine")
         # Cleanup support is independently negotiated with the daemon.
-        app.state.registry.register({**node, "sandboxId": node["id"], "userId": "alice",
+        app.state.registry.register({**node, "sandboxId": node["id"], "userId": ALICE,
             "protocolVersion": 1, "supportedAgents": ["codex", "claude"], "token": f"token_{node['id']}", "capabilities": [*node["capabilities"], "project-workspace-delete"]})
         agent = _agent(client, app, node, "Shared agent", "codex")
         _login_alice(client)
         response = client.post("/api/v1/projects", json={"name": "Delete me", "daemonNodeId": node["id"], "members": [{"agentId": agent["id"], "role": "planner", "responsibilities": "Plan"}], "leadAgentId": agent["id"]})
         assert response.status_code == 201, response.text
         project = response.json()["project"]
-        task = app.state.task_store.create_task({"title": "Project task", "ownerUserId": "alice", "projectId": project["id"]})
-        routine = app.state.task_store.create_task({"title": "Project routine", "ownerUserId": "alice", "projectId": project["id"], "isRoutine": True, "routineEnabled": True, "routineCadence": "daily"})
-        session = app.state.session_store.create_session({"taskGoal": "Project thread", "ownerUserId": "alice", "projectId": project["id"], "workspacePath": "/workspace", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"]})
+        task = app.state.task_store.create_task({"title": "Project task", "ownerUserId": ALICE, "projectId": project["id"]})
+        routine = app.state.task_store.create_task({"title": "Project routine", "ownerUserId": ALICE, "projectId": project["id"], "isRoutine": True, "routineEnabled": True, "routineCadence": "daily"})
+        session = app.state.session_store.create_session({"taskGoal": "Project thread", "ownerUserId": ALICE, "projectId": project["id"], "workspacePath": "/workspace", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"]})
         app.state.task_store.link_session(task["id"], session["id"])
         yield app, client, node, agent, project, task, routine, session
 
@@ -36,7 +39,7 @@ def project_env(monkeypatch):
 def test_delete_project_cascades_and_queues_workspace_cleanup(project_env):
     app, client, node, agent, project, task, routine, session = project_env
     other_project = client.post("/api/v1/projects", json={"name": "Keep project", "daemonNodeId": node["id"], "members": [], "leadAgentId": None}).json()["project"]
-    other = app.state.task_store.create_task({"title": "Keep", "ownerUserId": "alice", "projectId": other_project["id"]})
+    other = app.state.task_store.create_task({"title": "Keep", "ownerUserId": ALICE, "projectId": other_project["id"]})
     occurrence = app.state.task_store.create_triggered_occurrence(routine["id"], run_date="2026-09-22", trigger_kind="manual", depth=0, context="")
     assert occurrence is not None
     app.state.task_store.link_session(other["id"], session["id"])
@@ -178,7 +181,7 @@ def test_project_deletion_defers_cleanup_until_daemon_upgrade(project_env):
     assert app.state.registry.take_commands(node["id"], f"token_{node['id']}", lease_seconds=0) == []
     assert app.state.daemon_store.get_command(response.json()["cleanupCommandId"])["status"] != "completed"
     app.state.registry.register({
-        **old_node, "sandboxId": node["id"], "userId": "alice",
+        **old_node, "sandboxId": node["id"], "userId": ALICE,
         "protocolVersion": 1, "supportedAgents": ["codex"],
         "token": f"token_{node['id']}",
         "capabilities": [*old_node["capabilities"], "project-workspace-delete"],
@@ -216,7 +219,7 @@ def test_cleanup_moves_to_the_computers_next_incarnation(project_env):
     original = response.json()["cleanupCommandId"]
     # Reprovisioning the machine retires the old node, which never polls again.
     successor = _register_computer(app, "node_delete_next", "delete-machine")
-    app.state.registry.register({**successor, "sandboxId": successor["id"], "userId": "alice",
+    app.state.registry.register({**successor, "sandboxId": successor["id"], "userId": ALICE,
         "protocolVersion": 1, "supportedAgents": ["codex"], "token": f"token_{successor['id']}",
         "capabilities": [*successor["capabilities"], "project-workspace-delete"]})
     assert app.state.daemon_store.get_command(original)["status"] == "cancelled"
@@ -242,7 +245,7 @@ def test_refused_delete_settles_nothing(project_env, monkeypatch):
     app, client, node, agent, project, task, routine, session = project_env
     # The project's own thread holds a lost run, but a task's other thread is live.
     app.state.session_store.append_event(session["id"], relay_event("agent.started", session["id"], {"agent": "codex", "runId": "lost-run"}))
-    elsewhere = app.state.session_store.create_session({"taskGoal": "Elsewhere", "ownerUserId": "alice", "workspacePath": "/workspace"})
+    elsewhere = app.state.session_store.create_session({"taskGoal": "Elsewhere", "ownerUserId": ALICE, "workspacePath": "/workspace"})
     app.state.task_store.link_session(task["id"], elsewhere["id"])
     _hold_live(monkeypatch, app, elsewhere["id"])
     before = app.state.session_store.get_session(session["id"])

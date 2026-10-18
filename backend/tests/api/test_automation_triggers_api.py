@@ -9,6 +9,10 @@ from relay.app import create_app
 from relay.automations.model import LEGACY_FIELDS
 
 from test_tasks import _bootstrap_admin, _create_agent, _create_account, _login
+from user_ids import user_id
+
+ALICE = user_id("alice")
+BOB = user_id("bob")
 
 WEBHOOK = {"kind": "webhook"}
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
@@ -21,13 +25,13 @@ def _client(monkeypatch, root: str) -> tuple[TestClient, dict]:
     client = TestClient(create_app(root))
     _bootstrap_admin(client)
     _create_account(client, "alice", user_id="alice")
-    return client, _create_agent(client, "alice")
+    return client, _create_agent(client, ALICE)
 
 
 def _routine(client: TestClient, agent: dict, **extra) -> dict:
     response = client.post("/api/v1/tasks", json={
         "title": "Triage failures", "description": "Look into it.",
-        "ownerUserId": "alice", "assigneeUserId": "alice",
+        "ownerUserId": ALICE, "assigneeUserId": ALICE,
         "assignedAgentId": agent["id"], "isRoutine": True, "routineState": "active",
         "routineTriggers": DAILY_9, **extra,
     })
@@ -69,13 +73,13 @@ def test_invalid_trigger_is_a_400(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         response = client.post("/api/v1/tasks", json={
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
-            "ownerUserId": "alice", "assigneeUserId": "alice",
+            "ownerUserId": ALICE, "assigneeUserId": ALICE,
             "routineTriggers": [{"kind": "task_event", "on": "completed"}],
         })
         assert response.status_code == 400
         missing = client.post("/api/v1/tasks", json={
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
-            "ownerUserId": "alice", "assigneeUserId": "alice",
+            "ownerUserId": ALICE, "assigneeUserId": ALICE,
             "routineTriggers": [DAILY_9[0], {"kind": "task_event", "on": "created", "filters": {"projectId": "nope"}}],
         })
         assert missing.status_code == 400
@@ -88,8 +92,8 @@ def test_scope_filters_require_owner_access_on_create_and_patch(monkeypatch) -> 
     with TemporaryDirectory() as root:
         client, alice_agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
-        bob_agent = _create_agent(client, "bob")
-        project = project_for_agents(client.app.state.project_store, "bob", [bob_agent])
+        bob_agent = _create_agent(client, BOB)
+        project = project_for_agents(client.app.state.project_store, BOB, [bob_agent])
         routine = _routine(client, alice_agent, routineTriggers=[ON_BLOCKED])
         _login(client, "alice")
         trigger = {"kind": "task_event", "on": "created", "filters": {"projectId": project["id"]}}
@@ -138,8 +142,8 @@ def test_scope_team_and_agent_filters_use_owner_not_admin_access(monkeypatch) ->
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
-        foreign = _create_agent(client, "bob")
-        team = client.app.state.team_store.create_team("bob", {
+        foreign = _create_agent(client, BOB)
+        team = client.app.state.team_store.create_team(BOB, {
             "name": "Bob team", "leadAgentId": foreign["id"], "memberAgentIds": [foreign["id"]],
         })
         routine = _routine(client, agent, routineTriggers=[ON_BLOCKED])
@@ -154,10 +158,10 @@ def test_project_and_team_filters_require_same_computer(monkeypatch) -> None:
     from issue_projects import project_for_agents
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        project = project_for_agents(client.app.state.project_store, "alice", [agent])
+        project = project_for_agents(client.app.state.project_store, ALICE, [agent])
         # The agent has no placement on the project's computer. Project/task
         # admission must also be applied to scoped trigger teams.
-        team = client.app.state.team_store.create_team("alice", {
+        team = client.app.state.team_store.create_team(ALICE, {
             "name": "Unplaced team", "leadAgentId": agent["id"], "memberAgentIds": [agent["id"]],
         })
         routine = _routine(client, agent, routineTriggers=[ON_BLOCKED])
@@ -212,7 +216,7 @@ def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch)
 
 def _post(client: TestClient, **body):
     return client.post("/api/v1/tasks", json={
-        "ownerUserId": "alice", "assigneeUserId": "alice", **body,
+        "ownerUserId": ALICE, "assigneeUserId": ALICE, **body,
     })
 
 
@@ -309,7 +313,7 @@ def test_legacy_routine_reads_as_v2_and_patches_keep_its_schedule(monkeypatch) -
         legacy = client.app.state.task_store.create_task({
             "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineType": "task",
             "routineNextRunDate": "2030-01-02", "routineEnabled": True,
-            "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": "alice",
+            "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": ALICE,
         })
         current = client.get(f"/api/v1/tasks/{legacy['id']}").json()
         assert current["routineState"] == "active"
@@ -367,8 +371,8 @@ def _legacy_routine(client: TestClient, agent: dict) -> dict:
     return client.app.state.task_store.create_task({
         "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineType": "task",
         "routineNextRunDate": "2030-01-02", "routineEnabled": True, "routineTrigger": {"kind": "schedule"},
-        "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": "alice",
-        "assigneeUserId": "alice",
+        "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": ALICE,
+        "assigneeUserId": ALICE,
     })
 
 
@@ -389,8 +393,8 @@ def test_rejected_start_of_a_legacy_routine_answers_without_legacy_fields(monkey
         # is answered while preparing, before any automation path.
         legacy = client.app.state.task_store.create_task({
             "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineEnabled": True,
-            "routineNextRunDate": "2030-01-02", "assignedAgent": "kimi", "ownerUserId": "alice",
-            "assigneeUserId": "alice",
+            "routineNextRunDate": "2030-01-02", "assignedAgent": "kimi", "ownerUserId": ALICE,
+            "assigneeUserId": ALICE,
         })
         response = client.post(f"/api/v1/tasks/{legacy['id']}/runs", json={})
         assert response.status_code == 202, response.text
@@ -450,7 +454,7 @@ def test_resume_by_non_owner_is_403(monkeypatch) -> None:
         # Bob can see the automation as its assignee, but only its owner or an admin may resume it.
         task = _routine(client, agent)
         client.app.state.task_store.update_task(task["id"], {
-            "assigneeUserId": "bob", "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
+            "assigneeUserId": BOB, "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
         _login(client, "bob")
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 403
@@ -466,7 +470,7 @@ def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> 
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeUserId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": BOB, "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         automations = client.app.state.automation_store
@@ -490,7 +494,7 @@ def test_only_owner_or_admin_can_convert_a_relay_paused_automation(monkeypatch, 
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeUserId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": BOB, "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         before = store.get_task(task["id"])
@@ -528,7 +532,7 @@ def test_assignee_can_edit_relay_pause_and_toggle_an_ordinary_pause(monkeypatch)
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeUserId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": BOB, "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         _login(client, "bob")
@@ -604,8 +608,8 @@ def test_active_create_rejects_past_once(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         response = client.post("/api/v1/tasks", json={
             "title": "Missed", "isRoutine": True, "routineState": "active",
-            "assignedAgentId": agent["id"], "ownerUserId": "alice",
-            "assigneeUserId": "alice", "routineTriggers": PAST_ONCE,
+            "assignedAgentId": agent["id"], "ownerUserId": ALICE,
+            "assigneeUserId": ALICE, "routineTriggers": PAST_ONCE,
         })
         assert response.status_code == 400
         assert "routineTriggers[0]" in response.json()["detail"]
@@ -657,7 +661,7 @@ def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body
         _create_account(client, "bob", user_id="bob")
         task = _routine(client, agent)
         store = client.app.state.task_store
-        store.update_task(task["id"], {"assigneeUserId": "bob"})
+        store.update_task(task["id"], {"assigneeUserId": BOB})
         _login(client, "bob")
         original = task_routes.routine_fields
         paused = False

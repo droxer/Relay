@@ -62,7 +62,6 @@ def test_unsupported_intervals_fail_at_startup(seconds):
 
 def test_worker_conninfo_preserves_credentials_and_connection_options(monkeypatch):
     from psycopg.conninfo import conninfo_to_dict
-    monkeypatch.setenv("RELAY_STORAGE", "postgres")
     monkeypatch.setenv("RELAY_DATABASE_URL", "postgresql+psycopg://user:p%40ss@localhost:5439/relay?sslmode=require&options=-csearch_path%3Dtest_jobs")
     assert conninfo_to_dict(worker_conninfo()) == {
         "user": "user", "password": "p@ss", "host": "localhost", "port": "5439",
@@ -70,11 +69,12 @@ def test_worker_conninfo_preserves_credentials_and_connection_options(monkeypatc
     }
 
 
-def test_worker_requires_postgres_and_shared_storage(monkeypatch):
-    with pytest.raises(ValueError, match="RELAY_STORAGE=postgres"):
-        worker_conninfo()
-    monkeypatch.setenv("RELAY_STORAGE", "postgres")
+def test_worker_requires_a_postgres_database(monkeypatch):
+    # conftest points RELAY_DATABASE_URL at SQLite.
     with pytest.raises(ValueError, match="PostgreSQL"):
+        worker_conninfo()
+    monkeypatch.delenv("RELAY_DATABASE_URL")
+    with pytest.raises(RuntimeError, match="RELAY_DATABASE_URL"):
         worker_conninfo()
 
 

@@ -26,9 +26,12 @@ from relay.app import create_app
 from relay.services.task_dispatch import start_task_on_ready_node
 
 from issue_projects import PROJECT_CAPABILITY, project_for
+from user_ids import user_id as handle_user_id
 
 # A routine's run is the one kind of work that dispatches outside a project.
 ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
+
+ALICE = handle_user_id("alice")
 
 
 def _bootstrap_admin(client: TestClient) -> None:
@@ -70,7 +73,7 @@ def _register_node(
     node_id: str,
     *,
     capabilities: list[str],
-    user_id: str = "alice",
+    user_id: str = ALICE,
 ) -> dict:
     return app.state.registry.register(
         {
@@ -88,7 +91,7 @@ def _register_node(
     )
 
 
-def _agent(app, node: dict, *, user_id: str = "alice") -> dict:
+def _agent(app, node: dict, *, user_id: str = ALICE) -> dict:
     agent = app.state.agent_store.create_agent(
         user_id,
         {
@@ -136,8 +139,8 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
             {
                 **ROUTINE_RUN,
                 "title": "Write the report",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -166,8 +169,8 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
             {
                 **ROUTINE_RUN,
                 "title": "Write the report",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -214,13 +217,13 @@ def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
                 **ROUTINE_RUN,
                 "title": "Legacy task without a named agent",
                 "assignedAgent": "codex",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"userId": "alice", "isAdmin": True}
+        actor = {"userId": ALICE, "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)
@@ -305,8 +308,8 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
             "/api/v1/tasks",
             json={
                 "title": "Nightly",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -338,7 +341,7 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
-        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
+        project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
 
         async def failing_run(node_id, request):
             raise ValueError("capacity_exhausted: node is full")
@@ -349,14 +352,14 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
                 "title": "Manual dispatch that fails",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"userId": "alice", "isAdmin": True}
+        actor = {"userId": ALICE, "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)
@@ -390,7 +393,7 @@ def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) ->
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
-        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
+        project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
 
         async def failing_run(node_id, request):
             raise ValueError("capacity_exhausted: node is full")
@@ -401,14 +404,14 @@ def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) ->
                 "title": "Dispatch whose caller records the failure",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"userId": "alice", "isAdmin": True}
+        actor = {"userId": ALICE, "isAdmin": True}
 
         with pytest.raises(ValueError, match="capacity_exhausted: node is full"):
             asyncio.run(
@@ -432,7 +435,7 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
-        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
+        project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
 
         async def failing_run(node_id, request):
             raise ValueError("connection reset")
@@ -443,14 +446,14 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
                 "title": "Manual dispatch with unknown outcome",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"userId": "alice", "isAdmin": True}
+        actor = {"userId": ALICE, "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)

@@ -4,7 +4,6 @@ from relay.core.legacy_names import (
     contains_legacy_names,
     downgrade_to_legacy_names,
     upgrade_legacy_names,
-    upgrade_legacy_session,
 )
 
 
@@ -72,14 +71,6 @@ def test_contains_legacy_names_finds_nested_keys_and_values() -> None:
     assert contains_legacy_names({"a": [{"ownerEmployeeId": "x"}]})
     assert contains_legacy_names({"a": {"nodeLocation": "employee-device"}})
     assert not contains_legacy_names({"a": [{"ownerUserId": "x"}]})
-
-
-def test_an_auth_session_user_id_names_the_account() -> None:
-    legacy = {"tokenHash": "h", "userId": "acct-1"}
-
-    assert upgrade_legacy_session(legacy) == {"tokenHash": "h", "accountId": "acct-1"}
-    current = {"tokenHash": "h", "accountId": "acct-1"}
-    assert upgrade_legacy_session(current) == current
 
 
 def test_downgrade_inverts_every_key_relay_wrote() -> None:

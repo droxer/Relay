@@ -4,6 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 @pytest.fixture
@@ -37,7 +40,7 @@ def client(monkeypatch, tmp_path):
         node = app.state.registry.register(
             {
                 "sandboxId": "skill-policy-node",
-                "userId": "alice",
+                "userId": ALICE,
                 "token": "node-token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -91,7 +94,7 @@ def test_admin_creation_rejects_skill_policy_but_default_creation_still_works(cl
         == 200
     )
     body = {
-        "supervisorUserId": "alice",
+        "supervisorUserId": ALICE,
         "displayName": "Worker",
         "executorKind": "codex",
         "defaultRole": "implementer",

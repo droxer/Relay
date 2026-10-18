@@ -11,6 +11,9 @@ from relay.api import project_links
 from relay.app import create_app
 
 from test_project_routes import _bootstrap, _login_alice
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 LINK_CAPABILITIES = ["thread-workspaces", "project-workspaces", "project-links"]
 
@@ -19,7 +22,7 @@ def _register(app, node_id: str, *, capabilities: list[str] = LINK_CAPABILITIES)
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "userId": "alice",
+            "userId": ALICE,
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
@@ -117,7 +120,7 @@ def test_refused_directory_creates_no_project(env, daemon) -> None:
         "code": "project_workspace_not_allowed",
         "message": "/etc is outside the directories this computer allows: /Users/alice.",
     }
-    assert app.state.project_store.list_projects("alice") == []
+    assert app.state.project_store.list_projects(ALICE) == []
 
 
 @pytest.mark.parametrize("path", ["code/app", "~/code", 7, "/a\x00b", "/" + "a" * 5000])
@@ -157,7 +160,7 @@ def test_workspace_check_is_a_dry_run(env, daemon) -> None:
     assert response.json() == {"workspaceHostPath": "/Users/alice/code/app"}
     [command] = sent
     assert command["dryRun"] is True
-    assert app.state.project_store.list_projects("alice") == []
+    assert app.state.project_store.list_projects(ALICE) == []
 
 
 def test_workspace_check_refuses_another_users_computer(env, daemon) -> None:
@@ -166,7 +169,7 @@ def test_workspace_check_refuses_another_users_computer(env, daemon) -> None:
     app.state.registry.register(
         {
             "sandboxId": "node_bob",
-            "userId": "bob",
+            "userId": user_id("bob"),
             "token": "token_node_bob",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -197,7 +200,7 @@ def test_registration_returns_the_computers_links(env, daemon) -> None:
         headers={"Authorization": f"Bearer token_{node['id']}"},
         json={
             "sandboxId": node["id"],
-            "userId": "alice",
+            "userId": ALICE,
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": LINK_CAPABILITIES,

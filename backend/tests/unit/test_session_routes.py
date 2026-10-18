@@ -13,6 +13,12 @@ from relay.persistence.store_common import store_transaction
 from sqlalchemy import update
 
 
+def _admin_id(app) -> str:
+    # The bootstrapped admin's User row has a random id, not one derived
+    # from its handle.
+    return app.state.auth_store.resolve_user_id("admin")
+
+
 def test_is_workspace_artifact_only_allows_generated_files() -> None:
     assert is_workspace_artifact({"kind": "workspace_file"}) is True
     assert is_workspace_artifact({"kind": "plan"}) is False
@@ -92,7 +98,7 @@ def test_session_creation_persists_the_selected_computer(monkeypatch) -> None:
         app.state.registry.register(
             {
                 "sandboxId": "node_a",
-                "userId": "admin",
+                "userId": _admin_id(app),
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -133,7 +139,7 @@ def test_session_creation_on_an_user_device_computer_persists_a_device_identity(
         app.state.registry.register(
             {
                 "sandboxId": "node_device_a",
-                "userId": "admin",
+                "userId": _admin_id(app),
                 "workspaceId": "machine-abc123",
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
@@ -152,7 +158,7 @@ def test_session_creation_on_an_user_device_computer_persists_a_device_identity(
         body = created.json()
         assert body["daemonNodeId"] == "node_device_a"
         assert body.get("managedNodeId") is None
-        assert body["computerId"] == "device:admin:machine-abc123"
+        assert body["computerId"] == f"device:{_admin_id(app)}:machine-abc123"
 
 
 def test_session_read_backfills_managed_affinity_from_deleted_runtime_history(

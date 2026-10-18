@@ -84,12 +84,10 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     return {
         "settings": ctx.org_settings_store.get_settings(),
-        # Editing a user — display name, email, or their own computer
-        # limit — writes the users table, which only the database auth
-        # store has. Reported so the admin UI can leave those controls out
-        # instead of offering an edit that would come back a 400.
         "capabilities": {
-            "userEdits": hasattr(ctx.auth_store, "update_user"),
+            # Always on since accounts are database-only; kept because the
+            # admin UI still reads it to decide whether to offer user edits.
+            "userEdits": True,
             # Off: automations may hold only schedule triggers.
             "automationTriggers": automation_triggers_enabled(),
             # Off: the waitlist routes are not mounted (RELAY_WAITLIST_ENABLED).
@@ -174,9 +172,7 @@ def create_account(
 @router.get("/admin/departments")
 def list_departments(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if hasattr(ctx.auth_store, "list_departments"):
-        return {"departments": ctx.auth_store.list_departments()}
-    return {"departments": []}
+    return {"departments": ctx.auth_store.list_departments()}
 
 
 @router.post("/admin/departments", status_code=201)
@@ -184,8 +180,6 @@ def create_department(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if not hasattr(ctx.auth_store, "ensure_department"):
-        raise HTTPException(400, "Department storage is only available with database auth storage.")
     body = _request_body
     department_id = string_field(body, "id") or string_field(body, "departmentId")
     name = string_field(body, "name") or department_id
@@ -216,24 +210,7 @@ def list_users_for_legacy_supervisor(request: Request, ctx: AppContextDep) -> di
 
 
 def _user_records(ctx: Any) -> list[dict[str, Any]]:
-    if hasattr(ctx.auth_store, "list_users"):
-        return decorate_user_limits(ctx, ctx.auth_store.list_users())
-    deleted_ids = ctx.auth_store.deleted_user_ids() if hasattr(ctx.auth_store, "deleted_user_ids") else set()
-    users = []
-    seen = set()
-    for account in ctx.auth_store.list_accounts():
-        user_id = account.get("userId")
-        if not user_id or user_id in seen or user_id in deleted_ids:
-            continue
-        seen.add(user_id)
-        users.append({
-            "id": user_id,
-            "displayName": account.get("displayName") or account.get("username") or user_id,
-            "email": account.get("email"),
-            "createdAt": account.get("createdAt"),
-            "updatedAt": account.get("createdAt"),
-        })
-    return decorate_user_limits(ctx, users)
+    return decorate_user_limits(ctx, ctx.auth_store.list_users())
 
 
 @router.delete("/admin/users/{user_id}", status_code=200)
@@ -241,8 +218,6 @@ def soft_delete_user(
     user_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if not hasattr(ctx.auth_store, "soft_delete_user"):
-        raise HTTPException(400, "User soft-delete is not supported by this auth store.")
     try:
         return soft_delete_user_cascade(ctx, user_id)
     except KeyError as error:
@@ -260,10 +235,6 @@ def update_user(
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if not hasattr(ctx.auth_store, "update_user"):
-        raise HTTPException(
-            400, "Editing a user requires the database auth store."
-        )
     body = _request_body
     patch: dict[str, Any] = {}
     if "displayName" in body:
@@ -352,29 +323,12 @@ def create_user(
         message = str(error)
         status = 409 if "already exists" in message else 400
         raise HTTPException(status, message) from error
-    if hasattr(ctx.auth_store, "ensure_user"):
-        user = ctx.auth_store.ensure_user(
-            account.get("userId") or user_id,
-            display_name=display_name,
-            email=email,
-            max_local_computers=max_local_computers,
-        )
-    else:
-        # The file auth store keeps no user row, so an override has nowhere
-        # to live. Say so rather than accepting a limit that would be dropped.
-        if max_local_computers is not None:
-            raise HTTPException(
-                400,
-                "Per-user computer limits require the database auth store.",
-            )
-        user = {
-            "id": user_id,
-            "handle": user_id,
-            "displayName": display_name,
-            "email": email,
-            "createdAt": account.get("createdAt"),
-            "updatedAt": account.get("createdAt"),
-        }
+    user = ctx.auth_store.ensure_user(
+        account.get("userId") or user_id,
+        display_name=display_name,
+        email=email,
+        max_local_computers=max_local_computers,
+    )
     user = decorate_user_limits(ctx, [user])[0]
     public_node: dict[str, Any] | None = None
     assignment_error: str | None = None
@@ -577,9 +531,8 @@ def create_control_panel_daemon_node(
             400, "An absolute workspacePath on the user device is required."
         )
     assert_user_device_runtime(requested_location, sandbox_mode)
-    if hasattr(ctx.auth_store, "ensure_user"):
-        if user_id:
-            ctx.auth_store.ensure_user(user_id)
+    if user_id:
+        ctx.auth_store.ensure_user(user_id)
     provision_payload = {
         **({"userId": user_id} if user_id else {}),
         **({"displayName": display_name} if display_name else {}),

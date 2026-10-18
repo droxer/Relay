@@ -28,8 +28,8 @@ entries = Table(
     Column("invite_token_hash", Text, nullable=True, unique=True),
     Column("invite_expires_at", DateTime(timezone=True), nullable=True),
     Column("invited_at", DateTime(timezone=True), nullable=True),
-    # Plain text, not foreign keys: under the file auth store these ids
-    # name accounts and users that have no database row.
+    # Plain text, not foreign keys: they were written while accounts could
+    # live in a file, when these ids named rows the database did not have.
     Column("invited_by_user_id", Text, nullable=True),
     Column("account_id", Text, nullable=True),
     Column("admin_note", Text, nullable=True),

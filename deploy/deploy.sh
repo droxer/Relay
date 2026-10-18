@@ -57,7 +57,6 @@ resolve_services() {
 # finish store writes on shutdown; preserve any longer configured grace.
 backend_process_variables() {
   jq -c '{
-    RELAY_STORAGE: "postgres",
     RELAY_BACKGROUND_MODE: "external",
     RAILWAY_DEPLOYMENT_DRAINING_SECONDS: (
       (.RAILWAY_DEPLOYMENT_DRAINING_SECONDS | tonumber? // 35)

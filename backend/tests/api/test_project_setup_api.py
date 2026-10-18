@@ -5,13 +5,16 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 
 from test_project_routes import _agent, _bootstrap, _login_alice
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 def _register(app, node_id: str, *, setup: bool = True) -> dict:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "userId": "alice",
+            "userId": ALICE,
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],

@@ -7,6 +7,10 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
+from user_ids import user_id
+
+ALICE = user_id("alice")
+
 PNG_BYTES = b"\x89PNG\r\n\x1a\nrelay-profile"
 PNG_DATA_URL = "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode("ascii")
 
@@ -21,32 +25,32 @@ def bootstrap(client: TestClient) -> None:
     )
 
 
-def user(client: TestClient, user_id: str) -> None:
+def user(client: TestClient, handle: str) -> None:
     assert (
         client.post(
             "/api/v1/admin/users",
             json={
-                "userId": user_id,
-                "username": user_id,
+                "userId": handle,
+                "username": handle,
                 "password": "userpass",
-                "displayName": user_id.title(),
+                "displayName": handle.title(),
             },
         ).status_code
         == 201
     )
 
 
-def _agent(client: TestClient, user_id: str) -> dict:
+def _agent(client: TestClient, handle: str) -> dict:
     # An offline birth-certificate computer: enough to mint a computerId
     # without auto-placing the agent, so callers that manually place it
     # afterward don't hit a duplicate-placement conflict.
     node = client.app.state.registry.register(
         {
-            "sandboxId": f"test_node_{user_id}",
-            "userId": user_id,
-            "workspaceId": f"machine-{user_id}",
+            "sandboxId": f"test_node_{handle}",
+            "userId": user_id(handle),
+            "workspaceId": f"machine-{handle}",
             "token": "node_token",
-            "workspacePath": f"/workspace/{user_id}",
+            "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "capabilities": ["thread-workspaces"],
@@ -56,7 +60,7 @@ def _agent(client: TestClient, user_id: str) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": user_id,
+            "supervisorUserId": user_id(handle),
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -82,7 +86,7 @@ def test_user_updates_and_removes_agent_and_team_profile_images(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerUserId": "alice",
+                "ownerUserId": ALICE,
                 "name": "Delivery",
                 "leadAgentId": agent["id"],
                 "memberAgentIds": [agent["id"]],
@@ -255,7 +259,7 @@ def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
         node = client.app.state.registry.register(
             {
                 "sandboxId": "test_node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -314,7 +318,7 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
         node = client.app.state.registry.register(
             {
                 "sandboxId": "test_node_alice",
-                "userId": "alice",
+                "userId": ALICE,
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -327,7 +331,7 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
         created = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorUserId": "alice",
+                "supervisorUserId": ALICE,
                 "executorKind": "codex",
                 "defaultRole": "implementer",
                 "computerId": computer_id(node),

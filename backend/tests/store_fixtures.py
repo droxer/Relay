@@ -20,6 +20,7 @@ from relay.persistence.daemon_store import DatabaseDaemonStore
 from relay.persistence.session_store import DatabaseSessionStore
 from relay.persistence.task_store import DatabaseTaskStore
 from relay.persistence.team_store import DatabaseTeamStore
+from relay.security.auth import DatabaseAccountAuthStore
 
 DATABASE_FILE = "relay.db"
 
@@ -56,6 +57,10 @@ def make_agent_placement_store(root: str | Path) -> DatabaseAgentPlacementStore:
 
 def make_chat_store(root: str | Path) -> DatabaseChatIntegrationStore:
     return DatabaseChatIntegrationStore(sqlite_url(root), create_schema=True)
+
+
+def make_auth_store(root: str | Path) -> DatabaseAccountAuthStore:
+    return DatabaseAccountAuthStore(sqlite_url(root), create_schema=True)
 
 
 def overwrite_snapshot(table: Any, engine: Any, record_id: str, snapshot: dict[str, Any]) -> None:

@@ -300,14 +300,30 @@ class ProjectStore(Protocol):
 
 
 class AuthStore(Protocol):
+    """Accounts, users, departments, and login sessions (``security/auth.py``)."""
+
     session_ttl_seconds: int
 
     def has_accounts(self) -> bool: ...
     def create_account(
-        self, username: str, password: str, **kwargs: Any
+        self,
+        username: str,
+        password: str,
+        role: Any = ...,
+        email: str | None = ...,
+        user_id: str | None = ...,
+        display_name: str | None = ...,
+        department_id: str | None = ...,
+        department_name: str | None = ...,
+        max_local_computers: int | None = ...,
     ) -> dict[str, Any]: ...
     def update_user_preferences(
-        self, account_id: str, **kwargs: Any
+        self,
+        account_id: str,
+        *,
+        theme: Any = ...,
+        language: Any = ...,
+        onboarding: dict[str, Any] | None = ...,
     ) -> dict[str, Any]: ...
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None: ...
     def bootstrap_with_token(
@@ -318,8 +334,36 @@ class AuthStore(Protocol):
     def get_account_by_id(self, account_id: str) -> dict[str, Any] | None: ...
     def delete_session(self, token: str) -> bool: ...
     def list_accounts(self) -> list[dict[str, Any]]: ...
-    def deleted_user_ids(self) -> set[str]: ...
+    def resolve_user_id(self, user_id: str) -> str: ...
+    def ensure_user(
+        self,
+        user_id: str,
+        *,
+        display_name: str | None = ...,
+        email: str | None = ...,
+        department_id: str | None = ...,
+        department_name: str | None = ...,
+        max_local_computers: int | None = ...,
+    ) -> dict[str, Any]: ...
+    def update_user(
+        self,
+        user_id: str,
+        *,
+        display_name: str | None = ...,
+        email: str | None = ...,
+        max_local_computers: int | None = ...,
+        clear_max_local_computers: bool = ...,
+    ) -> dict[str, Any]: ...
+    def list_users(self) -> list[dict[str, Any]]: ...
     def soft_delete_user(self, user_id: str) -> dict[str, Any]: ...
+    def ensure_department(
+        self,
+        department_id: str,
+        *,
+        name: str | None = ...,
+        parent_department_id: str | None = ...,
+    ) -> dict[str, Any]: ...
+    def list_departments(self) -> list[dict[str, Any]]: ...
 
 
 class DaemonStore(Protocol):

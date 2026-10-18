@@ -118,7 +118,8 @@ _COUNT_KEYS = (
 )
 
 
-def _source_id(root: Path) -> str:
+def source_id(root: Path) -> str:
+    """The import marker's key for one data directory."""
     return hashlib.sha256(str(root.resolve()).encode()).hexdigest()
 
 
@@ -152,23 +153,22 @@ def _comparable(value: Any) -> Any:
     return value
 
 
-class _Importer:
-    """Writes one source root into one open transaction."""
+class RowImporter:
+    """Inserts rows into one open transaction, accepting identical ones.
 
-    def __init__(self, conn: Any, root: Path, *, dry_run: bool) -> None:
+    Shared by every one-time import of a retired file store, so they agree on
+    what counts as the same record and on how a dry run behaves.
+    """
+
+    def __init__(self, conn: Any, *, dry_run: bool, count_keys: tuple[str, ...]) -> None:
         self.conn = conn
-        self.root = root
         self.dry_run = dry_run
-        self.counts = dict.fromkeys(_COUNT_KEYS, 0)
+        self.counts = dict.fromkeys(count_keys, 0)
         self.skipped: dict[str, int] = {}
-        self.node_ids: set[str] = set()
-        self.command_ids: set[str] = set()
-        self.agent_ids: set[str] = set()
 
-    # -- generic row handling -------------------------------------------------
-
-    def _skip(self, reason: str) -> None:
-        self.skipped[reason] = self.skipped.get(reason, 0) + 1
+    def _skip(self, reason: str, count: int = 1) -> None:
+        if count:
+            self.skipped[reason] = self.skipped.get(reason, 0) + count
 
     def _existing(self, table: Any, row_id: str) -> Any:
         return (
@@ -210,6 +210,17 @@ class _Importer:
                     f"record ({key} differs)."
                 )
         return False
+
+
+class _Importer(RowImporter):
+    """Writes one source root into one open transaction."""
+
+    def __init__(self, conn: Any, root: Path, *, dry_run: bool) -> None:
+        super().__init__(conn, dry_run=dry_run, count_keys=_COUNT_KEYS)
+        self.root = root
+        self.node_ids: set[str] = set()
+        self.command_ids: set[str] = set()
+        self.agent_ids: set[str] = set()
 
     # -- daemon -----------------------------------------------------------------
 
@@ -507,7 +518,7 @@ class _Importer:
 
 
 @contextmanager
-def _import_transaction(engine: Any) -> Iterator[Any]:
+def import_transaction(engine: Any) -> Iterator[Any]:
     with store_transaction(engine) as conn:
         if engine.dialect.name == "postgresql":
             # Replicas booting together import one at a time; the loser then
@@ -516,11 +527,28 @@ def _import_transaction(engine: Any) -> Iterator[Any]:
         yield conn
 
 
-def _marker(conn: Any, source_id: str) -> Any:
+def import_marker(conn: Any, kind: str, marker_id: str) -> Any:
+    """The marker an earlier import of ``kind`` left for one source, if any."""
     records = managed_node_tables.records
     return conn.scalar(
-        select(records.c.snapshot).where(
-            records.c.kind == IMPORT_MARKER_KIND, records.c.id == source_id
+        select(records.c.snapshot).where(records.c.kind == kind, records.c.id == marker_id)
+    )
+
+
+def write_import_marker(
+    conn: Any, kind: str, marker_id: str, root: Path, details: dict[str, Any]
+) -> None:
+    conn.execute(
+        insert(managed_node_tables.records).values(
+            kind=kind,
+            id=marker_id,
+            node_id=None,
+            snapshot={
+                "id": marker_id,
+                "sourceRoot": str(root.resolve()),
+                "importedAt": now_iso(),
+                **details,
+            },
         )
     )
 
@@ -528,7 +556,7 @@ def _marker(conn: Any, source_id: str) -> Any:
 def file_stores_imported(root: str | Path, database_url: str) -> bool:
     engine = shared_engine(database_url)
     with store_transaction(engine) as conn:
-        return _marker(conn, _source_id(Path(root))) is not None
+        return import_marker(conn, IMPORT_MARKER_KIND, source_id(Path(root))) is not None
 
 
 def migrate_local_file_stores(
@@ -541,12 +569,12 @@ def migrate_local_file_stores(
     written in that case.
     """
     root = Path(root_dir)
-    source_id = _source_id(root)
+    marker_id = source_id(root)
     engine = shared_engine(database_url)
     if engine.dialect.name == "sqlite":
         create_all_tables(engine)
-    with _import_transaction(engine) as conn:
-        if _marker(conn, source_id) is not None:
+    with import_transaction(engine) as conn:
+        if import_marker(conn, IMPORT_MARKER_KIND, marker_id) is not None:
             return {
                 "alreadyImported": True,
                 "dryRun": dry_run,
@@ -556,18 +584,8 @@ def migrate_local_file_stores(
         importer = _Importer(conn, root, dry_run=dry_run)
         importer.run()
         if not dry_run:
-            conn.execute(
-                insert(managed_node_tables.records).values(
-                    kind=IMPORT_MARKER_KIND,
-                    id=source_id,
-                    node_id=None,
-                    snapshot={
-                        "id": source_id,
-                        "sourceRoot": str(root.resolve()),
-                        "importedAt": now_iso(),
-                        "counts": importer.counts,
-                    },
-                )
+            write_import_marker(
+                conn, IMPORT_MARKER_KIND, marker_id, root, {"counts": importer.counts}
             )
     return {
         "alreadyImported": False,

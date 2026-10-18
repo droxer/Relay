@@ -155,9 +155,12 @@ This is the better steady state once you have a domain. Requires DNS.
    Relay pins the psycopg 3 driver on it automatically
    (`relay.core.storage_config.normalize_database_url`), so paste it unedited.
 
-4. **Set the backend variables.** The image already sets `RELAY_STORAGE`,
-   `RELAY_AUTH_STORE`, `HOST`, and
-   `RELAY_DATA_DIR`; `PORT` comes from Railway. Add:
+4. **Set the backend variables.** The image already sets `HOST`,
+   `RELAY_BACKGROUND_MODE`, and `RELAY_DATA_DIR`; `PORT` comes from Railway.
+   Every store, accounts included, lives in the referenced database, so there
+   is no storage switch to set (`RELAY_STORAGE` and `RELAY_AUTH_STORE` are
+   retired; a service that still has them only logs a warning at boot, so
+   delete them from its variables). Add:
 
    | Variable | Value | Notes |
    | --- | --- | --- |

@@ -118,18 +118,6 @@ def contains_legacy_names(value: Any) -> bool:
     return isinstance(value, str) and value in _LEGACY_VALUES
 
 
-def upgrade_legacy_session(session: dict[str, Any]) -> dict[str, Any]:
-    """An auth session's ``userId`` used to name the login account.
-
-    "user" now means the person, so sessions carry ``accountId`` instead.
-    """
-    if "userId" not in session or "accountId" in session:
-        return session
-    return {
-        ("accountId" if key == "userId" else key): item for key, item in session.items()
-    }
-
-
 def with_legacy_user_id(record: dict[str, Any]) -> dict[str, Any]:
     """Mirror ``userId`` as ``employeeId`` for clients older than the rename.
 

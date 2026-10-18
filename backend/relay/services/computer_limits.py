@@ -24,12 +24,8 @@ def global_max_local_computers(ctx: Any) -> int:
 
 
 def user_override(ctx: Any, user_id: str) -> int | None:
-    """The user's pinned limit, or None when they inherit the global.
-
-    The override lives on the users table, so a file-backed auth store has
-    no place to keep one — every user there inherits.
-    """
-    if not user_id or not hasattr(ctx.auth_store, "list_users"):
+    """The user's pinned limit, or None when they inherit the global."""
+    if not user_id:
         return None
     for user in ctx.auth_store.list_users():
         if user.get("id") == user_id:

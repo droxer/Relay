@@ -87,6 +87,7 @@ from .bootstrap.http import (
     configure_cors,
 )
 from .bootstrap.stores import (
+    retired_settings_chose_database_accounts,
     waitlist_service_from_env,
     Stores,
     build_stores,
@@ -125,6 +126,7 @@ def create_app(
         root_dir,
         stores.sessions.engine.url.render_as_string(hide_password=False),
         repairs_enabled=settings.startup_repairs_enabled,
+        accounts_already_in_database=retired_settings_chose_database_accounts(),
     )
     notifier = KeyedEventNotifier()
     notification_bridge = database_notification_bridge(stores.sessions, notifier)

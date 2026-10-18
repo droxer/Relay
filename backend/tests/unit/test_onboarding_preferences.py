@@ -3,7 +3,7 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.security.auth import AccountAuthStore, DatabaseAccountAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
 from relay.security.onboarding import apply_onboarding_patch, normalize_onboarding
 
 NOW = "2026-10-16T19:40:00.000Z"
@@ -61,18 +61,6 @@ def test_normalize_drops_whatever_it_does_not_recognize() -> None:
     }
 
 
-def test_file_store_round_trips_onboarding() -> None:
-    with TemporaryDirectory() as root:
-        store = AccountAuthStore(root)
-        account = store.create_account("alice", "kestrel-vault-7719")
-        assert account["onboarding"] == {}
-
-        updated = store.update_user_preferences(account["id"], onboarding={"introSeen": True})
-
-        assert set(updated["onboarding"]) == {"introSeenAt"}
-        assert AccountAuthStore(root).get_account_by_id(account["id"])["onboarding"] == updated["onboarding"]
-
-
 def test_database_store_round_trips_onboarding() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
@@ -107,16 +95,13 @@ def test_database_store_rejects_a_bad_patch_without_writing() -> None:
         assert persisted["onboarding"] == {}
 
 
-@pytest.mark.parametrize("storage", ["file", "database"])
-def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypatch, storage) -> None:
+def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypatch) -> None:
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier, BrokenBarrierError
 
     from relay.security import auth as auth_module
 
     def make_store():
-        if storage == "file":
-            return AccountAuthStore(str(tmp_path))
         return DatabaseAccountAuthStore(f"sqlite:///{tmp_path}/auth.db", create_schema=True)
 
     first, second = make_store(), make_store()

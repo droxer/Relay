@@ -26,9 +26,15 @@ def _bootstrap(client: TestClient) -> None:
     assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
 
 
+def _admin_user_id(app: Any) -> str:
+    # The bootstrapped admin's User row has a random id, not one derived
+    # from its handle.
+    return app.state.auth_store.resolve_user_id("admin")
+
+
 def _create_agent(app: Any) -> dict[str, Any]:
     return app.state.agent_store.create_agent(
-        "admin",
+        _admin_user_id(app),
         {"displayName": "Routine Runner", "executorKind": "claude", "defaultRole": "implementer"},
     )
 
@@ -57,7 +63,7 @@ def _session_for(app: Any, task_id: str, workspace: str, agent_id: str) -> str:
         task_store=app.state.task_store,
         task_id=task_id,
         workspace_path=workspace,
-        owner_user_id="admin",
+        owner_user_id=_admin_user_id(app),
         owner_agent_id=agent_id,
     )
     return controller.create_session("Weekly status deck", ["human", "claude"])["id"]

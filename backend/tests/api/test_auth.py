@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from automation_helpers import WEEKLY_TRIGGERS
 
-import json
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
+from sqlalchemy import delete as sa_delete, select, update as sa_update
 from relay.app import create_app
 from relay.persistence.stores import (
     DatabaseDaemonStore,
@@ -16,6 +17,7 @@ from relay.persistence.stores import (
     relay_event,
 )
 from relay.security.auth import DatabaseAccountAuthStore
+from user_ids import user_id
 
 
 def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:
@@ -444,10 +446,10 @@ def test_user_routes_are_scoped_to_authenticated_user(monkeypatch) -> None:
         })
         assert task_response.status_code == 201
         task = task_response.json()
-        assert task["ownerUserId"] == "alice"
+        assert task["ownerUserId"] == user_id("alice")
         session_id = task["linkedSessionIds"][0]
         session = alice_client.get(f"/api/v1/threads/{session_id}").json()
-        assert session["ownerUserId"] == "alice"
+        assert session["ownerUserId"] == user_id("alice")
 
         assert bob_client.get("/api/v1/tasks").json()["tasks"] == []
         assert bob_client.get("/api/v1/threads").json()["sessions"] == []
@@ -467,7 +469,7 @@ def test_user_routes_are_scoped_to_authenticated_user(monkeypatch) -> None:
 
         bob_task_response = admin_client.post("/api/v1/tasks", json={
             "title": "Bob task",
-            "ownerUserId": "bob",
+            "ownerUserId": user_id("bob"),
         })
         assert bob_task_response.status_code == 201
         bob_task = bob_task_response.json()
@@ -484,8 +486,8 @@ def test_artifact_index_is_scoped_to_authenticated_user(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_account(admin_client, "alice")
-        _create_account(admin_client, "bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
 
         alice_client = TestClient(app)
         bob_client = TestClient(app)
@@ -517,17 +519,20 @@ def test_artifact_index_is_scoped_to_authenticated_user(monkeypatch) -> None:
         alice_artifacts = alice_client.get("/api/v1/artifacts")
         assert alice_artifacts.status_code == 200
         alice_body = alice_artifacts.json()
-        assert [artifact["ownerUserId"] for artifact in alice_body["artifacts"]] == ["alice", "alice"]
+        assert [artifact["ownerUserId"] for artifact in alice_body["artifacts"]] == [
+            user_id("alice"),
+            user_id("alice"),
+        ]
         assert {artifact["sessionId"] for artifact in alice_body["artifacts"]} == {
             alice_first.json()["id"],
             alice_second.json()["id"],
         }
 
-        assert alice_client.get("/api/v1/artifacts?userId=bob").status_code == 403
+        assert alice_client.get(f"/api/v1/artifacts?userId={user_id('bob')}").status_code == 403
 
-        admin_bob_artifacts = admin_client.get("/api/v1/artifacts?userId=bob")
+        admin_bob_artifacts = admin_client.get(f"/api/v1/artifacts?userId={user_id('bob')}")
         assert admin_bob_artifacts.status_code == 200
-        assert [artifact["ownerUserId"] for artifact in admin_bob_artifacts.json()["artifacts"]] == ["bob"]
+        assert [artifact["ownerUserId"] for artifact in admin_bob_artifacts.json()["artifacts"]] == [user_id("bob")]
 
 
 def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
@@ -537,12 +542,12 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_account(admin_client, "alice")
-        _create_account(admin_client, "bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
 
         register = admin_client.post("/api/v1/daemon-node-registrations", json={
             "sandboxId": "sbx_alice",
-            "userId": "alice",
+            "userId": user_id("alice"),
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -551,7 +556,7 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         }, headers={"Authorization": "Bearer ui_token"})
         assert register.status_code == 200
         agent = app.state.agent_store.create_agent(
-            "alice", {"displayName": "Auth Maintainer", "executorKind": "codex", "defaultRole": "implementer"}
+            user_id("alice"), {"displayName": "Auth Maintainer", "executorKind": "codex", "defaultRole": "implementer"}
         )
 
         alice_client = TestClient(app)
@@ -590,7 +595,7 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         brief_response = alice_client.get("/api/v1/workspace/brief")
         assert brief_response.status_code == 200
         brief = brief_response.json()
-        assert brief["userId"] == "alice"
+        assert brief["userId"] == user_id("alice")
         assert "workspacePath" not in brief
         assert "primaryNode" not in brief
         assert brief["nodes"][0]["id"] == "sbx_alice"
@@ -608,11 +613,11 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         assert "routineCadence" not in brief["tasks"][0]
         assert brief["artifacts"][0]["sessionId"] == session.json()["id"]
 
-        assert alice_client.get("/api/v1/workspace/brief?userId=bob").status_code == 403
+        assert alice_client.get(f"/api/v1/workspace/brief?userId={user_id('bob')}").status_code == 403
 
-        admin_bob = admin_client.get("/api/v1/workspace/brief?userId=bob")
+        admin_bob = admin_client.get(f"/api/v1/workspace/brief?userId={user_id('bob')}")
         assert admin_bob.status_code == 200
-        assert admin_bob.json()["userId"] == "bob"
+        assert admin_bob.json()["userId"] == user_id("bob")
         assert admin_bob.json()["metrics"]["sessionCount"] == 1
 
 
@@ -737,28 +742,34 @@ def test_invalid_session_cookie_is_rejected(monkeypatch) -> None:
 def test_expired_session_is_rejected_and_removed(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        client = TestClient(create_app(root))
+        app = create_app(root)
+        client = TestClient(app)
         _bootstrap_admin(client)
-
-        sessions_path = Path(root) / "auth" / "sessions.json"
-        sessions = json.loads(sessions_path.read_text(encoding="utf-8"))
-        sessions[0]["expiresAt"] = "2000-01-01T00:00:00.000Z"
-        sessions_path.write_text(json.dumps(sessions), encoding="utf-8")
+        auth_store = app.state.auth_store
+        with auth_store.engine.begin() as conn:
+            conn.execute(
+                sa_update(auth_store.sessions).values(
+                    expires_at=datetime(2000, 1, 1, tzinfo=UTC)
+                )
+            )
 
         response = client.get("/api/v1/auth/me")
 
         assert response.status_code == 401
         assert response.json()["detail"] == "Session expired or invalid."
-        assert json.loads(sessions_path.read_text(encoding="utf-8")) == []
+        with auth_store.engine.begin() as conn:
+            assert conn.execute(select(auth_store.sessions.c.id)).first() is None
 
 
 def test_session_for_deleted_user_is_rejected(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        client = TestClient(create_app(root))
+        app = create_app(root)
+        client = TestClient(app)
         _bootstrap_admin(client)
-        accounts_path = Path(root) / "auth" / "users.json"
-        accounts_path.write_text("[]\n", encoding="utf-8")
+        auth_store = app.state.auth_store
+        with auth_store.engine.begin() as conn:
+            conn.execute(sa_delete(auth_store.accounts))
 
         response = client.get("/api/v1/auth/me")
 
@@ -1043,9 +1054,8 @@ def test_chat_service_user_header_requires_configured_token(monkeypatch) -> None
         assert response.status_code == 401
 
 
-def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
+def test_app_keeps_accounts_users_and_departments_in_the_database(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    monkeypatch.setenv("RELAY_AUTH_STORE", "database")
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
@@ -1120,10 +1130,8 @@ def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
         assert any(user["displayName"] == "alice" for user in users)
 
 
-def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch) -> None:
+def test_backend_stores_share_the_configured_database(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    monkeypatch.setenv("RELAY_STORAGE", "postgres")
-    monkeypatch.delenv("RELAY_AUTH_STORE", raising=False)
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/relay.db"
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)

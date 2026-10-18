@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.security.auth import DatabaseAccountAuthStore
+from sqlalchemy import update
 
 
 def _bootstrap_admin(client: TestClient) -> None:
@@ -69,27 +70,18 @@ def _set_global_limit(client: TestClient, limit: int) -> None:
 
 
 @contextmanager
-def _client(monkeypatch: pytest.MonkeyPatch, *, database_auth: bool) -> Iterator[TestClient]:
-    """A signed-out client, admin-bootstrapped.
-
-    The per-user override lives on the users table, so tests that need
-    one run against the database auth store; the rest exercise the file store
-    that the backend defaults to.
-    """
+def _client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    """A signed-out client, admin-bootstrapped, on a database of its own."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        if database_auth:
-            monkeypatch.setenv("RELAY_AUTH_STORE", "database")
-            database_url = f"sqlite:///{root}/auth.db"
-            monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
-            DatabaseAccountAuthStore(database_url, create_schema=True)
+        monkeypatch.setenv("RELAY_DATABASE_URL", f"sqlite:///{root}/relay.db")
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         yield client
 
 
 def test_settings_default_and_update(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         response = client.get("/api/v1/admin/settings")
         assert response.status_code == 200
         assert response.json()["settings"]["maxLocalComputersPerUser"] == 3
@@ -103,15 +95,10 @@ def test_settings_default_and_update(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
 
-def test_settings_report_whether_user_edits_are_storable(
+def test_settings_report_user_edits_as_always_storable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
-        assert (
-            client.get("/api/v1/admin/settings").json()["capabilities"]["userEdits"]
-            is False
-        )
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         assert (
             client.get("/api/v1/admin/settings").json()["capabilities"]["userEdits"]
             is True
@@ -121,7 +108,7 @@ def test_settings_report_whether_user_edits_are_storable(
 def test_settings_report_the_admin_token_without_revealing_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         body = client.get("/api/v1/admin/settings").json()
         assert body["adminTokenConfigured"] is True
         assert "adminToken" not in body
@@ -139,7 +126,7 @@ def test_settings_report_the_admin_token_without_revealing_it(
 def test_admin_token_survives_a_restart_without_a_data_volume(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         token = client.post("/api/v1/admin/admin-token/reissue").json()["adminToken"]
 
     # A fresh data dir is a redeployed container with no volume; the database
@@ -158,7 +145,7 @@ def test_admin_token_survives_a_restart_without_a_data_volume(
 def test_admin_token_reissue_returns_it_once_and_invalidates_the_old_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         response = client.post("/api/v1/admin/admin-token/reissue")
         assert response.status_code == 200
         new_token = response.json()["adminToken"]
@@ -185,7 +172,7 @@ def test_admin_token_reissue_returns_it_once_and_invalidates_the_old_one(
 def test_settings_reject_out_of_range_and_non_numeric(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         for value in (-1, 51, "many", None):
             response = client.put(
                 "/api/v1/admin/settings", json={"maxLocalComputersPerUser": value}
@@ -194,7 +181,7 @@ def test_settings_reject_out_of_range_and_non_numeric(
 
 
 def test_settings_require_admin_session(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert client.get("/api/v1/admin/settings").status_code == 401
@@ -210,7 +197,7 @@ def test_settings_require_admin_session(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_enrollment_stops_at_the_global_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 2)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -227,7 +214,7 @@ def test_enrollment_stops_at_the_global_limit(monkeypatch: pytest.MonkeyPatch) -
 def test_re_enrolling_an_adopted_computer_is_allowed_at_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 1)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -240,7 +227,7 @@ def test_re_enrolling_an_adopted_computer_is_allowed_at_the_limit(
 
 
 def test_zero_limit_blocks_every_enrollment(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 0)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -252,7 +239,7 @@ def test_zero_limit_blocks_every_enrollment(monkeypatch: pytest.MonkeyPatch) -> 
 def test_lowering_the_limit_grandfathers_existing_computers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 3)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -265,7 +252,8 @@ def test_lowering_the_limit_grandfathers_existing_computers(
         _set_global_limit(client, 1)
 
         nodes = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
-        assert len([node for node in nodes if node.get("userId") == "alice"]) == 2
+        alice = client.app.state.auth_store.resolve_user_id("alice")
+        assert len([node for node in nodes if node.get("userId") == alice]) == 2
 
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
@@ -277,7 +265,7 @@ def test_lowering_the_limit_grandfathers_existing_computers(
 def test_admin_node_creation_respects_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 1)
         _create_user(client, "alice")
 
@@ -307,7 +295,7 @@ def test_admin_node_creation_respects_the_limit(
 def test_managed_node_creation_ignores_the_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 0)
         _create_user(client, "alice")
 
@@ -319,7 +307,7 @@ def test_managed_node_creation_ignores_the_limit(
 
 
 def test_user_override_beats_the_global(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 1)
         user = _create_user(client, "alice", maxLocalComputers=2)
         assert user["maxLocalComputers"] == 2
@@ -335,7 +323,7 @@ def test_user_override_beats_the_global(monkeypatch: pytest.MonkeyPatch) -> None
 def test_users_without_an_override_follow_the_global(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         # The database auth store mints its own user id, so read it back
         # rather than assuming the requested one.
         alice_id = _create_user(client, "alice")["id"]
@@ -352,7 +340,7 @@ def test_users_without_an_override_follow_the_global(
 
 
 def test_patch_sets_and_clears_the_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 4)
         alice_id = _create_user(client, "alice")["id"]
 
@@ -387,7 +375,7 @@ def test_patch_sets_and_clears_the_override(monkeypatch: pytest.MonkeyPatch) -> 
 def test_patch_rejects_unknown_user_and_bad_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         alice_id = _create_user(client, "alice")["id"]
         assert (
             client.patch(
@@ -409,27 +397,10 @@ def test_patch_rejects_unknown_user_and_bad_limit(
         )
 
 
-def test_override_at_creation_needs_the_database_auth_store(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
-        response = client.post(
-            "/api/v1/admin/users",
-            json={
-                "userId": "alice",
-                "username": "alice",
-                "password": "userpass",
-                "maxLocalComputers": 2,
-            },
-        )
-        assert response.status_code == 400
-        assert "database auth store" in response.json()["detail"]
-
-
 def test_disconnecting_a_computer_frees_a_slot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 1)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -447,7 +418,7 @@ def test_disconnecting_a_computer_frees_a_slot(
 def test_settings_default_and_update_task_rounds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         assert client.get("/api/v1/admin/settings").json()["settings"][
             "maxTaskRounds"
         ] == 5
@@ -472,7 +443,7 @@ def test_saving_one_setting_leaves_the_other_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each card sends only its own field, so one save cannot revert the other."""
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 7)
         assert (
             client.put(
@@ -496,7 +467,7 @@ def test_auth_me_carries_the_caller_limit_and_usage(
     """Self-service surfaces gate their connect action on /auth/me, so the
     session payload must carry the resolved limit and live usage — an
     admin-only endpoint cannot serve the user's own page."""
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 2)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -514,7 +485,7 @@ def test_auth_me_carries_the_caller_limit_and_usage(
 def test_auth_me_reflects_the_user_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 5)
         _create_user(client, "alice", maxLocalComputers=1)
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -528,9 +499,13 @@ def test_auth_me_reflects_the_user_override(
 def test_auth_me_omits_limits_for_users_without_an_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A user with no user link cannot enroll a computer at all, so their
-    # payload stays bare rather than implying a limit of zero.
-    with _client(monkeypatch, database_auth=False) as client:
+    # An account with no user link (one imported from the retired file
+    # store) cannot enroll a computer at all, so its payload stays bare
+    # rather than implying a limit of zero.
+    with _client(monkeypatch) as client:
+        auth_store = client.app.state.auth_store
+        with auth_store.engine.begin() as conn:
+            conn.execute(update(auth_store.accounts).values(user_id=None))
         me = client.get("/api/v1/auth/me").json()["user"]
         assert "effectiveMaxLocalComputers" not in me
         assert "localComputerCount" not in me
@@ -542,7 +517,7 @@ def test_preferences_response_keeps_the_limit_fields(
     # The client replaces its session user with the preferences response, so
     # an undecorated payload here silently ungates the connect CTA until the
     # next reload.
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 2)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -560,7 +535,7 @@ def test_login_response_carries_the_limit_fields(
 ) -> None:
     # LoginScreen seeds the session user straight from the login response —
     # there is no /auth/me round trip before the My Computer page can render.
-    with _client(monkeypatch, database_auth=False) as client:
+    with _client(monkeypatch) as client:
         _set_global_limit(client, 4)
         _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -582,7 +557,7 @@ def test_user_id_collision_is_rejected_not_merged(
     user's display name, email, and computer limit and attached a second
     login to them.
     """
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         first = _create_user(
             client, "alice", displayName="Alice Chen", maxLocalComputers=2
@@ -612,7 +587,7 @@ def test_user_id_collision_is_rejected_not_merged(
 def test_user_id_is_normalized_and_validated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
 
         for bad in ("a b", "Alice/Bob", "a", "@@", "-"):
@@ -653,7 +628,7 @@ def test_user_survives_a_computer_claimed_mid_create(
     Raising here left a created user behind an error message, and the retry
     then failed on "username already exists" with no way forward.
     """
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         # An unassigned computer for the new user to be given.
         created_node = client.post(
@@ -702,7 +677,7 @@ def test_unknown_computer_is_still_refused_before_the_user_exists(
 ) -> None:
     """The pre-check stays: a node id that never existed is a bad request, and
     nothing is created for it."""
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         response = client.post(
             "/api/v1/admin/users",
@@ -724,7 +699,7 @@ def test_unknown_computer_is_still_refused_before_the_user_exists(
 def test_password_policy_is_enforced_wherever_a_password_is_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         short = client.post(
             "/api/v1/admin/users",
@@ -748,7 +723,7 @@ def test_password_policy_is_enforced_wherever_a_password_is_set(
 
 def test_user_carries_a_handle_not_a_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
     """`id` is a UUID under the database store; the handle is what admins read."""
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         created = _create_user(client, "alice", displayName="Alice Chen")
         assert created["handle"] == "alice"
@@ -766,7 +741,7 @@ def test_handle_lookup_catches_a_collision_the_uuid_mapping_would_miss(
 ) -> None:
     """A row whose handle was backfilled has an id that is NOT uuid5 of it, so
     resolution consults the handle column before falling back to the mapping."""
-    with _client(monkeypatch, database_auth=True) as client:
+    with _client(monkeypatch) as client:
         _login_admin(client)
         alice = _create_user(client, "alice")
 

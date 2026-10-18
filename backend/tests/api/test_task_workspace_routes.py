@@ -12,8 +12,10 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.sessions.controller import SessionController
+from user_ids import user_id
 
 ADMIN_PASSWORD = "kestrel-vault-7719"
+ALICE = user_id("alice")
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -53,7 +55,7 @@ def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) 
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "userId": "alice",
+            "userId": ALICE,
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -72,7 +74,7 @@ def _agent(client: TestClient, node: dict, name: str = "Runner") -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": "alice",
+            "supervisorUserId": ALICE,
             "displayName": name,
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -153,8 +155,8 @@ def task_with_run(client: TestClient):
             {
                 "title": "Ship the report",
                 "sourceRoutineId": "routine_nightly",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
                 "assignedAgent": agent["executorKind"],
                 "status": "assigned",
@@ -174,8 +176,8 @@ def backlog_task(client: TestClient):
         "/api/v1/tasks",
         json={
             "title": "Not started yet",
-            "ownerUserId": "alice",
-            "assigneeUserId": "alice",
+            "ownerUserId": ALICE,
+            "assigneeUserId": ALICE,
         },
     )
     assert created.status_code == 201, created.text
@@ -193,8 +195,8 @@ def routine_with_occurrence(client: TestClient):
             "/api/v1/tasks",
             json={
                 "title": "Weekly report",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
+                "ownerUserId": ALICE,
+                "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -277,7 +279,7 @@ def test_project_task_browses_the_recorded_project_workspace(
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_user_id="alice",
+        owner_user_id=ALICE,
         project_id="prj_launch",
         workspace_layout="project",
         workspace_subpath="projects/prj_launch",
@@ -323,7 +325,7 @@ def test_task_workspace_rejects_a_daemon_that_lost_task_workspace_support(
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_user_id="alice",
+        owner_user_id=ALICE,
         workspace_layout="task",
         workspace_subpath=f"tasks/{backlog_task['id']}",
         daemon_node_id=node["id"],
@@ -361,7 +363,7 @@ def test_newest_workspace_session_does_not_fall_back_to_an_older_node(
             task_store=app.state.task_store,
             task_id=backlog_task["id"],
             workspace_path=node["workspacePath"],
-            owner_user_id="alice",
+            owner_user_id=ALICE,
             workspace_layout="task",
             workspace_subpath=f"tasks/{backlog_task['id']}",
             daemon_node_id=node["id"],
@@ -391,7 +393,7 @@ def test_falls_back_to_an_older_session_when_the_newest_was_deleted(client, task
         task_store=app.state.task_store,
         task_id=task["id"],
         workspace_path=node["workspacePath"],
-        owner_user_id="alice",
+        owner_user_id=ALICE,
         workspace_layout="task",
         daemon_node_id=node["id"],
     )
@@ -435,7 +437,7 @@ def test_linking_an_unrelated_thread_does_not_replace_the_task_binding(client, t
         task_store=app.state.task_store,
         task_id=task["id"],
         workspace_path=node["workspacePath"],
-        owner_user_id="alice",
+        owner_user_id=ALICE,
         workspace_layout="thread",
         daemon_node_id=node["id"],
     )
@@ -450,7 +452,7 @@ def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_t
     app = client.app
     old = _register_node(app, "old-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
     controller = SessionController(app.state.session_store, task_store=app.state.task_store,
-        task_id=backlog_task["id"], owner_user_id="alice", workspace_path=old["workspacePath"],
+        task_id=backlog_task["id"], owner_user_id=ALICE, workspace_path=old["workspacePath"],
         workspace_layout="task", workspace_subpath="tasks/original-location", daemon_node_id=old["id"],
         computer_id=computer_id(old))
     controller.create_session("Keep files", ["human", "codex"])
@@ -491,7 +493,7 @@ def test_task_admission_rejects_another_computer_even_without_dispatch_helper(cl
     with pytest.raises(ValueError, match="workspace_unavailable"):
         asyncio.run(client.app.state.backend.run(other["id"], {
             "taskId": task["id"], "taskGoal": "Continue", "assignments": [{"agent": "codex"}],
-            "actorUserId": "alice",
+            "actorUserId": ALICE,
         }))
     binding = client.app.state.task_store.get_task(task["id"])["workspaceBinding"]
     assert binding["computerId"] == computer_id(node)
@@ -511,7 +513,7 @@ def _thread_with_unsnapshotted_artifact(app, backlog_task, node) -> tuple[dict, 
         task_store=app.state.task_store,
         task_id=backlog_task["id"],
         workspace_path=node["workspacePath"],
-        owner_user_id="alice",
+        owner_user_id=ALICE,
         workspace_layout="task",
         workspace_subpath=f"tasks/{backlog_task['id']}",
         daemon_node_id=node["id"],

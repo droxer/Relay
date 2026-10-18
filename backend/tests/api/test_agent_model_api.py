@@ -6,6 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
+from user_ids import user_id
+
+ALICE = user_id("alice")
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -28,7 +31,7 @@ def _register_node(app, capabilities: list[str], **extra) -> None:
         {
             **extra,
             "sandboxId": "node_a",
-            "userId": "alice",
+            "userId": ALICE,
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -43,7 +46,7 @@ def _create_agent(client: TestClient, **extra) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": "alice",
+            "supervisorUserId": ALICE,
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -91,7 +94,7 @@ def test_invalid_model_is_rejected_at_creation(env) -> None:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorUserId": "alice",
+            "supervisorUserId": ALICE,
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
