@@ -27,7 +27,7 @@ async function dragCard(page: Page, card: Locator, lane: Locator) {
 }
 
 test("five-stage board preserves blocked review and accepts it only after unblocking", async ({ page }) => {
-  let tasks = [task("Blocked review", "blocked", { workflowStage: "review", startedAt: stamp, blockedFromStatus: "review", blockerReason: "Need approval", blockedAt: stamp }), task("Queued delivery", "assigned")];
+  let tasks = [task("Blocked review", "blocked", { number: 1, workflowStage: "review", startedAt: stamp, blockedFromStatus: "review", blockerReason: "Need approval", blockedAt: stamp }), task("Queued delivery", "assigned", { number: 2 })];
   const writes: Array<{ path: string; body: any }> = [];
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -54,6 +54,9 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   // A tile is an ID, a title and one facts line; the blocker and every action
   // live in the record drawer it opens.
   await expect(card.getByRole("button")).toHaveCount(0);
+  // Sharing the Review lane, the tile itself says it is blocked, and on what.
+  await expect(card.locator(".task-holdup")).toContainText("Blocked");
+  await expect(card.locator(".task-holdup")).toContainText("Need approval");
   await card.getByRole("link", { name: "Blocked review", exact: true }).click();
   const drawer = page.getByRole("dialog");
   const guidance = drawer.getByRole("region", { name: "Next steps" });

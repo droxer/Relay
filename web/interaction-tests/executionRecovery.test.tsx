@@ -155,8 +155,9 @@ it("warns only about faults — work waiting on a person reads as information", 
   expect(tone()).toBe("info");
   view.rerender(<TaskRecoveryPanel task={task(undefined, "waiting_for_human")} />);
   expect(tone()).toBe("info");
+  // A blocked task is a fault to clear: its rail is the error tone.
   view.rerender(<TaskRecoveryPanel task={task("agent_offline")} />);
-  expect(tone()).toBe("attention");
+  expect(tone()).toBe("blocked");
 });
 it("announces a requested retry through a live region that predates the request", async () => {
   const view = render(<ExecutionRecoveryPanel session={session("finalization_failed")} onRetry={vi.fn().mockResolvedValue(undefined)} />);

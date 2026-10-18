@@ -2864,5 +2864,15 @@
     "desktop_on": "On. New notices appear as system notifications while Relay is in the background.",
     "desktop_blocked": "Notifications are blocked for this site. Allow them in your browser's site settings, then turn this on.",
     "desktop_unsupported": "This browser doesn't support desktop notifications."
+  },
+  "blocker": {
+    "no_reason": "No cause was recorded",
+    "no_question": "A question is waiting for you",
+    "resolve": "How to resolve",
+    "source": {
+      "dispatch": "Couldn’t start",
+      "execution": "Stopped during a run",
+      "operator": "Blocked by a person"
+    }
   }
 }

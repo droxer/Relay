@@ -44,3 +44,42 @@
    them out. The empty live region below must keep its box — a display:none
    region is not announced when it fills. */
 .recovery-feedback:empty { margin-block-start: calc(var(--sp-2) * -1); }
+
+/* ── A blocked task on its record ─────────────────────────────────────────
+   Status first (glyph, word, source, age), then the recorded blocker as the
+   headline, then a quieter "how to resolve" block. The rail turns --err: a
+   blocked task is a fault to clear, unlike a task simply waiting on a person. */
+.recovery-panel[data-tone="blocked"] {
+  --recovery-rail: var(--err);
+  gap: var(--sp-3);
+}
+.blocker-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font: var(--type-body-sm);
+}
+.blocker-head .blocker-label { color: var(--err); font: var(--type-label); }
+.blocker-meta { color: var(--ink-3); }
+.blocker-meta::before { content: "·"; margin-inline-end: var(--sp-2); }
+.recovery-panel .blocker-reason {
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  white-space: pre-line;
+}
+.recovery-panel .blocker-reason--none { color: var(--ink-3); }
+.blocker-resolve {
+  display: grid;
+  gap: var(--sp-1);
+  padding-block-start: var(--sp-3);
+  border-top: 0.5px solid var(--line-2);
+  font: var(--type-body-sm);
+}
+.blocker-resolve-label {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+.blocker-resolve strong { color: var(--ink-1); font: var(--type-label); }

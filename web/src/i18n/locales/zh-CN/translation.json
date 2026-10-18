@@ -2805,5 +2805,15 @@
     "desktop_on": "已开启。Relay 在后台时，新通知会以系统通知显示。",
     "desktop_blocked": "此网站的通知已被阻止。请在浏览器的网站设置中允许通知后再开启。",
     "desktop_unsupported": "此浏览器不支持桌面通知。"
+  },
+  "blocker": {
+    "no_reason": "未记录原因",
+    "no_question": "有问题等待你回答",
+    "resolve": "解决方法",
+    "source": {
+      "dispatch": "无法启动",
+      "execution": "运行中停止",
+      "operator": "由人工阻塞"
+    }
   }
 }

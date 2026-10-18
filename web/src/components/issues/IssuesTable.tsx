@@ -12,6 +12,7 @@ import { hrefForTaskRecord, type TaskRoster } from "../task-board/BacklogRecords
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { issueNeedsProject, NO_GROUP, type IssueGroup, type IssueGroupBy, type IssueSortKey } from "../../lib/issueQueues";
 import { TaskRefLink } from "../task-board/TaskRefLink";
+import { TaskHoldupLine } from "../task-board/TaskHoldupLine";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "../task-board/InlineTaskFields";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 import type { ProjectRecord, RelayTaskListItem, TaskStatus } from "../../types";
@@ -156,6 +157,7 @@ export function IssuesTable({
                       {task.title}
                     </a>
                     {intake && task.status !== "done" ? <Badge variant="warning" className="issue-intake-chip">{t("issues.needs_project")}</Badge> : null}
+                    <TaskHoldupLine task={task} />
                   </div>
                 </TableCell>
                 {showStatus ? (

@@ -5,6 +5,9 @@ import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/
 import { executionRecoveryGuide, taskRecoveryGuide, taskRecoveryReason, type RecoveryGuide } from "../lib/executionRecovery";
 import { taskWaitingPrompt, taskWaitingThreadId } from "../lib/awaitingInput";
 import { AwaitingInputNotes } from "./AwaitingInputPrompt";
+import { TaskStatusIcon } from "./TaskStatusIcon";
+import { taskBlocker } from "../lib/taskExceptions";
+import { formatRelativeTime } from "../lib/adminHelpers";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 
@@ -115,6 +118,7 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   const linked = task.workspaceWaiting?.blockingSessionId
     || (task.status === "blocked" && task.attention ? task.attention.sessionId : taskWaitingThreadId(task) ?? task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
+  if (task.status === "blocked") return <TaskBlockerPanel task={task} guide={guide} sessionId={sessionId} onOpenThread={onOpenThread} />;
   const reason = taskRecoveryReason(task);
   // Waiting on a person: quote what the agent asked, and make answering it
   // the one primary action — the reply is what resumes the task.
@@ -125,7 +129,6 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
     {waiting?.text ? <blockquote className="awaiting-input-quote">{waiting.text}</blockquote> : null}
     {waiting?.notes.length ? <AwaitingInputNotes notes={waiting.notes} /> : null}
     <p>{t(`recovery.${guide.key}.body`)}</p>
-    {task.status === "blocked" ? <p>{t("recovery.unblock_help")}</p> : null}
     <div className="recovery-actions">
       <RecoveryDestination guide={guide} />
       {sessionId ? (
@@ -134,6 +137,55 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
           onNavigate={onOpenThread ? () => onOpenThread(sessionId) : undefined}
           primary={Boolean(waiting)}
         >{t(waiting ? "recovery.reply_in_thread" : "recovery.thread")}</RecoveryLink>
+      ) : null}
+    </div>
+  </section>;
+}
+
+/**
+ * A blocked task, stated in the order a reader asks: that it is blocked and
+ * since when, what the blocker is, then how to clear it. The recorded reason
+ * is the headline — it used to sit in small print between two paragraphs of
+ * guidance, under a title that named only the category.
+ */
+function TaskBlockerPanel({ task, guide, sessionId, onOpenThread }: {
+  task: RelayTaskListItem;
+  guide: RecoveryGuide;
+  sessionId?: string;
+  onOpenThread?: (sessionId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const blocker = taskBlocker(task);
+  const since = task.blockedAt ?? task.attention?.observedAt;
+  const source = task.attention?.source;
+  const meta = [
+    source && source !== "legacy" ? t(`blocker.source.${source}`) : null,
+    since && Number.isFinite(Date.parse(since)) ? formatRelativeTime(since, t) : null,
+  ].filter(Boolean).join(" · ");
+  // With no recorded cause the headline is the unknown-cause title itself,
+  // so the resolve block does not repeat it.
+  const showGuideTitle = !blocker.unknown;
+  return <section className="recovery-panel blocker-panel" data-tone="blocked" aria-label={t("recovery.title")}>
+    <header className="blocker-head">
+      <TaskStatusIcon status="blocked" />
+      <strong className="blocker-label">{t("backlog.statuses.blocked")}</strong>
+      {meta ? <span className="blocker-meta">{meta}</span> : null}
+    </header>
+    <p className={blocker.reason ? "blocker-reason" : "blocker-reason blocker-reason--none"}>
+      {blocker.reason ?? t("recovery.unknown.title")}
+    </p>
+    <div className="blocker-resolve">
+      <span className="blocker-resolve-label">{t("blocker.resolve")}</span>
+      {showGuideTitle ? <strong>{t(`recovery.${guide.key}.title`)}</strong> : null}
+      <p>{t(`recovery.${guide.key}.body`)}</p>
+      <p className="recovery-context">{t("recovery.unblock_help")}</p>
+    </div>
+    <div className="recovery-actions">
+      <RecoveryDestination guide={guide} />
+      {sessionId ? (
+        <RecoveryLink href={hrefForRoute("main", sessionId)} onNavigate={onOpenThread ? () => onOpenThread(sessionId) : undefined}>
+          {t("recovery.thread")}
+        </RecoveryLink>
       ) : null}
     </div>
   </section>;

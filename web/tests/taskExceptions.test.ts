@@ -6,6 +6,7 @@ import {
   UNKNOWN_BLOCKER_SENTINEL,
   taskBlocker,
   taskExceptions,
+  taskHoldup,
   taskWorkAgeDays,
 } from "../src/lib/taskExceptions.js";
 import type { RelaySession, RelayTask } from "../src/types.js";
@@ -134,6 +135,27 @@ describe("taskExceptions", () => {
   });
 });
 
+describe("taskHoldup", () => {
+  it("is null for work that is simply moving", () => {
+    assert.equal(taskHoldup(task({ id: "t1", title: "One", status: "running" })), null);
+  });
+
+  it("names a blocked task's recorded reason", () => {
+    const blocked = task({ id: "t1", title: "One", status: "blocked", blockerReason: "Needs a key" });
+    assert.deepEqual(taskHoldup(blocked), { kind: "blocked", text: "Needs a key" });
+  });
+
+  it("leaves the text empty when no cause was recorded, never the sentinel", () => {
+    const blocked = task({ id: "t1", title: "One", status: "blocked", blockerReason: UNKNOWN_BLOCKER_SENTINEL });
+    assert.deepEqual(taskHoldup(blocked), { kind: "blocked", text: null });
+  });
+
+  it("quotes the question a waiting task asks", () => {
+    const waiting = { ...task({ id: "t1", title: "One", status: "waiting_for_human" }), awaiting: { text: " Which tier? " } } as RelayTask;
+    assert.deepEqual(taskHoldup(waiting), { kind: "waiting", text: "Which tier?" });
+  });
+});
+
 /* The card is a tile now: a title and one facts line. Everything it used to
    carry — the description, the exception line, the routine badge, the file
    count, the ref, and the action bar — moved into the record drawer, and
@@ -158,6 +180,12 @@ describe("the backlog card stays a tile", () => {
     assert.ok(!card.includes("RoutineOriginBadge"), "the origin badge belongs to the drawer");
     assert.ok(!card.includes("backlog-result-files"), "the file count belongs to the drawer");
     assert.ok(!card.includes("TaskFlowDetails"), "the exception line belongs to the drawer");
+  });
+
+  /* The one exception a tile states: a blocked or waiting task shares the
+     lane of the stage it stopped in, so without it the tile reads as moving. */
+  it("says when it is held up, and on what", () => {
+    assert.ok(card.includes("<TaskHoldupLine"), "a blocked tile must name its blocker");
   });
 
   it("keeps the title a real link to the record", () => {
