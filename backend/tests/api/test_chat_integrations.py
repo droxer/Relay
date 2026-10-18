@@ -8,9 +8,12 @@ from tempfile import TemporaryDirectory
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
+from app_state_helpers import replace_app_context
 from relay.app import create_app
-from relay.chat import DatabaseChatIntegrationStore, LocalChatIntegrationStore
+from relay.chat.integrations import DatabaseChatIntegrationStore
+from store_fixtures import make_chat_store
 from relay.chat.provider_health import (
     probe_chat_integration,
     provision_chat_integration,
@@ -18,10 +21,15 @@ from relay.chat.provider_health import (
 from relay.core.computer_identity import computer_id
 
 
+_CHAT_SECRET_KEY = Fernet.generate_key().decode()
+
+
 @pytest.fixture(autouse=True)
 def _channels_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat channels ship disabled; these tests cover the enabled feature."""
     monkeypatch.setenv("RELAY_CHANNELS_ENABLED", "1")
+    # Chat secrets live encrypted in the database.
+    monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", _CHAT_SECRET_KEY)
 
 
 async def _healthy_provider(_settings):
@@ -140,8 +148,8 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_secret")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
-        client.app.state.chat_probe = _healthy_provider
-        client.app.state.chat_provision = _healthy_provision
+        replace_app_context(client.app, chat_probe=_healthy_provider)
+        replace_app_context(client.app, chat_provision=_healthy_provision)
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
         assert (
@@ -304,7 +312,7 @@ def test_chat_integration_check_rejects_invalid_provider_credentials(
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
-        client.app.state.chat_probe = invalid_provider
+        replace_app_context(client.app, chat_probe=invalid_provider)
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
         assert (
@@ -366,8 +374,8 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
-        client.app.state.chat_probe = _healthy_provider
-        client.app.state.chat_provision = capture_provision
+        replace_app_context(client.app, chat_probe=_healthy_provider)
+        replace_app_context(client.app, chat_provision=capture_provision)
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
         assert (
@@ -406,12 +414,11 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
         )
         assert forbidden_patch.status_code == 400
 
-        client.app.state.chat_store.secrets_path.write_text(
-            json.dumps(
-                {
-                    integration_id: {"botToken": "token"},
-                }
-            )
+        chat_store = client.app.state.chat_store
+        replaced_secrets = json.dumps({integration_id: {"botToken": "token"}})
+        chat_store._write_document(
+            "secrets",
+            {"ciphertext": chat_store._secret_cipher.encrypt(replaced_secrets.encode()).decode()},
         )
         client.patch(
             f"/api/v1/admin/chat-integrations/{integration_id}",
@@ -495,7 +502,7 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
                 return True, "Previous Telegram webhook restored."
             return False, "Telegram webhook confirmation failed."
 
-        client.app.state.chat_provision = reject_then_restore
+        replace_app_context(client.app, chat_provision=reject_then_restore)
         failed_rotation = client.post(
             f"/api/v1/admin/chat-integrations/{integration_id}/webhook-secret-rotations"
         )
@@ -534,7 +541,7 @@ def test_chat_integrations_require_admin(monkeypatch) -> None:
 
 def test_chat_integration_store_serializes_concurrent_creates() -> None:
     with TemporaryDirectory() as root:
-        store = LocalChatIntegrationStore(root)
+        store = make_chat_store(root)
 
         def create(index: int) -> str:
             integration = store.create_integration(

@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.sessions import SessionController
+from relay.sessions.controller import SessionController
 
 ADMIN_PASSWORD = "kestrel-vault-7719"
 

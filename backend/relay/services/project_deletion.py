@@ -7,17 +7,16 @@ from loguru import logger
 from sqlalchemy import delete, select
 
 from ..core.ids import new_database_id
-from ..daemon_registry.registry import (
-    PROJECT_WORKSPACE_DELETE_CAPABILITY,
-    WORKSPACE_DELETE_COMMAND,
+from ..daemon_registry.records import WORKSPACE_DELETE_COMMAND
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE,
+    has_capability,
 )
-from ..persistence.project_store import (
-    LINKED_WORKSPACE_PREFIX,
-    ProjectVersionConflict,
-)
+from ..persistence.project_store import ProjectVersionConflict
+from ..core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from ..persistence.resource_lock import resource_transaction
 from ..persistence.store_common import store_transaction
-from ..persistence.task_store import dispatch_claim_active
+from ..persistence.task.rules import dispatch_claim_active
 from ..sessions.controller import SessionController, SessionRunInFlightError
 from .task_deletion import TASK_DELETION_LOCK, task_has_active_linked_session
 
@@ -120,7 +119,7 @@ def _cleanup_target(registry: Any, computer: str) -> tuple[dict[str, Any] | None
     """Pick the node record that will carry the cleanup, and say when it runs."""
     live = registry.live_cleanup_node(computer)
     if live is not None:
-        capable = PROJECT_WORKSPACE_DELETE_CAPABILITY in (live.get("capabilities") or [])
+        capable = has_capability(live, DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE)
         return live, CLEANUP_QUEUED if capable else CLEANUP_WAITING_FOR_UPGRADE
     # The files outlive the node: queue on the newest retired record so a
     # re-enrolled node for this computer adopts the cleanup on registration.
@@ -324,10 +323,10 @@ def _adopt_by_live_node(registry: Any, computer: str, cleanup: str) -> str:
         return cleanup
     try:
         registry.rehome_workspace_cleanups(computer, live["id"])
-    except Exception:
+    except Exception:  # noqa: BLE001 - post-delete cleanup is best-effort; the deletion already committed
         logger.exception("Failed to move project cleanup", computer_id=computer)
         return cleanup
-    capable = PROJECT_WORKSPACE_DELETE_CAPABILITY in (live.get("capabilities") or [])
+    capable = has_capability(live, DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE)
     return CLEANUP_QUEUED if capable else CLEANUP_WAITING_FOR_UPGRADE
 
 
@@ -341,11 +340,11 @@ def _forget_after_commit(ctx: Any, automation_store: Any, removed: dict[str, Any
     for session_id in removed["sessionIds"]:
         try:
             ctx.chat_store.clear_conversation_sessions(session_id)
-        except Exception:
+        except Exception:  # noqa: BLE001 - post-delete cleanup is best-effort; the deletion already committed
             logger.exception("Failed to clear chat bindings", session_id=session_id)
     if automation_store is None:
         return
     try:
         automation_store.forget_routines(removed["routineIds"])
-    except Exception:
+    except Exception:  # noqa: BLE001 - post-delete cleanup is best-effort; the deletion already committed
         logger.exception("Failed to drop automation state", routine_ids=removed["routineIds"])

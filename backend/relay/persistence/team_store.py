@@ -1,23 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
-from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Table,
-    Text,
-    UniqueConstraint,
     insert,
     select,
-    text,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -27,22 +15,14 @@ from ..collaboration.styles import validate_collaboration_style
 from ..core.ids import new_database_id, now_iso
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
-    DEFAULT_RELAY_DATA_DIR,
-    _append_jsonl,
     _format_iso,
     _parse_iso,
-    _read_json,
-    _read_jsonl,
-    _write_json,
-    database_id_column,
-    entity_uuid_type,
     create_all_tables,
-    json_type,
     shared_engine,
     store_transaction,
-    metadata as shared_metadata,
-    safe_name,
 )
+from .sql import metadata as shared_metadata
+from .tables import teams as teams_tables
 
 
 class TeamValidationError(ValueError):
@@ -85,188 +65,10 @@ def validate_team_payload(
     return lead, normalized
 
 
-class LocalTeamStore:
-    def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
-        self.root = Path(root_dir) / "teams"
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._lock = RLock()
-
-    def create_team(
-        self, owner_user_id: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
-        team = _new_team(owner_user_id, payload)
-        with self._lock:
-            self._ensure_unique_name(team["ownerUserId"], team["name"])
-            self._append(team["id"], "team.created", {"team": team})
-        return team
-
-    def get_team(self, team_id: str) -> dict[str, Any] | None:
-        path = self._snapshot_path(team_id)
-        return _normalized_team_snapshot(_read_json(path)) if path.exists() else None
-
-    def list_teams(
-        self,
-        owner_user_id: str | None = None,
-        *,
-        include_deleted: bool = False,
-    ) -> list[dict[str, Any]]:
-        teams = [
-            _normalized_team_snapshot(_read_json(path))
-            for path in self.root.glob("*/snapshot.json")
-        ]
-        if owner_user_id is not None:
-            teams = [
-                team
-                for team in teams
-                if team.get("ownerUserId") == owner_user_id
-            ]
-        if not include_deleted:
-            teams = [team for team in teams if not team.get("deletedAt")]
-        return sorted(
-            teams,
-            key=lambda team: (
-                team.get("ownerUserId") or "",
-                team.get("name", "").casefold(),
-                team["id"],
-            ),
-        )
-
-    def update_team(self, team_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
-            current = self._active_team(team_id)
-            normalized = _normalize_team_patch(patch, current=current)
-            if "name" in normalized:
-                self._ensure_unique_name(
-                    current["ownerUserId"],
-                    normalized["name"],
-                    exclude_id=team_id,
-                )
-            updated = {**current, **normalized, "updatedAt": now_iso()}
-            if updated.get("collaborationStyle") is None:
-                updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
-            self._append(
-                team_id,
-                "team.updated",
-                {"patch": normalized, "team": updated},
-            )
-            return updated
-
-    def delete_team(self, team_id: str) -> dict[str, Any]:
-        with self._lock:
-            current = self._active_team(team_id)
-            timestamp = now_iso()
-            deleted = {
-                **current,
-                "enabled": False,
-                "deletedAt": timestamp,
-                "updatedAt": timestamp,
-            }
-            self._append(team_id, "team.deleted", {"team": deleted})
-            return deleted
-
-    def remove_member(self, team_id: str, agent_id: str) -> dict[str, Any]:
-        with self._lock:
-            current = self._active_team(team_id)
-            members = [
-                member for member in current.get("memberAgentIds", []) if member != agent_id
-            ]
-            if members == current.get("memberAgentIds", []):
-                return current
-            updated, patch = _without_member(current, members, agent_id)
-            self._append(
-                team_id, "team.updated", {"patch": patch, "team": updated}
-            )
-            return updated
-
-    def events(self, team_id: str) -> list[dict[str, Any]]:
-        return _read_jsonl(self._events_path(team_id))
-
-    def _active_team(self, team_id: str) -> dict[str, Any]:
-        team = self.get_team(team_id)
-        if not team or team.get("deletedAt"):
-            raise KeyError(team_id)
-        return team
-
-    def _ensure_unique_name(
-        self,
-        owner_user_id: str,
-        name: str,
-        *,
-        exclude_id: str | None = None,
-    ) -> None:
-        if any(
-            team["id"] != exclude_id
-            and team.get("name", "").casefold() == name.casefold()
-            for team in self.list_teams(owner_user_id)
-        ):
-            raise TeamValidationError("team_name_taken")
-
-    def _append(self, team_id: str, event_type: str, payload: dict[str, Any]) -> None:
-        event = _team_event(team_id, event_type, payload)
-        _append_jsonl(self._events_path(team_id), event)
-        _write_json(self._snapshot_path(team_id), payload["team"])
-
-    def _events_path(self, team_id: str) -> Path:
-        return self.root / safe_name(team_id) / "events.jsonl"
-
-    def _snapshot_path(self, team_id: str) -> Path:
-        return self.root / safe_name(team_id) / "snapshot.json"
-
-
 class DatabaseTeamStore:
     metadata = shared_metadata
-    teams = Table(
-        "teams",
-        metadata,
-        database_id_column(),
-        Column(
-            "owner_user_id",
-            entity_uuid_type(),
-            ForeignKey(
-                "users.id",
-                ondelete="RESTRICT",
-                name="fk_teams_owner_user",
-            ),
-            nullable=False,
-            index=True,
-        ),
-        Column("name", Text, nullable=False),
-        Column("name_key", Text, nullable=True),
-        Column("lead_agent_id", entity_uuid_type(), nullable=True),
-        Column("member_agent_ids", json_type(), nullable=False),
-        Column("enabled", Boolean, nullable=False),
-        Column("snapshot", json_type(), nullable=False),
-        Column("event_version", BigInteger, nullable=False),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        Column("deleted_at", DateTime(timezone=True), nullable=True),
-        # Uniqueness applies to an owner's *live* teams; see agent_store for
-        # why the casefolded key column is kept rather than an expression index.
-        Index(
-            "uq_teams_live_owner_name",
-            "owner_user_id",
-            "name_key",
-            unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
-            sqlite_where=text("deleted_at IS NULL"),
-        ),
-    )
-    events_table = Table(
-        "team_events",
-        metadata,
-        database_id_column(),
-        Column(
-            "team_id",
-            entity_uuid_type(),
-            ForeignKey("teams.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        Column("sequence", BigInteger, nullable=False),
-        Column("type", Text, nullable=False),
-        Column("timestamp", DateTime(timezone=True), nullable=False),
-        Column("payload", json_type(), nullable=False),
-        UniqueConstraint("team_id", "sequence", name="uq_team_events_sequence"),
-    )
+    teams = teams_tables.teams
+    events_table = teams_tables.events_table
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)

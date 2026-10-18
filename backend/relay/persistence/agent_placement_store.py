@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Table,
-    Text,
-    UniqueConstraint,
     insert,
     select,
-    text,
     update,
 )
 
@@ -24,24 +14,14 @@ from ..core.ids import new_database_id, now_iso
 from ..core.models import AGENT_NAMES
 from .agent_store import DatabaseAgentStore
 from .store_common import (
-    DEFAULT_RELAY_DATA_DIR,
-    _append_jsonl,
     _format_iso,
     _parse_iso,
-    _read_json,
-    _read_jsonl,
-    _write_json,
     create_all_tables,
-    database_id_column,
-    entity_uuid_type,
-    json_type,
-    safe_name,
     shared_engine,
     store_transaction,
 )
-from .store_common import (
-    metadata as shared_metadata,
-)
+from .sql import metadata as shared_metadata
+from .tables import agent_placements as agent_placements_tables
 
 PLACEMENT_DESIRED_STATES = frozenset({"active", "draining", "removed"})
 PLACEMENT_PATCH_FIELDS = frozenset(
@@ -56,195 +36,6 @@ def _shared_placement_lock(key: str) -> RLock:
         return _PLACEMENT_LOCKS.setdefault(key, RLock())
 
 
-class LocalAgentPlacementStore:
-    """Event-sourced bindings between logical agents and daemon nodes."""
-
-    def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
-        self.root = Path(root_dir) / "agent-placements"
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._lock = _shared_placement_lock(f"local:{self.root.resolve()}")
-
-    def create_placement(
-        self,
-        agent: dict[str, Any],
-        daemon_node_id: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        placement = _new_placement(agent, daemon_node_id, payload or {})
-        with self._lock:
-            active = self.list_placements(agent_id=agent["id"])
-            if _has_active_placement(active, placement["daemonNodeId"]):
-                raise ValueError(
-                    "Agent already has an active placement on this daemon node."
-                )
-            # One agent lives on exactly one computer: assigning a different
-            # computer moves the agent by superseding its prior placement. Write
-            # the replacement first so a failed create cannot erase the working
-            # placement. The lock hides the temporary overlap from this process;
-            # rollback restores the old snapshots if superseding one fails.
-            self._append(placement["id"], "placement.created", placement)
-            removed: list[dict[str, Any]] = []
-            try:
-                for existing in active:
-                    self.update_placement(existing["id"], {"desiredState": "removed"})
-                    removed.append(existing)
-            except Exception:
-                for existing in removed:
-                    self.update_placement(existing["id"], {"desiredState": "active"})
-                self.update_placement(placement["id"], {"desiredState": "removed"})
-                raise
-            return placement
-
-    def attach_first_managed_placement(
-        self,
-        agent: dict[str, Any],
-        node: dict[str, Any],
-        *,
-        expected_placement_ids: set[str],
-    ) -> dict[str, Any] | None:
-        """Atomically replace only the legacy placements the caller inspected."""
-        target_computer_id = computer_id(node)
-        with self._lock:
-            active = self.list_placements(agent_id=agent["id"])
-            stable = [placement for placement in active if placement.get("computerId")]
-            if stable:
-                return next(
-                    (
-                        placement
-                        for placement in stable
-                        if placement.get("computerId") == target_computer_id
-                    ),
-                    None,
-                )
-            if {placement["id"] for placement in active} != expected_placement_ids:
-                return None
-            return create_node_placement(self, agent, node)
-
-    def get_placement(self, placement_id: str) -> dict[str, Any] | None:
-        path = self._snapshot_path(placement_id)
-        return (
-            _normalized_placement_snapshot(_read_json(path)) if path.exists() else None
-        )
-
-    def rebind_placement(
-        self,
-        placement_id: str,
-        daemon_node_id: str,
-        *,
-        managed_node_id: str | None = None,
-        computer_id_value: str | None = None,
-    ) -> dict[str, Any]:
-        daemon_node_id = _required_daemon_node_id(daemon_node_id)
-        managed_node_id = _optional_managed_node_id(managed_node_id)
-        target_computer_id = _rebind_computer_id(
-            managed_node_id, computer_id_value
-        )
-        with self._lock:
-            current = self.get_placement(placement_id)
-            if not current:
-                raise KeyError(placement_id)
-            if (
-                current.get("daemonNodeId") == daemon_node_id
-                and current.get("desiredState") == "active"
-                and current.get("managedNodeId") == managed_node_id
-                and current.get("computerId") == target_computer_id
-            ):
-                return current
-            conflicts = [
-                placement
-                for placement in self.list_placements(agent_id=current["agentId"])
-                if placement["id"] != placement_id
-                and placement.get("daemonNodeId") == daemon_node_id
-            ]
-            if conflicts:
-                raise ValueError(
-                    "Agent already has an active placement on this daemon node."
-                )
-            updated = _rebound_placement(
-                current, daemon_node_id, managed_node_id, target_computer_id
-            )
-            self._append(placement_id, "placement.rebound", updated)
-            return updated
-
-    def list_placements(
-        self,
-        *,
-        agent_id: str | None = None,
-        daemon_node_id: str | None = None,
-        include_removed: bool = False,
-    ) -> list[dict[str, Any]]:
-        placements = [
-            _normalized_placement_snapshot(_read_json(path))
-            for path in self.root.glob("*/snapshot.json")
-        ]
-        if agent_id is not None:
-            placements = [
-                placement
-                for placement in placements
-                if placement.get("agentId") == agent_id
-            ]
-        if daemon_node_id is not None:
-            placements = [
-                placement
-                for placement in placements
-                if placement.get("daemonNodeId") == daemon_node_id
-            ]
-        if not include_removed:
-            placements = [
-                placement
-                for placement in placements
-                if placement.get("desiredState") != "removed"
-            ]
-        return sorted(
-            placements, key=lambda item: (int(item.get("priority") or 100), item["id"])
-        )
-
-    def update_placement(
-        self, placement_id: str, patch: dict[str, Any]
-    ) -> dict[str, Any]:
-        with self._lock:
-            current = self.get_placement(placement_id)
-            if not current:
-                raise KeyError(placement_id)
-            updated, event_type = _updated_placement(current, patch)
-            self._append(placement_id, event_type, updated)
-            return updated
-
-    def events(self, placement_id: str) -> list[dict[str, Any]]:
-        return _read_jsonl(self._events_path(placement_id))
-
-    def realize_agent_version(
-        self, placement_id: str, agent_version: int
-    ) -> dict[str, Any]:
-        """Advance the diagnostic realized version without allowing regressions."""
-        with self._lock:
-            current = self.get_placement(placement_id)
-            if not current:
-                raise KeyError(placement_id)
-            if int(current.get("agentVersion") or 0) >= agent_version:
-                return current
-            return self.update_placement(placement_id, {"agentVersion": agent_version})
-
-    def _append(
-        self, placement_id: str, event_type: str, placement: dict[str, Any]
-    ) -> None:
-        event = {
-            "id": new_database_id(),
-            "type": event_type,
-            "placementId": placement_id,
-            "timestamp": now_iso(),
-            "placement": placement,
-        }
-        _append_jsonl(self._events_path(placement_id), event)
-        _write_json(self._snapshot_path(placement_id), placement)
-
-    def _events_path(self, placement_id: str) -> Path:
-        return self.root / safe_name(placement_id) / "events.jsonl"
-
-    def _snapshot_path(self, placement_id: str) -> Path:
-        return self.root / safe_name(placement_id) / "snapshot.json"
-
-
 class DatabaseAgentPlacementStore:
     # `supervisor_user_id` and `executor_kind` are copied from the agent and
     # have no refresh path, which is safe only because neither is patchable on
@@ -252,78 +43,8 @@ class DatabaseAgentPlacementStore:
     # so making either mutable fails there rather than silently drifting every
     # placement. `agent_version` does change and is synced by `sync_agent_version`.
     metadata = shared_metadata
-    placements = Table(
-        "agent_placements",
-        metadata,
-        database_id_column(),
-        Column(
-            "agent_id",
-            entity_uuid_type(),
-            ForeignKey(
-                "agents.id", ondelete="CASCADE", name="fk_agent_placements_agent"
-            ),
-            nullable=False,
-            index=True,
-        ),
-        Column(
-            "supervisor_user_id",
-            entity_uuid_type(),
-            ForeignKey(
-                "users.id",
-                ondelete="RESTRICT",
-                name="fk_agent_placements_supervisor_user",
-            ),
-            nullable=False,
-            index=True,
-        ),
-        Column(
-            "daemon_node_id",
-            entity_uuid_type(),
-            ForeignKey(
-                "daemon_nodes.id",
-                ondelete="CASCADE",
-                name="fk_agent_placements_node",
-            ),
-            nullable=False,
-            index=True,
-        ),
-        Column("executor_kind", Text, nullable=False),
-        Column("desired_state", Text, nullable=False),
-        Column("priority", BigInteger, nullable=False),
-        Column("agent_version", BigInteger, nullable=False),
-        Column("snapshot", json_type(), nullable=False),
-        Column("event_version", BigInteger, nullable=False),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        # An agent has at most one live placement per node. Previously held only
-        # by the advisory row lock taken in create_placement/rebind_placement.
-        Index(
-            "uq_agent_placements_live_agent_node",
-            "agent_id",
-            "daemon_node_id",
-            unique=True,
-            postgresql_where=text("desired_state <> 'removed'"),
-            sqlite_where=text("desired_state <> 'removed'"),
-        ),
-    )
-    events_table = Table(
-        "agent_placement_events",
-        metadata,
-        database_id_column(),
-        Column(
-            "placement_id",
-            entity_uuid_type(),
-            ForeignKey("agent_placements.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        Column("sequence", BigInteger, nullable=False),
-        Column("type", Text, nullable=False),
-        Column("timestamp", DateTime(timezone=True), nullable=False),
-        Column("payload", json_type(), nullable=False),
-        UniqueConstraint(
-            "placement_id", "sequence", name="uq_agent_placement_events_sequence"
-        ),
-    )
+    placements = agent_placements_tables.placements
+    events_table = agent_placements_tables.events_table
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
@@ -746,7 +467,7 @@ def _placements_to_supersede(active_placements: list[dict[str, Any]]) -> list[st
     """Given active placements sorted by (priority, id), return the ids beyond
     each agent's top-priority one — the extras a one-agent-one-computer
     invariant must move to removed."""
-    seen: set[str] = set()
+    seen: set[str | None] = set()
     extras: list[str] = []
     for placement in active_placements:
         agent_id = placement.get("agentId")

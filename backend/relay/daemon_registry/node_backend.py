@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import builtins
 from collections import defaultdict
 from typing import Any
-from uuid import UUID, uuid5
 
 from starlette.concurrency import run_in_threadpool
 
@@ -20,11 +20,21 @@ from ..core.models import AGENT_NAMES, DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS
 from ..persistence.protocols import AgentPlacementStore, AgentStore, SessionStore
 from ..persistence.stores import valid_agent
 from ..services.skill_bundle import resolve_bundle
-from ..sessions import SessionController, initial_agent_state
+from ..sessions.controller import SessionController, initial_agent_state
 from ..sessions.bridge import latest_user_turn_marker, latest_user_turn_text
 from .credentials import sandbox_node_auth_error, sandbox_ui_auth_error
 from .registry import DaemonNodeRegistry
 from .scheduling import node_accepts_run
+from ..core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
+from ..core.run_request_ids import idempotent_run_request_id
+from ..services.agent_routing import (
+    placement_node,
+    AgentRoutingError,
+    resolve_legacy_session_computer_id,
+)
+from ..persistence.task_execution import request_execution_owner
+from ..persistence.store_common import relay_task_event
+from ..services.task_workspace import recorded_task_workspace, resolve_task_workspace
 
 _SOURCE_CHANGED_ERROR = (
     "handoff_source_changed: the source round changed; request recovery again."
@@ -80,7 +90,7 @@ class ServerDaemonNodeBackend:
     ) -> dict[str, Any] | None:
         with self.registry.dispatch_lock:
             request = self.registry.daemon_store.get_run_request(
-                _idempotent_run_request_id(idempotency_key)
+                idempotent_run_request_id(idempotency_key)
             )
             if not request:
                 return None
@@ -160,7 +170,10 @@ class ServerDaemonNodeBackend:
     def _validate_logical_assignment(self, assignment: dict[str, Any]) -> None:
         if self.agent_store is None or self.agent_placement_store is None:
             raise ValueError("logical assignments require agent and placement stores")
-        agent = self.agent_store.get_agent(assignment.get("agentId"))
+        agent_id = assignment.get("agentId")
+        if not isinstance(agent_id, str):
+            raise ValueError("logical agent is disabled or missing")
+        agent = self.agent_store.get_agent(agent_id)
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
         if agent.get("toolPolicy"):
@@ -171,12 +184,12 @@ class ServerDaemonNodeBackend:
             raise ValueError("logical agent executor changed")
         if agent.get("version") != assignment.get("agentVersion"):
             raise ValueError("logical agent version changed")
-        placement = self.agent_placement_store.get_placement(
-            assignment.get("placementId")
-        )
+        placement_id = assignment.get("placementId")
+        if not isinstance(placement_id, str):
+            raise ValueError("placement is not active")
+        placement = self.agent_placement_store.get_placement(placement_id)
         if not placement or placement.get("desiredState") != "active":
             raise ValueError("placement is not active")
-        from ..services.agent_routing import placement_node
 
         current_node = placement_node(
             placement,
@@ -191,7 +204,8 @@ class ServerDaemonNodeBackend:
             or placement.get("executorKind") != agent.get("executorKind")
         ):
             raise ValueError("placement no longer matches the selected agent and node")
-        if not self.registry.get(assignment.get("daemonNodeId")):
+        # The match check above pinned daemonNodeId to the current node's id.
+        if not self.registry.get(current_node["id"]):
             raise ValueError("daemon node is no longer available")
 
     def provision(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -365,7 +379,6 @@ class ServerDaemonNodeBackend:
                 run_request_id=(prepared_request or {}).get("id") or run_request_id,
             )
             if request.get("_workspaceBinding") and self.registry.task_store:
-                from ..persistence.store_common import relay_task_event
 
                 task = self.registry.task_store.get_task(request["taskId"])
                 if (
@@ -412,7 +425,6 @@ class ServerDaemonNodeBackend:
             current_session = self.registry.store.get_session(session_id)
             self._validate_source_ownership(run_request, current_session)
             run_request = self.registry.ensure_task_execution_claim(run_request)
-            from ..persistence.task_execution import request_execution_owner
 
             controller.task_execution_owner = request_execution_owner(run_request)
             if (
@@ -442,10 +454,6 @@ class ServerDaemonNodeBackend:
         self, request: dict[str, Any], node: dict[str, Any]
     ) -> dict[str, Any]:
         """Enforce affinity at admission, including callers outside task dispatch."""
-        from ..services.task_workspace import (
-            recorded_task_workspace,
-            resolve_task_workspace,
-        )
 
         if not request.get("taskId") or not self.registry.task_store:
             return request
@@ -530,7 +538,7 @@ class ServerDaemonNodeBackend:
         idempotency_key = request.get("idempotencyKey")
         if not isinstance(idempotency_key, str) or not idempotency_key:
             return None
-        return _idempotent_run_request_id(idempotency_key)
+        return idempotent_run_request_id(idempotency_key)
 
     def _idempotent_session(
         self, request: dict[str, Any], run_request_id: str | None
@@ -629,8 +637,8 @@ class ServerDaemonNodeBackend:
             ),
         }
 
-    def _active_runs_by_node(self) -> dict[str, list[dict[str, Any]]]:
-        active_runs_by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    def _active_runs_by_node(self) -> dict[str, builtins.list[dict[str, Any]]]:
+        active_runs_by_node: dict[str, builtins.list[dict[str, Any]]] = defaultdict(list)
         for active_run in self.registry.daemon_store.list_active_runs():
             active_runs_by_node[active_run["nodeId"]].append(active_run)
         return active_runs_by_node
@@ -665,13 +673,13 @@ class ServerDaemonNodeBackend:
         self,
         sandbox_id: str,
         request: dict[str, Any],
-        active_runs_by_node: dict[str, list[dict[str, Any]]],
+        active_runs_by_node: dict[str, builtins.list[dict[str, Any]]],
     ) -> None:
         for assignment in request["assignments"]:
             node_id = assignment.get("daemonNodeId") or sandbox_id
             node = self.registry.get(node_id)
             assert node is not None
-            if (assignment.get("teamSnapshot") or {}).get("workContractVersion") == 1 and "work-results" not in (node.get("capabilities") or []):
+            if (assignment.get("teamSnapshot") or {}).get("workContractVersion") == 1 and not has_capability(node, DAEMON_CAPABILITY_WORK_RESULTS):
                 raise ValueError("This team requires a daemon with work-results support. Upgrade the daemon before dispatch.")
             if assignment.get("agentId"):
                 self._validate_logical_assignment(assignment)
@@ -679,7 +687,6 @@ class ServerDaemonNodeBackend:
                 raise ValueError(f"Sandbox {node_id} daemon node heartbeat expired.")
             executor_kind = assignment["executorKind"]
             if executor_kind in set(node.get("disabledAgents") or []):
-                from ..services.agent_routing import AgentRoutingError
 
                 raise AgentRoutingError(
                     "executor_not_ready",
@@ -712,7 +719,6 @@ class ServerDaemonNodeBackend:
         if not identity and session.get("managedNodeId"):
             identity = f"managed:{session['managedNodeId']}"
         if not identity and self.agent_placement_store is not None:
-            from ..services.agent_routing import resolve_legacy_session_computer_id
 
             identity = resolve_legacy_session_computer_id(
                 session,
@@ -865,8 +871,7 @@ class ServerDaemonNodeBackend:
         revision = session.get("collaborationRevision", 0)
         round_id = session.get("activeRoundId")
         expected = source.get("revision") if isinstance(source, dict) else None
-        valid = type(expected) is int and expected >= 0
-        if valid and (
+        if type(expected) is int and expected >= 0 and (
             (revision == expected and round_id == source.get("roundId"))
             or (
                 revision == expected + 1
@@ -967,7 +972,7 @@ class ServerDaemonNodeBackend:
         controller: SessionController,
         session_id: str,
         decision: dict[str, Any],
-        assignments: list[dict[str, Any]],
+        assignments: builtins.list[dict[str, Any]],
         *,
         round_id: str | None = None,
         actor_user_id: str | None = None,
@@ -1002,7 +1007,7 @@ class ServerDaemonNodeBackend:
         session_id: str,
         task_goal: str,
         request: dict[str, Any],
-        active_runs_by_node: dict[str, list[dict[str, Any]]],
+        active_runs_by_node: dict[str, builtins.list[dict[str, Any]]],
         run_request_id: str | None,
     ) -> dict[str, Any]:
         task_id = request.get("taskId")
@@ -1070,22 +1075,6 @@ class ServerDaemonNodeBackend:
                 return session
             return None
         return self.registry.store.get_session(session_id)
-
-
-# Fixed namespace for deriving idempotent run-request ids. Changing it would
-# make in-flight keys resolve to a different request and dispatch twice.
-_IDEMPOTENT_RUN_REQUEST_NAMESPACE = UUID("6f5c9d2e-1a47-4b8e-9c30-5d7ab1e84f62")
-
-
-def _idempotent_run_request_id(idempotency_key: str) -> str:
-    """Derive the run request's primary key from a caller's idempotency key.
-
-    ``daemon_run_requests.id`` is a native uuid column, so this must be a real
-    uuid: a prefixed digest makes Postgres reject every lookup and insert with
-    InvalidTextRepresentation, failing the dispatch outright. uuid5 keeps the
-    property that matters — the same key always resolves to the same request.
-    """
-    return str(uuid5(_IDEMPOTENT_RUN_REQUEST_NAMESPACE, idempotency_key))
 
 
 def assert_session_owned_by_user(

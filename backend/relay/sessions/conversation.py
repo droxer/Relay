@@ -186,11 +186,11 @@ def compute_conversation_history(
         if latest_user and marker >= latest_user:
             continue
         items.append((marker, "user", f"[User]\n{text}"))
-    for marker, run, text in _agent_turns(session, store):
+    for marker, run, agent_text in _agent_turns(session, store):
         if latest_user and marker >= latest_user:
             continue
         agent = run.get("agent", "agent")
-        items.append((marker, "agent", f"[Assistant @{agent}{run_continuity_suffix(run)}]\n{text or '<no output>'}"))
+        items.append((marker, "agent", f"[Assistant @{agent}{run_continuity_suffix(run)}]\n{agent_text or '<no output>'}"))
     for index, event in enumerate(session.get("events", [])):
         if event.get("type") != "human.decision":
             continue

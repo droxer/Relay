@@ -5,7 +5,7 @@ from typing import Any
 from .skill_grants import GRANTS_VERSION, read_grants
 from .skill_assignments import effective_assignments
 
-EMPTY_SKILL_BUNDLE = {
+EMPTY_SKILL_BUNDLE: dict[str, Any] = {
     "contract": {"name": "relay.agent.skills", "version": 1},
     "skills": [],
 }

@@ -10,7 +10,7 @@ from issue_projects import routine_run_with_session
 
 from relay.app import create_app
 from relay.persistence.stores import relay_event
-from relay.sessions import SessionController
+from relay.sessions.controller import SessionController
 
 
 def _bootstrap(client: TestClient) -> None:

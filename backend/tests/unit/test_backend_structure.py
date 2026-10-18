@@ -1,29 +1,22 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.api.helpers import daemon_node_event, token_usage_field
+from relay.api.daemon_events import daemon_node_event
+from relay.api.bodies import token_usage_field
 from relay.app import create_app
-from relay.chat import DatabaseChatIntegrationStore
+from relay.chat.integrations import DatabaseChatIntegrationStore
 from relay.core.models import DaemonNodeRegistration
-from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from relay.persistence.daemon_store import (
     DatabaseDaemonStore,
 )
-from relay.persistence.daemon_store import (
-    LocalDaemonStore as CanonicalLocalDaemonStore,
-)
-from relay.persistence.session_store import (
-    DatabaseSessionStore,
-    LocalSessionStore,
-)
-from relay.persistence.stores import LocalDaemonStore
-from relay.persistence.task_store import (
-    DatabaseTaskStore,
-    LocalTaskStore,
-)
+from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.task_store import DatabaseTaskStore
 from relay.security.auth import DatabaseAccountAuthStore
 
 
@@ -54,7 +47,7 @@ def test_app_factory_wires_backend_state_and_routes() -> None:
 
     assert isinstance(app.state.session_store, DatabaseSessionStore)
     assert isinstance(app.state.task_store, DatabaseTaskStore)
-    assert isinstance(app.state.daemon_store, LocalDaemonStore)
+    assert isinstance(app.state.daemon_store, DatabaseDaemonStore)
     assert app.state.task_scheduler is not None
 
     paths = {route.path for route in app.routes}
@@ -105,9 +98,8 @@ def test_app_factory_uses_database_stores_without_local_state(monkeypatch) -> No
 
 
 def test_backend_uses_canonical_domain_modules() -> None:
-    assert CanonicalLocalDaemonStore is LocalDaemonStore
-    assert LocalSessionStore.__module__ == "relay.persistence.session_store"
-    assert LocalTaskStore.__module__ == "relay.persistence.task_store"
+    # Every aggregate is database-only; no file-backed twin may return.
+    assert importlib.util.find_spec("relay.persistence.files") is None
     assert DaemonNodeRegistration.__name__ == "DaemonNodeRegistration"
     assert DaemonNodeRegistry.__name__ == "DaemonNodeRegistry"
     assert ServerDaemonNodeBackend.__name__ == "ServerDaemonNodeBackend"

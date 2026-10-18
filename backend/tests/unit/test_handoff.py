@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
-from relay.sessions import compute_prior_handoff_note
+from relay.persistence.session_store import DatabaseSessionStore
+from store_fixtures import make_session_store
+from relay.sessions.handoff import compute_prior_handoff_note
 from relay.sessions.controller import SessionArchivedError, SessionController
 
 
@@ -86,7 +87,7 @@ def test_compute_prior_handoff_note_targets_a_logical_agent() -> None:
 
 
 def test_rejected_handoff_does_not_append_a_decision(tmp_path: Path) -> None:
-    store = LocalSessionStore(tmp_path)
+    store = make_session_store(tmp_path)
     controller = SessionController(store, owner_user_id="alice")
     session = controller.create_session("Fix auth", ["human", "claude"])
     controller.archive_session(session["id"])

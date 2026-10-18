@@ -9,8 +9,8 @@ rather than left holding events.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import datetime, timedelta, UTC
+from typing import Any, overload
 
 from loguru import logger
 
@@ -33,10 +33,14 @@ FAILING = "failing"
 NO_TARGET_RUN_NOW = "Run now could not start: the automation has no agent, team, or open project."
 
 
+@overload
+def _aware(value: datetime) -> datetime: ...
+@overload
+def _aware(value: None) -> None: ...
 def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 def in_flight_occurrence(task_store: Any, routine: dict[str, Any]) -> dict[str, Any] | None:
@@ -87,7 +91,8 @@ class AutomationFiring:
         runnable = routine and events and (
             is_active(routine) or (manual and routine.get("routinePauseReason") != RATE_LIMITED)
         )
-        if not runnable:
+        # ``runnable`` already implies ``routine``; the check only narrows it.
+        if not routine or not runnable:
             self.automation_store.clear_state(routine_id)
             return False
         if now - _aware(state["pending_since"]) > PENDING_TTL:

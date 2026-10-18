@@ -45,7 +45,7 @@ def test_action_failure_requests_one_explicit_coordinator_repair() -> None:
         outcome="Builder action failed.",
         agent_label="Builder",
         mode="action",
-        max_repairs=1,
+        max_runtime_repairs=1,
     )
 
     assert decision.kind == "repair"
@@ -61,7 +61,7 @@ def test_taskless_failure_never_invents_coordinator_authority() -> None:
         outcome="Builder action failed.",
         agent_label="Builder",
         mode="action",
-        max_repairs=1,
+        max_runtime_repairs=1,
     )
 
     assert decision.kind == "fail"
@@ -79,7 +79,7 @@ def test_coordinator_repair_discards_stale_evidence_and_restarts_member_work():
         {"assignmentId": "lead", "coordinator": True},
         {"assignmentId": "build"}, {"assignmentId": "verify"}, {"assignmentId": "review"},
     ])
-    decision = decide_failure(request, state, outcome="Review failed", agent_label="Reviewer", mode="review", max_repairs=1)
+    decision = decide_failure(request, state, outcome="Review failed", agent_label="Reviewer", mode="review", max_runtime_repairs=1)
     assert decision.kind == "repair"
     assert not decision.state.get(WORK_RESULTS)
     assert "_relay_round_result" not in decision.state
@@ -104,7 +104,7 @@ def test_discussion_failure_keeps_collecting_participants() -> None:
         outcome="Researcher ask failed.",
         agent_label="Researcher",
         mode="ask",
-        max_repairs=1,
+        max_runtime_repairs=1,
     )
 
     assert decision.kind == "continue"
@@ -333,7 +333,7 @@ def test_runtime_and_findings_repairs_share_one_budget():
         outcome="Reviewer failed.",
         agent_label="Reviewer",
         mode="action",
-        max_repairs=1,
+        max_runtime_repairs=1,
     )
     assert decision.kind == "fail"
 

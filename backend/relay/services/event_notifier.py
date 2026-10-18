@@ -106,7 +106,7 @@ class KeyedEventNotifier:
                 # completing. The durable recovery read remains authoritative.
                 continue
 
-    async def wait(self, key: str, after_version: int, *, timeout: float) -> bool:
+    async def wait(self, key: str, after_version: int, *, timeout: float) -> bool:  # noqa: ASYNC109 - bounded long-poll API
         if timeout <= 0:
             return False
         loop = asyncio.get_running_loop()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from relay.sessions import compute_prior_agent_bridge, extract_last_assistant_text
+from relay.sessions.bridge import compute_prior_agent_bridge, extract_last_assistant_text
 
 
 def test_bridge_bounds_long_current_turn_and_preserves_latest_result() -> None:

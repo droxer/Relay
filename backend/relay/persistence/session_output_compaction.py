@@ -20,13 +20,10 @@ sweeps at a time: the cursor row is taken with ``SKIP LOCKED``.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import (
-    Column,
-    DateTime,
     Table,
-    Text,
     func,
     insert,
     literal_column,
@@ -36,13 +33,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
-from .store_common import (
-    _format_iso,
-    _parse_iso,
-    json_type,
-    metadata,
-    store_transaction,
-)
+from .store_common import _format_iso, _parse_iso, store_transaction
+from .tables.maintenance import maintenance_cursors
 
 CURSOR_NAME = "session_output_compaction"
 STREAM_OUTPUT_EVENTS = ("agent.output", "agent.output.batch")
@@ -78,13 +70,6 @@ REDACTED_PAYLOAD = {
     },
 }
 
-maintenance_cursors = Table(
-    "maintenance_cursors",
-    metadata,
-    Column("name", Text, primary_key=True),
-    Column("position", json_type(), nullable=True),
-    Column("updated_at", DateTime(timezone=True), nullable=False),
-)
 
 
 def compact_completed_run_output(
@@ -127,7 +112,7 @@ def compact_completed_run_output(
     return redacted
 
 
-def _claim_cursor(conn: Any) -> dict[str, Any] | None | bool:
+def _claim_cursor(conn: Any) -> dict[str, Any] | None | Literal[False]:
     """Lock the sweep cursor; False when another replica holds it."""
     statement = select(maintenance_cursors.c.position).where(
         maintenance_cursors.c.name == CURSOR_NAME

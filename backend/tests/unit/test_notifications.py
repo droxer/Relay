@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from relay.daemon_registry.client_version import client_outdated, missing_capabilities
-from relay.daemon_registry.registry import DAEMON_NODE_CAPABILITIES
+from relay.core.daemon_capabilities import client_outdated, missing_capabilities
+from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 from relay.notifications.rules import (
     CLIENT_OUTDATED,
     COMPUTER_STATUS,
@@ -18,6 +18,7 @@ from relay.notifications.rules import (
 from relay.notifications.watcher import ComputerNotificationWatcher
 from relay.persistence.notification_store import DatabaseNotificationStore
 from relay.persistence.task_store import DatabaseTaskStore
+from datetime import UTC
 
 SEEN = "2026-10-16T12:00:00Z"
 
@@ -141,7 +142,7 @@ def test_muting_a_kind_hides_it_and_unmuting_brings_it_back(tmp_path: Path) -> N
 
 
 def test_preferences_save_handles_a_competing_first_insert(tmp_path: Path) -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from sqlalchemy import event, insert
 
@@ -156,7 +157,7 @@ def test_preferences_save_handles_a_competing_first_insert(tmp_path: Path) -> No
             # Model another writer winning the first insert before ours executes.
             competing = False
             conn.execute(insert(notification_preferences).values(
-                user_id="u-1", muted_kinds=[TASK_COMPLETED], updated_at=datetime.now(timezone.utc),
+                user_id="u-1", muted_kinds=[TASK_COMPLETED], updated_at=datetime.now(UTC),
             ))
 
     event.listen(store.engine, "before_cursor_execute", insert_competitor)

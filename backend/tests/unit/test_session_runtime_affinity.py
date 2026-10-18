@@ -4,14 +4,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
+from relay.persistence.session_store import DatabaseSessionStore
+from store_fixtures import make_session_store
 from relay.persistence.stores import relay_event
 from relay.services.agent_routing import persist_legacy_session_computer_id
 from relay.sessions.controller import SessionController
 
 
 def _controller(tmp_path: Path) -> SessionController:
-    return SessionController(LocalSessionStore(tmp_path))
+    return SessionController(make_session_store(tmp_path))
 
 
 def test_runtime_affinity_records_the_computer_identity(tmp_path: Path) -> None:
@@ -61,19 +62,21 @@ def test_concurrent_runtime_affinity_backfill_appends_one_event(tmp_path: Path) 
 
 
 def test_dispatch_backfill_persists_legacy_daemon_history_once(tmp_path: Path) -> None:
-    store = LocalSessionStore(tmp_path)
-    session_id = "legacy-dispatch-session"
-    store.append_event(
-        session_id,
-        relay_event(
-            "session.created",
-            session_id,
-            {
-                "taskGoal": "Continue",
-                "workspacePath": "/workspace",
-                "daemonNodeId": "runtime-old",
-            },
-        ),
+    store = make_session_store(tmp_path)
+    session_id = "11111111-1111-4111-8111-111111111111"
+    store.import_session(
+        [
+            relay_event(
+                "session.created",
+                session_id,
+                {
+                    "taskGoal": "Continue",
+                    "workspacePath": "/workspace",
+                    "daemonNodeId": "runtime-old",
+                },
+            )
+        ],
+        {},
     )
     daemon_store = type(
         "DaemonHistory",
@@ -139,7 +142,7 @@ def test_legacy_affinity_event_replays_into_a_managed_computer_id(
     tmp_path: Path,
 ) -> None:
     """老事件只带 managedNodeId，replay 时必须派生出 computerId。"""
-    store = LocalSessionStore(tmp_path)
+    store = make_session_store(tmp_path)
     session = SessionController(store).create_session("Ship it")
     store.append_event(
         session["id"],
@@ -157,7 +160,7 @@ def test_create_session_materializes_computer_id_onto_the_snapshot(
 ) -> None:
     """Critical 1 回归：session.created 事件里的 computerId 必须被
     materialize_events 拷贝进 snapshot，而不是只停留在事件 payload 里。"""
-    store = LocalSessionStore(tmp_path)
+    store = make_session_store(tmp_path)
     session = SessionController(store, computer_id="device:alice:machine-a").create_session(
         "Ship it"
     )
@@ -173,20 +176,22 @@ def test_legacy_snapshot_without_computer_id_still_guards_against_a_conflicting_
     """Important 2 回归：存量 session 只带 managedNodeId、还没派生出
     computerId 时，写一次不可改的保护不能被打开 —— 否则会被无声钉到另一台
     managed Computer。"""
-    store = LocalSessionStore(tmp_path)
-    session_id = "legacy-session-1"
-    store.append_event(
-        session_id,
-        relay_event(
-            "session.created",
-            session_id,
-            {
-                "workspacePath": "/workspace",
-                "taskGoal": "Ship it",
-                "daemonNodeId": "node-1",
-                "managedNodeId": "mnode-A",
-            },
-        ),
+    store = make_session_store(tmp_path)
+    session_id = "22222222-2222-4222-8222-222222222222"
+    store.import_session(
+        [
+            relay_event(
+                "session.created",
+                session_id,
+                {
+                    "workspacePath": "/workspace",
+                    "taskGoal": "Ship it",
+                    "daemonNodeId": "node-1",
+                    "managedNodeId": "mnode-A",
+                },
+            )
+        ],
+        {},
     )
     snapshot = store.get_session(session_id)
     assert snapshot.get("computerId") is None

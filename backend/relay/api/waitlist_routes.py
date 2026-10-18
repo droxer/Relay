@@ -27,16 +27,10 @@ from ..services.waitlist import (
     WaitlistService,
     WaitlistValidationError,
 )
-from .deps import AppContextDep
-from .helpers import (
-    USER_HANDLE_PATTERN,
-    JsonBodyDep,
-    backend_base_url,
-    normalize_user_handle,
-    resolve_user_id,
-    string_field,
-    user_record,
-)
+from .deps import AppContextDep, app_context
+from .node_install import backend_base_url
+from ..security.user_handles import USER_HANDLE_PATTERN, normalize_user_handle, resolve_user_id, user_record
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 
@@ -47,12 +41,15 @@ _HANDLE_UNSAFE = re.compile(r"[^a-z0-9._-]+")
 
 
 def _service(request: Request) -> WaitlistService:
-    return request.app.state.waitlist
+    service = app_context(request).waitlist
+    if service is None:  # The routes are mounted only with the waitlist on.
+        raise HTTPException(404, "Not Found")
+    return service
 
 
 def _limit(request: Request, limiter_name: str, scope: str) -> None:
     key = f"{scope}:{client_ip(request)}"
-    retry_after = getattr(request.app.state, limiter_name).consume(key)
+    retry_after = getattr(app_context(request), limiter_name).consume(key)
     if retry_after is not None:
         raise HTTPException(
             429, "Too many requests. Try again later.", headers={"Retry-After": str(retry_after)}

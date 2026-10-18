@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 PRODUCED_FILE_LISTING_MAX_DIRS = 8
 
-LIVE_STATUS_BY_REASON = {
+LIVE_STATUS_BY_REASON: dict[str | None, str] = {
     "workspace-not-created": "not-created",
     "computer-offline": "offline",
     "workspace-unsupported": "unsupported",
@@ -20,7 +20,7 @@ def live_status(error: HTTPException) -> str:
     """Normalize daemon and placement failures into the client vocabulary."""
     if error.status_code == 403:
         return "denied"
-    detail = error.detail if isinstance(error.detail, dict) else {}
+    detail: dict[str, Any] = error.detail if isinstance(error.detail, dict) else {}
     reason = detail.get("reason") or detail.get("code")
     return LIVE_STATUS_BY_REASON.get(reason, "unavailable")
 

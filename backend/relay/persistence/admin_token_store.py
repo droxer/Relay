@@ -12,13 +12,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-from sqlalchemy import Column, DateTime, Table, Text, insert, select, update
+from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from .store_common import create_all_tables, shared_engine, store_transaction
-from .store_common import metadata as shared_metadata
+from .sql import metadata as shared_metadata
+from .tables import admin_tokens as admin_tokens_tables
 
 ADMIN_TOKEN_ROW_ID = "admin"
 _TOKEN_BYTES = 32
@@ -31,13 +32,7 @@ def hash_admin_token(token: str) -> str:
 class DatabaseAdminTokenStore:
     metadata = shared_metadata
 
-    tokens = Table(
-        "admin_tokens",
-        metadata,
-        Column("id", Text, primary_key=True),
-        Column("token_hash", Text, nullable=False),
-        Column("issued_at", DateTime(timezone=True), nullable=False),
-    )
+    tokens = admin_tokens_tables.tokens
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
@@ -88,5 +83,5 @@ class DatabaseAdminTokenStore:
         return {
             "id": ADMIN_TOKEN_ROW_ID,
             "token_hash": hash_admin_token(token),
-            "issued_at": datetime.now(timezone.utc),
+            "issued_at": datetime.now(UTC),
         }

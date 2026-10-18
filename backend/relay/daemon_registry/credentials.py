@@ -23,7 +23,7 @@ def managed_daemon_node_token(
     """Derive a replayable runtime token without persisting its plaintext."""
     digest = hmac.new(
         enrollment_credential.encode("utf-8"),
-        f"relay-managed-runtime:{sandbox_id}".encode("utf-8"),
+        f"relay-managed-runtime:{sandbox_id}".encode(),
         hashlib.sha256,
     ).digest()
     return "tok_" + urlsafe_b64encode(digest).decode("ascii").rstrip("=")

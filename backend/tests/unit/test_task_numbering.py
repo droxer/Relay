@@ -9,18 +9,15 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from relay.persistence.store_common import materialize_task_events
 from relay.persistence.task_numbering import task_number_scope
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
 from sqlalchemy import delete, select, update
 
 from automation_helpers import fire_now
 
 
-@pytest.fixture(params=["local", "database"])
-def store(request, tmp_path) -> Iterator[LocalTaskStore | DatabaseTaskStore]:
-    if request.param == "local":
-        yield LocalTaskStore(tmp_path)
-    else:
-        yield DatabaseTaskStore(f"sqlite:///{tmp_path}/relay.db", create_schema=True)
+@pytest.fixture
+def store(tmp_path) -> Iterator[DatabaseTaskStore]:
+    yield DatabaseTaskStore(f"sqlite:///{tmp_path}/relay.db", create_schema=True)
 
 
 def _issue(store, owner: str, **extra):

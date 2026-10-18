@@ -45,7 +45,8 @@ def task_awaiting(task: dict[str, Any]) -> dict[str, Any] | None:
     """
     if task.get("status") != "waiting_for_human" or task.get("deletedAt"):
         return None
-    request = task.get("waitingRequest") if isinstance(task.get("waitingRequest"), dict) else {}
+    raw_request = task.get("waitingRequest")
+    request: dict[str, Any] = raw_request if isinstance(raw_request, dict) else {}
     question = _text(request.get("inputQuestion"))
     options = round_result_options(request.get("inputOptions"))
     notes = [note for note in (_text(item) for item in request.get("inputNotes") or []) if note]

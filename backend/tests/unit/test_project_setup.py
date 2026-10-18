@@ -1,13 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from relay.services.project_setup import (
-    ProjectSetupError,
-    choose_setup_agent,
-    completed_setup,
-    normalize_setup_proposal,
-    resolved_setup,
-)
+from relay.services.project_setup import ProjectSetupError, choose_setup_agent, resolved_setup
+from relay.services.project_setup_result import completed_setup, normalize_setup_proposal
 
 
 def test_proposal_is_held_to_the_shape_the_patch_accepts() -> None:

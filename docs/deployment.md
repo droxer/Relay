@@ -156,7 +156,7 @@ This is the better steady state once you have a domain. Requires DNS.
    (`relay.core.storage_config.normalize_database_url`), so paste it unedited.
 
 4. **Set the backend variables.** The image already sets `RELAY_STORAGE`,
-   `RELAY_AUTH_STORE`, `RELAY_DAEMON_STORE`, `RELAY_CHAT_STORE`, `HOST`, and
+   `RELAY_AUTH_STORE`, `HOST`, and
    `RELAY_DATA_DIR`; `PORT` comes from Railway. Add:
 
    | Variable | Value | Notes |

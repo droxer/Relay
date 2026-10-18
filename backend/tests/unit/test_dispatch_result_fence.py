@@ -2,14 +2,13 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
 from relay.services.task_dispatch import TaskDispatcher
 
 
-@pytest.mark.parametrize("database", [False, True])
 @pytest.mark.parametrize("outcome", ["success", "failure"])
-def test_delayed_dispatch_result_cannot_overwrite_completed_task(tmp_path, database, outcome):
-    tasks = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True) if database else LocalTaskStore(str(tmp_path))
+def test_delayed_dispatch_result_cannot_overwrite_completed_task(tmp_path, outcome):
+    tasks = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
     task = tasks.create_task({"title": "Fast completion", "status": "assigned", "assignedAgent": "codex"})
     claimed = tasks.claim_task_for_dispatch(task["id"], "codex")
 

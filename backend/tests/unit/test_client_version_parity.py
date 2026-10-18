@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from relay.daemon_registry.registry import DAEMON_NODE_CAPABILITIES
+from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 
 REPO = Path(__file__).parents[3]
 PROTOCOL = (REPO / "packages/relay-core/src/daemon-node-protocol.ts").read_text()

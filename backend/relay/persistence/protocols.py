@@ -5,6 +5,8 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from ..core.models import AgentName
+
 
 @dataclass(frozen=True)
 class TaskDispatchAssignment:
@@ -56,6 +58,9 @@ class SessionStore(Protocol):
     def delete_session(
         self, session_id: str, *, deleted_by: str | None = None
     ) -> None: ...
+    def delete_session_with_task_unlinks(
+        self, session_id: str, task_store: Any, *, deleted_by: str | None = None
+    ) -> bool: ...
     def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]: ...
     def list_sessions(self) -> list[dict[str, Any]]: ...
     def list_session_summaries(
@@ -76,7 +81,7 @@ class SessionStore(Protocol):
     def read_artifact_content(
         self, session_id: str, artifact_id: str
     ) -> bytes | None: ...
-    def read_artifact(self, session_id: str, artifact_id: str) -> dict[str, Any]: ...
+    def read_artifact(self, session_id: str, artifact_id: str) -> str: ...
     def list_token_usage(self) -> list[dict[str, Any]]: ...
 
 
@@ -84,6 +89,16 @@ class TaskStore(Protocol):
     def task_write_scope(self, task_id: str) -> AbstractContextManager[dict[str, Any]]: ...
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     def get_task(self, task_id: str) -> dict[str, Any]: ...
+    def record_round(
+        self,
+        task_id: str,
+        *,
+        round_result: dict[str, Any] | None = None,
+        round_count: int | None = None,
+        continuation_session_id: str | None = None,
+        clear_continuation: bool = False,
+        execution_owner: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
     def list_tasks(
         self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]: ...
@@ -143,17 +158,17 @@ class TaskStore(Protocol):
     def claim_task_for_dispatch(
         self,
         task_id: str,
-        agent: str,
+        agent: AgentName,
         message: str | None = None,
         *,
         expected_assignment: TaskDispatchAssignment | None = None,
     ) -> dict[str, Any] | None: ...
     def release_dispatch_claim(self, task_id: str, claim_id: str) -> dict[str, Any]: ...
     def assign_task(
-        self, task_id: str, agent: str, agent_id: str | None = None
+        self, task_id: str, agent: AgentName, agent_id: str | None = None
     ) -> dict[str, Any]: ...
     def set_task_assignment(
-        self, task_id: str, agent: str, agent_id: str | None
+        self, task_id: str, agent: AgentName, agent_id: str
     ) -> dict[str, Any]: ...
     def set_task_team_assignment(
         self, task_id: str, team_id: str
@@ -180,10 +195,9 @@ class AgentStore(Protocol):
     def get_agent(self, agent_id: str) -> dict[str, Any] | None: ...
     def list_agents(
         self,
-        supervisor_user_id: str | None = None,
         *,
+        supervisor_user_id: str | None = None,
         include_deleted: bool = False,
-        user_id: str | None = None,
     ) -> list[dict[str, Any]]: ...
     def update_agent(self, agent_id: str, patch: dict[str, Any]) -> dict[str, Any]: ...
     def transform_skill_policy(
@@ -196,8 +210,9 @@ class AgentStore(Protocol):
         self,
         supervisor_user_id: str,
         executor_kind: str,
-        compatibility_key: str,
-        **kwargs: Any,
+        daemon_node_id: str,
+        *,
+        computer_id: str | None = None,
     ) -> dict[str, Any]: ...
     def set_birth_certificate(
         self, agent_id: str, *, computer_id: str, default_role: str
@@ -308,6 +323,12 @@ class AuthStore(Protocol):
 
 
 class DaemonStore(Protocol):
+    def set_command_listener(
+        self, listener: Callable[[str], None], *, database_channel: str | None = None
+    ) -> None: ...
+    def set_workspace_listener(
+        self, listener: Callable[[str], None], *, database_channel: str | None = None
+    ) -> None: ...
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str,
         *, actor_user_id: str | None = None,
@@ -334,7 +355,14 @@ class DaemonStore(Protocol):
         self, request_id: str, expected_status: str, patch: dict[str, Any],
         *, require_undelivered: bool = False,
     ) -> dict[str, Any] | None: ...
-    def list_active_run_requests(self, **kwargs: Any) -> list[dict[str, Any]]: ...
+    def list_active_run_requests(
+        self,
+        node_id: str | None = None,
+        *,
+        session_ids: set[str] | None = None,
+        limit: int | None = None,
+        after_id: str | None = None,
+    ) -> list[dict[str, Any]]: ...
     def historical_managed_node_id(self, runtime_id: str) -> str | None: ...
     def record_workspace_response(
         self, node_id: str, response: dict[str, Any]

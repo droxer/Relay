@@ -1,23 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Table,
-    Text,
-    UniqueConstraint,
     insert,
     select,
-    text,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -28,22 +17,14 @@ from ..core.model_policy import normalize_model_policy, policy_model
 from ..core.models import AGENT_NAMES, AGENT_ROLES
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
-    DEFAULT_RELAY_DATA_DIR,
-    _append_jsonl,
     _format_iso,
     _parse_iso,
-    _read_json,
-    _read_jsonl,
-    _write_json,
     create_all_tables,
-    database_id_column,
-    entity_uuid_type,
-    json_type,
-    safe_name,
     shared_engine,
     store_transaction,
 )
-from .store_common import metadata as shared_metadata
+from .sql import metadata as shared_metadata
+from .tables import agents as agents_tables
 
 AGENT_PATCH_FIELDS = frozenset(
     {
@@ -62,334 +43,10 @@ PLACEMENT_RELEVANT_AGENT_FIELDS = frozenset(
 )
 
 
-class LocalAgentStore:
-    """Event-sourced logical agents supervised by users."""
-
-    def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
-        self.root = Path(root_dir) / "agents"
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._lock = RLock()
-
-    def create_agent(
-        self, supervisor_user_id: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
-        agent = _new_agent(
-            supervisor_user_id,
-            payload,
-            name_taken=_name_taken(self, supervisor_user_id),
-        )
-        return self._create_agent(agent)
-
-    def _create_agent(self, agent: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
-            self._ensure_unique_name(
-                agent["supervisorUserId"], agent["displayName"]
-            )
-            self._append(agent["id"], "agent.created", {"agent": agent})
-            return agent
-
-    def ensure_compatibility_agent(
-        self,
-        supervisor_user_id: str,
-        executor_kind: str,
-        daemon_node_id: str,
-        *,
-        computer_id: str | None = None,
-    ) -> dict[str, Any]:
-        if executor_kind not in AGENT_NAMES:
-            raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
-        key = _compatibility_key(
-            supervisor_user_id, computer_id or daemon_node_id, executor_kind
-        )
-        legacy_key = _compatibility_key(
-            supervisor_user_id, daemon_node_id, executor_kind
-        )
-        with self._lock:
-            owned = self.list_agents(supervisor_user_id=supervisor_user_id)
-            existing = next(
-                (agent for agent in owned if agent.get("compatibilityKey") == key),
-                None,
-            )
-            if existing:
-                return _migrate_compatibility_display_name(
-                    self, existing, supervisor_user_id, executor_kind
-                )
-            legacy = next(
-                (
-                    agent
-                    for agent in owned
-                    if key != legacy_key and agent.get("compatibilityKey") == legacy_key
-                ),
-                None,
-            )
-            if legacy:
-                migrated = self.update_agent(legacy["id"], {"compatibilityKey": key})
-                return _migrate_compatibility_display_name(
-                    self, migrated, supervisor_user_id, executor_kind
-                )
-            agent = _new_agent(
-                supervisor_user_id,
-                {
-                    "displayName": _compatibility_display_name(owned, executor_kind),
-                    "executorKind": executor_kind,
-                    "defaultRole": "implementer",
-                },
-            )
-            return self._create_agent({**agent, "compatibilityKey": key})
-
-    def get_agent(self, agent_id: str) -> dict[str, Any] | None:
-        snapshot = self._snapshot_path(agent_id)
-        return (
-            _normalized_agent_snapshot(_read_json(snapshot))
-            if snapshot.exists()
-            else None
-        )
-
-    def list_agents(
-        self,
-        *,
-        supervisor_user_id: str | None = None,
-        user_id: str | None = None,
-        include_deleted: bool = False,
-    ) -> list[dict[str, Any]]:
-        if user_id is not None:
-            if (
-                supervisor_user_id is not None
-                and supervisor_user_id != user_id
-            ):
-                raise ValueError(
-                    "user_id and supervisor_user_id must match when both are supplied."
-                )
-            supervisor_user_id = user_id
-        agents = [
-            _normalized_agent_snapshot(_read_json(path))
-            for path in self.root.glob("*/snapshot.json")
-        ]
-        if supervisor_user_id is not None:
-            agents = [
-                agent
-                for agent in agents
-                if agent.get("supervisorUserId") == supervisor_user_id
-            ]
-        if not include_deleted:
-            agents = [agent for agent in agents if not agent.get("deletedAt")]
-        return sorted(
-            agents,
-            key=lambda agent: (
-                agent.get("supervisorUserId") or "",
-                agent.get("displayName", "").casefold(),
-                agent["id"],
-            ),
-        )
-
-    def update_agent(self, agent_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
-            current = self.get_agent(agent_id)
-            if not current or current.get("deletedAt"):
-                raise KeyError(agent_id)
-            updated, normalized, event_type = _updated_agent(
-                agent_id, current, patch, self._ensure_unique_name
-            )
-            self._append(agent_id, event_type, {"patch": normalized, "agent": updated})
-            return updated
-
-    def transform_skill_policy(
-        self,
-        agent_id: str,
-        transform: Callable[[dict[str, Any]], dict[str, Any]],
-    ) -> dict[str, Any]:
-        """Atomically replace skillPolicy through the agent event log."""
-        with self._lock:
-            current = self.get_agent(agent_id)
-            if not current or current.get("deletedAt"):
-                raise KeyError(agent_id)
-            return self.update_agent(
-                agent_id,
-                {"skillPolicy": transform(dict(current.get("skillPolicy") or {}))},
-            )
-
-    def delete_agent(self, agent_id: str) -> dict[str, Any]:
-        with self._lock:
-            current = self.get_agent(agent_id)
-            if not current or current.get("deletedAt"):
-                raise KeyError(agent_id)
-            updated = {
-                **current,
-                "enabled": False,
-                "deletedAt": now_iso(),
-                "updatedAt": now_iso(),
-            }
-            self._append(agent_id, "agent.deleted", {"agent": updated})
-            return updated
-
-    def set_birth_certificate(
-        self, agent_id: str, *, computer_id: str, default_role: str
-    ) -> dict[str, Any]:
-        """Migration and identity-promotion use only: write a durable birth
-        certificate and clear any compatibility identity.
-
-        These fields are fixed at creation and immutable on the normal path;
-        Legacy records predate the concept, and early migrations could persist
-        a provisional ``node:`` identity. Only migration and daemon sync may
-        repair those records through this event-sourced path.
-
-        Clearing compatibilityKey must go through here too — update_agent
-        won't work, because _updated_agent routes that field through
-        _required_string (agent_store.py:828), which treats an empty string
-        as a missing required value and raises ValueError.
-        """
-        with self._lock:
-            current = self.get_agent(agent_id)
-            if not current:
-                raise KeyError(agent_id)
-            updated = {
-                key: value
-                for key, value in current.items()
-                if key != "compatibilityKey"
-            }
-            updated |= {
-                "computerId": computer_id,
-                "defaultRole": default_role,
-                "version": int(current.get("version") or 1) + 1,
-                "updatedAt": now_iso(),
-            }
-            self._append(agent_id, "agent.updated", {"agent": updated})
-            return updated
-
-    def move_to_computer(self, agent_id: str, computer_id: str) -> dict[str, Any]:
-        """Record that the agent now lives on another computer.
-
-        An agent lives on exactly one computer, and placing it on a different
-        one moves it; this keeps the agent record the single answer to "where
-        does it live". The configuration is unchanged, so the version is too.
-        """
-        with self._lock:
-            current = self.get_agent(agent_id)
-            if not current or current.get("deletedAt"):
-                raise KeyError(agent_id)
-            if current.get("computerId") == computer_id:
-                return current
-            updated = {**current, "computerId": computer_id, "updatedAt": now_iso()}
-            self._append(agent_id, "agent.moved", {"agent": updated})
-            return updated
-
-    def events(self, agent_id: str) -> list[dict[str, Any]]:
-        return _read_jsonl(self._events_path(agent_id))
-
-    def _ensure_unique_name(
-        self,
-        supervisor_user_id: str,
-        display_name: str,
-        *,
-        exclude_id: str | None = None,
-    ) -> None:
-        duplicate = next(
-            (
-                agent
-                for agent in self.list_agents(
-                    supervisor_user_id=supervisor_user_id
-                )
-                if (
-                    agent["id"] != exclude_id
-                    and agent.get("displayName", "").casefold()
-                    == display_name.casefold()
-                )
-            ),
-            None,
-        )
-        if duplicate:
-            raise ValueError(
-                f"Supervisor {supervisor_user_id} already has an agent named {display_name}."
-            )
-
-    def _append(self, agent_id: str, event_type: str, payload: dict[str, Any]) -> None:
-        event = {
-            "id": new_database_id(),
-            "type": event_type,
-            "agentId": agent_id,
-            "timestamp": now_iso(),
-            **payload,
-        }
-        _append_jsonl(self._events_path(agent_id), event)
-        _write_json(self._snapshot_path(agent_id), payload["agent"])
-
-    def _events_path(self, agent_id: str) -> Path:
-        return self.root / safe_name(agent_id) / "events.jsonl"
-
-    def _snapshot_path(self, agent_id: str) -> Path:
-        return self.root / safe_name(agent_id) / "snapshot.json"
-
-
 class DatabaseAgentStore:
     metadata = shared_metadata
-    agents = Table(
-        "agents",
-        metadata,
-        database_id_column(),
-        Column(
-            "supervisor_user_id",
-            entity_uuid_type(),
-            ForeignKey(
-                "users.id",
-                ondelete="RESTRICT",
-                name="fk_agents_supervisor_user",
-            ),
-            nullable=False,
-            index=True,
-        ),
-        Column("display_name", Text, nullable=False),
-        Column("display_name_key", Text, nullable=True),
-        Column("executor_kind", Text, nullable=False),
-        # Mirrors snapshot.modelPolicy.model; NULL is the runtime default.
-        Column("model", Text, nullable=True),
-        Column("compatibility_key", Text, nullable=True),
-        Column("enabled", Boolean, nullable=False),
-        Column("agent_version", BigInteger, nullable=False),
-        Column("snapshot", json_type(), nullable=False),
-        Column("event_version", BigInteger, nullable=False),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        Column("deleted_at", DateTime(timezone=True), nullable=True),
-        # Uniqueness applies to a user's *live* agents. Deleting used to
-        # mean nulling display_name_key and dropping compatibility_key so the
-        # row escaped a whole-table constraint; the predicate says it directly,
-        # so both key columns are now written unconditionally.
-        Index(
-            "uq_agents_live_supervisor_display_name",
-            "supervisor_user_id",
-            "display_name_key",
-            unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
-            sqlite_where=text("deleted_at IS NULL"),
-        ),
-        Index(
-            "uq_agents_live_compatibility_key",
-            "compatibility_key",
-            unique=True,
-            postgresql_where=text(
-                "deleted_at IS NULL AND compatibility_key IS NOT NULL"
-            ),
-            sqlite_where=text("deleted_at IS NULL AND compatibility_key IS NOT NULL"),
-        ),
-    )
-    events_table = Table(
-        "agent_events",
-        metadata,
-        database_id_column(),
-        Column(
-            "agent_id",
-            entity_uuid_type(),
-            ForeignKey("agents.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        Column("sequence", BigInteger, nullable=False),
-        Column("type", Text, nullable=False),
-        Column("timestamp", DateTime(timezone=True), nullable=False),
-        Column("payload", json_type(), nullable=False),
-        UniqueConstraint(
-            "agent_id", "sequence", name="uq_user_agent_events_sequence"
-        ),
-    )
+    agents = agents_tables.agents
+    events_table = agents_tables.events_table
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)

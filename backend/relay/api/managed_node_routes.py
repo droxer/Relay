@@ -14,7 +14,8 @@ from ..services.node_agents import (
     sync_node_agents,
 )
 from .deps import AppContext, AppContextDep
-from .helpers import JsonBodyDep, user_record
+from ..security.user_handles import user_record
+from .bodies import JsonBodyDep
 
 router = APIRouter()
 
@@ -345,7 +346,9 @@ def enroll_managed_daemon(
         }
     except PermissionError as error:
         raise HTTPException(401, str(error)) from error
-    except (KeyError, ValueError) as error:
+    except KeyError as error:
+        raise HTTPException(409, "Managed node or provisioning attempt not found.") from error
+    except ValueError as error:
         raise HTTPException(409, str(error)) from error
     except (OSError, json.JSONDecodeError) as error:
         logger.error(

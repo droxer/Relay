@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
 from relay.services.execution_lifecycle import ExecutionLifecycleService, execution_status
 
-NOW = datetime(2026, 9, 16, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 16, tzinfo=UTC)
 
 
 @pytest.mark.parametrize("run_request,command,phase", [

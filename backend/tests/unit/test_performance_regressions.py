@@ -18,8 +18,10 @@ def capture_sql(store):
     event.listen(
         store.engine,
         "before_cursor_execute",
-        lambda conn, cursor, statement, parameters, context, many: statements.append(
-            statement
+        lambda conn, cursor, statement, parameters, context, many: (
+            # SQLite transactions open with an explicit BEGIN IMMEDIATE; only
+            # the queries themselves are under test.
+            None if statement.startswith("BEGIN") else statements.append(statement)
         ),
     )
     return statements
@@ -50,9 +52,10 @@ def test_task_append_updates_projection_without_replaying_history(
     def no_replay(*args, **kwargs):
         raise AssertionError("append replayed full history")
 
-    monkeypatch.setattr(
-        "relay.persistence.task_store.materialize_task_events", no_replay
-    )
+    for module in ("writes", "reads", "routines"):
+        monkeypatch.setattr(
+            f"relay.persistence.task.{module}.materialize_task_events", no_replay
+        )
     updated = store.record_activity(task["id"], "latest")
     assert len(updated["activity"]) == 31
     assert updated["activity"][-1]["message"] == "latest"
@@ -202,7 +205,7 @@ def test_sync_api_reads_and_json_mutations_do_not_block_loop(tmp_path, monkeypat
 
 
 def test_background_task_writes_do_not_load_history(tmp_path, monkeypatch):
-    from relay.persistence.task_store import compact_task_writes
+    from relay.persistence.task.rules import compact_task_writes
 
     store = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
     task = store.create_task({"title": "History"})

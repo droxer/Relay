@@ -9,16 +9,11 @@ cannot both win; which transitions are allowed is decided by
 
 from __future__ import annotations
 
+import builtins
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    CheckConstraint,
-    Column,
-    DateTime,
-    Index,
-    Table,
-    Text,
     delete,
     func,
     insert,
@@ -29,14 +24,9 @@ from sqlalchemy import (
 
 from ..core.ids import new_database_id
 from .resource_lock import resource_transaction
-from .store_common import (
-    _format_iso,
-    create_all_tables,
-    database_id_column,
-    shared_engine,
-    store_transaction,
-)
-from .store_common import metadata as shared_metadata
+from .store_common import _format_iso, create_all_tables, shared_engine, store_transaction
+from .sql import metadata as shared_metadata
+from .tables import waitlist as waitlist_tables
 
 WAITLIST_STATUSES = ("waiting", "invited", "joined", "declined")
 
@@ -52,37 +42,7 @@ class WaitlistFullError(RuntimeError):
 class DatabaseWaitlistStore:
     metadata = shared_metadata
 
-    entries = Table(
-        "waitlist_entries",
-        metadata,
-        database_id_column(),
-        Column("email", Text, nullable=False, unique=True),
-        Column("name", Text, nullable=True),
-        Column("company", Text, nullable=True),
-        Column("role", Text, nullable=True),
-        Column("use_case", Text, nullable=True),
-        Column("source", Text, nullable=True),
-        Column("locale", Text, nullable=True),
-        Column("status", Text, nullable=False),
-        Column("invite_token_hash", Text, nullable=True, unique=True),
-        Column("invite_expires_at", DateTime(timezone=True), nullable=True),
-        Column("invited_at", DateTime(timezone=True), nullable=True),
-        # Plain text, not foreign keys: under the file auth store these ids
-        # name accounts and users that have no database row.
-        Column("invited_by_user_id", Text, nullable=True),
-        Column("account_id", Text, nullable=True),
-        Column("admin_note", Text, nullable=True),
-        Column("last_delivery_status", Text, nullable=True),
-        Column("last_delivery_error", Text, nullable=True),
-        Column("last_delivered_at", DateTime(timezone=True), nullable=True),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        CheckConstraint(
-            "status IN ('waiting', 'invited', 'joined', 'declined')",
-            name="ck_waitlist_entries_status",
-        ),
-        Index("ix_waitlist_entries_status_created_at", "status", "created_at"),
-    )
+    entries = waitlist_tables.entries
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
@@ -108,14 +68,14 @@ class DatabaseWaitlistStore:
                 conn.execute(
                     update(self.entries).where(self.entries.c.id == entry_id).values(updated_at=now)
                 )
-                return self._get(conn, entry_id), False
+                return self._require(conn, entry_id), False
             entry_id = new_database_id()
             conn.execute(
                 insert(self.entries).values(
                     id=entry_id, status="waiting", created_at=now, updated_at=now, **fields
                 )
             )
-            return self._get(conn, entry_id), True
+            return self._require(conn, entry_id), True
 
     def count(self, status: str) -> int:
         with store_transaction(self.engine) as conn:
@@ -165,7 +125,7 @@ class DatabaseWaitlistStore:
             ).mappings().all()
         return [_row_to_entry(row) for row in rows], int(total or 0)
 
-    def oldest_waiting_ids(self, limit: int) -> list[str]:
+    def oldest_waiting_ids(self, limit: int) -> builtins.list[str]:
         with store_transaction(self.engine) as conn:
             return [
                 str(entry_id)
@@ -297,6 +257,13 @@ class DatabaseWaitlistStore:
             entry = self._get(conn, entry_id)
         if entry is None:
             raise KeyError(entry_id)
+        return entry
+
+    def _require(self, conn: Any, entry_id: str) -> dict[str, Any]:
+        """Read back a row this transaction just wrote."""
+        entry = self._get(conn, entry_id)
+        if entry is None:
+            raise RuntimeError(f"Waitlist entry {entry_id} vanished mid-transaction.")
         return entry
 
     def _get(self, conn: Any, entry_id: str) -> dict[str, Any] | None:

@@ -6,26 +6,21 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
+from relay.persistence.session_store import DatabaseSessionStore
 from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import (
-    DatabaseTaskStore,
-    LocalTaskStore,
-    TaskExecutionActiveError,
-)
+from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.rules import TaskExecutionActiveError
 from sqlalchemy import event, text
 
 from automation_helpers import fire_now
+from store_fixtures import make_task_store
+from datetime import UTC
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_round_recording_is_idempotent_for_each_execution_owner(database: bool) -> None:
+def test_round_recording_is_idempotent_for_each_execution_owner() -> None:
     with TemporaryDirectory() as root:
         def open_store():
-            return (
-                DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-                if database else LocalTaskStore(root)
-            )
+            return DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         store = open_store()
         task = store.create_task({"title": "Continue without spending a round twice"})
         task_id = task["id"]
@@ -56,72 +51,9 @@ def test_round_recording_is_idempotent_for_each_execution_owner(database: bool) 
         assert len([event for event in store.get_task(task_id)["events"] if event["type"] == "task.round"]) == 2
 
 
-def test_task_store_persists_assignment_status_activity_and_link() -> None:
+def test_task_store_serializes_concurrent_appends() -> None:
     with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
-        task = store.create_task(
-            {
-                "title": "Add Kanban board",
-                "description": "Show backlog.",
-                "priority": "high",
-                "assigneeUserId": "alice",
-                "dueDate": "2026-06-30",
-                "isRoutine": True,
-                "routineType": "job",
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": True,
-            }
-        )
-        task = store.assign_task(task["id"], "codex", "agent_builder")
-        task = store.update_task(
-            task["id"], {"routineNextRunDate": "2026-07-02", "routineEnabled": False}
-        )
-        task = store.link_session(task["id"], "ses_test")
-        task = store.update_task(task["id"], {"status": "running"})
-
-        assert task["assigneeUserId"] == "alice"
-        assert task["dueDate"] == "2026-06-30"
-        assert task["isRoutine"] is True
-        assert task["routineType"] == "job"
-        assert task["routineCadence"] == "weekly"
-        assert task["routineNextRunDate"] == "2026-07-02"
-        assert task["routineEnabled"] is False
-        assert task["assignedAgent"] == "codex"
-        assert task["assignedAgentId"] == "agent_builder"
-        assert task["linkedSessionIds"] == ["ses_test"]
-        assert task["status"] == "running"
-        assert any("Assigned to codex" in item["message"] for item in task["activity"])
-
-
-def test_local_task_store_link_session_is_idempotent() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
-        task = store.create_task({"title": "Link once"})
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            list(
-                pool.map(lambda _: store.link_session(task["id"], "ses_test"), range(2))
-            )
-        linked = store.get_task(task["id"])
-
-        assert linked["linkedSessionIds"] == ["ses_test"]
-        assert (
-            sum(event["type"] == "task.session_linked" for event in linked["events"])
-            == 1
-        )
-        assert (
-            sum(
-                activity["message"] == "Linked session ses_test."
-                for activity in linked["activity"]
-            )
-            == 1
-        )
-
-
-def test_local_task_store_serializes_concurrent_appends() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
+        store = make_task_store(root)
         task = store.create_task(
             {"title": "Collect activity", "description": "", "priority": "normal"}
         )
@@ -292,82 +224,9 @@ def test_database_task_store_link_session_is_idempotent() -> None:
         )
 
 
-def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
+def test_task_store_persists_dispatch_retry_state() -> None:
     with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
-        later = store.create_task(
-            {
-                "title": "Later",
-                "priority": "high",
-                "assigneeUserId": "alice",
-                "projectId": "project_billing",
-                "dueDate": "2026-07-10",
-            }
-        )
-        earlier = store.create_task(
-            {
-                "title": "Earlier",
-                "priority": "high",
-                "assigneeUserId": "alice",
-                "projectId": "project_billing",
-                "dueDate": "2026-06-25",
-            }
-        )
-        wrong_assignee = store.create_task(
-            {
-                "title": "Bob",
-                "priority": "high",
-                "assigneeUserId": "bob",
-                "projectId": "project_billing",
-                "dueDate": "2026-06-01",
-            }
-        )
-        for task in (later, earlier, wrong_assignee):
-            store.assign_task(task["id"], "codex")
-
-        claimed = store.claim_next_task_for_agent("codex", "alice")
-
-        assert claimed is not None
-        assert claimed["id"] == earlier["id"]
-        assert claimed["status"] == "assigned"
-        assert claimed["dispatchClaim"]["id"]
-        assert store.get_task(wrong_assignee["id"])["status"] == "assigned"
-
-
-def test_task_store_claims_exact_task_for_dispatch() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
-        routine = store.create_task(
-            {
-                "title": "Routine",
-                "isRoutine": True,
-                "routineEnabled": True,
-                "assignedAgent": "codex",
-                "status": "assigned",
-            }
-        )
-        task = store.create_task(
-            {"title": "Dispatch me", "assignedAgent": "codex", "status": "assigned"}
-        )
-
-        assert store.claim_task_for_dispatch(routine["id"], "codex") is None
-        claimed = store.claim_task_for_dispatch(task["id"], "codex")
-        second_claim = store.claim_task_for_dispatch(task["id"], "codex")
-
-        assert claimed is not None
-        assert claimed["status"] == "assigned"
-        assert claimed["dispatchClaim"]["id"]
-        assert second_claim is None
-
-
-@pytest.mark.parametrize("database", [False, True])
-def test_task_store_persists_dispatch_retry_state(database: bool) -> None:
-    with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         task = store.create_task({"title": "Retry a queued dispatch"})
 
         updated = store.record_dispatch_retry(
@@ -388,14 +247,9 @@ def test_task_store_persists_dispatch_retry_state(database: bool) -> None:
         assert replayed["dispatchRetry"] == updated["dispatchRetry"]
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_dispatchable_tasks_exclude_future_retry_deadlines(database: bool) -> None:
+def test_dispatchable_tasks_exclude_future_retry_deadlines() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         waiting = store.create_task(
             {"title": "Wait", "assignedAgent": "codex", "status": "assigned"}
         )
@@ -413,14 +267,9 @@ def test_dispatchable_tasks_exclude_future_retry_deadlines(database: bool) -> No
         assert [task["id"] for task in dispatchable] == [ready["id"]]
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_task_store_clears_retry_state_after_dispatch_starts(database: bool) -> None:
+def test_task_store_clears_retry_state_after_dispatch_starts() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         task = store.create_task({"title": "Clear a stale retry"})
         store.record_dispatch_retry(
             task["id"],
@@ -434,14 +283,9 @@ def test_task_store_clears_retry_state_after_dispatch_starts(database: bool) -> 
         assert "dispatchRetry" not in store.get_task(task["id"])
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_clear_dispatch_retry_without_state_appends_no_event(database: bool) -> None:
+def test_clear_dispatch_retry_without_state_appends_no_event() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         task = store.create_task({"title": "Nothing to clear"})
 
         cleared = store.clear_dispatch_retry(task["id"])
@@ -467,14 +311,9 @@ def test_clear_dispatch_retry_without_state_appends_no_event(database: bool) -> 
         ] == ["task.dispatch_retry_cleared"]
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_dispatchable_tasks_treat_naive_retry_deadline_as_utc(database: bool) -> None:
+def test_dispatchable_tasks_treat_naive_retry_deadline_as_utc() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         waiting = store.create_task(
             {"title": "Wait", "assignedAgent": "codex", "status": "assigned"}
         )
@@ -497,40 +336,9 @@ def test_dispatchable_tasks_treat_naive_retry_deadline_as_utc(database: bool) ->
         assert [task["id"] for task in dispatchable] == [ready["id"]]
 
 
-def test_task_store_creates_one_routine_occurrence() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
-        routine = store.create_task(
-            {
-                "title": "Routine",
-                "description": "Run it.",
-                "priority": "high",
-                "isRoutine": True,
-                "routineEnabled": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "assignedAgent": "codex",
-                "ownerUserId": "alice",
-                "assigneeUserId": "alice",
-            }
-        )
-
-        first = fire_now(store, routine["id"], run_date="2026-06-25")
-
-        assert first is not None
-        assert first["status"] == "assigned"
-        assert first["isRoutine"] is False
-        assert first["assignedAgent"] == "codex"
-        assert first["dueDate"] == "2026-06-25"
-        assert (
-            len([task for task in store.list_tasks() if task["id"] != routine["id"]])
-            == 1
-        )
-
-
 def test_task_store_updates_routine_and_assignment_in_one_event_batch() -> None:
     with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
+        store = make_task_store(root)
         task = store.create_task(
             {
                 "title": "Atomic routine",
@@ -637,11 +445,6 @@ def assert_store_guards_updates_during_dispatch(store) -> None:
     assert metadata["dispatchClaim"] == claimed["dispatchClaim"]
 
 
-def test_local_task_store_guards_updates_during_dispatch() -> None:
-    with TemporaryDirectory() as root:
-        assert_store_guards_updates_during_dispatch(LocalTaskStore(root))
-
-
 def test_database_task_store_guards_updates_during_dispatch() -> None:
     with TemporaryDirectory() as root:
         assert_store_guards_updates_during_dispatch(
@@ -649,9 +452,7 @@ def test_database_task_store_guards_updates_during_dispatch() -> None:
         )
 
 
-def assert_store_lists_scheduler_queues(
-    store: LocalTaskStore | DatabaseTaskStore,
-) -> None:
+def assert_store_lists_scheduler_queues(store: DatabaseTaskStore) -> None:
     low = store.create_task(
         {
             "title": "Low priority",
@@ -712,18 +513,6 @@ def assert_store_lists_scheduler_queues(
             "assignedAgent": "codex",
         }
     )
-    if isinstance(store, LocalTaskStore):
-        store.create_task(
-            {
-                "title": "Invalid routine",
-                "isRoutine": True,
-                "routineEnabled": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "not-a-date",
-                "assignedAgent": "codex",
-            }
-        )
-
     assert [task["id"] for task in store.list_dispatchable_tasks()] == [
         high["id"],
         normal["id"],
@@ -738,11 +527,6 @@ def assert_store_lists_scheduler_queues(
         due_routine["id"],
         future_routine["id"],
     }
-
-
-def test_local_task_store_lists_scheduler_queues() -> None:
-    with TemporaryDirectory() as root:
-        assert_store_lists_scheduler_queues(LocalTaskStore(root))
 
 
 def test_database_task_store_lists_scheduler_queues() -> None:
@@ -835,13 +619,6 @@ def assert_store_supports_canonical_assignment_and_dispatch_leases(store) -> Non
     assert unassigned["status"] == "assigned"
 
 
-def test_local_task_store_supports_canonical_assignment_and_dispatch_leases() -> None:
-    with TemporaryDirectory() as root:
-        assert_store_supports_canonical_assignment_and_dispatch_leases(
-            LocalTaskStore(root)
-        )
-
-
 def test_database_task_store_supports_canonical_assignment_and_dispatch_leases() -> (
     None
 ):
@@ -874,11 +651,6 @@ def assert_store_records_routine_occurrence_lineage(store) -> None:
     assert occurrence["assignedAgentId"] == "agent_builder"
     updated = store.get_task(routine["id"])
     assert updated["occurrenceIds"] == [occurrence["id"]]
-
-
-def test_local_task_store_records_routine_occurrence_lineage() -> None:
-    with TemporaryDirectory() as root:
-        assert_store_records_routine_occurrence_lineage(LocalTaskStore(root))
 
 
 def test_database_task_store_records_routine_occurrence_lineage() -> None:
@@ -977,13 +749,6 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
     assert persisted["deletedAt"] == deleted["deletedAt"]
 
 
-def test_local_task_store_delete_hides_task_everywhere() -> None:
-    with TemporaryDirectory() as root:
-        assert_store_delete_hides_task_everywhere(
-            LocalTaskStore(root), LocalSessionStore(root)
-        )
-
-
 def test_database_task_store_delete_hides_task_everywhere() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/relay.db"
@@ -1020,11 +785,6 @@ def assert_team_assignment_contract(store) -> None:
     cleared = store.unassign_task(task["id"])
     assert "assignedTeamId" not in cleared
     assert "assignedAgentId" not in cleared
-
-
-def test_local_task_store_team_assignment_contract() -> None:
-    with TemporaryDirectory() as root:
-        assert_team_assignment_contract(LocalTaskStore(root))
 
 
 def test_database_task_store_team_assignment_contract() -> None:
@@ -1098,9 +858,8 @@ def test_database_task_store_verify_schema_rejects_missing_constraint(
         store.verify_schema()
 
 
-@pytest.mark.parametrize("store_type", [LocalTaskStore, DatabaseTaskStore])
-def test_workspace_binding_is_durable_and_immutable(tmp_path, store_type):
-    store = store_type(f"sqlite:///{tmp_path}/tasks.sqlite", create_schema=True) if store_type is DatabaseTaskStore else store_type(str(tmp_path))
+def test_workspace_binding_is_durable_and_immutable(tmp_path):
+    store = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.sqlite", create_schema=True)
     task = store.create_task({"title": "Keep files"})
     binding = {"computerId": "device:alice:machine", "layout": "task", "subpath": f"tasks/{task['id']}"}
     event = relay_task_event("task.workspace_bound", task["id"], {"binding": binding})
@@ -1113,14 +872,9 @@ def test_workspace_binding_is_durable_and_immutable(tmp_path, store_type):
     assert store.get_task(task["id"])["workspaceBinding"] == binding
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_task_collaboration_style_is_set_changed_and_cleared(database: bool) -> None:
+def test_task_collaboration_style_is_set_changed_and_cleared() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         task = store.create_task({"title": "Ship it", "collaborationStyle": "solo"})
         assert task["collaborationStyle"] == "solo"
         changed = store.update_task(task["id"], {"collaborationStyle": "pipeline"})
@@ -1131,26 +885,16 @@ def test_task_collaboration_style_is_set_changed_and_cleared(database: bool) -> 
         assert "collaborationStyle" not in cleared
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_task_without_a_style_inherits(database: bool) -> None:
+def test_task_without_a_style_inherits() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         task = store.create_task({"title": "Ship it"})
         assert "collaborationStyle" not in task
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_routine_occurrence_inherits_collaboration_style(database: bool) -> None:
+def test_routine_occurrence_inherits_collaboration_style() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         routine = store.create_task(
             {
                 "title": "Routine",
@@ -1170,14 +914,9 @@ def test_routine_occurrence_inherits_collaboration_style(database: bool) -> None
         assert occurrence["collaborationStyle"] == "solo"
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> None:
+def test_routine_occurrence_without_a_style_inherits_nothing() -> None:
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
         routine = store.create_task(
             {
                 "title": "Routine",
@@ -1196,16 +935,11 @@ def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> 
         assert "collaborationStyle" not in occurrence
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_task_claim_skips_intake_issues(database) -> None:
+def test_task_claim_skips_intake_issues() -> None:
     """An issue outside a project is never picked up, even if it was made Ready
     before intake existed; a routine run outside a project still is."""
     with TemporaryDirectory() as root:
-        store = (
-            DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
-            if database
-            else LocalTaskStore(root)
-        )
+        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
         intake = store.create_task({"title": "Loose", "priority": "high", "assigneeUserId": "alice"})
         run = store.create_task({
             "title": "Nightly run", "assigneeUserId": "alice", "sourceRoutineId": "routine_nightly",
@@ -1219,10 +953,9 @@ def test_task_claim_skips_intake_issues(database) -> None:
         assert store.claim_next_task_for_agent("codex", "alice") is None
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_stale_project_move_cannot_replace_the_first_move(database) -> None:
+def test_stale_project_move_cannot_replace_the_first_move() -> None:
     with TemporaryDirectory() as root:
-        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True) if database else LocalTaskStore(root)
+        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
         issue = store.create_task({"title": "Intake"})
         stale = {"expectedStatus": "backlog", "expectedExecutionRevision": 0}
         store.update_task_if_not_dispatching(issue["id"], {**stale, "projectId": "first"})
@@ -1238,12 +971,9 @@ DAILY_9 = [
 ]
 
 
-def _stores():
-    from datetime import datetime, timezone  # noqa: F401
-
+def _store():
     root = TemporaryDirectory()
-    database_url = f"sqlite:///{root.name}/relay.db"
-    return root, DatabaseTaskStore(database_url, create_schema=True), LocalTaskStore(root.name + "/local")
+    return root, DatabaseTaskStore(f"sqlite:///{root.name}/relay.db", create_schema=True)
 
 
 def _v2_routine(store, title, **extra):
@@ -1252,28 +982,24 @@ def _v2_routine(store, title, **extra):
     )
 
 
-@pytest.mark.parametrize("which", [1, 2])
-def test_due_and_unseeded_schedule_queries(which) -> None:
-    from datetime import datetime, timezone
+def test_due_and_unseeded_schedule_queries() -> None:
+    from datetime import datetime
 
-    root, db_store, local_store = _stores()
+    root, store = _store()
     with root:
-        store = (None, db_store, local_store)[which]
         due = _v2_routine(store, "a", routineNextRunAt="2026-10-13T09:00:00+00:00")
         later = _v2_routine(store, "b", routineNextRunAt="2026-10-14T09:00:00+00:00")
         unseeded = _v2_routine(store, "c")
         _v2_routine(store, "d", routineState="paused", routineNextRunAt="2026-10-13T09:00:00+00:00")
-        now = datetime(2026, 10, 13, 10, tzinfo=timezone.utc)
+        now = datetime(2026, 10, 13, 10, tzinfo=UTC)
         assert [task["id"] for task in store.list_due_schedules(now)] == [due["id"]]
         assert [task["id"] for task in store.list_unseeded_schedules()] == [unseeded["id"]]
         assert later["id"] not in [task["id"] for task in store.list_due_schedules(now)]
 
 
-@pytest.mark.parametrize("which", [1, 2])
-def test_listening_automations_query(which) -> None:
-    root, db_store, local_store = _stores()
+def test_listening_automations_query() -> None:
+    root, store = _store()
     with root:
-        store = (None, db_store, local_store)[which]
         hook = store.create_task(
             {"title": "h", "isRoutine": True, "routineTriggers": [{"kind": "webhook"}], "routineState": "active"}
         )
@@ -1285,11 +1011,11 @@ def test_listening_automations_query(which) -> None:
 
 
 def test_schedule_queries_use_their_partial_indexes_on_sqlite() -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     with TemporaryDirectory() as root:
         store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
-        now = datetime(2026, 10, 13, tzinfo=timezone.utc)
+        now = datetime(2026, 10, 13, tzinfo=UTC)
         expected = {
             "ix_tasks_listening_routines": store.listening_query(),
             "ix_tasks_due_schedules": store.due_schedules_query(now),
@@ -1308,17 +1034,17 @@ def test_schedule_queries_use_their_partial_indexes_on_sqlite() -> None:
 
 
 def test_deleted_routines_are_not_listed_by_schedule_queries() -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     with TemporaryDirectory() as root:
         store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
         task = _v2_routine(store, "gone", routineNextRunAt="2026-10-13T09:00:00+00:00")
         store.delete_task(task["id"])
-        assert store.list_due_schedules(datetime(2026, 10, 14, tzinfo=timezone.utc)) == []
+        assert store.list_due_schedules(datetime(2026, 10, 14, tzinfo=UTC)) == []
 
 
 def test_create_keeps_an_empty_trigger_list() -> None:
     with TemporaryDirectory() as root:
-        store = LocalTaskStore(root)
+        store = make_task_store(root)
         task = store.create_task({"title": "t", "isRoutine": True, "routineTriggers": [], "routineState": "paused"})
         assert task["routineTriggers"] == []

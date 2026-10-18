@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from ..core.computer_identity import computer_id
@@ -42,7 +42,9 @@ from .models import (
     RecoveryIntent,
     RunIntent,
 )
-from .styles import LEAD_LED, STYLE_POLICIES, resolve_collaboration_style
+from .styles import LEAD_LED, resolve_collaboration_style
+from .manifest import compile_assignment_work_graph, create_round_manifest
+from ..security.actor import Actor
 
 ASSIGNMENT_BRIEF_MAX_CHARS = 4000
 VALID_MODES = frozenset({"action", "ask", "review"})
@@ -91,6 +93,17 @@ class _PreparedRound:
     question_id: str | None = None
 
 
+@dataclass(frozen=True)
+class _RoundRoster:
+    """The participants a round resolves to, before placement."""
+
+    raw_assignments: list[dict[str, Any]]
+    team_member_ids: set[str] = field(default_factory=set)
+    team_snapshot: dict[str, Any] | None = None
+    project: dict[str, Any] | None = None
+    project_snapshot: dict[str, Any] | None = None
+
+
 class CollaborationConductor:
     """Turn semantic collaboration intent into one durable, auditable round.
 
@@ -102,7 +115,7 @@ class CollaborationConductor:
         self.ctx = ctx
 
     async def submit(
-        self, intent: MessageIntent | RecoveryIntent | RunIntent, actor: dict[str, Any]
+        self, intent: MessageIntent | RecoveryIntent | RunIntent, actor: Actor
     ) -> dict[str, Any]:
         prepared = self._prepare(intent)
         fingerprint = _request_fingerprint(prepared)
@@ -153,104 +166,15 @@ class CollaborationConductor:
         intent: MessageIntent | RecoveryIntent | RunIntent,
     ) -> _PreparedRound:
         if isinstance(intent, MessageIntent):
-            purpose_modes = {
-                "accomplish": "action",
-                "discuss": "ask",
-                "review": "review",
-            }
-            addressed_ids = list(dict.fromkeys(intent.address_agent_ids))
-            raw_assignments = (
-                [
-                    {"agentId": agent_id, "mode": purpose_modes[intent.purpose]}
-                    for agent_id in addressed_ids
-                ]
-                if addressed_ids
-                else None
-            )
-            address = (
-                {"kind": "members", "agentIds": addressed_ids}
-                if addressed_ids
-                else {"kind": "team", "teamId": intent.address_team_id}
-                if intent.address_team_id
-                else {"kind": "room"}
-            )
-            return _PreparedRound(
-                task_goal=intent.text,
-                session_id=intent.thread_id,
-                raw_assignments=raw_assignments,
-                mode=purpose_modes[intent.purpose],
-                requested_team_id=None,
-                address_team_id=intent.address_team_id,
-                requested_project_id=None,
-                requested_node_id=None,
-                idempotency_key=intent.idempotency_key or intent.user_message_id,
-                user_message_id=intent.user_message_id,
-                decision=None,
-                source="message",
-                purpose=intent.purpose,
-                address=address,
-                style=intent.style,
-                question_id=intent.question_id,
-            )
+            return _prepare_message(intent)
         if isinstance(intent, RecoveryIntent):
-            mode = _mode(intent.mode)
-            return _PreparedRound(
-                task_goal="",
-                session_id=intent.thread_id,
-                raw_assignments=[{"agentId": intent.target_agent_id, "mode": mode}],
-                mode=mode,
-                requested_team_id=None,
-                address_team_id=None,
-                requested_project_id=None,
-                requested_node_id=None,
-                idempotency_key=intent.idempotency_key,
-                user_message_id=None,
-                decision={
-                    "kind": intent.kind,
-                    "targetAgentId": intent.target_agent_id,
-                    **({"note": intent.note} if intent.note else {}),
-                    **({"resume": True} if intent.resume else {}),
-                },
-                source="recovery",
-                purpose=_purpose_for_mode(mode),
-                address={
-                    "kind": "members",
-                    "agentIds": [intent.target_agent_id],
-                },
-            )
-        raw_assignments = _client_assignments(intent.raw_assignments)
-        addressed = [
-            item.get("agentId")
-            for item in (raw_assignments or [])
-            if isinstance(item, dict) and isinstance(item.get("agentId"), str)
-        ]
-        return _PreparedRound(
-            task_goal=intent.task_goal,
-            session_id=intent.session_id,
-            raw_assignments=raw_assignments,
-            mode=_mode(intent.mode),
-            requested_team_id=intent.requested_team_id,
-            address_team_id=None,
-            requested_project_id=intent.requested_project_id,
-            requested_node_id=intent.requested_node_id,
-            idempotency_key=intent.idempotency_key,
-            user_message_id=intent.user_message_id,
-            decision=intent.decision,
-            source=intent.source,
-            style=intent.style,
-            project_setup=intent.project_setup,
-            purpose=_purpose_for_mode(intent.mode),
-            address=(
-                {"kind": "members", "agentIds": addressed}
-                if addressed
-                else {"kind": "room"}
-            ),
-        )
+            return _prepare_recovery(intent)
+        return _prepare_run(intent)
 
     async def _submit_prepared(
         self,
         intent: _PreparedRound,
-        actor: dict[str, Any],
+        actor: Actor,
         fingerprint: str,
     ) -> dict[str, Any]:
         session = self._session_for_actor(intent.session_id, actor)
@@ -260,264 +184,313 @@ class CollaborationConductor:
             if intent.question_id
             else None
         )
-        task_goal = (
-            latest_user_turn_text(session)
-            if intent.source == "recovery" and session
-            else intent.task_goal
-        )
-        if not isinstance(task_goal, str) or not task_goal:
-            raise CollaborationError("task_goal_required", status=400)
-        raw_assignments = intent.raw_assignments
-        session_team_id = session.get("teamId") if session else None
-        if (
-            session
-            and intent.requested_team_id
-            and intent.requested_team_id != session_team_id
-        ):
-            raise CollaborationError(
-                "team_mismatch",
-                "teamId does not match this thread's team.",
-                status=400,
-            )
-        team_id = session_team_id or intent.requested_team_id
-        session_project_id = session.get("projectId") if session else None
-        if (
-            session
-            and intent.requested_project_id
-            and intent.requested_project_id != session_project_id
-        ):
-            raise CollaborationError(
-                "project_mismatch",
-                "projectId does not match this thread's project.",
-                status=400,
-            )
-        project_id = session_project_id or intent.requested_project_id
-        if (team_id or intent.address_team_id) and project_id:
-            raise CollaborationError("project_team_conflict", status=400)
-        team_member_ids: set[str] = set()
-        team_snapshot: dict[str, Any] | None = None
-        team: dict[str, Any] | None = None
-        is_recovery = isinstance(intent.decision, dict) and intent.decision.get(
-            "kind"
-        ) in ("rerun", "handoff")
+        task_goal = _round_task_goal(intent, session)
+        team_id, project_id = _round_scope_ids(intent, session)
+        is_recovery = _is_recovery_decision(intent.decision)
         round_team_id = self._round_team_id(
             team_id,
             intent.address_team_id,
-            raw_assignments,
+            intent.raw_assignments,
             retargetable=intent.source == "message",
         )
-        if intent.style is not None and (
-            intent.purpose != "accomplish"
-            or intent.address.get("kind") == "members"
-            or not round_team_id
-        ):
-            raise CollaborationError(
-                "style_requires_team",
-                "Collaboration style applies to team work requests only.",
-                status=400,
+        _assert_style_allowed(intent, round_team_id)
+        roster = self._round_roster(
+            intent,
+            session,
+            actor,
+            team_id=team_id,
+            project_id=project_id,
+            round_team_id=round_team_id,
+            is_recovery=is_recovery,
+            answered_task=answered_task,
+        )
+        daemon_nodes = self.ctx.registry.monitor_nodes()
+        required_node_id = self._required_node_id(
+            intent, session, roster.project, daemon_nodes
+        )
+        if intent.source == "message" and session and required_node_id:
+            self._assert_addressed_agents_on_node(
+                roster.raw_assignments,
+                _room_agent_ids(session),
+                required_node_id,
+                daemon_nodes,
             )
-        project: dict[str, Any] | None = None
-        project_snapshot: dict[str, Any] | None = None
+        team_snapshot = _with_work_contract(
+            roster.team_snapshot, intent, is_recovery, len(roster.raw_assignments)
+        )
+        resolved = self._resolve_round_assignments(
+            intent,
+            actor,
+            session,
+            roster,
+            round_team_id=round_team_id,
+            team_snapshot=team_snapshot,
+            daemon_nodes=daemon_nodes,
+            required_node_id=required_node_id,
+        )
+        parsed = self._round_request(
+            intent,
+            actor,
+            fingerprint,
+            session=session,
+            task_goal=task_goal,
+            resolved=resolved,
+            team_id=team_id,
+            team_snapshot=team_snapshot,
+            project_snapshot=roster.project_snapshot,
+            required_node_id=required_node_id,
+            is_recovery=is_recovery,
+            answered_task=answered_task,
+        )
+        dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
+        return self._admit_addressed_agents(dispatched, resolved, actor)
+
+    def _round_roster(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        actor: Actor,
+        *,
+        team_id: str | None,
+        project_id: str | None,
+        round_team_id: str | None,
+        is_recovery: bool,
+        answered_task: dict[str, Any] | None,
+    ) -> _RoundRoster:
+        """Who takes this round: the project crew, a team, or the room."""
+        raw_assignments = intent.raw_assignments
         if project_id:
-            project = self.ctx.project_store.get_project(project_id)
-            if not project or project.get("archivedAt"):
-                raise CollaborationError("project_not_found", status=404)
-            expected_owner = (
-                session.get("ownerUserId") if session else actor["userId"]
+            roster = self._project_roster(
+                intent, session, actor, project_id, answered_task
             )
-            if project.get("ownerUserId") != expected_owner:
-                raise CollaborationError("project_forbidden", status=403)
-            if not project.get("enabled", True):
-                raise CollaborationError("project_disabled")
-            project_snapshot = project_runtime_snapshot(project)
-            if raw_assignments is not None and (
-                not raw_assignments
-                or any(
-                    not isinstance(item, dict)
-                    or not isinstance(item.get("agentId"), str)
-                    or not item["agentId"].strip()
-                    for item in raw_assignments
-                )
-            ):
-                raise CollaborationError("project_assignment_invalid", status=400)
-            selected_ids = (
-                [item["agentId"].strip() for item in raw_assignments]
-                if raw_assignments is not None
-                else None
-            )
-            if selected_ids is None and answered_task is not None:
-                selected_ids = self._asking_outside_agent_ids(
-                    project, intent.question_id
-                )
-            if intent.project_setup is not None:
-                raw_assignments = self._project_setup_assignments(
-                    project, selected_ids, project_snapshot
-                )
-            else:
-                try:
-                    raw_assignments = project_thread_assignments(
-                        project,
-                        mode=intent.mode,
-                        selected_agent_ids=selected_ids,
-                        room_agent_ids=_room_agent_ids(session) if session else [],
-                        snapshot=project_snapshot,
-                        agent_store=self.ctx.agent_store,
-                        placement_store=self.ctx.agent_placement_store,
-                    )
-                except ProjectDispatchError as error:
-                    raise CollaborationError(error.code, status=400) from error
         elif round_team_id and not raw_assignments:
-            team, members = self._team_for_round(round_team_id, session, actor)
-            team_member_ids = {agent["id"] for agent in members}
-            raw_assignments = team_member_assignments(
-                members,
-                mode=intent.mode,
-                team=team,
-                style=resolve_collaboration_style(team, None, intent.style),
-            )
-            team_snapshot = raw_assignments[0].get("teamSnapshot") or team_runtime_snapshot(team, members)
+            roster = self._team_roster(intent, session, actor, round_team_id)
         elif round_team_id and raw_assignments:
-            if is_recovery:
-                # Recovery deliberately skips `team_agents`. A rerun or handoff
-                # is how a stuck thread gets rescued, so it must still work
-                # after the team was disabled or a sibling member broke;
-                # requiring the whole roster to be healthy would strand the
-                # thread. Ownership and membership are still enforced, and the
-                # target agent's own liveness is checked by
-                # `resolve_agent_assignments` below.
-                team = self.ctx.team_store.get_team(team_id)
-                if not team or team.get("deletedAt"):
-                    raise CollaborationError("team_not_found")
-                expected_owner = self._team_user_id(session, actor)
-                if team.get("ownerUserId") != expected_owner:
-                    raise CollaborationError("team_forbidden")
-                team_member_ids = set(team.get("memberAgentIds") or [])
-                members = [
-                    self.ctx.agent_store.get_agent(agent_id)
-                    for agent_id in team.get("memberAgentIds") or []
-                ]
-                members = [member for member in members if member]
-            else:
-                team, members = self._team_for_round(round_team_id, session, actor)
-                team_member_ids = {agent["id"] for agent in members}
-            # An addressed accomplish round runs lead-led whatever the team's
-            # own style: the lead coordinates and synthesizes below. Record
-            # that, so style-aware policy treats it like any lead-led round.
-            team_snapshot = team_runtime_snapshot(
-                team,
-                members,
-                style=LEAD_LED if intent.mode == "action" and not is_recovery else None,
+            roster = self._addressed_team_roster(
+                intent,
+                session,
+                actor,
+                team_id=team_id,
+                round_team_id=round_team_id,
+                is_recovery=is_recovery,
             )
-            # Addressing chooses participants, not their specialization. Keep
-            # explicit overrides, but fill in team briefs and roles. In an
-            # accomplish group the addressed lead coordinates first regardless
-            # of mention order, then owns the final synthesis turn.
-            member_assignments = team_member_assignments(
-                members, team=team, include_on_request=True, style=LEAD_LED
-            )
-            member_defaults = {
-                item["agentId"]: {
-                    key: item[key] for key in ("role", "brief", "required", "acceptanceCriteria", "expectedOutputs") if key in item
-                }
-                for item in member_assignments
-                if not item.get("synthesizer") or item.get("coordinator")
-            }
-            raw_assignments = [
-                {**member_defaults.get(item.get("agentId"), {}), **item}
-                if isinstance(item, dict) and isinstance(item.get("agentId"), str)
-                else item
-                for item in raw_assignments
-            ]
-            if (
-                not is_recovery
-                and intent.purpose == "accomplish"
-                and len(raw_assignments) > 1
-            ):
-                lead_index = next(
-                    (
-                        index for index, item in enumerate(raw_assignments)
-                        if isinstance(item, dict)
-                        and item.get("agentId") == team.get("leadAgentId")
-                        and _mode(item.get("mode")) == "action"
-                        and not item.get("synthesizer")
-                    ),
-                    None,
-                )
-                if lead_index is not None:
-                    raw_assignments.insert(0, raw_assignments.pop(lead_index))
-                    if not any(
-                        isinstance(item, dict) and item.get("synthesizer") is True
-                        for item in raw_assignments
-                    ):
-                        synthesis = next(
-                            (item for item in member_assignments if item.get("synthesizer")),
-                            None,
-                        )
-                        if synthesis:
-                            raw_assignments.append(synthesis)
         elif session and not raw_assignments:
-            # A bare message goes to the whole room: every agent the thread has
-            # accumulated, not just the one it started with.
-            room = _room_agent_ids(session)
-            if not room:
-                raise CollaborationError(
-                    "participants_required",
-                    "The thread has no addressable room participant.",
-                    status=400,
-                )
-            raw_assignments = [
-                {"agentId": agent_id, "mode": intent.mode} for agent_id in room
-            ]
-        if not raw_assignments:
+            roster = _RoundRoster(
+                raw_assignments=_room_assignments(session, intent.mode)
+            )
+        else:
+            roster = _RoundRoster(raw_assignments=raw_assignments or [])
+        if not roster.raw_assignments:
             raise CollaborationError(
                 "participants_required",
                 "At least one participant is required.",
                 status=400,
             )
+        return roster
 
-        daemon_nodes = self.ctx.registry.monitor_nodes()
-        session_node_id = resolve_session_daemon_node_id(session, daemon_nodes)
-        requested_original_runtime = bool(
-            session
-            and session.get("managedNodeId")
-            and intent.requested_node_id == session.get("daemonNodeId")
+    def _project_roster(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        actor: Actor,
+        project_id: str,
+        answered_task: dict[str, Any] | None,
+    ) -> _RoundRoster:
+        project = self._round_project(project_id, session, actor)
+        project_snapshot = project_runtime_snapshot(project)
+        selected_ids = _project_selected_ids(intent.raw_assignments)
+        if selected_ids is None and answered_task is not None:
+            selected_ids = self._asking_outside_agent_ids(
+                project, intent.question_id
+            )
+        if intent.project_setup is not None:
+            raw_assignments = self._project_setup_assignments(
+                project, selected_ids, project_snapshot
+            )
+        else:
+            raw_assignments = self._project_room_assignments(
+                intent, session, project, selected_ids, project_snapshot
+            )
+        return _RoundRoster(
+            raw_assignments=raw_assignments,
+            project=project,
+            project_snapshot=project_snapshot,
+        )
+
+    def _round_project(
+        self,
+        project_id: str,
+        session: dict[str, Any] | None,
+        actor: Actor,
+    ) -> dict[str, Any]:
+        project = self.ctx.project_store.get_project(project_id)
+        if not project or project.get("archivedAt"):
+            raise CollaborationError("project_not_found", status=404)
+        expected_owner = session.get("ownerUserId") if session else actor["userId"]
+        if project.get("ownerUserId") != expected_owner:
+            raise CollaborationError("project_forbidden", status=403)
+        if not project.get("enabled", True):
+            raise CollaborationError("project_disabled")
+        return project
+
+    def _project_room_assignments(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        project: dict[str, Any],
+        selected_ids: list[str] | None,
+        project_snapshot: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        try:
+            return project_thread_assignments(
+                project,
+                mode=intent.mode,
+                selected_agent_ids=selected_ids,
+                room_agent_ids=_room_agent_ids(session) if session else [],
+                snapshot=project_snapshot,
+                agent_store=self.ctx.agent_store,
+                placement_store=self.ctx.agent_placement_store,
+            )
+        except ProjectDispatchError as error:
+            raise CollaborationError(error.code, status=400) from error
+
+    def _team_roster(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        actor: Actor,
+        round_team_id: str,
+    ) -> _RoundRoster:
+        """An unaddressed team round: the team's own roster and style."""
+        team, members = self._team_for_round(round_team_id, session, actor)
+        team_member_ids = {agent["id"] for agent in members}
+        raw_assignments = team_member_assignments(
+            members,
+            mode=intent.mode,
+            team=team,
+            style=resolve_collaboration_style(team, None, intent.style),
+        )
+        team_snapshot = raw_assignments[0].get(
+            "teamSnapshot"
+        ) or team_runtime_snapshot(team, members)
+        return _RoundRoster(
+            raw_assignments=raw_assignments,
+            team_member_ids=team_member_ids,
+            team_snapshot=team_snapshot,
+        )
+
+    def _addressed_team_roster(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        actor: Actor,
+        *,
+        team_id: str | None,
+        round_team_id: str,
+        is_recovery: bool,
+    ) -> _RoundRoster:
+        """A team round whose participants the caller named."""
+        if is_recovery:
+            team, members = self._recovery_team(team_id, session, actor)
+            team_member_ids = set(team.get("memberAgentIds") or [])
+        else:
+            team, members = self._team_for_round(round_team_id, session, actor)
+            team_member_ids = {agent["id"] for agent in members}
+        # An addressed accomplish round runs lead-led whatever the team's
+        # own style: the lead coordinates and synthesizes below. Record
+        # that, so style-aware policy treats it like any lead-led round.
+        team_snapshot = team_runtime_snapshot(
+            team,
+            members,
+            style=LEAD_LED if intent.mode == "action" and not is_recovery else None,
+        )
+        # Addressing chooses participants, not their specialization. Keep
+        # explicit overrides, but fill in team briefs and roles. In an
+        # accomplish group the addressed lead coordinates first regardless
+        # of mention order, then owns the final synthesis turn.
+        member_assignments = team_member_assignments(
+            members, team=team, include_on_request=True, style=LEAD_LED
+        )
+        raw_assignments = _with_member_defaults(
+            intent.raw_assignments or [], member_assignments
         )
         if (
-            session_node_id
-            and intent.requested_node_id
-            and intent.requested_node_id != session_node_id
-            and not requested_original_runtime
+            not is_recovery
+            and intent.purpose == "accomplish"
+            and len(raw_assignments) > 1
         ):
-            raise CollaborationError(
-                "workspace_unavailable",
-                "This thread already runs on another computer.",
+            raw_assignments = _lead_led_order(
+                raw_assignments, member_assignments, team.get("leadAgentId")
             )
+        return _RoundRoster(
+            raw_assignments=raw_assignments,
+            team_member_ids=team_member_ids,
+            team_snapshot=team_snapshot,
+        )
+
+    def _recovery_team(
+        self,
+        team_id: str | None,
+        session: dict[str, Any] | None,
+        actor: Actor,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """The thread's team for a rerun or handoff, healthy or not.
+
+        Recovery deliberately skips `team_agents`. A rerun or handoff is how a
+        stuck thread gets rescued, so it must still work after the team was
+        disabled or a sibling member broke; requiring the whole roster to be
+        healthy would strand the thread. Ownership and membership are still
+        enforced, and the target agent's own liveness is checked by
+        `resolve_agent_assignments` later.
+        """
+        team = self.ctx.team_store.get_team(team_id)
+        if not team or team.get("deletedAt"):
+            raise CollaborationError("team_not_found")
+        expected_owner = self._team_user_id(session, actor)
+        if team.get("ownerUserId") != expected_owner:
+            raise CollaborationError("team_forbidden")
+        members = [
+            self.ctx.agent_store.get_agent(agent_id)
+            for agent_id in team.get("memberAgentIds") or []
+        ]
+        return team, [member for member in members if member]
+
+    def _required_node_id(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        project: dict[str, Any] | None,
+        daemon_nodes: list[dict[str, Any]],
+    ) -> str | None:
+        """The computer this round must run on, if one is already decided."""
+        session_node_id = resolve_session_daemon_node_id(session, daemon_nodes)
+        _assert_same_runtime(intent, session, session_node_id)
         project_node = project_runtime_node(project, daemon_nodes) if project else None
         if project and project_node is None:
             raise CollaborationError("project_computer_offline")
-        required_node_id = (
+        return (
             session_node_id
             or (project_node or {}).get("id")
             or intent.requested_node_id
         )
-        if intent.source == "message" and session and required_node_id:
-            self._assert_addressed_agents_on_node(
-                raw_assignments,
-                _room_agent_ids(session),
-                required_node_id,
-                daemon_nodes,
-            )
-        # New team work must use validated delegation even without custom roles.
-        # Single-member recovery retains the admitted legacy compatibility path.
-        if (
-            team_snapshot
-            and intent.purpose == "accomplish"
-            and not is_recovery
-            and len(raw_assignments) > 1
-        ):
-            team_snapshot = {**team_snapshot, "workContractVersion": 1}
+
+    def _resolve_round_assignments(
+        self,
+        intent: _PreparedRound,
+        actor: Actor,
+        session: dict[str, Any] | None,
+        roster: _RoundRoster,
+        *,
+        round_team_id: str | None,
+        team_snapshot: dict[str, Any] | None,
+        daemon_nodes: list[dict[str, Any]],
+        required_node_id: str | None,
+    ) -> list[dict[str, Any]]:
         assignments = self._compile_assignments(
-            raw_assignments, round_team_id, team_member_ids, team_snapshot
+            roster.raw_assignments,
+            round_team_id,
+            roster.team_member_ids,
+            team_snapshot,
         )
         resolved = resolve_agent_assignments(
             assignments,
@@ -531,11 +504,29 @@ class CollaborationConductor:
             daemon_store=self.ctx.registry.daemon_store,
             session_store=self.ctx.session_store,
         )
-        resolved = compile_assignment_work_graph(
+        return compile_assignment_work_graph(
             resolved,
             purpose=intent.purpose,
             team_snapshot=team_snapshot,
         )
+
+    def _round_request(
+        self,
+        intent: _PreparedRound,
+        actor: Actor,
+        fingerprint: str,
+        *,
+        session: dict[str, Any] | None,
+        task_goal: str,
+        resolved: list[dict[str, Any]],
+        team_id: str | None,
+        team_snapshot: dict[str, Any] | None,
+        project_snapshot: dict[str, Any] | None,
+        required_node_id: str | None,
+        is_recovery: bool,
+        answered_task: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """The run request handed to the backend, carrying the round manifest."""
         collaboration_id = new_relay_id("col")
         round_id = new_relay_id("round")
         manifest = create_round_manifest(
@@ -549,30 +540,52 @@ class CollaborationConductor:
             round_id=round_id,
         )
         if intent.project_setup is not None:
-            manifest["projectSetup"] = intent.project_setup
-        parsed: dict[str, Any] = {
-            "taskGoal": task_goal,
-            "assignments": resolved,
-            "actorUserId": actor["userId"],
-            "actorIsAdmin": actor["isAdmin"],
-            "agentFirst": True,
-            "daemonNodeId": required_node_id or resolved[0]["daemonNodeId"],
-            "collaboration": {"manifest": manifest},
-        }
-        if intent.session_id:
-            parsed["sessionId"] = intent.session_id
+            manifest = {**manifest, "projectSetup": intent.project_setup}
+        task_id, scope_fields = self._round_work_scope(
+            intent, session, is_recovery, answered_task
+        )
+        manifest = {**manifest, **scope_fields}
+        handoff_context = self._handoff_context(
+            intent, session, fingerprint, resolved[0], task_id, round_id
+        )
+        if handoff_context is not None:
+            manifest = {**manifest, "handoffContext": handoff_context}
+        return _round_payload(
+            intent,
+            actor,
+            fingerprint,
+            task_goal=task_goal,
+            resolved=resolved,
+            manifest=manifest,
+            required_node_id=required_node_id,
+            task_id=task_id,
+            team_id=team_id,
+            project_snapshot=project_snapshot,
+        )
+
+    def _round_work_scope(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        is_recovery: bool,
+        answered_task: dict[str, Any] | None,
+    ) -> tuple[str | None, dict[str, Any]]:
+        """The task this round executes for, and the manifest fields naming it."""
         if session and is_recovery:
-            manifest["sourceOwnership"] = {
+            ownership = {
                 "revision": session.get("collaborationRevision", 0),
                 "roundId": session.get("activeRoundId"),
             }
             scope = self._recovery_work_scope(session)
-            if scope["kind"] == "task":
-                parsed["taskId"] = scope["taskId"]
-                task = self.ctx.task_store.get_task(scope["taskId"])
-                manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
-            manifest["workScope"] = scope
-        elif session and intent.source == "message" and intent.purpose == "accomplish":
+            if scope["kind"] != "task":
+                return None, {"sourceOwnership": ownership, "workScope": scope}
+            task = self.ctx.task_store.get_task(scope["taskId"])
+            return scope["taskId"], {
+                "sourceOwnership": ownership,
+                "sourceTaskRevision": _execution_revision(task),
+                "workScope": scope,
+            }
+        if session and intent.source == "message" and intent.purpose == "accomplish":
             # A reply to a task that is waiting on its human is the answer the
             # task asked for: run it as the task's next round, so the verdict
             # moves the task instead of leaving it parked forever. Discussion
@@ -581,68 +594,42 @@ class CollaborationConductor:
             # against; one read, so the check and the resume cannot disagree.
             task = answered_task or self._awaiting_task(session)
             if task:
-                parsed["taskId"] = task["id"]
-                manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
-                manifest["workScope"] = {"kind": "task", "taskId": task["id"]}
-        if session and intent.decision and intent.decision.get("kind") == "handoff":
-            prepared = (
-                self.ctx.registry.daemon_store.active_run_request_for_session_any_node(
-                    session["id"]
-                )
-            )
-            prepared_state = (prepared or {}).get("state") or {}
-            frozen_context = (
-                prepared_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
-            ).get("handoffContext")
-            if (
-                prepared
-                and prepared.get("status") == "prepared"
-                and prepared_state.get(COLLABORATION_FINGERPRINT_STATE_KEY)
-                == fingerprint
-                and frozen_context
-            ):
-                # Do not even revalidate newer requirement lengths or reread
-                # artifact snapshots for an already accepted operation.
-                manifest["handoffContext"] = deepcopy(frozen_context)
-            else:
-                task = (
-                    self.ctx.task_store.get_task(parsed["taskId"])
-                    if parsed.get("taskId")
-                    else None
-                )
-                manifest["handoffContext"] = capture_handoff_context(
-                    session,
-                    resolved[0],
-                    intent.decision.get("note"),
-                    self.ctx.session_store,
-                    task=task,
-                )
-                manifest["handoffContext"]["decisionId"] = f"dec_{round_id}"
-        if intent.user_message_id:
-            parsed["userMessageId"] = intent.user_message_id
-        parsed["idempotencyFingerprint"] = fingerprint
-        if intent.idempotency_key:
-            parsed["idempotencyKey"] = intent.idempotency_key
-        if team_id:
-            parsed["teamId"] = team_id
-        if project_snapshot:
-            parsed.update(
-                {
-                    "projectId": project_snapshot["projectId"],
-                    "workspaceLayout": "project",
-                    "workspaceSubpath": project_snapshot["workspaceSubpath"],
+                return task["id"], {
+                    "sourceTaskRevision": _execution_revision(task),
+                    "workScope": {"kind": "task", "taskId": task["id"]},
                 }
-            )
-        if intent.decision:
-            parsed["decision"] = _validated_decision(intent.decision, resolved[0])
-            if parsed["decision"].get("resume"):
-                # The rerun target picks its runtime conversation back up; the
-                # registry finds it and only resumes on a daemon that can.
-                parsed["assignments"] = [
-                    {**resolved[0], "resumeRun": True}, *resolved[1:],
-                ]
-        dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
-        return self._admit_addressed_agents(dispatched, resolved, actor)
+        return None, {}
+
+    def _handoff_context(
+        self,
+        intent: _PreparedRound,
+        session: dict[str, Any] | None,
+        fingerprint: str,
+        target: dict[str, Any],
+        task_id: str | None,
+        round_id: str,
+    ) -> dict[str, Any] | None:
+        if not (
+            session and intent.decision and intent.decision.get("kind") == "handoff"
+        ):
+            return None
+        prepared = self.ctx.registry.daemon_store.active_run_request_for_session_any_node(
+            session["id"]
+        )
+        frozen_context = _frozen_handoff_context(prepared, fingerprint)
+        if frozen_context:
+            # Do not even revalidate newer requirement lengths or reread
+            # artifact snapshots for an already accepted operation.
+            return deepcopy(frozen_context)
+        task = self.ctx.task_store.get_task(task_id) if task_id else None
+        captured = capture_handoff_context(
+            session,
+            target,
+            intent.decision.get("note"),
+            self.ctx.session_store,
+            task=task,
+        )
+        return {**captured, "decisionId": f"dec_{round_id}"}
 
     def _project_setup_assignments(
         self,
@@ -715,7 +702,7 @@ class CollaborationConductor:
         """
         task = self._awaiting_task(session) if session else None
         current = ((task or {}).get("waitingRequest") or {}).get("questionId")
-        if current != question_id:
+        if task is None or current != question_id:
             raise CollaborationError(
                 "question_superseded",
                 "This question was already answered or replaced. "
@@ -735,7 +722,7 @@ class CollaborationConductor:
         for task in self.ctx.task_store.list_tasks_for_session(session_id):
             if task.get("waitingSessionId") == session_id and _resumable_wait(task):
                 return task
-        source_round = next(
+        source_round: dict[str, Any] = next(
             (
                 item
                 for item in session.get("collaborationRounds", [])
@@ -763,7 +750,7 @@ class CollaborationConductor:
         return task
 
     def _recovery_work_scope(self, session: dict[str, Any]) -> dict[str, str]:
-        source_round = next(
+        source_round: dict[str, Any] = next(
             (
                 item
                 for item in session.get("collaborationRounds", [])
@@ -852,7 +839,7 @@ class CollaborationConductor:
         self,
         session: dict[str, Any],
         assignments: list[dict[str, Any]],
-        actor: dict[str, Any],
+        actor: Actor,
     ) -> dict[str, Any]:
         """Grow the room to include agents this round addressed into it.
 
@@ -876,7 +863,7 @@ class CollaborationConductor:
         )
 
     def _session_for_actor(
-        self, session_id: str | None, actor: dict[str, Any]
+        self, session_id: str | None, actor: Actor
     ) -> dict[str, Any] | None:
         if not session_id:
             return None
@@ -906,7 +893,7 @@ class CollaborationConductor:
         )
 
     def _team_user_id(
-        self, session: dict[str, Any] | None, actor: dict[str, Any]
+        self, session: dict[str, Any] | None, actor: Actor
     ) -> str:
         if actor["isAdmin"] and session:
             return session.get("ownerUserId") or actor["userId"]
@@ -941,7 +928,7 @@ class CollaborationConductor:
         return thread_team_id if addressed <= roster else None
 
     def _team_for_round(
-        self, team_id: str, session: dict[str, Any] | None, actor: dict[str, Any]
+        self, team_id: str, session: dict[str, Any] | None, actor: Actor
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         return team_agents(
             team_id,
@@ -1126,244 +1113,6 @@ def _purpose_for_mode(mode: Any) -> str:
     return "accomplish"
 
 
-def create_round_manifest(
-    *,
-    source: str,
-    purpose: str,
-    address: dict[str, Any],
-    assignments: list[dict[str, Any]],
-    team_snapshot: dict[str, Any] | None,
-    project_snapshot: dict[str, Any] | None = None,
-    collaboration_id: str | None = None,
-    round_id: str | None = None,
-) -> dict[str, Any]:
-    strategy = (
-        "direct"
-        if address.get("kind") == "members" and len(assignments) == 1
-        else "room"
-        if purpose == "discuss"
-        else "review"
-        if purpose == "review"
-        else "coordinate"
-    )
-    compiled_assignments = compile_assignment_work_graph(
-        assignments,
-        purpose=purpose,
-        team_snapshot=team_snapshot,
-    )
-    work_items = [
-        {
-            "workItemId": assignment["workItemId"],
-            "assignmentId": assignment["assignmentId"],
-            "ownerAgentId": assignment["workOwnerAgentId"],
-            **(
-                {"delegationAuthority": assignment["delegationAuthority"]}
-                if assignment.get("delegationAuthority")
-                else {}
-            ),
-            "kind": assignment["workKind"],
-            "objective": assignment["workObjective"],
-            "dependsOnWorkItemIds": assignment["dependsOnWorkItemIds"],
-            "required": assignment.get("required", True),
-            **{key: assignment[key] for key in ("acceptanceCriteria", "expectedOutputs") if key in assignment},
-        }
-        for assignment in compiled_assignments
-    ]
-    completion_kind = "synthesize" if strategy in ("room", "review") else "all_required"
-    result_owner = _result_owner_work_item(compiled_assignments)
-    style = (team_snapshot or {}).get("collaborationStyle")
-    fallback_from = (team_snapshot or {}).get("styleFallbackFrom")
-    return {
-        "contract": {
-            "name": "relay.collaboration.round",
-            "version": 2,
-        },
-        "collaborationId": collaboration_id or new_relay_id("col"),
-        "roundId": round_id or new_relay_id("round"),
-        "source": source,
-        "workScope": {"kind": "thread"},
-        "purpose": purpose,
-        "strategy": strategy,
-        **({"style": style} if style else {}),
-        **({"styleFallbackFrom": fallback_from} if fallback_from else {}),
-        "address": address,
-        **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
-        **({"projectSnapshot": project_snapshot} if project_snapshot else {}),
-        "assignments": [
-            {
-                key: assignment[key]
-                for key in (
-                    "assignmentId",
-                    "agentId",
-                    "mode",
-                    "phase",
-                    "role",
-                    "brief",
-                    "coordinator",
-                    "synthesizer",
-                )
-                if assignment.get(key) is not None
-            }
-            for assignment in compiled_assignments
-        ],
-        "completionPolicy": (
-            "synthesize" if strategy in ("room", "review") else "assigned_work"
-        ),
-        "workGraph": {
-            "contract": {
-                "name": "relay.collaboration.work-graph",
-                "version": 1,
-            },
-            "items": work_items,
-            "completion": {
-                "kind": completion_kind,
-                **({"resultOwnerWorkItemId": result_owner} if result_owner else {}),
-            },
-            "delegationPolicy": {
-                "authority": "conductor",
-                "policy": STYLE_POLICIES.get(style or LEAD_LED)
-                or ("lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1"),
-            },
-        },
-    }
-
-
-def compile_assignment_work_graph(
-    assignments: list[dict[str, Any]],
-    *,
-    purpose: str,
-    team_snapshot: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    """Attach the conductor-owned delegated-subtask contract to assignments.
-
-    Delivery may remain sequential, but the immutable graph records the actual
-    ownership and prerequisites independently of that transport choice.
-
-    Recompute dependencies from the current roster, including when a lead plan
-    removes every specialist from an already-compiled round. Reuse the captured
-    objectives so compiling the same roster again remains idempotent.
-    """
-    work_item_ids = [assignment["assignmentId"] for assignment in assignments]
-    compiled: list[dict[str, Any]] = []
-    for index, assignment in enumerate(assignments):
-        work_item_id = assignment["assignmentId"]
-        synthesizer = assignment.get("synthesizer") is True
-        if synthesizer:
-            dependencies = work_item_ids[:index]
-        elif purpose in ("discuss", "review"):
-            dependencies = []
-        else:
-            # The current delivery adapter is sequential. Recording that chain
-            # makes the graph truthful today while leaving the public contract
-            # ready for a later dependency-aware parallel reconciler.
-            dependencies = work_item_ids[:index]
-        owner_agent_id = _work_owner_agent_id(assignment)
-        objective = assignment.get("workObjective") or _work_objective(
-            assignment,
-            index=index,
-            total=len(assignments),
-            dependencies=dependencies,
-        )
-        compiled.append(
-            {
-                **assignment,
-                "brief": objective,
-                "workItemId": work_item_id,
-                "workOwnerAgentId": owner_agent_id,
-                "workKind": _work_kind(assignment),
-                "workObjective": objective,
-                "dependsOnWorkItemIds": dependencies,
-                "delegationAuthority": "conductor",
-            }
-        )
-    return compiled
-
-
-def _work_owner_agent_id(assignment: dict[str, Any]) -> str:
-    agent_id = assignment.get("agentId")
-    if isinstance(agent_id, str) and agent_id:
-        return agent_id
-    executor = assignment.get("executorKind") or assignment.get("agent") or "unknown"
-    return f"legacy-executor:{executor}"
-
-
-def _work_kind(assignment: dict[str, Any]) -> str:
-    # Pipeline's last specialist also reports the aggregate result; it still
-    # owns its role's work rather than a separate synthesis-only turn.
-    if assignment.get("synthesizer") is True and (
-        assignment.get("teamSnapshot") or {}
-    ).get("collaborationStyle") != "pipeline":
-        return "synthesis"
-    mode = assignment.get("mode") or "action"
-    role = assignment.get("role")
-    if mode == "ask":
-        return "discussion"
-    if mode == "review":
-        return "review"
-    if assignment.get("coordinator") is True:
-        return "coordination"
-    if role == "reviewer":
-        return "review"
-    if role == "tester":
-        return "verification"
-    if role == "planner":
-        return "planning"
-    if role == "fixer":
-        return "repair"
-    return "implementation"
-
-
-def _work_objective(
-    assignment: dict[str, Any],
-    *,
-    index: int,
-    total: int,
-    dependencies: list[str],
-) -> str:
-    brief = assignment.get("brief")
-    if isinstance(brief, str) and brief.strip():
-        objective = brief.strip()
-    else:
-        objective = {
-            "discussion": "Contribute to the team's discussion.",
-            "review": "Review the accumulated team result.",
-            "verification": "Verify the accumulated implementation.",
-            "planning": "Plan the delegated team work.",
-            "repair": "Repair confirmed defects in the accumulated work.",
-            "coordination": "Coordinate the delegated team work.",
-            "synthesis": "Synthesize the team's contributions into one result.",
-            "implementation": "Implement a distinct part of the shared goal.",
-        }[_work_kind(assignment)]
-    if total <= 1 or assignment.get("coordinator") or assignment.get("synthesizer"):
-        return objective
-    if not dependencies:
-        return (
-            f"{objective} Own delegated work item {index + 1} of {total} as an "
-            "independently eligible contribution; do not duplicate another item."
-        )
-    return (
-        f"{objective} Own delegated work item {index + 1} of {total}; "
-        "use predecessor results and do not duplicate another item."
-    )
-
-
-def _result_owner_work_item(assignments: list[dict[str, Any]]) -> str | None:
-    synthesizers = [
-        assignment
-        for assignment in assignments
-        if assignment.get("synthesizer") is True
-    ]
-    if synthesizers:
-        return synthesizers[-1]["workItemId"]
-    writable = [
-        assignment
-        for assignment in assignments
-        if (assignment.get("mode") or "action") != "ask"
-    ]
-    owner = writable[-1] if writable else assignments[-1] if assignments else None
-    return owner["workItemId"] if owner else None
-
-
 def _validated_decision(
     decision: dict[str, Any], target_assignment: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1399,3 +1148,390 @@ def _validated_decision(
         ),
         **({"resume": True} if kind == "rerun" and decision.get("resume") is True else {}),
     }
+
+
+def _prepare_message(intent: MessageIntent) -> _PreparedRound:
+    purpose_modes = {
+        "accomplish": "action",
+        "discuss": "ask",
+        "review": "review",
+    }
+    addressed_ids = list(dict.fromkeys(intent.address_agent_ids))
+    raw_assignments = (
+        [
+            {"agentId": agent_id, "mode": purpose_modes[intent.purpose]}
+            for agent_id in addressed_ids
+        ]
+        if addressed_ids
+        else None
+    )
+    address = (
+        {"kind": "members", "agentIds": addressed_ids}
+        if addressed_ids
+        else {"kind": "team", "teamId": intent.address_team_id}
+        if intent.address_team_id
+        else {"kind": "room"}
+    )
+    return _PreparedRound(
+        task_goal=intent.text,
+        session_id=intent.thread_id,
+        raw_assignments=raw_assignments,
+        mode=purpose_modes[intent.purpose],
+        requested_team_id=None,
+        address_team_id=intent.address_team_id,
+        requested_project_id=None,
+        requested_node_id=None,
+        idempotency_key=intent.idempotency_key or intent.user_message_id,
+        user_message_id=intent.user_message_id,
+        decision=None,
+        source="message",
+        purpose=intent.purpose,
+        address=address,
+        style=intent.style,
+        question_id=intent.question_id,
+    )
+
+
+def _prepare_recovery(intent: RecoveryIntent) -> _PreparedRound:
+    mode = _mode(intent.mode)
+    return _PreparedRound(
+        task_goal="",
+        session_id=intent.thread_id,
+        raw_assignments=[{"agentId": intent.target_agent_id, "mode": mode}],
+        mode=mode,
+        requested_team_id=None,
+        address_team_id=None,
+        requested_project_id=None,
+        requested_node_id=None,
+        idempotency_key=intent.idempotency_key,
+        user_message_id=None,
+        decision={
+            "kind": intent.kind,
+            "targetAgentId": intent.target_agent_id,
+            **({"note": intent.note} if intent.note else {}),
+            **({"resume": True} if intent.resume else {}),
+        },
+        source="recovery",
+        purpose=_purpose_for_mode(mode),
+        address={
+            "kind": "members",
+            "agentIds": [intent.target_agent_id],
+        },
+    )
+
+
+def _prepare_run(intent: RunIntent) -> _PreparedRound:
+    raw_assignments = _client_assignments(intent.raw_assignments)
+    addressed = [
+        item.get("agentId")
+        for item in (raw_assignments or [])
+        if isinstance(item, dict) and isinstance(item.get("agentId"), str)
+    ]
+    return _PreparedRound(
+        task_goal=intent.task_goal,
+        session_id=intent.session_id,
+        raw_assignments=raw_assignments,
+        mode=_mode(intent.mode),
+        requested_team_id=intent.requested_team_id,
+        address_team_id=None,
+        requested_project_id=intent.requested_project_id,
+        requested_node_id=intent.requested_node_id,
+        idempotency_key=intent.idempotency_key,
+        user_message_id=intent.user_message_id,
+        decision=intent.decision,
+        source=intent.source,
+        style=intent.style,
+        project_setup=intent.project_setup,
+        purpose=_purpose_for_mode(intent.mode),
+        address=(
+            {"kind": "members", "agentIds": addressed}
+            if addressed
+            else {"kind": "room"}
+        ),
+    )
+
+
+def _round_task_goal(
+    intent: _PreparedRound, session: dict[str, Any] | None
+) -> str:
+    """A recovery reruns the thread's latest ask; anything else brings its own."""
+    task_goal = (
+        latest_user_turn_text(session)
+        if intent.source == "recovery" and session
+        else intent.task_goal
+    )
+    if not isinstance(task_goal, str) or not task_goal:
+        raise CollaborationError("task_goal_required", status=400)
+    return task_goal
+
+
+def _round_scope_ids(
+    intent: _PreparedRound, session: dict[str, Any] | None
+) -> tuple[str | None, str | None]:
+    """The thread's team and project; a request may not contradict them."""
+    session_team_id = session.get("teamId") if session else None
+    if (
+        session
+        and intent.requested_team_id
+        and intent.requested_team_id != session_team_id
+    ):
+        raise CollaborationError(
+            "team_mismatch",
+            "teamId does not match this thread's team.",
+            status=400,
+        )
+    team_id = session_team_id or intent.requested_team_id
+    session_project_id = session.get("projectId") if session else None
+    if (
+        session
+        and intent.requested_project_id
+        and intent.requested_project_id != session_project_id
+    ):
+        raise CollaborationError(
+            "project_mismatch",
+            "projectId does not match this thread's project.",
+            status=400,
+        )
+    project_id = session_project_id or intent.requested_project_id
+    # A project thread is the project's room: team work enters through a task.
+    if (team_id or intent.address_team_id) and project_id:
+        raise CollaborationError("project_team_conflict", status=400)
+    return team_id, project_id
+
+
+def _is_recovery_decision(decision: dict[str, Any] | None) -> bool:
+    return isinstance(decision, dict) and decision.get("kind") in (
+        "rerun",
+        "handoff",
+    )
+
+
+def _assert_style_allowed(intent: _PreparedRound, round_team_id: str | None) -> None:
+    if intent.style is not None and (
+        intent.purpose != "accomplish"
+        or intent.address.get("kind") == "members"
+        or not round_team_id
+    ):
+        raise CollaborationError(
+            "style_requires_team",
+            "Collaboration style applies to team work requests only.",
+            status=400,
+        )
+
+
+def _project_selected_ids(
+    raw_assignments: list[dict[str, Any]] | None,
+) -> list[str] | None:
+    """The agents a project round names, or None when it names nobody."""
+    if raw_assignments is None:
+        return None
+    if not raw_assignments or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("agentId"), str)
+        or not item["agentId"].strip()
+        for item in raw_assignments
+    ):
+        raise CollaborationError("project_assignment_invalid", status=400)
+    return [item["agentId"].strip() for item in raw_assignments]
+
+
+def _room_assignments(session: dict[str, Any], mode: str) -> list[dict[str, Any]]:
+    """A bare message goes to the whole room.
+
+    Every agent the thread has accumulated, not just the one it started with.
+    """
+    room = _room_agent_ids(session)
+    if not room:
+        raise CollaborationError(
+            "participants_required",
+            "The thread has no addressable room participant.",
+            status=400,
+        )
+    return [{"agentId": agent_id, "mode": mode} for agent_id in room]
+
+
+TEAM_DEFAULT_ASSIGNMENT_FIELDS = (
+    "role",
+    "brief",
+    "required",
+    "acceptanceCriteria",
+    "expectedOutputs",
+)
+
+
+def _with_member_defaults(
+    raw_assignments: list[Any], member_assignments: list[dict[str, Any]]
+) -> list[Any]:
+    """Fill each named member's team brief and role under explicit overrides."""
+    member_defaults = {
+        item["agentId"]: {
+            key: item[key] for key in TEAM_DEFAULT_ASSIGNMENT_FIELDS if key in item
+        }
+        for item in member_assignments
+        if not item.get("synthesizer") or item.get("coordinator")
+    }
+    return [
+        {**member_defaults.get(item.get("agentId"), {}), **item}
+        if isinstance(item, dict) and isinstance(item.get("agentId"), str)
+        else item
+        for item in raw_assignments
+    ]
+
+
+def _lead_led_order(
+    raw_assignments: list[Any],
+    member_assignments: list[dict[str, Any]],
+    lead_agent_id: str | None,
+) -> list[Any]:
+    """Move an addressed lead first and give it the closing synthesis turn."""
+    lead_index = next(
+        (
+            index
+            for index, item in enumerate(raw_assignments)
+            if isinstance(item, dict)
+            and item.get("agentId") == lead_agent_id
+            and _mode(item.get("mode")) == "action"
+            and not item.get("synthesizer")
+        ),
+        None,
+    )
+    if lead_index is None:
+        return raw_assignments
+    ordered = [
+        raw_assignments[lead_index],
+        *raw_assignments[:lead_index],
+        *raw_assignments[lead_index + 1:],
+    ]
+    if any(
+        isinstance(item, dict) and item.get("synthesizer") is True
+        for item in ordered
+    ):
+        return ordered
+    synthesis = next(
+        (item for item in member_assignments if item.get("synthesizer")),
+        None,
+    )
+    return [*ordered, synthesis] if synthesis else ordered
+
+
+def _assert_same_runtime(
+    intent: _PreparedRound,
+    session: dict[str, Any] | None,
+    session_node_id: str | None,
+) -> None:
+    """A thread keeps the computer it runs on; naming another is refused."""
+    requested_original_runtime = bool(
+        session
+        and session.get("managedNodeId")
+        and intent.requested_node_id == session.get("daemonNodeId")
+    )
+    if (
+        session_node_id
+        and intent.requested_node_id
+        and intent.requested_node_id != session_node_id
+        and not requested_original_runtime
+    ):
+        raise CollaborationError(
+            "workspace_unavailable",
+            "This thread already runs on another computer.",
+        )
+
+
+def _with_work_contract(
+    team_snapshot: dict[str, Any] | None,
+    intent: _PreparedRound,
+    is_recovery: bool,
+    assignment_count: int,
+) -> dict[str, Any] | None:
+    """New team work must use validated delegation even without custom roles.
+
+    Single-member recovery retains the admitted legacy compatibility path.
+    """
+    if (
+        team_snapshot
+        and intent.purpose == "accomplish"
+        and not is_recovery
+        and assignment_count > 1
+    ):
+        return {**team_snapshot, "workContractVersion": 1}
+    return team_snapshot
+
+
+def _execution_revision(task: dict[str, Any]) -> Any:
+    return (task.get("executionOwner") or {}).get("revision", 0)
+
+
+def _frozen_handoff_context(
+    prepared: dict[str, Any] | None, fingerprint: str
+) -> dict[str, Any] | None:
+    """The handoff context an already accepted retry of this request froze."""
+    prepared_state = (prepared or {}).get("state") or {}
+    frozen_context = (
+        prepared_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+    ).get("handoffContext")
+    if (
+        prepared
+        and prepared.get("status") == "prepared"
+        and prepared_state.get(COLLABORATION_FINGERPRINT_STATE_KEY) == fingerprint
+        and frozen_context
+    ):
+        return frozen_context
+    return None
+
+
+def _round_payload(
+    intent: _PreparedRound,
+    actor: Actor,
+    fingerprint: str,
+    *,
+    task_goal: str,
+    resolved: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    required_node_id: str | None,
+    task_id: str | None,
+    team_id: str | None,
+    project_snapshot: dict[str, Any] | None,
+) -> dict[str, Any]:
+    parsed: dict[str, Any] = {
+        "taskGoal": task_goal,
+        "assignments": resolved,
+        "actorUserId": actor["userId"],
+        "actorIsAdmin": actor["isAdmin"],
+        "agentFirst": True,
+        "daemonNodeId": required_node_id or resolved[0]["daemonNodeId"],
+        "collaboration": {"manifest": manifest},
+        **({"sessionId": intent.session_id} if intent.session_id else {}),
+        **({"taskId": task_id} if task_id is not None else {}),
+        **(
+            {"userMessageId": intent.user_message_id}
+            if intent.user_message_id
+            else {}
+        ),
+        "idempotencyFingerprint": fingerprint,
+        **(
+            {"idempotencyKey": intent.idempotency_key}
+            if intent.idempotency_key
+            else {}
+        ),
+        **({"teamId": team_id} if team_id else {}),
+        **(
+            {
+                "projectId": project_snapshot["projectId"],
+                "workspaceLayout": "project",
+                "workspaceSubpath": project_snapshot["workspaceSubpath"],
+            }
+            if project_snapshot
+            else {}
+        ),
+    }
+    if not intent.decision:
+        return parsed
+    decision = _validated_decision(intent.decision, resolved[0])
+    # The rerun target picks its runtime conversation back up; the registry
+    # finds it and only resumes on a daemon that can.
+    assignments = (
+        [{**resolved[0], "resumeRun": True}, *resolved[1:]]
+        if decision.get("resume")
+        else resolved
+    )
+    return {**parsed, "assignments": assignments, "decision": decision}

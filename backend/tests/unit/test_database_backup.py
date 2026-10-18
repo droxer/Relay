@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +19,8 @@ from relay.persistence.database_backup import (
 )
 
 URL = "postgresql+psycopg://relay:s3cret%40pw@db.internal:6543/relay_prod?sslmode=require"
-JUNE_2 = datetime(2026, 6, 2, 3, 0, 5, tzinfo=timezone.utc)
-JULY_1 = datetime(2026, 7, 1, 3, 0, 5, tzinfo=timezone.utc)
+JUNE_2 = datetime(2026, 6, 2, 3, 0, 5, tzinfo=UTC)
+JULY_1 = datetime(2026, 7, 1, 3, 0, 5, tzinfo=UTC)
 
 
 class FakeS3:

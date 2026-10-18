@@ -3,10 +3,12 @@ from tempfile import TemporaryDirectory
 from threading import RLock
 
 import pytest
-from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
-from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
-from relay.persistence.session_store import LocalSessionStore
-from relay.sessions import SessionController
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from relay.persistence.daemon_store import DatabaseDaemonStore
+from store_fixtures import make_daemon_store
+from store_fixtures import make_session_store
+from relay.sessions.controller import SessionController
 
 
 def registration():
@@ -44,8 +46,8 @@ class OrderedGlobalLock:
 @pytest.mark.parametrize("continuation", [False, True])
 def test_run_admission_obeys_terminal_event_lock_order(continuation):
     with TemporaryDirectory() as root:
-        sessions = LocalSessionStore(root)
-        registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+        sessions = make_session_store(root)
+        registry = DaemonNodeRegistry(sessions, make_daemon_store(root))
         registry.register(registration())
         registry.dispatch_lock = OrderedGlobalLock(registry)
         request = {
@@ -63,8 +65,8 @@ def test_run_admission_obeys_terminal_event_lock_order(continuation):
 
 def test_direct_activation_obeys_terminal_event_lock_order():
     with TemporaryDirectory() as root:
-        sessions = LocalSessionStore(root)
-        registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+        sessions = make_session_store(root)
+        registry = DaemonNodeRegistry(sessions, make_daemon_store(root))
         registry.register(registration())
         session = SessionController(sessions, owner_user_id="alice").create_session(
             "Activate", ["human", "codex"]
@@ -87,7 +89,7 @@ def test_direct_activation_obeys_terminal_event_lock_order():
 def test_replica_refreshes_capabilities_without_a_newer_heartbeat():
     with TemporaryDirectory() as root:
         url = f"sqlite:///{root}/daemon.db"
-        sessions = LocalSessionStore(root)
+        sessions = make_session_store(root)
         first = DaemonNodeRegistry(
             sessions, DatabaseDaemonStore(url, create_schema=True)
         )
@@ -105,7 +107,7 @@ def test_replica_refreshes_capabilities_without_a_newer_heartbeat():
 def test_stale_replica_registration_preserves_retirement(refresh_first):
     with TemporaryDirectory() as root:
         url = f"sqlite:///{root}/daemon.db"
-        sessions = LocalSessionStore(root)
+        sessions = make_session_store(root)
         first = DaemonNodeRegistry(
             sessions, DatabaseDaemonStore(url, create_schema=True)
         )
@@ -127,7 +129,6 @@ def test_stale_replica_registration_preserves_retirement(refresh_first):
 @pytest.mark.parametrize(
     "factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -139,7 +140,7 @@ def test_store_rejects_stale_registration_and_heartbeat_resurrection(
 ):
     with TemporaryDirectory() as root:
         store = factory(root)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+        registry = DaemonNodeRegistry(make_session_store(root), store)
         registry.register(registration())
         stale = store.get_node("node_stability")
         store.mark_node_seen(

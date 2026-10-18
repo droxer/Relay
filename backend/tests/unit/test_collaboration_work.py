@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from relay.collaboration.service import compile_assignment_work_graph, create_round_manifest
+from relay.collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from relay.collaboration.work import (
     WORK_RESULTS,
     completion_blockers,
@@ -272,7 +272,8 @@ def test_a_lead_plan_keeps_who_started_the_round(source, human):
     """Adopting a plan replaces the round manifest. A person's round must stay
     one, or it spends the unattended continuation budget."""
     from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
-    from relay.daemon_registry.registry import DaemonNodeRegistry, is_human_started_round
+    from relay.daemon_registry.registry import DaemonNodeRegistry
+    from relay.daemon_registry.records import is_human_started_round
 
     class Controller:
         def record_collaboration_round_started(self, _session_id, _manifest):

@@ -15,52 +15,27 @@ file-store handle) must never fail that write.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Index, Table, Text, and_, delete, func, insert, select, update
+from sqlalchemy import and_, delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from .store_common import (
-    create_all_tables, database_id_column, json_type, new_database_id, shared_engine, store_transaction,
-)
-from .store_common import metadata as shared_metadata
+from .store_common import create_all_tables, new_database_id, shared_engine, store_transaction
+from .tables.notifications import notifications, notification_watch_state, notification_preferences
 
 # The inbox shows recent notices; older ones are pruned by the watcher.
 MAX_LIST_LIMIT = 100
 
-notifications = Table(
-    "notifications", shared_metadata,
-    database_id_column(),
-    Column("user_id", Text, nullable=False),
-    Column("kind", Text, nullable=False),
-    Column("data", json_type(), nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-    Column("read_at", DateTime(timezone=True), nullable=True),
-    Index("ix_notifications_user_id_created_at", "user_id", "created_at"),
-    Index("ix_notifications_created_at", "created_at"),
-)
 
-notification_watch_state = Table(
-    "notification_watch_state", shared_metadata,
-    Column("subject_key", Text, primary_key=True),
-    Column("state", Text, nullable=False),
-    Column("updated_at", DateTime(timezone=True), nullable=False),
-)
 
-notification_preferences = Table(
-    "notification_preferences", shared_metadata,
-    Column("user_id", Text, primary_key=True),
-    Column("muted_kinds", json_type(), nullable=False),
-    Column("updated_at", DateTime(timezone=True), nullable=False),
-)
 
 
 def insert_notification_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
     """Insert ``{"user_id", "kind", "data"}`` rows on an open connection."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for row in rows:
         conn.execute(insert(notifications).values(
             id=new_database_id(), user_id=row["user_id"], kind=row["kind"],
@@ -80,7 +55,7 @@ def _iso(value: datetime | None) -> str | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return value.isoformat().replace("+00:00", "Z")
 
 
@@ -138,7 +113,7 @@ class DatabaseNotificationStore:
                 return
             where.append(notifications.c.id.in_(ids))
         with store_transaction(self.engine) as conn:
-            conn.execute(update(notifications).where(*where).values(read_at=datetime.now(timezone.utc)))
+            conn.execute(update(notifications).where(*where).values(read_at=datetime.now(UTC)))
 
     def prune(self, before: datetime) -> int:
         with store_transaction(self.engine) as conn:
@@ -157,7 +132,7 @@ class DatabaseNotificationStore:
         return [kind for kind in value if isinstance(kind, str)] if isinstance(value, list) else []
 
     def set_muted_kinds(self, user_id: str, kinds: list[str]) -> list[str]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with store_transaction(self.engine) as conn:
             dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
             statement = dialect_insert(notification_preferences).values(
@@ -191,7 +166,7 @@ class DatabaseNotificationStore:
     def _claim_transition(
         self, subject_key: str, previous: str | None, state: str, rows: list[dict[str, Any]],
     ) -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with store_transaction(self.engine) as conn:
             if previous is None:
                 exists = conn.execute(

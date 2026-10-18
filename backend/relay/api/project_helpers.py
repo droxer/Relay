@@ -7,22 +7,19 @@ from fastapi import HTTPException
 from ..core.computer_identity import computer_id
 from ..services.project_runtime import project_work_error
 from .deps import AppContextDep
+from ..services.project_access import ProjectAccessError, project_for_owner as owned_project
 
 
 def project_for_owner(
-    ctx: AppContextDep, project_id: str | None, owner_user_id: str,
+    ctx: AppContextDep, project_id: str | None, owner_user_id: str | None,
     *, require_enabled: bool = False,
 ) -> dict[str, Any] | None:
-    if not project_id:
-        return None
-    project = ctx.project_store.get_project(project_id)
-    if not project or project.get("archivedAt"):
-        raise HTTPException(404, "Project not found.")
-    if project.get("ownerUserId") != owner_user_id:
-        raise HTTPException(403, "Project belongs to another user.")
-    if require_enabled and (code := project_work_error(project)):
-        raise HTTPException(409, code)
-    return project
+    try:
+        return owned_project(
+            ctx.project_store, project_id, owner_user_id, require_enabled=require_enabled
+        )
+    except ProjectAccessError as error:
+        raise HTTPException(error.status, error.detail) from error
 
 
 def ensure_task_project_writable(ctx: AppContextDep, task: dict[str, Any]) -> None:

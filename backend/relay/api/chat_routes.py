@@ -5,7 +5,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from .deps import AppContextDep
-from .helpers import JsonBodyDep, require_chat_service_request, string_field
+from .actors import require_chat_service_request
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 
@@ -92,7 +93,7 @@ def chat_conversation_mapping(
     try:
         session = ctx.session_store.get_session(session_id)
     except KeyError:
-        raise HTTPException(404, "Session not found.")
+        raise HTTPException(404, "Session not found.") from None
     if not _owned_by(session, identity["userId"]):
         raise HTTPException(403, "Session is owned by another user.")
     record = ctx.chat_store.set_conversation_session(body, session_id, identity["userId"])

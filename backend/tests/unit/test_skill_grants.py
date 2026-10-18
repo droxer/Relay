@@ -4,7 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.agent_store import DatabaseAgentStore, LocalAgentStore
+from relay.persistence.agent_store import DatabaseAgentStore
+from store_fixtures import make_agent_store
 from relay.services.skill_grants import SkillGrantError, grant, read_grants, revoke
 
 
@@ -22,7 +23,7 @@ class Skills:
 
 @pytest.fixture
 def ctx(tmp_path):
-    return SimpleNamespace(agent_store=LocalAgentStore(tmp_path), skill_store=Skills())
+    return SimpleNamespace(agent_store=make_agent_store(tmp_path), skill_store=Skills())
 
 
 def _agent(ctx, owner="alice", executor="claude"):

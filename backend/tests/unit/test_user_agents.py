@@ -4,18 +4,13 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from relay.persistence.agent_store import (
-    DatabaseAgentStore,
-    LocalAgentStore,
-)
+from relay.persistence.agent_store import DatabaseAgentStore
+from store_fixtures import make_agent_store
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
-def test_agent_stores_create_uuid_agent_ids(tmp_path: Path, store_kind: str) -> None:
+def test_agent_stores_create_uuid_agent_ids(tmp_path: Path) -> None:
     store = (
-        LocalAgentStore(tmp_path / "local")
-        if store_kind == "local"
-        else DatabaseAgentStore(
+        DatabaseAgentStore(
             f"sqlite:///{tmp_path}/agents.db", create_schema=True
         )
     )
@@ -35,7 +30,7 @@ def test_agent_stores_create_uuid_agent_ids(tmp_path: Path, store_kind: str) -> 
 def test_user_can_own_multiple_agents_of_the_same_executor_kind(
     tmp_path: Path,
 ) -> None:
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
 
     researcher = store.create_agent(
         "alice",
@@ -63,7 +58,7 @@ def test_user_can_own_multiple_agents_of_the_same_executor_kind(
 
 
 def test_agent_names_are_unique_within_an_user(tmp_path: Path) -> None:
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     store.create_agent(
         "alice",
         {
@@ -96,7 +91,7 @@ def test_agent_names_are_unique_within_an_user(tmp_path: Path) -> None:
 def test_agent_updates_are_event_sourced_and_configuration_increments_version(
     tmp_path: Path,
 ) -> None:
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     agent = store.create_agent(
         "alice",
         {
@@ -144,14 +139,11 @@ def test_database_agent_store_matches_local_contract(tmp_path: Path) -> None:
     ]
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_deleted_agent_releases_compatibility_identity(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
     store = (
-        LocalAgentStore(tmp_path / "local")
-        if store_kind == "local"
-        else DatabaseAgentStore(
+        DatabaseAgentStore(
             f"sqlite:///{tmp_path}/agents.db", create_schema=True
         )
     )
@@ -195,9 +187,9 @@ def test_database_agent_store_normalizes_legacy_owner_snapshot(tmp_path: Path) -
 
 
 def test_create_agent_records_the_computer_id(tmp_path) -> None:
-    from relay.persistence.agent_store import LocalAgentStore
+    from store_fixtures import make_agent_store
 
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     agent = store.create_agent(
         "alice",
         {
@@ -212,9 +204,9 @@ def test_create_agent_records_the_computer_id(tmp_path) -> None:
 
 
 def test_create_agent_requires_a_default_role(tmp_path) -> None:
-    from relay.persistence.agent_store import LocalAgentStore
+    from store_fixtures import make_agent_store
 
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     with pytest.raises(ValueError, match="defaultRole"):
         store.create_agent(
             "alice",
@@ -227,9 +219,9 @@ def test_create_agent_requires_a_default_role(tmp_path) -> None:
 
 
 def test_default_role_must_be_a_known_role(tmp_path) -> None:
-    from relay.persistence.agent_store import LocalAgentStore
+    from store_fixtures import make_agent_store
 
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     with pytest.raises(ValueError, match="defaultRole"):
         store.create_agent(
             "alice",
@@ -245,9 +237,9 @@ def test_default_role_must_be_a_known_role(tmp_path) -> None:
 def test_birth_certificate_fields_cannot_be_patched(tmp_path) -> None:
     """computerId / executorKind / defaultRole are the birth certificate;
     changing them is like swapping in a different coworker."""
-    from relay.persistence.agent_store import LocalAgentStore
+    from store_fixtures import make_agent_store
 
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     agent = store.create_agent(
         "alice",
         {
@@ -267,9 +259,9 @@ def test_birth_certificate_fields_cannot_be_patched(tmp_path) -> None:
 
 
 def test_personality_fields_remain_patchable(tmp_path) -> None:
-    from relay.persistence.agent_store import LocalAgentStore
+    from store_fixtures import make_agent_store
 
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
     agent = store.create_agent(
         "alice",
         {

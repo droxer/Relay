@@ -186,7 +186,7 @@ def test_local_operational_import_is_dry_runnable_and_idempotent(tmp_path):
         migrate_local_operational_state,
         require_operational_import,
     )
-    from relay.services.managed_nodes import LocalManagedNodeStore
+    from relay.persistence.managed_node_store import LocalManagedNodeStore
 
     root = tmp_path / "legacy"
     local = LocalManagedNodeStore(root)
@@ -233,7 +233,8 @@ def test_recovery_does_not_acquire_fleet_dispatch_lock():
 
 
 def test_retention_limits_deletes_and_does_not_load_command_payloads(tmp_path):
-    from relay.persistence.daemon_store import DatabaseDaemonStore, command_to_row
+    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.rows import command_to_row
     from relay.core.ids import new_database_id
     from sqlalchemy import insert
 
@@ -296,7 +297,7 @@ def test_import_conflict_rolls_back_prior_records(tmp_path):
         DatabaseProfileImageStore,
         LocalProfileImageStore,
     )
-    from relay.services.managed_nodes import LocalManagedNodeStore
+    from relay.persistence.managed_node_store import LocalManagedNodeStore
 
     root = tmp_path / "legacy"
     source = LocalManagedNodeStore(root)

@@ -3,7 +3,9 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
+from app_state_helpers import replace_app_context
 from relay.app import create_app
 
 
@@ -11,6 +13,8 @@ from relay.app import create_app
 def _channels_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat channels ship disabled; these tests cover the enabled feature."""
     monkeypatch.setenv("RELAY_CHANNELS_ENABLED", "1")
+    # Chat secrets live encrypted in the database.
+    monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
 
 CHAT_HEADERS = {"Authorization": "Bearer chat_secret"}
 CONVERSATION = {
@@ -33,7 +37,7 @@ def _bootstrap_admin(client: TestClient) -> None:
 
 
 def _active_integration(client: TestClient) -> str:
-    client.app.state.chat_probe = _healthy_provider
+    replace_app_context(client.app, chat_probe=_healthy_provider)
     assert client.post("/api/v1/admin/accounts", json={
         "username": "alice",
         "password": "harbor-quartz-8830",

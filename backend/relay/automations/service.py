@@ -4,7 +4,7 @@ firing — each automation isolated within one locked transaction."""
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
@@ -24,6 +24,8 @@ from .model import (
     triggers_of,
 )
 from .schedule import next_fire_after
+from ..services.task_dispatch import DispatchResult, existing_routine_occurrence_result
+from ..security.actor import Actor
 
 if TYPE_CHECKING:
     from ..api.deps import AppContext
@@ -150,11 +152,11 @@ class AutomationService:
                         failed[routine_id] = deliveries.get(routine_id, [])
                 self.matcher.finish(rows, failed, now)
                 return fired
-        except Exception:
+        except Exception:  # noqa: BLE001 - tick supervisor: a failed tick logs and retries next interval
             logger.exception("Automation tick failed")
             return 0
 
-    def resume(self, task_id: str, actor: dict[str, Any], now: datetime) -> dict[str, Any]:
+    def resume(self, task_id: str, actor: Actor, now: datetime) -> dict[str, Any]:
         """Turn a paused automation back on. Owner or admin only
         (``PermissionError`` otherwise); an active one is returned as is."""
         with store_transaction(self.task_store.engine) as conn:
@@ -179,7 +181,7 @@ def lock_automation_state(conn: Any) -> None:
 
 
 def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict[str, Any],
-                   actor: dict[str, Any]) -> None:
+                   actor: Actor) -> None:
     """The automation-state side of every resume, run inside the transaction
     that flips ``routineState`` back to ``active``.
 
@@ -202,7 +204,7 @@ def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict
     task_store.record_activity(task_id, f"Automation resumed by {_resumer(task, actor)}.")
 
 
-def _resumer(task: dict[str, Any], actor: dict[str, Any]) -> str:
+def _resumer(task: dict[str, Any], actor: Actor) -> str:
     """Who resumed, by role: activity names no raw user ids."""
     user = actor.get("userId")
     if user and user == task.get("ownerUserId"):
@@ -235,7 +237,9 @@ REFUSAL_MESSAGES = {
 }
 
 
-def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
+def request_manual_occurrence(
+    automation_store: Any, ctx: AppContext, task: dict[str, Any], actor: Actor
+) -> dict[str, Any] | DispatchResult:
     if not actor["isAdmin"] and task.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     refusal = _run_now_refusal(task)
@@ -257,7 +261,7 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
     automation_store.enqueue_manual(task["id"])
     # Use the same locked tick as the scheduler. Running it here preserves the
     # endpoint's immediate-dispatch response when nothing else is in flight.
-    automation_service(automation_store, ctx).tick(datetime.now(timezone.utc))
+    automation_service(automation_store, ctx).tick(datetime.now(UTC))
     refreshed = ctx.task_store.get_task(task["id"])
     previous = set(task.get("occurrenceIds") or [])
     new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]
@@ -273,13 +277,12 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
 
 def _active_occurrence_result(
     ctx: AppContext, routine: dict[str, Any], active: dict[str, Any]
-) -> dict[str, Any]:
+) -> dict[str, Any] | DispatchResult:
     """Answer Run now with the occurrence already in flight. A queued one may
     need waking after its computer comes online; its assignment is immutable
     even if the definition was edited later."""
     if active.get("linkedSessionIds"):
         # Deferred: services.task_dispatch imports relay.tasks, which imports this module.
-        from ..services.task_dispatch import existing_routine_occurrence_result
 
         existing = existing_routine_occurrence_result(ctx, routine, active)
         if existing:

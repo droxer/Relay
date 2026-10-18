@@ -19,6 +19,8 @@ from .persistence.user_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
 from .persistence.storage_report import storage_report
+from .persistence.operational_import import migrate_local_operational_state
+from .persistence.file_store_import import migrate_local_file_stores
 
 load_backend_env()
 
@@ -63,6 +65,7 @@ def main(argv: list[str] | None = None) -> None:
             "serve",
             "migrate-local-sessions",
             "migrate-local-operational-state",
+            "migrate-local-file-stores",
             "migrate-blobs-to-r2",
             "backup-database",
             "rehearse-user-handles",
@@ -76,11 +79,22 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     setup_logging()
     if args.command == "migrate-local-operational-state":
-        from .persistence.operational_import import migrate_local_operational_state
         if not args.data_dir:
             parser.error("migrate-local-operational-state requires --data-dir")
         report = migrate_local_operational_state(args.data_dir,
             database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "migrate-local-file-stores":
+        # The backend also runs this at boot; by hand it previews (--dry-run)
+        # or resolves a conflict the boot import refused.
+        if not args.data_dir:
+            parser.error("migrate-local-file-stores requires --data-dir")
+        report = migrate_local_file_stores(
+            args.data_dir,
+            database_url_from_env(setting="migrate-local-file-stores"),
+            dry_run=args.dry_run,
+        )
         print(json.dumps(report, indent=2))
         return
     if args.command == "backup-database":

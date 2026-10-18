@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import time
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
-from typing import Any
+from dataclasses import dataclass
+from datetime import datetime, UTC
+from typing import Any, Protocol, cast
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -21,30 +21,27 @@ from ..core.models import AGENT_NAMES
 from ..core.permission_requests import PERMISSION_DECISIONS, PERMISSION_NOTE_MAX_CHARS
 from ..persistence.stores import valid_agent
 from ..services.event_notifier import session_event_key
+from ..services.session_deletion import delete_thread
 from ..services.team_dispatch import (
     TeamDispatchError,
     task_thread_assignments,
     task_thread_ownership,
 )
 from ..services.task_workspace import recorded_session_workspace
-from ..sessions import SessionArchivedError, SessionController, SessionRunInFlightError
+from ..sessions.controller import SessionArchivedError, SessionController, SessionRunInFlightError
 from ..sessions.task_scope import thread_task_scope
 from .deps import AppContext, AppContextDep
-from .helpers import (
-    JsonBodyDep,
-    artifact_index_item,
-    assignment_list,
+from .actors import (
     get_session_for_actor,
     get_session_header_for_actor,
     get_task_for_actor,
-    is_workspace_artifact,
     owner_user_id_for_create,
     request_actor,
     request_actor_or_sandbox,
-    role_name,
-    string_field,
-    workspace_artifacts,
 )
+from ..persistence.workspace_artifacts import artifact_index_item, is_workspace_artifact, workspace_artifacts
+from .bodies import JsonBodyDep, assignment_list, role_name, string_field
+from .schemas import ThreadCreateBody, ThreadCreateBodyDep, openapi_body
 from .project_helpers import (
     ensure_project_node_matches,
     project_for_owner,
@@ -57,8 +54,24 @@ from .workspace_transport import (
     workspace_binding_target,
     workspace_path,
 )
+from ..persistence.daemon.rules import TERMINAL_CLAIM_EXPIRES_STATE_KEY, TERMINAL_CLAIM_ID_STATE_KEY
+from ..core.settings import StreamSettings
+from ..security.actor import Actor
 
 router = APIRouter()
+
+
+class _RunRequestRecovery(Protocol):
+    """Run-request reads and writes both daemon stores implement but the
+    ``DaemonStore`` protocol does not yet declare."""
+
+    def active_run_request_for_session_any_node(
+        self, session_id: str
+    ) -> dict[str, Any] | None: ...
+
+    def update_run_request_if_claimed(
+        self, request_id: str, claim_key: str, claim_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any] | None: ...
 
 
 ACTIVE_TASK_STATUSES = frozenset(
@@ -177,7 +190,7 @@ def task_brief_item(task: dict[str, Any]) -> dict[str, Any]:
 
 
 def user_for_workspace_brief(
-    actor: dict[str, Any], requested_user: str | None
+    actor: Actor, requested_user: str | None
 ) -> str:
     requested = (
         requested_user.strip() if isinstance(requested_user, str) else ""
@@ -196,7 +209,7 @@ def agent_supervisor_user_id(agent: dict[str, Any]) -> str | None:
 
 
 def agent_for_workspace(
-    ctx: AppContext, actor: dict[str, Any], requested_agent: str | None
+    ctx: AppContext, actor: Actor, requested_agent: str | None
 ) -> dict[str, Any] | None:
     agent_id = requested_agent.strip() if isinstance(requested_agent, str) else ""
     if not agent_id:
@@ -283,7 +296,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=min(max(1, requested_limit), 200),
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
-        sessions = request.app.state.execution_lifecycle.annotate(sessions)
+        sessions = ctx.execution_lifecycle.annotate(sessions)
         return {"sessions": [session_brief_item(session) for session in sessions]}
     visible = [
         session
@@ -291,7 +304,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         if actor["isAdmin"] or session.get("ownerUserId") == actor["userId"]
     ]
     sessions = ensure_sessions_managed_affinity(ctx, visible)
-    sessions = request.app.state.execution_lifecycle.annotate(sessions)
+    sessions = ctx.execution_lifecycle.annotate(sessions)
     return {"sessions": sessions}
 
 
@@ -305,7 +318,7 @@ def artifact_index_limit(raw: str | None) -> int:
     try:
         value = int(raw)
     except ValueError:
-        raise HTTPException(400, "limit must be an integer.")
+        raise HTTPException(400, "limit must be an integer.") from None
     if value < 1:
         raise HTTPException(400, "limit must be at least 1.")
     return min(value, ARTIFACT_INDEX_MAX_LIMIT)
@@ -352,6 +365,50 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 @router.get("/workspace/brief")
 def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
+    agent, team, project, user_id = _workspace_scope(ctx, actor, request)
+    sessions = [
+        session
+        for session in ctx.session_store.list_session_snapshots(
+            owner_user_id=user_id,
+            project_id=project["id"] if project else None,
+        )
+        if (not agent or session_uses_agent(session, agent["id"]))
+        and (not team or session.get("teamId") == team["id"])
+    ]
+    sessions = ensure_sessions_managed_affinity(ctx, sessions)
+    scoped_session_ids = (
+        {session["id"] for session in sessions} if team or project else set()
+    )
+    nodes = _workspace_nodes(ctx, agent, team, project, user_id, scoped_session_ids)
+    active_runs = [
+        run
+        for node in nodes
+        for run in node.get("activeRuns", [])
+        if (not agent or run.get("logicalAgentId") == agent["id"])
+        and (not team or run.get("sessionId") in scoped_session_ids)
+        and (not project or run.get("sessionId") in scoped_session_ids)
+    ]
+    tasks = [
+        task
+        for task in ctx.task_store.list_task_summaries(user_id=user_id)
+        if (not agent or task.get("assignedAgentId") == agent["id"])
+        and (not team or task.get("assignedTeamId") == team["id"])
+        and (not project or task.get("projectId") == project["id"])
+    ]
+    return {
+        "userId": user_id,
+        **({"agentId": agent["id"]} if agent else {}),
+        **({"teamId": team["id"]} if team else {}),
+        **({"projectId": project["id"]} if project else {}),
+        **_workspace_brief_lists(nodes, active_runs, sessions, tasks),
+        "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _workspace_scope(
+    ctx: AppContext, actor: Actor, request: Request
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None, str]:
+    """The agent, team, or project a brief is scoped to, and whose work it reads."""
     requested_team_id = (request.query_params.get("teamId") or "").strip()
     requested_agent_id = (request.query_params.get("agentId") or "").strip()
     requested_project_id = (request.query_params.get("projectId") or "").strip()
@@ -396,20 +453,17 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     )
     if not user_id:
         raise HTTPException(404, "Agent owner not found.")
+    return agent, team, project, user_id
 
-    sessions = [
-        session
-        for session in ctx.session_store.list_session_snapshots(
-            owner_user_id=user_id,
-            project_id=project["id"] if project else None,
-        )
-        if (not agent or session_uses_agent(session, agent["id"]))
-        and (not team or session.get("teamId") == team["id"])
-    ]
-    sessions = ensure_sessions_managed_affinity(ctx, sessions)
-    scoped_session_ids = (
-        {session["id"] for session in sessions} if team or project else set()
-    )
+
+def _workspace_nodes(
+    ctx: AppContext,
+    agent: dict[str, Any] | None,
+    team: dict[str, Any] | None,
+    project: dict[str, Any] | None,
+    user_id: str,
+    scoped_session_ids: set[str],
+) -> list[dict[str, Any]]:
     placements: list[dict[str, Any]] | None = None
     if agent:
         placements = ctx.agent_placement_store.list_placements(agent_id=agent["id"])
@@ -450,27 +504,20 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         )
         if include_node:
             nodes.append(node)
-    active_runs = [
-        run
-        for node in nodes
-        for run in node.get("activeRuns", [])
-        if (not agent or run.get("logicalAgentId") == agent["id"])
-        and (not team or run.get("sessionId") in scoped_session_ids)
-        and (not project or run.get("sessionId") in scoped_session_ids)
-    ]
-    tasks = [
-        task
-        for task in ctx.task_store.list_task_summaries(user_id=user_id)
-        if (not agent or task.get("assignedAgentId") == agent["id"])
-        and (not team or task.get("assignedTeamId") == team["id"])
-        and (not project or task.get("projectId") == project["id"])
-    ]
+    return nodes
+
+
+def _workspace_brief_lists(
+    nodes: list[dict[str, Any]],
+    active_runs: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+    tasks: list[dict[str, Any]],
+) -> dict[str, Any]:
     artifacts = [
         artifact_index_item(session, artifact)
         for session in sessions
         for artifact in workspace_artifacts(session)
     ]
-
     workspace_sessions = sorted(
         sessions, key=lambda item: item.get("updatedAt") or "", reverse=True
     )
@@ -480,12 +527,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     recent_artifacts = sorted(
         artifacts, key=lambda item: item.get("createdAt") or "", reverse=True
     )[:12]
-
     return {
-        "userId": user_id,
-        **({"agentId": agent["id"]} if agent else {}),
-        **({"teamId": team["id"]} if team else {}),
-        **({"projectId": project["id"]} if project else {}),
         "nodes": nodes,
         "activeRuns": sorted(
             active_runs, key=lambda item: item.get("startedAt") or "", reverse=True
@@ -514,20 +556,19 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             "activeTaskCount": len(active_tasks),
             "artifactCount": len(artifacts),
         },
-        "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 
-@router.post("/threads", status_code=201)
+@router.post("/threads", status_code=201, openapi_extra=openapi_body(ThreadCreateBody))
 def create_session(
-    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+    request: Request, ctx: AppContextDep, *, _request_body: ThreadCreateBodyDep
 ) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     body = _request_body
-    task_goal = string_field(body, "taskGoal")
+    task_goal = body.task_goal
     if not task_goal:
         raise HTTPException(400, "taskGoal is required.")
-    assignments = assignment_list(body.get("assignments"))
+    assignments = assignment_list(body.assignments)
     owner_agent_id = next(
         (
             assignment.get("agentId")
@@ -536,75 +577,32 @@ def create_session(
         ),
         None,
     )
-    workspace_path = string_field(body, "workspacePath") or "/workspace"
-    daemon_node_id = string_field(body, "daemonNodeId") or string_field(
-        body, "daemon_node_id"
-    )
+    workspace_path = body.workspace_path or "/workspace"
+    daemon_node_id = body.node_id()
     managed_node_id = None
     session_computer_id = None
-    task_id = body.get("taskId") if isinstance(body.get("taskId"), str) else None
+    task_id = body.task_id
     task = get_task_for_actor(ctx.task_store, task_id, actor) if task_id else None
-    requested_project_id = string_field(body, "projectId") or None
+    requested_project_id = body.project_id or None
     task_project_id = task.get("projectId") if task else None
     if requested_project_id and task_project_id and requested_project_id != task_project_id:
         raise HTTPException(400, "thread_project_task_mismatch")
     project_id = task_project_id or requested_project_id
-    if project_id and "assignments" in body:
+    if project_id and body.is_set("assignments"):
         raise HTTPException(400, "project_assignment_override_unsupported")
-    owner = owner_user_id_for_create(actor, body)
+    owner = owner_user_id_for_create(actor, body.as_dict())
     thread_ownership = {
         "owner_user_id": owner,
         **({"owner_agent_id": owner_agent_id} if owner_agent_id else {}),
     }
     if task:
-        try:
-            thread_ownership = task_thread_ownership(
-                task, team_store=ctx.team_store, agent_store=ctx.agent_store
-            )
-            assignments = task_thread_assignments(
-                task,
-                assignments,
-                team_store=ctx.team_store,
-                agent_store=ctx.agent_store,
-            )
-        except TeamDispatchError as error:
-            raise HTTPException(409, error.code) from error
-        expected_owner = thread_ownership.get("owner_user_id")
-        requested_owner = string_field(body, "ownerUserId") or string_field(
-            body, "userId"
+        thread_ownership, assignments, owner = _task_thread_ownership(
+            ctx, task, body, assignments, owner
         )
-        if requested_owner and requested_owner != expected_owner:
-            raise HTTPException(
-                403, "Session owner must match the linked task assignee."
-            )
-        owner = expected_owner or owner
-        if owner and "owner_user_id" not in thread_ownership:
-            thread_ownership["owner_user_id"] = owner
-    if daemon_node_id:
-        node = next(
-            (
-                item
-                for item in ctx.registry.monitor_nodes()
-                if item.get("id") == daemon_node_id
-            ),
-            None,
-        )
-        if not node or not node.get("online") or node.get("stale"):
-            raise HTTPException(
-                409,
-                {
-                    "code": "node_offline",
-                    "message": "The selected computer is not available.",
-                },
-            )
-        if owner and node.get("userId") != owner:
-            raise HTTPException(
-                403, "The selected computer belongs to another user."
-            )
+    node = _selected_thread_node(ctx, daemon_node_id, owner) if daemon_node_id else None
+    if node:
         managed_node_id = node.get("managedNodeId")
         session_computer_id = resolve_computer_id(node)
-    else:
-        node = None
     project = project_for_owner(ctx, project_id, owner, require_enabled=True) if project_id and owner else None
     project_fields: dict[str, Any] = {}
     if project:
@@ -642,6 +640,64 @@ def create_session(
     return ctx.session_store.get_session(session["id"])
 
 
+def _task_thread_ownership(
+    ctx: AppContext,
+    task: dict[str, Any],
+    body: ThreadCreateBody,
+    assignments: list[dict[str, Any]],
+    owner: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
+    """A task thread's ownership and assignments come from the task."""
+    try:
+        thread_ownership = task_thread_ownership(
+            task, team_store=ctx.team_store, agent_store=ctx.agent_store
+        )
+        assignments = task_thread_assignments(
+            task,
+            assignments,
+            team_store=ctx.team_store,
+            agent_store=ctx.agent_store,
+        )
+    except TeamDispatchError as error:
+        raise HTTPException(409, error.code) from error
+    expected_owner = thread_ownership.get("owner_user_id")
+    requested_owner = body.owner_user_id or body.user_id
+    if requested_owner and requested_owner != expected_owner:
+        raise HTTPException(
+            403, "Session owner must match the linked task assignee."
+        )
+    owner = expected_owner or owner
+    if owner and "owner_user_id" not in thread_ownership:
+        thread_ownership = {**thread_ownership, "owner_user_id": owner}
+    return thread_ownership, assignments, owner
+
+
+def _selected_thread_node(
+    ctx: AppContext, daemon_node_id: str, owner: str
+) -> dict[str, Any]:
+    node = next(
+        (
+            item
+            for item in ctx.registry.monitor_nodes()
+            if item.get("id") == daemon_node_id
+        ),
+        None,
+    )
+    if not node or not node.get("online") or node.get("stale"):
+        raise HTTPException(
+            409,
+            {
+                "code": "node_offline",
+                "message": "The selected computer is not available.",
+            },
+        )
+    if owner and node.get("userId") != owner:
+        raise HTTPException(
+            403, "The selected computer belongs to another user."
+        )
+    return node
+
+
 @router.get("/threads/{session_id}")
 def get_session(
     session_id: str, request: Request, ctx: AppContextDep
@@ -650,27 +706,24 @@ def get_session(
     session = ensure_session_managed_affinity(
         ctx, get_session_for_actor(ctx.session_store, session_id, actor)
     )
-    return {**session, "execution": request.app.state.execution_lifecycle.status(session)}
+    return {**session, "execution": ctx.execution_lifecycle.status(session)}
 
 
 @router.get("/threads/{session_id}/execution")
 def get_execution_status(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     session = get_session_for_actor(ctx.session_store, session_id, actor)
-    return request.app.state.execution_lifecycle.status(session)
+    return ctx.execution_lifecycle.status(session)
 
 
 @router.post("/threads/{session_id}/execution/recovery")
 def retry_execution_recovery(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     session = get_session_for_actor(ctx.session_store, session_id, actor)
-    from ..persistence.daemon_store import (
-        TERMINAL_CLAIM_EXPIRES_STATE_KEY,
-        TERMINAL_CLAIM_ID_STATE_KEY,
-    )
 
+    daemon_store = cast(_RunRequestRecovery, ctx.daemon_store)
     with ctx.registry.dispatch_lock:
-        run = ctx.daemon_store.active_run_request_for_session_any_node(session_id)
+        run = daemon_store.active_run_request_for_session_any_node(session_id)
         state = dict((run or {}).get("state") or {})
         if run and run.get("status") == "finalizing" and state.get("_relay_recovery_required"):
             claim = state.get(TERMINAL_CLAIM_ID_STATE_KEY)
@@ -678,9 +731,9 @@ def retry_execution_recovery(session_id: str, request: Request, ctx: AppContextD
                 state.pop("_relay_recovery_required", None)
                 state.pop("_relay_finalization_retry_at", None)
                 state["_relay_finalization_attempts"] = 0
-                state[TERMINAL_CLAIM_EXPIRES_STATE_KEY] = datetime.now(timezone.utc).isoformat()
-                ctx.daemon_store.update_run_request_if_claimed(run["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim, {"state": state})
-    return request.app.state.execution_lifecycle.status(session)
+                state[TERMINAL_CLAIM_EXPIRES_STATE_KEY] = datetime.now(UTC).isoformat()
+                daemon_store.update_run_request_if_claimed(run["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim, {"state": state})
+    return ctx.execution_lifecycle.status(session)
 
 
 @router.post("/threads/{session_id}/execution/reconcile")
@@ -694,7 +747,7 @@ def reconcile_execution(session_id: str, request: Request, ctx: AppContextDep) -
     """
     actor = request_actor(request, ctx.auth_store)
     get_session_for_actor(ctx.session_store, session_id, actor)
-    status = request.app.state.execution_lifecycle.reconcile(session_id, actor["userId"])
+    status = ctx.execution_lifecycle.reconcile(session_id, actor["userId"])
     if status is None:
         raise HTTPException(
             409,
@@ -804,9 +857,9 @@ def assign_session(
     try:
         controller.assign_session(session_id, assignments)
     except SessionArchivedError:
-        raise HTTPException(409, "Session is archived.")
+        raise HTTPException(409, "Session is archived.") from None
     except SessionRunInFlightError:
-        raise HTTPException(409, "Session has a run in flight.")
+        raise HTTPException(409, "Session has a run in flight.") from None
     return ctx.session_store.get_session(session_id)
 
 
@@ -821,24 +874,18 @@ def delete_session(
         raise HTTPException(400, "stop must be true or false.")
     if stop == "true":
         from fastapi.responses import JSONResponse
-        status = request.app.state.execution_lifecycle.request_delete(session_id, actor["userId"])
+        status = ctx.execution_lifecycle.request_delete(session_id, actor["userId"])
         return JSONResponse(status, status_code=202) if status else Response(status_code=204)
-    controller = SessionController(
-        ctx.session_store,
-        task_store=ctx.task_store,
-        owner_user_id=actor["userId"],
-    )
     try:
-        with ctx.registry.dispatch_lock, request.app.state.execution_lifecycle.admission_scope():
-            snapshot = get_session_for_actor(ctx.session_store, session_id, actor)
-            if not request.app.state.execution_lifecycle.status(snapshot)["canDelete"]:
-                raise SessionRunInFlightError(session_id)
-            controller.delete_session(
-                session_id, snapshot=snapshot, deleted_by=actor["userId"]
-            )
+        delete_thread(
+            ctx,
+            session_id,
+            execution_lifecycle=ctx.execution_lifecycle,
+            deleted_by=actor["userId"],
+            reload=lambda: get_session_for_actor(ctx.session_store, session_id, actor),
+        )
     except SessionRunInFlightError:
-        raise HTTPException(409, "Session has a run in flight.")
-    ctx.chat_store.clear_conversation_sessions(session_id)
+        raise HTTPException(409, "Session has a run in flight.") from None
     return Response(status_code=204)
 
 
@@ -854,7 +901,7 @@ def _assert_rejectable(session: dict[str, Any], ctx: Any) -> None:
         ctx.registry.daemon_store.active_run_request_for_session_any_node(session["id"])
     ):
         raise HTTPException(409, "session_run_in_flight")
-    active_round = next(
+    active_round: dict[str, Any] = next(
         (
             item
             for item in session.get("collaborationRounds", [])
@@ -895,7 +942,7 @@ def decision(
     if kind == "reject":
         with (
             ctx.registry.dispatch_lock,
-            request.app.state.execution_lifecycle.admission_scope(),
+            ctx.execution_lifecycle.admission_scope(),
             ctx.session_store.mutation_scope(session_id),
         ):
             session = get_session_for_actor(ctx.session_store, session_id, actor)
@@ -1009,23 +1056,12 @@ def handoff(
 # stream flushes the backlog and closes when it sees one of these.
 TERMINAL_SESSION_STATUSES = frozenset({"completed", "failed", "cancelled"})
 # Agent subprocesses emit output in small chunks, but this tail loop is the
-# final hop before the browser. A 50 ms tail interval feels continuous while
-# still batching subprocess chunks into a single browser cache update.
-_STREAM_FALLBACK_SECONDS = max(
-    1.0, float(os.environ.get("RELAY_STREAM_FALLBACK_SECONDS", "5"))
-)
-_STREAM_EVENT_PAGE_LIMIT = max(
-    1, min(1000, int(os.environ.get("RELAY_STREAM_EVENT_PAGE_LIMIT", "256")))
-)
+# final hop before the browser; its knobs are validated in core/settings.py.
+_STREAM_SETTINGS = StreamSettings.from_env()
+_STREAM_FALLBACK_SECONDS = _STREAM_SETTINGS.fallback_seconds
+_STREAM_EVENT_PAGE_LIMIT = _STREAM_SETTINGS.event_page_limit
 _STREAM_HEARTBEAT_SECONDS = 15.0
-# Upper bound on a single SSE connection. The client reconnects with
-# Last-Event-ID, so capping the connection only costs a reconnect. Configurable
-# because a CDN or platform proxy in front of the backend may cut a stream at
-# its own (shorter) limit; setting this below that limit turns an opaque proxy
-# disconnect into a clean, resumable `done` frame.
-_STREAM_MAX_SECONDS = max(
-    5.0, float(os.environ.get("RELAY_STREAM_MAX_SECONDS", str(60 * 30)))
-)
+_STREAM_MAX_SECONDS = _STREAM_SETTINGS.max_seconds
 
 
 def _sse_frame(data: dict[str, Any], *, event: str | None = None) -> str:
@@ -1033,6 +1069,75 @@ def _sse_frame(data: dict[str, Any], *, event: str | None = None) -> str:
     prefix = f"id: {event_id}\n" if isinstance(event_id, str) and event_id else ""
     prefix += f"event: {event}\n" if event else ""
     return f"{prefix}data: {json.dumps(data)}\n\n"
+
+
+@dataclass
+class _EventTail:
+    """Where one SSE connection stands in a thread's event log."""
+
+    after_event_id: str | None
+    start: float
+    last_heartbeat: float
+    next_sequence: int | None = None
+
+
+def _open_event_tail(request: Request) -> _EventTail:
+    # EventSource keeps the original URL across automatic reconnects but
+    # advances Last-Event-ID as frames arrive. Prefer that live cursor over
+    # the URL's initial `after` value so a reconnect does not replay the
+    # entire stream window.
+    after_event_id = request.headers.get("last-event-id") or request.query_params.get("after")
+    start = time.monotonic()
+    return _EventTail(after_event_id=after_event_id, start=start, last_heartbeat=start)
+
+
+async def _read_tail_page(
+    ctx: AppContext, session_id: str, tail: _EventTail
+) -> dict[str, Any] | None:
+    """The next page after the tail's cursor, advancing it; None once the thread is gone."""
+    try:
+        page = await run_in_threadpool(
+            ctx.session_store.read_event_page,
+            session_id,
+            after_event_id=tail.after_event_id if tail.next_sequence is None else None,
+            after_sequence=tail.next_sequence,
+            limit=_STREAM_EVENT_PAGE_LIMIT,
+        )
+    except KeyError:
+        return None
+    tail.next_sequence = page["nextSequence"]
+    return page
+
+
+def _finished_frame(page: dict[str, Any]) -> str | None:
+    """The closing frame once a terminal thread's history is fully sent."""
+    status = page.get("status")
+    history_drained = page["nextSequence"] >= int(page.get("version") or 0)
+    if status in TERMINAL_SESSION_STATUSES and history_drained:
+        return _sse_frame({"status": status}, event="done")
+    return None
+
+
+def _timer_frames(tail: _EventTail, status: Any, now: float) -> tuple[list[str], bool]:
+    """A due heartbeat, then the timeout close; True when the stream must end."""
+    frames: list[str] = []
+    if now - tail.last_heartbeat >= _STREAM_HEARTBEAT_SECONDS:
+        timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        frames.append(_sse_frame({"timestamp": timestamp}, event="heartbeat"))
+        tail.last_heartbeat = now
+    if now - tail.start >= _STREAM_MAX_SECONDS:
+        frames.append(_sse_frame({"status": status, "reason": "timeout"}, event="done"))
+        return frames, True
+    return frames, False
+
+
+def _tail_wait_seconds(tail: _EventTail, now: float) -> float:
+    wait_seconds = min(
+        _STREAM_FALLBACK_SECONDS,
+        _STREAM_HEARTBEAT_SECONDS - (now - tail.last_heartbeat),
+        _STREAM_MAX_SECONDS - (now - tail.start),
+    )
+    return max(0.001, wait_seconds)
 
 
 @router.get("/threads/{session_id}/events")
@@ -1050,73 +1155,33 @@ async def session_events(
         # log each tick. The web client coalesces that tick's message frames
         # into one render commit, while other SSE consumers keep the existing
         # one-domain-event-per-frame contract.
-        # EventSource keeps the original URL across automatic reconnects but
-        # advances Last-Event-ID as frames arrive. Prefer that live cursor over
-        # the URL's initial `after` value so a reconnect does not replay the
-        # entire stream window.
-        after_event_id = request.headers.get(
-            "last-event-id"
-        ) or request.query_params.get("after")
-        next_sequence: int | None = None
-        start = time.monotonic()
-        last_heartbeat = start
+        tail = _open_event_tail(request)
         notification_key = session_event_key(session_id)
-        while True:
-            if await request.is_disconnected():
-                return
-            with ctx.control_plane_notifier.observe(
-                notification_key
-            ) as observed_version:
-                try:
-                    page = await run_in_threadpool(
-                        ctx.session_store.read_event_page,
-                        session_id,
-                        after_event_id=(
-                            after_event_id if next_sequence is None else None
-                        ),
-                        after_sequence=next_sequence,
-                        limit=_STREAM_EVENT_PAGE_LIMIT,
-                    )
-                except KeyError:
+        notifier = ctx.control_plane_notifier
+        while not await request.is_disconnected():
+            with notifier.observe(notification_key) as observed_version:
+                page = await _read_tail_page(ctx, session_id, tail)
+                if page is None:
                     return
                 events = page["events"]
-                next_sequence = page["nextSequence"]
+                for event in events:
+                    yield _sse_frame(event)
                 if events:
-                    for event in events:
-                        yield _sse_frame(event)
-                    last_heartbeat = time.monotonic()
-                status = page.get("status")
-                history_drained = next_sequence >= int(page.get("version") or 0)
-                if status in TERMINAL_SESSION_STATUSES and history_drained:
-                    yield _sse_frame({"status": status}, event="done")
+                    tail.last_heartbeat = time.monotonic()
+                finished = _finished_frame(page)
+                if finished is not None:
+                    yield finished
                     return
                 now = time.monotonic()
-                if now - last_heartbeat >= _STREAM_HEARTBEAT_SECONDS:
-                    yield _sse_frame(
-                        {
-                            "timestamp": datetime.now(timezone.utc)
-                            .isoformat()
-                            .replace("+00:00", "Z")
-                        },
-                        event="heartbeat",
-                    )
-                    last_heartbeat = now
-                if now - start >= _STREAM_MAX_SECONDS:
-                    yield _sse_frame(
-                        {"status": status, "reason": "timeout"}, event="done"
-                    )
+                frames, timed_out = _timer_frames(tail, page.get("status"), now)
+                for frame in frames:
+                    yield frame
+                if timed_out:
                     return
                 if events:
                     continue
-                wait_seconds = min(
-                    _STREAM_FALLBACK_SECONDS,
-                    _STREAM_HEARTBEAT_SECONDS - (now - last_heartbeat),
-                    _STREAM_MAX_SECONDS - (now - start),
-                )
-                await ctx.control_plane_notifier.wait(
-                    notification_key,
-                    observed_version,
-                    timeout=max(0.001, wait_seconds),
+                await notifier.wait(
+                    notification_key, observed_version, timeout=_tail_wait_seconds(tail, now)
                 )
 
     return StreamingResponse(
@@ -1169,7 +1234,7 @@ async def read_artifact(
             ctx.session_store.read_artifact, session_id, artifact_id
         )
     except (KeyError, FileNotFoundError, OSError):
-        raise HTTPException(404, "Artifact not found.")
+        raise HTTPException(404, "Artifact not found.") from None
     return PlainTextResponse(text)
 
 

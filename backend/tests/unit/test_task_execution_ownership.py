@@ -3,14 +3,13 @@ from threading import Barrier
 
 import pytest
 from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
+from store_fixtures import make_task_store
 
 
-@pytest.fixture(params=["local", "database"])
-def store(request, tmp_path):
-    if request.param == "local":
-        return LocalTaskStore(str(tmp_path))
-    return DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
+@pytest.fixture
+def store(tmp_path):
+    return make_task_store(tmp_path)
 
 
 def claim(store, task_id, request_id, revision):

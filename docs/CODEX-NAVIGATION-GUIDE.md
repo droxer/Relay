@@ -48,15 +48,15 @@ relational columns, list summaries, and dashboard rows are projections.
 
 | Concern | Start here | Check alongside it |
 | --- | --- | --- |
-| FastAPI construction, middleware, lifespan | `backend/relay/app.py` | `backend/relay/api/deps.py`, API tests |
+| FastAPI construction, middleware, lifespan | `backend/relay/app.py`, `backend/relay/bootstrap/` | `backend/relay/core/settings.py`, `backend/relay/api/deps.py`, API tests |
 | Public URL and response contract | `backend/relay/api/contract.py`, domain route in `backend/relay/api/` | `docs/api.md`, `web/src/api.ts`, `packages/relay-core/src/api-url.ts` |
-| Authentication and record access | `backend/relay/security/auth.py`, `backend/relay/api/helpers.py` | auth API tests and daemon-token tests |
+| Authentication and record access | `backend/relay/security/auth.py`, `backend/relay/api/actors.py` | auth API tests and daemon-token tests |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session_store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task_store.py` | `api/task_routes.py`, `services/task_dispatch.py`, backlog/routine UI |
 | Routine scheduling | `backend/relay/tasks/scheduler.py` | task store claim queries and scheduler tests |
 | Agent routing and placement | `backend/relay/services/agent_routing.py` | agent routes, placement store, daemon registry scheduling |
-| Daemon admission and dispatch | `backend/relay/daemon_registry/node_backend.py` | `registry.py`, `scheduling.py`, daemon protocol tests |
+| Daemon admission and dispatch | `backend/relay/daemon_registry/node_backend.py` | `registry.py` and its mixins (`admission.py`, `delivery.py`, `progression.py`, …), `scheduling.py`, daemon protocol tests |
 | Daemon command execution | `packages/relay-daemon/src/index.ts` | `sandbox-session.ts`, `execution.ts`, daemon tests |
 | Local agent execution and configuration | `packages/relay-daemon/src/local-runtime.ts`, `runtime-profile.ts` | `process-supervisor.ts`, `agent-inventory.ts`, installer/doctor tests |
 | CLI argv and prompt construction | `packages/relay-core/src/commands.ts`, `prompts.ts` | renderers, handoff tests, daemon execution |
@@ -65,7 +65,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Web server-state cache | `web/src/hooks/useRelayData.ts`, `useRelayMutations.ts` | session SSE/detail hooks and cache merge helpers |
 | Web session streaming | `web/src/hooks/useSessionEvents.ts` | `lib/sessionEvents.ts`, `sessionEventMerge.ts`, `sessionPollMerge.ts` |
 | Issues, project boards, and routines | `web/src/components/IssuesPage.tsx`, `BacklogPage.tsx`, `RoutinesPage.tsx` | `lib/issueQueues.ts`, `backlog.ts`, `routine.ts`, task API contract |
-| Managed computers | `backend/relay/services/managed_nodes.py` | managed-node routes and `packages/relay-supervisor/` |
+| Managed computers | `backend/relay/persistence/managed_node_store.py`, `backend/relay/core/managed_node_policy.py` | managed-node routes and `packages/relay-supervisor/` |
 | Database schema | table declarations under `backend/relay/persistence/` | `backend/migrations/versions/`, schema-drift tests |
 
 Compatibility imports are not the place for new implementation. Put new

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -7,7 +7,7 @@ from relay.persistence.automation_store import DatabaseAutomationStore
 from relay.persistence.store_common import store_transaction
 from relay.persistence.task_store import DatabaseTaskStore
 
-UTC = timezone.utc
+UTC = UTC
 DAILY_9 = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
 DAILY_7 = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "07:00"}}}]
 

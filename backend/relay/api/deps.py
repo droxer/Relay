@@ -1,30 +1,42 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
-from ..daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
+from ..chat.integrations import DatabaseChatIntegrationStore
+from ..daemon_registry.registry import DaemonNodeRegistry
+from ..daemon_registry.node_backend import ServerDaemonNodeBackend
 from ..persistence.protocols import (
     AgentPlacementStore,
     AgentStore,
     AuthStore,
-    ChatStore,
     DaemonStore,
-    ManagedNodeStore,
     OrgSettingsStore,
-    ProfileImageStore,
     ProjectStore,
     SessionStore,
     TaskStore,
     TeamStore,
 )
+from ..persistence.profile_image_store import DatabaseProfileImageStore
 from ..persistence.skill_store import DatabaseSkillStore
-from ..services.event_notifier import KeyedEventNotifier
+from ..services.event_notifier import KeyedEventNotifier, PostgresNotificationBridge
 from ..services.workspace_query import WorkspaceQueryBroker
+from ..persistence.managed_node_store import DatabaseManagedNodeStore
+from ..persistence.automation_store import DatabaseAutomationStore
+from ..persistence.notification_store import DatabaseNotificationStore
+from ..core.settings import AppSettings
+from ..security.rate_limit import AuthRateLimiter
+from ..services.execution_lifecycle import ExecutionLifecycleService
+from ..services.password_reset import PasswordResetService
+from ..services.waitlist import WaitlistService
+
+ChatProbe = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
+ChatProvision = Callable[[dict[str, Any], str], Awaitable[tuple[bool, str]]]
 
 
 @dataclass(frozen=True)
@@ -32,44 +44,53 @@ class AppContext:
     session_store: SessionStore
     task_store: TaskStore
     daemon_store: DaemonStore
-    chat_store: ChatStore
+    # Concrete: routes use the integration admin surface, which the read-only
+    # ``ChatStore`` protocol does not declare; every store subclasses this one.
+    chat_store: DatabaseChatIntegrationStore
     registry: DaemonNodeRegistry
     backend: ServerDaemonNodeBackend
     auth_store: AuthStore
-    managed_node_store: ManagedNodeStore
+    managed_node_store: DatabaseManagedNodeStore
     agent_store: AgentStore
     team_store: TeamStore
     project_store: ProjectStore
     skill_store: DatabaseSkillStore
     agent_placement_store: AgentPlacementStore
-    profile_image_store: ProfileImageStore
+    # Concrete, as the app builds it: ``ProfileImageStore`` in the protocols
+    # module disagrees with the store's real save/read signatures.
+    profile_image_store: DatabaseProfileImageStore
     org_settings_store: OrgSettingsStore
     workspace_query_broker: WorkspaceQueryBroker
     control_plane_notifier: KeyedEventNotifier
     today: Callable[[], date]
+    settings: AppSettings
+    automation_store: DatabaseAutomationStore
+    notification_store: DatabaseNotificationStore
+    execution_lifecycle: ExecutionLifecycleService
+    # None when the database has no LISTEN/NOTIFY bridge (SQLite).
+    notification_bridge: PostgresNotificationBridge | None
+    # None unless RELAY_WAITLIST_ENABLED, in which case its routes are unmounted.
+    waitlist: WaitlistService | None
+    password_reset: PasswordResetService
+    auth_rate_limiter: AuthRateLimiter
+    automation_webhook_limiter: AuthRateLimiter
+    automation_webhook_failure_limiter: AuthRateLimiter
+    waitlist_rate_limiter: AuthRateLimiter
+    password_reset_rate_limiter: AuthRateLimiter
+    chat_probe: ChatProbe
+    chat_provision: ChatProvision
+    # Shared and mutable on purpose: one lock per integration, process-wide.
+    chat_rotation_locks: dict[str, asyncio.Lock]
 
 
 def app_context(request: Request) -> AppContext:
-    return AppContext(
-        session_store=request.app.state.session_store,
-        task_store=request.app.state.task_store,
-        daemon_store=request.app.state.daemon_store,
-        chat_store=request.app.state.chat_store,
-        registry=request.app.state.registry,
-        backend=request.app.state.backend,
-        auth_store=request.app.state.auth_store,
-        managed_node_store=request.app.state.managed_node_store,
-        agent_store=request.app.state.agent_store,
-        team_store=request.app.state.team_store,
-        project_store=request.app.state.project_store,
-        skill_store=request.app.state.skill_store,
-        agent_placement_store=request.app.state.agent_placement_store,
-        profile_image_store=request.app.state.profile_image_store,
-        org_settings_store=request.app.state.org_settings_store,
-        workspace_query_broker=request.app.state.workspace_query_broker,
-        control_plane_notifier=request.app.state.control_plane_notifier,
-        today=request.app.state.today,
-    )
+    """The context ``create_app`` built once at startup (``app.state.context``).
+
+    Every API module reaches application state through this, never through
+    ``request.app.state`` directly (``tests/unit/test_api_state_access.py``).
+    """
+    context: AppContext = request.app.state.context
+    return context
 
 
 AppContextDep = Annotated[AppContext, Depends(app_context)]

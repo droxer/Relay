@@ -3,10 +3,12 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Any, Literal, Protocol, TypedDict
 
-from ..persistence.protocols import ChatStore, SessionStore, TaskStore
+from ..chat.integrations import DatabaseChatIntegrationStore
+from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.resource_lock import resource_transaction
-from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
+from ..persistence.task.rules import TaskExecutionActiveError, dispatch_claim_active
 from ..sessions.controller import SessionController, SessionRunInFlightError
+from ..security.actor import Actor
 
 TERMINAL_SESSION_STATUSES = frozenset({"completed", "failed", "cancelled"})
 # Every cascade that deletes tasks takes this lock first, so deletions that
@@ -15,9 +17,12 @@ TASK_DELETION_LOCK = "relay.task-deletion"
 
 
 class TaskDeletionContext(Protocol):
-    task_store: TaskStore
-    session_store: SessionStore
-    chat_store: ChatStore
+    @property
+    def task_store(self) -> TaskStore: ...
+    @property
+    def session_store(self) -> SessionStore: ...
+    @property
+    def chat_store(self) -> DatabaseChatIntegrationStore: ...
 
 
 class TaskDeletionResult(TypedDict):
@@ -52,7 +57,7 @@ def task_has_active_linked_session(
 def delete_task(
     ctx: TaskDeletionContext,
     task_id: str,
-    actor: dict[str, Any],
+    actor: Actor,
     *,
     execution_lifecycle: Any = None,
 ) -> TaskDeletionResult:
@@ -69,7 +74,7 @@ def delete_task(
 
 
 def _delete_task(
-    ctx: TaskDeletionContext, task_id: str, actor: dict[str, Any],
+    ctx: TaskDeletionContext, task_id: str, actor: Actor,
     execution_lifecycle: Any,
 ) -> TaskDeletionResult:
     try:

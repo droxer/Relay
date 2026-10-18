@@ -8,6 +8,8 @@
 
 **Spec:** `docs/automation-triggers-design.md`
 
+> Note (2026-10-18): the file-backed `LocalTaskStore` this plan mentions has since been retired; tasks and sessions are database-only, and tests build them on sqlite through `backend/tests/store_fixtures.py`.
+
 ## Implementation status (2026-10-02)
 
 - Tasks 1–7 were committed before the continuation.

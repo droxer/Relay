@@ -7,7 +7,7 @@ timezone (the reducer stays pure)."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from typing import Any
 
 from loguru import logger
@@ -38,7 +38,7 @@ def seed_from_legacy(task: dict[str, Any], now: datetime) -> str | None:
         day = None
     if day is not None:
         zone = resolve_timezone(None)
-        return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(timezone.utc).isoformat()
+        return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(UTC).isoformat()
     return next_run_at(task, now)
 
 

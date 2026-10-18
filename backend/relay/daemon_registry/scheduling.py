@@ -27,16 +27,10 @@ def effective_role_for_assignment(
     if explicit_role in AGENT_ROLES:
         return explicit_role
     agent = assignment.get("executorKind") or assignment.get("agent")
-    overrides = (
-        node.get("agentRoleOverrides")
-        if isinstance(node.get("agentRoleOverrides"), dict)
-        else {}
-    )
-    defaults = (
-        node.get("agentRoleDefaults")
-        if isinstance(node.get("agentRoleDefaults"), dict)
-        else {}
-    )
+    raw_overrides = node.get("agentRoleOverrides")
+    overrides = raw_overrides if isinstance(raw_overrides, dict) else {}
+    raw_defaults = node.get("agentRoleDefaults")
+    defaults = raw_defaults if isinstance(raw_defaults, dict) else {}
     return overrides.get(agent) or defaults.get(agent)
 
 

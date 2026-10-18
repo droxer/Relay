@@ -1,32 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+from enum import Enum
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from typing import Any
 
 from loguru import logger
 
 from ..automations.service import AutomationService
-from ..collaboration.service import (
-    assignment_team_snapshot,
-    compile_assignment_work_graph,
-    create_round_manifest,
-)
-from ..core.computer_identity import computer_id
-from ..core.human_waits import new_question_id, wait_record
+from ..collaboration.service import assignment_team_snapshot
+from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
+from ..core.human_waits import WaitKind, new_question_id, wait_record
 from ..core.ids import new_database_id
 from ..core.models import AgentName
-from ..daemon_registry import node_accepts_run
-from ..persistence.agent_placement_store import create_node_placement
 from ..persistence.protocols import TaskDispatchAssignment
 from ..persistence.stores import valid_agent
-from ..persistence.task_store import (
-    compact_task_writes,
-    dispatch_claim_active,
-    task_claim_sort_key,
-)
+from ..persistence.task.rows import task_claim_sort_key
+from ..persistence.task.rules import compact_task_writes, dispatch_claim_active
 from ..services.agent_routing import (
     AgentRoutingError,
     dispatch_failure_code,
@@ -60,6 +53,12 @@ from ..services.team_dispatch import (
     resolve_team_task_assignments,
     task_execution_user_id,
 )
+from ..services.task_placement import (
+    ensure_managed_capacity_for_task,
+    materialize_legacy_task_assignment,
+    task_goal_text,
+)
+from ..services.dispatch_results import dispatch_result_scope
 
 PERMANENT_DISPATCH_CODES = {
     "agent_disabled",
@@ -70,87 +69,43 @@ PERMANENT_DISPATCH_CODES = {
 }
 
 
-def task_goal_text(task: dict[str, Any]) -> str:
-    return (
-        f"{task['title']}\n\n{task['description']}"
-        if task.get("description")
-        else task["title"]
-    )
+# A dispatch that outlives this keeps going (abandoning it would lose the
+# success bookkeeping that follows), but every interval it is logged so a hung
+# daemon backend is visible instead of silently stalling the scheduler.
+DISPATCH_WAIT_WARNING_SECONDS = 60.0
 
 
-def materialize_legacy_agent_assignment(
-    task: dict[str, Any],
-    executor_kind: str,
-    *,
-    registry: Any,
-    agent_store: Any,
-    placement_store: Any,
-) -> dict[str, Any] | None:
-    user_id = task_execution_user_id(task)
-    if not user_id:
-        return None
-    assignment = {"agent": executor_kind}
-    node = ready_node_for_task(registry, task, [assignment])
-    if not node:
-        return None
-    node_computer_id = computer_id(node)
-    candidates = sorted(
-        (
-            agent
-            for agent in agent_store.list_agents(supervisor_user_id=user_id)
-            if not agent.get("deletedAt")
-            and agent.get("enabled", True)
-            and agent["executorKind"] == executor_kind
-            and agent.get("computerId") == node_computer_id
-        ),
-        key=lambda agent: (agent.get("createdAt") or "", agent["id"]),
-    )
-    if not candidates:
-        logger.info(
-            "No declared agent for this runtime; task stays queued",
-            user_id=user_id,
-            executor_kind=executor_kind,
-            computer_id=node_computer_id,
-        )
-        return None
-    agent = candidates[0]
-    placement = next(
-        (
-            item
-            for item in placement_store.list_placements(agent_id=agent["id"])
-            if item.get("computerId") == node_computer_id
-            or (not item.get("computerId") and item["daemonNodeId"] == node["id"])
-        ),
-        None,
-    )
-    if placement is None:
-        create_node_placement(placement_store, agent, node)
-    return {"agent": executor_kind, "agentId": agent["id"]}
+def _await_dispatch(future: concurrent.futures.Future[Any], task_id: str) -> Any:
+    waited = 0.0
+    while True:
+        try:
+            return future.result(timeout=DISPATCH_WAIT_WARNING_SECONDS)
+        except TimeoutError:
+            waited += DISPATCH_WAIT_WARNING_SECONDS
+            logger.warning(
+                "Task dispatch still waiting on the daemon backend",
+                task_id=task_id,
+                waited_seconds=waited,
+            )
 
 
-def materialize_legacy_task_assignment(
-    task: dict[str, Any],
-    *,
-    task_store: Any,
-    registry: Any,
-    agent_store: Any,
-    placement_store: Any,
-) -> dict[str, Any] | None:
-    executor_kind = valid_agent(task.get("assignedAgent"))
-    if not executor_kind or task.get("assignedAgentId"):
-        return None
-    assignment = materialize_legacy_agent_assignment(
-        task,
-        executor_kind,
-        registry=registry,
-        agent_store=agent_store,
-        placement_store=placement_store,
-    )
-    if not assignment:
-        return None
-    return task_store.set_task_assignment(
-        task["id"], executor_kind, assignment["agentId"]
-    )
+class CandidateOutcome(Enum):
+    """What one pass over an assigned task did."""
+
+    IGNORED = "ignored"  # not dispatchable yet; not counted
+    SKIPPED = "skipped"  # held back for a recorded reason
+    ATTEMPTED = "attempted"  # claimed and handed to a daemon, which refused it
+    DISPATCHED = "dispatched"
+
+
+@dataclass(frozen=True)
+class _Route:
+    """Where a routed task runs and with which assignments."""
+
+    agent: Any
+    assignments: list[dict[str, Any]]
+    project_snapshot: dict[str, Any] | None
+    node: dict[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -176,7 +131,7 @@ class TaskScheduler:
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
         today: Callable[[], date] = date.today,
-        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.task_store = task_store
         self.registry = registry
@@ -243,7 +198,7 @@ class TaskScheduler:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - converted to a recorded dispatch failure or logged tick failure
                 logger.exception("Task scheduler tick failed")
             await asyncio.sleep(self.interval_seconds)
 
@@ -252,232 +207,242 @@ class TaskScheduler:
         for candidate in self._dispatchable_tasks():
             if attempts >= self.max_dispatches_per_tick:
                 break
-            # Legacy projectless work that was already Ready waits for triage.
-            if issue_needs_project(candidate):
-                continue
-            # Admitted work stays assigned until the daemon starts executing.
-            # Do not re-route it, block it, or enqueue another execution.
-            if dispatch_claim_active(candidate) or (
-                self.registry.daemon_store.active_run_request_for_task(candidate["id"])
-            ):
-                skipped += 1
-                continue
-            outcome = candidate.get("dispatchOutcome") or {}
-            retry = candidate.get("dispatchRetry") or {}
-            if retry or (
-                outcome.get("state") == "queued"
-                and outcome.get("code") in ("task_wip_limit", "dispatch_failed")
-            ):
-                # Older versions left failed dispatches in the queue. Do not
-                # revive them when their deadline or claim lease expires.
-                with self.task_store.task_write_scope(candidate["id"]) as current:
-                    if (
-                        current.get("status") == "assigned"
-                        and not dispatch_claim_active(current)
-                        and current.get("executionOwner") == candidate.get("executionOwner")
-                        and current.get("dispatchOutcome") == candidate.get("dispatchOutcome")
-                        and current.get("dispatchRetry") == candidate.get("dispatchRetry")
-                    ):
-                        record_dispatch_failure(
-                            self.task_store, current,
-                            code=outcome.get("code") or retry.get("code") or "dispatch_failed",
-                            message=outcome.get("message") or retry.get("message") or "Previous dispatch failed.",
-                        )
-                skipped += 1
-                continue
-            task = self._materialize_legacy_assignment(candidate) or candidate
-            if (
-                valid_agent(task.get("assignedAgent"))
-                and not task.get("assignedAgentId")
-                and not task.get("assignedTeamId")
-            ):
-                self._record_dispatch_deferred(
-                    task,
-                    "agent_not_found",
-                    "Select a named agent before this task can be dispatched.",
-                )
-                skipped += 1
-                continue
-            if not (
-                (valid_agent(task.get("assignedAgent")) and task.get("assignedAgentId"))
-                or task.get("assignedTeamId")
-                or task.get("projectId")
-            ):
-                continue
-            if self._continuation_refused(task):
-                skipped += 1
-                continue
-            # A project task's team runs inside the project room, so the thread
-            # it creates is the project's, never the team's.
-            team_id = None if task.get("projectId") else task.get("assignedTeamId")
-            project_snapshot: dict[str, Any] | None = None
-            agent = valid_agent(task.get("assignedAgent"))
-            assignments: list[dict[str, Any]]
-            # A continuation resumes its own thread, so routing has to respect
-            # that thread's workspace affinity rather than pick a node afresh.
-            resume_session_id = (
-                continuation_session_id(task) if awaits_continuation(task) else None
-            )
-            resume_session = (
-                self._session_for_continuation(resume_session_id)
-                if resume_session_id
-                else None
-            )
             try:
-                user_id = task_execution_user_id(task)
-                daemon_nodes = task_workspace_nodes(
-                    task, self.registry.monitor_nodes(), self.registry.store
-                )
-                if resume_session:
-                    resume_session = persist_legacy_session_computer_id(
-                        resume_session,
-                        session_store=self.registry.store,
-                        placement_store=self.backend.agent_placement_store,
-                        nodes={node["id"]: node for node in daemon_nodes},
-                        daemon_store=self.registry.daemon_store,
-                    )
-                if task.get("projectId"):
-                    if self.project_store is None:
-                        raise ProjectDispatchError("project_store_unavailable")
-                    assignments, project_snapshot = resolve_project_task_assignments(
-                        task,
-                        project_store=self.project_store,
-                        agent_store=self.backend.agent_store,
-                        placement_store=self.backend.agent_placement_store,
-                        daemon_nodes=daemon_nodes,
-                        session_store=self.registry.store,
-                        team_store=self.team_store,
-                    )
-                    agent = assignments[0]["agent"]
-                elif team_id:
-                    assignments = resolve_team_task_assignments(
-                        task,
-                        team_store=self.team_store,
-                        agent_store=self.backend.agent_store,
-                        placement_store=self.backend.agent_placement_store,
-                        daemon_nodes=daemon_nodes,
-                        session_store=self.registry.store,
-                    )
-                    agent = assignments[0]["agent"]
-                else:
-                    assignments = [
-                        {
-                            "agent": agent,
-                            "agentId": task["assignedAgentId"],
-                        }
-                    ]
-                    assignments = resolve_agent_assignments(
-                        assignments,
-                        user_id=user_id,
-                        is_admin=False,
-                        agent_store=self.backend.agent_store,
-                        placement_store=self.backend.agent_placement_store,
-                        daemon_nodes=daemon_nodes,
-                        session=resume_session,
-                        daemon_store=self.registry.daemon_store,
-                        session_store=self.registry.store,
-                    )
-                assignments = [
-                    {
-                        **assignment,
-                        "assignmentId": assignment.get("assignmentId")
-                        or new_database_id(),
-                    }
-                    for assignment in assignments
-                ]
-                assignments = compile_assignment_work_graph(
-                    assignments,
-                    purpose="accomplish",
-                    team_snapshot=assignment_team_snapshot(assignments),
-                )
-                node = self.registry.get(assignments[0]["daemonNodeId"])
-            except ProjectDispatchError as error:
-                state = "rejected" if error.permanent else "queued"
-                message = f"The project cannot execute this task ({error.code})."
-                self._record_dispatch_deferred(
-                    task,
-                    error.code,
-                    message,
-                    state=state,
-                )
-                if error.permanent:
-                    self.task_store.update_task(
-                        task["id"],
-                        {
-                            "status": "blocked",
-                            "blockerReason": message,
-                            "attention": {"code": error.code, "source": "dispatch"},
-                        },
-                    )
+                outcome = self._dispatch_candidate(loop, candidate)
+            except Exception:  # noqa: BLE001 - one malformed task must not starve the queue behind it
+                logger.exception("Task dispatch candidate failed", task_id=candidate.get("id"))
                 skipped += 1
                 continue
-            except TeamDispatchError as error:
-                message = (
-                    f"The assigned team cannot execute this task ({error.code})."
-                    if error.permanent
-                    else TEAM_UNAVAILABLE_MESSAGE
-                )
-                self._record_dispatch_deferred(
-                    task,
-                    error.code,
-                    message,
-                    state="rejected" if error.permanent else "queued",
-                )
-                if error.permanent:
-                    self.task_store.update_task(
-                        task["id"],
-                        {
-                            "status": "blocked",
-                            "blockerReason": message,
-                            "attention": {"code": error.code, "source": "dispatch"},
-                        },
-                    )
+            if outcome is CandidateOutcome.SKIPPED:
                 skipped += 1
-                continue
-            except AgentRoutingError as error:
-                state = (
-                    "rejected" if error.code in PERMANENT_DISPATCH_CODES else "queued"
-                )
-                self._record_dispatch_deferred(
-                    task, dispatch_reason_code(error.code), str(error), state=state
-                )
-                if error.code in PERMANENT_DISPATCH_CODES:
-                    self.task_store.update_task(
-                        task["id"],
-                        {
-                            "status": "blocked",
-                            "blockerReason": str(error),
-                            "attention": {"code": dispatch_reason_code(error.code), "source": "dispatch"},
-                        },
-                    )
-                    skipped += 1
-                    continue
-                node = None
-            if not node:
-                self._ensure_managed_capacity(task)
-                skipped += 1
-                continue
-            claimed = self.task_store.claim_task_for_dispatch(
-                task["id"],
-                agent,
-                expected_assignment=TaskDispatchAssignment.capture(task),
-            )
-            if not claimed:
-                skipped += 1
-                continue
-            attempts += 1
-            if self._dispatch_claimed_task(
-                loop,
-                claimed,
-                agent,
-                node["id"],
-                assignments,
-                team_id=team_id,
-                project_snapshot=project_snapshot,
-                session_id=resume_session_id,
-            ):
-                dispatched += 1
+            elif outcome in (CandidateOutcome.ATTEMPTED, CandidateOutcome.DISPATCHED):
+                attempts += 1
+                dispatched += outcome is CandidateOutcome.DISPATCHED
         return dispatched, skipped
+
+    def _dispatch_candidate(
+        self, loop: asyncio.AbstractEventLoop, candidate: dict[str, Any]
+    ) -> CandidateOutcome:
+        """Route, claim, and dispatch one assigned task."""
+        held = self._held_back(candidate)
+        if held is not None:
+            return held
+        task = self._materialize_legacy_assignment(candidate) or candidate
+        unroutable = self._unroutable(task)
+        if unroutable is not None:
+            return unroutable
+        # A project task's team runs inside the project room, so the thread
+        # it creates is the project's, never the team's.
+        team_id = None if task.get("projectId") else task.get("assignedTeamId")
+        # A continuation resumes its own thread, so routing has to respect
+        # that thread's workspace affinity rather than pick a node afresh.
+        resume_session_id = (
+            continuation_session_id(task) if awaits_continuation(task) else None
+        )
+        try:
+            route = self._route(task, team_id, resume_session_id)
+        except (ProjectDispatchError, TeamDispatchError, AgentRoutingError) as error:
+            if self._record_routing_failure(task, error):
+                return CandidateOutcome.SKIPPED
+            route = None
+        if route is None or route.node is None:
+            self._ensure_managed_capacity(task)
+            return CandidateOutcome.SKIPPED
+        claimed = self.task_store.claim_task_for_dispatch(
+            task["id"],
+            route.agent,
+            expected_assignment=TaskDispatchAssignment.capture(task),
+        )
+        if not claimed:
+            return CandidateOutcome.SKIPPED
+        dispatched = self._dispatch_claimed_task(
+            loop,
+            claimed,
+            route.agent,
+            route.node["id"],
+            route.assignments,
+            team_id=team_id,
+            project_snapshot=route.project_snapshot,
+            session_id=resume_session_id,
+        )
+        return CandidateOutcome.DISPATCHED if dispatched else CandidateOutcome.ATTEMPTED
+
+    def _held_back(self, candidate: dict[str, Any]) -> CandidateOutcome | None:
+        """Why an assigned task must not be routed this tick, if it must not."""
+        # Legacy projectless work that was already Ready waits for triage.
+        if issue_needs_project(candidate):
+            return CandidateOutcome.IGNORED
+        # Admitted work stays assigned until the daemon starts executing.
+        # Do not re-route it, block it, or enqueue another execution.
+        if dispatch_claim_active(candidate) or (
+            self.registry.daemon_store.active_run_request_for_task(candidate["id"])
+        ):
+            return CandidateOutcome.SKIPPED
+        outcome = candidate.get("dispatchOutcome") or {}
+        retry = candidate.get("dispatchRetry") or {}
+        if retry or (
+            outcome.get("state") == "queued"
+            and outcome.get("code") in ("task_wip_limit", "dispatch_failed")
+        ):
+            self._fail_legacy_retry(candidate, outcome, retry)
+            return CandidateOutcome.SKIPPED
+        return None
+
+    def _fail_legacy_retry(
+        self, candidate: dict[str, Any], outcome: dict[str, Any], retry: dict[str, Any]
+    ) -> None:
+        # Older versions left failed dispatches in the queue. Do not revive
+        # them when their deadline or claim lease expires.
+        with self.task_store.task_write_scope(candidate["id"]) as current:
+            if (
+                current.get("status") == "assigned"
+                and not dispatch_claim_active(current)
+                and current.get("executionOwner") == candidate.get("executionOwner")
+                and current.get("dispatchOutcome") == candidate.get("dispatchOutcome")
+                and current.get("dispatchRetry") == candidate.get("dispatchRetry")
+            ):
+                record_dispatch_failure(
+                    self.task_store, current,
+                    code=outcome.get("code") or retry.get("code") or "dispatch_failed",
+                    message=outcome.get("message") or retry.get("message") or "Previous dispatch failed.",
+                )
+
+    def _unroutable(self, task: dict[str, Any]) -> CandidateOutcome | None:
+        """Why a task names nothing the scheduler can route, if it does not."""
+        if (
+            valid_agent(task.get("assignedAgent"))
+            and not task.get("assignedAgentId")
+            and not task.get("assignedTeamId")
+        ):
+            self._record_dispatch_deferred(
+                task,
+                "agent_not_found",
+                "Select a named agent before this task can be dispatched.",
+            )
+            return CandidateOutcome.SKIPPED
+        if not (
+            (valid_agent(task.get("assignedAgent")) and task.get("assignedAgentId"))
+            or task.get("assignedTeamId")
+            or task.get("projectId")
+        ):
+            return CandidateOutcome.IGNORED
+        if self._continuation_refused(task):
+            return CandidateOutcome.SKIPPED
+        return None
+
+    def _route(
+        self, task: dict[str, Any], team_id: str | None, resume_session_id: str | None
+    ) -> _Route:
+        """Resolve the task's assignments and the node they run on."""
+        resume_session = (
+            self._session_for_continuation(resume_session_id) if resume_session_id else None
+        )
+        daemon_nodes = task_workspace_nodes(
+            task, self.registry.monitor_nodes(), self.registry.store
+        )
+        if resume_session:
+            resume_session = persist_legacy_session_computer_id(
+                resume_session,
+                session_store=self.registry.store,
+                placement_store=self.backend.agent_placement_store,
+                nodes={node["id"]: node for node in daemon_nodes},
+                daemon_store=self.registry.daemon_store,
+            )
+        project_snapshot: dict[str, Any] | None = None
+        agent = valid_agent(task.get("assignedAgent"))
+        if task.get("projectId"):
+            if self.project_store is None:
+                raise ProjectDispatchError("project_store_unavailable")
+            assignments, project_snapshot = resolve_project_task_assignments(
+                task,
+                project_store=self.project_store,
+                agent_store=self.backend.agent_store,
+                placement_store=self.backend.agent_placement_store,
+                daemon_nodes=daemon_nodes,
+                session_store=self.registry.store,
+                team_store=self.team_store,
+            )
+            agent = assignments[0]["agent"]
+        elif team_id:
+            assignments = resolve_team_task_assignments(
+                task,
+                team_store=self.team_store,
+                agent_store=self.backend.agent_store,
+                placement_store=self.backend.agent_placement_store,
+                daemon_nodes=daemon_nodes,
+                session_store=self.registry.store,
+            )
+            agent = assignments[0]["agent"]
+        else:
+            assignments = resolve_agent_assignments(
+                [{"agent": agent, "agentId": task["assignedAgentId"]}],
+                user_id=task_execution_user_id(task),
+                is_admin=False,
+                agent_store=self.backend.agent_store,
+                placement_store=self.backend.agent_placement_store,
+                daemon_nodes=daemon_nodes,
+                session=resume_session,
+                daemon_store=self.registry.daemon_store,
+                session_store=self.registry.store,
+            )
+        assignments = compile_assignment_work_graph(
+            [
+                {**assignment, "assignmentId": assignment.get("assignmentId") or new_database_id()}
+                for assignment in assignments
+            ],
+            purpose="accomplish",
+            team_snapshot=assignment_team_snapshot(assignments),
+        )
+        return _Route(
+            agent=agent,
+            assignments=assignments,
+            project_snapshot=project_snapshot,
+            node=self.registry.get(assignments[0]["daemonNodeId"]),
+        )
+
+    def _record_routing_failure(
+        self, task: dict[str, Any], error: ProjectDispatchError | TeamDispatchError | AgentRoutingError
+    ) -> bool:
+        """Record why routing failed. True when the task is held back; False
+        when it may still wait for managed capacity."""
+        if isinstance(error, ProjectDispatchError):
+            message = f"The project cannot execute this task ({error.code})."
+            self._record_dispatch_deferred(
+                task, error.code, message, state="rejected" if error.permanent else "queued"
+            )
+            if error.permanent:
+                self._block(task, message, error.code)
+            return True
+        if isinstance(error, TeamDispatchError):
+            message = (
+                f"The assigned team cannot execute this task ({error.code})."
+                if error.permanent
+                else TEAM_UNAVAILABLE_MESSAGE
+            )
+            self._record_dispatch_deferred(
+                task, error.code, message, state="rejected" if error.permanent else "queued"
+            )
+            if error.permanent:
+                self._block(task, message, error.code)
+            return True
+        permanent = error.code in PERMANENT_DISPATCH_CODES
+        self._record_dispatch_deferred(
+            task, dispatch_reason_code(error.code), str(error),
+            state="rejected" if permanent else "queued",
+        )
+        if permanent:
+            self._block(task, str(error), dispatch_reason_code(error.code))
+        return permanent
+
+    def _block(self, task: dict[str, Any], message: str, code: str) -> None:
+        self.task_store.update_task(
+            task["id"],
+            {
+                "status": "blocked",
+                "blockerReason": message,
+                "attention": {"code": code, "source": "dispatch"},
+            },
+        )
 
     def _session_for_continuation(self, session_id: str) -> dict[str, Any] | None:
         store = getattr(self.backend, "registry", None)
@@ -524,7 +489,7 @@ class TaskScheduler:
         self.task_store.record_round(task["id"], clear_continuation=True)
         # A spent budget is its own kind of wait, so a surface can offer to
         # continue rather than quote it as an agent's question.
-        kind = "budget" if code == "round_budget_exhausted" else "check"
+        kind: WaitKind = "budget" if code == "round_budget_exhausted" else "check"
         self.task_store.update_task(task["id"], {
             "status": "waiting_for_human",
             "statusReason": message,
@@ -587,7 +552,6 @@ class TaskScheduler:
         session_id: str | None = None,
     ) -> bool:
         claim = task.get("dispatchClaim") or {}
-        from ..services.dispatch_results import dispatch_result_scope
 
         claim_id = claim.get("id")
         try:
@@ -628,7 +592,7 @@ class TaskScheduler:
                 workspace_fields["workspaceSubpath"] = subpath
             if project_snapshot:
                 workspace_fields["projectId"] = project_snapshot["projectId"]
-            session = asyncio.run_coroutine_threadsafe(
+            session = _await_dispatch(asyncio.run_coroutine_threadsafe(
                 self.backend.run(
                     node_id,
                     {
@@ -645,8 +609,8 @@ class TaskScheduler:
                     },
                 ),
                 loop,
-            ).result()
-        except Exception as error:
+            ), task["id"])
+        except Exception as error:  # noqa: BLE001 - converted to a recorded dispatch failure
             with dispatch_result_scope(
                 self.task_store, task, claim_id, success=False
             ) as current:
@@ -717,58 +681,3 @@ class TaskScheduler:
                 )
             ]
             yield from sorted(tasks, key=task_claim_sort_key)
-
-
-def ready_node_for_task(
-    registry: Any, task: dict[str, Any], assignments: list[dict[str, Any]]
-) -> dict[str, Any] | None:
-    if not assignments:
-        return None
-    requested_agents = [
-        assignment.get("agent") for assignment in assignments if assignment.get("agent")
-    ]
-    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
-    active_runs_by_node: dict[str, list[dict[str, Any]]] = {}
-    for run in registry.daemon_store.list_active_runs():
-        active_runs_by_node.setdefault(run["nodeId"], []).append(run)
-    for node in registry.list_ready():
-        if user_id and node.get("userId") != user_id:
-            continue
-        if node.get("status") in (
-            "stopped",
-            "failed",
-            "provisioning",
-        ) or not registry.is_live(node["id"]):
-            continue
-        disabled = set(node.get("disabledAgents") or [])
-        if any(agent in disabled for agent in requested_agents):
-            continue
-        active_runs = active_runs_by_node.get(node["id"], [])
-        if all(
-            node.get("agents", {}).get(agent) == "ready" for agent in requested_agents
-        ) and node_accepts_run(
-            node,
-            active_runs=active_runs,
-        ):
-            return node
-    return None
-
-
-def user_has_device_node(registry: Any, user_id: str) -> bool:
-    return any(
-        node.get("userId") == user_id
-        and node.get("nodeLocation") == "user-device"
-        and not node.get("retiredAt")
-        for node in registry.monitor_nodes()
-    )
-
-
-def ensure_managed_capacity_for_task(
-    task: dict[str, Any], registry: Any, managed_node_store: Any | None
-) -> Any | None:
-    if not managed_node_store:
-        return None
-    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
-    if not user_id or user_has_device_node(registry, user_id):
-        return None
-    return managed_node_store.ensure_node_for_user(user_id)

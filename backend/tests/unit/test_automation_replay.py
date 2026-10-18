@@ -73,7 +73,7 @@ def test_turning_legacy_routine_off_drops_all_routine_fields():
 
 
 def test_pre_v2_snapshot_upgrades_from_its_stored_legacy_keys():
-    from relay.persistence.task_store import apply_task_events
+    from relay.persistence.task.rules import apply_task_events
 
     stored = {"id": "t1", "isRoutine": True, "routineCadence": "daily",
               "routineNextRunDate": "2026-10-14", "routineEnabled": True}
@@ -83,7 +83,7 @@ def test_pre_v2_snapshot_upgrades_from_its_stored_legacy_keys():
 
 
 def test_pre_v2_webhook_snapshot_keeps_its_trigger_when_disabled():
-    from relay.persistence.task_store import apply_task_events
+    from relay.persistence.task.rules import apply_task_events
 
     stored = {"id": "t1", "isRoutine": True, "routineTrigger": {"kind": "webhook"}, "routineEnabled": True}
     task = apply_task_events(stored, [ev("task.updated", 1, routineEnabled=False)], version=1)

@@ -1,22 +1,5 @@
-from .integrations import (
-    CHAT_PROVIDERS,
-    CHAT_STATUSES,
-    SECRET_FIELDS,
-    ChatIntegrationStatus,
-    ChatProvider,
-    DatabaseChatIntegrationStore,
-    LocalChatIntegrationStore,
-)
-from .provider_health import probe_chat_integration, provision_chat_integration
+"""Chat channel integrations.
 
-__all__ = [
-    "CHAT_PROVIDERS",
-    "CHAT_STATUSES",
-    "SECRET_FIELDS",
-    "ChatIntegrationStatus",
-    "ChatProvider",
-    "DatabaseChatIntegrationStore",
-    "LocalChatIntegrationStore",
-    "probe_chat_integration",
-    "provision_chat_integration",
-]
+Import from the defining submodule; this package re-exports nothing, so
+importing one leaf never drags in the rest of the package.
+"""

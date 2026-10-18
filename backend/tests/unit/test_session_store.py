@@ -7,11 +7,13 @@ from tempfile import TemporaryDirectory
 from uuid import UUID
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
+from relay.persistence.session_store import DatabaseSessionStore
 from relay.persistence.store_common import materialize_events, relay_event
 from relay.persistence.task_store import DatabaseTaskStore
 from relay.sessions.controller import SessionController, SessionRunInFlightError
 from sqlalchemy import select, text
+
+from store_fixtures import make_session_store
 
 
 @pytest.mark.parametrize("outcome", ["reported_done", "unfinished", "blocked", "needs_review", "unverified"])
@@ -49,7 +51,6 @@ def test_work_outcome_survives_database_snapshot_and_summary():
 def test_session_stores_create_uuid_thread_ids() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -85,7 +86,6 @@ def test_historical_session_without_layout_retains_legacy_node_root() -> None:
 def test_session_stores_preserve_team_provenance() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -109,7 +109,6 @@ def test_session_stores_preserve_team_provenance() -> None:
 def test_session_stores_preserve_managed_computer_affinity() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -131,7 +130,6 @@ def test_session_stores_preserve_managed_computer_affinity() -> None:
 def test_session_stores_read_incremental_event_pages() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -171,7 +169,6 @@ def test_session_stores_read_incremental_event_pages() -> None:
 def test_session_stores_bound_incremental_event_pages() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -212,7 +209,6 @@ def test_session_stores_bound_incremental_event_pages() -> None:
 def test_session_snapshots_do_not_duplicate_event_history() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -238,17 +234,12 @@ def test_session_snapshots_do_not_duplicate_event_history() -> None:
                 ),
             )
 
-            if isinstance(store, LocalSessionStore):
-                raw_snapshot = json.loads(
-                    store._snapshot_path(created["id"]).read_text(encoding="utf-8")
-                )
-            else:
-                with store.engine.begin() as conn:
-                    raw_snapshot = conn.scalar(
-                        select(store.sessions.c.snapshot).where(
-                            store.sessions.c.id == created["id"]
-                        )
+            with store.engine.begin() as conn:
+                raw_snapshot = conn.scalar(
+                    select(store.sessions.c.snapshot).where(
+                        store.sessions.c.id == created["id"]
                     )
+                )
 
             assert "events" not in raw_snapshot
             assert len(store.get_session(created["id"])["events"]) == 2
@@ -257,7 +248,6 @@ def test_session_snapshots_do_not_duplicate_event_history() -> None:
 def test_session_summary_pages_are_bounded_and_event_free() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -282,7 +272,6 @@ def test_session_summary_pages_are_bounded_and_event_free() -> None:
 def test_session_stores_notify_after_committed_events() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -312,7 +301,6 @@ def test_session_stores_notify_after_committed_events() -> None:
 def test_session_stores_delete_session() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -433,52 +421,9 @@ def test_database_session_store_verify_schema_rejects_missing_column(
         store.verify_schema()
 
 
-def test_session_store_persists_events_and_artifacts() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
-        session = store.create_session(
-            {
-                "workspacePath": "/workspace",
-                "taskGoal": "fix auth",
-                "participants": ["human", "claude"],
-            }
-        )
-        store.append_event(
-            session["id"],
-            relay_event(
-                "human.decision",
-                session["id"],
-                {
-                    "decision": {
-                        "id": "dec_test",
-                        "kind": "approve",
-                        "createdAt": "2026-06-05T00:00:00.000Z",
-                    }
-                },
-            ),
-        )
-        artifact = store.write_artifact(
-            session["id"],
-            {
-                "kind": "review",
-                "title": "Agent review",
-                "body": "Looks good.",
-                "extension": "md",
-            },
-        )
-        updated = store.append_event(
-            session["id"],
-            relay_event("artifact.created", session["id"], {"artifact": artifact}),
-        )
-
-        assert updated["events"][0]["type"] == "session.created"
-        assert store.get_session(session["id"])["decisions"][0]["kind"] == "approve"
-        assert store.read_artifact(session["id"], artifact["id"]) == "Looks good."
-
-
 def test_session_store_create_artifact_indexes_artifact() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         session = store.create_session(
             {
                 "workspacePath": "/workspace",
@@ -501,9 +446,9 @@ def test_session_store_create_artifact_indexes_artifact() -> None:
         assert store.read_artifact(session["id"], artifact["id"]) == "  Looks good.\n\n"
 
 
-def test_local_session_store_serializes_concurrent_appends() -> None:
+def test_session_store_serializes_concurrent_appends() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         session = store.create_session(
             {
                 "workspacePath": "/workspace",
@@ -540,7 +485,7 @@ def test_local_session_store_serializes_concurrent_appends() -> None:
 
 def test_session_store_clears_pending_decision_on_terminal_events() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         session = store.create_session(
             {
                 "workspacePath": "/workspace",
@@ -577,7 +522,7 @@ def test_session_store_clears_pending_decision_on_terminal_events() -> None:
 
 def test_session_store_clears_pending_decision_on_cancel_decision() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         session = store.create_session(
             {
                 "workspacePath": "/workspace",
@@ -619,7 +564,6 @@ def test_session_store_clears_pending_decision_on_cancel_decision() -> None:
 def test_agent_started_backfills_session_daemon_node() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -665,7 +609,6 @@ def test_agent_started_backfills_session_daemon_node() -> None:
 def test_agent_run_history_uses_the_index_projection() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:
@@ -693,45 +636,6 @@ def test_agent_run_history_uses_the_index_projection() -> None:
             )
             store.delete_session(session["id"])
             assert store.has_agent_run("11111111-1111-1111-1111-111111111111", set())
-
-
-def test_local_agent_run_index_backfills_from_authoritative_events() -> None:
-    with TemporaryDirectory() as root:
-        root_path = Path(root)
-        session_id = "44444444-4444-4444-4444-444444444444"
-        session_dir = root_path / "sessions" / session_id
-        session_dir.mkdir(parents=True)
-        created = relay_event(
-            "session.created",
-            session_id,
-            {"workspacePath": "/workspace", "taskGoal": "recover stale snapshot"},
-        )
-        started = relay_event(
-            "agent.started",
-            session_id,
-            {
-                "runId": "run-before-crash",
-                "agent": "codex",
-                "logicalAgentId": "55555555-5555-5555-5555-555555555555",
-                "placementId": "66666666-6666-6666-6666-666666666666",
-            },
-        )
-        (session_dir / "events.jsonl").write_text(
-            "".join(f"{json.dumps(event)}\n" for event in (created, started)),
-            encoding="utf-8",
-        )
-        (session_dir / "snapshot.json").write_text(
-            json.dumps(materialize_events([created])),
-            encoding="utf-8",
-        )
-
-        store = LocalSessionStore(root_path)
-
-        assert store.has_agent_run("55555555-5555-5555-5555-555555555555", set())
-        assert store.has_agent_run(
-            "77777777-7777-7777-7777-777777777777",
-            {"66666666-6666-6666-6666-666666666666"},
-        )
 
 
 def test_database_session_store_persists_events_and_artifacts() -> None:
@@ -879,43 +783,6 @@ def _workspace_file_artifact(session_id: str) -> dict:
     }
 
 
-def test_local_session_store_workspace_artifact_snapshot_roundtrip() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
-        session = store.create_session(
-            {
-                "workspacePath": "/workspace",
-                "taskGoal": "build a deck",
-                "participants": ["human", "codex"],
-            }
-        )
-        artifact, updated = store.index_workspace_artifact(
-            session["id"],
-            _workspace_file_artifact(session["id"]),
-            b"pptx binary \x00 bytes",
-        )
-
-        assert updated["artifacts"][0]["id"] == artifact["id"]
-        assert artifact["bytes"] == len(b"pptx binary \x00 bytes")
-        assert artifact["snapshotPath"].endswith(".pptx")
-        assert (
-            store.read_artifact_content(session["id"], artifact["id"])
-            == b"pptx binary \x00 bytes"
-        )
-
-        # Metadata-only indexing (no snapshot) still records the artifact.
-        no_content, _updated = store.index_workspace_artifact(
-            session["id"],
-            {
-                **_workspace_file_artifact(session["id"]),
-                "id": "33333333-3333-4333-8333-333333333333",
-            },
-            None,
-        )
-        assert "snapshotPath" not in no_content
-        assert store.read_artifact_content(session["id"], no_content["id"]) is None
-
-
 def test_database_session_store_workspace_artifact_snapshot_roundtrip() -> None:
     with TemporaryDirectory() as root:
         store = DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True)
@@ -965,7 +832,6 @@ def test_database_session_store_workspace_artifact_snapshot_roundtrip() -> None:
 def test_deleted_session_stays_deleted_and_retains_token_usage() -> None:
     with TemporaryDirectory() as root:
         stores = (
-            LocalSessionStore(Path(root) / "local"),
             DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True),
         )
         for store in stores:

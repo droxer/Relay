@@ -4,10 +4,10 @@ from typing import Any
 
 from ..collaboration.styles import (
     LEAD_LED,
-    ROLE_STAGE,
     fill_build_review_slots,
     pipeline_order,
     resolve_collaboration_style,
+    role_stage,
 )
 from .agent_routing import resolve_agent_assignments
 
@@ -198,7 +198,8 @@ def team_member_assignments(
         for index, agent in enumerate(ordered_agents)
     ]
     lead = next((agent for agent in agents if agent["id"] == lead_agent_id), None)
-    if delegated and lead:
+    # ``delegated`` already implies a team; ``team`` here only narrows it.
+    if delegated and lead and team:
         return [
             *assignments,
             {
@@ -270,14 +271,15 @@ def _styled_assignments(
     """
     fallback_from: str | None = None
     slots = fill_build_review_slots(agents, team.get("leadAgentId"))
-    if style == "build_review" and slots.reviewer is None:
+    reviewer = slots.reviewer
+    if style == "build_review" and reviewer is None:
         style, fallback_from = "solo", "build_review"
     if style == "solo":
         turns = [(slots.builder, "implementer", "action", True, _STYLE_BRIEFS["solo"])]
-    elif style == "build_review":
+    elif style == "build_review" and reviewer is not None:
         turns = [
             (slots.builder, "implementer", "action", False, _STYLE_BRIEFS["builder"]),
-            (slots.reviewer, "reviewer", "review", True, _STYLE_BRIEFS["reviewer"]),
+            (reviewer, "reviewer", "review", True, _STYLE_BRIEFS["reviewer"]),
         ]
     else:
         ordered = pipeline_order(agents)
@@ -363,7 +365,7 @@ def _ordered_accomplish_agents(
     members = [agent for agent in agents if agent["id"] != lead_agent_id]
     return [
         *lead,
-        *sorted(members, key=lambda agent: ROLE_STAGE.get(agent.get("defaultRole"), 1)),
+        *sorted(members, key=lambda agent: role_stage(agent.get("defaultRole"))),
     ]
 
 

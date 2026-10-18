@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -14,7 +14,7 @@ ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatu
 
 class Clock:
     def __init__(self) -> None:
-        self.value = datetime(2026, 10, 2, 12, tzinfo=timezone.utc)
+        self.value = datetime(2026, 10, 2, 12, tzinfo=UTC)
 
     def __call__(self) -> datetime:
         return self.value
@@ -158,7 +158,7 @@ def test_deleted_automation_clears_pending_state(world) -> None:
     routine = _automation(tasks)
     automations.save_state(routine["id"], {**automations.get_state(routine["id"]), "pending": True,
                                            "pending_events": [{"eventType": "webhook", "payload": {}, "depth": 0}],
-                                           "pending_since": datetime(2026, 10, 2, tzinfo=timezone.utc)})
+                                           "pending_since": datetime(2026, 10, 2, tzinfo=UTC)})
     tasks.delete_task(routine["id"])
     assert run(world) == 0
     assert automations.list_pending_states() == []
@@ -371,7 +371,7 @@ def test_outbox_rows_are_written_only_when_a_matcher_drains_them(monkeypatch, tm
     monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", enabled)
     app = create_app(tmp_path)
     _block(app.state.task_store)
-    rows = app.state.automation_store.claim_outbox(100, datetime.now(timezone.utc))
+    rows = app.state.automation_store.claim_outbox(100, datetime.now(UTC))
     assert bool(rows) is expected
 
 

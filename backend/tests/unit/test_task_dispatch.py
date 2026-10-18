@@ -20,6 +20,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
+from app_state_helpers import replace_app_context
 from relay.api.deps import AppContext
 from relay.app import create_app
 from relay.services.task_dispatch import start_task_on_ready_node
@@ -101,34 +102,15 @@ def _agent(app, node: dict, *, user_id: str = "alice") -> dict:
 
 
 def app_context_for(app) -> AppContext:
-    """Build the same `AppContext` the HTTP routes get, from `app.state`.
+    """The same `AppContext` the HTTP routes get (`app.state.context`).
 
     Lets a test call `start_task_on_ready_node` directly, skipping the
     `/tasks/{id}/runs` route's pre-dispatch legacy-agent materialization —
     needed to reach a `TaskDispatcher` code path the route would otherwise
     route around before it ever gets there.
     """
-    state = app.state
-    return AppContext(
-        session_store=state.session_store,
-        task_store=state.task_store,
-        daemon_store=state.daemon_store,
-        chat_store=state.chat_store,
-        registry=state.registry,
-        backend=state.backend,
-        auth_store=state.auth_store,
-        managed_node_store=state.managed_node_store,
-        agent_store=state.agent_store,
-        team_store=state.team_store,
-        project_store=state.project_store,
-        skill_store=state.skill_store,
-        agent_placement_store=state.agent_placement_store,
-        profile_image_store=state.profile_image_store,
-        org_settings_store=state.org_settings_store,
-        workspace_query_broker=state.workspace_query_broker,
-        control_plane_notifier=state.control_plane_notifier,
-        today=state.today,
-    )
+    context: AppContext = app.state.context
+    return context
 
 
 def _take_command(app, node: dict) -> dict:
@@ -311,7 +293,7 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
 
     with TemporaryDirectory() as root:
         app = create_app(root)
-        app.state.today = FixedDate.today
+        replace_app_context(app, today=FixedDate.today)
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(

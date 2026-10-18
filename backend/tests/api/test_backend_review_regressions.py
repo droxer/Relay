@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from types import SimpleNamespace
 
 import pytest
@@ -9,13 +11,14 @@ from sqlalchemy.engine import make_url
 
 from issue_projects import routine_run_with_session
 
+from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.ids import new_database_id, now_iso
 from relay.services.event_notifier import (
     KeyedEventNotifier,
     database_notification_bridge,
 )
-from relay.sessions import SessionController
+from relay.sessions.controller import SessionController
 
 
 @pytest.fixture
@@ -52,7 +55,8 @@ def test_static_assets_reject_sibling_prefix_and_symlink_escape(
     (sibling / "secret.txt").write_text("private")
     (dist / "escape.txt").symlink_to(sibling / "secret.txt")
     (dist / "public.txt").write_text("public")
-    monkeypatch.setenv("RELAY_WEB_UI_DIST_DIR", str(dist))
+    # The web UI directory is read once at startup (core/settings.py).
+    replace_app_context(review_app, settings=replace(review_app.state.settings, web_ui_dist_dir=dist))
     client = TestClient(review_app)
     assert client.get("/public.txt").text == "public"
     for path in ("/%2e%2e%2fout-private/secret.txt", "/escape.txt"):
@@ -590,7 +594,8 @@ def test_web_assets_cache_only_content_hashed_files(review_app, monkeypatch, tmp
     (dist / "favicon.ico").write_bytes(b"icon")
     (dist / "landing").mkdir()
     (dist / "landing" / "threads.webp").write_bytes(b"shot")
-    monkeypatch.setenv("RELAY_WEB_UI_DIST_DIR", str(dist))
+    # The web UI directory is read once at startup (core/settings.py).
+    replace_app_context(review_app, settings=replace(review_app.state.settings, web_ui_dist_dir=dist))
     client = TestClient(review_app)
     hashed = client.get("/_next/static/chunks/app-1.js")
     assert hashed.headers["cache-control"] == "public, max-age=31536000, immutable"

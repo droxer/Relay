@@ -84,11 +84,11 @@ class TestCors:
         # preflight; caching it spares a round trip to the origin region.
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from relay.app import _configure_cors
+        from relay.bootstrap.http import configure_cors
 
         monkeypatch.setenv("RELAY_CORS_ALLOW_ORIGINS", "https://app.example.com")
         app = FastAPI()
-        _configure_cors(app)
+        configure_cors(app)
         response = TestClient(app).options(
             "/api/v1/threads",
             headers={

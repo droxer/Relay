@@ -17,7 +17,7 @@ import os
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -49,8 +49,8 @@ def pg_env_from_url(database_url: str) -> dict[str, str]:
 
 
 def backup_keys(now: datetime) -> tuple[str, str | None]:
-    name = f"relay-{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}.dump"
-    return f"daily/{name}", (f"monthly/{name}" if now.astimezone(timezone.utc).day == 1 else None)
+    name = f"relay-{now.astimezone(UTC):%Y%m%dT%H%M%SZ}.dump"
+    return f"daily/{name}", (f"monthly/{name}" if now.astimezone(UTC).day == 1 else None)
 
 
 def backup_database(
@@ -61,7 +61,7 @@ def backup_database(
     now: datetime | None = None,
     run: Runner = subprocess.run,
 ) -> dict[str, Any]:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     daily_key, monthly_key = backup_keys(now)
     env = {**os.environ, **pg_env_from_url(database_url)}
     with tempfile.TemporaryDirectory(prefix="relay-backup-") as scratch:

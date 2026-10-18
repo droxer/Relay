@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tempfile import TemporaryDirectory
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from test_automation_triggers_api import _client, _routine
 
@@ -25,7 +25,7 @@ def test_webhook_accepts_json_with_the_secret(monkeypatch) -> None:
                                json={"ref": "main"}, headers={HEADER: secret})
         assert response.status_code == 202
         assert response.json() == {"accepted": True}
-        [row] = client.app.state.automation_store.claim_outbox(10, datetime.now(timezone.utc))
+        [row] = client.app.state.automation_store.claim_outbox(10, datetime.now(UTC))
         assert row["payload"] == {"body": {"ref": "main"}}
 
 
@@ -59,7 +59,7 @@ def test_webhook_to_paused_automation_is_refused(monkeypatch) -> None:
         url = f"/api/v1/automations/{routine['id']}/webhook"
         assert client.post(url, json={}, headers={HEADER: secret}).status_code == 409
         client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineState": "active"})
-        assert client.app.state.automation_store.claim_outbox(10, datetime.now(timezone.utc)) == []
+        assert client.app.state.automation_store.claim_outbox(10, datetime.now(UTC)) == []
 
 
 def test_webhook_beside_a_schedule_is_accepted(monkeypatch) -> None:
@@ -138,7 +138,7 @@ def test_empty_webhook_body_is_not_json(monkeypatch):
 
 def test_webhook_tick_creates_a_labeled_run_in_the_api_ledger(monkeypatch):
     import asyncio
-    from relay.app import task_scheduler_from_env
+    from relay.bootstrap.runtime import task_scheduler_from_env
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         routine, secret = _webhook_automation(client, agent)

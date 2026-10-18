@@ -60,8 +60,6 @@ RUN uv sync --project backend --extra migration --extra r2 --frozen
 ENV HOST=0.0.0.0 \
     RELAY_STORAGE=postgres \
     RELAY_AUTH_STORE=database \
-    RELAY_DAEMON_STORE=database \
-    RELAY_CHAT_STORE=database \
     RELAY_DATA_DIR=/data
 
 # With the database stores above, everything but skill bundles lives in

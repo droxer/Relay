@@ -10,12 +10,15 @@ from uuid import UUID
 import pytest
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.persistence.agent_placement_store import LocalAgentPlacementStore
+from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
 from relay.services.agent_routing import placement_node
 from relay.services.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
+from datetime import UTC
 
 
 def _bootstrap_admin(client: TestClient) -> None:
@@ -161,7 +164,7 @@ def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch) ->
                 received.append((command_id, sandbox_id, payload))
                 return True
 
-        app.state.workspace_query_broker = Broker()
+        replace_app_context(app, workspace_query_broker=Broker())
         event = {
             "type": "workspace.listing",
             "commandId": "00000000-0000-4000-8000-000000000080",
@@ -1007,7 +1010,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
             }
         )
 
-        original_list_placements = LocalAgentPlacementStore.list_placements
+        original_list_placements = DatabaseAgentPlacementStore.list_placements
 
         def reject_agent_scoped_startup_query(store, *args, **kwargs):
             if kwargs.get("agent_id") is not None:
@@ -1016,7 +1019,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
 
         with monkeypatch.context() as startup_patch:
             startup_patch.setattr(
-                LocalAgentPlacementStore,
+                DatabaseAgentPlacementStore,
                 "list_placements",
                 reject_agent_scoped_startup_query,
             )
@@ -2796,9 +2799,10 @@ def test_disconnecting_a_computer_destroys_its_token_secret(monkeypatch) -> None
         assert stored.get("nodeTokenSecret") is None
         assert client.get(f"/api/v1/daemon-nodes/{node_id}/token").status_code == 404
         # The secret must not leak into the audit events either.
-        events_dir = app.state.registry.daemon_store.events_dir
-        for path in events_dir.glob("*.json"):
-            assert "nodeTokenSecret" not in path.read_text()
+        daemon_store = app.state.registry.daemon_store
+        with daemon_store.engine.begin() as conn:
+            payloads = list(conn.scalars(select(daemon_store.events.c.payload)))
+        assert all("nodeTokenSecret" not in json.dumps(payload) for payload in payloads)
 
 
 def test_user_can_manage_own_computer_executors(monkeypatch) -> None:
@@ -4401,11 +4405,8 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         assert client.get(endpoint + f"/{command_id}").status_code == 403
 
 
-@pytest.mark.parametrize("database", [False, True])
-def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch, database) -> None:
+def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    if database:
-        monkeypatch.setenv("RELAY_DAEMON_STORE", "database")
     with TemporaryDirectory() as root:
         app = create_app(root)
         browser = TestClient(app)
@@ -4444,9 +4445,9 @@ def test_device_authorization_requires_browser_approval_and_single_use_redemptio
 
 
 def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from sqlalchemy import update
-    from relay.security.device_authorization import computer_authorizations
+    from relay.persistence.tables.device_authorizations import computer_authorizations
     from relay.persistence.store_common import store_transaction
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -4460,7 +4461,7 @@ def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -
             "workspacePath": "/Users/alice/work", "displayName": "Alice laptop"}).json()
         with store_transaction(app.state.session_store.engine) as conn:
             conn.execute(update(computer_authorizations).values(
-                expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+                expires_at=datetime.now(UTC) - timedelta(seconds=1)))
         approval = f"/api/v1/computer-authorizations/{grant['userCode']}"
         assert browser.get(approval).status_code == 410
         assert browser.post(approval + "/approve").status_code == 410

@@ -8,12 +8,12 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from loguru import logger
 
-from ..persistence.daemon_store import (
+from ..persistence.daemon.rules import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
@@ -45,7 +45,7 @@ def _parse_time(value: str) -> datetime:
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                      command: dict[str, Any] | None, *, now: datetime | None = None,
                      computer_online: bool | None = None) -> dict[str, Any]:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     state = (request or {}).get("state") or {}
     phase, reason = "terminal", None
     confirmed = False
@@ -152,7 +152,7 @@ class ExecutionLifecycleService:
         self.registry = registry
         self.chat_store = chat_store
         self.interval_seconds = interval_seconds
-        self.clock = lambda: datetime.now(timezone.utc)
+        self.clock = lambda: datetime.now(UTC)
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
 
@@ -379,7 +379,7 @@ class ExecutionLifecycleService:
     def tick(self) -> None:
         try:
             self.registry.reap_stale_runs()
-        except Exception:
+        except Exception:  # noqa: BLE001 - recovery loop supervisor: logs and retries next tick
             logger.exception("Execution reconciliation failed; deletion recovery continues")
         pending = self.registry.store.list_pending_deletions(limit=100, offset=getattr(self, "_deletion_offset", 0))
         self._deletion_offset = getattr(self, "_deletion_offset", 0) + len(pending) if len(pending) == 100 else 0
@@ -388,7 +388,7 @@ class ExecutionLifecycleService:
                 self.finish_delete(session["id"])
             except KeyError:
                 pass  # Another replica completed deletion.
-            except Exception:
+            except Exception:  # noqa: BLE001 - recovery loop supervisor: logs and retries next tick
                 logger.exception("Thread deletion recovery failed", session_id=session["id"])
 
     def start(self) -> None:
@@ -401,7 +401,7 @@ class ExecutionLifecycleService:
         while not self._stop.is_set():
             try:
                 await asyncio.to_thread(self.tick)
-            except Exception:
+            except Exception:  # noqa: BLE001 - recovery loop supervisor: logs and retries next tick
                 logger.exception("Execution recovery tick failed; retrying")
             try:
                 await asyncio.wait_for(self._stop.wait(), self.interval_seconds)

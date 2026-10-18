@@ -518,16 +518,22 @@ curl -b cookies.txt http://127.0.0.1:8790/api/v1/admin/daemon-nodes
 ## Data Layout
 
 Session/task events, snapshots, artifacts, links, and token usage live in the
-configured PostgreSQL database. The event log is the source of truth; snapshots
-are materialized views rebuilt from events. Remaining generated operational
-state lives under `.relay/` (repo root, daemon registry) and the daemon host's
-private state directory (never mounted into an agent sandbox):
+configured PostgreSQL database, as do daemon nodes and their command queue,
+agents, teams, agent placements, and chat integrations. The event log is the
+source of truth; snapshots are materialized views rebuilt from events. The
+daemon host's private state directory (never mounted into an agent sandbox)
+holds tokens and logs:
 
 ```text
-.relay/daemon/{nodes,commands,runs,run-requests,events}/         # daemon registry state
 ~/.relay/daemon-nodes/<sandbox-id>/credentials/<user>.token  # daemon auth token
 ~/.relay/daemon-nodes/<sandbox-id>/logs/*.jsonl                  # daemon structured logs
 ```
+
+Legacy `.relay/daemon/{nodes,commands,runs,run-requests,events}/`,
+`.relay/agents/`, `.relay/teams/`, `.relay/agent-placements/`, and
+`.relay/chat/` files are import-only: the backend moves them into the database
+once at startup (or run `relay migrate-local-file-stores --data-dir <path>
+[--dry-run]`) and never writes them again.
 
 Legacy `.relay/sessions/` and `.relay/tasks/` trees are migration inputs only;
 the runtime does not use them as its session/task store. Import them with
@@ -538,19 +544,21 @@ the runtime does not use them as its session/task store. Import them with
 
 ```text
 backend/relay/cli.py                          relay binary entrypoint
-backend/relay/app.py                          FastAPI backend application
-backend/relay/core/                           models, env, ids, logging, storage config
+backend/relay/app.py                          FastAPI backend application (create_app)
+backend/relay/bootstrap/                      store wiring, background runtime, HTTP middleware
+backend/relay/core/                           models, settings, env, ids, logging, storage config
 backend/relay/persistence/                    event-sourced session/task/daemon/agent/team/
-                                              project stores; persistence/stores.py re-exports
+                                              project stores; tables/ declares every table
 backend/relay/security/auth.py                auth store and JWT helpers
 backend/relay/sessions/controller.py          session mutation controller
 backend/relay/sessions/bridge.py              session continuity and handoff
 backend/relay/daemon_registry/node_backend.py daemon admission and run dispatch
-backend/relay/daemon_registry/registry.py     daemon registry
+backend/relay/daemon_registry/registry.py     daemon registry (mixins: nodes, commands,
+                                              admission, delivery, progression, events, reaper)
 backend/relay/tasks/scheduler.py              routine promotion and assigned-task dispatch
 backend/relay/chat/integrations.py            chat integration glue
 backend/relay/services/                       narrower runtime services (agent routing,
-                                              managed nodes, computer limits, task/team dispatch)
+                                              computer limits, task placement/dispatch, teams)
 backend/relay/api/                            HTTP routes split by domain (tasks, sessions,
                                               daemon nodes, sandboxes, auth, admin, chat, web,
                                               agents, managed nodes, teams, projects)

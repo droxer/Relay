@@ -13,15 +13,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Table, Text, delete, insert, or_, select, update
+from sqlalchemy import delete, insert, or_, select, update
 
-from .store_common import (
-    create_all_tables, database_id_column, json_type, new_database_id, shared_engine, store_transaction,
-)
-from .store_common import metadata as shared_metadata
+from .store_common import create_all_tables, new_database_id, shared_engine, store_transaction
+from .tables.automations import automation_outbox, automation_state, automation_webhook_secrets
 
 AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
@@ -33,42 +31,8 @@ MAX_PENDING_EVENTS = 20
 MAX_COUNTED_OCCURRENCES = 20
 SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerUserId", "assigneeUserId")
 
-automation_outbox = Table(
-    "automation_outbox", shared_metadata,
-    database_id_column(),
-    Column("kind", Text, nullable=False),
-    Column("event_type", Text, nullable=False),
-    Column("source_type", Text, nullable=True),
-    Column("source_id", Text, nullable=True),
-    Column("target_routine_id", Text, nullable=True),
-    Column("payload", json_type(), nullable=False),
-    Column("origin_automation_id", Text, nullable=True),
-    Column("depth", Integer, nullable=False, default=0),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-    Column("claimed_at", DateTime(timezone=True), nullable=True),
-    Index("ix_automation_outbox_claim", "claimed_at", "created_at"),
-)
 
-automation_state = Table(
-    "automation_state", shared_metadata,
-    Column("routine_id", Text, primary_key=True),
-    Column("pending", Boolean, nullable=False, default=False),
-    Column("pending_events", json_type(), nullable=False),
-    Column("pending_dropped", Integer, nullable=False, default=0),
-    Column("pending_since", DateTime(timezone=True), nullable=True),
-    Column("fired_window_start", DateTime(timezone=True), nullable=True),
-    Column("fired_count", Integer, nullable=False, default=0),
-    Column("consecutive_failures", Integer, nullable=False, default=0),
-    Column("counted_occurrence_ids", json_type(), nullable=True),
-    Index("ix_automation_state_pending", "pending"),
-)
 
-automation_webhook_secrets = Table(
-    "automation_webhook_secrets", shared_metadata,
-    Column("routine_id", Text, primary_key=True),
-    Column("secret_hash", Text, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-)
 
 
 def subject_of(task: dict[str, Any]) -> dict[str, Any]:
@@ -137,7 +101,7 @@ def session_outbox_rows(session_id: str, event: dict[str, Any]) -> list[dict[str
 
 
 def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for row in rows:
         conn.execute(insert(automation_outbox).values(id=new_database_id(), created_at=now, claimed_at=None, **row))
 
@@ -277,7 +241,7 @@ class DatabaseAutomationStore:
         with store_transaction(self.engine) as conn:
             conn.execute(delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id))
             conn.execute(insert(automation_webhook_secrets).values(
-                routine_id=routine_id, secret_hash=_hash(token), created_at=datetime.now(timezone.utc)))
+                routine_id=routine_id, secret_hash=_hash(token), created_at=datetime.now(UTC)))
         return token
 
     def verify_webhook_secret(self, routine_id: str, token: str) -> bool:

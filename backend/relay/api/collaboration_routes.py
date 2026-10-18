@@ -9,31 +9,14 @@ from ..collaboration.models import MessageIntent, RecoveryIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from .deps import AppContextDep
-from .helpers import get_session_for_actor, json_body, request_actor, string_field
+from .actors import get_session_for_actor, request_actor
+from .bodies import json_body, string_field
+from .schemas import ThreadMessageBody, openapi_body, parse_request_body
 
 router = APIRouter()
 
-PURPOSES = frozenset({"accomplish", "discuss", "review"})
 RECOVERY_KINDS = frozenset({"rerun", "handoff"})
 MODES = frozenset({"action", "ask", "review"})
-
-
-def _address_agent_ids(body: dict[str, Any]) -> tuple[str, ...]:
-    """Read the addressed agents, accepting the singular legacy field.
-
-    `addressAgentId` is what the chat gateway still sends; it means the same
-    thing as a one-element `addressAgentIds`.
-    """
-    raw = body.get("addressAgentIds")
-    if isinstance(raw, list):
-        ids = [item for item in raw if isinstance(item, str) and item]
-        if len(ids) != len(raw):
-            raise HTTPException(400, "addressAgentIds must be a list of agent ids.")
-        return tuple(dict.fromkeys(ids))
-    if raw is not None:
-        raise HTTPException(400, "addressAgentIds must be a list of agent ids.")
-    single = string_field(body, "addressAgentId") or None
-    return (single,) if single else ()
 
 
 def _leading_mention_agent_ids(
@@ -124,28 +107,20 @@ def _is_javascript_non_newline_space(character: str) -> bool:
     )
 
 
-@router.post("/threads/{thread_id}/messages", status_code=202)
+@router.post(
+    "/threads/{thread_id}/messages",
+    status_code=202,
+    openapi_extra=openapi_body(ThreadMessageBody),
+)
 async def submit_thread_message(
     thread_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
-    text = string_field(body, "text")
-    if not text:
-        raise HTTPException(400, "text is required.")
-    purpose = string_field(body, "intent") or "accomplish"
-    if purpose not in PURPOSES:
-        raise HTTPException(400, "intent must be accomplish, discuss, or review.")
-    question_id = body.get("questionId")
-    if question_id is not None and (not isinstance(question_id, str) or not question_id):
-        raise HTTPException(400, "questionId must be a question id.")
-    if question_id and purpose != "accomplish":
-        # An answer resumes the task; a discussion must not.
-        raise HTTPException(
-            400,
-            {"code": "answer_requires_accomplish", "message": "An answer is sent with intent accomplish."},
-        )
-    supplied_address_agent_ids = _address_agent_ids(body)
+    # Parsed after the actor, so an anonymous caller is refused before its body.
+    body = await parse_request_body(request, ThreadMessageBody)
+    text = body.message_text()
+    purpose = body.purpose()
+    supplied_address_agent_ids = body.supplied_address_agent_ids()
     session = get_session_for_actor(ctx.session_store, thread_id, actor)
     mention_owner_id = (
         session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
@@ -155,7 +130,7 @@ async def submit_thread_message(
         ctx.agent_store.list_agents(supervisor_user_id=mention_owner_id),
     )
     address_agent_ids = mentioned_agent_ids or supplied_address_agent_ids
-    address_team_id = string_field(body, "addressTeamId") or None
+    address_team_id = body.address_team_id or None
     if address_team_id and address_agent_ids:
         raise HTTPException(
             400,
@@ -164,7 +139,7 @@ async def submit_thread_message(
                 "message": "A message addresses either a team or agents, not both.",
             },
         )
-    style = body.get("style")
+    style = body.style
     if style is not None:
         try:
             style = validate_collaboration_style(style, "style")
@@ -178,10 +153,10 @@ async def submit_thread_message(
                 purpose=purpose,  # type: ignore[arg-type]
                 address_agent_ids=address_agent_ids,
                 address_team_id=address_team_id,
-                idempotency_key=string_field(body, "idempotencyKey") or None,
-                user_message_id=string_field(body, "userMessageId") or None,
+                idempotency_key=body.idempotency_key or None,
+                user_message_id=body.user_message_id or None,
                 style=style,
-                question_id=question_id or None,
+                question_id=body.answered_question_id(),
             ),
             actor,
         )

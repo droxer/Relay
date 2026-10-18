@@ -6,6 +6,7 @@ from sqlalchemy import event
 
 from relay.persistence.session_store import DatabaseSessionStore
 from relay.persistence.store_common import relay_event
+from datetime import UTC
 
 
 def capture_sql(engine):
@@ -13,8 +14,10 @@ def capture_sql(engine):
     event.listen(
         engine,
         "before_cursor_execute",
-        lambda conn, cursor, statement, parameters, context, many: statements.append(
-            statement
+        lambda conn, cursor, statement, parameters, context, many: (
+            # SQLite transactions open with an explicit BEGIN IMMEDIATE; only
+            # the queries themselves are under test.
+            None if statement.startswith("BEGIN") else statements.append(statement)
         ),
     )
     return statements
@@ -265,11 +268,11 @@ def test_pending_command_lookup_uses_the_run_request_column(tmp_path):
 
 
 def insert_run_request(store, request_id, status, completed_at):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from sqlalchemy import insert, select
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with store.engine.begin() as conn:
         node_pk = conn.scalar(select(store.nodes.c.id).where(store.nodes.c.id == "sbx_alice"))
         conn.execute(
@@ -290,14 +293,14 @@ def insert_run_request(store, request_id, status, completed_at):
 
 
 def test_retention_prunes_old_terminal_run_requests_and_their_events(tmp_path, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from relay.persistence.store_common import daemon_event
 
     store = daemon_store(tmp_path)
-    long_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    long_ago = datetime.now(UTC) - timedelta(days=30)
     insert_run_request(store, "00000000-0000-4000-8000-00000000000a", "completed", long_ago)
-    insert_run_request(store, "00000000-0000-4000-8000-00000000000b", "completed", datetime.now(timezone.utc))
+    insert_run_request(store, "00000000-0000-4000-8000-00000000000b", "completed", datetime.now(UTC))
     insert_run_request(store, "00000000-0000-4000-8000-00000000000c", "running", None)
     store.append_daemon_event(daemon_event("daemon.run_request.updated", {"requestId": "a"}))
 
@@ -343,14 +346,14 @@ def completed_run_session(store, *, agent_log: str, run_id: str = "run"):
 
 
 def test_output_compaction_redacts_completed_runs_and_keeps_the_log_shape(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     store = session_store(tmp_path)
     sid = completed_run_session(store, agent_log="final log")
     before = store.get_session(sid)
 
     redacted = store.compact_completed_run_output(
-        older_than=datetime.now(timezone.utc) + timedelta(seconds=1)
+        older_than=datetime.now(UTC) + timedelta(seconds=1)
     )
 
     after = store.get_session(sid)
@@ -363,13 +366,13 @@ def test_output_compaction_redacts_completed_runs_and_keeps_the_log_shape(tmp_pa
     assert outputs[1]["entries"] == [{"stream": "stdout", "text": "", "sequence": 1}]
     assert after["agentRuns"][0]["agentLog"] == "final log"
     again = store.compact_completed_run_output(
-        older_than=datetime.now(timezone.utc) + timedelta(seconds=1)
+        older_than=datetime.now(UTC) + timedelta(seconds=1)
     )
     assert again == 0
 
 
 def test_output_compaction_keeps_runs_without_a_completed_log(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     store = session_store(tmp_path)
     sid = completed_run_session(store, agent_log="")
@@ -379,7 +382,7 @@ def test_output_compaction_keeps_runs_without_a_completed_log(tmp_path):
     )
 
     redacted = store.compact_completed_run_output(
-        older_than=datetime.now(timezone.utc) + timedelta(seconds=1)
+        older_than=datetime.now(UTC) + timedelta(seconds=1)
     )
 
     assert redacted == 0
@@ -388,13 +391,13 @@ def test_output_compaction_keeps_runs_without_a_completed_log(tmp_path):
 
 
 def test_output_compaction_skips_threads_active_since_the_cutoff(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     store = session_store(tmp_path)
     completed_run_session(store, agent_log="final log")
 
     redacted = store.compact_completed_run_output(
-        older_than=datetime.now(timezone.utc) - timedelta(days=1)
+        older_than=datetime.now(UTC) - timedelta(days=1)
     )
 
     assert redacted == 0
@@ -403,6 +406,7 @@ def test_output_compaction_skips_threads_active_since_the_cutoff(tmp_path):
 def test_registry_compaction_is_opt_in_and_survives_a_failed_sweep(monkeypatch):
     from types import SimpleNamespace
 
+    from relay.daemon_registry import config as registry_config
     from relay.daemon_registry import registry as registry_module
 
     calls = []
@@ -411,11 +415,11 @@ def test_registry_compaction_is_opt_in_and_survives_a_failed_sweep(monkeypatch):
     )
     sweep = registry_module.DaemonNodeRegistry._maybe_compact_session_output
 
-    monkeypatch.setattr(registry_module, "SESSION_OUTPUT_RETENTION_DAYS", 0)
+    monkeypatch.setattr(registry_config, "SESSION_OUTPUT_RETENTION_DAYS", 0)
     sweep(SimpleNamespace(store=store))
     assert calls == []
 
-    monkeypatch.setattr(registry_module, "SESSION_OUTPUT_RETENTION_DAYS", 30)
+    monkeypatch.setattr(registry_config, "SESSION_OUTPUT_RETENTION_DAYS", 30)
     sweep(SimpleNamespace(store=store))
     assert len(calls) == 1 and "older_than" in calls[0]
 

@@ -6,8 +6,9 @@ from threading import Barrier
 from uuid import UUID
 
 import pytest
-import relay.services.managed_nodes as managed_nodes_module
-from relay.services.managed_nodes import LocalManagedNodeStore
+import relay.core.managed_node_policy as managed_node_policy
+import relay.persistence.managed_node_store as managed_node_store_module
+from relay.persistence.managed_node_store import LocalManagedNodeStore
 
 
 def test_managed_nodes_use_uuid_ids(tmp_path: Path) -> None:
@@ -274,7 +275,7 @@ def test_running_managed_capacity_is_preferred_over_an_older_stopped_node(
             "2026-07-19T00:00:03Z",
         ]
     )
-    monkeypatch.setattr(managed_nodes_module, "now_iso", lambda: next(timestamps))
+    monkeypatch.setattr(managed_node_store_module, "now_iso", lambda: next(timestamps))
     store = LocalManagedNodeStore(tmp_path)
     stopped = store.create_node({"userId": "alice"})
     store.update_node(stopped["id"], {"desiredState": "stopped"})
@@ -326,12 +327,12 @@ def test_repeated_failed_attempts_do_not_grow_history_without_bound(
     store = LocalManagedNodeStore(tmp_path)
     node = store.create_node({"userId": "alice"})
 
-    for _ in range(managed_nodes_module.ATTEMPT_HISTORY_LIMIT + 10):
+    for _ in range(managed_node_policy.ATTEMPT_HISTORY_LIMIT + 10):
         attempt, _credential = store.create_attempt(node["id"])
         store.update_attempt(attempt["id"], {"status": "failed"})
 
     retained = store.list_attempts(node["id"])
-    assert len(retained) <= managed_nodes_module.ATTEMPT_HISTORY_LIMIT + 1
+    assert len(retained) <= managed_node_policy.ATTEMPT_HISTORY_LIMIT + 1
     assert len(list(store.grants_dir.glob("*.json"))) <= len(retained)
 
 
@@ -356,7 +357,7 @@ def test_failed_attempt_with_retry_is_projected_as_recovering(tmp_path: Path) ->
         "message": "The provider instance disappeared.",
         "updatedAt": updated["conditions"][-1]["updatedAt"],
     }
-    assert managed_nodes_module._managed_node_status(updated) == "provisioning"
+    assert managed_node_policy._managed_node_status(updated) == "provisioning"
 
 
 def test_failed_attempt_without_retry_remains_failed(tmp_path: Path) -> None:

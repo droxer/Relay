@@ -4,7 +4,7 @@ import hashlib
 import os
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from threading import RLock
 from typing import Any, Literal
@@ -13,14 +13,6 @@ from uuid import UUID, uuid5
 from fastapi import HTTPException, Request
 from loguru import logger
 from sqlalchemy import (
-    CheckConstraint,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    Table,
-    Text,
     delete,
     insert,
     select,
@@ -47,25 +39,26 @@ from ..persistence.store_common import (
     _read_json,
     _write_json,
     create_all_tables,
-    database_id_column,
-    entity_uuid_type,
-    json_type,
     shared_engine,
     store_transaction,
 )
-from ..persistence.store_common import metadata as shared_metadata
+from ..persistence.sql import metadata as shared_metadata
+from ..persistence.tables import auth as auth_tables
+from ..core.user_preferences import (
+    DEFAULT_USER_LANGUAGE,
+    DEFAULT_USER_THEME,
+    USER_LANGUAGES,
+    USER_THEMES,
+    UserLanguage,
+    UserTheme,
+)
+from ..persistence.protocols import AuthStore
 
 DEFAULT_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60  # 1 week
 USER_COOKIE_NAME = "relay_session"
 PW_HASH_ALGORITHM = "pbkdf2_sha256"
 PW_HASH_ITERATIONS = 600_000
 UserRole = Literal["admin", "user"]
-UserTheme = Literal["light", "dark", "system"]
-UserLanguage = Literal["en", "zh-CN"]
-USER_THEMES: tuple[UserTheme, ...] = ("light", "dark", "system")
-USER_LANGUAGES: tuple[UserLanguage, ...] = ("en", "zh-CN")
-DEFAULT_USER_THEME: UserTheme = "system"
-DEFAULT_USER_LANGUAGE: UserLanguage = "en"
 # Traditional Chinese was retired. A preference stored while it existed reads
 # back as Simplified Chinese instead of dropping the reader to English.
 _RETIRED_USER_LANGUAGES: dict[str, UserLanguage] = {"zh-TW": "zh-CN"}
@@ -130,6 +123,11 @@ def hash_password(password: str) -> str:
     return f"{PW_HASH_ALGORITHM}${PW_HASH_ITERATIONS}${salt}${digest}"
 
 
+def _session_expired(session: dict[str, Any], now: datetime) -> bool:
+    expires_at = _parse_iso(session.get("expiresAt"))
+    return expires_at is not None and expires_at <= now
+
+
 def verify_password(password: str, hashed: str) -> bool:
     try:
         algorithm, iterations, salt, digest = hashed.split("$")
@@ -138,11 +136,11 @@ def verify_password(password: str, hashed: str) -> bool:
     if algorithm != PW_HASH_ALGORITHM:
         return False
     try:
-        iterations = int(iterations)
+        rounds = int(iterations)
     except ValueError:
         return False
     expected = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), rounds
     ).hex()
     return secrets.compare_digest(expected, digest)
 
@@ -195,7 +193,9 @@ def admin_token_configured() -> bool:
 def verify_admin_token(candidate: str | None) -> bool:
     """Whether ``candidate`` is the bearer token for bootstrap, supervisor,
     and admin API calls."""
-    return bool(candidate) and _admin_token_store is not None and _admin_token_store.verify(candidate)
+    if not candidate or _admin_token_store is None:
+        return False
+    return _admin_token_store.verify(candidate)
 
 
 def reissue_admin_token() -> str:
@@ -373,14 +373,14 @@ class AccountAuthStore:
     def create_session(self, account_id: str) -> dict[str, Any]:
         with self._lock:
             token = new_session_token()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = now.timestamp() + self.session_ttl_seconds
             session = {
                 "tokenHash": hash_session_token(token),
                 "accountId": account_id,
                 "createdAt": _format_iso(now),
                 "expiresAt": _format_iso(
-                    datetime.fromtimestamp(expires_at, tz=timezone.utc)
+                    datetime.fromtimestamp(expires_at, tz=UTC)
                 ),
             }
             sessions = self._read_sessions()
@@ -410,7 +410,7 @@ class AccountAuthStore:
                         session.pop("token", None)
                         self._write_sessions(sessions)
                     expires_at = _parse_iso(session.get("expiresAt"))
-                    if expires_at and expires_at <= datetime.now(timezone.utc):
+                    if expires_at and expires_at <= datetime.now(UTC):
                         self.delete_session(token)
                         return None
                     return session
@@ -442,13 +442,11 @@ class AccountAuthStore:
     def cleanup_expired_sessions(self) -> int:
         with self._lock:
             sessions = self._read_sessions()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             kept = [
                 s
                 for s in sessions
-                if not (
-                    _parse_iso(s.get("expiresAt")) and _parse_iso(s.get("expiresAt")) <= now
-                )
+                if not _session_expired(s, now)
             ]
             removed = len(sessions) - len(kept)
             if removed:
@@ -491,109 +489,11 @@ class AccountAuthStore:
 class DatabaseAccountAuthStore:
     metadata = shared_metadata
 
-    departments = Table(
-        "departments",
-        metadata,
-        database_id_column(),
-        Column("name", Text, nullable=False),
-        Column(
-            "parent_department_id",
-            entity_uuid_type(),
-            ForeignKey("departments.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        Index("ix_departments_parent_department_id", "parent_department_id"),
-    )
-    users = Table(
-        "users",
-        metadata,
-        database_id_column(),
-        # The @handle. `id` is a UUID (uuid5 of the handle for anything created
-        # through the admin form), which made the admin lists render `@<uuid>`
-        # and left the handle grammar with nothing behind it. The handle is the
-        # display and lookup identity; `id` stays the foreign key everywhere.
-        Column("handle", Text, nullable=True),
-        Column("display_name", Text, nullable=False),
-        Column("email", Text, nullable=True),
-        Column(
-            "department_id",
-            entity_uuid_type(),
-            ForeignKey("departments.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        # Empty means "inherit the org-wide default" rather than "no
-        # computers": a global change has to move every user who was never
-        # pinned to a number of their own.
-        Column("max_local_computers", Integer, nullable=True),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        Column("deleted_at", DateTime(timezone=True), nullable=True),
-        Index("ix_users_department_id", "department_id"),
-        Index("uq_users_handle", "handle", unique=True),
-    )
-    accounts = Table(
-        "auth_accounts",
-        metadata,
-        database_id_column(),
-        Column("username", Text, nullable=False, unique=True),
-        Column("email", Text, nullable=True),
-        Column("role", Text, nullable=False),
-        Column(
-            "user_id",
-            entity_uuid_type(),
-            ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        Column("theme", Text, nullable=False, server_default=DEFAULT_USER_THEME),
-        Column("language", Text, nullable=False, server_default=DEFAULT_USER_LANGUAGE),
-        # The onboarding wizard's stored choices (security/onboarding.py);
-        # NULL until the person first acts on the wizard.
-        Column("onboarding", json_type(), nullable=True),
-        Column("password_hash", Text, nullable=False),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        CheckConstraint("role in ('admin', 'user')", name="ck_auth_accounts_role"),
-        Index("ix_auth_accounts_role", "role"),
-        Index("ix_auth_accounts_user_id", "user_id"),
-    )
-    sessions = Table(
-        "auth_sessions",
-        metadata,
-        database_id_column(),
-        Column("token_hash", Text, nullable=False, unique=True),
-        Column(
-            "account_id",
-            entity_uuid_type(),
-            ForeignKey("auth_accounts.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("expires_at", DateTime(timezone=True), nullable=False),
-        Index("ix_auth_sessions_account_id", "account_id"),
-        Index("ix_auth_sessions_expires_at", "expires_at"),
-    )
-    # Single-use password reset links; only the token's SHA-256 is kept. The
-    # rules that read and write it live in `security/password_resets.py`.
-    password_resets = Table(
-        "auth_password_resets",
-        metadata,
-        database_id_column(),
-        Column(
-            "account_id",
-            entity_uuid_type(),
-            ForeignKey("auth_accounts.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        Column("token_hash", Text, nullable=False, unique=True),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("expires_at", DateTime(timezone=True), nullable=False),
-        # Set when the link is redeemed or superseded by a newer one.
-        Column("used_at", DateTime(timezone=True), nullable=True),
-        Index("ix_auth_password_resets_account_id_created_at", "account_id", "created_at"),
-        Index("ix_auth_password_resets_expires_at", "expires_at"),
-    )
+    departments = auth_tables.departments
+    users = auth_tables.users
+    accounts = auth_tables.accounts
+    sessions = auth_tables.sessions
+    password_resets = auth_tables.password_resets
 
     def __init__(
         self,
@@ -647,7 +547,7 @@ class DatabaseAccountAuthStore:
         department_name = department_name.strip() if department_name else None
         email = email.strip() if email else None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         account = {
             "id": new_database_id(),
             "username": username,
@@ -692,7 +592,7 @@ class DatabaseAccountAuthStore:
         onboarding: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _validate_user_preferences(theme=theme, language=language)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         patch: dict[str, Any] = {"updated_at": now}
         if theme is not None:
             patch["theme"] = theme
@@ -824,7 +724,7 @@ class DatabaseAccountAuthStore:
             raise ValueError("userId is required.")
         if clear_max_local_computers and max_local_computers is not None:
             raise ValueError("maxLocalComputers cannot be both cleared and set.")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         patch: dict[str, Any] = {}
         if display_name is not None:
             display_name = display_name.strip()
@@ -887,7 +787,7 @@ class DatabaseAccountAuthStore:
         user_id = (user_id or "").strip()
         if not user_id:
             raise ValueError("userId is required.")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -955,9 +855,9 @@ class DatabaseAccountAuthStore:
 
     def create_session(self, account_id: str) -> dict[str, Any]:
         token = new_session_token()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = datetime.fromtimestamp(
-            now.timestamp() + self.session_ttl_seconds, tz=timezone.utc
+            now.timestamp() + self.session_ttl_seconds, tz=UTC
         )
         session = {
             "id": new_database_id(),
@@ -993,7 +893,7 @@ class DatabaseAccountAuthStore:
                 return None
             session = row_to_database_session(row, token)
             expires_at = _parse_iso(session.get("expiresAt"))
-            if expires_at and expires_at <= datetime.now(timezone.utc):
+            if expires_at and expires_at <= datetime.now(UTC):
                 conn.execute(
                     delete(self.sessions).where(
                         self.sessions.c.token_hash == hash_session_token(token)
@@ -1036,7 +936,7 @@ class DatabaseAccountAuthStore:
         with store_transaction(self.engine) as conn:
             result = conn.execute(
                 delete(self.sessions).where(
-                    self.sessions.c.expires_at <= datetime.now(timezone.utc)
+                    self.sessions.c.expires_at <= datetime.now(UTC)
                 )
             )
         return result.rowcount
@@ -1068,7 +968,7 @@ class DatabaseAccountAuthStore:
         parent_department_id = (
             parent_department_id.strip() if parent_department_id else None
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         parent = (
             self._ensure_department(conn, parent_department_id)
             if parent_department_id
@@ -1136,7 +1036,7 @@ class DatabaseAccountAuthStore:
         department_name: str | None = None,
         max_local_computers: int | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         department_id = department_id.strip() if department_id else None
         department = (
             self._ensure_department(conn, department_id, name=department_name)
@@ -1388,7 +1288,17 @@ def user_session_token_from_request(request: Request) -> str | None:
     return request.cookies.get(USER_COOKIE_NAME)
 
 
-def require_user_session(request: Request, auth_store: AccountAuthStore) -> dict[str, Any]:
+# The account a request's session cookie resolved to, kept for the rest of the
+# request so a router-level auth dependency and the handler's own check share
+# one lookup.
+_REQUEST_ACCOUNT_STATE = "relay_session_account"
+
+
+def require_user_session(request: Request, auth_store: AuthStore) -> dict[str, Any]:
+    state = getattr(request, "state", None)
+    cached = getattr(state, _REQUEST_ACCOUNT_STATE, None) if state is not None else None
+    if cached is not None:
+        return cached
     token = user_session_token_from_request(request)
     if not token:
         raise HTTPException(401, "Authentication required.")
@@ -1398,11 +1308,13 @@ def require_user_session(request: Request, auth_store: AccountAuthStore) -> dict
     account = auth_store.get_account_by_id(session["accountId"])
     if not account:
         raise HTTPException(401, "User not found.")
+    if state is not None:
+        setattr(state, _REQUEST_ACCOUNT_STATE, account)
     return account
 
 
 def require_admin_session(
-    request: Request, auth_store: AccountAuthStore
+    request: Request, auth_store: AuthStore
 ) -> dict[str, Any]:
     bearer = _bearer_token(request)
     if verify_admin_token(bearer):

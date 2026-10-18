@@ -29,6 +29,11 @@ ROLE_STAGE: dict[str, int] = {
 }
 
 
+def role_stage(role: str | None) -> int:
+    """Pipeline stage for a role; a missing or unknown role sits with the writers."""
+    return 1 if role is None else ROLE_STAGE.get(role, 1)
+
+
 class CollaborationStyleError(ValueError):
     """A collaboration style value outside the supported set."""
 
@@ -78,11 +83,10 @@ def fill_build_review_slots(
     if lead is not None and _role(lead) in BUILDER_ROLES:
         builder = lead
     else:
-        builder = (
-            next((agent for agent in agents if _role(agent) in BUILDER_ROLES), None)
-            or lead
-            or agents[0]
+        first_builder: dict[str, Any] | None = next(
+            (agent for agent in agents if _role(agent) in BUILDER_ROLES), None
         )
+        builder = first_builder or lead or agents[0]
     others = [agent for agent in agents if agent["id"] != builder["id"]]
     reviewer = (
         next((agent for agent in others if _role(agent) == "reviewer"), None)
@@ -94,4 +98,4 @@ def fill_build_review_slots(
 
 
 def pipeline_order(agents: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(agents, key=lambda agent: ROLE_STAGE.get(_role(agent), 1))
+    return sorted(agents, key=lambda agent: role_stage(_role(agent)))

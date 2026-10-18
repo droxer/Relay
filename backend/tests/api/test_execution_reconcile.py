@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.persistence.store_common import new_database_id
 from relay.sessions.controller import SessionController
+from datetime import UTC
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -163,7 +164,7 @@ def test_delete_starts_the_grace_when_no_stop_marker_could_be_recorded(monkeypat
 def test_delete_releases_a_finalization_whose_evidence_was_lost(monkeypatch) -> None:
     """Retrying a save with no exit evidence only re-marks it lost, so the
     retry must not be the only way out; the delete asserts the run gone."""
-    from relay.persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY
+    from relay.persistence.daemon.rules import TERMINAL_CLAIM_ID_STATE_KEY
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -193,7 +194,7 @@ def test_delete_releases_a_finalization_whose_evidence_was_lost(monkeypatch) -> 
 
 @pytest.mark.parametrize("request_deletion", [False, True])
 def test_late_terminal_evidence_is_protected_and_can_be_saved(monkeypatch, request_deletion) -> None:
-    from relay.persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY
+    from relay.persistence.daemon.rules import TERMINAL_CLAIM_ID_STATE_KEY
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -461,9 +462,9 @@ def test_online_heartbeat_is_separate_from_unconfirmed_exit_in_detail_and_list(m
 
 def _clock_after(app, seconds: float) -> None:
     """Advance the lifecycle's view of time past the command's lease."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    later = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    later = datetime.now(UTC) + timedelta(seconds=seconds)
     app.state.execution_lifecycle.clock = lambda: later
 
 

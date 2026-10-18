@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -10,9 +10,8 @@ from relay.persistence.store_common import relay_event
 from test_project_routes import _bootstrap, _login_alice, _register_computer, _agent
 
 
-@pytest.fixture(params=["file", "database"])
-def project_env(monkeypatch, request):
-    monkeypatch.setenv("RELAY_DAEMON_STORE", request.param)
+@pytest.fixture
+def project_env(monkeypatch):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -257,7 +256,7 @@ def test_delete_project_forgets_automation_state(project_env):
     app, client, node, agent, project, task, routine, session = project_env
     automations = app.state.automation_store
     automations.set_webhook_secret(routine["id"])
-    automations.mark_pending(routine["id"], {"kind": "manual"}, datetime.now(timezone.utc))
+    automations.mark_pending(routine["id"], {"kind": "manual"}, datetime.now(UTC))
     response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
     assert response.status_code == 200, response.text
     assert not automations.has_webhook_secret(routine["id"])

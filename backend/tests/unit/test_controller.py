@@ -1,105 +1,20 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from tempfile import TemporaryDirectory
-from threading import Event, Thread
 
 import pytest
 
-from relay.persistence.session_store import LocalSessionStore
-from relay.sessions import SessionController, initial_agent_state
-
-
-@pytest.mark.parametrize("mutation", ["link", "claim"])
-def test_fallback_thread_delete_serializes_concurrent_task_mutations(monkeypatch, mutation) -> None:
-    from relay.persistence.task_store import LocalTaskStore
-
-    with TemporaryDirectory() as root:
-        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
-        controller = SessionController(sessions, task_store=tasks)
-        old_thread = controller.create_session("Old thread")
-        new_thread = controller.create_session("New thread")
-        task = tasks.create_task({"title": "Task", "assignedAgent": "codex", "status": "assigned"})
-        tasks.link_session(task["id"], old_thread["id"])
-        attempted, finished = Event(), Event()
-        errors = []
-
-        def mutate_task():
-            attempted.set()
-            try:
-                if mutation == "link":
-                    tasks.link_session(task["id"], new_thread["id"])
-                else:
-                    tasks.claim_task_for_dispatch(task["id"], "codex")
-            except Exception as error:
-                errors.append(error)
-            finally:
-                finished.set()
-
-        worker = Thread(target=mutate_task)
-        original_unlink = tasks.unlink_session
-
-        def unlink_with_concurrent_mutation(task_id, session_id):
-            unlinked = original_unlink(task_id, session_id)
-            worker.start()
-            assert attempted.wait(2)
-            # Before the fix the mutation completes while the controller is
-            # still holding the now-stale result of unlink_session.
-            finished.wait(0.2)
-            return unlinked
-
-        monkeypatch.setattr(tasks, "unlink_session", unlink_with_concurrent_mutation)
-        try:
-            controller.delete_session(old_thread["id"], deleted_by="alice")
-        finally:
-            worker.join(2)
-        assert not worker.is_alive()
-        assert not errors
-        result = tasks.get_task(task["id"])
-        assert result.get("deletedAt")
-        assert result["deletedByUserId"] == "alice"
-        assert result["linkedSessionIds"] == []
-        assert not result.get("dispatchClaim")
-        assert sessions.get_session(new_thread["id"])["id"] == new_thread["id"]
-
-
-@pytest.mark.parametrize("mutation", ["link", "claim"])
-def test_fallback_thread_delete_keeps_task_mutated_before_unlink(monkeypatch, mutation) -> None:
-    from relay.persistence.task_store import LocalTaskStore
-
-    with TemporaryDirectory() as root:
-        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
-        controller = SessionController(sessions, task_store=tasks)
-        old_thread = controller.create_session("Old thread")
-        new_thread = controller.create_session("New thread")
-        task = tasks.create_task({"title": "Task", "assignedAgent": "codex", "status": "assigned"})
-        tasks.link_session(task["id"], old_thread["id"])
-        original_list = tasks.list_tasks
-
-        def list_before_mutation():
-            listed = original_list()
-            if mutation == "link":
-                tasks.link_session(task["id"], new_thread["id"])
-            else:
-                assert tasks.claim_task_for_dispatch(task["id"], "codex")
-            return listed
-
-        monkeypatch.setattr(tasks, "list_tasks", list_before_mutation)
-        controller.delete_session(old_thread["id"])
-        result = tasks.get_task(task["id"])
-        assert not result.get("deletedAt")
-        assert old_thread["id"] not in result["linkedSessionIds"]
-        if mutation == "link":
-            assert result["linkedSessionIds"] == [new_thread["id"]]
-        else:
-            assert result.get("dispatchClaim")
+from store_fixtures import make_session_store
+from relay.sessions.controller import SessionController, initial_agent_state
 
 
 def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:
-    from relay.persistence.task_store import LocalTaskStore
+    from store_fixtures import make_task_store
 
     with TemporaryDirectory() as root:
-        sessions = LocalSessionStore(root)
-        tasks = LocalTaskStore(root)
+        sessions = make_session_store(root)
+        tasks = make_task_store(root)
         session = SessionController(sessions).create_session("Legacy thread")
         task = tasks.create_task({"title": "Legacy task"})
         tasks.link_session(task["id"], session["id"])
@@ -114,7 +29,7 @@ def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:
 
 def test_session_controller_records_review_run() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("review diff")
         state = initial_agent_state("review diff")
@@ -143,7 +58,7 @@ def test_session_controller_records_review_run() -> None:
 
 def test_record_cancel_decision_appends_one_cancel_decision() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("cancel this")
 
@@ -154,9 +69,9 @@ def test_record_cancel_decision_appends_one_cancel_decision() -> None:
 
 
 def test_record_user_message_appends_event_with_given_id() -> None:
-    from relay.sessions import SessionController, initial_agent_state  # noqa: F401
+    from relay.sessions.controller import SessionController
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("first turn")
         controller.record_user_message(session["id"], "second turn", message_id="evt_fixed")
@@ -169,7 +84,7 @@ def test_record_user_message_appends_event_with_given_id() -> None:
 
 def test_collaboration_round_is_materialized_as_authoritative_session_state() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("ship it")
         manifest = {
@@ -192,9 +107,9 @@ def test_collaboration_round_is_materialized_as_authoritative_session_state() ->
 
 
 def test_compute_conversation_history_excludes_current_turn() -> None:
-    from relay.sessions import compute_conversation_history
+    from relay.sessions.conversation import compute_conversation_history
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("first turn")
         # No prior turns yet beyond the current goal -> nothing to show.
@@ -219,11 +134,11 @@ def test_compute_conversation_history_excludes_current_turn() -> None:
 def test_successful_final_turn_keeps_task_running_until_round_closes() -> None:
     """The round's own closeout picks the next status; the turn must not
     report a waiting_for_human stop that automations would then react to."""
-    from relay.persistence.task_store import LocalTaskStore
+    from store_fixtures import make_task_store
 
     with TemporaryDirectory() as root:
-        sessions = LocalSessionStore(root)
-        tasks = LocalTaskStore(root)
+        sessions = make_session_store(root)
+        tasks = make_task_store(root)
         task = tasks.create_task({"title": "Ship it", "acceptancePolicy": "automatic"})
         controller = SessionController(sessions, task_store=tasks, task_id=task["id"])
         session = controller.create_session("Ship it")
@@ -244,7 +159,7 @@ def test_successful_final_turn_keeps_task_running_until_round_closes() -> None:
 
 def test_complete_session_retry_is_a_no_op() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("finish once")
 
@@ -258,7 +173,7 @@ def test_complete_session_retry_is_a_no_op() -> None:
 def test_approving_a_rejected_turn_settles_the_thread() -> None:
     """Nothing dispatches after an approval, so it must not claim a live run."""
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("draft")
         controller.complete_session(session["id"], "Draft written.")
@@ -273,7 +188,7 @@ def test_approving_a_rejected_turn_settles_the_thread() -> None:
 
 def test_approving_a_running_thread_keeps_it_running() -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store, workspace_path="/workspace")
         session = controller.create_session("in flight")
 
@@ -288,13 +203,16 @@ def test_approving_a_running_thread_keeps_it_running() -> None:
 def test_completion_retry_repairs_partial_task_write(
     monkeypatch, policy, task_status, expected,
 ) -> None:
-    from relay.persistence.task_store import LocalTaskStore
+    from store_fixtures import make_task_store
     from relay.persistence.store_common import relay_task_event
 
     with TemporaryDirectory() as root:
-        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        sessions, tasks = make_session_store(root), make_task_store(root)
         task = tasks.create_task({"title": "Finish", "acceptancePolicy": policy})
         controller = SessionController(sessions, task_store=tasks, task_id=task["id"])
+        # Commit the thread on its own, so a failed task write leaves the
+        # partial completion a retry must repair.
+        monkeypatch.setattr(controller, "_transaction", nullcontext)
         session = controller.create_session("Finish")
         tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "running"}))
         with monkeypatch.context() as patch:
@@ -314,11 +232,11 @@ def test_completion_retry_repairs_partial_task_write(
 
 @pytest.mark.parametrize("claimed", [False, True])
 def test_completion_retry_does_not_overwrite_newer_execution(monkeypatch, claimed) -> None:
-    from relay.persistence.task_store import LocalTaskStore
+    from store_fixtures import make_task_store
     from relay.persistence.store_common import relay_task_event
 
     with TemporaryDirectory() as root:
-        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        sessions, tasks = make_session_store(root), make_task_store(root)
         task = tasks.create_task({"title": "Finish", "acceptancePolicy": "automatic"})
         if claimed:
             task = tasks.append_event(task["id"], relay_task_event(
@@ -326,6 +244,9 @@ def test_completion_retry_does_not_overwrite_newer_execution(monkeypatch, claime
             ))
         controller = SessionController(sessions, task_store=tasks, task_id=task["id"],
                                        task_execution_owner=task.get("executionOwner"))
+        # Commit the thread on its own, so a failed task write leaves the
+        # partial completion a retry must repair.
+        monkeypatch.setattr(controller, "_transaction", nullcontext)
         session = controller.create_session("Finish")
         with monkeypatch.context() as patch:
             def fail_task_write(*args, **kwargs):
@@ -350,7 +271,7 @@ def test_completion_retry_does_not_overwrite_newer_execution(monkeypatch, claime
 ])
 def test_completion_retry_compares_all_structured_input_fields(field, new_value) -> None:
     with TemporaryDirectory() as root:
-        store = LocalSessionStore(root)
+        store = make_session_store(root)
         controller = SessionController(store)
         session = controller.create_session("Question")
         request = {"inputQuestion": "Which branch?", "inputOptions": ["main"], "inputNotes": ["Tests failed."]}
@@ -365,13 +286,16 @@ def test_completion_retry_compares_all_structured_input_fields(field, new_value)
 
 @pytest.mark.parametrize("initial_status", ["running", "waiting_for_human"])
 def test_completion_retry_repairs_structured_task_question(monkeypatch, initial_status) -> None:
-    from relay.persistence.task_store import LocalTaskStore
+    from store_fixtures import make_task_store
     from relay.persistence.store_common import relay_task_event
 
     with TemporaryDirectory() as root:
-        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        sessions, tasks = make_session_store(root), make_task_store(root)
         task = tasks.create_task({"title": "Question"})
         controller = SessionController(sessions, task_store=tasks, task_id=task["id"])
+        # Commit the thread on its own, so a failed task write leaves the
+        # partial completion a retry must repair.
+        monkeypatch.setattr(controller, "_transaction", nullcontext)
         session = controller.create_session("Question")
         tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": initial_status}))
         request = {"inputQuestion": "Which branch?", "inputOptions": ["main"], "inputNotes": ["Tests failed."]}

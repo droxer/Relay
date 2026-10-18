@@ -9,9 +9,10 @@ from ..collaboration.models import RunIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.computer_identity import computer_id
-from ..daemon_registry.registry import (
+from ..core.daemon_capabilities import (
     DAEMON_CAPABILITY_AGENT_MODEL,
     DAEMON_CAPABILITY_ENDPOINT_MODELS,
+    has_capability,
 )
 from ..persistence.agent_placement_store import placement_status
 from ..security.auth import require_admin_session
@@ -23,12 +24,10 @@ from ..services.computer_names import computer_display_name
 from ..services.project_catalog import agent_has_active_project
 from ..services.team_membership import remove_agent_from_teams
 from .deps import AppContextDep
-from .helpers import (
-    JsonBodyDep,
-    json_body,
-    request_actor,
-    string_field,
-)
+from .actors import request_actor
+from .bodies import JsonBodyDep, json_body, string_field
+from ..services.skill_bundle import resolve_bundle
+from ..services.skill_grants import read_grants
 
 router = APIRouter()
 
@@ -367,7 +366,7 @@ def _update_agent_and_realize_placements(
                 ctx.agent_placement_store.realize_agent_version(
                     placement["id"], updated["version"]
                 )
-            except Exception as error:  # readiness does not depend on this audit field
+            except Exception as error:  # noqa: BLE001 - readiness does not depend on this audit field
                 logger.warning(
                     "Agent placement version realization deferred",
                     agent_id=agent_id,
@@ -429,7 +428,7 @@ def _can_select_model(ctx: AppContextDep, placements: list[dict[str, Any]]) -> b
     if not node_ids:
         return True
     return all(
-        DAEMON_CAPABILITY_AGENT_MODEL in (node.get("capabilities") or [])
+        has_capability(node, DAEMON_CAPABILITY_AGENT_MODEL)
         for node in ctx.registry.monitor_nodes()
         if node["id"] in node_ids
     )
@@ -453,7 +452,7 @@ def _custom_model_endpoint(
     }
     return any(
         executor_kind in (node.get("customModelEndpoints") or [])
-        and DAEMON_CAPABILITY_ENDPOINT_MODELS not in (node.get("capabilities") or [])
+        and not has_capability(node, DAEMON_CAPABILITY_ENDPOINT_MODELS)
         for node in ctx.registry.monitor_nodes()
         if node["id"] in node_ids
     )
@@ -516,8 +515,6 @@ def _agent_skills(
                 continue
             seen.add(key)
             skills.append({**skill, "source": "node"})
-    from ..services.skill_bundle import resolve_bundle
-    from ..services.skill_grants import read_grants
 
     bundle, skipped = resolve_bundle(ctx, agent)
     available = {entry["skillId"] for entry in (bundle or {}).get("skills", [])}

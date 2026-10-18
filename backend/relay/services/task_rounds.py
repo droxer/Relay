@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..persistence.org_settings_store import DEFAULT_MAX_TASK_ROUNDS
+from ..core.org_policy import DEFAULT_MAX_TASK_ROUNDS
 
 CONTINUE_STATUS = "continue"
 

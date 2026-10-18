@@ -7,7 +7,7 @@ scheduler's matcher turns the row into a run, the same as any other trigger.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -18,8 +18,9 @@ from ..automations.service import automation_service
 from ..automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ..security.edge import client_ip
 from .contract import API_PREFIX
-from .deps import AppContextDep
-from .helpers import get_task_for_actor, json_body, request_actor
+from .deps import AppContextDep, app_context
+from .actors import get_task_for_actor, request_actor
+from .bodies import json_body
 from .task_routes import public_task_envelope
 
 router = APIRouter()
@@ -53,19 +54,20 @@ def _too_many(retry_after: int) -> HTTPException:
 async def receive_automation_webhook(routine_id: str, request: Request) -> dict[str, Any]:
     # Failed tokens are limited per caller and successful calls per automation,
     # so a stranger spamming bad tokens cannot lock out the real sender.
-    failures = request.app.state.automation_webhook_failure_limiter
+    ctx = app_context(request)
+    failures = ctx.automation_webhook_failure_limiter
     caller = client_ip(request)
     retry_after = failures.retry_after(caller)
     if retry_after:
         raise _too_many(retry_after)
-    store = request.app.state.automation_store
+    store = ctx.automation_store
     token = request.headers.get(WEBHOOK_TOKEN_HEADER, "")
     if not token or not await run_in_threadpool(store.verify_webhook_secret, routine_id, token):
         retry_after = failures.consume(caller)
         if retry_after:
             raise _too_many(retry_after)
         raise HTTPException(401, "Invalid automation token.")
-    retry_after = request.app.state.automation_webhook_limiter.consume(routine_id)
+    retry_after = ctx.automation_webhook_limiter.consume(routine_id)
     if retry_after:
         raise _too_many(retry_after)
     if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
@@ -76,7 +78,7 @@ async def receive_automation_webhook(routine_id: str, request: Request) -> dict[
     except ValueError as error:
         raise HTTPException(400, "Webhook body is not valid JSON.") from error
     try:
-        routine = await run_in_threadpool(request.app.state.task_store.get_task, routine_id)
+        routine = await run_in_threadpool(ctx.task_store.get_task, routine_id)
     except (KeyError, FileNotFoundError) as error:
         raise HTTPException(409, "automation_unavailable") from error
     if not (is_active(routine) and has_webhook(routine)):
@@ -99,14 +101,14 @@ def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id:
 @router.get("/tasks/{task_id}/automation/webhook-secret")
 def webhook_secret_status(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     _webhook_automation_for_actor(request, ctx, task_id)
-    configured = request.app.state.automation_store.has_webhook_secret(task_id)
+    configured = ctx.automation_store.has_webhook_secret(task_id)
     return {"configured": configured, "path": webhook_path(task_id), "header": WEBHOOK_TOKEN_HEADER}
 
 
 @router.post("/tasks/{task_id}/automation/webhook-secret", status_code=201)
 def rotate_webhook_secret(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     _webhook_automation_for_actor(request, ctx, task_id)
-    secret = request.app.state.automation_store.set_webhook_secret(task_id)
+    secret = ctx.automation_store.set_webhook_secret(task_id)
     return {"secret": secret, "path": webhook_path(task_id), "header": WEBHOOK_TOKEN_HEADER}
 
 
@@ -117,9 +119,9 @@ async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) 
     task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
     if not task.get("isRoutine"):
         raise HTTPException(404, "Not an automation.")
-    service = automation_service(request.app.state.automation_store, ctx)
+    service = automation_service(ctx.automation_store, ctx)
     try:
-        resumed = await run_in_threadpool(service.resume, task_id, actor, datetime.now(timezone.utc))
+        resumed = await run_in_threadpool(service.resume, task_id, actor, datetime.now(UTC))
     except PermissionError as error:
         raise HTTPException(403, str(error)) from error
     except TriggerError as error:
@@ -136,5 +138,5 @@ async def preview_schedule(request: Request, ctx: AppContextDep) -> dict[str, An
         schedule = normalize_schedule(body.get("schedule"))
     except ScheduleError as error:
         raise HTTPException(400, str(error)) from error
-    fires = next_fires(schedule, datetime.now(timezone.utc), PREVIEW_FIRES)
+    fires = next_fires(schedule, datetime.now(UTC), PREVIEW_FIRES)
     return {"summary": summarize(schedule), "next": [fire.isoformat() for fire in fires]}

@@ -9,17 +9,19 @@ delete cancels, or a finalization the reaper is still retrying).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from itertools import product
 
 import pytest
 
-from relay.persistence.daemon_store import (
-    EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY, TERMINAL_CLAIM_ID_STATE_KEY,
+from relay.persistence.daemon.rules import (
+    EXECUTION_INTERRUPTED_STATE_KEY,
+    EXIT_UNCONFIRMED_STATE_KEY,
+    TERMINAL_CLAIM_ID_STATE_KEY,
 )
 from relay.services.execution_lifecycle import STOP_GRACE_SECONDS, execution_status
 
-NOW = datetime(2026, 10, 11, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 11, tzinfo=UTC)
 LONG_AGO = (NOW - timedelta(seconds=STOP_GRACE_SECONDS * 10)).isoformat()
 JUST_NOW = (NOW - timedelta(seconds=1)).isoformat()
 LIVE = (NOW + timedelta(seconds=30)).isoformat()
@@ -137,7 +139,7 @@ def test_invalid_stop_intent_timestamps_enter_recovery(mark: str, intent: str) -
 
 @pytest.mark.parametrize("source", ["request", "command"])
 def test_restored_evidence_overrides_a_stale_missing_evidence_flag(source: str) -> None:
-    from relay.persistence.daemon_store import TERMINAL_EVENT_STATE_KEY
+    from relay.persistence.daemon.rules import TERMINAL_EVENT_STATE_KEY
 
     state = {
         "_relay_recovery_required": True,

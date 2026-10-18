@@ -1,8 +1,10 @@
-"""Short-lived device grants. Only hashes of polling credentials are stored."""
+"""Table definitions for computer (device) authorization grants."""
+
 from __future__ import annotations
 
 from sqlalchemy import Column, DateTime, Index, Table, Text
-from ..persistence.store_common import metadata
+from ..sql import metadata
+
 
 computer_authorizations = Table(
     "computer_authorizations", metadata,

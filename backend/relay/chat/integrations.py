@@ -3,28 +3,24 @@ from __future__ import annotations
 import json
 import os
 import secrets
-from pathlib import Path
+from collections.abc import Iterator
+from contextlib import contextmanager
 from threading import RLock
 from typing import Any, Literal
 from urllib.parse import urlparse, urlunsplit
 
-from sqlalchemy import Column, DateTime, Table, Text, insert, select, update
+from sqlalchemy import insert, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
-from ..core.legacy_names import upgrade_legacy_names
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.store_common import (
-    _append_jsonl,
     _parse_iso,
-    _read_json,
-    _write_json,
-    database_id_column,
     create_all_tables,
-    json_type,
     shared_engine,
     store_transaction,
-    metadata as shared_metadata,
 )
+from ..persistence.sql import metadata as shared_metadata
+from ..persistence.tables import chat as chat_tables
 
 ChatProvider = Literal["discord", "telegram", "lark"]
 ChatIntegrationStatus = Literal["draft", "active", "degraded", "disabled"]
@@ -43,24 +39,26 @@ SECRET_FIELDS = {
 }
 
 
-class LocalChatIntegrationStore:
-    """Local chat integration configuration store.
+class DatabaseChatIntegrationStore:
+    """Chat integration configuration in the shared database.
 
-    Provider credentials live in a separate 0600 JSON file and are never
-    returned through the public admin API. Production deployments can keep the
-    same shape while swapping this implementation for database + KMS storage.
+    Each concern is one JSON document row (integrations, conversations, audit,
+    secrets). Provider credentials are Fernet-encrypted with
+    ``RELAY_CHAT_SECRET_KEY`` and never returned through the public admin API.
     """
 
-    def __init__(self, root_dir: str | Path):
-        root = Path(root_dir) / "chat"
+    metadata = shared_metadata
+
+    documents = chat_tables.documents
+
+    def __init__(self, database_url: str, *, create_schema: bool = False):
         self._lock = RLock()
-        self.integrations_path = root / "integrations.json"
-        self.secrets_path = root / "secrets.json"
-        self.audit_path = root / "audit.jsonl"
-        # Persistent conversation -> session bindings so a chat thread resumes
-        # the right Relay session across bot restarts, and so one user can run
-        # several conversations in parallel from different threads.
-        self.conversations_path = root / "conversations.json"
+        self.engine = shared_engine(database_url)
+        self._transaction_connection = None
+        raw_key = os.environ.get("RELAY_CHAT_SECRET_KEY", "").strip()
+        self._secret_cipher = Fernet(raw_key.encode()) if raw_key else None
+        if create_schema:
+            create_all_tables(self.engine)
 
     def list_integrations(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -73,16 +71,17 @@ class LocalChatIntegrationStore:
             return self._public_integration(integration)
 
     def create_integration(self, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             payload = dict(payload)
             provider = _provider(payload.get("provider"))
-            secret_values = dict(payload.get("secrets")) if isinstance(payload.get("secrets"), dict) else {}
+            raw_secrets = payload.get("secrets")
+            secret_values: dict[str, Any] = dict(raw_secrets) if isinstance(raw_secrets, dict) else {}
             if provider == "telegram":
                 secret_values["webhookSecret"] = secrets.token_urlsafe(32)
                 payload["secrets"] = secret_values
             self._validate_secret_patch(payload.get("secrets"))
             now = now_iso()
-            integration = {
+            integration: dict[str, Any] = {
                 "id": new_relay_id("chat"),
                 "provider": provider,
                 "displayName": _string(payload.get("displayName")) or provider.title(),
@@ -107,7 +106,7 @@ class LocalChatIntegrationStore:
             return self._public_integration(integration)
 
     def update_integration(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integration = self._find_integration(integration_id)
             secret_patch = payload.get("secrets")
             if (
@@ -146,7 +145,7 @@ class LocalChatIntegrationStore:
             raise KeyError(integration_id)
 
     def activate_integration(self, integration_id: str, actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integrations = self._read_integrations()
             for index, integration in enumerate(integrations):
                 if integration.get("id") != integration_id:
@@ -179,7 +178,7 @@ class LocalChatIntegrationStore:
         webhook_secret: str,
         actor: str | None = None,
     ) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integration = self._find_integration(integration_id)
             if integration.get("provider") != "telegram":
                 raise ValueError("Webhook secret rotation is only available for Telegram integrations.")
@@ -200,7 +199,7 @@ class LocalChatIntegrationStore:
         actor: str | None = None,
         provider_health: tuple[bool, str] | None = None,
     ) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integrations = self._read_integrations()
             for index, integration in enumerate(integrations):
                 if integration.get("id") != integration_id:
@@ -253,7 +252,7 @@ class LocalChatIntegrationStore:
             ]
 
     def add_identity_link(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             external_user_id = _required_string(payload.get("externalUserId"), "externalUserId")
             user_id = _required_string(payload.get("userId"), "userId")
             link = {
@@ -270,13 +269,13 @@ class LocalChatIntegrationStore:
             return self._public_integration(integration)
 
     def delete_identity_link(self, integration_id: str, link_id: str, actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integration = self._delete_collection_item(integration_id, "identityLinks", link_id)
             self._audit("chat.identity_link.deleted", integration_id, actor, {"linkId": link_id})
             return self._public_integration(integration)
 
     def add_allowed_conversation(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             conversation_id = _required_string(payload.get("conversationId"), "conversationId")
             conversation = {
                 "id": new_relay_id("cac"),
@@ -291,23 +290,10 @@ class LocalChatIntegrationStore:
             return self._public_integration(integration)
 
     def delete_allowed_conversation(self, integration_id: str, conversation_record_id: str, actor: str | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integration = self._delete_collection_item(integration_id, "allowedConversations", conversation_record_id)
             self._audit("chat.allowed_conversation.deleted", integration_id, actor, {"conversationRecordId": conversation_record_id})
             return self._public_integration(integration)
-
-    def audit_events(self, integration_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-        with self._lock:
-            if not self.audit_path.exists():
-                return []
-            events = [
-                upgrade_legacy_names(json.loads(line))
-                for line in self.audit_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
-            if integration_id:
-                events = [event for event in events if event.get("integrationId") == integration_id]
-            return events[-max(1, min(limit, 200)):]
 
     def resolve_identity(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         with self._lock:
@@ -349,7 +335,7 @@ class LocalChatIntegrationStore:
 
     def clear_conversation_sessions(self, session_id: str) -> int:
         """Drop bindings that point at a permanently deleted session."""
-        with self._lock:
+        with self._atomic_scope():
             records = self._read_conversations()
             remaining = [
                 record
@@ -363,7 +349,7 @@ class LocalChatIntegrationStore:
 
     def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
         """Bind a conversation thread to a Relay session (upsert by thread key)."""
-        with self._lock:
+        with self._atomic_scope():
             key = _conversation_key(payload)
             now = now_iso()
             records = self._read_conversations()
@@ -395,48 +381,6 @@ class LocalChatIntegrationStore:
             self._write_conversations(records)
             return record
 
-    def _read_conversations(self) -> list[dict[str, Any]]:
-        if not self.conversations_path.exists():
-            return []
-        value = _read_json(self.conversations_path)
-        return value if isinstance(value, list) else []
-
-    def _write_conversations(self, records: list[dict[str, Any]]) -> None:
-        _write_json(self.conversations_path, records)
-
-    def _read_integrations(self) -> list[dict[str, Any]]:
-        if not self.integrations_path.exists():
-            return []
-        value = _read_json(self.integrations_path)
-        return value if isinstance(value, list) else []
-
-    def _write_integrations(self, integrations: list[dict[str, Any]]) -> None:
-        _write_json(self.integrations_path, integrations)
-
-    def _read_secrets(self) -> dict[str, dict[str, str]]:
-        if not self.secrets_path.exists():
-            return {}
-        value = _read_json(self.secrets_path)
-        return value if isinstance(value, dict) else {}
-
-    def _write_secret_patch(self, integration_id: str, raw: Any) -> None:
-        if not isinstance(raw, dict):
-            return
-        patch = {
-            str(key): str(value)
-            for key, value in raw.items()
-            if key in SECRET_FIELDS and value is not None and str(value).strip()
-        }
-        if not patch:
-            return
-        secrets = self._read_secrets()
-        current = secrets.get(integration_id, {})
-        secrets[integration_id] = {**current, **patch}
-        _write_json(self.secrets_path, secrets, mode=0o600)
-
-    def _validate_secret_patch(self, raw: Any) -> None:
-        return
-
     def _find_integration(self, integration_id: str) -> dict[str, Any]:
         for integration in self._read_integrations():
             if integration.get("id") == integration_id:
@@ -458,8 +402,8 @@ class LocalChatIntegrationStore:
 
     def _public_integration(self, integration: dict[str, Any]) -> dict[str, Any]:
         secrets = self._read_secrets().get(str(integration.get("id")), {})
-        identity_links = integration.get("identityLinks") if isinstance(integration.get("identityLinks"), list) else []
-        allowed_conversations = integration.get("allowedConversations") if isinstance(integration.get("allowedConversations"), list) else []
+        identity_links = list_field(integration, "identityLinks")
+        allowed_conversations = list_field(integration, "allowedConversations")
         return {
             **integration,
             "secretConfigured": bool(secrets),
@@ -473,7 +417,7 @@ class LocalChatIntegrationStore:
         for index, integration in enumerate(integrations):
             if integration.get("id") != integration_id:
                 continue
-            existing = integration.get(collection) if isinstance(integration.get(collection), list) else []
+            existing = list_field(integration, collection)
             updated = {
                 **integration,
                 collection: [record, *existing],
@@ -491,7 +435,7 @@ class LocalChatIntegrationStore:
         for index, integration in enumerate(integrations):
             if integration.get("id") != integration_id:
                 continue
-            existing = integration.get(collection) if isinstance(integration.get(collection), list) else []
+            existing = list_field(integration, collection)
             updated_items = [item for item in existing if item.get("id") != record_id]
             if len(updated_items) == len(existing):
                 raise KeyError(record_id)
@@ -506,106 +450,6 @@ class LocalChatIntegrationStore:
             self._write_integrations(integrations)
             return updated
         raise KeyError(integration_id)
-
-    def _audit(self, event_type: str, integration_id: str, actor: str | None, payload: dict[str, Any]) -> None:
-        _append_jsonl(self.audit_path, {
-            "id": new_relay_id("cae"),
-            "type": event_type,
-            "integrationId": integration_id,
-            "actor": actor,
-            "timestamp": now_iso(),
-            **payload,
-        })
-
-
-class DatabaseChatIntegrationStore(LocalChatIntegrationStore):
-    metadata = shared_metadata
-
-    documents = Table(
-        "chat_documents",
-        metadata,
-        database_id_column(),
-        Column("document_key", Text, nullable=False, unique=True),
-        Column("payload", json_type(), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-    )
-
-    def __init__(self, database_url: str, *, create_schema: bool = False):
-        self._lock = RLock()
-        self.engine = shared_engine(database_url)
-        self._transaction_connection = None
-        raw_key = os.environ.get("RELAY_CHAT_SECRET_KEY", "").strip()
-        self._secret_cipher = Fernet(raw_key.encode()) if raw_key else None
-        if create_schema:
-            create_all_tables(self.engine)
-
-    def create_integration(self, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(lambda: super(DatabaseChatIntegrationStore, self).create_integration(payload, actor))
-
-    def update_integration(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(lambda: super(DatabaseChatIntegrationStore, self).update_integration(integration_id, payload, actor))
-
-    def activate_integration(self, integration_id: str, actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(lambda: super(DatabaseChatIntegrationStore, self).activate_integration(integration_id, actor))
-
-    def check_integration(
-        self,
-        integration_id: str,
-        actor: str | None = None,
-        provider_health: tuple[bool, str] | None = None,
-    ) -> dict[str, Any]:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).check_integration(integration_id, actor, provider_health)
-        )
-
-    def set_telegram_webhook_secret(
-        self,
-        integration_id: str,
-        webhook_secret: str,
-        actor: str | None = None,
-    ) -> dict[str, Any]:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).set_telegram_webhook_secret(
-                integration_id, webhook_secret, actor
-            )
-        )
-
-    def add_identity_link(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(lambda: super(DatabaseChatIntegrationStore, self).add_identity_link(integration_id, payload, actor))
-
-    def delete_identity_link(self, integration_id: str, link_id: str, actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(lambda: super(DatabaseChatIntegrationStore, self).delete_identity_link(integration_id, link_id, actor))
-
-    def add_allowed_conversation(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).add_allowed_conversation(integration_id, payload, actor)
-        )
-
-    def delete_allowed_conversation(
-        self,
-        integration_id: str,
-        conversation_record_id: str,
-        actor: str | None = None,
-    ) -> dict[str, Any]:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).delete_allowed_conversation(
-                integration_id, conversation_record_id, actor
-            )
-        )
-
-    def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).set_conversation_session(
-                payload, session_id, owner_user_id
-            )
-        )
-
-    def clear_conversation_sessions(self, session_id: str) -> int:
-        return self._atomic(
-            lambda: super(DatabaseChatIntegrationStore, self).clear_conversation_sessions(
-                session_id
-            )
-        )
 
     def audit_events(self, integration_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         with self._lock:
@@ -628,7 +472,8 @@ class DatabaseChatIntegrationStore(LocalChatIntegrationStore):
 
     def _read_secrets(self) -> dict[str, dict[str, str]]:
         if self._transaction_connection is None:
-            return self._atomic(self._read_secrets)
+            with self._atomic_scope():
+                return self._read_secrets()
         encrypted = self._read_document("secrets", {})
         if not encrypted:
             return {}
@@ -716,14 +561,17 @@ class DatabaseChatIntegrationStore(LocalChatIntegrationStore):
         else:
             conn.execute(insert(self.documents).values(document_key=key, payload=payload, updated_at=now))
 
-    def _atomic(self, operation: Any) -> Any:
+    @contextmanager
+    def _atomic_scope(self) -> Iterator[None]:
+        """Serialize in-process callers and run the body in one transaction."""
         with self._lock:
             if self._transaction_connection is not None:
-                return operation()
+                yield
+                return
             with store_transaction(self.engine) as conn:
                 self._transaction_connection = conn
                 try:
-                    return operation()
+                    yield
                 finally:
                     self._transaction_connection = None
 
@@ -754,6 +602,18 @@ def _required_string(value: Any, field: str) -> str:
     return text
 
 
+def list_field(record: dict[str, Any], key: str) -> list[Any]:
+    """``record[key]`` when it is a list, else an empty list."""
+    value = record.get(key)
+    return value if isinstance(value, list) else []
+
+
+def dict_field(record: dict[str, Any], key: str) -> dict[str, Any]:
+    """``record[key]`` when it is a dict, else an empty dict."""
+    value = record.get(key)
+    return value if isinstance(value, dict) else {}
+
+
 def _public_config(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -765,7 +625,7 @@ def _public_config(value: Any) -> dict[str, Any]:
 
 
 def public_callback_base_url(integration: dict[str, Any]) -> str:
-    config = integration.get("config") if isinstance(integration.get("config"), dict) else {}
+    config = dict_field(integration, "config")
     value = _string(config.get("publicBaseUrl"))
     parsed = urlparse(value or "")
     if (
@@ -793,7 +653,7 @@ def _conversation_key(payload: dict[str, Any]) -> str:
 
 
 def _conversation_allowed(integration: dict[str, Any], conversation_id: str, thread_id: str | None) -> bool:
-    allowed = integration.get("allowedConversations") if isinstance(integration.get("allowedConversations"), list) else []
+    allowed = list_field(integration, "allowedConversations")
     for record in allowed:
         if record.get("conversationId") != conversation_id:
             continue
@@ -805,5 +665,5 @@ def _conversation_allowed(integration: dict[str, Any], conversation_id: str, thr
 
 
 def _identity_link(integration: dict[str, Any], external_user_id: str) -> dict[str, Any] | None:
-    links = integration.get("identityLinks") if isinstance(integration.get("identityLinks"), list) else []
+    links = list_field(integration, "identityLinks")
     return next((link for link in links if link.get("externalUserId") == external_user_id), None)

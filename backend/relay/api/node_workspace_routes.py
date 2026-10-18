@@ -22,6 +22,7 @@ from .workspace_transport import (
     raise_workspace_error,
     workspace_path,
 )
+from ..core.daemon_capabilities import DAEMON_CAPABILITY_WORKSPACE_READ_SHARED, has_capability
 
 router = APIRouter()
 
@@ -32,9 +33,7 @@ def _shared_capable_node(ctx: AppContext, node_id: str) -> dict[str, Any]:
     )
     if node is None:
         raise HTTPException(404, "Daemon node not found.")
-    if not node.get("online") or "workspace-read-shared" not in (
-        node.get("capabilities") or []
-    ):
+    if not node.get("online") or not has_capability(node, DAEMON_CAPABILITY_WORKSPACE_READ_SHARED):
         raise HTTPException(503, {"reason": "placement-unavailable"})
     return node
 

@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from .integrations import public_callback_base_url
+from .integrations import dict_field, public_callback_base_url
 
 
 async def probe_chat_integration(
@@ -12,8 +12,8 @@ async def probe_chat_integration(
     client: httpx.AsyncClient | None = None,
 ) -> tuple[bool, str]:
     provider = settings.get("provider")
-    secrets = settings.get("secrets") if isinstance(settings.get("secrets"), dict) else {}
-    config = settings.get("config") if isinstance(settings.get("config"), dict) else {}
+    secrets = dict_field(settings, "secrets")
+    config = dict_field(settings, "config")
     owns_client = client is None
     client = client or httpx.AsyncClient(timeout=10)
     try:
@@ -68,8 +68,8 @@ async def provision_chat_integration(
     client: httpx.AsyncClient | None = None,
 ) -> tuple[bool, str]:
     provider = settings.get("provider")
-    secrets = settings.get("secrets") if isinstance(settings.get("secrets"), dict) else {}
-    config = settings.get("config") if isinstance(settings.get("config"), dict) else {}
+    secrets = dict_field(settings, "secrets")
+    config = dict_field(settings, "config")
     try:
         public_base_url = public_callback_base_url({"config": config})
     except ValueError as error:

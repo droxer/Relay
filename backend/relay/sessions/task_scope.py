@@ -27,7 +27,7 @@ def thread_task_scope(
         return run_request["taskId"], request_execution_owner(run_request)
     if task_store is None:
         return None, None
-    active_round = next(
+    active_round: dict[str, Any] = next(
         (
             item
             for item in session.get("collaborationRounds", [])
