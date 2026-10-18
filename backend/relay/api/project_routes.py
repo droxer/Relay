@@ -20,7 +20,6 @@ from ..collaboration.models import RunIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
 from ..services.project_runtime import project_runtime_node, project_work_error
 from ..services.project_setup import (
-    PROJECT_SETUP_CAPABILITY,
     ProjectSetupError,
     annotate_setup,
     choose_setup_agent,
@@ -31,12 +30,18 @@ from ..services.project_setup import (
     setup_manifest_block,
     setup_task_goal,
 )
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_PROJECT_SETUP,
+    has_capability,
+    DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
+)
 from ..services.project_deletion import (
     ProjectDeletionError,
     delete_project as delete_project_record,
 )
 from .deps import AppContextDep
-from .helpers import JsonBodyDep, request_actor
+from .actors import request_actor
+from .bodies import JsonBodyDep
 from .project_helpers import project_for_owner
 from .project_links import (
     link_existing_directory,
@@ -61,6 +66,17 @@ def _project_error(error: Exception) -> HTTPException:
     return HTTPException(409 if code == "project_name_taken" else 400, code)
 
 
+def _owned_project(
+    ctx: AppContextDep, project_id: str, owner_user_id: str | None
+) -> dict[str, Any]:
+    """The live project the actor owns. Only an empty id yields no project,
+    and a route path always carries one, so the 404 here is unreachable."""
+    project = project_for_owner(ctx, project_id, owner_user_id)
+    if project is None:
+        raise HTTPException(404, "Project not found.")
+    return project
+
+
 def _readable_project(
     ctx: AppContextDep, request: Request, project_id: str
 ) -> dict[str, Any]:
@@ -78,7 +94,7 @@ def _project_workspace_node(
     ctx: AppContextDep, project: dict[str, Any]
 ) -> dict[str, Any]:
     node = project_runtime_node(project, ctx.registry.monitor_nodes())
-    if node is None or "workspace-read-shared" not in (node.get("capabilities") or []):
+    if node is None or not has_capability(node, DAEMON_CAPABILITY_WORKSPACE_READ_SHARED):
         raise HTTPException(503, {"reason": "placement-unavailable"})
     return node
 
@@ -243,7 +259,7 @@ def update_project(
     project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    current = project_for_owner(ctx, project_id, actor["userId"])
+    current = _owned_project(ctx, project_id, actor["userId"])
     body = _request_body
     try:
         target_node_id = resolve_target_node_id(
@@ -274,7 +290,7 @@ def get_project_setup(
     """The project's agent-drafted setup, with each proposed member's current
     eligibility, and the agents a setup could staff."""
     actor = request_actor(request, ctx.auth_store)
-    project = project_for_owner(ctx, project_id, actor["userId"])
+    project = _owned_project(ctx, project_id, actor["userId"])
     return {
         "setup": annotate_setup(
             project,
@@ -299,7 +315,7 @@ async def start_project_setup(
     and the owner's note; otherwise a fresh setup thread starts.
     """
     actor = request_actor(request, ctx.auth_store)
-    project = project_for_owner(ctx, project_id, actor["userId"])
+    project = _owned_project(ctx, project_id, actor["userId"])
     body = _request_body
     if code := project_work_error(project):
         raise HTTPException(409, code)
@@ -316,18 +332,18 @@ async def start_project_setup(
             raise ProjectSetupError("project_setup_in_progress")
         agent_id = choose_setup_agent(
             candidates,
-            body.get("agentId") or (previous.get("agentId") if revising else None),
+            body.get("agentId") or (previous.get("agentId") if revising and previous else None),
             lead_agent_id=project.get("leadAgentId"),
         )
         node = project_runtime_node(project, ctx.registry.monitor_nodes())
         if node is None:
             raise ProjectSetupError("project_computer_offline")
-        if PROJECT_SETUP_CAPABILITY not in (node.get("capabilities") or []):
+        if not has_capability(node, DAEMON_CAPABILITY_PROJECT_SETUP):
             raise ProjectSetupError("project_setup_unsupported")
     except ProjectSetupError as error:
         raise HTTPException(error.status, error.code) from error
     previous_proposal = (previous or {}).get("proposal") if revising else None
-    thread_id = previous["threadId"] if revising else None
+    thread_id = previous["threadId"] if revising and previous else None
     # Record the draft before dispatch so a fast result always finds it.
     draft = drafting_setup(
         intent=intent, agent_id=agent_id, thread_id=thread_id, previous=previous if revising else None,
@@ -362,13 +378,14 @@ async def start_project_setup(
             actor,
         )
     except CollaborationError as error:
+        failure_code = error.code
         # Undo only our own draft: a revise falls back to the setup it was
         # revising, a fresh start is marked failed so it never waits forever.
         def restore(latest: dict[str, Any]) -> dict[str, Any] | None:
             current = latest.get("setup") or {}
             if current.get("state") != "drafting" or current.get("draftId") != draft["draftId"]:
                 return None
-            return previous if revising and previous else {**current, "state": "failed", "error": error.code}
+            return previous if revising and previous else {**current, "state": "failed", "error": failure_code}
 
         _mutate_setup(ctx, project_id, restore)
         detail: Any = str(error) if error.status in (400, 403) else {"code": error.code, "message": str(error)}
@@ -446,8 +463,8 @@ def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dic
         return delete_project_record(
             ctx, project_id, expected_version=expected_version,
             user_id=actor["userId"],
-            lifecycle=request.app.state.execution_lifecycle,
-            automation_store=getattr(request.app.state, "automation_store", None),
+            lifecycle=ctx.execution_lifecycle,
+            automation_store=ctx.automation_store,
         )
     except KeyError as error:
         raise HTTPException(404, "Project not found.") from error

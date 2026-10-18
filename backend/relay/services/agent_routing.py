@@ -57,7 +57,8 @@ def placement_node(
     """
     identity = placement.get("computerId")
     if not identity:
-        return nodes.get(placement.get("daemonNodeId"))
+        node_id = placement.get("daemonNodeId")
+        return nodes.get(node_id) if node_id is not None else None
     candidates = [node for node in nodes.values() if computer_id(node) == identity]
     if not candidates:
         return None
@@ -176,7 +177,8 @@ def resolve_agent_assignments(
         for placement in placements:
             node = placement_node(placement, nodes)
             view = placement_status(placement, agent, node)
-            if view["status"] not in ("ready", "busy"):
+            # A missing node is never ready or busy; the check only narrows it.
+            if node is None or view["status"] not in ("ready", "busy"):
                 rejection_reasons.update(
                     condition["reason"] for condition in view.get("conditions", [])
                 )

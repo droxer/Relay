@@ -4,13 +4,13 @@ import pytest
 
 from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
 from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import LocalTaskStore
+from store_fixtures import make_task_store
 from relay.sessions.task_scope import thread_task_scope
 
 
 @pytest.fixture
 def scoped_task(tmp_path):
-    store = LocalTaskStore(str(tmp_path))
+    store = make_task_store(str(tmp_path))
     task = store.create_task({"title": "Scoped task", "status": "running"})
     manifest = {"roundId": "round_1", "workScope": {"kind": "task", "taskId": task["id"]}}
     session = {"id": "thread_1", "activeRoundId": "round_1", "collaborationRounds": [manifest]}

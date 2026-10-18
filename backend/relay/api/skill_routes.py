@@ -18,7 +18,7 @@ from ..persistence.skill_store import (
 )
 from ..services import skill_assignments, skill_grants, skill_import
 from .deps import AppContextDep
-from .helpers import request_actor
+from .actors import request_actor
 
 router = APIRouter()
 # Base64 expands content by 4/3; reserve bounded space for paths and metadata.
@@ -301,11 +301,12 @@ def export_skill(
         for entry in ctx.skill_store.revision_files(revision_id):
             info = zipfile.ZipInfo(entry["path"])
             info.external_attr = 0o600 << 16
-            archive.writestr(
-                info,
-                ctx.skill_store.blob(entry["sha256"]),
-                compress_type=zipfile.ZIP_DEFLATED,
-            )
+            content = ctx.skill_store.blob(entry["sha256"])
+            if content is None:
+                # A revision's files are content-addressed blobs it pins, so
+                # this is unreachable; writestr would refuse None the same way.
+                raise TypeError(f"Skill revision blob {entry['sha256']} is missing.")
+            archive.writestr(info, content, compress_type=zipfile.ZIP_DEFLATED)
     filename = skill["slug"].replace("/", "-") + ".skill.zip"
     return Response(
         output.getvalue(),

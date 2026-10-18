@@ -6,13 +6,12 @@ from typing import Any, Protocol, TypedDict
 
 from loguru import logger
 
-from ..collaboration.service import (
-    assignment_team_snapshot,
-    compile_assignment_work_graph,
-    create_round_manifest,
-)
+from ..collaboration.service import assignment_team_snapshot
+from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.ids import new_database_id
-from ..daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
+from ..core.models import AgentName
+from ..daemon_registry.registry import DaemonNodeRegistry
+from ..daemon_registry.node_backend import ServerDaemonNodeBackend
 from ..persistence.protocols import (
     AgentPlacementStore,
     AgentStore,
@@ -24,12 +23,8 @@ from ..persistence.protocols import (
     TeamStore,
 )
 from ..persistence.stores import valid_agent
-from ..persistence.task_store import dispatch_claim_active
-from ..tasks import (
-    ensure_managed_capacity_for_task,
-    ready_node_for_task,
-    task_goal_text,
-)
+from ..persistence.task.rules import dispatch_claim_active
+from .task_placement import ensure_managed_capacity_for_task, ready_node_for_task, task_goal_text
 from .agent_routing import (
     AgentRoutingError,
     dispatch_failure_code,
@@ -53,6 +48,8 @@ from .team_dispatch import (
     resolve_team_task_assignments,
     task_execution_user_id,
 )
+from .dispatch_results import dispatch_result_scope
+from ..security.actor import Actor
 
 PERMANENT_DISPATCH_CODES = frozenset(
     {
@@ -78,15 +75,24 @@ class DispatchResult(TypedDict):
 
 
 class TaskDispatchContext(Protocol):
-    task_store: TaskStore
-    session_store: SessionStore
-    agent_store: AgentStore
-    agent_placement_store: AgentPlacementStore
-    team_store: TeamStore
-    project_store: ProjectStore
-    managed_node_store: ManagedNodeStore
-    registry: DaemonNodeRegistry
-    backend: ServerDaemonNodeBackend
+    @property
+    def task_store(self) -> TaskStore: ...
+    @property
+    def session_store(self) -> SessionStore: ...
+    @property
+    def agent_store(self) -> AgentStore: ...
+    @property
+    def agent_placement_store(self) -> AgentPlacementStore: ...
+    @property
+    def team_store(self) -> TeamStore: ...
+    @property
+    def project_store(self) -> ProjectStore: ...
+    @property
+    def managed_node_store(self) -> ManagedNodeStore: ...
+    @property
+    def registry(self) -> DaemonNodeRegistry: ...
+    @property
+    def backend(self) -> ServerDaemonNodeBackend: ...
 
 
 def implicit_group_assignments_for_task(
@@ -213,7 +219,7 @@ class TaskDispatcher:
         self,
         ctx: TaskDispatchContext,
         task: dict[str, Any],
-        actor: dict[str, Any],
+        actor: Actor,
         *,
         assignments: list[dict[str, Any]] | None,
         record_pending: bool,
@@ -229,7 +235,7 @@ class TaskDispatcher:
         self.project_assignment_resolved = False
         self.project_snapshot: dict[str, Any] | None = None
         self.team_snapshot: dict[str, Any] | None = None
-        self.agent: str | None = None
+        self.agent: AgentName | None = None
         self.agent_first = False
         self.temporary_group_status = False
         self.claim_id: str | None = None
@@ -241,7 +247,7 @@ class TaskDispatcher:
         return await self._dispatch(node)
 
     def _prepare(self) -> tuple[dict[str, Any] | None, DispatchResult | None]:
-        self._prepared_node = None
+        self._prepared_node: dict[str, Any] | None = None
         result = self._prepare_dispatch()
         return self._prepared_node, result
 
@@ -613,13 +619,12 @@ class TaskDispatcher:
         try:
             request = await run_in_threadpool(self._run_request, node)
             session = await self.ctx.backend.run(node["id"], request)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - converted to a recorded dispatch failure, never swallowed
             return await run_in_threadpool(self._finish_dispatch, node, None, error)
         return await run_in_threadpool(self._finish_dispatch, node, session, None)
 
     def _finish_dispatch(self, node: dict[str, Any], session: dict[str, Any] | None,
                          error: Exception | None) -> DispatchResult:
-        from .dispatch_results import dispatch_result_scope
         with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=error is None) as current:
             if current is None:
                 return _result(self.ctx.task_store.get_task(self.task["id"]),
@@ -628,6 +633,10 @@ class TaskDispatcher:
             self.task = current
             if error is not None:
                 return self._dispatch_error_result(error)
+            if session is None:
+                # Unreachable: a run that raised nothing returned its session.
+                # Same failure as indexing the missing session would raise.
+                raise TypeError("A dispatched run returned no session.")
             return self._record_dispatch_started(session, node)
 
     def _record_dispatch_started(self, session: dict[str, Any], node: dict[str, Any]) -> DispatchResult:
@@ -744,7 +753,7 @@ class TaskDispatcher:
 async def start_task_on_ready_node(
     ctx: TaskDispatchContext,
     task: dict[str, Any],
-    actor: dict[str, Any],
+    actor: Actor,
     *,
     assignments: list[dict[str, Any]] | None = None,
     record_pending: bool = True,

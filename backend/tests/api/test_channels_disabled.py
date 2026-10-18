@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from relay.api.contract import API_PREFIX, is_channel_route
-from relay.app import channels_enabled_from_env, create_app
+from relay.app import create_app
+from relay.core.settings import AppSettings
 
 CHANNEL_REQUESTS = (
     ("GET", "/admin/chat-integrations"),
@@ -85,7 +86,7 @@ def test_channels_flag_is_off_unless_explicitly_enabled(
     else:
         monkeypatch.setenv("RELAY_CHANNELS_ENABLED", value)
 
-    assert channels_enabled_from_env() is expected
+    assert AppSettings.from_env().channels_enabled is expected
 
 
 @pytest.mark.parametrize(

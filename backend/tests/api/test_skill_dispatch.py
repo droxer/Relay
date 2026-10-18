@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from relay.api.helpers import daemon_node_event
+from app_state_helpers import replace_app_context
+from relay.api.daemon_events import daemon_node_event
 from relay.app import create_app
 from relay.daemon_registry.registry import DaemonNodeRegistry
 
@@ -26,9 +27,9 @@ def _node(registry, node_id, token):
 def test_blob_is_scoped_to_active_issuing_node_command(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(tmp_path)
-    app.state.skill_store = SimpleNamespace(
+    replace_app_context(app, skill_store=SimpleNamespace(
         blob=lambda digest: b"content" if digest == "allowed" else None
-    )
+    ))
     registry = app.state.registry
     first = _node(registry, "node-first", "token-first")
     second = _node(registry, "node-second", "token-second")

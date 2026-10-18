@@ -3,7 +3,8 @@ import pytest
 from relay.persistence.task_lifecycle import apply_flow_status
 from relay.services.execution_lifecycle import execution_status
 from relay.services.dispatch_failure import record_dispatch_failure
-from relay.persistence.task_store import LocalTaskStore, DatabaseTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
+from store_fixtures import make_task_store
 
 
 def test_missing_reason_is_explicit_unknown_without_borrowing_previous_cause():
@@ -29,7 +30,7 @@ def test_recorded_cause_and_link_survive_replay_then_clear():
 
 @pytest.mark.parametrize("database", [False, True])
 def test_dispatch_cause_is_in_authoritative_blocked_event(tmp_path, database):
-    store = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True) if database else LocalTaskStore(tmp_path)
+    store = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True) if database else make_task_store(tmp_path)
     task = store.create_task({"title": "Explain failure"})
     record_dispatch_failure(store, task, code="capacity_exhausted", message="Computer is full")
     result = store.get_task(task["id"])
@@ -59,11 +60,12 @@ def test_legacy_malformed_metadata_does_not_prevent_event_replay(metadata):
 
 @pytest.mark.parametrize("database", [False, True])
 def test_session_failure_records_source_in_detail_summary_and_replay(tmp_path, database):
-    from relay.persistence.session_store import LocalSessionStore, DatabaseSessionStore
+    from relay.persistence.session_store import DatabaseSessionStore
+    from store_fixtures import make_session_store
     from relay.sessions.controller import SessionController
     url = f"sqlite:///{tmp_path}/state.db"
-    tasks = DatabaseTaskStore(url, create_schema=True) if database else LocalTaskStore(tmp_path)
-    sessions = DatabaseSessionStore(url, create_schema=True) if database else LocalSessionStore(tmp_path)
+    tasks = DatabaseTaskStore(url, create_schema=True) if database else make_task_store(tmp_path)
+    sessions = DatabaseSessionStore(url, create_schema=True) if database else make_session_store(tmp_path)
     task = tasks.create_task({"title": "Failure context"})
     session = sessions.create_session({"taskGoal": "Fail with context", "workspacePath": "/workspace"})
     controller = SessionController(sessions, task_store=tasks, task_id=task["id"])

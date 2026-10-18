@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
-from relay.daemon_registry import DaemonNodeRegistry
+from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.security.auth import DatabaseAccountAuthStore
 
 

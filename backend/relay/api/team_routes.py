@@ -9,11 +9,8 @@ from ..security.auth import require_admin_session
 from ..services.team_computer import resolve_team_computer
 from .agent_routes import _agent_with_placements, _user_exists
 from .deps import AppContextDep
-from .helpers import (
-    JsonBodyDep,
-    request_actor,
-    string_field,
-)
+from .actors import request_actor
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 

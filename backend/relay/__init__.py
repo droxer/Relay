@@ -9,7 +9,6 @@ __all__ = [
     "DatabaseSessionStore",
     "DatabaseTaskStore",
     "DatabaseUserAuthStore",
-    "LocalDaemonStore",
     "ServerDaemonNodeBackend",
     "SessionController",
     "create_app",
@@ -22,11 +21,12 @@ def __getattr__(name: str) -> Any:
 
         return create_app
     if name == "SessionController":
-        from .sessions import SessionController
+        from .sessions.controller import SessionController
 
         return SessionController
     if name in {"DaemonNodeRegistry", "ServerDaemonNodeBackend"}:
-        from .daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
+        from .daemon_registry.registry import DaemonNodeRegistry
+        from .daemon_registry.node_backend import ServerDaemonNodeBackend
 
         return {"DaemonNodeRegistry": DaemonNodeRegistry, "ServerDaemonNodeBackend": ServerDaemonNodeBackend}[name]
     if name in {
@@ -34,14 +34,12 @@ def __getattr__(name: str) -> Any:
         "DatabaseDaemonStore",
         "DatabaseSessionStore",
         "DatabaseTaskStore",
-        "LocalDaemonStore",
     }:
         from .persistence.stores import (
             DEFAULT_RELAY_DATA_DIR,
             DatabaseDaemonStore,
             DatabaseSessionStore,
             DatabaseTaskStore,
-            LocalDaemonStore,
         )
 
         return {
@@ -49,7 +47,6 @@ def __getattr__(name: str) -> Any:
             "DatabaseDaemonStore": DatabaseDaemonStore,
             "DatabaseSessionStore": DatabaseSessionStore,
             "DatabaseTaskStore": DatabaseTaskStore,
-            "LocalDaemonStore": LocalDaemonStore,
         }[name]
     if name == "DatabaseUserAuthStore":
         from .security.auth import DatabaseAccountAuthStore

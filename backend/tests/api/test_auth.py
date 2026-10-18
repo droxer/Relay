@@ -1033,7 +1033,9 @@ def test_chat_service_user_header_requires_configured_token(monkeypatch) -> None
         })
         assert response.status_code == 503
 
+        # The token is read once at startup, like every other setting.
         monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_token")
+        client = TestClient(create_app(root))
         response = client.get("/api/v1/threads", headers={
             "Authorization": "Bearer wrong",
             "X-Relay-User-Id": "alice",
@@ -1122,7 +1124,6 @@ def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch)
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     monkeypatch.setenv("RELAY_STORAGE", "postgres")
     monkeypatch.delenv("RELAY_AUTH_STORE", raising=False)
-    monkeypatch.delenv("RELAY_DAEMON_STORE", raising=False)
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/relay.db"
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)

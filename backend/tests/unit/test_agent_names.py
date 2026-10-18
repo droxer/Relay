@@ -5,12 +5,11 @@ from pathlib import Path
 
 import pytest
 from relay.core.agent_names import AGENT_NAME_POOL, generate_agent_name
-from relay.persistence.agent_store import DatabaseAgentStore, LocalAgentStore
+from relay.persistence.agent_store import DatabaseAgentStore
+from store_fixtures import make_agent_store
 
 
-def _make_store(store_kind: str, tmp_path: Path):
-    if store_kind == "local":
-        return LocalAgentStore(tmp_path / "local")
+def _make_store(tmp_path: Path):
     return DatabaseAgentStore(f"sqlite:///{tmp_path}/agents.db", create_schema=True)
 
 
@@ -57,11 +56,10 @@ def test_generator_increments_the_suffix_until_it_is_free() -> None:
     assert name.endswith(" 3")
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_create_agent_generates_a_themed_name_when_display_name_is_missing(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    store = _make_store(store_kind, tmp_path)
+    store = _make_store(tmp_path)
 
     agent = store.create_agent(
         "alice", {"executorKind": "claude", "defaultRole": "implementer"}
@@ -71,11 +69,10 @@ def test_create_agent_generates_a_themed_name_when_display_name_is_missing(
     assert store.events(agent["id"])[0]["agent"]["displayName"] == agent["displayName"]
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_create_agent_generates_a_themed_name_when_display_name_is_blank(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    store = _make_store(store_kind, tmp_path)
+    store = _make_store(tmp_path)
 
     agent = store.create_agent(
         "alice",
@@ -85,11 +82,10 @@ def test_create_agent_generates_a_themed_name_when_display_name_is_blank(
     assert agent["displayName"] in AGENT_NAME_POOL
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_generated_names_are_unique_within_a_supervisor(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    store = _make_store(store_kind, tmp_path)
+    store = _make_store(tmp_path)
 
     first = store.create_agent(
         "alice", {"executorKind": "claude", "defaultRole": "implementer"}
@@ -101,11 +97,10 @@ def test_generated_names_are_unique_within_a_supervisor(
     assert first["displayName"].casefold() != second["displayName"].casefold()
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_generated_names_do_not_collide_with_existing_agents(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    store = _make_store(store_kind, tmp_path)
+    store = _make_store(tmp_path)
     taken_names = set(AGENT_NAME_POOL)
     for _ in range(3):
         agent = store.create_agent(
@@ -117,7 +112,7 @@ def test_generated_names_do_not_collide_with_existing_agents(
 
 
 def test_create_agent_still_honors_an_explicit_display_name(tmp_path: Path) -> None:
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
 
     agent = store.create_agent(
         "alice",
@@ -132,7 +127,7 @@ def test_create_agent_still_honors_an_explicit_display_name(tmp_path: Path) -> N
 
 
 def test_create_agent_rejects_a_non_string_display_name(tmp_path: Path) -> None:
-    store = LocalAgentStore(tmp_path)
+    store = make_agent_store(tmp_path)
 
     with pytest.raises(ValueError, match="displayName must be a string"):
         store.create_agent("alice", {"displayName": 42, "executorKind": "claude"})

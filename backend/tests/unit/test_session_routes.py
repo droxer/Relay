@@ -181,6 +181,8 @@ def test_session_read_backfills_managed_affinity_from_deleted_runtime_history(
                 "nodeLocation": "managed",
                 "status": "ready",
                 "agents": {"codex": "ready"},
+                "createdAt": "2026-06-13T00:00:00.000Z",
+                "updatedAt": "2026-06-13T00:00:00.000Z",
             }
         )
         app.state.registry.daemon_store.delete_node("runtime_old")
@@ -238,6 +240,8 @@ def test_thread_read_does_not_500_when_registration_history_disagrees_with_the_s
                 "nodeLocation": "managed",
                 "status": "ready",
                 "agents": {"codex": "ready"},
+                "createdAt": "2026-06-13T00:00:00.000Z",
+                "updatedAt": "2026-06-13T00:00:00.000Z",
             }
         )
 

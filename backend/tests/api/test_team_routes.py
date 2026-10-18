@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import date
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 from relay.api import task_routes
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
@@ -437,10 +436,18 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
         ).json()["team"]
         project = project_for_team(client.app, "alice", team)
 
-        snapshot_path = Path(root) / "teams" / team["id"] / "snapshot.json"
-        legacy = json.loads(snapshot_path.read_text(encoding="utf-8"))
-        legacy["supervisorUserId"] = legacy.pop("ownerUserId")
-        snapshot_path.write_text(json.dumps(legacy), encoding="utf-8")
+        team_store = client.app.state.team_store
+        with team_store.engine.begin() as conn:
+            stored = conn.scalar(
+                select(team_store.teams.c.snapshot).where(team_store.teams.c.id == team["id"])
+            )
+            legacy = {**stored, "supervisorUserId": stored["ownerUserId"]}
+            legacy.pop("ownerUserId")
+            conn.execute(
+                update(team_store.teams)
+                .where(team_store.teams.c.id == team["id"])
+                .values(snapshot=legacy)
+            )
 
         created = client.post(
             "/api/v1/tasks",
@@ -3414,7 +3421,7 @@ def test_addressed_team_reviewer_keeps_specialization(
 def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
     recovery_team_thread, monkeypatch, task_backed
 ) -> None:
-    from relay.api.helpers import daemon_node_event
+    from relay.api.daemon_events import daemon_node_event
 
     client, controller, session, _team, reviewer = recovery_team_thread
     task = None

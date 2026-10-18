@@ -18,6 +18,14 @@ repos:
       - id: detect-private-key
       - id: mixed-line-ending
 
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+      - id: ruff
+        name: ruff (backend)
+        files: ^backend/
+        args: ['--config', 'backend/pyproject.toml']
+
   - repo: local
     hooks:
       - id: uv-lock-check
@@ -26,6 +34,15 @@ repos:
         args: ['lock', '--project', 'backend', '--locked']
         language: system
         files: ^backend/pyproject\.toml$
+        pass_filenames: false
+        require_serial: true
+
+      - id: mypy-backend
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy'
+        language: system
+        types: [python]
+        files: ^backend/relay/
         pass_filenames: false
         require_serial: true
 

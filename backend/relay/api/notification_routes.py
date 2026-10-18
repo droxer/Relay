@@ -14,8 +14,8 @@ from ..notifications.rules import NOTIFICATION_KINDS
 from ..notifications.watcher import recipient_id
 from ..persistence.notification_store import MAX_LIST_LIMIT, DatabaseNotificationStore
 from ..security.auth import require_user_session
-from .deps import AppContextDep
-from .helpers import JsonBodyDep
+from .deps import AppContextDep, app_context
+from .bodies import JsonBodyDep
 
 router = APIRouter()
 
@@ -24,7 +24,7 @@ MAX_MARK_READ_IDS = MAX_LIST_LIMIT
 
 
 def _store(request: Request) -> DatabaseNotificationStore:
-    return request.app.state.notification_store
+    return app_context(request).notification_store
 
 
 def _caller(request: Request, ctx: AppContextDep) -> str:

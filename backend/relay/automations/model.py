@@ -20,7 +20,7 @@ TRIGGER_ON = {
     "task_event": ("created", "status_changed"),
     "run_event": ("completed", "failed"),
 }
-EVENT_TYPES = {
+EVENT_TYPES: dict[tuple[str | None, str | None], str] = {
     ("task_event", "created"): "task.created",
     ("task_event", "status_changed"): "task.status_changed",
     ("run_event", "completed"): "run.completed",
@@ -190,7 +190,8 @@ def public_task_result(result: Any) -> Any:
 def upgrade_legacy(legacy: dict[str, Any]) -> dict[str, Any]:
     """What a legacy routine's fields mean in v2. Pure: the server timezone
     stays ``timezone: None`` and is resolved only when a schedule is evaluated."""
-    trigger = legacy.get("routineTrigger") if isinstance(legacy.get("routineTrigger"), dict) else {"kind": "schedule"}
+    raw_trigger = legacy.get("routineTrigger")
+    trigger: dict[str, Any] = raw_trigger if isinstance(raw_trigger, dict) else {"kind": "schedule"}
     if trigger.get("kind") == "schedule":
         triggers = _legacy_schedule(legacy.get("routineCadence") or "weekly", legacy.get("routineNextRunDate"))
     elif trigger.get("kind") == "manual":

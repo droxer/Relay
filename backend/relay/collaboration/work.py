@@ -7,7 +7,7 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from .contracts import text_list
-from .styles import ROLE_STAGE
+from .styles import role_stage
 
 MAX_WORK_ITEMS = 16
 # One budget for every full-sequence rerun in a round: findings repairs here
@@ -478,7 +478,7 @@ def compile_proposed_plan(
     if required - selected:
         raise ValueError("The plan omitted a required team contribution.")
     # Verification/review may not precede writes, even if proposed out of order.
-    compiled[1:] = sorted(compiled[1:], key=lambda item: ROLE_STAGE.get(item.get("role"), 1))
+    compiled[1:] = sorted(compiled[1:], key=lambda item: role_stage(item.get("role")))
     final = next(
         (deepcopy(item) for item in reversed(assignments) if item.get("synthesizer")),
         None,

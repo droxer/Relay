@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from relay.sessions import compute_conversation_history
+from relay.sessions.conversation import compute_conversation_history
 
 
 class _FakeStore:

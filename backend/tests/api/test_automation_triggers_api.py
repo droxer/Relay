@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -61,7 +61,7 @@ def test_switching_trigger_kind_moves_next_run(monkeypatch) -> None:
         assert "routineNextRunAt" not in to_webhook.json()
         back = client.patch(f"/api/v1/tasks/{created['id']}", json={"routineTriggers": DAILY_9})
         assert back.json()["routineTriggers"] == DAILY_9
-        assert back.json()["routineNextRunAt"] > datetime.now(timezone.utc).isoformat()
+        assert back.json()["routineNextRunAt"] > datetime.now(UTC).isoformat()
 
 
 def test_invalid_trigger_is_a_400(monkeypatch) -> None:
@@ -206,7 +206,7 @@ def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch)
         store.update_task(occurrence_id, {"status": "done"})
         AutomationService(task_store=store, session_store=client.app.state.session_store,
                           automation_store=client.app.state.automation_store,
-                          project_store=client.app.state.project_store).tick(datetime.now(timezone.utc))
+                          project_store=client.app.state.project_store).tick(datetime.now(UTC))
         assert len(store.get_task(routine["id"])["occurrenceIds"]) == 1
 
 
@@ -405,7 +405,7 @@ def test_any_resume_resets_failures_but_only_a_relay_resume_resets_the_rate_wind
         client, agent = _client(monkeypatch, root)
         routine = _routine(client, agent)
         store, automations = client.app.state.task_store, client.app.state.automation_store
-        window = datetime.now(timezone.utc)
+        window = datetime.now(UTC)
         automations.save_state(routine["id"], {**automations.get_state(routine["id"]),
                                                "consecutive_failures": 3, "fired_count": 2,
                                                "fired_window_start": window})
@@ -431,7 +431,7 @@ def test_resume_clears_pause_pending_and_recomputes_next_run(monkeypatch) -> Non
         task = _routine(client, agent)
         task_store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
                                             "routineNextRunAt": None})
-        automation_store.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(timezone.utc))
+        automation_store.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(UTC))
         automation_store.save_state(task["id"], {**automation_store.get_state(task["id"]), "consecutive_failures": 3})
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 200, response.text
@@ -471,7 +471,7 @@ def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> 
         })
         automations = client.app.state.automation_store
         automations.record_outcome(task["id"], "failure-1", True)
-        automations.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(timezone.utc))
+        automations.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(UTC))
         before = store.get_task(task["id"])
         before_state = automations.get_state(task["id"])
         _login(client, "bob")
@@ -585,7 +585,7 @@ def test_patch_resume_of_owner_pause_keeps_the_rate_window(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         task = _routine(client, agent, routineTriggers=[])
         automation_store = client.app.state.automation_store
-        window = datetime.now(timezone.utc)
+        window = datetime.now(UTC)
         automation_store.save_state(task["id"], {**automation_store.get_state(task["id"]),
                                                  "fired_window_start": window, "fired_count": 4,
                                                  "consecutive_failures": 2})
@@ -686,7 +686,7 @@ def test_resume_reads_pause_after_entering_automation_transaction(monkeypatch) -
         client, agent = _client(monkeypatch, root)
         task = _routine(client, agent, routineState="paused")
         store, automations = client.app.state.task_store, client.app.state.automation_store
-        automations.save_state(task["id"], {**automations.get_state(task["id"]), "fired_count": 3, "fired_window_start": datetime.now(timezone.utc)})
+        automations.save_state(task["id"], {**automations.get_state(task["id"]), "fired_count": 3, "fired_window_start": datetime.now(UTC)})
         original = service.store_transaction
 
         @contextmanager

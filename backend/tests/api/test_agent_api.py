@@ -9,7 +9,7 @@ from issue_projects import project_for_agents
 
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.persistence.store_common import _write_json
+from store_fixtures import overwrite_snapshot
 from relay.services.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
 
@@ -431,8 +431,11 @@ def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch) -> None:
             "alice", "codex", "node_a"
         )
         app.state.agent_placement_store.create_placement(agent, "node_a")
-        _write_json(
-            app.state.agent_store._snapshot_path(agent["id"]),
+        agent_store = app.state.agent_store
+        overwrite_snapshot(
+            agent_store.agents,
+            agent_store.engine,
+            agent["id"],
             {**agent, "toolPolicy": {"allowedTools": ["read"]}},
         )
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -1350,7 +1353,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
         if operation_fields:
             prepared_id = app.state.daemon_store.list_active_run_requests()[0]["id"]
             monkeypatch.setattr(
-                "relay.daemon_registry.registry.PREPARED_ADMISSION_LEASE_SECONDS", 0
+                "relay.daemon_registry.config.PREPARED_ADMISSION_LEASE_SECONDS", 0
             )
             app.state.registry.reap_stale_runs()
             assert app.state.daemon_store.get_run_request(prepared_id)["status"] == (
@@ -1447,7 +1450,7 @@ def test_new_thread_retry_resumes_the_session_owned_by_its_prepared_admission(
         interrupted = client.post("/api/v1/agent-runs", json=body)
         prepared = app.state.daemon_store.list_active_run_requests()[0]
         monkeypatch.setattr(
-            "relay.daemon_registry.registry.PREPARED_ADMISSION_LEASE_SECONDS", 0
+            "relay.daemon_registry.config.PREPARED_ADMISSION_LEASE_SECONDS", 0
         )
         app.state.registry.reap_stale_runs()
         assert app.state.session_store.get_session(prepared["sessionId"])["status"] == (
@@ -1758,9 +1761,13 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
         legacy_agent.pop("supervisorUserId")
         legacy_placement = {**placement, "userId": "alice"}
         legacy_placement.pop("supervisorUserId")
-        _write_json(app.state.agent_store._snapshot_path(agent["id"]), legacy_agent)
-        _write_json(
-            app.state.agent_placement_store._snapshot_path(placement["id"]),
+        agent_store = app.state.agent_store
+        placement_store = app.state.agent_placement_store
+        overwrite_snapshot(agent_store.agents, agent_store.engine, agent["id"], legacy_agent)
+        overwrite_snapshot(
+            placement_store.placements,
+            placement_store.engine,
+            placement["id"],
             legacy_placement,
         )
         session = app.state.session_store.create_session(
@@ -2939,9 +2946,9 @@ def test_agent_list_normalizes_a_legacy_placement_to_its_stable_computer(
     )
     legacy = {**placement}
     legacy.pop("computerId")
-    _write_json(
-        client.app.state.agent_placement_store._snapshot_path(placement["id"]),
-        legacy,
+    placement_store = client.app.state.agent_placement_store
+    overwrite_snapshot(
+        placement_store.placements, placement_store.engine, placement["id"], legacy
     )
 
     listed = client.get("/api/v1/agents").json()["agents"]

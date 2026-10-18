@@ -1,21 +1,5 @@
-from .scheduler import (
-    SchedulerTickResult,
-    TaskScheduler,
-    user_has_device_node,
-    ensure_managed_capacity_for_task,
-    materialize_legacy_agent_assignment,
-    materialize_legacy_task_assignment,
-    ready_node_for_task,
-    task_goal_text,
-)
+"""Background task scheduling.
 
-__all__ = [
-    "SchedulerTickResult",
-    "TaskScheduler",
-    "user_has_device_node",
-    "ensure_managed_capacity_for_task",
-    "materialize_legacy_agent_assignment",
-    "materialize_legacy_task_assignment",
-    "ready_node_for_task",
-    "task_goal_text",
-]
+Import from the defining submodule; this package re-exports nothing, so
+importing one leaf never drags in the rest of the package.
+"""

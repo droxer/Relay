@@ -30,10 +30,29 @@ placeholder URL in `backend/alembic.ini`. Shell values take precedence over
 `backend/.env`.
 
 Sessions, session events, retained artifact content, token usage, tasks, task
-events, and thread-task links always require the database. Set
-`RELAY_STORAGE=postgres` to store the remaining operational records there too.
-The legacy `RELAY_AUTH_STORE=database` and `RELAY_DAEMON_STORE=database`
-switches remain available for targeted compatibility.
+events, thread-task links, daemon nodes and their command queue, agents, teams,
+agent placements, and chat integrations always require the database. Set
+`RELAY_STORAGE=postgres` (or the legacy `RELAY_AUTH_STORE=database`) to store
+accounts there too. `RELAY_DAEMON_STORE` and `RELAY_CHAT_STORE` are retired and
+ignored.
+
+## Import legacy daemon, agent, team, placement, and chat files
+
+Older installs kept those aggregates as JSON under the data directory
+(`daemon/{nodes,commands,runs,run-requests,events}/`, `agents/`, `teams/`,
+`agent-placements/`, `chat/`). The backend imports them automatically, once,
+at startup, logging what it imported; the files are never modified or
+deleted. To preview or run the import by hand:
+
+```bash
+uv run --project backend relay migrate-local-file-stores --data-dir .relay --dry-run
+uv run --project backend relay migrate-local-file-stores --data-dir .relay
+```
+
+A record that already exists in the database with different content stops the
+import (and startup) with an error naming it; nothing is written until the
+conflict is resolved. Chat provider secrets are encrypted on import, so set
+`RELAY_CHAT_SECRET_KEY` when `chat/secrets.json` exists.
 
 ## Import legacy session files
 

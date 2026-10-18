@@ -1,4 +1,3 @@
-from automation_helpers import WEEKLY_TRIGGERS
 """Task starts recover from unavailable projects and idle precreated threads."""
 
 import asyncio
@@ -7,8 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.sessions import SessionController
+from relay.sessions.controller import SessionController
 
+from automation_helpers import WEEKLY_TRIGGERS
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 
 

@@ -66,10 +66,10 @@ def migrate_local_operational_state(
                 image = local_images.read(kind, entity_id)
                 if image is None:
                     continue
-                existing = images.read(kind, entity_id)
-                if existing is not None and existing != image:
+                existing_image = images.read(kind, entity_id)
+                if existing_image is not None and existing_image != image:
                     raise ValueError(f"Conflicting profile image: {kind}/{entity_id}")
-                if not dry_run and existing is None:
+                if not dry_run and existing_image is None:
                     content, mime, _ = image
                     images.save(
                         kind,

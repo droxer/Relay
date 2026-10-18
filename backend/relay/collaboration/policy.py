@@ -19,6 +19,10 @@ from .work import (
     repairs_used,
 )
 
+# Coordinator runtime-failure repairs per round. A sub-budget of the round's
+# shared ``MAX_REPAIRS``; ``RELAY_DAEMON_RUN_MAX_REPAIRS`` overrides it.
+DEFAULT_RUNTIME_FAILURE_REPAIRS = 1
+
 REPAIR_COUNT_STATE_KEY = RUNTIME_REPAIRS
 REPAIR_RESUME_INDEX_STATE_KEY = "_relay_repair_resume_index"
 REPAIR_NOTE_STATE_KEY = "_relay_repair_note"
@@ -82,9 +86,15 @@ def decide_failure(
     outcome: str,
     agent_label: str,
     mode: str,
-    max_repairs: int,
+    max_runtime_repairs: int = DEFAULT_RUNTIME_FAILURE_REPAIRS,
 ) -> FailureDecision:
-    """Choose the next collaboration action without performing delivery I/O."""
+    """Choose the next collaboration action without performing delivery I/O.
+
+    A coordinator's runtime-failure repair spends both its own budget
+    (``max_runtime_repairs``) and the round's shared rerun budget
+    (``MAX_REPAIRS``), so findings repairs and runtime repairs together never
+    rerun the member sequence more than ``MAX_REPAIRS`` times.
+    """
     assignments = run_request["assignments"]
     index = run_request.get("currentIndex", 0)
     state = dict(next_state)
@@ -93,7 +103,7 @@ def decide_failure(
         bool(run_request.get("taskId"))
         and index > 0
         and len(assignments) >= 2
-        and repairs < max_repairs
+        and repairs < max_runtime_repairs
         and repairs_used(state) < MAX_REPAIRS
         and assignments[0].get("coordinator") is True
         and (assignments[0].get("mode") or "action") == "action"
@@ -158,7 +168,7 @@ def next_work_transition(
     work_result: dict[str, Any] | None,
     next_state: dict[str, Any],
     *,
-    max_repairs: int,
+    max_repairs: int = MAX_REPAIRS,
 ) -> WorkTransition:
     """Choose the next turn of an evidence-gated round after a successful run.
 

@@ -6,21 +6,19 @@ from relay.app import create_app
 from sqlalchemy import text
 
 
-@pytest.mark.parametrize('database', [False, True])
-def test_local_credentials_are_hash_only(monkeypatch, database):
-    from relay.daemon_registry import DaemonNodeRegistry
-    from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
-    from relay.persistence.session_store import LocalSessionStore
+def test_local_credentials_are_hash_only(monkeypatch):
+    from relay.daemon_registry.registry import DaemonNodeRegistry
+    from store_fixtures import make_daemon_store
+    from store_fixtures import make_session_store
     monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
     with TemporaryDirectory() as root:
-        store = DatabaseDaemonStore(f'sqlite:///{root}/daemon.db', create_schema=True) if database else LocalDaemonStore(root)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+        store = make_daemon_store(root)
+        registry = DaemonNodeRegistry(make_session_store(root), store)
         node, _, token = registry.provision_pending('alice', '/workspace', 'none')
         assert not store.get_node(node['id']).get('nodeTokenSecret')
-        if database:
-            with store.engine.connect() as conn:
-                secret = conn.execute(text('SELECT node_token_secret FROM daemon_nodes')).scalar()
-            assert secret is None
+        with store.engine.connect() as conn:
+            secret = conn.execute(text('SELECT node_token_secret FROM daemon_nodes')).scalar()
+        assert secret is None
         assert registry.reveal_node_token(node['id']) is None
         assert token
 
@@ -85,16 +83,23 @@ def test_anonymous_registration_cannot_create_a_computer(monkeypatch):
         assert app.state.registry.get('sbx_unprovisioned') is None
 
 
-def test_legacy_local_secrets_are_erased_on_open(tmp_path):
+def test_legacy_local_secrets_never_reach_the_database(tmp_path):
     import json
-    from relay.persistence.daemon_store import LocalDaemonStore
-    nodes = tmp_path / 'daemon' / 'nodes'
+    from relay.persistence.file_store_import import migrate_local_file_stores
+    from store_fixtures import make_daemon_store, sqlite_url
+    nodes = tmp_path / 'data' / 'daemon' / 'nodes'
     nodes.mkdir(parents=True)
-    path = nodes / 'legacy.json'
-    path.write_text(json.dumps({'id': 'legacy', 'nodeTokenSecret': 'old-secret', 'nodeTokenHash': 'hash'}))
-    store = LocalDaemonStore(tmp_path)
-    assert 'old-secret' not in path.read_text()
+    (nodes / 'legacy.json').write_text(json.dumps({
+        'id': 'legacy', 'status': 'ready', 'nodeTokenSecret': 'old-secret', 'nodeTokenHash': 'hash',
+        'createdAt': '2026-06-13T00:00:00.000Z', 'updatedAt': '2026-06-13T00:00:00.000Z',
+    }))
+    migrate_local_file_stores(tmp_path / 'data', sqlite_url(tmp_path / 'db'))
+    store = make_daemon_store(tmp_path / 'db')
     assert store.get_node('legacy')['nodeTokenHash'] == 'hash'
+    with store.engine.connect() as conn:
+        dumped = json.dumps([list(row) for row in conn.execute(text('SELECT * FROM daemon_nodes'))], default=str)
+        events = json.dumps([list(row) for row in conn.execute(text('SELECT payload FROM daemon_events'))], default=str)
+    assert 'old-secret' not in dumped and 'old-secret' not in events
 
 
 def test_unknown_node_event_is_a_permanent_rejection(monkeypatch):

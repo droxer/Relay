@@ -1,28 +1,28 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import pytest
 from relay.core.computer_identity import computer_id
-from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
-from relay.persistence.agent_placement_store import LocalAgentPlacementStore
-from relay.persistence.daemon_store import LocalDaemonStore
-from relay.persistence.agent_store import LocalAgentStore
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from store_fixtures import make_agent_placement_store
+from store_fixtures import make_daemon_store
+from store_fixtures import make_agent_store
 from relay.persistence.automation_store import DatabaseAutomationStore
 from relay.persistence.project_store import DatabaseProjectStore
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
-from relay.persistence.team_store import LocalTeamStore
-from relay.services.managed_nodes import LocalManagedNodeStore
+from relay.persistence.session_store import DatabaseSessionStore
+from store_fixtures import make_session_store
+from relay.persistence.task_store import DatabaseTaskStore
+from store_fixtures import make_task_store
+from store_fixtures import make_team_store
+from relay.persistence.managed_node_store import LocalManagedNodeStore
 from relay.automations.service import AutomationService
-from relay.tasks import (
-    SchedulerTickResult,
-    TaskScheduler,
-    materialize_legacy_agent_assignment,
-)
+from relay.tasks.scheduler import SchedulerTickResult, TaskScheduler
+from relay.services.task_placement import materialize_legacy_agent_assignment
 
 from issue_projects import PROJECT_CAPABILITY, project_for
 
@@ -33,7 +33,7 @@ from issue_projects import PROJECT_CAPABILITY, project_for
 # routine run — the one kind of projectless work those branches still serve.
 ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
 # Tuesday 2026-10-13, just past a 09:00 UTC slot.
-SLOT_NOW = datetime(2026, 10, 13, 9, 0, 5, tzinfo=timezone.utc)
+SLOT_NOW = datetime(2026, 10, 13, 9, 0, 5, tzinfo=UTC)
 DAILY_9_UTC = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
 
 
@@ -65,8 +65,8 @@ def _logical_backend(
     *node_ids: str,
     instructions: str | None = None,
 ):
-    agent_store = LocalAgentStore(root)
-    placement_store = LocalAgentPlacementStore(root)
+    agent_store = make_agent_store(root)
+    placement_store = make_agent_placement_store(root)
     payload = {
         "displayName": "Builder",
         "executorKind": "codex",
@@ -91,10 +91,10 @@ def _logical_backend(
 def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_return) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -167,7 +167,7 @@ def test_scheduler_fires_a_due_v2_schedule_and_dispatches_one_run() -> None:
         with TemporaryDirectory() as root:
             session_store, task_store, automation_store = _database_stores(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -244,10 +244,10 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -290,10 +290,10 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
 def test_scheduler_dispatches_when_user_owns_multiple_computers() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             for suffix in ("one", "two"):
                 registry.register(
@@ -346,10 +346,10 @@ def test_scheduler_dispatches_when_user_owns_multiple_computers() -> None:
 def test_scheduler_claim_fences_the_resolved_logical_assignment() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -431,9 +431,9 @@ def test_scheduler_claim_fences_the_resolved_logical_assignment() -> None:
 def test_scheduler_requests_managed_capacity_once_when_no_node_is_ready() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             managed_nodes = LocalManagedNodeStore(root)
             backend, agent = _logical_backend(root, registry)
@@ -473,9 +473,9 @@ def test_scheduler_waits_for_an_user_device_node_regardless_of_sandbox_mode() ->
 ):
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             registry.provision_pending(
                 "alice",
@@ -510,9 +510,9 @@ def test_scheduler_waits_for_an_user_device_node_regardless_of_sandbox_mode() ->
 def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             local_node, _ui_token, _node_token = registry.provision_pending(
                 "alice", "/Users/alice/workspace", sandbox_mode="none"
@@ -548,12 +548,12 @@ def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
 def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
-            agent_store = LocalAgentStore(root)
-            placement_store = LocalAgentPlacementStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
+            agent_store = make_agent_store(root)
+            placement_store = make_agent_placement_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             backend = ServerDaemonNodeBackend(
                 registry,
@@ -608,10 +608,10 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
 def test_scheduler_dispatches_by_priority_not_recency() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -675,10 +675,10 @@ def test_scheduler_blocks_after_first_failed_dispatch() -> None:
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -745,10 +745,10 @@ def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -841,9 +841,9 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             node = registry.register(
                 {
@@ -858,8 +858,8 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalAgentStore(root)
-            placement_store = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placement_store = make_agent_placement_store(root)
             declared = agent_store.create_agent(
                 "alice",
                 {
@@ -903,8 +903,8 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
     id, so a declared agent's placement survives a runtime re-registration
     under a new node id for the same computer — no duplicate is created."""
     with TemporaryDirectory() as root:
-        agents = LocalAgentStore(root)
-        placements = LocalAgentPlacementStore(root)
+        agents = make_agent_store(root)
+        placements = make_agent_placement_store(root)
         current = [
             {
                 "id": "runtime_old",
@@ -971,7 +971,7 @@ def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypa
         with TemporaryDirectory() as root:
             session_store, task_store, automation_store = _database_stores(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             node = registry.register(
                 {
@@ -986,8 +986,8 @@ def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypa
                 },
                 "ui_token",
             )
-            agent_store = LocalAgentStore(root)
-            placement_store = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placement_store = make_agent_placement_store(root)
             agent = agent_store.create_agent(
                 "alice",
                 {
@@ -1036,9 +1036,9 @@ def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypa
 def test_scheduler_routes_assignment_through_task_assignee() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -1084,9 +1084,9 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
 def test_scheduler_dispatches_all_team_members_lead_first() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -1102,8 +1102,8 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalAgentStore(root)
-            placements = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placements = make_agent_placement_store(root)
             lead = agent_store.create_agent(
                 "alice",
                 {
@@ -1127,7 +1127,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                 agent_store=agent_store,
                 agent_placement_store=placements,
             )
-            teams = LocalTeamStore(root)
+            teams = make_team_store(root)
             team = teams.create_team(
                 "alice",
                 {
@@ -1242,7 +1242,7 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
         with TemporaryDirectory() as root:
             session_store, task_store, automation_store = _database_stores(root)
             registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
+                session_store, make_daemon_store(root), task_store=task_store
             )
             registry.register(
                 {
@@ -1257,8 +1257,8 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalAgentStore(root)
-            placements = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placements = make_agent_placement_store(root)
             lead = agent_store.create_agent(
                 "alice",
                 {
@@ -1282,7 +1282,7 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
                 agent_store=agent_store,
                 agent_placement_store=placements,
             )
-            teams = LocalTeamStore(root)
+            teams = make_team_store(root)
             team = teams.create_team(
                 "alice",
                 {
@@ -1362,12 +1362,12 @@ def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
 def test_scheduler_records_team_unavailable_without_claiming() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
-            agent_store = LocalAgentStore(root)
-            placements = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placements = make_agent_placement_store(root)
             member = agent_store.create_agent(
                 "alice",
                 {
@@ -1382,7 +1382,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
                 agent_store=agent_store,
                 agent_placement_store=placements,
             )
-            teams = LocalTeamStore(root)
+            teams = make_team_store(root)
             team = teams.create_team(
                 "alice",
                 {
@@ -1421,13 +1421,13 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
 def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            task_store = make_task_store(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                make_session_store(root), make_daemon_store(root), task_store=task_store
             )
             managed_nodes = LocalManagedNodeStore(root)
-            agent_store = LocalAgentStore(root)
-            placements = LocalAgentPlacementStore(root)
+            agent_store = make_agent_store(root)
+            placements = make_agent_placement_store(root)
             lead = agent_store.create_agent(
                 "alice",
                 {
@@ -1441,7 +1441,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
                 agent_store=agent_store,
                 agent_placement_store=placements,
             )
-            teams = LocalTeamStore(root)
+            teams = make_team_store(root)
             team = teams.create_team(
                 "alice",
                 {
@@ -1486,9 +1486,9 @@ class _FixedOrgSettings:
 
 
 def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
-    task_store = LocalTaskStore(root)
+    task_store = make_task_store(root)
     registry = DaemonNodeRegistry(
-        LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+        make_session_store(root), make_daemon_store(root), task_store=task_store
     )
     node = registry.register(
         {
@@ -1503,8 +1503,8 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
         },
         "ui_token",
     )
-    agent_store = LocalAgentStore(root)
-    placements = LocalAgentPlacementStore(root)
+    agent_store = make_agent_store(root)
+    placements = make_agent_placement_store(root)
     agent = agent_store.create_agent(
         "alice",
         {"displayName": "Solo", "executorKind": "codex", "defaultRole": "implementer"},
@@ -1612,10 +1612,10 @@ def test_scheduler_stops_a_task_that_never_reports_itself_finished() -> None:
 
 def _legacy_fixture(root: str):
     """A registered claude computer plus empty agent/placement stores."""
-    session_store = LocalSessionStore(root)
-    task_store = LocalTaskStore(root)
+    session_store = make_session_store(root)
+    task_store = make_task_store(root)
     registry = DaemonNodeRegistry(
-        session_store, LocalDaemonStore(root), task_store=task_store
+        session_store, make_daemon_store(root), task_store=task_store
     )
     registry.register(
         {
@@ -1632,8 +1632,8 @@ def _legacy_fixture(root: str):
     )
     return (
         registry,
-        LocalAgentStore(root),
-        LocalAgentPlacementStore(root),
+        make_agent_store(root),
+        make_agent_placement_store(root),
         {"id": "task-1", "ownerUserId": "alice", "assignments": [{"agent": "claude"}]},
     )
 
@@ -1695,3 +1695,74 @@ def test_legacy_assignment_picks_deterministically_among_candidates() -> None:
                 placement_store=placements,
             )
             assert resolved["agentId"] == expected
+
+
+def test_scheduler_skips_a_malformed_task_and_dispatches_the_next(monkeypatch) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store = make_session_store(root)
+            task_store = make_task_store(root)
+            registry = DaemonNodeRegistry(
+                session_store, make_daemon_store(root), task_store=task_store
+            )
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "userId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/workspace/alice",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": ["task-workspaces", "thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            backend, agent = _logical_backend(root, registry, "sbx_alice")
+            fields = {
+                **ROUTINE_RUN,
+                "assignedAgent": "codex",
+                "assignedAgentId": agent["id"],
+                "assigneeUserId": "alice",
+                "status": "assigned",
+            }
+            poisoned = task_store.create_task({**fields, "title": "Malformed", "priority": "high"})
+            healthy = task_store.create_task({**fields, "title": "Healthy", "priority": "low"})
+            scheduler = TaskScheduler(task_store=task_store, registry=registry, backend=backend)
+            original = scheduler._materialize_legacy_assignment
+
+            def materialize(task):
+                if task["id"] == poisoned["id"]:
+                    raise ValueError("corrupt row")
+                return original(task)
+
+            monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
+
+            result = await scheduler.tick()
+
+            # The broken task is logged and skipped; it no longer stops every
+            # task queued behind it from ever being dispatched.
+            assert result.dispatched == 1
+            assert result.skipped == 1
+            assert task_store.get_task(healthy["id"])["linkedSessionIds"]
+            assert not task_store.get_task(poisoned["id"]).get("linkedSessionIds")
+
+    asyncio.run(run_flow())
+
+
+def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) -> None:
+    import concurrent.futures
+
+    from relay.tasks import scheduler as scheduler_module
+
+    warnings: list[dict] = []
+    monkeypatch.setattr(scheduler_module, "DISPATCH_WAIT_WARNING_SECONDS", 0.01)
+    monkeypatch.setattr(
+        scheduler_module.logger, "warning", lambda message, **fields: warnings.append(fields)
+    )
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(lambda: __import__("time").sleep(0.05) or "session")
+
+        assert scheduler_module._await_dispatch(future, "task_1") == "session"
+
+    assert warnings and warnings[0]["task_id"] == "task_1"

@@ -3,7 +3,8 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
+from store_fixtures import make_task_store
 
 from automation_helpers import fire_now
 
@@ -14,7 +15,7 @@ ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatu
 def store(request):
     with TemporaryDirectory() as root:
         yield (DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
-               if request.param == "database" else LocalTaskStore(root))
+               if request.param == "database" else make_task_store(root))
 
 
 def _automation(store, **extra):

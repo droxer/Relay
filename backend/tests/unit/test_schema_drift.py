@@ -31,6 +31,7 @@ from relay.persistence.session_store import DatabaseSessionStore
 from relay.services.task_deletion import task_has_active_linked_session
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import UTC
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -323,13 +324,14 @@ def test_postgres_managed_nodes_lock_independently_and_enrollment_is_shared(migr
 
 def test_postgres_recovery_claims_disjoint_pages_and_expired_claims_recover(migrated_schema):
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from sqlalchemy import insert, update
-    from relay.persistence.daemon_store import DatabaseDaemonStore, node_to_row, run_request_to_row
+    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.rows import node_to_row, run_request_to_row
     url, _ = migrated_schema
     a, b = DatabaseDaemonStore(url), DatabaseDaemonStore(url)
     node_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     node = {'id': node_id, 'status': 'ready', 'workspacePath': '/work', 'sandboxMode': 'none', 'createdAt': now, 'updatedAt': now}
     with a.engine.begin() as conn:
         conn.execute(insert(a.nodes).values(**node_to_row(node)))
@@ -342,7 +344,7 @@ def test_postgres_recovery_claims_disjoint_pages_and_expired_claims_recover(migr
     assert len({r['id'] for page in pages for r in page}) == 4
     assert a.claim_recovery_requests(limit=2) == []
     with a.engine.begin() as conn:
-        conn.execute(update(a.run_requests).values(recovery_after=datetime.now(timezone.utc) - timedelta(seconds=1)))
+        conn.execute(update(a.run_requests).values(recovery_after=datetime.now(UTC) - timedelta(seconds=1)))
     assert len(b.claim_recovery_requests(limit=2)) == 2
 
 
@@ -366,7 +368,7 @@ def test_postgres_stream_cursor_and_scalability_migration_roundtrip(migrated_sch
 @pytest.mark.parametrize("kind", ["webhook", "manual", "schedule"])
 def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_schema, kind):
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import datetime, timezone
+    from datetime import datetime
     from threading import Event
     from relay.automations.service import AutomationService
     from relay.persistence.automation_store import DatabaseAutomationStore
@@ -380,7 +382,7 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
                                  "assignedAgent": "codex", "routineTrigger": {"kind": kind}})
     automations.save_state(routine["id"], {**automations.get_state(routine["id"]), "pending": True,
                                            "pending_events": [{"eventType": "webhook" if kind == "webhook" else "manual", "depth": 0, "payload": {}}],
-                                           "pending_since": datetime.now(timezone.utc)})
+                                           "pending_since": datetime.now(UTC)})
     entered, release = Event(), Event()
     original = tasks.create_triggered_occurrence
     def delayed(*args, **kwargs):
@@ -392,7 +394,7 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
                               project_store=None)
     second = AutomationService(task_store=DatabaseTaskStore(url), session_store=sessions,
                                automation_store=automations, project_store=None)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with ThreadPoolExecutor(max_workers=2) as executor:
         running = executor.submit(first.tick, now)
         assert entered.wait(10)
@@ -490,7 +492,7 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
 
 
 def test_postgres_output_compaction_redacts_in_place(migrated_schema):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from relay.persistence.store_common import relay_event
 
@@ -511,7 +513,7 @@ def test_postgres_output_compaction_redacts_in_place(migrated_schema):
     )
     sessions.append_event(sid, relay_event("agent.completed", sid, {
         **run, "status": "completed", "exitCode": 0, "agentLog": "final"}))
-    later = datetime.now(timezone.utc) + timedelta(seconds=1)
+    later = datetime.now(UTC) + timedelta(seconds=1)
 
     assert sessions.compact_completed_run_output(older_than=later) == 2
     assert sessions.compact_completed_run_output(older_than=later) == 0
@@ -529,7 +531,7 @@ def test_postgres_output_compaction_redacts_in_place(migrated_schema):
 
 def test_password_reset_redemption_waits_for_account_before_claiming_link(migrated_schema):
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import datetime, timezone
+    from datetime import datetime
     from threading import Event
 
     from relay.notifications.mailer import NullMailer
@@ -568,7 +570,7 @@ def test_password_reset_redemption_waits_for_account_before_claiming_link(migrat
                 ).with_for_update(nowait=True))
                 issuer.execute(update(auth.password_resets).where(
                     auth.password_resets.c.account_id == account["id"]
-                ).values(used_at=datetime.now(timezone.utc)))
+                ).values(used_at=datetime.now(UTC)))
             # After the issuer retires the token and releases its lock,
             # redemption must recheck it rather than changing the password.
             with pytest.raises(ResetNotLiveError):

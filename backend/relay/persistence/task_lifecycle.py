@@ -38,18 +38,6 @@ def needs_wip_admission(current: dict[str, Any], updated: dict[str, Any]) -> boo
     )
 
 
-def check_wip_admission(task: dict[str, Any], tasks: list[dict[str, Any]]) -> None:
-    count = sum(
-        is_wip(item) and flow_scope(item) == flow_scope(task)
-        for item in tasks
-        if item["id"] != task["id"]
-    )
-    if count >= wip_limit():
-        raise ValueError(
-            "task_wip_limit: Finish existing work before starting another task."
-        )
-
-
 def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
     status = event["status"]
     previous = task["status"]

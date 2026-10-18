@@ -10,10 +10,12 @@ exist (spring forward) fires at the first valid instant and an ambiguous one
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import functools
 import os
 import re
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import datetime, timedelta, tzinfo, UTC
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -31,7 +33,7 @@ _REPEAT_KEYS = {
     "week": {"every", "at", "days"},
     "month": {"every", "at", "day"},
 }
-_FLOOR_ORIGIN = datetime(2026, 1, 1, tzinfo=timezone.utc)
+_FLOOR_ORIGIN = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class ScheduleError(ValueError):
@@ -53,7 +55,7 @@ def _host_zone() -> tzinfo:
             return ZoneInfo(name)
         except (ZoneInfoNotFoundError, ValueError, OSError):
             continue
-    return datetime.now().astimezone().tzinfo or timezone.utc
+    return datetime.now().astimezone().tzinfo or UTC
 
 
 def resolve_timezone(name: str | None) -> tzinfo:
@@ -78,7 +80,7 @@ def normalize_schedule(raw: Any) -> dict[str, Any]:
             ZoneInfo(zone)
         except (ZoneInfoNotFoundError, ValueError) as error:
             raise ScheduleError(f"schedule.timezone {zone!r} is not a known IANA timezone.") from error
-    schedule = {"timezone": zone, "repeat": _normalize_repeat(raw.get("repeat"))}
+    schedule: dict[str, Any] = {"timezone": zone, "repeat": _normalize_repeat(raw.get("repeat"))}
     if "cron" in schedule["repeat"]:
         _check_floor(schedule)
     return schedule
@@ -148,7 +150,7 @@ def _resolve(local: datetime, zone: tzinfo) -> datetime:
     """Local wall time → UTC. fold=0 takes the first of an ambiguous pair; a
     nonexistent time keeps the pre-transition offset, which lands on the
     first valid instant after the gap."""
-    return local.replace(tzinfo=zone, fold=0).astimezone(timezone.utc)
+    return local.replace(tzinfo=zone, fold=0).astimezone(UTC)
 
 
 def next_fire_after(schedule: dict[str, Any], after: datetime) -> datetime | None:
@@ -204,7 +206,7 @@ def _check_floor(schedule: dict[str, Any]) -> None:
     fires = next_fires(schedule, _FLOOR_ORIGIN, FLOOR_SAMPLES)
     if not fires:
         raise ScheduleError("schedule.repeat.cron never fires.")
-    if any(later - earlier < CRON_FLOOR for earlier, later in zip(fires, fires[1:])):
+    if any(later - earlier < CRON_FLOOR for earlier, later in pairwise(fires)):
         raise ScheduleError("schedule.repeat.cron must not fire more often than every 15 minutes.")
 
 

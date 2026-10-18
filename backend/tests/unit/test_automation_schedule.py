@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 from relay.automations.schedule import ScheduleError, next_fire_after, next_fires, normalize_schedule, summarize, to_cron
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def sched(repeat, tz="UTC"):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, Protocol, cast
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -16,10 +16,21 @@ from ..security.auth import (
 )
 from ..security.edge import client_ip
 from ..services.computer_limits import decorate_account_limits
-from .deps import AppContextDep
-from .helpers import JsonBodyDep, string_field
+from .deps import AppContext, AppContextDep, app_context
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
+
+
+class _AccountPresenter(Protocol):
+    """The public account projection both auth stores provide, which the
+    ``AuthStore`` protocol does not declare."""
+
+    def _public_account(self, account: dict[str, Any]) -> dict[str, Any]: ...
+
+
+def _public_account(ctx: AppContext, account: dict[str, Any]) -> dict[str, Any]:
+    return cast(_AccountPresenter, ctx.auth_store)._public_account(account)
 
 
 def _auth_rate_key(request: Request, scope: str, identity: str = "") -> str:
@@ -27,7 +38,7 @@ def _auth_rate_key(request: Request, scope: str, identity: str = "") -> str:
 
 
 def _consume_auth_attempt(request: Request, key: str) -> None:
-    retry_after = request.app.state.auth_rate_limiter.consume(key)
+    retry_after = app_context(request).auth_rate_limiter.consume(key)
     if retry_after is not None:
         raise HTTPException(
             429,
@@ -42,9 +53,9 @@ def auth_status(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         "requiresBootstrap": not ctx.auth_store.has_accounts(),
         # Public, so the sign-in screen can offer "Request access" only when
         # the waitlist routes are mounted.
-        "waitlistEnabled": bool(getattr(request.app.state, "waitlist_enabled", False)),
+        "waitlistEnabled": ctx.settings.waitlist_enabled,
         # Whether "Forgot password?" can deliver: self-serve reset needs mail.
-        "passwordResetEnabled": request.app.state.password_reset.self_serve_enabled,
+        "passwordResetEnabled": ctx.password_reset.self_serve_enabled,
     }
 
 
@@ -53,7 +64,7 @@ def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     account = require_user_session(request, ctx.auth_store)
     return {
         "authenticated": True,
-        "user": decorate_account_limits(ctx, ctx.auth_store._public_account(account)),
+        "user": decorate_account_limits(ctx, _public_account(ctx, account)),
         # Server switches every signed-in user's UI depends on; admin
         # settings are admin-only, and users edit automations too.
         "capabilities": {"automationTriggers": automation_triggers_enabled()},
@@ -107,7 +118,7 @@ def auth_bootstrap(
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    request.app.state.auth_rate_limiter.reset(rate_key)
+    app_context(request).auth_rate_limiter.reset(rate_key)
     session = ctx.auth_store.create_session(account["id"])
     attrs = user_session_cookie_attrs_for_request(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds
@@ -131,13 +142,13 @@ def auth_login(
     account = ctx.auth_store.authenticate(username, string_field(body, "password"))
     if not account:
         raise HTTPException(401, "Invalid username or password.")
-    request.app.state.auth_rate_limiter.reset(rate_key)
+    app_context(request).auth_rate_limiter.reset(rate_key)
     session = ctx.auth_store.create_session(account["id"])
     attrs = user_session_cookie_attrs_for_request(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds
     )
     response.set_cookie(value=session["token"], **attrs)
-    return {"user": decorate_account_limits(ctx, ctx.auth_store._public_account(account))}
+    return {"user": decorate_account_limits(ctx, _public_account(ctx, account))}
 
 
 @router.post("/auth/logout")
@@ -153,7 +164,8 @@ def auth_logout(
         key=USER_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite=deploy_config.session_cookie_samesite(),
+        # session_cookie_samesite() admits only these three values.
+        samesite=cast(Literal["lax", "strict", "none"], deploy_config.session_cookie_samesite()),
         secure=deploy_config.cookie_is_secure(request.url.scheme),
         **user_session_cookie_scope(),
     )
@@ -163,4 +175,4 @@ def auth_logout(
 @router.get("/admin/version")
 def control_panel_version(request: Request, ctx: AppContextDep) -> dict[str, str]:
     require_admin_session(request, ctx.auth_store)
-    return {"version": request.app.state.control_panel_version}
+    return {"version": ctx.settings.control_panel_version}

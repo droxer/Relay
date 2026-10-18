@@ -23,13 +23,13 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from loguru import logger
 
-from ..daemon_registry.client_version import missing_capabilities
-from ..daemon_registry.registry import DAEMON_NODE_CAPABILITIES
+from ..core.daemon_capabilities import missing_capabilities
+from ..core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 from .rules import client_outdated_rows, computer_status_rows
 
 ONLINE_PREFIX = "computer-online:"
@@ -102,7 +102,7 @@ class ComputerNotificationWatcher:
             try:
                 self._observe_online(node, online_states.get(ONLINE_PREFIX + node["id"]))
                 self._observe_client(node, outdated_states.get(OUTDATED_PREFIX + node["id"]))
-            except Exception:
+            except Exception:  # noqa: BLE001 - watch loop supervisor: one bad node or tick must not stop the watcher
                 logger.exception("Computer notification check failed", node_id=node.get("id"))
         present = {node["id"] for node in nodes}
         self._offline_since = {
@@ -148,7 +148,7 @@ class ComputerNotificationWatcher:
         if self._last_prune and now - self._last_prune < PRUNE_EVERY_SECONDS:
             return
         self._last_prune = now
-        removed = self.store.prune(datetime.now(timezone.utc) - RETENTION)
+        removed = self.store.prune(datetime.now(UTC) - RETENTION)
         if removed:
             logger.info("Pruned old notifications", count=removed)
 
@@ -162,7 +162,7 @@ class ComputerNotificationWatcher:
         while not self._stop.is_set():
             try:
                 await asyncio.to_thread(self.tick)
-            except Exception:
+            except Exception:  # noqa: BLE001 - watch loop supervisor: one bad node or tick must not stop the watcher
                 logger.exception("Computer notification tick failed; retrying")
             try:
                 await asyncio.wait_for(self._stop.wait(), self.interval_seconds)

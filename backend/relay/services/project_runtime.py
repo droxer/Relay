@@ -7,6 +7,7 @@ from ..core.computer_identity import computer_id
 from .agent_routing import resolve_agent_assignments
 from .team_dispatch import TeamDispatchError, team_agents, team_member_assignments
 from .workspace_capabilities import required_workspace_capabilities
+from ..core.daemon_capabilities import has_capability
 
 
 class ProjectDispatchError(ValueError):
@@ -190,7 +191,7 @@ def project_runtime_node(
             and not node.get("stale")
             and node.get("status") in ("ready", "busy", "running")
             and all(
-                capability in (node.get("capabilities") or [])
+                has_capability(node, capability)
                 for capability in required_workspace_capabilities(
                     "project", project.get("workspaceSubpath")
                 )

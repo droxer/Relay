@@ -8,10 +8,11 @@ from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile
 
-from sqlalchemy import Column, LargeBinary, Table, Text, delete, insert, select, update
-from .store_common import metadata, shared_engine, create_all_tables, store_transaction
+from sqlalchemy import delete, insert, select, update
+from .store_common import shared_engine, create_all_tables, store_transaction
 from .resource_lock import resource_transaction
 from .store_common import safe_name
+from .tables import profile_images as profile_images_tables
 
 
 MAX_PROFILE_IMAGE_BYTES = 2 * 1024 * 1024
@@ -116,15 +117,7 @@ def decode_profile_image(data_url: str) -> tuple[bytes, str]:
 class DatabaseProfileImageStore:
     """Small, size-limited images shared by all backend replicas."""
 
-    images = Table(
-        "profile_images",
-        metadata,
-        Column("kind", Text, primary_key=True),
-        Column("entity_id", Text, primary_key=True),
-        Column("content", LargeBinary, nullable=False),
-        Column("content_type", Text, nullable=False),
-        Column("etag", Text, nullable=False),
-    )
+    images = profile_images_tables.images
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)

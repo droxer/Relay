@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ from relay.services.waitlist import (
     hash_invite_token,
 )
 
-START = datetime(2026, 10, 16, 9, 0, tzinfo=timezone.utc)
+START = datetime(2026, 10, 16, 9, 0, tzinfo=UTC)
 WEB = "https://get-relay.cc"
 
 

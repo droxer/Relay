@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import os
-import re
-import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime
 from pathlib import Path
-from typing import Any, ClassVar
-from zoneinfo import ZoneInfo
+from dataclasses import fields
+from typing import Any, cast
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .api import (
     admin_routes,
@@ -41,6 +34,7 @@ from .api import (
     web_routes,
 )
 from .api.conditional_get import ConditionalGetMiddleware
+from .api.deps import AppContext
 from .api.contract import (
     API_DOCS_PATH,
     API_OPENAPI_PATH,
@@ -50,189 +44,58 @@ from .api.contract import (
     api_router_groups,
     include_api_router,
 )
-from .chat import (
-    DatabaseChatIntegrationStore,
-    LocalChatIntegrationStore,
-    probe_chat_integration,
-    provision_chat_integration,
-)
+from .chat.provider_health import probe_chat_integration, provision_chat_integration
 from .core import deploy_config
 from .core.environment import load_backend_env
-from .core.storage_config import database_url_from_env, use_postgres_storage
-from .daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
-from .migrations_runtime.agent_computer_id import (
-    log_agent_computer_id_status,
-    migrate_agent_computer_ids,
-    migrate_agent_placement_computer_ids,
-)
-from .persistence.agent_placement_store import (
-    DatabaseAgentPlacementStore,
-    LocalAgentPlacementStore,
-    reconcile_single_active_placement,
-)
-from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
-from .persistence.blob_store import BlobStore, blob_store_from_env
-from .persistence.admin_token_store import DatabaseAdminTokenStore
-from .persistence.org_settings_store import DatabaseOrgSettingsStore
-from .persistence.profile_image_store import DatabaseProfileImageStore
-from .persistence.managed_node_store import DatabaseManagedNodeStore
-from .persistence.project_store import DatabaseProjectStore
-from .persistence.skill_store import DatabaseSkillStore
-from .persistence.skill_object_store import BlobSkillObjectStore, LocalSkillObjectStore
+from .daemon_registry.registry import DaemonNodeRegistry
+from .daemon_registry.node_backend import ServerDaemonNodeBackend
 from .persistence.stores import (
     DEFAULT_RELAY_DATA_DIR,
-    DatabaseDaemonStore,
-    DatabaseSessionStore,
-    DatabaseTaskStore,
-    LocalDaemonStore,
 )
-from .persistence.team_store import DatabaseTeamStore, LocalTeamStore
-from .persistence.waitlist_store import DatabaseWaitlistStore
-from .persistence.notification_store import DatabaseNotificationStore
 from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
-from .security.auth import USER_COOKIE_NAME, auth_store_from_env, configure_admin_token
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
+from .chat.integrations import DatabaseChatIntegrationStore
 from .services.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
     KeyedEventNotifier,
+    PostgresNotificationBridge,
     daemon_command_key,
     database_notification_bridge,
     session_event_key,
     workspace_response_key,
 )
-from .services.team_membership import reconcile_team_memberships
-from .services.waitlist import WaitlistService, waitlist_config_from_env
 from .services.password_reset import PasswordResetService, password_reset_config_from_env
 from .security.password_resets import password_reset_store_for
-from .notifications.mailer import Mailer, mailer_from_env
+from .notifications.mailer import mailer_from_env
 from .services.workspace_query import WorkspaceQueryBroker
-from .tasks import TaskScheduler
-from .automations.service import AutomationService, max_runs_per_hour_from_env
-from .persistence.automation_store import DatabaseAutomationStore
+from .services.waitlist import WaitlistService
+from .persistence.task_lifecycle import wip_limit
+from .persistence.operational_import import require_operational_import
+from .services.execution_lifecycle import ExecutionLifecycleService
+from .core.settings import AppSettings
+from .migrations_runtime.startup import (
+    import_file_stores_before_serving,
+    migrate_legacy_computer_ids,
+    repair_records_before_serving,
+)
+from .bootstrap.http import (
+    CookieRequestGuardMiddleware,
+    SecurityHeadersMiddleware,
+    ServerTimingMiddleware,
+    unhandled_error,
+    configure_cors,
+)
+from .bootstrap.stores import (
+    waitlist_service_from_env,
+    Stores,
+    build_stores,
+)
+from .bootstrap.runtime import rate_limiter, task_scheduler_from_env
 
 load_backend_env()
 
-CONTROL_PANEL_VERSION = os.environ.get("RELAY_CONTROL_PANEL_VERSION") or "python"
 WEB_UI_PATH = "/"
-CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
-
-
-class ServerTimingMiddleware:
-    """Expose backend time-to-response-headers without buffering response bodies."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        started_at = time.perf_counter()
-
-        async def send_with_timing(message: Message) -> None:
-            if message["type"] == "http.response.start":
-                duration_ms = (time.perf_counter() - started_at) * 1000
-                headers = list(message.get("headers", []))
-                headers.append(
-                    (b"server-timing", f"app;dur={duration_ms:.2f}".encode("ascii"))
-                )
-                message = {**message, "headers": headers}
-            await send(message)
-
-        await self.app(scope, receive, send_with_timing)
-
-
-class CookieRequestGuardMiddleware:
-    """Reject cross-site mutations that carry a browser session cookie."""
-
-    _unsafe_methods: ClassVar[set[str]] = {"POST", "PUT", "PATCH", "DELETE"}
-
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope.get("method") not in self._unsafe_methods:
-            await self.app(scope, receive, send)
-            return
-        headers = {
-            key.decode("latin-1").lower(): value.decode("latin-1")
-            for key, value in scope.get("headers", [])
-        }
-        cookie = headers.get("cookie", "")
-        if f"{USER_COOKIE_NAME}=" not in cookie:
-            await self.app(scope, receive, send)
-            return
-        origin = headers.get("origin", "").rstrip("/")
-        fetch_site = headers.get("sec-fetch-site", "").lower()
-        origin_allowed = origin and _request_origin_allowed(scope, headers, origin)
-        # A same-origin browser request can reach Relay through the Next.js
-        # rewrite proxy with the public Origin preserved but the upstream Host
-        # substituted. Sec-Fetch-Site is browser-controlled, so it identifies
-        # that safe proxy case without trusting spoofable X-Forwarded-* values.
-        if (origin and not origin_allowed and fetch_site != "same-origin") or (
-            not origin and fetch_site == "cross-site"
-        ):
-            response = JSONResponse(
-                {"detail": "Cross-site request rejected."}, status_code=403
-            )
-            await response(scope, receive, send)
-            return
-        await self.app(scope, receive, send)
-
-
-def _request_origin_allowed(scope: Scope, headers: dict[str, str], origin: str) -> bool:
-    host = headers.get("host", "")
-    if host and origin == f"{scope.get('scheme', 'http')}://{host}":
-        return True
-    if origin in deploy_config.cors_allow_origins():
-        return True
-    pattern = deploy_config.cors_allow_origin_regex()
-    return bool(pattern and re.fullmatch(pattern, origin))
-
-
-class SecurityHeadersMiddleware:
-    """Apply one browser hardening policy to API and backend-served UI."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        async def send_with_security_headers(message: Message) -> None:
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                existing = {key.lower() for key, _value in headers}
-
-                def add(key: bytes, value: bytes) -> None:
-                    if key.lower() not in existing:
-                        headers.append((key, value))
-
-                add(b"x-content-type-options", b"nosniff")
-                add(b"x-frame-options", b"DENY")
-                add(b"referrer-policy", b"strict-origin-when-cross-origin")
-                add(
-                    b"content-security-policy",
-                    b"base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
-                )
-                add(
-                    b"permissions-policy",
-                    b"camera=(), microphone=(), geolocation=()",
-                )
-                if str(scope.get("path", "")).startswith("/api"):
-                    add(b"cache-control", b"no-store")
-                if scope.get("scheme") == "https":
-                    add(
-                        b"strict-transport-security",
-                        b"max-age=31536000; includeSubDomains",
-                    )
-                message = {**message, "headers": headers}
-            await send(message)
-
-        await self.app(scope, receive, send_with_security_headers)
 
 
 def create_app(
@@ -240,157 +103,86 @@ def create_app(
     *,
     background_mode: str | None = None,
 ) -> FastAPI:
-    from .background import background_mode_from_env
-
-    mode = background_mode if background_mode is not None else background_mode_from_env()
+    settings = AppSettings.from_env()  # Every bad value at once, before any service starts.
+    _validate_deploy_config()
+    # "external": a separate `relay worker` owns the scheduler, recovery, and
+    # computer-notification loops, so this process starts none of them.
+    mode = background_mode if background_mode is not None else settings.background_mode
     if mode not in ("embedded", "external"):
         raise ValueError("background_mode must be embedded or external.")
-    from .persistence.task_lifecycle import wip_limit
-
-    wip_limit()  # Validate the shared admission policy before starting services.
-    deploy_config.public_backend_url()  # Fail before enrollment can emit a bad URL.
-    deploy_config.public_web_url()
-    deploy_config.edge_secrets()  # Fail before a weak origin lock goes live.
-    deploy_config.client_ip_header()
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
-
-    # One client for every store that keeps bytes outside Postgres.
-    blob_store = blob_store_from_env()
-    session_store = session_store_from_env(root_dir, blob_store)
-    # After the session store, so a missing database is reported as missing
-    # thread storage — the dependency an operator recognizes.
-    configure_admin_token(root_dir, admin_token_store_from_env())
-    task_store = task_store_from_env(root_dir)
-    automation_store = automation_store_from_env()
-    daemon_store = daemon_store_from_env(root_dir)
-    chat_store = chat_store_from_env(root_dir)
-    auth_store = auth_store_from_env(root_dir)
-    managed_node_store = DatabaseManagedNodeStore(
-        session_store.engine.url.render_as_string(hide_password=False),
-        create_schema=session_store.engine.dialect.name == "sqlite",
-    )
-    agent_store = agent_store_from_env(root_dir)
-    team_store = team_store_from_env(root_dir)
-    project_store = project_store_from_env(root_dir)
-    skill_store = skill_store_from_env(root_dir, blob_store)
-    agent_placement_store = agent_placement_store_from_env(root_dir)
-    profile_image_store = DatabaseProfileImageStore(
-        session_store.engine.url.render_as_string(hide_password=False),
-        create_schema=session_store.engine.dialect.name == "sqlite",
-    )
-    org_settings_store = org_settings_store_from_env(root_dir)
+    stores = build_stores(root_dir)
     # One mailer for every transactional email; a half-configured mail setup
     # fails startup here rather than silently dropping invites and resets.
     mailer = mailer_from_env()
-    waitlist_enabled = waitlist_enabled_from_env()
-    waitlist = waitlist_service_from_env(mailer) if waitlist_enabled else None
+    waitlist = waitlist_service_from_env(mailer) if settings.waitlist_enabled else None
     password_reset = PasswordResetService(
-        password_reset_store_for(auth_store), mailer, config=password_reset_config_from_env()
+        password_reset_store_for(stores.auth), mailer, config=password_reset_config_from_env()
     )
-    from .persistence.operational_import import require_operational_import
-    require_operational_import(root_dir, managed_node_store)
-    control_plane_notifier = KeyedEventNotifier()
-    notification_bridge = database_notification_bridge(
-        session_store, control_plane_notifier
+    require_operational_import(root_dir, stores.managed_nodes)
+    import_file_stores_before_serving(
+        root_dir,
+        stores.sessions.engine.url.render_as_string(hide_password=False),
+        repairs_enabled=settings.startup_repairs_enabled,
     )
-    session_store.set_event_listener(
-        lambda session_id: control_plane_notifier.publish(
-            session_event_key(session_id)
-        ),
-        database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
-    )
-    if hasattr(daemon_store, "set_command_listener"):
-        daemon_store.set_command_listener(
-            lambda node_id: control_plane_notifier.publish(daemon_command_key(node_id)),
-            database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+    notifier = KeyedEventNotifier()
+    notification_bridge = database_notification_bridge(stores.sessions, notifier)
+    _publish_store_changes(stores, notifier)
+    if settings.startup_repairs_enabled:
+        repair_records_before_serving(
+            team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
         )
-    if hasattr(daemon_store, "set_workspace_listener"):
-        daemon_store.set_workspace_listener(
-            lambda command_id: control_plane_notifier.publish(
-                workspace_response_key(command_id)
-            ),
-            database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
-        )
-    # Older runtimes could retire an agent without updating Teams. Repair those
-    # dangling member references through Team events before serving requests.
-    reconcile_team_memberships(team_store, agent_store)
-    # Heal any agent left with multiple active placements before the
-    # one-agent-one-computer invariant (idempotent; a no-op once collapsed).
-    reconcile_single_active_placement(agent_placement_store)
-    registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store, project_store=project_store)
+    registry = DaemonNodeRegistry(
+        stores.sessions, stores.daemon, task_store=stores.tasks, project_store=stores.projects
+    )
     backend = ServerDaemonNodeBackend(
         registry,
-        agent_store=agent_store,
-        agent_placement_store=agent_placement_store,
-        skill_store=skill_store,
-        team_store=team_store,
-        project_store=project_store,
+        agent_store=stores.agents,
+        agent_placement_store=stores.placements,
+        skill_store=stores.skills,
+        team_store=stores.teams,
+        project_store=stores.projects,
     )
-    try:
-        migrated_placements = migrate_agent_placement_computer_ids(
-            agent_placement_store, registry
+    if settings.startup_repairs_enabled:
+        migrate_legacy_computer_ids(
+            agent_store=stores.agents, agent_placement_store=stores.placements, registry=registry
         )
-        if migrated_placements:
-            logger.info(
-                "Migrated legacy agent placement computer ids",
-                count=migrated_placements,
-            )
-        migrated = migrate_agent_computer_ids(
-            agent_store, agent_placement_store, registry
-        )
-        if migrated:
-            logger.info("Migrated compatibility agents", count=migrated)
-        log_agent_computer_id_status(agent_store, agent_placement_store)
-    except Exception as error:  # noqa: BLE001 - migration failure must not block startup
-        logger.warning("Agent computer-id migration deferred", error=str(error))
-
-    today = scheduler_today_from_env()
     scheduler = task_scheduler_from_env(
-        session_store=session_store,
-        automation_store=automation_store,
-        task_store=task_store,
+        settings=settings,
+        session_store=stores.sessions,
+        automation_store=stores.automations,
+        task_store=stores.tasks,
         registry=registry,
         backend=backend,
-        team_store=team_store,
-        project_store=project_store,
-        managed_node_store=managed_node_store,
-        org_settings_store=org_settings_store,
-        today=today,
+        team_store=stores.teams,
+        project_store=stores.projects,
+        managed_node_store=stores.managed_nodes,
+        org_settings_store=stores.org_settings,
+        today=settings.scheduler_today,
     )
     if scheduler is None:
-        for store in (task_store, session_store):
-            if hasattr(store, "emit_automation_events"):
-                store.emit_automation_events = False
-
-    from .services.execution_lifecycle import ExecutionLifecycleService
-    execution_lifecycle = ExecutionLifecycleService(registry, chat_store)
-    notification_store = notification_store_from_env()
+        # Without a scheduler nothing drains the automation outbox.
+        stores.tasks.emit_automation_events = False
+        stores.sessions.emit_automation_events = False
+    execution_lifecycle = ExecutionLifecycleService(registry, stores.chat)
     computer_notifications = ComputerNotificationWatcher(
-        registry, auth_store, notification_store, interval_seconds=watch_interval_from_env(),
+        registry, stores.auth, stores.notifications, interval_seconds=watch_interval_from_env(),
     )
+    loops = (execution_lifecycle, computer_notifications, scheduler) if mode == "embedded" else ()
+    services = [service for service in (notification_bridge, *loops) if service]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        computer_installer_routes.warn_if_bundle_stale()
-        if notification_bridge:
-            notification_bridge.start()
-        if mode == "embedded":
-            execution_lifecycle.start()
-            computer_notifications.start()
-            if scheduler:
-                scheduler.start()
+        computer_installer_routes.warn_if_bundle_stale(settings.computer_bundle)
+        for service in services:
+            service.start()
         try:
             yield
         finally:
-            if mode == "embedded":
-                if scheduler:
-                    await scheduler.stop()
-                await computer_notifications.stop()
-                await execution_lifecycle.stop()
-            if notification_bridge:
-                await notification_bridge.stop()
-            control_plane_notifier.close()
+            for service in reversed(services):
+                await service.stop()
+            notifier.close()
 
     app = FastAPI(
         title="Relay backend",
@@ -400,63 +192,151 @@ def create_app(
         openapi_url=API_OPENAPI_PATH,
         redoc_url=API_REDOC_PATH,
     )
+    _install_http_edge(app)
+    _publish_state(
+        app,
+        settings=settings,
+        stores=stores,
+        registry=registry,
+        backend=backend,
+        scheduler=scheduler,
+        execution_lifecycle=execution_lifecycle,
+        computer_notifications=computer_notifications,
+        notifier=notifier,
+        notification_bridge=notification_bridge,
+        waitlist=waitlist,
+        password_reset=password_reset,
+    )
+    _mount_routes(app, settings)
+    return app
+
+
+def _validate_deploy_config() -> None:
+    wip_limit()  # Validate the shared admission policy before starting services.
+    deploy_config.public_backend_url()  # Fail before enrollment can emit a bad URL.
+    deploy_config.public_web_url()
+    deploy_config.edge_secrets()  # Fail before a weak origin lock goes live.
+    deploy_config.client_ip_header()
+
+
+def _publish_store_changes(stores: Stores, notifier: KeyedEventNotifier) -> None:
+    """Wake waiting requests (SSE, daemon long-polls) when a store commits."""
+    stores.sessions.set_event_listener(
+        lambda session_id: notifier.publish(session_event_key(session_id)),
+        database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+    )
+    stores.daemon.set_command_listener(
+        lambda node_id: notifier.publish(daemon_command_key(node_id)),
+        database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+    )
+    stores.daemon.set_workspace_listener(
+        lambda command_id: notifier.publish(workspace_response_key(command_id)),
+        database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+    )
+
+
+def _install_http_edge(app: FastAPI) -> None:
+    app.add_exception_handler(Exception, unhandled_error)
     # Innermost of these, so SecurityHeadersMiddleware sees the polled lists'
     # `private, no-cache` and leaves it instead of forcing no-store.
     app.add_middleware(ConditionalGetMiddleware)
     app.add_middleware(ServerTimingMiddleware)
     app.add_middleware(CookieRequestGuardMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
-    _configure_cors(app)
+    configure_cors(app)
     if deploy_config.edge_secrets():
         # Added last so it runs first: nothing behind it sees an unproven request.
         app.add_middleware(EdgeOriginGuardMiddleware)
-    app.state.session_store = session_store
-    app.state.automation_webhook_limiter = AuthRateLimiter(
-        attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "60")), window_seconds=60,
-    )
-    app.state.automation_webhook_failure_limiter = AuthRateLimiter(
-        attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_FAILURE_LIMIT", "20")), window_seconds=60,
-    )
-    app.state.automation_store = automation_store
-    app.state.task_store = task_store
-    app.state.daemon_store = daemon_store
-    app.state.execution_lifecycle = execution_lifecycle
-    app.state.notification_store = notification_store
-    app.state.computer_notifications = computer_notifications
-    app.state.chat_store = chat_store
-    app.state.chat_probe = probe_chat_integration
-    app.state.chat_provision = provision_chat_integration
-    app.state.chat_rotation_locks = {}
-    app.state.registry = registry
-    app.state.backend = backend
-    app.state.auth_store = auth_store
-    app.state.auth_rate_limiter = AuthRateLimiter()
-    app.state.waitlist_enabled = waitlist_enabled
-    app.state.waitlist = waitlist
-    app.state.waitlist_rate_limiter = AuthRateLimiter(
-        attempts=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_ATTEMPTS", "5")),
-        window_seconds=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_WINDOW_SECONDS", "600")),
-    )
-    app.state.password_reset = password_reset
-    app.state.password_reset_rate_limiter = AuthRateLimiter(
-        attempts=int(os.environ.get("RELAY_PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", "5")),
-        window_seconds=int(os.environ.get("RELAY_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS", "900")),
-    )
-    app.state.managed_node_store = managed_node_store
-    app.state.agent_store = agent_store
-    app.state.team_store = team_store
-    app.state.project_store = project_store
-    app.state.skill_store = skill_store
-    app.state.agent_placement_store = agent_placement_store
-    app.state.profile_image_store = profile_image_store
-    app.state.org_settings_store = org_settings_store
-    app.state.workspace_query_broker = WorkspaceQueryBroker()
-    app.state.control_plane_notifier = control_plane_notifier
-    app.state.notification_bridge = notification_bridge
-    app.state.task_scheduler = scheduler
-    app.state.today = today
-    app.state.control_panel_version = CONTROL_PANEL_VERSION
 
+
+def _publish_state(
+    app: FastAPI,
+    *,
+    settings: AppSettings,
+    stores: Stores,
+    registry: DaemonNodeRegistry,
+    backend: ServerDaemonNodeBackend,
+    scheduler: Any,
+    execution_lifecycle: ExecutionLifecycleService,
+    computer_notifications: ComputerNotificationWatcher,
+    notifier: KeyedEventNotifier,
+    notification_bridge: PostgresNotificationBridge | None,
+    waitlist: WaitlistService | None,
+    password_reset: PasswordResetService,
+) -> None:
+    """Build the one ``AppContext`` request handlers read (see api/deps.py).
+
+    The individual ``app.state`` attributes below are the same objects the
+    context holds, kept for the CLI and tests; API modules read only the
+    context, so replacing one of these attributes after startup does not
+    reach a route — replace ``app.state.context`` instead.
+    """
+    context = AppContext(
+        session_store=stores.sessions,
+        task_store=stores.tasks,
+        daemon_store=stores.daemon,
+        chat_store=cast(DatabaseChatIntegrationStore, stores.chat),
+        registry=registry,
+        backend=backend,
+        auth_store=stores.auth,
+        managed_node_store=stores.managed_nodes,
+        agent_store=stores.agents,
+        team_store=stores.teams,
+        project_store=stores.projects,
+        skill_store=stores.skills,
+        agent_placement_store=stores.placements,
+        profile_image_store=stores.profile_images,
+        org_settings_store=stores.org_settings,
+        workspace_query_broker=WorkspaceQueryBroker(),
+        control_plane_notifier=notifier,
+        today=settings.scheduler_today,
+        settings=settings,
+        automation_store=stores.automations,
+        notification_store=stores.notifications,
+        execution_lifecycle=execution_lifecycle,
+        notification_bridge=notification_bridge,
+        waitlist=waitlist,
+        password_reset=password_reset,
+        auth_rate_limiter=AuthRateLimiter(),
+        automation_webhook_limiter=rate_limiter(settings.automation_webhook_limit),
+        automation_webhook_failure_limiter=rate_limiter(settings.automation_webhook_failure_limit),
+        waitlist_rate_limiter=rate_limiter(settings.waitlist_limit),
+        password_reset_rate_limiter=rate_limiter(settings.password_reset_limit),
+        chat_probe=probe_chat_integration,
+        chat_provision=provision_chat_integration,
+        chat_rotation_locks={},
+    )
+    state = app.state
+    state.context = context
+    for field in fields(context):
+        setattr(state, field.name, getattr(context, field.name))
+    state.task_scheduler = scheduler
+    state.computer_notifications = computer_notifications
+
+API_ROUTERS = (
+    automation_routes.router,
+    auth_routes.router,
+    device_authorization_routes.router,
+    agent_routes.router,
+    team_routes.router,
+    project_routes.router,
+    skill_routes.router,
+    node_workspace_routes.router,
+    admin_routes.router,
+    chat_routes.router,
+    collaboration_routes.router,
+    task_routes.router,
+    session_routes.router,
+    sandbox_routes.router,
+    daemon_node_routes.router,
+    managed_node_routes.router,
+    notification_routes.router,
+    password_reset_routes.router,
+    waitlist_routes.router,
+)
+
+
+def _mount_routes(app: FastAPI, settings: AppSettings) -> None:
     # Platform health checks run before the app has a database session and must
     # never require auth, so this stays outside the versioned API namespace and
     # reports only liveness.
@@ -477,278 +357,23 @@ def create_app(
             "webUiPath": WEB_UI_PATH,
         }
 
-    api_routers = (
-        automation_routes.router,
-        auth_routes.router,
-        device_authorization_routes.router,
-        agent_routes.router,
-        team_routes.router,
-        project_routes.router,
-        skill_routes.router,
-        node_workspace_routes.router,
-        admin_routes.router,
-        chat_routes.router,
-        collaboration_routes.router,
-        task_routes.router,
-        session_routes.router,
-        sandbox_routes.router,
-        daemon_node_routes.router,
-        managed_node_routes.router,
-        notification_routes.router,
-        password_reset_routes.router,
-        waitlist_routes.router,
-    )
-    canonical_groups = api_router_groups()
-    channels_enabled = channels_enabled_from_env()
-    for router in api_routers:
+    groups = api_router_groups()
+    for router in API_ROUTERS:
         include_api_router(
-            canonical_groups,
+            groups,
             router,
-            channels_enabled=channels_enabled,
-            waitlist_enabled=waitlist_enabled,
+            channels_enabled=settings.channels_enabled,
+            waitlist_enabled=settings.waitlist_enabled,
         )
-    app.include_router(canonical_groups.public)
-    app.include_router(canonical_groups.admin)
-    app.include_router(canonical_groups.internal_chat)
-    app.include_router(canonical_groups.daemon)
-
+    app.include_router(groups.public)
+    app.include_router(groups.admin)
+    app.include_router(groups.internal_chat)
+    app.include_router(groups.daemon)
     # Stable persisted media locators intentionally remain outside the JSON API
     # namespace because their URLs are persisted data.
     app.include_router(profile_image_routes.router, tags=["profile-images"])
-
     # Public downloads are served at the API origin, ahead of the SPA fallback.
     app.include_router(computer_installer_routes.router)
-
     # Registered last: its root catch-all serves the exported web UI and must not
     # shadow the explicit API routes above.
     app.include_router(web_routes.router)
-    return app
-
-
-def _configure_cors(app: FastAPI) -> None:
-    """Allow a separately hosted web UI to call the API with session cookies.
-
-    A no-op unless origins are configured, which keeps the single-origin
-    deployment free of CORS headers it does not need. ``allow_credentials`` is
-    required because Relay authenticates with a cookie, and it is what forces
-    the exact-origin rule enforced in ``deploy_config.cors_allow_origins``.
-    """
-    if not deploy_config.cors_enabled():
-        return
-    origins = deploy_config.cors_allow_origins()
-    origin_regex = deploy_config.cors_allow_origin_regex()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_origin_regex=origin_regex,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        # The web client reads Last-Event-ID off SSE frames, not headers, but
-        # Server-Timing is read by the browser devtools panel on every request.
-        expose_headers=["Server-Timing"],
-        # Credentialed JSON calls each need a preflight; cache it for Chrome's
-        # two-hour ceiling (Starlette's default is ten minutes) so the browser
-        # skips that extra round trip to the origin.
-        max_age=CORS_PREFLIGHT_MAX_AGE_SECONDS,
-    )
-    logger.info(
-        "CORS enabled for cross-origin web UI",
-        origins=origins,
-        origin_regex=origin_regex,
-    )
-
-
-def daemon_store_from_env(root_dir: Path) -> Any:
-    daemon_store = os.environ.get("RELAY_DAEMON_STORE", "").strip().lower()
-    if daemon_store != "database" and not use_postgres_storage():
-        return LocalDaemonStore(root_dir)
-    setting = (
-        "RELAY_DAEMON_STORE=database"
-        if daemon_store == "database"
-        else "RELAY_STORAGE=postgres"
-    )
-    database_url = database_url_from_env(setting=setting)
-    return DatabaseDaemonStore(database_url)
-
-
-def agent_store_from_env(root_dir: Path) -> Any:
-    if not use_postgres_storage():
-        return LocalAgentStore(root_dir)
-    return DatabaseAgentStore(database_url_from_env(setting="RELAY_STORAGE=postgres"))
-
-
-def admin_token_store_from_env() -> DatabaseAdminTokenStore:
-    # Database-only for the same reason as org settings, and so the token
-    # survives a container that has no data volume.
-    database_url = database_url_from_env(setting="database-only admin token storage")
-    return DatabaseAdminTokenStore(
-        database_url, create_schema=database_url.startswith("sqlite")
-    )
-
-
-def org_settings_store_from_env(root_dir: Path) -> Any:
-    # Database-only, like sessions and tasks: a database engine always exists,
-    # so a file-backed twin would only be a second code path to keep in sync.
-    database_url = database_url_from_env(setting="database-only settings storage")
-    return DatabaseOrgSettingsStore(
-        database_url, create_schema=database_url.startswith("sqlite")
-    )
-
-
-def team_store_from_env(root_dir: Path) -> Any:
-    if not use_postgres_storage():
-        return LocalTeamStore(root_dir)
-    return DatabaseTeamStore(database_url_from_env(setting="RELAY_STORAGE=postgres"))
-
-
-def project_store_from_env(root_dir: Path) -> Any:
-    database_url = database_url_from_env(setting="database-only project storage")
-    return DatabaseProjectStore(
-        database_url, create_schema=database_url.startswith("sqlite")
-    )
-
-
-def skill_store_from_env(root_dir: Path, blob_store: BlobStore | None = None) -> DatabaseSkillStore:
-    database_url = database_url_from_env(setting="database-only skill storage")
-    local_objects = LocalSkillObjectStore(root_dir / "skills" / "objects")
-    return DatabaseSkillStore(
-        database_url,
-        create_schema=database_url.startswith("sqlite"),
-        # With a blob store the data dir is only a read fallback for objects
-        # an earlier version wrote there, so the backend needs no volume.
-        object_store=(
-            BlobSkillObjectStore(blob_store, fallback=local_objects)
-            if blob_store is not None
-            else local_objects
-        ),
-    )
-
-
-def agent_placement_store_from_env(root_dir: Path) -> Any:
-    if not use_postgres_storage():
-        return LocalAgentPlacementStore(root_dir)
-    return DatabaseAgentPlacementStore(
-        database_url_from_env(setting="RELAY_STORAGE=postgres")
-    )
-
-
-def session_store_from_env(root_dir: Path, blob_store: BlobStore | None = None) -> Any:
-    database_url = database_url_from_env(setting="database-only thread storage")
-    store = DatabaseSessionStore(
-        database_url,
-        create_schema=database_url.startswith("sqlite"),
-        blob_store=blob_store,
-    )
-    store.verify_schema()
-    return store
-
-
-def task_store_from_env(root_dir: Path) -> Any:
-    database_url = database_url_from_env(setting="database-only thread storage")
-    store = DatabaseTaskStore(
-        database_url,
-        create_schema=database_url.startswith("sqlite"),
-    )
-    store.verify_schema()
-    return store
-
-
-def automation_store_from_env() -> DatabaseAutomationStore:
-    url = database_url_from_env(setting="database-only automation storage")
-    return DatabaseAutomationStore(url, create_schema=url.startswith("sqlite"))
-
-
-def notification_store_from_env() -> DatabaseNotificationStore:
-    url = database_url_from_env(setting="database-only notification storage")
-    return DatabaseNotificationStore(url, create_schema=url.startswith("sqlite"))
-
-
-def channels_enabled_from_env() -> bool:
-    """Whether the chat channels feature is published.
-
-    Off unless ``RELAY_CHANNELS_ENABLED`` opts in: the routes that configure
-    and serve chat integrations are then not mounted at all.
-    """
-    value = os.environ.get("RELAY_CHANNELS_ENABLED", "").strip().lower()
-    return value in ("1", "true", "yes", "on")
-
-
-def waitlist_enabled_from_env() -> bool:
-    """Whether the public waitlist is published.
-
-    Off unless ``RELAY_WAITLIST_ENABLED`` opts in, so an install never grows an
-    unauthenticated write endpoint it did not ask for."""
-    value = os.environ.get("RELAY_WAITLIST_ENABLED", "").strip().lower()
-    return value in ("1", "true", "yes", "on")
-
-
-def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:
-    # Database-only like org settings.
-    url = database_url_from_env(setting="database-only waitlist storage")
-    store = DatabaseWaitlistStore(url, create_schema=url.startswith("sqlite"))
-    return WaitlistService(store, mailer, config=waitlist_config_from_env())
-
-
-def chat_store_from_env(root_dir: Path) -> Any:
-    chat_store = os.environ.get("RELAY_CHAT_STORE", "").strip().lower()
-    if chat_store != "database" and not use_postgres_storage():
-        return LocalChatIntegrationStore(root_dir)
-    setting = (
-        "RELAY_CHAT_STORE=database"
-        if chat_store == "database"
-        else "RELAY_STORAGE=postgres"
-    )
-    return DatabaseChatIntegrationStore(database_url_from_env(setting=setting))
-
-
-def task_scheduler_from_env(
-    *,
-    session_store: Any,
-    automation_store: Any,
-    task_store: Any,
-    registry: DaemonNodeRegistry,
-    backend: ServerDaemonNodeBackend,
-    team_store: Any,
-    project_store: Any,
-    managed_node_store: Any | None = None,
-    org_settings_store: Any | None = None,
-    today: Callable[[], date] | None = None,
-) -> TaskScheduler | None:
-    enabled = os.environ.get("RELAY_TASK_SCHEDULER_ENABLED", "1").strip().lower()
-    if enabled in ("0", "false", "no", "off"):
-        return None
-    # The automation store is database-only and always present, so every
-    # scheduler runs the automation tick.
-    automations = AutomationService(
-        task_store=task_store, session_store=session_store, automation_store=automation_store,
-        project_store=project_store, max_runs_per_hour=max_runs_per_hour_from_env(),
-        batch=max(1, int(os.environ.get("RELAY_AUTOMATION_OUTBOX_BATCH", "200"))),
-    )
-    return TaskScheduler(
-        automations=automations,
-        task_store=task_store,
-        registry=registry,
-        backend=backend,
-        team_store=team_store,
-        project_store=project_store,
-        managed_node_store=managed_node_store,
-        org_settings_store=org_settings_store,
-        interval_seconds=float(
-            os.environ.get("RELAY_TASK_SCHEDULER_INTERVAL_SECONDS", "10")
-        ),
-        max_dispatches_per_tick=max(
-            1, int(os.environ.get("RELAY_TASK_SCHEDULER_MAX_DISPATCHES", "5"))
-        ),
-        today=today or scheduler_today_from_env(),
-    )
-
-
-def scheduler_today_from_env() -> Callable[[], date]:
-    """Routine due dates are calendar days; without a configured timezone they
-    roll over at server-local midnight, which surprises users in other zones."""
-    timezone_name = os.environ.get("RELAY_TASK_SCHEDULER_TIMEZONE", "").strip()
-    if not timezone_name:
-        return date.today
-    zone = ZoneInfo(timezone_name)  # invalid names fail fast at startup
-    return lambda: datetime.now(zone).date()

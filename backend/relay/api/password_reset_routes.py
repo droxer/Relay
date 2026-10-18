@@ -24,8 +24,9 @@ from ..services.password_reset import (
     normalize_reset_identifier,
     trusted_web_origin,
 )
-from .deps import AppContextDep
-from .helpers import JsonBodyDep, backend_base_url, string_field
+from .deps import AppContextDep, app_context
+from .node_install import backend_base_url
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 
@@ -33,11 +34,11 @@ _RESET_NOT_LIVE = "This reset link is invalid or has expired."
 
 
 def _service(request: Request) -> PasswordResetService:
-    return request.app.state.password_reset
+    return app_context(request).password_reset
 
 
 def _limit(request: Request, limiter_name: str, key: str) -> None:
-    retry_after = getattr(request.app.state, limiter_name).consume(key)
+    retry_after = getattr(app_context(request), limiter_name).consume(key)
     if retry_after is not None:
         raise HTTPException(
             429, "Too many requests. Try again later.", headers={"Retry-After": str(retry_after)}

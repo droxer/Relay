@@ -328,7 +328,7 @@ def test_pipeline_runs_members_in_role_order_and_last_synthesizes() -> None:
     ],
 )
 def test_pipeline_result_owner_keeps_its_specialist_work(role, kind, brief_start):
-    from relay.collaboration.service import compile_assignment_work_graph
+    from relay.collaboration.manifest import compile_assignment_work_graph
 
     roster = [_agent("lead", "codex", defaultRole="planner"),
               _agent("specialist", "claude", defaultRole=role)]

@@ -25,11 +25,16 @@ class NodeAgentRegistry(Protocol):
 
 
 class NodeAgentContext(Protocol):
-    registry: NodeAgentRegistry
-    agent_store: AgentStore
-    agent_placement_store: AgentPlacementStore
-    team_store: TeamStore
-    project_store: ProjectStore
+    @property
+    def registry(self) -> NodeAgentRegistry: ...
+    @property
+    def agent_store(self) -> AgentStore: ...
+    @property
+    def agent_placement_store(self) -> AgentPlacementStore: ...
+    @property
+    def team_store(self) -> TeamStore: ...
+    @property
+    def project_store(self) -> ProjectStore: ...
 
 
 def assert_node_agent_runs_drained(ctx: NodeAgentContext, node_id: str) -> None:

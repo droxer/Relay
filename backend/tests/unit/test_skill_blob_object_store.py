@@ -72,12 +72,13 @@ def test_new_writes_never_touch_the_fallback(tmp_path) -> None:
 
 
 def test_app_shares_one_blob_store_between_snapshots_and_skills(monkeypatch, tmp_path) -> None:
-    import relay.app as app_module
+    import relay.bootstrap.stores as stores_module
+    from relay.app import create_app
 
     blobs = MemoryBlobStore()
-    monkeypatch.setattr(app_module, "blob_store_from_env", lambda: blobs)
+    monkeypatch.setattr(stores_module, "blob_store_from_env", lambda: blobs)
 
-    app = app_module.create_app(tmp_path / "data")
+    app = create_app(tmp_path / "data")
 
     object_store = app.state.skill_store.object_store
     assert isinstance(object_store, BlobSkillObjectStore)

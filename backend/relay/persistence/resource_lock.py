@@ -2,7 +2,8 @@
 
 from contextlib import contextmanager
 import hashlib
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from sqlalchemy import text
 from .store_common import store_transaction

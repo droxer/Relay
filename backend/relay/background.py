@@ -12,14 +12,16 @@ import math
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import procrastinate
+from procrastinate.app import WorkerOptions
 from loguru import logger
 from procrastinate.jobs import Status
 from psycopg.conninfo import make_conninfo
 from sqlalchemy.engine import make_url
 
+from . import app as app_module
 from .core.storage_config import database_url_from_env, use_postgres_storage
 
 CONTROL_QUEUE = "relay_control"
@@ -97,14 +99,16 @@ def create_worker_app(
 ) -> procrastinate.App:
     app = procrastinate.App(
         connector=connector if connector is not None else procrastinate.PsycopgConnector(conninfo=worker_conninfo()),
-        worker_defaults={
+        # procrastinate reads a None graceful timeout as "wait indefinitely",
+        # though its WorkerOptions type declares a float.
+        worker_defaults=cast(WorkerOptions, {
             "queues": [CONTROL_QUEUE],
             "concurrency": 3,
             # Wait for store work to finish on graceful termination.
             "shutdown_graceful_timeout": None,
             # Retain failures; successful high-frequency checks need no history.
             "delete_jobs": "successful",
-        },
+        }),
     )
 
     def periodic(name: str, seconds: float):
@@ -149,6 +153,8 @@ def create_worker_app(
                 except procrastinate.exceptions.ConnectorException:
                     # Another maintainer or the original worker may have
                     # finished it since the scan. Surface actual DB failures.
+                    if job.id is None:  # a job read back from the queue always has one
+                        raise
                     try:
                         status = await app.job_manager.get_job_status_async(job.id)
                     except procrastinate.exceptions.NoResult:
@@ -169,8 +175,7 @@ def create_worker_app(
 async def run_worker(root_dir: str | None = None) -> None:
     # Validate shared storage before construction can touch private file stores.
     worker_conninfo()
-    from .app import create_app
-
+    create_app = app_module.create_app
     api = create_app(root_dir, background_mode="external") if root_dir else create_app(background_mode="external")
     worker = create_worker_app(BackgroundServices.from_state(api.state))
     async with worker.open_async():

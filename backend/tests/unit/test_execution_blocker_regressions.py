@@ -4,27 +4,26 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
-from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from relay.persistence.daemon_store import DatabaseDaemonStore
+from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.task_store import DatabaseTaskStore
 
 
-@pytest.fixture(params=["local", "database"])
-def runtime(tmp_path, request, monkeypatch):
+@pytest.fixture
+def runtime(tmp_path, monkeypatch):
     url = f"sqlite:///{tmp_path}/state.db"
-    database = request.param == "database"
-    sessions = DatabaseSessionStore(url, create_schema=True) if database else LocalSessionStore(tmp_path)
-    tasks = DatabaseTaskStore(url, create_schema=True) if database else LocalTaskStore(tmp_path)
-    daemon = DatabaseDaemonStore(url, create_schema=True) if database else LocalDaemonStore(tmp_path)
+    sessions = DatabaseSessionStore(url, create_schema=True)
+    tasks = DatabaseTaskStore(url, create_schema=True)
+    daemon = DatabaseDaemonStore(url, create_schema=True)
     registry = DaemonNodeRegistry(sessions, daemon, task_store=tasks)
     payload = dict(sandboxId="node", userId="alice", token="token", workspacePath="/workspace",
                    protocolVersion=1, supportedAgents=["codex"], capabilities=["thread-workspaces", "task-workspaces"],
                    status="ready", maxConcurrentRuns=10)
     registry.register(payload, "ui")
-    if database:
-        # Test recovery transitions without the independent batch-claim cooldown.
-        monkeypatch.setattr(daemon, "claim_recovery_requests", lambda **kw: daemon.list_active_run_requests())
+    # Test recovery transitions without the independent batch-claim cooldown.
+    monkeypatch.setattr(daemon, "claim_recovery_requests", lambda **kw: daemon.list_active_run_requests())
     return sessions, tasks, registry, payload
 
 
@@ -35,7 +34,9 @@ def terminal(command):
 
 def expire_leases(monkeypatch):
     future = (datetime.now(UTC) + timedelta(seconds=120)).isoformat()
-    monkeypatch.setattr("relay.persistence.daemon_store.now_iso", lambda: future)
+    # Every daemon store module reads the clock; freeze them all.
+    for module in ("daemon.commands", "daemon.maintenance", "daemon.nodes", "daemon.rules", "daemon.run_requests", "daemon.workspace_responses"):
+        monkeypatch.setattr(f"relay.persistence.{module}.now_iso", lambda: future)
 
 
 def test_expired_run_keeps_lease_and_accepts_saved_terminal(runtime, monkeypatch):

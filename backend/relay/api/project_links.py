@@ -16,8 +16,11 @@ from starlette.concurrency import run_in_threadpool
 
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id
-from ..daemon_registry.registry import DAEMON_CAPABILITY_PROJECT_LINKS
-from ..persistence.project_store import LINKED_WORKSPACE_PREFIX
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_PROJECT_LINKS,
+    has_capability,
+)
+from ..core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .deps import AppContext
 from .workspace_transport import dispatch_workspace_command
 
@@ -59,7 +62,7 @@ def _live_link_nodes(
         and node.get("online")
         and not node.get("stale")
         and not node.get("retiredAt")
-        and DAEMON_CAPABILITY_PROJECT_LINKS in (node.get("capabilities") or [])
+        and has_capability(node, DAEMON_CAPABILITY_PROJECT_LINKS)
     ]
 
 
@@ -111,7 +114,7 @@ async def link_existing_directory(
     )
     target = next((item for item in live if item["id"] == node["id"]), None)
     if target is None:
-        if DAEMON_CAPABILITY_PROJECT_LINKS not in (node.get("capabilities") or []):
+        if not has_capability(node, DAEMON_CAPABILITY_PROJECT_LINKS):
             raise HTTPException(409, "project_workspace_link_unsupported")
         raise HTTPException(409, "project_computer_offline")
     event = await dispatch_workspace_command(

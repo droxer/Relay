@@ -4,6 +4,7 @@ import unicodedata
 from typing import Any, Protocol
 
 from ..persistence.protocols import ManagedNodeStore
+from ..security.actor import Actor
 
 MAX_COMPUTER_DISPLAY_NAME_LENGTH = 64
 
@@ -16,8 +17,10 @@ class ComputerRegistry(Protocol):
 
 
 class ComputerContext(Protocol):
-    registry: ComputerRegistry
-    managed_node_store: ManagedNodeStore
+    @property
+    def registry(self) -> ComputerRegistry: ...
+    @property
+    def managed_node_store(self) -> ManagedNodeStore: ...
 
 
 def normalize_computer_display_name(value: Any) -> str | None:
@@ -54,7 +57,7 @@ def present_computer(ctx: ComputerContext, node: dict[str, Any]) -> dict[str, An
 
 def rename_computer_for_actor(
     ctx: ComputerContext,
-    actor: dict[str, Any],
+    actor: Actor,
     node_id: str,
     requested_display_name: Any,
 ) -> dict[str, Any]:

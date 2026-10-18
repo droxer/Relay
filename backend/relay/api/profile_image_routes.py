@@ -8,7 +8,8 @@ from ..core.preset_avatars import is_preset_avatar_url
 from ..persistence.profile_image_store import ProfileImageError
 from .agent_routes import _agent_with_placements
 from .deps import AppContextDep
-from .helpers import JsonBodyDep, request_actor
+from .actors import request_actor
+from .bodies import JsonBodyDep
 from .team_routes import _team_view
 
 router = APIRouter()
@@ -19,7 +20,7 @@ def _profile_entity(
     ctx: AppContextDep,
     kind: str,
     entity_id: str,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str | None]:
     actor = request_actor(request, ctx.auth_store)
     if kind == "agents":
         entity = ctx.agent_store.get_agent(entity_id)
@@ -80,11 +81,18 @@ def update_profile_image(
     if "presetUrl" in body:
         return _apply_preset(ctx, kind, entity_id, body.get("presetUrl"))
     try:
-        image_url = ctx.profile_image_store.save(kind, entity_id, body.get("dataUrl"))
+        data_url = body.get("dataUrl")
+        if not isinstance(data_url, str):
+            # The store's decoder refuses a non-string data URL the same way.
+            raise ProfileImageError("profile_image_type")
+        image_url = ctx.profile_image_store.save(kind, entity_id, data_url)
         return _set_profile_image_url(ctx, kind, entity_id, image_url)
     except ProfileImageError as error:
         raise _profile_image_error(error) from error
-    except (KeyError, ValueError) as error:
+    except KeyError as error:
+        ctx.profile_image_store.delete(kind, entity_id)
+        raise HTTPException(404, "Profile not found.") from error
+    except ValueError as error:
         ctx.profile_image_store.delete(kind, entity_id)
         raise HTTPException(400, str(error)) from error
 
@@ -97,7 +105,9 @@ def _apply_preset(
         raise HTTPException(400, "profile_image_preset")
     try:
         result = _set_profile_image_url(ctx, kind, entity_id, preset_url)
-    except (KeyError, ValueError) as error:
+    except KeyError as error:
+        raise HTTPException(404, "Profile not found.") from error
+    except ValueError as error:
         raise HTTPException(400, str(error)) from error
     ctx.profile_image_store.delete(kind, entity_id)
     return result

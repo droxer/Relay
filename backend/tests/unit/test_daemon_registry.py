@@ -5,6 +5,7 @@ import base64
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,34 +14,30 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from relay.daemon_registry import (
-    DaemonNodeRegistry,
-    ServerDaemonNodeBackend,
-    daemon_active_run,
-    effective_role_for_assignment,
-    sandbox_ui_token_matches,
-    workspace_paths_match,
-)
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.records import daemon_active_run
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from relay.daemon_registry.scheduling import effective_role_for_assignment, workspace_paths_match
+from relay.daemon_registry.credentials import sandbox_ui_token_matches
 from relay.daemon_registry.artifacts import is_snapshotable_path
-from relay.daemon_registry.registry import (
-    _confined_workspace_path,
-)
-from relay.persistence.agent_placement_store import LocalAgentPlacementStore
-from relay.persistence.agent_store import LocalAgentStore
-from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
-from relay.persistence.session_store import LocalSessionStore
-from relay.persistence.store_common import _read_jsonl, new_database_id
-from relay.persistence.task_store import LocalTaskStore
-from relay.sessions import SessionController
+from relay.daemon_registry.records import _confined_workspace_path
+from store_fixtures import make_agent_placement_store
+from store_fixtures import make_agent_store
+from relay.persistence.daemon_store import DatabaseDaemonStore
+from store_fixtures import make_daemon_store, sqlite_url
+from store_fixtures import make_session_store
+from relay.persistence.store_common import new_database_id
+from store_fixtures import make_task_store
+from relay.sessions.controller import SessionController
 from relay.sessions.handoff_files import handoff_checkpoint_file, handoff_file
-from sqlalchemy import event, select
+from sqlalchemy import event, select, update
 
 
 def database_daemon_store(root: str) -> DatabaseDaemonStore:
     return DatabaseDaemonStore(f"sqlite:///{root}/daemon.db", create_schema=True)
 
 
-DAEMON_STORE_FACTORIES = [LocalDaemonStore, database_daemon_store]
+DAEMON_STORE_FACTORIES = [database_daemon_store]
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
@@ -51,7 +48,7 @@ def test_cancel_before_delivery_preserves_delivered_task_reservation(
     with TemporaryDirectory() as root:
         store = daemon_store_factory(root)
         store.register_node(store_node_payload())
-        sessions = LocalSessionStore(root)
+        sessions = make_session_store(root)
         session = sessions.create_session({
             "workspacePath": "/workspace/alice", "ownerUserId": "alice",
             "taskGoal": "retain ownership until exit",
@@ -93,12 +90,6 @@ def test_cancel_before_delivery_preserves_delivered_task_reservation(
 
 
 def stored_daemon_event_types(store: object) -> list[str]:
-    events_dir = getattr(store, "events_dir", None)
-    if events_dir is not None:
-        events_path = events_dir / "events.jsonl"
-        if not events_path.exists():
-            return []
-        return [event["type"] for event in _read_jsonl(events_path)]
     with store.engine.begin() as conn:
         return list(conn.scalars(select(store.events.c.type)))
 
@@ -169,8 +160,8 @@ def test_database_run_request_status_transition_moves_the_node_reference() -> No
 
 def test_local_run_request_status_cas_is_shared_across_store_instances() -> None:
     with TemporaryDirectory() as root:
-        first = LocalDaemonStore(root)
-        second = LocalDaemonStore(root)
+        first = make_daemon_store(root)
+        second = make_daemon_store(root)
         first.register_node(store_node_payload())
         request = first.create_run_request(
             {
@@ -323,11 +314,11 @@ def test_registry_hydrates_node_registered_after_replica_start() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/daemon.db"
         first = DaemonNodeRegistry(
-            LocalSessionStore(root),
+            make_session_store(root),
             DatabaseDaemonStore(database_url, create_schema=True),
         )
         second = DaemonNodeRegistry(
-            LocalSessionStore(root), DatabaseDaemonStore(database_url)
+            make_session_store(root), DatabaseDaemonStore(database_url)
         )
         first.register(
             {
@@ -351,7 +342,7 @@ def test_registry_hydrates_node_registered_after_replica_start() -> None:
 def test_provisioned_daemon_nodes_use_uuid_ids(daemon_store_factory) -> None:
     with TemporaryDirectory() as root:
         registry = DaemonNodeRegistry(
-            LocalSessionStore(root), daemon_store_factory(root)
+            make_session_store(root), daemon_store_factory(root)
         )
 
         node, _, _ = registry.provision_pending(
@@ -368,7 +359,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
     """Two backend replicas must issue one launchable pending computer."""
     with TemporaryDirectory() as root:
         registries = [
-            DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
+            DaemonNodeRegistry(make_session_store(root), daemon_store_factory(root))
             for _ in range(2)
         ]
         both_checked_for_an_existing_node = Barrier(2)
@@ -409,7 +400,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
         assert sum(token is not None for token in node_tokens) == 1
 
         restarted = DaemonNodeRegistry(
-            LocalSessionStore(root), daemon_store_factory(root)
+            make_session_store(root), daemon_store_factory(root)
         )
         matches = [
             node
@@ -481,13 +472,13 @@ def test_pending_user_device_enrollment_rotates_token_after_restart(
 ) -> None:
     # Pending enrollments can be retried, but the old secret is unrecoverable.
     with TemporaryDirectory() as root:
-        first = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
+        first = DaemonNodeRegistry(make_session_store(root), daemon_store_factory(root))
         node, _, first_token = first.provision_pending(
             "alice", "/Users/alice/project", "boxlite", "user-device"
         )
 
         restarted = DaemonNodeRegistry(
-            LocalSessionStore(root), daemon_store_factory(root)
+            make_session_store(root), daemon_store_factory(root)
         )
         retried, _, replacement_token = restarted.provision_pending(
             "alice", "/Users/alice/project", "boxlite", "user-device"
@@ -514,13 +505,13 @@ def test_pending_user_device_enrollment_rotates_token_after_restart(
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
 def test_reissue_authenticates_after_restart_without_recoverable_secrets(daemon_store_factory) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store_factory(root))
         node, _, token = registry.provision_pending(
             "alice", "/Users/alice/project", "none", "user-device"
         )
 
         restarted = DaemonNodeRegistry(
-            LocalSessionStore(root), daemon_store_factory(root)
+            make_session_store(root), daemon_store_factory(root)
         )
         assert restarted.reveal_node_token(node["id"]) is None
 
@@ -540,7 +531,7 @@ def test_reissue_authenticates_after_restart_without_recoverable_secrets(daemon_
         with pytest.raises(PermissionError):
             restarted.register({**registration, "token": token})
         # Only the hash survives; a third process can authenticate but not reveal it.
-        third = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
+        third = DaemonNodeRegistry(make_session_store(root), daemon_store_factory(root))
         assert third.reveal_node_token(node["id"]) is None
         assert third.register({**registration, "token": new_token})["status"] == "ready"
 
@@ -550,7 +541,7 @@ def test_managed_node_token_is_neither_persisted_nor_reissuable(
     daemon_store_factory,
 ) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store_factory(root))
         node, _ = registry.enroll_managed_node(
             {"id": "managed_one", "userId": "alice"},
             {"id": "attempt_one"},
@@ -566,29 +557,24 @@ def test_managed_node_token_is_neither_persisted_nor_reissuable(
 def test_node_token_secret_stays_out_of_daemon_events(daemon_store_factory) -> None:
     with TemporaryDirectory() as root:
         store = daemon_store_factory(root)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+        registry = DaemonNodeRegistry(make_session_store(root), store)
         node, _, token = registry.provision_pending(
             "alice", "/Users/alice/project", "none", "user-device"
         )
         registry.reissue_node_token(node["id"])
 
-        events_dir = getattr(store, "events_dir", None)
-        if events_dir is not None:
-            events_path = events_dir / "events.jsonl"
-            raw = events_path.read_text() if events_path.exists() else ""
-        else:
-            with store.engine.begin() as conn:
-                raw = " ".join(
-                    json.dumps(row) for row in conn.scalars(select(store.events.c.payload))
-                )
+        with store.engine.begin() as conn:
+            raw = " ".join(
+                json.dumps(row) for row in conn.scalars(select(store.events.c.payload))
+            )
         assert token not in raw
         assert "nodeTokenSecret" not in raw
 
 
 def test_explicit_sandbox_provision_targets_requested_node() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         backend = ServerDaemonNodeBackend(registry)
         registry.register(
@@ -624,8 +610,8 @@ def test_explicit_sandbox_provision_targets_requested_node() -> None:
 def test_daemon_registration_poll_and_completion_updates_session() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -695,8 +681,8 @@ def test_daemon_registration_poll_and_completion_updates_session() -> None:
 def test_first_dispatch_refuses_to_downgrade_thread_layout_for_old_daemon() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
                 {
@@ -742,8 +728,8 @@ def test_confined_workspace_path_rejects_escaping_subpaths() -> None:
 def test_project_dispatch_carries_shared_workspace_subpath() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
                 {
@@ -822,8 +808,8 @@ def test_project_dispatch_carries_shared_workspace_subpath() -> None:
 def test_task_dispatch_carries_shared_workspace_subpath() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
                 {
@@ -901,8 +887,8 @@ def test_task_dispatch_carries_shared_workspace_subpath() -> None:
 def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             backend = ServerDaemonNodeBackend(registry)
             registration = {
                 "sandboxId": "sbx_alice",
@@ -955,8 +941,8 @@ def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> Non
 def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_before_dispatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             backend = ServerDaemonNodeBackend(registry)
             registration = {
                 "sandboxId": "sbx_alice",
@@ -1027,7 +1013,7 @@ def test_command_poll_cannot_observe_run_before_request_links_command() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/daemon.db"
         daemon_store = PausingDaemonStore(database_url)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -1042,7 +1028,7 @@ def test_command_poll_cannot_observe_run_before_request_links_command() -> None:
             "ui_token",
         )
         second_registry = DaemonNodeRegistry(
-            LocalSessionStore(root), DatabaseDaemonStore(database_url)
+            make_session_store(root), DatabaseDaemonStore(database_url)
         )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1098,7 +1084,7 @@ def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/daemon.db"
         daemon_store = PausingClaimStore(database_url)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -1113,7 +1099,7 @@ def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
             "ui_token",
         )
         second = DaemonNodeRegistry(
-            LocalSessionStore(root), DatabaseDaemonStore(database_url)
+            make_session_store(root), DatabaseDaemonStore(database_url)
         )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1158,7 +1144,7 @@ def test_staged_command_is_published_after_dispatcher_crash() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             registry = DaemonNodeRegistry(
                 session_store, FailingPublishStore(database_url)
             )
@@ -1185,7 +1171,7 @@ def test_staged_command_is_published_after_dispatcher_crash() -> None:
                 )
 
             restarted = DaemonNodeRegistry(
-                LocalSessionStore(root), DatabaseDaemonStore(database_url)
+                make_session_store(root), DatabaseDaemonStore(database_url)
             )
             [command] = restarted.take_commands("sbx_alice", "node_token")
             assert command["taskGoal"] == "recover dispatch"
@@ -1220,7 +1206,7 @@ def test_staged_command_is_relinked_after_dispatcher_crash_before_link() -> None
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             registry = DaemonNodeRegistry(session_store, FailingLinkStore(database_url))
             registry.register(
                 {
@@ -1249,7 +1235,7 @@ def test_staged_command_is_relinked_after_dispatcher_crash_before_link() -> None
             staged = restarted_store.pending_command_for_run_request(request["id"])
             assert staged is not None
 
-            restarted = DaemonNodeRegistry(LocalSessionStore(root), restarted_store)
+            restarted = DaemonNodeRegistry(make_session_store(root), restarted_store)
             [command] = restarted.take_commands("sbx_alice", "node_token")
             assert command["id"] == staged["id"]
             assert (
@@ -1265,8 +1251,8 @@ def test_daemon_output_batch_is_persisted_in_order_and_deduplicated_after_restar
 ) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
                 {
@@ -1329,7 +1315,7 @@ def test_daemon_output_batch_is_persisted_in_order_and_deduplicated_after_restar
             assert registry.output_for_run(command["runId"]) == "out-1err-1out-2"
 
             restarted = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             restarted.handle_event("sbx_alice", batch, "node_token")
 
@@ -1353,8 +1339,8 @@ def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
 ) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -1409,7 +1395,7 @@ def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
             )
 
             restarted = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             scan_count = 0
             original = restarted._session_output_sequences
@@ -1481,8 +1467,8 @@ def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
 def test_daemon_collaboration_retry_after_registry_restart_is_deduplicated() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
@@ -1516,7 +1502,7 @@ def test_daemon_collaboration_retry_after_registry_restart_is_deduplicated() -> 
             registry.handle_event("sbx_alice", collaboration, "node_token")
 
             restarted = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             restarted.handle_event("sbx_alice", collaboration, "node_token")
 
@@ -1536,7 +1522,7 @@ def test_daemon_fallback_output_buffer_is_bounded(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             registry.register(
                 {
@@ -1578,15 +1564,15 @@ def test_daemon_fallback_output_buffer_is_bounded(monkeypatch) -> None:
             assert registry.output_for_run(command["runId"]) == "45678"
             assert registry.output_sizes[command["runId"]] == 5
 
-    monkeypatch.setattr("relay.daemon_registry.registry.RUN_OUTPUT_BUFFER_MAX_CHARS", 5)
+    monkeypatch.setattr("relay.daemon_registry.config.RUN_OUTPUT_BUFFER_MAX_CHARS", 5)
     asyncio.run(run_flow())
 
 
 def test_daemon_output_retry_survives_event_log_write_failure(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
@@ -1652,8 +1638,8 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
         with TemporaryDirectory() as root:
             workspace = Path(root) / "workspace"
             workspace.mkdir()
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -1725,8 +1711,8 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
             output = workspace / "output"
             output.mkdir()
 
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -1835,8 +1821,8 @@ def test_is_snapshotable_path_scopes_text_documents_to_workspace_roots(
 def test_daemon_reported_generated_files_index_without_shared_filesystem() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -1957,8 +1943,8 @@ def _artifacts_from_completed_generated_file_report(
 ) -> list[dict[str, Any]]:
     async def run_flow() -> list[dict[str, Any]]:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
@@ -2052,8 +2038,8 @@ def test_daemon_without_produced_files_indexes_only_documents() -> None:
 def test_generated_file_replay_fills_in_partially_indexed_report() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
                 {
@@ -2133,8 +2119,8 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
         with TemporaryDirectory() as root:
             workspace = Path(root) / "workspace"
             workspace.mkdir()
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2230,8 +2216,8 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
 def test_daemon_capacity_allows_concurrent_runs() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2283,8 +2269,8 @@ def test_daemon_capacity_allows_concurrent_runs() -> None:
 def test_legacy_daemon_capacity_remains_single_slot() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2323,8 +2309,8 @@ def test_legacy_daemon_capacity_remains_single_slot() -> None:
 def test_daemon_rejects_event_agent_metadata_mismatch() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2373,8 +2359,8 @@ def test_daemon_rejects_event_agent_metadata_mismatch() -> None:
 def test_daemon_rejects_event_lease_mismatch() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2440,8 +2426,8 @@ def test_daemon_rejects_event_lease_mismatch() -> None:
 def test_daemon_poll_renews_known_active_command_before_reclaim() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2518,7 +2504,7 @@ def test_daemon_heartbeat_renews_command_dispatched_by_another_backend_replica()
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             first_store = DatabaseDaemonStore(database_url, create_schema=True)
             first = DaemonNodeRegistry(session_store, first_store)
             first.register(
@@ -2579,7 +2565,7 @@ def test_active_run_survives_heartbeat_seen_by_another_backend_replica() -> None
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             first = DaemonNodeRegistry(
                 session_store,
                 DatabaseDaemonStore(database_url, create_schema=True),
@@ -2650,7 +2636,7 @@ def test_next_member_starts_from_a_replica_that_missed_the_heartbeats(monkeypatc
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             first = DaemonNodeRegistry(
                 session_store, DatabaseDaemonStore(database_url, create_schema=True)
             )
@@ -2671,9 +2657,10 @@ def test_next_member_starts_from_a_replica_that_missed_the_heartbeats(monkeypatc
             [command] = first.take_commands("sbx_alice", "node_token", renew_known_active=False)
             with monkeypatch.context() as patched:
                 # No slot when the first member finishes: the next one waits.
-                patched.setattr(
-                    "relay.daemon_registry.registry.node_accepts_run", lambda *args, **kwargs: False
-                )
+                for module in ("delivery", "nodes"):
+                    patched.setattr(
+                        f"relay.daemon_registry.{module}.node_accepts_run", lambda *args, **kwargs: False
+                    )
                 second.handle_event("sbx_alice", {
                     "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
                     "sessionId": session["id"], "agent": "codex", "exitCode": 0,
@@ -2696,7 +2683,7 @@ def test_daemon_cancel_finds_run_dispatched_by_another_backend_replica() -> None
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             first = DaemonNodeRegistry(
                 session_store,
                 DatabaseDaemonStore(database_url, create_schema=True),
@@ -2771,7 +2758,7 @@ def test_daemon_events_are_accepted_by_a_replica_that_did_not_dispatch_the_comma
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             first = DaemonNodeRegistry(
                 session_store,
                 DatabaseDaemonStore(database_url, create_schema=True),
@@ -2891,8 +2878,8 @@ def test_daemon_events_are_accepted_by_a_replica_that_did_not_dispatch_the_comma
 def test_daemon_failed_event_preserves_agent_log_without_artifact() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -2945,8 +2932,8 @@ def test_daemon_failed_event_preserves_agent_log_without_artifact() -> None:
 def test_daemon_failed_event_indexes_reported_generated_files() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3017,8 +3004,8 @@ def test_daemon_failed_event_indexes_reported_generated_files() -> None:
 def test_daemon_follow_up_run_gets_prior_conversation_state() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3082,8 +3069,8 @@ def test_daemon_follow_up_run_gets_prior_conversation_state() -> None:
 def test_daemon_multi_agent_same_turn_shares_full_handoff_context() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3173,8 +3160,8 @@ def test_daemon_multi_agent_same_turn_shares_full_handoff_context() -> None:
 def test_daemon_run_records_decision_metadata_after_validation() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3221,8 +3208,8 @@ def test_daemon_run_records_decision_metadata_after_validation() -> None:
 def test_daemon_handoff_decision_injects_note_without_duplicate_user_turn() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3279,8 +3266,8 @@ def test_daemon_handoff_decision_injects_note_without_duplicate_user_turn() -> N
 def test_daemon_prerecorded_handoff_decision_skips_duplicate_user_turn() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3336,8 +3323,8 @@ def test_daemon_prerecorded_handoff_decision_skips_duplicate_user_turn() -> None
 def test_daemon_run_does_not_record_decision_when_validation_fails() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3381,8 +3368,8 @@ def test_daemon_run_does_not_record_decision_when_validation_fails() -> None:
 def test_daemon_terminal_event_after_registry_restart_finalizes_session() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -3408,7 +3395,7 @@ def test_daemon_terminal_event_after_registry_restart_finalizes_session() -> Non
             )
             [command] = registry.take_commands("sbx_alice", "node_token")
 
-            restarted = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            restarted = DaemonNodeRegistry(session_store, make_daemon_store(root))
             restarted.handle_event(
                 "sbx_alice",
                 {
@@ -3430,8 +3417,10 @@ def test_daemon_terminal_event_after_registry_restart_finalizes_session() -> Non
 
 def test_active_session_run_request_is_global_after_cross_node_handoff() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
+        for node_id in ("node_a", "node_b"):
+            daemon_store.register_node({**store_node_payload(), "id": node_id, "workspaceId": node_id})
         registry = DaemonNodeRegistry(session_store, daemon_store)
         session = session_store.create_session(
             {
@@ -3586,8 +3575,8 @@ def test_same_idempotent_run_request_is_get_or_create_across_store_instances(
 
 def test_reaper_activates_a_prepared_request_only_after_its_round_is_durable() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
             {
@@ -3631,11 +3620,12 @@ def test_reaper_expires_a_prepared_request_without_a_durable_round(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "relay.daemon_registry.registry.PREPARED_ADMISSION_LEASE_SECONDS", 0
+        "relay.daemon_registry.config.PREPARED_ADMISSION_LEASE_SECONDS", 0
     )
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
+        daemon_store.register_node(store_node_payload())
         registry = DaemonNodeRegistry(session_store, daemon_store)
         session = session_store.create_session(
             {"workspacePath": "/workspace", "taskGoal": "expire admission"}
@@ -3660,8 +3650,8 @@ def test_reaper_expires_a_prepared_request_without_a_durable_round(
 
 def test_cancelling_a_prepared_request_prevents_later_reaper_activation() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         backend = ServerDaemonNodeBackend(registry)
         registry.register(
@@ -3706,8 +3696,8 @@ def test_cancelling_a_prepared_request_prevents_later_reaper_activation() -> Non
 
 def test_direct_activation_refuses_a_cancelled_prepared_request() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
             {
@@ -3742,8 +3732,9 @@ def test_direct_activation_refuses_a_cancelled_prepared_request() -> None:
 
 def test_expired_admission_cannot_revive_after_a_newer_terminal_decision() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
+        daemon_store.register_node(store_node_payload())
         registry = DaemonNodeRegistry(session_store, daemon_store)
         session = session_store.create_session(
             {"workspacePath": "/workspace", "taskGoal": "do not revive"}
@@ -3781,8 +3772,9 @@ def test_cancelled_expired_request_cannot_revive_even_before_session_cancel_even
     None
 ):
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
+        daemon_store.register_node(store_node_payload())
         registry = DaemonNodeRegistry(session_store, daemon_store)
         session = session_store.create_session(
             {"workspacePath": "/workspace", "taskGoal": "expire then cancel"}
@@ -3819,8 +3811,8 @@ def test_cancelled_expired_request_cannot_revive_even_before_session_cancel_even
 
 def test_reaper_never_dispatches_a_running_request_for_a_terminal_session() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
             {
@@ -3864,8 +3856,8 @@ def test_reaper_never_dispatches_a_running_request_for_a_terminal_session() -> N
 
 def test_stale_activation_cannot_publish_after_persistent_cancellation_fence() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         backend = ServerDaemonNodeBackend(registry)
         registry.register(
@@ -3916,7 +3908,7 @@ def test_command_claim_rejects_queued_work_after_session_terminalization(
 ) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             daemon_store = daemon_store_factory(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
@@ -3985,7 +3977,7 @@ def test_backend_run_does_not_block_the_asyncio_event_loop() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             backend = ServerDaemonNodeBackend(registry)
             request = {
@@ -4012,7 +4004,7 @@ def test_backend_run_does_not_block_the_asyncio_event_loop() -> None:
 
 def test_dispatch_scopes_do_not_serialize_unrelated_nodes() -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
         first_entered = Event()
         release_first = Event()
 
@@ -4033,7 +4025,7 @@ def test_dispatch_scopes_do_not_serialize_unrelated_nodes() -> None:
 
 def test_global_reaping_precedes_command_poll_node_scope(monkeypatch) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -4062,11 +4054,11 @@ def test_cross_replica_node_hydration_precedes_node_scope(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/daemon.db"
         first = DaemonNodeRegistry(
-            LocalSessionStore(root),
+            make_session_store(root),
             DatabaseDaemonStore(database_url, create_schema=True),
         )
         second = DaemonNodeRegistry(
-            LocalSessionStore(root), DatabaseDaemonStore(database_url)
+            make_session_store(root), DatabaseDaemonStore(database_url)
         )
         second.register(
             {
@@ -4093,8 +4085,8 @@ def test_cross_replica_node_hydration_precedes_node_scope(monkeypatch) -> None:
 def test_daemon_output_retry_after_registry_restart_is_deduplicated() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -4131,7 +4123,7 @@ def test_daemon_output_retry_after_registry_restart_is_deduplicated() -> None:
             }
             registry.handle_event("sbx_alice", output, "node_token")
 
-            restarted = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            restarted = DaemonNodeRegistry(session_store, make_daemon_store(root))
             restarted.handle_event("sbx_alice", output, "node_token")
 
             events = [
@@ -4150,8 +4142,8 @@ def test_daemon_output_retry_after_registry_restart_is_deduplicated() -> None:
 def test_daemon_cancel_event_clears_active_run_request(terminal_log: bool) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -4219,7 +4211,7 @@ def test_terminal_event_wins_over_stale_reaper_on_another_registry(monkeypatch) 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             terminal_store = PausingTerminalStore(database_url)
             registry = DaemonNodeRegistry(session_store, terminal_store)
             registry.register(
@@ -4248,10 +4240,10 @@ def test_terminal_event_wins_over_stale_reaper_on_another_registry(monkeypatch) 
                 request["id"], {"currentStartedAt": "2020-01-01T00:00:00.000Z"}
             )
             second = DaemonNodeRegistry(
-                LocalSessionStore(root), DatabaseDaemonStore(database_url)
+                make_session_store(root), DatabaseDaemonStore(database_url)
             )
             monkeypatch.setattr(
-                "relay.daemon_registry.registry.DAEMON_RUN_TIMEOUT_MS", 1
+                "relay.daemon_registry.config.DAEMON_RUN_TIMEOUT_MS", 1
             )
             event = {
                 "type": "run.cancelled",
@@ -4368,8 +4360,8 @@ def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason, store
 def test_terminal_event_retry_recovers_after_handler_crash() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
                 {
@@ -4403,7 +4395,7 @@ def test_terminal_event_retry_recovers_after_handler_crash() -> None:
             assert daemon_store.mark_command_cancelled("sbx_alice", event)
 
             restarted = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             restarted.handle_event("sbx_alice", event, "node_token")
 
@@ -4417,8 +4409,8 @@ def test_terminal_event_retry_recovers_after_handler_crash() -> None:
 def test_terminal_event_retry_fails_orphaned_run_when_session_was_deleted() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
                 {
@@ -4482,7 +4474,7 @@ def test_terminal_event_replay_is_claimed_by_only_one_backend_replica() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             database_url = f"sqlite:///{root}/daemon.db"
-            session_store = LocalSessionStore(root)
+            session_store = make_session_store(root)
             daemon_store = DatabaseDaemonStore(database_url, create_schema=True)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             registry.register(
@@ -4518,7 +4510,7 @@ def test_terminal_event_replay_is_claimed_by_only_one_backend_replica() -> None:
             assert daemon_store.mark_command_completed("sbx_alice", event)
             replicas = [
                 DaemonNodeRegistry(
-                    LocalSessionStore(root), DatabaseDaemonStore(database_url)
+                    make_session_store(root), DatabaseDaemonStore(database_url)
                 )
                 for _ in range(2)
             ]
@@ -4552,8 +4544,8 @@ def test_terminal_event_replay_is_claimed_by_only_one_backend_replica() -> None:
 def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -4604,7 +4596,7 @@ def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
             )
 
             monkeypatch.setattr(
-                "relay.daemon_registry.registry.DAEMON_RUN_TIMEOUT_MS", 1
+                "relay.daemon_registry.config.DAEMON_RUN_TIMEOUT_MS", 1
             )
             registry.reap_stale_runs()
 
@@ -4625,15 +4617,15 @@ def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
             assert command["runId"] not in registry.output_sequences
             assert command["runId"] not in registry.output_sequences_hydrated
 
-    monkeypatch.setattr("relay.daemon_registry.registry.DAEMON_RUN_TIMEOUT_MS", 60_000)
+    monkeypatch.setattr("relay.daemon_registry.config.DAEMON_RUN_TIMEOUT_MS", 60_000)
     asyncio.run(run_flow())
 
 
 def _pipeline_registry(root: str, *, work_results: bool = False) -> tuple[Any, Any, Any]:
-    session_store = LocalSessionStore(root)
-    daemon_store = LocalDaemonStore(root)
+    session_store = make_session_store(root)
+    daemon_store = make_daemon_store(root)
     registry = DaemonNodeRegistry(
-        session_store, daemon_store, task_store=LocalTaskStore(root)
+        session_store, daemon_store, task_store=make_task_store(root)
     )
     registry.register(
         {
@@ -4744,7 +4736,7 @@ def test_single_agent_protocol_is_frozen_across_capability_changes(mode, require
 def test_team_work_contract_survives_backend_restart(daemon_store_factory):
     async def flow():
         with TemporaryDirectory() as root:
-            sessions = LocalSessionStore(root)
+            sessions = make_session_store(root)
             daemon = daemon_store_factory(root)
             registry = DaemonNodeRegistry(sessions, daemon)
             registry.register({
@@ -4778,7 +4770,7 @@ def test_team_work_contract_survives_backend_restart(daemon_store_factory):
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
 def test_daemon_capability_changes_reach_other_backend_replicas(daemon_store_factory):
     with TemporaryDirectory() as root:
-        sessions = LocalSessionStore(root)
+        sessions = make_session_store(root)
         daemon = daemon_store_factory(root)
         first = DaemonNodeRegistry(sessions, daemon)
         second = DaemonNodeRegistry(sessions, daemon)
@@ -5476,10 +5468,10 @@ def test_only_the_final_assignment_reports_the_round_result() -> None:
     asyncio.run(run_flow())
 
 
-def _round_result_registry(root: str, store_factory=LocalDaemonStore) -> tuple[Any, Any, Any]:
-    session_store = LocalSessionStore(root)
+def _round_result_registry(root: str, store_factory=make_daemon_store) -> tuple[Any, Any, Any]:
+    session_store = make_session_store(root)
     daemon_store = store_factory(root)
-    task_store = LocalTaskStore(root)
+    task_store = make_task_store(root)
     registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store)
     registry.register(
         {
@@ -5732,8 +5724,8 @@ def test_handoff_checkpoint_sits_beside_its_notes() -> None:
 def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -5793,8 +5785,8 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
 def test_streaming_output_defers_the_run_timeout(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -5847,8 +5839,14 @@ def test_streaming_output_defers_the_run_timeout(monkeypatch) -> None:
             assert len(daemon_store.list_active_run_requests("sbx_alice")) == 1
 
             monkeypatch.setattr(
-                "relay.daemon_registry.registry.DAEMON_RUN_MAX_DURATION_MS", 1
+                "relay.daemon_registry.config.DAEMON_RUN_MAX_DURATION_MS", 1
             )
+            # The first pass leased the request for recovery; release it so
+            # this pass sees it again.
+            with daemon_store.engine.begin() as conn:
+                conn.execute(
+                    update(daemon_store.run_requests).values(recovery_after=None)
+                )
             registry.reap_stale_runs()
 
             reaped = session_store.get_session(session["id"])
@@ -5856,15 +5854,15 @@ def test_streaming_output_defers_the_run_timeout(monkeypatch) -> None:
             [stopping] = daemon_store.list_active_run_requests("sbx_alice")
             assert "maximum duration" in stopping["error"]
 
-    monkeypatch.setattr("relay.daemon_registry.registry.DAEMON_RUN_TIMEOUT_MS", 60_000)
+    monkeypatch.setattr("relay.daemon_registry.config.DAEMON_RUN_TIMEOUT_MS", 60_000)
     asyncio.run(run_flow())
 
 
 def test_a_silent_run_stays_alive_while_its_daemon_holds_the_lease() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -5911,8 +5909,8 @@ def test_a_silent_run_stays_alive_while_its_daemon_holds_the_lease() -> None:
 def test_run_progress_is_persisted_at_most_once_per_interval(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -5983,7 +5981,7 @@ def test_logical_assignment_validation_fails_closed_without_stores() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             registry.register(
                 {
@@ -6021,8 +6019,8 @@ def test_logical_assignment_validation_fails_closed_without_stores() -> None:
 
 def test_daemon_registration_rejects_wrong_node_token() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
             {
@@ -6056,7 +6054,7 @@ def test_daemon_registration_rejects_wrong_node_token() -> None:
 
 def test_new_daemon_records_store_only_split_credential_hashes() -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -6077,33 +6075,6 @@ def test_new_daemon_records_store_only_split_credential_hashes() -> None:
         assert "token" not in node
         assert "tokenHash" not in node
         assert "nodeToken" not in node
-
-
-def test_local_daemon_store_redacts_plaintext_node_token() -> None:
-    with TemporaryDirectory() as root:
-        store = LocalDaemonStore(root)
-        store.register_node(
-            {
-                **store_node_payload(),
-                "status": "provisioning",
-                "agents": {"codex": "unknown"},
-                "lastError": "Waiting for daemon node registration.",
-            }
-        )
-
-        [node] = store.list_nodes()
-        assert node["id"] == "sbx_alice"
-        assert node["nodeTokenHash"] == "sha256:hash"
-        assert "nodeToken" not in node
-        assert node["token"] is None
-
-        persisted = json.loads(
-            (Path(root) / "daemon" / "nodes" / "sbx_alice.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        assert "nodeToken" not in persisted
-        assert persisted["token"] is None
 
 
 def test_database_daemon_store_redacts_plaintext_node_token() -> None:
@@ -6135,7 +6106,7 @@ def test_database_daemon_store_redacts_plaintext_node_token() -> None:
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_registry_restart_does_not_recover_plaintext_node_token(store_factory) -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
+        session_store = make_session_store(root)
         registry = DaemonNodeRegistry(session_store, store_factory(root))
         _sandbox, _ui_token, node_token = registry.provision_pending(
             "alice", "/workspace/alice"
@@ -6143,7 +6114,7 @@ def test_registry_restart_does_not_recover_plaintext_node_token(store_factory) -
 
         assert registry.control_panel_nodes()[0]["nodeToken"] == node_token
 
-        restarted = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        restarted = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         assert "nodeToken" not in restarted.control_panel_nodes()[0]
 
 
@@ -6152,7 +6123,7 @@ def test_registry_restart_keeps_agents_ready_when_live_daemon_resumes_polling(
     store_factory,
 ) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -6167,7 +6138,7 @@ def test_registry_restart_keeps_agents_ready_when_live_daemon_resumes_polling(
             "ui_token",
         )
 
-        restarted = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        restarted = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         restarted.renew_active_command_leases("sbx_alice", "node_token", [])
         node = restarted.monitor_nodes()[0]
 
@@ -6180,7 +6151,7 @@ def test_registry_restart_does_not_revive_retired_daemon_on_poll(
     store_factory,
 ) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         registry.register(
             {
                 "sandboxId": "sbx_retired",
@@ -6196,7 +6167,7 @@ def test_registry_restart_does_not_revive_retired_daemon_on_poll(
         )
         registry.fence_managed_node("sbx_retired")
 
-        restarted = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        restarted = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         restarted.renew_active_command_leases("sbx_retired", "node_token", [])
         node = restarted.monitor_nodes()[0]
 
@@ -6208,7 +6179,7 @@ def test_registry_restart_does_not_revive_retired_daemon_on_poll(
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_registry_persists_computer_display_name(store_factory) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         registry.register(
             {
                 "sandboxId": "sbx_alice",
@@ -6225,14 +6196,13 @@ def test_registry_persists_computer_display_name(store_factory) -> None:
 
         registry.set_display_name("sbx_alice", "Office Mac")
 
-        restarted = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        restarted = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         assert restarted.get("sbx_alice")["displayName"] == "Office Mac"
 
 
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -6276,7 +6246,7 @@ def test_multi_node_workflow_is_rejected_even_with_shared_workspace_id() -> None
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             backend = ServerDaemonNodeBackend(registry)
             for node_id, executor, workspace_path in (
@@ -6330,10 +6300,10 @@ def test_multi_node_workflow_is_rejected_even_with_shared_workspace_id() -> None
 def test_same_node_workflow_revalidates_placement_before_next_enqueue() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
-            agents = LocalAgentStore(root)
-            placements = LocalAgentPlacementStore(root)
+            session_store = make_session_store(root)
+            registry = DaemonNodeRegistry(session_store, make_daemon_store(root))
+            agents = make_agent_store(root)
+            placements = make_agent_placement_store(root)
             backend = ServerDaemonNodeBackend(
                 registry,
                 agent_store=agents,
@@ -6643,9 +6613,9 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
     """An idle long poll touches the registry several times per second; only a
     bounded fraction of those may reach the durable node row."""
 
-    class CountingLocalDaemonStore(LocalDaemonStore):
+    class CountingLocalDaemonStore(DatabaseDaemonStore):
         def __init__(self, root: str):
-            super().__init__(root)
+            super().__init__(sqlite_url(root), create_schema=True)
             self.mark_seen_calls = 0
 
         def mark_node_seen(self, node_id, patch=None):
@@ -6653,7 +6623,7 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
             return super().mark_node_seen(node_id, patch)
 
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
+        session_store = make_session_store(root)
         daemon_store = CountingLocalDaemonStore(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
@@ -6693,9 +6663,9 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
     node_location: str,
 ) -> None:
     with TemporaryDirectory() as root:
-        daemon_store = LocalDaemonStore(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(
-            LocalSessionStore(root), daemon_store, liveness_timeout_ms=15_000
+            make_session_store(root), daemon_store, liveness_timeout_ms=15_000
         )
         registry.register(
             {
@@ -6733,7 +6703,7 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
 
 def test_retired_node_cannot_renew_explicit_heartbeat() -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
         registry.register(
             {
                 "sandboxId": "node_retired",
@@ -6753,8 +6723,8 @@ def test_retired_node_cannot_renew_explicit_heartbeat() -> None:
 
 def test_durable_heartbeat_is_visible_to_another_registry_replica() -> None:
     with TemporaryDirectory() as root:
-        daemon_store = LocalDaemonStore(root)
-        first = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+        daemon_store = make_daemon_store(root)
+        first = DaemonNodeRegistry(make_session_store(root), daemon_store)
         first.register(
             {
                 "sandboxId": "node_shared",
@@ -6766,7 +6736,7 @@ def test_durable_heartbeat_is_visible_to_another_registry_replica() -> None:
                 "status": "ready",
             }
         )
-        second = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+        second = DaemonNodeRegistry(make_session_store(root), daemon_store)
         second.sandboxes["node_shared"] = {
             **second.sandboxes["node_shared"],
             "status": "stopped",
@@ -6782,9 +6752,9 @@ def test_durable_heartbeat_is_visible_to_another_registry_replica() -> None:
 
 
 def test_explicit_heartbeat_renews_active_command_leases() -> None:
-    class LeaseTrackingStore(LocalDaemonStore):
+    class LeaseTrackingStore(DatabaseDaemonStore):
         def __init__(self, root: str):
-            super().__init__(root)
+            super().__init__(sqlite_url(root), create_schema=True)
             self.renewals: list[tuple[str, list[tuple[str, str | None]], float]] = []
 
         def renew_command_leases(self, node_id, leases, *, lease_seconds):
@@ -6795,7 +6765,7 @@ def test_explicit_heartbeat_renews_active_command_leases() -> None:
 
     with TemporaryDirectory() as root:
         daemon_store = LeaseTrackingStore(root)
-        registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
         registry.register(
             {
                 "sandboxId": "node_busy",
@@ -6816,9 +6786,9 @@ def test_explicit_heartbeat_renews_active_command_leases() -> None:
 
 
 def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
-    class CountingLocalDaemonStore(LocalDaemonStore):
+    class CountingLocalDaemonStore(DatabaseDaemonStore):
         def __init__(self, root: str):
-            super().__init__(root)
+            super().__init__(sqlite_url(root), create_schema=True)
             self.active_run_calls: list[str | None] = []
             self.queued_count_calls = 0
             self.queued_counts_calls = 0
@@ -6838,7 +6808,7 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
             return super().queued_command_counts()
 
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
+        session_store = make_session_store(root)
         daemon_store = CountingLocalDaemonStore(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
@@ -6888,9 +6858,9 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
 
 
 def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
-    class CountingLocalDaemonStore(LocalDaemonStore):
+    class CountingLocalDaemonStore(DatabaseDaemonStore):
         def __init__(self, root: str):
-            super().__init__(root)
+            super().__init__(sqlite_url(root), create_schema=True)
             self.active_run_calls: list[str | None] = []
 
         def list_active_runs(
@@ -6902,7 +6872,7 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             daemon_store = CountingLocalDaemonStore(root)
-            registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store)
+            registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
@@ -6938,7 +6908,6 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -6947,7 +6916,9 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
 def test_daemon_store_reclaims_expired_command_leases(store_factory, monkeypatch) -> None:
     # Both stores must see the same clock regardless of database/fs latency.
     now = "2026-06-13T00:00:00.000Z"
-    monkeypatch.setattr("relay.persistence.daemon_store.now_iso", lambda: now)
+    # Every daemon store module reads the clock; freeze them all.
+    for module in ("daemon.commands", "daemon.maintenance", "daemon.nodes", "daemon.rules", "daemon.run_requests", "daemon.workspace_responses"):
+        monkeypatch.setattr(f"relay.persistence.{module}.now_iso", lambda: now)
     with TemporaryDirectory() as root:
         store = store_factory(root)
         store.register_node(
@@ -6996,7 +6967,6 @@ def test_daemon_store_reclaims_expired_command_leases(store_factory, monkeypatch
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -7052,7 +7022,6 @@ def test_daemon_store_retries_cancel_until_target_run_is_terminal(
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -7099,7 +7068,6 @@ def test_daemon_store_renews_active_command_leases(store_factory) -> None:
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -7151,7 +7119,6 @@ def test_daemon_store_does_not_renew_a_superseded_delivery(store_factory) -> Non
 @pytest.mark.parametrize(
     "store_factory",
     [
-        LocalDaemonStore,
         lambda root: DatabaseDaemonStore(
             f"sqlite:///{root}/daemon.db", create_schema=True
         ),
@@ -7183,8 +7150,8 @@ def test_daemon_store_persists_agent_role_maps(store_factory) -> None:
 def test_daemon_run_rejects_ownerless_sessions() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             session = session_store.create_session(
@@ -7223,8 +7190,8 @@ def test_daemon_run_rejects_ownerless_sessions() -> None:
 
 def test_daemon_run_dispatch_rejects_concurrent_second_claim() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         backend = ServerDaemonNodeBackend(registry)
         registry.register(
@@ -7266,8 +7233,8 @@ def test_daemon_run_dispatch_rejects_concurrent_second_claim() -> None:
 def test_set_disabled_agents_blocks_dispatch_and_survives_restart() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -7317,7 +7284,7 @@ def test_set_disabled_agents_blocks_dispatch_and_survives_restart() -> None:
             assert session["status"] == "running"
 
             registry2 = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root)
+                make_session_store(root), make_daemon_store(root)
             )
             assert registry2.get("sbx_alice")["disabledAgents"] == ["codex"]
             assert registry2.get("sbx_alice")["agentRoleDefaults"] == {
@@ -7364,8 +7331,8 @@ def test_effective_agent_roles_use_only_explicit_or_configured_roles() -> None:
 def test_daemon_run_records_effective_agent_role_override() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            daemon_store = LocalDaemonStore(root)
+            session_store = make_session_store(root)
+            daemon_store = make_daemon_store(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
             backend = ServerDaemonNodeBackend(registry)
             registry.register(
@@ -7400,8 +7367,8 @@ def test_daemon_run_records_effective_agent_role_override() -> None:
 
 def test_register_sanitizes_and_exposes_agent_inventory() -> None:
     with TemporaryDirectory() as root:
-        session_store = LocalSessionStore(root)
-        daemon_store = LocalDaemonStore(root)
+        session_store = make_session_store(root)
+        daemon_store = make_daemon_store(root)
         registry = DaemonNodeRegistry(session_store, daemon_store)
         registry.register(
             {
@@ -7458,7 +7425,7 @@ def test_register_sanitizes_and_exposes_agent_inventory() -> None:
 
 def test_register_without_inventory_omits_field() -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
         registry.register(
             {
                 "sandboxId": "sbx_none",
@@ -7485,7 +7452,7 @@ def test_reregistering_a_computer_retires_the_previous_daemon_incarnation(
     compatibility agents -- accumulated.
     """
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         for sandbox_id in ("sbx_first", "sbx_second"):
             registry.register(
                 {
@@ -7512,7 +7479,7 @@ def test_reregistering_a_computer_retires_the_previous_daemon_incarnation(
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_reregistering_a_computer_keeps_other_computers_live(store_factory) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         for sandbox_id, workspace_id, user in (
             ("sbx_laptop", "mch_laptop", "alice"),
             ("sbx_desktop", "mch_desktop", "alice"),
@@ -7542,7 +7509,7 @@ def test_reregistering_a_computer_keeps_other_computers_live(store_factory) -> N
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_reregistering_the_same_daemon_does_not_retire_itself(store_factory) -> None:
     with TemporaryDirectory() as root:
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
+        registry = DaemonNodeRegistry(make_session_store(root), store_factory(root))
         payload = {
             "sandboxId": "sbx_alice",
             "userId": "alice",
@@ -7569,13 +7536,13 @@ def test_idempotent_run_request_id_is_a_uuid() -> None:
     on the value itself: a store round-trip would only prove whatever the
     store under test happens to accept.
     """
-    from relay.daemon_registry.node_backend import _idempotent_run_request_id
+    from relay.core.run_request_ids import idempotent_run_request_id
 
-    derived = _idempotent_run_request_id("claim_ms64xmg1_j1r8cs")
+    derived = idempotent_run_request_id("claim_ms64xmg1_j1r8cs")
 
     assert str(UUID(derived)) == derived
-    assert derived == _idempotent_run_request_id("claim_ms64xmg1_j1r8cs")
-    assert derived != _idempotent_run_request_id("claim_other")
+    assert derived == idempotent_run_request_id("claim_ms64xmg1_j1r8cs")
+    assert derived != idempotent_run_request_id("claim_other")
 
 
 def test_node_agent_maps_round_trip_through_the_child_table() -> None:
@@ -7832,7 +7799,7 @@ def test_dead_heartbeat_events_are_prunable() -> None:
 
 
 def _machine_registry(root: str) -> DaemonNodeRegistry:
-    return DaemonNodeRegistry(LocalSessionStore(root), LocalDaemonStore(root))
+    return DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
 
 
 def _machine_payload(**overrides: Any) -> dict[str, Any]:
@@ -7976,7 +7943,7 @@ def test_failed_session_closes_agent_projection_only_after_execution_is_settled(
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_terminal_projection_recovery_survives_event_write_failure(store_factory, monkeypatch):
-    from relay.persistence.daemon_store import TERMINAL_CLAIM_EXPIRES_STATE_KEY
+    from relay.persistence.daemon.rules import TERMINAL_CLAIM_EXPIRES_STATE_KEY
 
     async def run_flow():
         with TemporaryDirectory() as root:
@@ -8023,7 +7990,10 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
                 "assignments": [{"agent": "codex"}, {"agent": "codex"}],
             })
             [command] = registry.take_commands("sbx_alice", "node_token")
-            monkeypatch.setattr("relay.daemon_registry.registry.node_accepts_run", lambda *args, **kwargs: False)
+            for module in ("delivery", "nodes"):
+                monkeypatch.setattr(
+                    f"relay.daemon_registry.{module}.node_accepts_run", lambda *args, **kwargs: False
+                )
             registry.handle_event("sbx_alice", {
                 "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
                 "sessionId": session["id"], "agent": command["agent"], "exitCode": 0,
@@ -8045,9 +8015,9 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
     ("assignments", "broken"),
     [
         # The next member cannot be staged.
-        ([{"agent": "codex"}, {"agent": "codex"}], "compute_prior_agent_bridge"),
+        ([{"agent": "codex"}, {"agent": "codex"}], "delivery.compute_prior_agent_bridge"),
         # The finished member was last and the round cannot close.
-        ([{"agent": "codex"}], "completion_blockers"),
+        ([{"agent": "codex"}], "completion.completion_blockers"),
     ],
 )
 def test_a_round_that_cannot_continue_after_a_turn_fails_visibly(
@@ -8069,7 +8039,7 @@ def test_a_round_that_cannot_continue_after_a_turn_fails_visibly(
             def explode(*_args, **_kwargs):
                 raise RuntimeError("next step exploded")
 
-            monkeypatch.setattr(f"relay.daemon_registry.registry.{broken}", explode)
+            monkeypatch.setattr(f"relay.daemon_registry.{broken}", explode)
             with pytest.raises(RuntimeError, match="next step exploded"):
                 registry.handle_event("sbx_alice", {
                     "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
@@ -8117,8 +8087,8 @@ def test_a_round_that_cannot_continue_after_a_turn_fails_visibly(
 def test_late_output_from_completed_lease_is_recovered_without_reactivating_run() -> None:
     async def flow() -> None:
         with TemporaryDirectory() as root:
-            sessions = LocalSessionStore(root)
-            daemons = LocalDaemonStore(root)
+            sessions = make_session_store(root)
+            daemons = make_daemon_store(root)
             registry = DaemonNodeRegistry(sessions, daemons)
             registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                                "workspacePath": "/workspace/alice", "protocolVersion": 2,
@@ -8152,7 +8122,7 @@ def _lapse_dispatch(registry: Any, command: dict[str, Any], monkeypatch: Any, *,
     )
     time.sleep(0.005)
     if long_ago:
-        monkeypatch.setattr("relay.daemon_registry.registry.LOST_DISPATCH_GRACE_SECONDS", 0)
+        monkeypatch.setattr("relay.daemon_registry.config.LOST_DISPATCH_GRACE_SECONDS", 0)
 
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
@@ -8374,7 +8344,7 @@ def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factor
 
 
 def test_run_completed_keeps_the_output_truncated_flag():
-    from relay.api.helpers import daemon_node_event
+    from relay.api.daemon_events import daemon_node_event
 
     base = {"type": "run.completed", "commandId": "c", "sessionId": "s", "runId": "r",
             "agent": "codex", "exitCode": 0, "agentLog": ""}
@@ -8385,8 +8355,8 @@ def test_run_completed_keeps_the_output_truncated_flag():
 def test_a_completed_run_remembers_its_output_was_truncated():
     async def flow() -> None:
         with TemporaryDirectory() as root:
-            sessions = LocalSessionStore(root)
-            registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+            sessions = make_session_store(root)
+            registry = DaemonNodeRegistry(sessions, make_daemon_store(root))
             registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                                "workspacePath": "/workspace/alice", "protocolVersion": 2,
                                "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
@@ -8407,8 +8377,8 @@ SESSION_ID = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
 
 
 def _resume_registry(root: str, capabilities: list[str]) -> tuple[Any, Any]:
-    sessions = LocalSessionStore(root)
-    registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+    sessions = make_session_store(root)
+    registry = DaemonNodeRegistry(sessions, make_daemon_store(root))
     registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                        "workspacePath": "/workspace/alice", "protocolVersion": 2,
                        "supportedAgents": ["claude"], "capabilities": ["thread-workspaces", *capabilities],
@@ -8437,7 +8407,7 @@ def test_a_run_remembers_the_runtime_conversation_it_ran_in():
 
 
 def test_a_malformed_runtime_session_id_is_dropped():
-    from relay.api.helpers import daemon_node_event
+    from relay.api.daemon_events import daemon_node_event
 
     event = daemon_node_event({"type": "run.cancelled", "commandId": "c", "sessionId": "s", "runId": "r",
                                "agent": "claude", "runtimeSessionId": "x; rm -rf /"})
@@ -8659,6 +8629,9 @@ def test_recovery_repairs_a_partially_written_completion(store_factory, human_ac
                 def fail_write(*_args, **_kwargs):
                     raise RuntimeError("task write unavailable")
                 patched.setattr(SessionController, "_update_task_status", fail_write)
+                # Commit the thread on its own so the failed task write leaves
+                # a partial completion for recovery to repair.
+                patched.setattr(SessionController, "_transaction", lambda _self: nullcontext())
                 with pytest.raises(RuntimeError, match="task write unavailable"):
                     _report_blocked(registry, command, exitCode=0, roundResult={
                         "status": "blocked", "note": "Which region?",
@@ -8718,7 +8691,7 @@ def test_staged_successor_recovery_has_a_failure_limit(store_factory, broken, mo
             def fail_write(*_args, **_kwargs):
                 raise RuntimeError("successor unavailable")
             monkeypatch.setattr(registry if broken.startswith("_") else registry.daemon_store, broken, fail_write)
-            monkeypatch.setattr("relay.daemon_registry.registry.DISPATCH_CLAIM_LEASE_SECONDS", 0)
+            monkeypatch.setattr("relay.daemon_registry.config.DISPATCH_CLAIM_LEASE_SECONDS", 0)
             monkeypatch.setattr(DaemonNodeRegistry, "_follow_up_backing_off", staticmethod(lambda _request: False))
             claim = getattr(registry.daemon_store, "claim_recovery_requests", None)
             if claim:

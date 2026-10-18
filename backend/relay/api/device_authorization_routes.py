@@ -3,26 +3,41 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from urllib.parse import quote
-from typing import Any
+from typing import Any, Protocol, cast
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import delete, insert, select, update
+from sqlalchemy.engine import Engine
 
 from ..persistence.store_common import store_transaction
-from ..security.device_authorization import computer_authorizations as grants
+from ..persistence.tables.device_authorizations import computer_authorizations as grants
 from .auth_routes import _consume_auth_attempt, _auth_rate_key
 from .computer_installer_routes import computer_setup_command, computer_windows_setup_command
 from .daemon_node_routes import create_local_device_enrollment
-from .deps import AppContextDep
-from .helpers import JsonBodyDep, backend_base_url, request_actor, valid_user_workspace_path
+from .deps import AppContext, AppContextDep
+from .actors import request_actor
+from ..security.actor import Actor
+from .node_install import backend_base_url, valid_user_workspace_path
+from .bodies import JsonBodyDep
 
 router = APIRouter()
 TTL_SECONDS = 600
 
 
-def _human(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+class _EngineBacked(Protocol):
+    @property
+    def engine(self) -> Engine: ...
+
+
+def _grants_engine(ctx: AppContext) -> Engine:
+    """The database the grants live in: the session store's own engine,
+    which the ``SessionStore`` protocol does not declare."""
+    return cast(_EngineBacked, ctx.session_store).engine
+
+
+def _human(request: Request, ctx: AppContextDep) -> Actor:
     actor = request_actor(request, ctx.auth_store)
     if not actor.get("account"):
         raise HTTPException(401, "Sign in to connect a computer.")
@@ -31,7 +46,7 @@ def _human(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 def _current(conn: Any, code: str) -> Any:
     row = conn.execute(select(grants).where(grants.c.user_code == code).where(
-        grants.c.expires_at > datetime.now(timezone.utc)).with_for_update()).mappings().first()
+        grants.c.expires_at > datetime.now(UTC)).with_for_update()).mappings().first()
     if not row:
         raise HTTPException(410, "This connection request has expired. Run setup again.")
     return row
@@ -53,8 +68,8 @@ def start_authorization(request: Request, ctx: AppContextDep, response: Response
     if not isinstance(name, str) or not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
         raise HTTPException(400, "A computer name of at most 80 characters is required.")
     device_code, user_code = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
-    now = datetime.now(timezone.utc)
-    with store_transaction(ctx.session_store.engine) as conn:
+    now = datetime.now(UTC)
+    with store_transaction(_grants_engine(ctx)) as conn:
         conn.execute(delete(grants).where(grants.c.expires_at <= now))
         conn.execute(insert(grants).values(device_hash=hashlib.sha256(device_code.encode()).hexdigest(),
             user_code=user_code, expires_at=now + timedelta(seconds=TTL_SECONDS), status="pending",
@@ -70,9 +85,9 @@ def redeem_authorization(request: Request, ctx: AppContextDep, response: Respons
     if scheme != "Device" or not code or len(code) > 128:
         raise HTTPException(401, "Invalid device credential.")
     digest = hashlib.sha256(code.encode()).hexdigest()
-    with store_transaction(ctx.session_store.engine) as conn:
+    with store_transaction(_grants_engine(ctx)) as conn:
         row = conn.execute(select(grants).where(grants.c.device_hash == digest).where(
-            grants.c.expires_at > datetime.now(timezone.utc)).with_for_update()).mappings().first()
+            grants.c.expires_at > datetime.now(UTC)).with_for_update()).mappings().first()
         if not row:
             raise HTTPException(401, "Invalid or expired device credential.")
         response.headers["Cache-Control"] = "no-store"
@@ -99,7 +114,7 @@ def redeem_authorization(request: Request, ctx: AppContextDep, response: Respons
 @router.get("/computer-authorizations/{code}")
 def authorization_details(code: str, request: Request, ctx: AppContextDep, response: Response) -> dict[str, Any]:
     _human(request, ctx)
-    with store_transaction(ctx.session_store.engine) as conn:
+    with store_transaction(_grants_engine(ctx)) as conn:
         row = _current(conn, code)
         response.headers["Cache-Control"] = "no-store"
         return {"displayName": row["display_name"], "workspacePath": row["workspace_path"], "status": row["status"]}
@@ -109,7 +124,7 @@ def authorization_details(code: str, request: Request, ctx: AppContextDep, respo
 def approve_authorization(code: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = _human(request, ctx)
     _consume_auth_attempt(request, _auth_rate_key(request, "computer-approve", actor["userId"]))
-    with store_transaction(ctx.session_store.engine) as conn:
+    with store_transaction(_grants_engine(ctx)) as conn:
         row = _current(conn, code)
         if row["status"] != "pending":
             raise HTTPException(409, "This connection request has already been approved.")

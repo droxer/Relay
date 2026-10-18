@@ -6,21 +6,19 @@ from pathlib import Path
 import pytest
 from relay.persistence.agent_placement_store import (
     DatabaseAgentPlacementStore,
-    LocalAgentPlacementStore,
     _new_placement,
     _placement_row,
     placement_status,
     reconcile_single_active_placement,
 )
-from relay.persistence.agent_store import (
-    DatabaseAgentStore,
-    LocalAgentStore,
-)
+from store_fixtures import make_agent_placement_store
+from relay.persistence.agent_store import DatabaseAgentStore
+from store_fixtures import make_agent_store
 
 
 def test_agents_can_be_placed_on_different_nodes(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     researcher = agents.create_agent(
         "alice",
         {
@@ -48,8 +46,8 @@ def test_agents_can_be_placed_on_different_nodes(tmp_path: Path) -> None:
 def test_moving_an_agent_to_a_new_computer_supersedes_the_old_placement(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -70,8 +68,8 @@ def test_moving_an_agent_to_a_new_computer_supersedes_the_old_placement(
 
 
 def test_reassigning_the_same_computer_is_rejected(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -110,19 +108,13 @@ def test_database_store_moves_an_agent_between_computers(tmp_path: Path) -> None
     assert [placement["daemonNodeId"] for placement in active] == ["node_b"]
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_first_managed_attachment_is_idempotent_across_store_instances(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    if store_kind == "database":
-        database_url = f"sqlite:///{tmp_path}/first-attach.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        first_store = DatabaseAgentPlacementStore(database_url, create_schema=True)
-        second_store = DatabaseAgentPlacementStore(database_url)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        first_store = LocalAgentPlacementStore(tmp_path)
-        second_store = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/first-attach.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    first_store = DatabaseAgentPlacementStore(database_url, create_schema=True)
+    second_store = DatabaseAgentPlacementStore(database_url)
     agent = agents.create_agent(
         "alice",
         {
@@ -156,19 +148,13 @@ def test_first_managed_attachment_is_idempotent_across_store_instances(
     assert active["computerId"] == "managed:computer-ready"
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_first_managed_attachment_allows_only_one_competing_computer(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
-    if store_kind == "database":
-        database_url = f"sqlite:///{tmp_path}/competing-attach.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        first_store = DatabaseAgentPlacementStore(database_url, create_schema=True)
-        second_store = DatabaseAgentPlacementStore(database_url)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        first_store = LocalAgentPlacementStore(tmp_path)
-        second_store = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/competing-attach.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    first_store = DatabaseAgentPlacementStore(database_url, create_schema=True)
+    second_store = DatabaseAgentPlacementStore(database_url)
     agent = agents.create_agent(
         "alice",
         {
@@ -200,17 +186,12 @@ def test_first_managed_attachment_allows_only_one_competing_computer(
     assert active["computerId"] in {"managed:computer-a", "managed:computer-b"}
 
 
-@pytest.mark.parametrize("database", [False, True])
 def test_runtime_rebind_preserves_placement_identity(
-    tmp_path: Path, database: bool
+    tmp_path: Path
 ) -> None:
-    if database:
-        database_url = f"sqlite:///{tmp_path}/rebind.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        placements = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/rebind.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
     agent = agents.create_agent(
         "alice",
         {
@@ -233,17 +214,12 @@ def test_runtime_rebind_preserves_placement_identity(
     assert placements.list_placements(agent_id=agent["id"]) == [rebound]
 
 
-@pytest.mark.parametrize("database", [False, True])
 def test_runtime_rebind_can_adopt_a_stable_local_computer_identity(
-    tmp_path: Path, database: bool
+    tmp_path: Path
 ) -> None:
-    if database:
-        database_url = f"sqlite:///{tmp_path}/local-rebind.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        placements = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/local-rebind.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
     agent = agents.create_agent(
         "alice",
         {
@@ -299,67 +275,6 @@ def test_database_move_keeps_old_placement_when_insert_fails(tmp_path: Path) -> 
     assert [placement["daemonNodeId"] for placement in active] == ["node_a"]
 
 
-def test_local_move_keeps_old_placement_when_create_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
-    agent = agents.create_agent(
-        "alice",
-        {
-            "displayName": "Researcher",
-            "executorKind": "claude",
-            "defaultRole": "implementer",
-        },
-    )
-    placements.create_placement(agent, "node_a")
-    append = placements._append
-
-    def reject_new_placement(
-        placement_id: str, event_type: str, placement: dict
-    ) -> None:
-        if event_type == "placement.created" and placement["daemonNodeId"] == "node_b":
-            raise OSError("node_b rejected")
-        append(placement_id, event_type, placement)
-
-    monkeypatch.setattr(placements, "_append", reject_new_placement)
-
-    with pytest.raises(OSError, match="node_b rejected"):
-        placements.create_placement(agent, "node_b")
-
-    active = placements.list_placements(agent_id=agent["id"])
-    assert [placement["daemonNodeId"] for placement in active] == ["node_a"]
-
-
-def test_reconcile_collapses_pre_invariant_multi_placements(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
-    agent = agents.create_agent(
-        "alice",
-        {
-            "displayName": "Researcher",
-            "executorKind": "claude",
-            "defaultRole": "implementer",
-        },
-    )
-    # Simulate data created before the one-agent-one-computer invariant by
-    # appending a second active placement straight to the event log (bypassing
-    # create_placement's guard).
-    placements.create_placement(agent, "node_low", {"priority": 200})
-    extra = _new_placement(agent, "node_top", {"priority": 50})
-    placements._append(extra["id"], "placement.created", extra)
-    assert len(placements.list_placements(agent_id=agent["id"])) == 2
-
-    superseded = reconcile_single_active_placement(placements)
-
-    active = placements.list_placements(agent_id=agent["id"])
-    # The top-priority (lowest number) placement survives; the rest are removed.
-    assert [placement["daemonNodeId"] for placement in active] == ["node_top"]
-    assert superseded  # the priority-200 placement was moved to removed
-    # Idempotent: a second pass has nothing left to collapse.
-    assert reconcile_single_active_placement(placements) == []
-
-
 def test_database_reconcile_collapses_pre_invariant_multi_placements(
     tmp_path: Path,
 ) -> None:
@@ -394,8 +309,8 @@ def test_database_reconcile_collapses_pre_invariant_multi_placements(
 def test_placement_availability_is_derived_from_agent_and_node_health(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -425,17 +340,12 @@ def test_placement_availability_is_derived_from_agent_and_node_health(
     assert result["conditions"] == []
 
 
-@pytest.mark.parametrize("database", [False, True])
 def test_realized_agent_versions_never_move_backward(
-    tmp_path: Path, database: bool
+    tmp_path: Path
 ) -> None:
-    if database:
-        database_url = f"sqlite:///{tmp_path}/version.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        placements = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/version.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
     agent = agents.create_agent(
         "alice",
         {
@@ -508,17 +418,12 @@ def test_database_placement_store_normalizes_legacy_owner_snapshot(
     assert placements.get_placement(placement["id"])["supervisorUserId"] == "alice"
 
 
-@pytest.mark.parametrize("database", [False, True])
 def test_rebinding_to_an_unmanaged_node_clears_the_computer_identity(
-    tmp_path: Path, database: bool
+    tmp_path: Path
 ) -> None:
-    if database:
-        database_url = f"sqlite:///{tmp_path}/clear-managed.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        placements = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/clear-managed.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
     agent = agents.create_agent(
         "alice",
         {
@@ -543,17 +448,12 @@ def test_rebinding_to_an_unmanaged_node_clears_the_computer_identity(
     assert placements.get_placement(original["id"]).get("managedNodeId") is None
 
 
-@pytest.mark.parametrize("database", [False, True])
 def test_rebind_repairs_a_stale_computer_identity_on_the_same_node(
-    tmp_path: Path, database: bool
+    tmp_path: Path
 ) -> None:
-    if database:
-        database_url = f"sqlite:///{tmp_path}/repair-managed.db"
-        agents = DatabaseAgentStore(database_url, create_schema=True)
-        placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
-    else:
-        agents = LocalAgentStore(tmp_path)
-        placements = LocalAgentPlacementStore(tmp_path)
+    database_url = f"sqlite:///{tmp_path}/repair-managed.db"
+    agents = DatabaseAgentStore(database_url, create_schema=True)
+    placements = DatabaseAgentPlacementStore(database_url, create_schema=True)
     agent = agents.create_agent(
         "alice",
         {
@@ -573,18 +473,15 @@ def test_rebind_repairs_a_stale_computer_identity_on_the_same_node(
     assert repaired.get("computerId") is None
 
 
-@pytest.mark.parametrize("store_kind", ["local", "database"])
 def test_placement_denormalized_agent_fields_cannot_drift(
-    tmp_path: Path, store_kind: str
+    tmp_path: Path
 ) -> None:
     """Placements copy supervisorUserId and executorKind from the agent and
     never refresh them. That is only safe while neither is patchable, so pin it
     here: making either mutable must fail this test, not silently leave every
     placement pointing at the wrong user or executor."""
     store = (
-        LocalAgentStore(tmp_path / "local")
-        if store_kind == "local"
-        else DatabaseAgentStore(f"sqlite:///{tmp_path}/agents.db", create_schema=True)
+        DatabaseAgentStore(f"sqlite:///{tmp_path}/agents.db", create_schema=True)
     )
     agent = store.create_agent(
         "alice",
@@ -604,14 +501,12 @@ def test_placement_denormalized_agent_fields_cannot_drift(
 
 
 def test_placement_records_the_computer_identity(tmp_path) -> None:
-    from relay.persistence.agent_placement_store import (
-        LocalAgentPlacementStore,
-        create_node_placement,
-    )
-    from relay.persistence.agent_store import LocalAgentStore
+    from relay.persistence.agent_placement_store import create_node_placement
+    from store_fixtures import make_agent_placement_store
+    from store_fixtures import make_agent_store
 
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {

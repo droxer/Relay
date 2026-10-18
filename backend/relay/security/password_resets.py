@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from sqlalchemy import delete, func, insert, or_, select, update
@@ -23,8 +23,8 @@ from sqlalchemy import delete, func, insert, or_, select, update
 from ..core.ids import new_database_id
 from ..persistence.store_common import (
     _format_iso,
-    _parse_iso,
     _read_json,
+    _require_iso,
     _write_json,
     store_transaction,
 )
@@ -86,7 +86,7 @@ def _recipient(*addresses: str | None) -> str | None:
 
 def _utc(value: datetime) -> datetime:
     # SQLite hands back naive datetimes; Relay writes every timestamp as UTC.
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _throttled(created: list[datetime], now: datetime, throttle: ResetThrottle | None) -> bool:
@@ -100,7 +100,9 @@ def _throttled(created: list[datetime], now: datetime, throttle: ResetThrottle |
 
 def _matches(identifier: str, account: ResetAccount) -> bool:
     if "@" in identifier:
-        return bool(account.email) and account.email.lower() == identifier
+        if not account.email:
+            return False
+        return account.email.lower() == identifier
     return account.username == identifier
 
 
@@ -136,10 +138,10 @@ class FilePasswordResetStore:
             records = [
                 record
                 for record in self._read()
-                if _parse_iso(record["expiresAt"]) > now - RETENTION
+                if _require_iso(record["expiresAt"]) > now - RETENTION
             ]
             mine = [record for record in records if record["accountId"] == account_id]
-            if _throttled([_parse_iso(record["createdAt"]) for record in mine], now, throttle):
+            if _throttled([_require_iso(record["createdAt"]) for record in mine], now, throttle):
                 return False
             records = [self._spent(record, account_id, now) for record in records]
             records.append(
@@ -162,7 +164,7 @@ class FilePasswordResetStore:
         account = self._auth.get_account_by_id(record["accountId"])
         if account is None:
             return None
-        return LiveReset(self._reset_account(account), _parse_iso(record["expiresAt"]))
+        return LiveReset(self._reset_account(account), _require_iso(record["expiresAt"]))
 
     def complete(self, token_hash: str, password: str, *, now: datetime) -> ResetAccount:
         with self._auth._lock:
@@ -228,7 +230,7 @@ class FilePasswordResetStore:
         for record in records:
             if not secrets.compare_digest(record["tokenHash"], token_hash):
                 continue
-            if record.get("usedAt") or _parse_iso(record["expiresAt"]) <= now:
+            if record.get("usedAt") or _require_iso(record["expiresAt"]) <= now:
                 return None
             return record
         return None

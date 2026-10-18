@@ -7,7 +7,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from ..core.deploy_config import public_web_url
 from .contract import WEB_UI_ROUTE_ROOTS
-from .helpers import web_ui_asset_response
+from .web_ui import web_ui_asset_response
+from .deps import app_context
 
 router = APIRouter()
 
@@ -31,7 +32,7 @@ def web_asset(request: Request, asset_path: str = "") -> Response:
     if web_origin and _is_client_route(asset_path):
         query = f"?{request.url.query}" if request.url.query else ""
         return RedirectResponse(f"{web_origin}/{asset_path}{query}", status_code=307)
-    return web_ui_asset_response(asset_path)
+    return web_ui_asset_response(asset_path, app_context(request).settings.web_ui_dist_dir)
 
 
 def _is_client_route(asset_path: str) -> bool:

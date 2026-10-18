@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.routing import APIRoute
+
+from ..security.auth import require_admin_session
+from .deps import app_context
 
 API_VERSION = "v1"
 API_PREFIX = f"/api/{API_VERSION}"
@@ -63,10 +66,20 @@ class ApiRouterGroups:
     daemon: APIRouter
 
 
+def require_admin(request: Request) -> None:
+    """Router-level guard for every ``/admin`` route.
+
+    Handlers still read the admin account themselves; the session lookup is
+    cached on the request, so this adds no second query. It exists so an admin
+    route cannot be published without the check.
+    """
+    require_admin_session(request, app_context(request).auth_store)
+
+
 def api_router_groups() -> ApiRouterGroups:
     return ApiRouterGroups(
         public=APIRouter(),
-        admin=APIRouter(),
+        admin=APIRouter(dependencies=[Depends(require_admin)]),
         internal_chat=APIRouter(),
         daemon=APIRouter(),
     )

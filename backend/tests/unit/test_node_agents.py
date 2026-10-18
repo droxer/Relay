@@ -3,12 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 from relay.core.computer_identity import computer_id
-from relay.persistence.agent_placement_store import (
-    LocalAgentPlacementStore,
-    create_node_placement,
-)
-from relay.persistence.agent_store import LocalAgentStore
-from relay.persistence.team_store import LocalTeamStore
+from relay.persistence.agent_placement_store import create_node_placement
+from store_fixtures import make_agent_placement_store
+from store_fixtures import make_agent_store
+from store_fixtures import make_team_store
 from relay.services.agent_routing import placement_node
 from relay.services.node_agents import remove_node_agents, sync_node_agents
 
@@ -18,8 +16,8 @@ def test_managed_agent_sync_tolerates_missing_agent_table(
 ) -> None:
     """During a rolling upgrade the agents table may not exist yet on this
     replica; sync must not crash the node registration path."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     node = {
         "id": "runtime_alice",
@@ -43,8 +41,8 @@ def test_deleting_a_computer_removes_only_its_placements(tmp_path: Path) -> None
     that computer. The agent stays on the roster (binding_status flags it
     computer_gone), so `remove_node_agents` still reports which agents were
     left without any active placement anywhere."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     keep = {
         "id": "node_keep",
@@ -105,8 +103,8 @@ def test_deleting_a_computer_removes_only_its_placements(tmp_path: Path) -> None
 
 
 def test_removing_agents_sweeps_already_unassigned_node(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     node = {
         "id": "node_solo",
@@ -139,9 +137,9 @@ def test_removing_agents_sweeps_already_unassigned_node(tmp_path: Path) -> None:
 def test_removing_node_agents_leaves_team_membership_untouched(tmp_path: Path) -> None:
     """The agent is not deleted when its computer goes away, so team
     membership — which only reacts to actual agent deletion — is unaffected."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
-    teams = LocalTeamStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
+    teams = make_team_store(tmp_path)
     ctx = SimpleNamespace(
         agent_store=agents,
         agent_placement_store=placements,
@@ -189,8 +187,8 @@ def test_removing_node_keeps_custom_logical_agent_with_no_other_computer(
     only placement — custom agents included — but the agent itself, declared
     explicitly by a user, stays on the roster (binding_status flags it
     computer_gone)."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(
         agent_store=agents,
         agent_placement_store=placements,
@@ -210,8 +208,8 @@ def test_removing_node_keeps_custom_logical_agent_with_no_other_computer(
 def test_removing_old_node_keeps_compatibility_agent_moved_elsewhere(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(
         agent_store=agents,
         agent_placement_store=placements,
@@ -229,8 +227,8 @@ def test_removing_old_node_keeps_compatibility_agent_moved_elsewhere(
 
 
 def test_removing_node_waits_for_active_agent_runs(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     node = {
         "id": "node_busy",
         "userId": "alice",
@@ -275,8 +273,8 @@ def _registry_ctx(
     nodes: list[dict],
     active_requests: list[dict] | None = None,
 ):
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(
         agent_store=agents,
         agent_placement_store=placements,
@@ -459,8 +457,8 @@ def test_managed_reprovision_keeps_placement_for_missing_old_runtime(
 def test_managed_runtime_replacement_keeps_placement_routable(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     first = {
         "id": "runtime_one",
@@ -493,8 +491,8 @@ def test_soft_deleted_user_does_not_get_a_placement_backfilled(
 ) -> None:
     """Deleting a user must stop their already-declared agents from
     getting a placement backfilled by a node that keeps registering."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     auth_store = SimpleNamespace(
         list_users=lambda: [{"id": "bob"}],  # alice was soft-deleted
     )
@@ -525,8 +523,8 @@ def test_soft_deleted_user_does_not_get_a_placement_backfilled(
 
 
 def test_live_user_still_gets_a_placement_backfilled(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     auth_store = SimpleNamespace(list_users=lambda: [{"id": "alice"}])
     ctx = SimpleNamespace(
         agent_store=agents,
@@ -599,8 +597,8 @@ def test_sync_backfills_a_placement_for_a_declared_agent(tmp_path) -> None:
 def test_sync_rebinds_a_legacy_placement_to_the_current_computer_runtime(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     stable_computer_id = "device:alice:machine-a"
     agent = agents.create_agent(
@@ -631,8 +629,8 @@ def test_sync_rebinds_a_legacy_placement_to_the_current_computer_runtime(
 def test_sync_promotes_an_unmigrated_compatibility_agent_after_machine_id_arrives(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     placement = placements.create_placement(agent, "node-1")
@@ -655,8 +653,8 @@ def test_sync_promotes_an_unmigrated_compatibility_agent_after_machine_id_arrive
 def test_sync_repairs_an_already_persisted_provisional_identity(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     ctx = SimpleNamespace(agent_store=agents, agent_placement_store=placements)
     agent = agents.create_agent(
         "alice",

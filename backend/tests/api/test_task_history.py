@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from relay.app import create_app
 from relay.persistence.stores import relay_event
-from relay.sessions import SessionController
+from relay.sessions.controller import SessionController
 
 from automation_helpers import WEEKLY_TRIGGERS, fire_now
 

@@ -4,13 +4,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.agent_placement_store import (
-    DatabaseAgentPlacementStore,
-    LocalAgentPlacementStore,
-)
-from relay.persistence.agent_store import DatabaseAgentStore, LocalAgentStore
-from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
-from relay.persistence.team_store import DatabaseTeamStore, LocalTeamStore
+from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
+from store_fixtures import make_agent_placement_store
+from relay.persistence.agent_store import DatabaseAgentStore
+from store_fixtures import make_agent_store
+from relay.persistence.daemon_store import DatabaseDaemonStore
+from store_fixtures import make_daemon_store
+from relay.persistence.team_store import DatabaseTeamStore
+from store_fixtures import make_team_store
 from relay.security.auth import DatabaseAccountAuthStore, AccountAuthStore
 from relay.services.user_lifecycle import cascade_engine, soft_delete_user
 
@@ -165,12 +166,12 @@ def test_file_backed_stores_have_no_shared_engine(tmp_path: Path) -> None:
     assert cascade_engine(ctx) is None
 
 
-def test_file_backed_failure_restores_user_and_agent(tmp_path: Path) -> None:
+def test_file_auth_failure_restores_user_and_database_agent(tmp_path: Path) -> None:
     auth_store = AccountAuthStore(tmp_path)
-    agent_store = LocalAgentStore(tmp_path)
-    placement_store = LocalAgentPlacementStore(tmp_path)
-    team_store = LocalTeamStore(tmp_path)
-    daemon_store = LocalDaemonStore(tmp_path)
+    agent_store = make_agent_store(tmp_path)
+    placement_store = make_agent_placement_store(tmp_path)
+    team_store = make_team_store(tmp_path)
+    daemon_store = make_daemon_store(tmp_path)
     ctx = SimpleNamespace(
         auth_store=auth_store,
         agent_store=agent_store,

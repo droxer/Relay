@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
@@ -183,7 +183,7 @@ def test_dashboard_tokens_totals_only_cover_last_seven_days(monkeypatch) -> None
         app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
         _record_run(app, session_id, "run_current", {"input": 10, "output": 5, "cache": 2, "total": 17})
-        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+        old_timestamp = (datetime.now(UTC) - timedelta(days=20)).isoformat()
         _record_run(app, session_id, "run_old", {"input": 100, "output": 50, "cache": 25, "total": 175}, timestamp=old_timestamp)
 
         body = client.get("/api/v1/admin/dashboard/tokens").json()
@@ -199,7 +199,7 @@ def test_dashboard_tokens_available_when_usage_is_older_than_the_summary_week(mo
     with TemporaryDirectory() as root:
         app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
-        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        ten_days_ago = (datetime.now(UTC) - timedelta(days=10)).isoformat()
         _record_run(app, session_id, "run_1", {"input": 10, "output": 5, "cache": 0, "total": 15}, timestamp=ten_days_ago)
 
         body = client.get("/api/v1/admin/dashboard/tokens").json()
@@ -245,7 +245,7 @@ def test_dashboard_tokens_bucket_days_in_the_viewer_time_zone(monkeypatch) -> No
         app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
         _record_run(app, session_id, "run_1", {"input": 7, "output": 0, "cache": 0, "total": 7},
-                    timestamp=start_of_local_day.astimezone(timezone.utc).isoformat())
+                    timestamp=start_of_local_day.astimezone(UTC).isoformat())
 
         local = client.get("/api/v1/admin/dashboard/tokens", params={"tz": "Pacific/Kiritimati"}).json()
         utc = client.get("/api/v1/admin/dashboard/tokens", params={"tz": "Not/AZone"}).json()
@@ -253,7 +253,7 @@ def test_dashboard_tokens_bucket_days_in_the_viewer_time_zone(monkeypatch) -> No
         assert local["timeZone"] == "Pacific/Kiritimati"
         assert {day["date"]: day["total"] for day in local["daily"]}[local_today.isoformat()] == 7
         assert utc["timeZone"] == "UTC"
-        utc_day = start_of_local_day.astimezone(timezone.utc).date().isoformat()
+        utc_day = start_of_local_day.astimezone(UTC).date().isoformat()
         assert {day["date"]: day["total"] for day in utc["daily"]}[utc_day] == 7
 
 
@@ -261,10 +261,10 @@ def test_dashboard_tokens_do_not_redate_old_usage_after_unrelated_session_activi
     with TemporaryDirectory() as root:
         app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
-        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+        old_timestamp = (datetime.now(UTC) - timedelta(days=20)).isoformat()
         _record_run(app, session_id, "run_old", {"input": 100, "output": 50, "cache": 25, "total": 175}, timestamp=old_timestamp)
         app.state.session_store.append_event(session_id, relay_event("human.decision", session_id, {
-            "decision": {"id": "dec_recent", "kind": "approve", "createdAt": datetime.now(timezone.utc).isoformat()},
+            "decision": {"id": "dec_recent", "kind": "approve", "createdAt": datetime.now(UTC).isoformat()},
         }))
 
         response = client.get("/api/v1/admin/dashboard/tokens")

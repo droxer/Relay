@@ -3,7 +3,7 @@ from __future__ import annotations
 from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from fastapi.testclient import TestClient
@@ -113,7 +113,7 @@ def test_closed_project_routines_pause_instead_of_promoting(project_context, sta
     assert created.status_code == 201, created.text
     routine = created.json()
     close_project(client, project, state)
-    assert app.state.task_scheduler.automations.tick(datetime.now(timezone.utc) + timedelta(days=2)) == 0
+    assert app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2)) == 0
     started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
     assert started.status_code == 409
     after = app.state.task_store.get_task(routine["id"])

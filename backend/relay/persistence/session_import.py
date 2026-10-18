@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .session_store import DatabaseSessionStore, artifact_snapshot_extension
+from .session_store import DatabaseSessionStore
+from .session.rows import artifact_snapshot_extension
 from .store_common import _parse_iso, _read_json, _read_jsonl, materialize_events
 
 

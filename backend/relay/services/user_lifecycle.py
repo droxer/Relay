@@ -34,24 +34,22 @@ CASCADE_STORES = (
 
 
 def cascade_engine(ctx: Any) -> Any | None:
-    """The engine shared by every store in the cascade, if there is one.
+    """The engine shared by every database-backed store in the cascade.
 
-    Returns None when any participant is file-backed or points at a different
-    database -- there is no transaction to join, so the cascade behaves as it
-    did before.
+    File-backed participants (the file auth store) have no engine and are
+    restored by ``local_store_rollback`` instead, so they do not stop the
+    database participants from sharing one transaction. Returns None when no
+    participant is database-backed or they point at different databases.
     """
-    engines = []
-    for name in CASCADE_STORES:
-        engine = getattr(getattr(ctx, name, None), "engine", None)
-        if engine is None:
-            return None
-        engines.append(engine)
-    registry_store = getattr(getattr(ctx, "registry", None), "daemon_store", None)
-    daemon_engine = getattr(registry_store, "engine", None)
-    if daemon_engine is None:
+    participants = [getattr(ctx, name, None) for name in CASCADE_STORES]
+    participants.append(getattr(getattr(ctx, "registry", None), "daemon_store", None))
+    engines = [
+        engine
+        for store in participants
+        if (engine := getattr(store, "engine", None)) is not None
+    ]
+    if not engines:
         return None
-    engines.append(daemon_engine)
-
     first = engines[0]
     return first if all(engine is first for engine in engines) else None
 

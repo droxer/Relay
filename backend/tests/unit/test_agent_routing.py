@@ -4,9 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.agent_placement_store import LocalAgentPlacementStore
-from relay.persistence.agent_store import LocalAgentStore
-from relay.persistence.session_store import LocalSessionStore
+from store_fixtures import make_agent_placement_store
+from store_fixtures import make_agent_store
+from store_fixtures import make_session_store
 from relay.persistence.stores import relay_event
 from relay.services.agent_routing import AgentRoutingError, resolve_agent_assignments
 
@@ -34,8 +34,8 @@ def node(
 def test_rejects_collaboration_across_nodes_even_with_shared_workspace(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     researcher = agents.create_agent(
         "alice",
         {
@@ -85,8 +85,8 @@ def test_rejects_collaboration_across_nodes_even_with_shared_workspace(
 
 
 def test_agents_on_same_computer_resolve_together(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     researcher = agents.create_agent(
         "alice",
         {
@@ -127,8 +127,8 @@ def test_agents_on_same_computer_resolve_together(tmp_path: Path) -> None:
 
 
 def test_user_cannot_route_another_users_agent(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -155,8 +155,8 @@ def test_user_cannot_route_another_users_agent(tmp_path: Path) -> None:
 def test_managed_capacity_does_not_replace_a_healthy_local_placement(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -190,8 +190,8 @@ def test_managed_capacity_does_not_replace_a_healthy_local_placement(
 def test_managed_capacity_does_not_move_an_offline_agent_to_another_computer(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -236,8 +236,8 @@ def test_managed_capacity_does_not_move_an_offline_agent_to_another_computer(
 def test_legacy_nonempty_policy_blocks_dispatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -271,8 +271,8 @@ def test_legacy_nonempty_policy_blocks_dispatch(
 
 
 def test_canonical_workspace_id_does_not_override_node_scope(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     researcher = agents.create_agent(
         "alice",
         {
@@ -323,8 +323,8 @@ def test_canonical_workspace_id_does_not_override_node_scope(tmp_path: Path) -> 
 
 
 def test_node_affine_placements_reject_cross_node_workflow(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     researcher = agents.create_agent(
         "alice",
         {
@@ -361,8 +361,8 @@ def test_node_affine_placements_reject_cross_node_workflow(tmp_path: Path) -> No
 
 
 def test_different_workspace_ids_reject_cross_node_workflow(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     first = agents.create_agent(
         "alice",
         {
@@ -401,8 +401,8 @@ def test_different_workspace_ids_reject_cross_node_workflow(tmp_path: Path) -> N
 def test_node_affine_session_rejects_followup_on_different_node(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     first = agents.create_agent(
         "alice",
         {
@@ -453,8 +453,8 @@ def test_node_affine_session_rejects_followup_on_different_node(
 def test_session_without_prior_run_does_not_invent_node_affinity(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -492,8 +492,8 @@ def test_session_without_prior_run_does_not_invent_node_affinity(
 def test_managed_runtime_replacement_keeps_existing_session_affinity(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -547,8 +547,8 @@ def test_managed_runtime_replacement_keeps_existing_session_affinity(
 def test_managed_runtime_replacement_keeps_pre_run_session_affinity(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -596,8 +596,8 @@ def test_managed_runtime_replacement_keeps_pre_run_session_affinity(
 def test_legacy_pre_run_session_follows_managed_runtime_history(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -640,8 +640,8 @@ def test_legacy_pre_run_session_follows_managed_runtime_history(
 def test_shared_path_session_rejects_followup_on_different_node(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     first = agents.create_agent(
         "alice",
         {
@@ -694,8 +694,8 @@ def test_shared_path_session_rejects_followup_on_different_node(
 
 
 def test_offline_agent_returns_stable_reason(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -720,8 +720,8 @@ def test_offline_agent_returns_stable_reason(tmp_path: Path) -> None:
 
 
 def test_saturated_placement_returns_capacity_exhausted(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -759,8 +759,8 @@ def test_device_compatibility_agent_does_not_borrow_managed_capacity(
     so every thread already pinned to the device would start rejecting it with
     workspace_unavailable.
     """
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.ensure_compatibility_agent("alice", "claude", "device_node")
     original = placements.create_placement(agent, "device_node")
     offline_device = {
@@ -794,8 +794,8 @@ def test_device_compatibility_agent_does_not_borrow_managed_capacity(
 
 def test_assignment_does_not_borrow_another_managed_computer(tmp_path: Path) -> None:
     """原机器离线时，派发必须失败而不是改派到另一台托管机器。"""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -837,9 +837,9 @@ def test_assignment_does_not_borrow_another_managed_computer(tmp_path: Path) -> 
 def test_phantom_placement_with_run_history_does_not_attach_elsewhere(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
-    sessions = LocalSessionStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
+    sessions = make_session_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -890,9 +890,9 @@ def test_phantom_placement_with_run_history_does_not_attach_elsewhere(
 def test_phantom_placement_does_not_attach_to_non_ready_executor(
     tmp_path: Path,
 ) -> None:
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
-    sessions = LocalSessionStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
+    sessions = make_session_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -1059,8 +1059,8 @@ def test_offline_computer_id_thread_refuses_instead_of_borrowing(
 ) -> None:
     """A pre-run thread pinned to a Computer that isn't online must refuse
     dispatch, not silently pick a different machine (spec §4)."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -1099,8 +1099,8 @@ def test_offline_managed_node_id_thread_refuses_instead_of_borrowing(
     tmp_path: Path,
 ) -> None:
     """Same guarantee for the pre-computerId managedNodeId shape."""
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -1144,8 +1144,8 @@ def test_legacy_rebind_chasing_uses_the_latest_run_with_a_daemon_node_id(
     — it must not skip past it to chase an older run's placement rebind."""
     from relay.services.agent_routing import resolve_legacy_session_computer_id
 
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {
@@ -1194,8 +1194,8 @@ def test_legacy_session_recovers_device_identity_from_its_run_placement(
     from relay.persistence.agent_placement_store import create_node_placement
     from relay.services.agent_routing import resolve_legacy_session_computer_id
 
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {

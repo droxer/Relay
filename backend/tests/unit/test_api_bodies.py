@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from relay.api import helpers
-from relay.api.helpers import assignment_list, json_body
+from relay.api import bodies
+from relay.api.bodies import assignment_list, json_body
 from starlette.requests import Request
+
+
+def _app(max_json_body_bytes: int = 4 * 1024 * 1024) -> SimpleNamespace:
+    # Routes read settings off the AppContext (``app.state.context``).
+    settings = SimpleNamespace(max_json_body_bytes=max_json_body_bytes)
+    return SimpleNamespace(state=SimpleNamespace(context=SimpleNamespace(settings=settings)))
 
 
 def test_json_body_translates_client_disconnect_to_http_error() -> None:
@@ -19,6 +26,7 @@ def test_json_body_translates_client_disconnect_to_http_error() -> None:
             "method": "POST",
             "path": "/api/v1/daemon-node-registrations",
             "headers": [],
+            "app": _app(),
         },
         receive,
     )
@@ -31,7 +39,6 @@ def test_json_body_translates_client_disconnect_to_http_error() -> None:
 
 
 def test_json_body_rejects_payloads_over_the_configured_limit(monkeypatch) -> None:
-    monkeypatch.setenv("RELAY_MAX_JSON_BODY_BYTES", "8")
     messages = iter(
         [
             {"type": "http.request", "body": b'{"value"', "more_body": True},
@@ -48,6 +55,7 @@ def test_json_body_rejects_payloads_over_the_configured_limit(monkeypatch) -> No
             "method": "POST",
             "path": "/api/v1/tasks",
             "headers": [(b"content-type", b"application/json")],
+            "app": _app(max_json_body_bytes=8),
         },
         receive,
     )
@@ -60,7 +68,7 @@ def test_json_body_rejects_payloads_over_the_configured_limit(monkeypatch) -> No
 
 
 def test_json_body_rejects_an_oversized_chunk_before_copying_it() -> None:
-    append_chunk = helpers.append_json_body_chunk
+    append_chunk = bodies.append_json_body_chunk
     body = bytearray(b"ok")
 
     with pytest.raises(HTTPException) as raised:

@@ -11,7 +11,6 @@ TASK_WORKSPACE_ROOT = "tasks"
 WORKSPACE_LAYOUT_TASK = "task"
 WORKSPACE_LAYOUT_THREAD = "thread"
 WORKSPACE_LAYOUT_PROJECT = "project"
-DAEMON_CAPABILITY_TASK_WORKSPACES = "task-workspaces"
 
 
 def task_workspace_subpath(task: dict[str, Any]) -> str:

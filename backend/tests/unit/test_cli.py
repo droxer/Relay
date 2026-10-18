@@ -83,10 +83,9 @@ def test_storage_report_command_prints_the_read_only_report(
 
 @pytest.mark.parametrize("command", ["worker", "worker-schema"])
 def test_worker_commands_do_not_start_an_http_server(monkeypatch, command, tmp_path):
-    from relay import background
     worker, schema = AsyncMock(), AsyncMock()
-    monkeypatch.setattr(background, "run_worker", worker)
-    monkeypatch.setattr(background, "apply_worker_schema", schema)
+    monkeypatch.setattr(cli, "run_worker", worker)
+    monkeypatch.setattr(cli, "apply_worker_schema", schema)
     monkeypatch.setattr(cli, "setup_logging", lambda: None)
     monkeypatch.setattr(cli, "create_app", lambda *args: pytest.fail("HTTP application startup"))
     cli.main([command, "--data-dir", str(tmp_path)])
@@ -99,9 +98,8 @@ def test_worker_commands_do_not_start_an_http_server(monkeypatch, command, tmp_p
 
 
 def test_combined_command_delegates_to_supervisor_and_returns_its_exit_code(monkeypatch, tmp_path):
-    from relay import processes
     supervisor = AsyncMock(return_value=7)
-    monkeypatch.setattr(processes, "serve_with_worker", supervisor)
+    monkeypatch.setattr(cli, "serve_with_worker", supervisor)
     monkeypatch.setattr(cli, "setup_logging", lambda: None)
     monkeypatch.setattr(cli, "create_app", lambda *args: pytest.fail("parent started an HTTP app"))
     with pytest.raises(SystemExit) as exit:

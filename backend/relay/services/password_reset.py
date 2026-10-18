@@ -16,7 +16,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from loguru import logger
@@ -132,7 +132,7 @@ class PasswordResetService:
         self.store = store
         self.mailer = mailer
         self.config = config or PasswordResetConfig()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
     def self_serve_enabled(self) -> bool:

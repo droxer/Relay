@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from store_fixtures import create_run_request_on_node
+
 import pytest
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
+from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import active_routine_occurrence
@@ -1063,7 +1066,7 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
 
     with TemporaryDirectory() as root:
         app = create_app(root)
-        app.state.today = FixedDate.today
+        replace_app_context(app, today=FixedDate.today)
         client = TestClient(app)
         _bootstrap_admin(client)
         _create_account(client, "alice", user_id="alice")
@@ -1178,7 +1181,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
 
     with TemporaryDirectory() as root:
         app = create_app(root)
-        app.state.today = FixedDate.today
+        replace_app_context(app, today=FixedDate.today)
         client = TestClient(app)
         _bootstrap_admin(client)
         _create_account(client, "alice", user_id="alice")
@@ -1231,7 +1234,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
 
         updated_definition = client.get(f"/api/v1/tasks/{task['id']}").json()
         assert updated_definition["status"] == "backlog"
-        assert updated_definition["routineNextRunAt"] > datetime.now(timezone.utc).isoformat()
+        assert updated_definition["routineNextRunAt"] > datetime.now(UTC).isoformat()
         assert updated_definition["occurrenceIds"] == [occurrence["id"]]
         assert updated_definition["linkedSessionIds"] == [start.json()["session"]["id"]]
 
@@ -1845,7 +1848,7 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
             }
         )
         client.app.state.task_store.link_session(running["id"], session["id"])
-        client.app.state.registry.daemon_store.create_run_request({
+        create_run_request_on_node(client.app.state.registry.daemon_store, {
             "nodeId": "sbx_alice", "sessionId": session["id"],
             "taskGoal": "Active linked work", "assignments": [], "state": {},
         })
@@ -1923,7 +1926,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
                 sessions.append_event(session["id"], relay_event(
                     "session.completed", session["id"], {"outcome": "Done"}))
             if active is True and index == 2:
-                client.app.state.registry.daemon_store.create_run_request({
+                create_run_request_on_node(client.app.state.registry.daemon_store, {
                     "nodeId": "sbx_admin", "sessionId": session["id"],
                     "taskGoal": "Active occurrence", "assignments": [], "state": {},
                 })
@@ -2081,7 +2084,7 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
                 "session.status", session["id"], {"status": session_status, "phase": session_status}))
         tasks.link_session(linked_task["id"], session["id"])
         if reserved:
-            client.app.state.registry.daemon_store.create_run_request({
+            create_run_request_on_node(client.app.state.registry.daemon_store, {
                 "nodeId": "sbx_admin", "sessionId": session["id"],
                 "taskGoal": "Pending execution", "assignments": [], "state": {},
             })

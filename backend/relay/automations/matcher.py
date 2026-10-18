@@ -163,14 +163,14 @@ class AutomationMatcher:
             session = self.session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):
             return None
-        run = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
+        run: dict[str, Any] = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
         linked = [task for task in self.task_store.list_tasks_for_session(session_id) if not task.get("isRoutine")]
         task = linked[0] if linked else None
         subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
         if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
             subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
         origin = task.get("sourceRoutineId") if task else None
-        depth = int(task.get("routineTriggerDepth") or 0) + 1 if origin else 0
+        depth = int(task.get("routineTriggerDepth") or 0) + 1 if task and origin else 0
         return {"eventType": row["event_type"], "subject": subject, "sessionId": session_id,
                 "error": payload.get("error"), "originAutomationId": origin, "depth": depth}
 

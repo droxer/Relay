@@ -9,6 +9,11 @@ import uvicorn
 from loguru import logger
 
 from .app import create_app
+from .background import apply_worker_schema, run_worker
+from .processes import serve_with_worker
+from .migrations_runtime.agent_computer_id import pending_agent_computer_id_migrations
+from .persistence.agent_placement_store import DatabaseAgentPlacementStore
+from .persistence.agent_store import DatabaseAgentStore
 from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
@@ -20,6 +25,8 @@ from .persistence.user_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
 from .persistence.storage_report import storage_report
+from .persistence.operational_import import migrate_local_operational_state
+from .persistence.file_store_import import migrate_local_file_stores
 
 load_backend_env()
 
@@ -55,12 +62,6 @@ def rehearse_user_handles(database_url: str) -> dict:
 
 def check_agent_computer_ids(database_url: str) -> dict:
     """Which agents and placements the startup migration would still rewrite."""
-    from .migrations_runtime.agent_computer_id import (
-        pending_agent_computer_id_migrations,
-    )
-    from .persistence.agent_placement_store import DatabaseAgentPlacementStore
-    from .persistence.agent_store import DatabaseAgentStore
-
     return pending_agent_computer_id_migrations(
         DatabaseAgentStore(database_url),
         DatabaseAgentPlacementStore(database_url),
@@ -81,6 +82,7 @@ def main(argv: list[str] | None = None) -> None:
             "worker-schema",
             "migrate-local-sessions",
             "migrate-local-operational-state",
+            "migrate-local-file-stores",
             "migrate-blobs-to-r2",
             "backup-database",
             "rehearse-user-handles",
@@ -95,25 +97,32 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     setup_logging()
     if args.command == "serve-with-worker":
-        from .processes import serve_with_worker
-
         raise SystemExit(asyncio.run(serve_with_worker(
             host=args.host, port=args.port, data_dir=args.data_dir,
         )))
     if args.command in ("worker", "worker-schema"):
-        from .background import apply_worker_schema, run_worker
-
         if args.command == "worker-schema":
             asyncio.run(apply_worker_schema())
         else:
             asyncio.run(run_worker(args.data_dir))
         return
     if args.command == "migrate-local-operational-state":
-        from .persistence.operational_import import migrate_local_operational_state
         if not args.data_dir:
             parser.error("migrate-local-operational-state requires --data-dir")
         report = migrate_local_operational_state(args.data_dir,
             database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "migrate-local-file-stores":
+        # The backend also runs this at boot; by hand it previews (--dry-run)
+        # or resolves a conflict the boot import refused.
+        if not args.data_dir:
+            parser.error("migrate-local-file-stores requires --data-dir")
+        report = migrate_local_file_stores(
+            args.data_dir,
+            database_url_from_env(setting="migrate-local-file-stores"),
+            dry_run=args.dry_run,
+        )
         print(json.dumps(report, indent=2))
         return
     if args.command == "backup-database":

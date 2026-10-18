@@ -8,6 +8,8 @@
 
 **Spec:** `docs/automation-v2-design.md`
 
+> Note (2026-10-18): the file-backed `LocalTaskStore` this plan mentions has since been retired; tasks and sessions are database-only, and tests build them on sqlite through `backend/tests/store_fixtures.py`.
+
 ## Global Constraints
 
 - Wire, storage, and event names keep `routine*`; product copy says Automations.

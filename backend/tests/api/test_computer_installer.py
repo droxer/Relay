@@ -423,7 +423,7 @@ def _bundle_with(tmp_path, manifest):
 
 def test_a_bundle_lacking_a_required_capability_is_named(tmp_path):
     from relay.api.computer_installer_routes import bundle_missing_capabilities
-    from relay.daemon_registry.registry import DAEMON_NODE_CAPABILITIES
+    from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 
     current = _bundle_with(tmp_path, {"capabilities": sorted(DAEMON_NODE_CAPABILITIES)})
     assert bundle_missing_capabilities(current) == []
@@ -440,14 +440,11 @@ def test_startup_warns_about_a_stale_bundle(monkeypatch, tmp_path):
     messages: list[str] = []
     sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
     try:
-        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(_bundle_with(tmp_path, {"capabilities": []})))
-        warn_if_bundle_stale()
-        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(tmp_path / "missing"))
-        warn_if_bundle_stale()
+        warn_if_bundle_stale(_bundle_with(tmp_path, {"capabilities": []}))
+        warn_if_bundle_stale(tmp_path / "missing")
         not_a_tar = tmp_path / "broken.tar.gz"
         not_a_tar.write_bytes(b"not a tarball")
-        monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(not_a_tar))
-        warn_if_bundle_stale()
+        warn_if_bundle_stale(not_a_tar)
     finally:
         logger.remove(sink)
     assert len(messages) == 2

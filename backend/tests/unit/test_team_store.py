@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier, Lock
+from threading import Barrier, BrokenBarrierError, Lock
 
 import pytest
 from sqlalchemy import update
 
-from relay.persistence.agent_store import LocalAgentStore
+from store_fixtures import make_agent_store
 from relay.persistence import team_store as team_store_module
-from relay.persistence.team_store import DatabaseTeamStore, LocalTeamStore
+from relay.persistence.team_store import DatabaseTeamStore
 
 
 def test_membership_contract_survives_updates_and_removal(team_store) -> None:
@@ -42,11 +42,9 @@ def test_membership_contract_rejects_invalid_configuration(team_store, config) -
         })
 
 
-@pytest.fixture(params=["local", "database"])
-def team_store(request: pytest.FixtureRequest, tmp_path: Path):
-    if request.param == "database":
-        return DatabaseTeamStore(f"sqlite:///{tmp_path}/teams.db", create_schema=True)
-    return LocalTeamStore(tmp_path)
+@pytest.fixture
+def team_store(tmp_path: Path):
+    return DatabaseTeamStore(f"sqlite:///{tmp_path}/teams.db", create_schema=True)
 
 
 def test_team_collaboration_style_is_stored_updated_and_cleared(team_store) -> None:
@@ -223,7 +221,14 @@ def test_database_team_updates_merge_from_the_locked_snapshot(
             first_write_count += 1
             should_wait = first_write_count <= 2
         if should_wait:
-            stale_read_barrier.wait()
+            # Where the database lets both writers in (Postgres row locks wait
+            # at the UPDATE), they meet here holding stale reads. SQLite takes
+            # the write lock at BEGIN, so the second never arrives and the
+            # writes run one after the other -- the merge must hold either way.
+            try:
+                stale_read_barrier.wait(timeout=1)
+            except BrokenBarrierError:
+                pass
         return original_team_row(*args, **kwargs)
 
     monkeypatch.setattr(team_store_module, "_team_row", synchronize_first_writes)
@@ -247,7 +252,7 @@ def test_database_team_updates_merge_from_the_locked_snapshot(
 
 
 def test_validate_team_payload_checks_membership(tmp_path: Path) -> None:
-    agents = LocalAgentStore(tmp_path)
+    agents = make_agent_store(tmp_path)
     lead = agents.create_agent(
         "alice", {"displayName": "Lead", "executorKind": "codex", "defaultRole": "implementer"}
     )

@@ -1,17 +1,16 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task_store import DatabaseTaskStore
+from store_fixtures import make_task_store
 from relay.persistence.store_common import relay_task_event
 
 from automation_helpers import fire_now
 
 
-@pytest.fixture(params=["local", "database"])
-def store(request, tmp_path):
-    if request.param == "local":
-        return LocalTaskStore(tmp_path)
-    return DatabaseTaskStore(f"sqlite:///{tmp_path}/flow.db", create_schema=True)
+@pytest.fixture
+def store(tmp_path):
+    return make_task_store(tmp_path)
 
 
 def status(store, task, value, **fields):

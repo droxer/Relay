@@ -6,34 +6,27 @@ from uuid import uuid4
 
 import pytest
 
-from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
-from relay.persistence.agent_placement_store import LocalAgentPlacementStore
-from relay.persistence.agent_store import LocalAgentStore
-from relay.persistence.daemon_store import LocalDaemonStore
+from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from store_fixtures import make_agent_placement_store
+from store_fixtures import make_agent_store
+from store_fixtures import make_daemon_store
 from relay.persistence.project_store import DatabaseProjectStore
-from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from store_fixtures import make_session_store
+from store_fixtures import make_task_store
 from relay.services.dispatch_failure import record_dispatch_failure
 from relay.services.task_dispatch import start_task_on_ready_node
-from relay.tasks import TaskScheduler
+from relay.tasks.scheduler import TaskScheduler
 
 from issue_projects import PROJECT_CAPABILITY, project_for
 
 
-@pytest.fixture(params=["local", "database"])
-def execution(tmp_path, request):
-    tasks = (
-        DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
-        if request.param == "database"
-        else LocalTaskStore(tmp_path)
-    )
-    sessions = (
-        DatabaseSessionStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
-        if request.param == "database"
-        else LocalSessionStore(tmp_path)
-    )
+@pytest.fixture
+def execution(tmp_path):
+    tasks = make_task_store(tmp_path)
+    sessions = make_session_store(tmp_path)
     registry = DaemonNodeRegistry(
-        sessions, LocalDaemonStore(tmp_path), task_store=tasks
+        sessions, make_daemon_store(tmp_path), task_store=tasks
     )
     node = registry.register(
         {
@@ -48,8 +41,8 @@ def execution(tmp_path, request):
         },
         "ui_token",
     )
-    agents = LocalAgentStore(tmp_path)
-    placements = LocalAgentPlacementStore(tmp_path)
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
     agent = agents.create_agent(
         "alice",
         {

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections import Counter
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import datetime, timedelta, tzinfo, UTC
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -12,7 +12,7 @@ from loguru import logger
 
 from ..automations.service import automation_triggers_enabled
 from ..core.legacy_names import with_legacy_user_id
-from ..daemon_registry import public_sandbox_record
+from ..daemon_registry.records import public_sandbox_record
 from ..persistence.store_common import split_cache_tokens
 from ..persistence.org_settings_store import (
     OrgSettingsValidationError,
@@ -34,24 +34,21 @@ from ..services.computer_names import normalize_computer_display_name, present_c
 from ..services.user_lifecycle import (
     soft_delete_user as soft_delete_user_cascade,
 )
-from ..services.managed_nodes import managed_node_placeholder
+from ..core.managed_node_policy import managed_node_placeholder
 from ..services.node_agents import (
     assert_node_agent_runs_drained,
     remove_node_agents,
     sync_node_agents,
 )
 from .deps import AppContextDep
-from .helpers import (
-    JsonBodyDep,
+from .node_install import (
     assert_user_device_runtime,
     daemon_start_command,
     daemon_start_env,
-    user_record,
-    normalize_user_handle,
-    resolve_user_id,
-    string_field,
     valid_user_workspace_path,
 )
+from ..security.user_handles import user_record, normalize_user_handle, resolve_user_id
+from .bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 
@@ -59,7 +56,7 @@ router = APIRouter()
 @router.get("/admin/control-plane/metrics")
 def control_plane_metrics(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    bridge = getattr(request.app.state, "notification_bridge", None)
+    bridge = ctx.notification_bridge
     return {
         "notifications": ctx.control_plane_notifier.stats(),
         "notificationBridge": (
@@ -96,7 +93,7 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             # Off: automations may hold only schedule triggers.
             "automationTriggers": automation_triggers_enabled(),
             # Off: the waitlist routes are not mounted (RELAY_WAITLIST_ENABLED).
-            "waitlist": bool(getattr(request.app.state, "waitlist_enabled", False)),
+            "waitlist": ctx.settings.waitlist_enabled,
         },
         # Whether the bootstrap/supervisor bearer token exists. Only its hash
         # is stored, so the value itself is shown once, by the reissue route.
@@ -602,9 +599,11 @@ def create_control_panel_daemon_node(
             node = ctx.backend.provision_daemon_node(provision_payload)
     else:
         node = ctx.backend.provision_daemon_node(provision_payload)
-    effective_sandbox_mode = node.get("sandboxMode") if node.get("sandboxMode") in ("boxlite", "none") else sandbox_mode
+    effective_sandbox_mode: str = (
+        node["sandboxMode"] if node.get("sandboxMode") in ("boxlite", "none") else sandbox_mode
+    )
     public_node = _public_control_panel_node(ctx, node)
-    response = {
+    response: dict[str, Any] = {
         "node": with_legacy_user_id(public_node),
         "daemonEnv": daemon_start_env(request, node, effective_sandbox_mode),
     }
@@ -685,7 +684,7 @@ async def activate_chat_integration(integration_id: str, request: Request, ctx: 
         ctx.chat_store.validate_activation(integration_id)
         settings = ctx.chat_store.connection_settings(integration_id)
         if settings.get("provider") == "telegram":
-            provisioned, message = await request.app.state.chat_provision(settings, integration_id)
+            provisioned, message = await ctx.chat_provision(settings, integration_id)
             if not provisioned:
                 raise ValueError(message)
         else:
@@ -701,7 +700,7 @@ async def check_chat_integration(integration_id: str, request: Request, ctx: App
     account = require_admin_session(request, ctx.auth_store)
     try:
         settings = ctx.chat_store.connection_settings(integration_id)
-        provider_health = await request.app.state.chat_probe(settings)
+        provider_health = await ctx.chat_probe(settings)
         integration = ctx.chat_store.check_integration(
             integration_id,
             actor=_actor_name(account),
@@ -719,7 +718,7 @@ async def rotate_telegram_webhook_secret(
     ctx: AppContextDep,
 ) -> dict[str, Any]:
     account = require_admin_session(request, ctx.auth_store)
-    locks = request.app.state.chat_rotation_locks
+    locks = ctx.chat_rotation_locks
     lock = locks.setdefault(integration_id, asyncio.Lock())
     async with lock:
         return await _rotate_telegram_webhook_secret(integration_id, request, ctx, account)
@@ -742,10 +741,10 @@ async def _rotate_telegram_webhook_secret(
             actor=_actor_name(account),
         )
         settings = ctx.chat_store.connection_settings(integration_id)
-        provisioned, message = await request.app.state.chat_provision(settings, integration_id)
+        provisioned, message = await ctx.chat_provision(settings, integration_id)
         if not provisioned:
             if isinstance(previous_secret, str) and previous_secret:
-                restored, restore_message = await request.app.state.chat_provision(previous_settings, integration_id)
+                restored, restore_message = await ctx.chat_provision(previous_settings, integration_id)
                 if restored:
                     ctx.chat_store.set_telegram_webhook_secret(integration_id, previous_secret, actor=_actor_name(account))
                 else:
@@ -865,8 +864,8 @@ def _parse_timestamp(value: Any) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 @router.get("/admin/dashboard/sessions")
@@ -875,7 +874,7 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     if hasattr(ctx.session_store, "dashboard_session_metrics"):
         return ctx.session_store.dashboard_session_metrics(day_window=_DAY_WINDOW)
     sessions = ctx.session_store.list_sessions()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_start = (now - timedelta(days=_DAY_WINDOW - 1)).date()
 
     buckets: dict[str, dict[str, int]] = {
@@ -975,7 +974,9 @@ def dashboard_tokens(
             _add_token_counts(bucket, usage)
         if in_summary:
             _add_token_counts(totals, usage)
-    daily = [{"date": day, **_with_derived_counts(counts)} for day, counts in buckets.items()]
+    daily: list[dict[str, Any]] = [
+        {"date": day, **_with_derived_counts(counts)} for day, counts in buckets.items()
+    ]
     summary = _with_derived_counts(totals)
     return {
         "available": any(point["total"] > 0 for point in daily),
@@ -996,11 +997,11 @@ def dashboard_tokens(
 
 def _dashboard_zone(name: str | None) -> tzinfo:
     if not name or len(name) > 64:
-        return timezone.utc
+        return UTC
     try:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
-        return timezone.utc
+        return UTC
 
 
 def _empty_token_counts() -> dict[str, int]:

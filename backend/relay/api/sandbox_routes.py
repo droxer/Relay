@@ -7,24 +7,14 @@ from loguru import logger
 
 from ..core.computer_identity import computer_id
 from ..core.model_policy import policy_model
-from ..daemon_registry import (
-    provisioned_sandbox_record,
-    public_sandbox_record,
-    sandbox_ui_auth_error,
-    sandbox_ui_token_matches,
-)
+from ..daemon_registry.records import provisioned_sandbox_record, public_sandbox_record
+from ..daemon_registry.credentials import sandbox_ui_auth_error, sandbox_ui_token_matches
 from ..persistence.agent_placement_store import create_node_placement
 from ..services.computer_names import present_computer
 from .deps import AppContextDep
-from .helpers import (
-    JsonBodyDep,
-    actor_can_access_sandbox,
-    assignment_list,
-    bearer_token,
-    json_body,
-    request_actor_or_none,
-    string_field,
-)
+from .actors import actor_can_access_sandbox, bearer_token, request_actor_or_none
+from ..security.actor import Actor
+from .bodies import JsonBodyDep, assignment_list, json_body, string_field
 
 router = APIRouter()
 
@@ -37,7 +27,7 @@ def public_computer_record(
 
 def require_sandbox_access(
     sandbox: dict[str, Any], request: Request, ctx: AppContextDep
-) -> dict[str, Any] | None:
+) -> Actor | None:
     token = bearer_token(request)
     if token and sandbox_ui_token_matches(sandbox, token):
         return None
@@ -107,7 +97,7 @@ def provision_sandbox(
         logger.warning(
             "Sandbox provisioning denied", user_id=user_id, error=str(error)
         )
-        raise HTTPException(403, str(error))
+        raise HTTPException(403, str(error)) from error
 
 
 @router.get("/sandboxes/{sandbox_id}")
@@ -182,9 +172,9 @@ async def run_sandbox(
     try:
         return await ctx.backend.run(sandbox_id, parsed)
     except PermissionError as error:
-        raise HTTPException(403, str(error))
+        raise HTTPException(403, str(error)) from error
     except ValueError as error:
-        raise HTTPException(409, str(error))
+        raise HTTPException(409, str(error)) from error
 
 
 def _resolve_legacy_assignment(

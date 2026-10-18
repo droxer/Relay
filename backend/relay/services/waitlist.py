@@ -8,13 +8,14 @@ leaves the entry invited, and the admin still gets the link.
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 import os
 import re
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from loguru import logger
@@ -125,7 +126,7 @@ class WaitlistService:
         self.store = store
         self.mailer = mailer
         self.config = config or WaitlistConfig()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     # --- public -------------------------------------------------------------
 
@@ -214,10 +215,10 @@ class WaitlistService:
         self,
         *,
         count: int | None,
-        ids: list[str] | None,
+        ids: builtins.list[str] | None,
         invited_by: str | None,
         web_origin: str,
-    ) -> tuple[list[dict[str, Any]], list[PendingInvite]]:
+    ) -> tuple[builtins.list[dict[str, Any]], builtins.list[PendingInvite]]:
         """Issue a batch of invites without sending them.
 
         Returns the admin's one-time links plus the sends still owed. The
@@ -248,7 +249,7 @@ class WaitlistService:
             pending.append(issued)
         return invites, pending
 
-    def deliver_invites(self, pending: list[PendingInvite]) -> None:
+    def deliver_invites(self, pending: builtins.list[PendingInvite]) -> None:
         """Send queued invites one recipient at a time, recording each result."""
         for issued in pending:
             result = self._deliver(issued)

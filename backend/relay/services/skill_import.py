@@ -272,18 +272,20 @@ def _close_stream(chunks: Iterable[bytes]) -> None:
 
 
 def _resolve_host(host: str) -> list[str]:
-    addresses = {entry[4][0] for entry in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+    addresses = {str(entry[4][0]) for entry in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
     return sorted(addresses)
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host: str, address: str, timeout: float):
-        super().__init__(host, port=443, timeout=timeout, context=ssl.create_default_context())
+        context = ssl.create_default_context()
+        super().__init__(host, port=443, timeout=timeout, context=context)
         self._address = address
+        self._tls_context = context
 
     def connect(self) -> None:
         raw_socket = socket.create_connection((self._address, self.port), self.timeout)
-        self.sock = self._context.wrap_socket(raw_socket, server_hostname=self.host)
+        self.sock = self._tls_context.wrap_socket(raw_socket, server_hostname=self.host)
 
 
 class _ResponseChunks(Iterator[bytes]):

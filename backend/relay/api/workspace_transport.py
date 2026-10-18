@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from fastapi import HTTPException
@@ -15,12 +15,16 @@ from ..services.event_notifier import workspace_response_key
 from ..services.workspace_capabilities import required_workspace_capabilities
 from ..services.workspace_query import WORKSPACE_COMMAND_TIMEOUT_SECONDS
 from .deps import AppContext
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
+    has_capability,
+)
 
 WORKSPACE_FILE_PREVIEW_LIMIT = 256 * 1024
 
 
 def workspace_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def workspace_path(raw: str | None, *, required: bool = False) -> str:
@@ -73,9 +77,9 @@ def workspace_binding_target(
         (
             node
             for node in candidates
-            if "workspace-read-shared" in (node.get("capabilities") or [])
+            if has_capability(node, DAEMON_CAPABILITY_WORKSPACE_READ_SHARED)
             and all(
-                capability in (node.get("capabilities") or [])
+                has_capability(node, capability)
                 for capability in required
             )
         ),
@@ -150,7 +154,7 @@ async def dispatch_workspace_command(
 def raise_workspace_error(event: dict[str, Any]) -> None:
     if event.get("type") != "workspace.error":
         return
-    messages = {
+    messages: dict[str | None, tuple[int, str]] = {
         "not-found": (404, "Workspace file path was not found."),
         "is-directory": (400, "Workspace file path is a directory."),
         "invalid-path": (400, "Workspace path is invalid."),

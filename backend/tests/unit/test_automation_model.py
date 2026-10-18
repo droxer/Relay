@@ -10,6 +10,7 @@ from relay.automations.model import (
     triggers_of,
     without_legacy_fields,
 )
+from relay.automations.model import listens, state_of, upgrade_legacy
 
 
 def test_webhook_takes_no_options() -> None:
@@ -94,8 +95,6 @@ def test_context_block_truncates_webhook_payload() -> None:
     assert "(truncated)" in block
     assert len(block.encode()) < 9 * 1024
 
-
-from relay.automations.model import listens, state_of, upgrade_legacy
 
 DAILY = {"kind": "schedule", "schedule": {"timezone": None, "repeat": {"every": "day", "at": "09:00"}}}
 BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}

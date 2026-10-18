@@ -9,31 +9,19 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from sqlalchemy import (
-    CheckConstraint,
-    Column,
-    DateTime,
-    Integer,
-    Table,
-    Text,
     insert,
     select,
     update,
 )
 
-from .store_common import (
-    _format_iso,
-    create_all_tables,
-    json_type,
-    shared_engine,
-    store_transaction,
-)
-from .store_common import (
-    metadata as shared_metadata,
-)
+from .store_common import _format_iso, create_all_tables, shared_engine, store_transaction
+from .sql import metadata as shared_metadata
+from .tables import org_settings as org_settings_tables
+from ..core.org_policy import DEFAULT_MAX_TASK_ROUNDS, MAX_MAX_TASK_ROUNDS, MIN_MAX_TASK_ROUNDS
 
 # The whole table is one row; the id is a constant so concurrent writers
 # contend on a single primary key rather than racing to insert siblings.
@@ -46,12 +34,6 @@ DEFAULT_MAX_LOCAL_COMPUTERS = 3
 MIN_MAX_LOCAL_COMPUTERS = 0
 MAX_MAX_LOCAL_COMPUTERS = 50
 
-# How many times a task may be re-dispatched because its last round reported it
-# unfinished. One means "no automatic continuation": the first round is not a
-# continuation, so the cap only bounds the rounds that follow.
-DEFAULT_MAX_TASK_ROUNDS = 5
-MIN_MAX_TASK_ROUNDS = 1
-MAX_MAX_TASK_ROUNDS = 50
 
 
 class OrgSettingsValidationError(ValueError):
@@ -121,33 +103,7 @@ def normalize_max_task_rounds(value: Any) -> int:
 class DatabaseOrgSettingsStore:
     metadata = shared_metadata
 
-    settings = Table(
-        "org_settings",
-        metadata,
-        Column("id", Text, primary_key=True),
-        Column(
-            "max_local_computers_per_user",
-            Integer,
-            nullable=False,
-        ),
-        Column(
-            "max_task_rounds",
-            Integer,
-            nullable=False,
-            server_default=str(DEFAULT_MAX_TASK_ROUNDS),
-        ),
-        Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("updated_at", DateTime(timezone=True), nullable=False),
-        Column("skill_import_allowed_hosts", json_type(), nullable=False, server_default='["github.com"]'),
-        CheckConstraint(
-            "max_task_rounds >= 1",
-            name="ck_org_settings_max_task_rounds_positive",
-        ),
-        CheckConstraint(
-            "max_local_computers_per_user >= 0",
-            name="ck_org_settings_max_local_computers_non_negative",
-        ),
-    )
+    settings = org_settings_tables.settings
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
@@ -195,7 +151,7 @@ class DatabaseOrgSettingsStore:
         hosts = normalize_skill_import_hosts(
             current["skillImportAllowedHosts"] if skill_import_allowed_hosts is None else skill_import_allowed_hosts
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with store_transaction(self.engine) as conn:
             existing = conn.scalar(
                 select(self.settings.c.id).where(self.settings.c.id == SETTINGS_ROW_ID)

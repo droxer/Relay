@@ -58,14 +58,11 @@ def test_delete_requires_known_session(monkeypatch) -> None:
         assert response.status_code == 404
 
 
-@pytest.mark.parametrize("database", [False, True])
 @pytest.mark.parametrize("already_completed", [False, True])
-def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, database, already_completed) -> None:
+def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, already_completed) -> None:
     from relay.persistence.store_common import new_database_id
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    if database:
-        monkeypatch.setenv("RELAY_DAEMON_STORE", "database")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
@@ -145,6 +142,14 @@ def test_delete_rejects_session_with_active_daemon_run_request(monkeypatch) -> N
         client = TestClient(app)
         _bootstrap(client)
         session_id = _create_session(client)
+        app.state.registry.daemon_store.register_node(
+            {
+                "id": "sbx_alice",
+                "status": "ready",
+                "createdAt": "2026-06-13T00:00:00.000Z",
+                "updatedAt": "2026-06-13T00:00:00.000Z",
+            }
+        )
         app.state.registry.daemon_store.create_run_request(
             {
                 "nodeId": "sbx_alice",

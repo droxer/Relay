@@ -1,42 +1,29 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
-from ..automations.model import (
-    EVENT_KINDS,
-    TriggerError,
-    has_webhook,
-    public_task_result,
-    state_of,
-    without_legacy_fields,
-)
-from ..automations.service import (
-    automation_triggers_enabled,
-    lock_automation_state,
-    prepare_resume,
-    request_manual_occurrence,
-    routine_fields_v2,
-)
+from ..automations.model import public_task_result, without_legacy_fields
 from ..collaboration.awaiting import with_awaiting
-from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
-from ..persistence.store_common import store_transaction
-from ..persistence.stores import (
-    task_priority,
-    task_status,
-    valid_agent,
-)
-from ..persistence.task_lifecycle import validate_manual_transition, wip_limit
-from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
+from ..persistence.task_lifecycle import wip_limit
+from ..persistence.workspace_artifacts import artifact_index_item, workspace_artifact_key, workspace_artifacts
+from ..services.issue_triage import project_move_error
 from ..services.produced_files import file_currency, listing_directories, live_status
-from ..services.issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project, project_move_error
-from ..services.project_runtime import project_task_assignment_error
+from ..services.task_assignment import (
+    logical_agent_for_assignment,
+    team_for_assignment,
+    validate_project_task_assignment,
+)
+from ..services.task_creation import TaskCreateRequest
+from ..services.task_creation import create_task as create_task_record
 from ..services.task_deletion import (
     TaskDeletionError,
     task_has_active_linked_session,
@@ -44,43 +31,42 @@ from ..services.task_deletion import (
 from ..services.task_deletion import (
     delete_task as delete_task_record,
 )
-from ..services.task_dispatch import (
-    implicit_group_assignments_for_task,
-    start_task_on_ready_node,
+from ..services.task_dispatch import DispatchResult, start_task_on_ready_node
+from ..services.task_requests import (
+    TaskRequestError,
+    TaskRequestReader,
+    ensure_issue_in_project,
+    parse_routine_fields,
+    update_task_unless_dispatching,
 )
+from ..services.task_start import PreparedStart, prepare_task_start, start_prepared_task
+from ..services.task_update import TaskPatchRequest
+from ..services.task_update import update_task as update_task_record
 from ..services.task_workspace import (
     recorded_task_workspace,
     task_workspace_subpath,
 )
-from ..services.team_dispatch import (
-    TeamDispatchError,
-    task_thread_assignments,
-    task_thread_ownership,
-)
-from ..sessions import SessionController
-from ..tasks import (
-    materialize_legacy_agent_assignment,
-    materialize_legacy_task_assignment,
-    task_goal_text,
-)
-from .deps import AppContext, AppContextDep
-from .helpers import (
-    JsonBodyDep,
+from ..services.team_dispatch import TeamDispatchError, task_thread_ownership
+from .actors import (
     actor_can_access_record,
-    artifact_index_item,
     assignee_user_id_for_task,
-    assignment_list,
     get_task_for_actor,
     get_task_or_404,
-    json_body,
     owner_user_id_for_create,
-    participants_for_assignments,
     request_actor,
-    string_field,
-    workspace_artifact_key,
-    workspace_artifacts,
 )
+from .bodies import JsonBodyDep, assignment_list, json_body, participants_for_assignments, string_field
+from .deps import AppContext, AppContextDep
 from .project_helpers import ensure_task_project_writable, project_for_owner, project_session_fields
+from .schemas import (
+    TaskCreateBody,
+    TaskCreateBodyDep,
+    TaskPatchBody,
+    TaskPatchBodyDep,
+    TaskStartBody,
+    openapi_body,
+    parse_request_body,
+)
 from .workspace_transport import (
     dispatch_workspace_command,
     live_workspace_file,
@@ -90,6 +76,7 @@ from .workspace_transport import (
     workspace_binding_target,
     workspace_path,
 )
+from ..security.actor import Actor
 
 router = APIRouter()
 
@@ -113,130 +100,13 @@ def public_task_envelope(result: Any) -> Any:
 
 
 
-def update_task_unless_dispatching(
-    ctx: AppContextDep, task_id: str, payload: dict[str, Any]
-) -> dict[str, Any]:
+@contextmanager
+def task_request_errors() -> Iterator[None]:
+    """Answer a task service's refusal with the status and detail it carries."""
     try:
-        return ctx.task_store.update_task_if_not_dispatching(task_id, payload)
-    except TaskExecutionActiveError as error:
-        raise HTTPException(409, "task_execution_active") from error
-
-
-def logical_agent_for_assignment(
-    ctx: AppContextDep,
-    actor: dict[str, Any],
-    agent_id: str | None,
-    *,
-    expected_user_id: str | None = None,
-) -> dict[str, Any] | None:
-    if not agent_id:
-        return None
-    agent = ctx.agent_store.get_agent(agent_id)
-    if not agent or agent.get("deletedAt"):
-        raise HTTPException(404, "Logical agent not found.")
-    if not agent.get("enabled", True):
-        raise HTTPException(409, "agent_disabled")
-    allowed_user_id = expected_user_id or actor["userId"]
-    if agent.get("supervisorUserId") != allowed_user_id:
-        raise HTTPException(403, "Logical agent is not available to the task assignee.")
-    if (
-        not actor["isAdmin"]
-        and agent.get("supervisorUserId") != actor["userId"]
-    ):
-        raise HTTPException(403, "Logical agent access denied.")
-    return agent
-
-
-def team_for_assignment(
-    ctx: AppContextDep,
-    actor: dict[str, Any],
-    team_id: str | None,
-    *,
-    expected_user_id: str,
-    require_actor_access: bool = True,
-) -> dict[str, Any] | None:
-    if not team_id:
-        return None
-    team = ctx.team_store.get_team(team_id)
-    if not team or team.get("deletedAt"):
-        raise HTTPException(404, "Team not found.")
-    if not team.get("enabled", True):
-        # Mirrors `team_agents`: an emptied team needs restaffing, not enabling.
-        raise HTTPException(
-            409, "team_disabled" if team.get("memberAgentIds") else "team_invalid"
-        )
-    if team.get("ownerUserId") != expected_user_id:
-        raise HTTPException(403, "Team is not available to the task assignee.")
-    if (
-        require_actor_access
-        and not actor["isAdmin"]
-        and team.get("ownerUserId") != actor["userId"]
-    ):
-        raise HTTPException(403, "Team access denied.")
-    return team
-
-
-def ensure_issue_in_project(task: dict[str, Any]) -> None:
-    """Refuse to hand intake work to an agent or team: it has nowhere to run."""
-    if issue_needs_project(task):
-        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
-
-
-def project_move_target(
-    ctx: AppContextDep, current: dict[str, Any], body: dict[str, Any]
-) -> dict[str, Any] | None:
-    """The project a PATCH moves an intake issue into, if it moves one."""
-    if "projectId" not in body:
-        return None
-    project_id = string_field(body, "projectId")
-    if not project_id:
-        raise HTTPException(400, "projectId cannot be cleared.")
-    if code := project_move_error(current):
-        raise HTTPException(409, code)
-    return project_for_owner(
-        ctx, project_id, current.get("ownerUserId"), require_enabled=True
-    )
-
-
-def validate_project_task_assignment(
-    ctx: AppContextDep,
-    task: dict[str, Any],
-    *,
-    assigned_agent_id: str | None,
-    assigned_team_id: str | None,
-) -> None:
-    project_id = task.get("projectId")
-    if not project_id:
-        return
-    project = ctx.project_store.get_project(project_id)
-    if not project:
-        raise HTTPException(404, "Project not found.")
-    validate_project_assignment(
-        ctx,
-        project,
-        assigned_agent_id=assigned_agent_id,
-        assigned_team_id=assigned_team_id,
-    )
-
-
-def validate_project_assignment(
-    ctx: AppContextDep,
-    project: dict[str, Any],
-    *,
-    assigned_agent_id: str | None,
-    assigned_team_id: str | None,
-) -> None:
-    """A project task may go to anyone who shares the project's computer."""
-    team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
-    if assigned_team_id and (not team or team.get("deletedAt")):
-        raise HTTPException(404, "Team not found.")
-    if code := project_task_assignment_error(
-        project,
-        agent_id=assigned_agent_id,
-        team=team,
-        placement_store=ctx.agent_placement_store,
-    ):
-        raise HTTPException(400, code)
+        yield
+    except TaskRequestError as error:
+        raise HTTPException(error.status, error.detail) from error
 
 
 def date_field(body: dict[str, Any], key: str) -> str | None:
@@ -246,141 +116,45 @@ def date_field(body: dict[str, Any], key: str) -> str | None:
     if raw in (None, ""):
         return ""
     if not isinstance(raw, str):
-        raise HTTPException(400, f"{key} must be a YYYY-MM-DD date.")
+        raise TaskRequestError(400, f"{key} must be a YYYY-MM-DD date.")
     value = raw.strip()
     try:
         date.fromisoformat(value)
     except ValueError:
-        raise HTTPException(400, f"{key} must be a YYYY-MM-DD date.")
+        raise TaskRequestError(400, f"{key} must be a YYYY-MM-DD date.") from None
     return value
 
 
-def _task_collaboration_style(body: dict[str, Any], *, allow_clear: bool) -> str | None:
-    value = body.get("collaborationStyle")
-    if value is None:
-        return None
-    if allow_clear and value == "":
-        return ""
-    try:
-        return validate_collaboration_style(value)
-    except CollaborationStyleError as error:
-        raise HTTPException(400, str(error)) from error
-
-
 def routine_fields(body: dict[str, Any], *, current: dict[str, Any] | None) -> dict[str, Any]:
-    """``routine_fields_v2`` answered over HTTP, behind the triggers switch."""
-    try:
-        fields = routine_fields_v2(body, current=current, now=datetime.now(timezone.utc))
-    except TriggerError as error:
-        raise HTTPException(400, str(error)) from error
-    if (
-        "routineTriggers" in body
-        and not automation_triggers_enabled()
-        and any(trigger["kind"] != "schedule" for trigger in fields.get("routineTriggers", []))
-    ):
-        raise HTTPException(400, "Only schedule triggers are enabled on this server.")
-    return fields
+    return parse_routine_fields(body, current=current)
 
 
-def validate_trigger_scope(
-    ctx: AppContext, triggers: list[dict[str, Any]] | None, *, owner: str | None,
-) -> None:
-    """Filters may observe only work their owner is allowed to assign."""
-    for index, trigger in enumerate(triggers or []):
-        if trigger.get("kind") in EVENT_KINDS:
-            _validate_filter_scope(ctx, trigger.get("filters") or {}, f"routineTriggers[{index}]", owner=owner)
-
-
-def _validate_filter_scope(
-    ctx: AppContext, filters: dict[str, Any], at: str, *, owner: str | None,
-) -> None:
-    if not any(key in filters for key in ("projectId", "assignedAgentId", "assignedTeamId")):
-        return
-    if not owner:
-        # No owner means no assignment scope to check the filter against.
-        raise HTTPException(400, "Only an automation with an owner can filter by project, agent, or team.")
-    lookups = (
-        ("projectId", ctx.project_store.get_project),
-        ("assignedAgentId", ctx.agent_store.get_agent),
-        ("assignedTeamId", ctx.team_store.get_team),
+def request_reader() -> TaskRequestReader:
+    """How the task services read this module's request fields."""
+    return TaskRequestReader(
+        string=string_field,
+        date=date_field,
+        routine=routine_fields,
+        assignments=assignment_list,
+        participants=participants_for_assignments,
     )
-    for key, lookup in lookups:
-        if key not in filters:
-            continue
-        try:
-            found = lookup(filters[key])
-        except KeyError:
-            found = None
-        if not found:
-            raise HTTPException(400, f"{at} filters.{key} does not exist.")
-    owner_actor = {"userId": owner, "isAdmin": False}
-    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_user_id=owner)
-    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_user_id=owner)
-    project = project_for_owner(ctx, filters.get("projectId"), owner, require_enabled=True)
-    if project:
-        validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
-                                    assigned_team_id=filters.get("assignedTeamId"))
 
 
-def complete_linked_task_sessions(
-    ctx: AppContextDep, task: dict[str, Any], outcome: str
-) -> None:
-    # Serialize with admission so a newer thread round cannot acquire the
-    # session between checking its scope and completing it.
-    with ctx.registry.dispatch_lock:
-        _complete_task_scoped_sessions(ctx, task, outcome)
+def project_move_target(
+    ctx: AppContextDep, current: dict[str, Any], body: TaskPatchBody
+) -> dict[str, Any] | None:
+    """The project a PATCH moves an intake issue into, if it moves one."""
+    if not body.is_set("project_id"):
+        return None
+    project_id = body.project_id
+    if not project_id:
+        raise HTTPException(400, "projectId cannot be cleared.")
+    if code := project_move_error(current):
+        raise HTTPException(409, code)
+    return project_for_owner(
+        ctx, project_id, current.get("ownerUserId"), require_enabled=True
+    )
 
-
-def _complete_task_scoped_sessions(
-    ctx: AppContextDep, task: dict[str, Any], outcome: str
-) -> None:
-    controller = SessionController(ctx.session_store)
-    for session_id in task.get("linkedSessionIds", []):
-        try:
-            session = ctx.session_store.get_session(session_id)
-        except (KeyError, FileNotFoundError):
-            continue
-        except Exception:  # noqa: BLE001 - one unreadable linked session must not block the rest
-            logger.warning(
-                "Unexpected error reading linked session",
-                session_id=session_id,
-                exc_info=True,
-            )
-            continue
-        if session.get("status") in ("completed", "failed", "cancelled"):
-            continue
-        run_request = ctx.registry.daemon_store.active_run_request_for_session_any_node(
-            session_id
-        )
-        source_round = next(
-            (
-                item
-                for item in session.get("collaborationRounds", [])
-                if item.get("roundId") == session.get("activeRoundId")
-            ),
-            {},
-        )
-        if run_request:
-            if run_request.get("taskId") != task["id"]:
-                continue
-        elif source_round.get("workScope") != {"kind": "task", "taskId": task["id"]}:
-            continue
-        if run_request:
-            terminal_reason = "Linked task completed before agent delivery finished."
-            ctx.registry.cancel_run_request_before_delivery(
-                run_request["id"], terminal_reason
-            )
-            if ctx.registry.get(run_request["nodeId"]):
-                ctx.registry.cancel_active_run(
-                    run_request["nodeId"], session_id, terminal_reason
-                )
-        controller.complete_session(session_id, outcome)
-
-
-UNBLOCKED_WAIT_REASON = (
-    "The block was cleared, but the interrupted run does not restart on its own. "
-    "Tell the agent how to continue."
-)
 
 @router.get("/tasks")
 def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
@@ -410,151 +184,33 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     }
 
 
-@router.post("/tasks", status_code=201)
+@router.post("/tasks", status_code=201, openapi_extra=openapi_body(TaskCreateBody))
 def create_task(
-    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+    request: Request, ctx: AppContextDep, *, _request_body: TaskCreateBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = _request_body
-    title = string_field(body, "title") or string_field(body, "taskGoal")
+    title = _request_body.task_title()
     if not title:
         raise HTTPException(400, "title is required.")
+    body = _request_body.as_dict()
     owner = owner_user_id_for_create(actor, body)
     assignee = assignee_user_id_for_task(actor, body, owner)
-    project_id = string_field(body, "projectId") or None
+    project_id = _request_body.project_id or None
     project = project_for_owner(ctx, project_id, owner, require_enabled=True)
-    if project and "assignments" in body:
-        raise HTTPException(400, "project_assignment_override_unsupported")
-    assigned_agent_id = string_field(body, "assignedAgentId") or None
-    assigned_team_id = string_field(body, "assignedTeamId") or None
-    if assigned_agent_id and assigned_team_id:
-        raise HTTPException(400, "task_agent_and_team_conflict")
-    if "assignedAgent" in body:
-        raise HTTPException(400, "assignedAgent is read-only; use assignedAgentId.")
-    logical_agent = logical_agent_for_assignment(
-        ctx, actor, assigned_agent_id, expected_user_id=assignee
-    )
-    if logical_agent:
-        assignee = logical_agent["supervisorUserId"]
-    if project:
-        validate_project_assignment(
+    with task_request_errors():
+        task = create_task_record(
             ctx,
-            project,
-            assigned_agent_id=assigned_agent_id,
-            assigned_team_id=assigned_team_id,
-        )
-    team_for_assignment(
-        ctx,
-        actor,
-        assigned_team_id,
-        expected_user_id=assignee,
-    )
-    agent = logical_agent["executorKind"] if logical_agent else None
-    status = task_status(body.get("status"))
-    acceptance_policy = body.get("acceptancePolicy")
-    if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
-        raise HTTPException(400, "acceptancePolicy must be human or automatic.")
-    collaboration_style = _task_collaboration_style(body, allow_clear=False)
-    if "status" in body and not status:
-        raise HTTPException(400, "status is not a recognized task status.")
-    routine = routine_fields(body, current=None)
-    if "routineTriggers" in body:
-        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=owner)
-    creates_thread = body.get("createSession") is True or isinstance(
-        body.get("assignments"), list
-    )
-    if issue_needs_project({**routine, "projectId": project and project["id"]}) and (
-        status == "assigned" or assigned_agent_id or assigned_team_id or creates_thread
-    ):
-        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
-    if status == "assigned" and not (project or assigned_agent_id or assigned_team_id):
-        raise HTTPException(400, "assigned status requires an agent or team.")
-    if status and status not in ("backlog", "assigned"):
-        raise HTTPException(400, "New tasks must enter Backlog or Ready.")
-    if routine.get("routineState") == "active" and not (
-        project or assigned_agent_id or assigned_team_id
-    ):
-        raise HTTPException(400, "An active automation requires an agent, team, or project.")
-    if creates_thread and assigned_team_id:
-        try:
-            task_thread_ownership(
-                {
-                    "ownerUserId": owner,
-                    "assigneeUserId": assignee,
-                    "assignedTeamId": assigned_team_id,
-                },
-                team_store=ctx.team_store,
-                agent_store=ctx.agent_store,
-            )
-        except TeamDispatchError as error:
-            raise HTTPException(409, error.code) from error
-    task = ctx.task_store.create_task(
-        {
-            "title": title,
-            "description": string_field(body, "description"),
-            "priority": task_priority(body.get("priority")) or "normal",
-            "ownerUserId": owner,
-            "assigneeUserId": assignee,
-            **({"projectId": project["id"]} if project else {}),
-            "dueDate": date_field(body, "dueDate"),
-            "status": status,
-            "acceptancePolicy": acceptance_policy or "human",
-            **({"collaborationStyle": collaboration_style} if collaboration_style else {}),
-            **(
-                {
-                    "assignedAgent": agent,
-                    "assignedAgentId": assigned_agent_id,
-                }
-                if agent and assigned_agent_id
-                else {}
+            actor,
+            TaskCreateRequest(
+                body=body,
+                reader=request_reader(),
+                title=title,
+                owner=owner,
+                assignee=assignee,
+                project=project,
+                project_session_fields=lambda selected: project_session_fields(ctx, selected),
             ),
-            **({"assignedTeamId": assigned_team_id} if assigned_team_id else {}),
-            **routine,
-        }
-    )
-    logger.info("Task created", task_id=task["id"], title=title, owner=owner)
-    if agent:
-        logger.info(
-            "Task assigned", task_id=task["id"], agent=agent, agent_id=assigned_agent_id
         )
-    if creates_thread:
-        project_fields = project_session_fields(ctx, project) if project else {}
-        workspace_path = project_fields.pop(
-            "workspace_path", string_field(body, "workspacePath") or "/workspace"
-        )
-        try:
-            thread_ownership = task_thread_ownership(
-                task, team_store=ctx.team_store, agent_store=ctx.agent_store
-            )
-        except TeamDispatchError as error:
-            raise HTTPException(409, error.code) from error
-        assignments = task_thread_assignments(
-            task,
-            assignment_list(body.get("assignments")),
-            team_store=ctx.team_store,
-            agent_store=ctx.agent_store,
-        )
-        controller = SessionController(
-            ctx.session_store,
-            task_store=ctx.task_store,
-            task_id=task["id"],
-            workspace_path=workspace_path,
-            **project_fields,
-            **thread_ownership,
-        )
-        session = controller.create_session(
-            task_goal_text(task),
-            participants_for_assignments(assignments, None),
-        )
-        logger.info(
-            "Session created from task",
-            task_id=task["id"],
-            session_id=session["id"],
-            workspace_path=workspace_path,
-        )
-        if assignments:
-            controller.assign_session(session["id"], assignments)
-        task = ctx.task_store.link_session(task["id"], session["id"])
     return public_task(task)
 
 
@@ -564,310 +220,36 @@ def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, An
     return public_task(get_task_for_actor(ctx.task_store, task_id, actor))
 
 
-def ensure_relay_pause_transition_allowed(
-    current: dict[str, Any], routine: dict[str, Any], actor: dict[str, Any]
-) -> None:
-    if (
-        state_of(current) == "paused_by_relay"
-        and (routine.get("routineState") in ("active", "paused") or routine.get("isRoutine") is False)
-        and not actor.get("isAdmin")
-        and current.get("ownerUserId") != actor.get("userId")
-    ):
-        # An ordinary pause or conversion would let the assignee activate it later.
-        raise HTTPException(403, "Only the automation's owner or an admin can resume it.")
-
-
-@router.patch("/tasks/{task_id}")
+@router.patch("/tasks/{task_id}", openapi_extra=openapi_body(TaskPatchBody))
 def update_task(
-    task_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+    task_id: str, request: Request, ctx: AppContextDep, *, _request_body: TaskPatchBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
-    body = _request_body
-    move_project = project_move_target(ctx, current, body)
-    # Everything below judges the task as it will be once the move lands.
-    effective = {**current, "projectId": move_project["id"]} if move_project else current
-    title = string_field(body, "title") or None
-    description = (
-        body.get("description") if isinstance(body.get("description"), str) else None
-    )
-    priority = task_priority(body.get("priority"))
-    status = task_status(body.get("status"))
-    acceptance_policy = body.get("acceptancePolicy")
-    if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
-        raise HTTPException(400, "acceptancePolicy must be human or automatic.")
-    collaboration_style = _task_collaboration_style(body, allow_clear=True)
-    if "status" in body and not status:
-        raise HTTPException(400, "status is not a recognized task status.")
-    unblock = body.get("action") == "unblock"
-    if "action" in body and not unblock:
-        raise HTTPException(400, "Unknown task action.")
-    if unblock:
-        if "status" in body or current.get("status") != "blocked":
-            raise HTTPException(409, "task_not_blocked")
-        status = current.get("blockedFromStatus") or "backlog"
-        if status == "running":
-            status = "waiting_for_human"
-    # An unblocked run cannot resume on its own; say so where the wait is
-    # quoted, and point the answer at the thread the block came from.
-    unblocked_wait = (
-        {
-            "statusReason": UNBLOCKED_WAIT_REASON,
-            **(
-                {"statusSessionId": current["attention"]["sessionId"]}
-                if isinstance(current.get("attention"), dict)
-                and current["attention"].get("sessionId")
-                else {}
-            ),
-        }
-        if unblock and status == "waiting_for_human"
-        else {}
-    )
-    blocker_reason = string_field(body, "blockerReason").strip()
-    if status == "blocked" and (not blocker_reason or len(blocker_reason) > 2000):
-        raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
-    due_date = date_field(body, "dueDate")
-    routine = routine_fields(body, current=current)
-    ensure_relay_pause_transition_allowed(current, routine, actor)
-    if "routineTriggers" in body:
-        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=current.get("ownerUserId"))
-    assignee = (
+    # The services judge the PATCH by which fields it names, so they read the
+    # body as sent; absent and null stay distinct.
+    body = _request_body.as_dict()
+    move_project = project_move_target(ctx, current, _request_body)
+    requested_assignee = (
         assignee_user_id_for_task(actor, body, current.get("assigneeUserId"))
-        if "assigneeUserId" in body or "assignee_user_id" in body
+        if _request_body.names_assignee()
         else None
     )
-    agent = valid_agent(body.get("assignedAgent")) if "assignedAgent" in body else None
-    assigned_agent_id = (
-        string_field(body, "assignedAgentId") if "assignedAgentId" in body else None
-    )
-    assigned_team_id = (
-        string_field(body, "assignedTeamId") if "assignedTeamId" in body else None
-    )
-    if assigned_agent_id and assigned_team_id:
-        raise HTTPException(400, "task_agent_and_team_conflict")
-    validate_project_task_assignment(
-        ctx,
-        effective,
-        assigned_agent_id=assigned_agent_id,
-        assigned_team_id=assigned_team_id,
-    )
-    if "assignedAgent" in body:
-        raise HTTPException(400, "assignedAgent is read-only; use assignedAgentId.")
-    assignee_changed = bool(assignee and assignee != current.get("assigneeUserId"))
-    if (
-        assignee_changed
-        and (current.get("assignedAgentId") or current.get("assignedTeamId"))
-        and "assignedAgentId" not in body
-        and "assignedTeamId" not in body
-    ):
-        raise HTTPException(
-            400,
-            "Changing the assignee requires an assignment for the new user, or an explicit empty assignment.",
-        )
-    if (
-        assignee_changed
-        and current.get("ownerUserId") == current.get("assigneeUserId")
-        and assignee != current.get("ownerUserId")
-    ):
-        raise HTTPException(
-            403,
-            "A user-owned task cannot be reassigned to another user.",
-        )
-    logical_agent = None
-    if not (
-        assigned_agent_id
-        and assigned_agent_id == current.get("assignedAgentId")
-        and not assignee_changed
-    ):
-        logical_agent = logical_agent_for_assignment(
+    with task_request_errors():
+        task = update_task_record(
             ctx,
             actor,
-            assigned_agent_id,
-            expected_user_id=assignee
-            or current.get("assigneeUserId")
-            or current.get("ownerUserId"),
-        )
-    if logical_agent:
-        if agent and agent != logical_agent["executorKind"]:
-            raise HTTPException(
-                400, "assignedAgent does not match assignedAgentId executor kind."
-            )
-        agent = logical_agent["executorKind"]
-        assignee = logical_agent["supervisorUserId"]
-    expected_team_user_id = (
-        assignee
-        or current.get("assigneeUserId")
-        or current.get("ownerUserId")
-        or actor["userId"]
-    )
-    unchanged_team_assignment = bool(
-        assigned_team_id
-        and assigned_team_id == current.get("assignedTeamId")
-        and not assignee_changed
-    )
-    team_for_assignment(
-        ctx,
-        actor,
-        assigned_team_id,
-        expected_user_id=expected_team_user_id,
-        require_actor_access=not unchanged_team_assignment,
-    )
-    if (
-        not title
-        and description is None
-        and not priority
-        and not status
-        and due_date is None
-        and assignee is None
-        and not agent
-        and "assignedAgentId" not in body
-        and "assignedTeamId" not in body
-        and not routine
-        and acceptance_policy is None
-        and collaboration_style is None
-        and not move_project
-    ):
-        raise HTTPException(
-            400,
-            "PATCH requires title, description, priority, dueDate, assigneeUserId, assignedAgentId, assignedTeamId, projectId, or status.",
-        )
-    next_routine_active = routine.get("routineState", state_of(current)) == "active"
-    next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
-    next_agent_id = (
-        assigned_agent_id
-        if "assignedAgentId" in body
-        else current.get("assignedAgentId")
-    )
-    next_team_id = (
-        assigned_team_id if "assignedTeamId" in body else current.get("assignedTeamId")
-    )
-    if "assignedAgentId" in body and assigned_agent_id:
-        next_team_id = None
-    if "assignedTeamId" in body and assigned_team_id:
-        next_agent_id = None
-    assignment_changed = next_agent_id != current.get(
-        "assignedAgentId"
-    ) or next_team_id != current.get("assignedTeamId")
-    if (assignment_changed or assignee_changed) and task_has_active_linked_session(
-        ctx.session_store, current
-    ):
-        raise HTTPException(409, "task_execution_active")
-    if (
-        next_is_routine
-        and next_routine_active
-        and not (effective.get("projectId") or next_agent_id or next_team_id)
-    ):
-        raise HTTPException(400, "An active automation requires an agent, team, or project.")
-    if move_project and (next_agent_id or next_team_id):
-        # A kept legacy assignment must still be someone on the project's computer.
-        validate_project_assignment(
-            ctx,
-            move_project,
-            assigned_agent_id=next_agent_id,
-            assigned_team_id=next_team_id,
-        )
-    assignment_clear_requested = assignment_changed and not (
-        next_agent_id or next_team_id
-    )
-    # Clearing stays allowed: it is how a legacy Ready intake issue goes back
-    # to Backlog (just below).
-    if (
-        issue_needs_project({**effective, "isRoutine": next_is_routine})
-        and not assignment_clear_requested
-        and (status == "assigned" or (assignment_changed and (next_agent_id or next_team_id)))
-    ):
-        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
-    if (status or current.get("status")) == "assigned" and not (
-        effective.get("projectId") or next_agent_id or next_team_id
-    ):
-        if assignment_clear_requested:
-            status = "backlog"
-        else:
-            raise HTTPException(400, "assigned status requires an agent or team.")
-    assignment_patch: dict[str, Any] = {}
-    if assignment_changed:
-        assignment_patch = {
-            "assignedAgentId": next_agent_id,
-            "assignedTeamId": next_team_id,
-            **(
-                {
-                    "assignedAgent": (
-                        logical_agent["executorKind"]
-                        if logical_agent
-                        else current.get("assignedAgent")
-                    )
-                }
-                if next_agent_id
-                else {}
+            current,
+            TaskPatchRequest(
+                body=body,
+                reader=request_reader(),
+                requested_assignee=requested_assignee,
+                move_project=move_project,
+                reload=lambda: get_task_for_actor(ctx.task_store, task_id, actor),
+                automation_store=ctx.automation_store,
             ),
-        }
-    update_payload = {
-        "title": title,
-        "description": description,
-        "priority": priority,
-        "status": status,
-        "acceptancePolicy": acceptance_policy,
-        "collaborationStyle": collaboration_style,
-        "blockerReason": blocker_reason,
-        **unblocked_wait,
-        "actorUserId": actor["userId"],
-        "expectedStatus": current["status"],
-        "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
-        "dueDate": due_date,
-        "assigneeUserId": assignee,
-        **({"projectId": move_project["id"]} if move_project else {}),
-        **routine,
-        **assignment_patch,
-    }
-    # Resuming here shares the resume route's state reset (prepare_resume).
-    with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
-        if routine:
-            # The scheduler can pause it after the initial request validation.
-            # Read again under its lock before judging or writing automation state.
-            lock_automation_state(conn)
-            current = get_task_for_actor(ctx.task_store, task_id, actor)
-            for field in routine:
-                update_payload.pop(field, None)
-            routine = routine_fields(body, current=current)
-            ensure_relay_pause_transition_allowed(current, routine, actor)
-            update_payload.update(routine)
-        resumed = routine.get("routineState") == "active" and state_of(current) != "active"
-        if resumed:
-            prepare_resume(conn, request.app.state.automation_store, ctx.task_store, current, actor)
-        if status:
-            try:
-                validate_manual_transition(
-                    current,
-                    status,
-                    active=bool(
-                        dispatch_claim_active(current)
-                        or ctx.registry.daemon_store.active_run_request_for_task(task_id)
-                    ),
-                    unblock=unblock,
-                )
-            except ValueError as error:
-                raise HTTPException(409, str(error)) from error
-        if (
-            acceptance_policy
-            and acceptance_policy != current.get("acceptancePolicy", "automatic")
-            and current.get("startedAt")
-        ):
-            raise HTTPException(409, "task_acceptance_policy_locked")
-        try:
-            task = (
-                update_task_unless_dispatching(ctx, task_id, update_payload)
-                if status or assignment_changed or assignee_changed or acceptance_policy or move_project
-                else ctx.task_store.update_task(task_id, update_payload)
-            )
-        except ValueError as error:
-            raise HTTPException(409, str(error)) from error
-        if status == "done":
-            complete_linked_task_sessions(ctx, task, "Task accepted after review.")
-            task = ctx.task_store.get_task(task_id)
-
-    if has_webhook(current) and (not task.get("isRoutine") or not has_webhook(task)):
-        request.app.state.automation_store.delete_webhook_secret(task_id)
+        )
     return public_task(task)
 
 
@@ -880,7 +262,7 @@ def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
     if not current.get("deletedAt"):
         ensure_task_project_writable(ctx, current)
     try:
-        lifecycle = request.app.state.execution_lifecycle
+        lifecycle = ctx.execution_lifecycle
         with ctx.registry.dispatch_lock, lifecycle.admission_scope():
             result = delete_task_record(ctx, task_id, actor, execution_lifecycle=lifecycle)
     except TaskDeletionError as error:
@@ -906,10 +288,17 @@ def assign_task(
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
+    with task_request_errors():
+        return _assign_task(ctx, actor, current, _request_body)
+
+
+def _assign_task(
+    ctx: AppContext, actor: Actor, current: dict[str, Any], body: dict[str, Any]
+) -> dict[str, Any]:
+    task_id = current["id"]
     ensure_issue_in_project(current)
     if task_has_active_linked_session(ctx.session_store, current):
         raise HTTPException(409, "task_execution_active")
-    body = _request_body
     assigned_agent_id = (
         string_field(body, "agentId") or string_field(body, "assignedAgentId") or None
     )
@@ -972,158 +361,23 @@ def assign_task(
     ))
 
 
-def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
+def _prepare_task_start(task_id: str, ctx: AppContext, actor: Actor, body: TaskStartBody) -> PreparedStart:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     if task.get("isRoutine") and not actor["isAdmin"] and task.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     ensure_task_project_writable(ctx, task)
-    ensure_issue_in_project(task)
-    raw_assignments = body.get("assignments")
-    assignments = assignment_list(raw_assignments)
-    if body.get("agent") is not None:
-        raise HTTPException(400, "agent is read-only; start through assignedAgentId.")
-    if assignments and task.get("assignedTeamId"):
-        assignments = []
-    if (
-        task.get("assignedAgentId")
-        and isinstance(raw_assignments, list)
-        and raw_assignments
-    ):
-        requested_agent_ids = [
-            item.get("agentId") if isinstance(item, dict) else None
-            for item in raw_assignments
-        ]
-        if requested_agent_ids != [task.get("assignedAgentId")]:
-            raise HTTPException(409, "task_assignment_override")
-        if not task.get("assignedAgent"):
-            raise HTTPException(409, "task_assignment_invalid")
-        assignments = [
-            {
-                "agentId": task["assignedAgentId"],
-                "agent": task["assignedAgent"],
-            }
-        ]
-    if (
-        not task.get("assignedTeamId")
-        and assignments
-        and any(not assignment.get("agentId") for assignment in assignments)
-    ):
-        materialized_assignments = []
-        for assignment in assignments:
-            if assignment.get("agentId"):
-                materialized_assignments.append(assignment)
-                continue
-            executor_kind = valid_agent(assignment.get("agent"))
-            materialized = (
-                materialize_legacy_agent_assignment(
-                    task,
-                    executor_kind,
-                    registry=ctx.registry,
-                    agent_store=ctx.agent_store,
-                    placement_store=ctx.agent_placement_store,
-                )
-                if executor_kind
-                else None
-            )
-            if not materialized:
-                updated = ctx.task_store.record_dispatch_outcome(
-                    task_id,
-                    "rejected",
-                    code="agent_not_found",
-                    message="Every start assignment requires an available agent.",
-                )
-                return {
-                    "task": updated,
-                    "session": None,
-                    "dispatch": {
-                        "state": "rejected",
-                        "code": "agent_not_found",
-                        "message": "Every start assignment requires an available agent.",
-                    },
-                }
-            materialized_assignments.append({**assignment, **materialized})
-        assignments = materialized_assignments
-    if (
-        not assignments
-        and task.get("assignedAgent")
-        and not task.get("assignedAgentId")
-    ):
-        task = materialize_legacy_task_assignment(
+    raw_assignments = body.assignments
+    with task_request_errors():
+        return prepare_task_start(
+            ctx,
             task,
-            task_store=ctx.task_store,
-            registry=ctx.registry,
-            agent_store=ctx.agent_store,
-            placement_store=ctx.agent_placement_store,
+            raw_assignments=raw_assignments,
+            assignments=assignment_list(raw_assignments),
+            agent_requested=body.requests_agent(),
         )
-        if not task:
-            updated = ctx.task_store.record_dispatch_outcome(
-                task_id,
-                "queued",
-                code="agent_offline",
-                message="No compatible runtime is currently available for this legacy task.",
-            )
-            return {
-                "task": updated,
-                "session": None,
-                "dispatch": {
-                    "state": "queued",
-                    "code": "agent_offline",
-                    "message": "No compatible runtime is currently available for this legacy task.",
-                },
-            }
-    if not assignments and task.get("assignedAgentId") and task.get("assignedAgent"):
-        assignments = [
-            {
-                "agentId": task["assignedAgentId"],
-                "agent": task["assignedAgent"],
-            }
-        ]
-    if not assignments and not task.get("assignedTeamId") and not task.get("projectId"):
-        assignments = implicit_group_assignments_for_task(ctx, task)
-    agent = valid_agent(task.get("assignedAgent"))
-    if not agent and assignments:
-        agent = assignments[0]["agent"]
-    if not agent and not task.get("assignedTeamId") and not task.get("projectId"):
-        updated = ctx.task_store.record_dispatch_outcome(
-            task_id,
-            "rejected",
-            code="agent_not_found",
-            message="Select a named agent before starting this task.",
-        )
-        return {
-            "task": updated,
-            "session": None,
-            "dispatch": {
-                "state": "rejected",
-                "code": "agent_not_found",
-                "message": "Select a named agent before starting this task.",
-            },
-        }
-    if task.get("isRoutine"):
-        if not (
-            task.get("projectId")
-            or task.get("assignedAgentId")
-            or task.get("assignedTeamId")
-        ):
-            updated = ctx.task_store.record_dispatch_outcome(
-                task_id,
-                "rejected",
-                code="agent_not_found",
-                message="A routine requires a named agent before it can start.",
-            )
-            return {
-                "task": updated,
-                "session": None,
-                "dispatch": {
-                    "state": "rejected",
-                    "code": "agent_not_found",
-                    "message": "A routine requires a named agent before it can start.",
-                },
-            }
-    return task, agent, assignments
 
 
-@router.post("/tasks/{task_id}/runs", status_code=202)
+@router.post("/tasks/{task_id}/runs", status_code=202, openapi_extra=openapi_body(TaskStartBody))
 async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
@@ -1131,48 +385,31 @@ async def start_task(
     return public_task_envelope(await _start_task(task_id, request, ctx))
 
 
-async def _start_task(task_id: str, request: Request, ctx: AppContext) -> dict[str, Any]:
+async def _start_task(
+    task_id: str, request: Request, ctx: AppContext
+) -> dict[str, Any] | DispatchResult:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
-    body = await json_body(request)
+    body = await parse_request_body(request, TaskStartBody)
     prepared = await run_in_threadpool(_prepare_task_start, task_id, ctx, actor, body)
     if isinstance(prepared, dict):
         return prepared
-    task, agent, assignments = prepared
-    if task.get("isRoutine"):
-        occurrence = await run_in_threadpool(
-            request_manual_occurrence, request.app.state.automation_store, ctx, task, actor
-        )
-        if "dispatch" in occurrence:
-            return occurrence
-        result = await start_task_on_ready_node(
-            ctx, occurrence, actor, retry_blocked=True
-        )
-    else:
-        result = await start_task_on_ready_node(
-            ctx, task, actor, assignments=assignments or None, retry_blocked=True
-        )
-    if task.get("isRoutine") and result and result.get("session"):
-        await run_in_threadpool(ctx.task_store.link_session, task["id"], result["session"]["id"])
-    if not result or not result.get("session"):
-        return (
-            result
-            if result
-            else {
-                "task": task,
-                "session": None,
-                "dispatch": {
-                    "state": "rejected",
-                    "code": "invalid_state",
-                    "message": "This task cannot be started in its current state.",
-                },
-            }
-        )
-    return result
+    task, _agent, assignments = prepared
+    return await start_prepared_task(
+        ctx, task, assignments, actor, automation_store=ctx.automation_store
+    )
 
 
-def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
+def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: Actor, body: dict[str, Any]) -> Any:
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
+    with task_request_errors():
+        return _pick_up(ctx, actor, current, body)
+
+
+def _pick_up(
+    ctx: AppContext, actor: Actor, current: dict[str, Any], body: dict[str, Any]
+) -> tuple[dict[str, Any], str, str]:
+    task_id = current["id"]
     ensure_issue_in_project(current)
     if current.get("status") not in ("backlog", "assigned"):
         raise HTTPException(409, "task_not_dispatchable")
@@ -1236,7 +473,7 @@ async def pickup_task(
 
 
 def occurrence_tasks(
-    ctx: Any, task: dict[str, Any], actor: dict[str, Any]
+    ctx: Any, task: dict[str, Any], actor: Actor
 ) -> list[dict[str, Any]]:
     """The routine's promoted occurrences the actor may read.
 
@@ -1366,7 +603,7 @@ def task_artifacts(
 async def _task_directory_listings(
     ctx: AppContext,
     task: dict[str, Any],
-    actor: dict[str, Any],
+    actor: Actor,
     directories: list[str],
 ) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, Any]]:
     """Read live directories without letting an unavailable computer hide the index."""
@@ -1476,7 +713,7 @@ async def task_files(
 
 
 def _task_workspace_target(
-    ctx: Any, task: dict[str, Any], actor: dict[str, Any]
+    ctx: Any, task: dict[str, Any], actor: Actor
 ) -> tuple[dict[str, Any], str, str]:
     """Resolve live reads from the same recorded identity used for execution."""
     nodes = ctx.registry.monitor_nodes()

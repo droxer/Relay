@@ -10,8 +10,8 @@ from starlette.concurrency import run_in_threadpool
 
 from ..core.ids import new_database_id
 from ..core.models import DaemonNodeRegistration
-from ..daemon_registry import public_sandbox_record
-from ..daemon_registry.registry import DeletedDaemonNodeError, UnknownDaemonNodeError
+from ..daemon_registry.records import public_sandbox_record
+from ..daemon_registry.records import DeletedDaemonNodeError, UnknownDaemonNodeError
 from ..services.computer_limits import assert_local_computer_allowed
 from ..services.computer_names import (
     normalize_computer_display_name,
@@ -19,7 +19,7 @@ from ..services.computer_names import (
     rename_computer_for_actor,
 )
 from ..services.event_notifier import daemon_command_key
-from ..services.managed_nodes import managed_node_placeholder
+from ..core.managed_node_policy import managed_node_placeholder
 from ..services.node_agents import (
     assert_node_agent_runs_drained,
     remove_node_agents,
@@ -28,22 +28,24 @@ from ..services.node_agents import (
 from .computer_installer_routes import computer_install_command, computer_windows_install_command
 from .deps import AppContextDep
 from .project_links import registration_project_links
-from .helpers import (
-    USER_DEVICE_SANDBOX_MODE,
-    JsonBodyDep,
+from .actors import (
     actor_can_access_sandbox,
-    assert_user_device_runtime,
     authorized_sandbox_for_token,
     bearer_token,
-    daemon_node_event,
-    daemon_start_command,
-    daemon_start_env,
-    json_body,
     request_actor,
     request_actor_or_none,
-    string_field,
+)
+from .daemon_events import daemon_node_event
+from .node_install import (
+    USER_DEVICE_SANDBOX_MODE,
+    assert_user_device_runtime,
+    daemon_start_command,
+    daemon_start_env,
     valid_user_workspace_path,
 )
+from .bodies import JsonBodyDep, json_body, string_field
+from ..core.daemon_capabilities import DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
+from ..security.actor import Actor
 
 router = APIRouter()
 WORKSPACE_EVENT_TYPES = frozenset(
@@ -77,7 +79,7 @@ def bounded_float(
     try:
         parsed = float(value)
     except (TypeError, ValueError):
-        raise HTTPException(400, f"{field} must be a number.")
+        raise HTTPException(400, f"{field} must be a number.") from None
     if not math.isfinite(parsed):
         raise HTTPException(400, f"{field} must be a finite number.")
     if parsed < minimum or parsed > maximum:
@@ -95,7 +97,7 @@ def bounded_int(
     try:
         parsed = int(value)
     except ValueError:
-        raise HTTPException(400, f"{field} must be an integer.")
+        raise HTTPException(400, f"{field} must be an integer.") from None
     if parsed < minimum or parsed > maximum:
         raise HTTPException(400, f"{field} must be between {minimum} and {maximum}.")
     return parsed
@@ -288,7 +290,7 @@ def _runtime_refresh_node(request: Request, ctx: AppContextDep, sandbox_id: str)
 @router.post("/daemon-nodes/{sandbox_id}/runtime-refresh", status_code=202)
 def request_runtime_refresh(sandbox_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     node = _runtime_refresh_node(request, ctx, sandbox_id)
-    if "runtime-refresh" not in (node.get("capabilities") or []):
+    if not has_capability(node, DAEMON_CAPABILITY_RUNTIME_REFRESH):
         raise HTTPException(409, "Update Relay Computer to refresh runtimes.")
     if not ctx.registry.is_live(sandbox_id):
         raise HTTPException(409, "Connect this computer before refreshing runtimes.")
@@ -386,7 +388,7 @@ def create_local_device_enrollment(
     return response
 
 
-def _owned_live_node(actor: dict[str, Any], ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
+def _owned_live_node(actor: Actor, ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
     node = ctx.registry.get(sandbox_id)
     if not node:
         raise HTTPException(404, "Daemon node not found.")
@@ -609,21 +611,23 @@ def register_daemon_node(
             sandbox_id=body.get("sandboxId"),
         )
         # 410 is terminal on purpose -- the daemon stops instead of retrying.
-        raise HTTPException(410, str(error))
+        raise HTTPException(410, str(error)) from error
     except PermissionError as error:
         logger.warning(
             "Daemon node registration denied",
             sandbox_id=body.get("sandboxId"),
             error=str(error),
         )
-        raise HTTPException(401, str(error))
-    except Exception as error:  # noqa: BLE001 - API boundary logs and normalizes registry failures.
+        raise HTTPException(401, str(error)) from error
+    except ValueError as error:
+        # Registration validates its payload with ValueError; anything else is
+        # a server fault, answered 500 so the daemon retries with backoff.
         logger.warning(
-            "Daemon node registration failed",
+            "Daemon node registration rejected",
             sandbox_id=body.get("sandboxId"),
             error=str(error),
         )
-        raise HTTPException(400, str(error))
+        raise HTTPException(400, str(error)) from error
 
 
 @router.post("/daemon-nodes/{sandbox_id}/heartbeat")
@@ -646,16 +650,16 @@ async def daemon_heartbeat(
             )
         }
     except DeletedDaemonNodeError as error:
-        raise HTTPException(410, str(error))
+        raise HTTPException(410, str(error)) from error
     except PermissionError as error:
         logger.warning(
             "Daemon node heartbeat unauthorized",
             sandbox_id=sandbox_id,
             error=str(error),
         )
-        raise HTTPException(401, str(error))
+        raise HTTPException(401, str(error)) from error
     except KeyError as error:
-        raise HTTPException(404, str(error))
+        raise HTTPException(404, "Daemon node not found.") from error
 
 
 @router.get("/daemon-nodes/{sandbox_id}/commands")
@@ -746,14 +750,14 @@ async def daemon_commands(
             "processingMs": (time.monotonic() - poll_started_at) * 1000,
         }
     except DeletedDaemonNodeError as error:
-        raise HTTPException(410, str(error))
+        raise HTTPException(410, str(error)) from error
     except PermissionError as error:
         logger.warning(
             "Daemon node commands unauthorized", sandbox_id=sandbox_id, error=str(error)
         )
-        raise HTTPException(401, str(error))
+        raise HTTPException(401, str(error)) from error
     except KeyError as error:
-        raise HTTPException(404, str(error))
+        raise HTTPException(404, "Daemon node not found.") from error
 
 
 @router.get("/daemon-nodes/{sandbox_id}/auth-check")
@@ -851,16 +855,19 @@ async def daemon_events(
         )
         return {"ok": True}
     except DeletedDaemonNodeError as error:
-        raise HTTPException(410, str(error))
+        raise HTTPException(410, str(error)) from error
     except PermissionError as error:
         logger.warning(
             "Daemon node event unauthorized", sandbox_id=sandbox_id, error=str(error)
         )
-        raise HTTPException(401, str(error))
+        raise HTTPException(401, str(error)) from error
     except UnknownDaemonNodeError as error:
         raise HTTPException(404, "Daemon node not found.") from error
-    except Exception as error:  # noqa: BLE001 - API boundary logs and normalizes event-store failures.
-        logger.warning(
-            "Daemon node event failed", sandbox_id=sandbox_id, error=str(error)
+    except Exception as error:  # noqa: BLE001 - the daemon retries a 503, so a transient store fault never loses an event
+        logger.exception(
+            "Daemon node event failed",
+            sandbox_id=sandbox_id,
+            event_type=event.get("type"),
+            run_id=event.get("runId"),
         )
         raise HTTPException(503, "Event processing is temporarily unavailable.") from error

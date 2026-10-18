@@ -7,6 +7,7 @@ from ..core.models import AGENT_ROLES
 from ..persistence.project_store import ProjectValidationError
 from .agent_location import agent_placed_on_computer
 from .project_setup import ProjectSetupError, resolved_setup
+from ..core.daemon_capabilities import DAEMON_CAPABILITY_PROJECT_WORKSPACES, has_capability
 
 PROJECT_NAME_MAX_LENGTH = 120
 PROJECT_MEMBER_MAX_COUNT = 32
@@ -33,7 +34,7 @@ def create_project_payload(
         raise ProjectValidationError("project_computer_forbidden")
     if not node.get("workspacePath"):
         raise ProjectValidationError("project_workspace_unavailable")
-    if "project-workspaces" not in (node.get("capabilities") or []):
+    if not has_capability(node, DAEMON_CAPABILITY_PROJECT_WORKSPACES):
         raise ProjectValidationError("project_workspace_unsupported")
     target_computer_id = computer_id(node)
     members, lead_agent_id = validate_project_roster(
@@ -293,7 +294,7 @@ def _normalize_member(value: Any) -> dict[str, Any]:
     enabled = value.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ProjectValidationError("project_member_invalid")
-    member = {
+    member: dict[str, Any] = {
         "agentId": agent_id,
         "role": role,
         "responsibilities": _required_text(
