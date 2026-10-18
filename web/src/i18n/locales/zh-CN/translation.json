@@ -419,7 +419,30 @@
     "band_label": "对话记录",
     "band_project": "项目",
     "band_agent": "智能体",
-    "band_computer": "电脑"
+    "band_computer": "电脑",
+    "band_task": "任务",
+    "band_task_status": "任务 {{ref}}：{{status}}",
+    "lifecycle": {
+      "label": "任务状态",
+      "to_backlog": "已移回待办",
+      "to_assigned": "已就绪，等待开始",
+      "to_running": "开始执行",
+      "resumed": "继续执行",
+      "reopened": "已重新打开",
+      "to_waiting_for_human": "等待你的输入",
+      "to_review": "已提交审核",
+      "to_done": "已完成",
+      "accepted": "已验收",
+      "to_blocked": "已阻塞",
+      "unblocked": "已解除阻塞",
+      "by_you": "由你操作",
+      "by_teammate": "由同事操作",
+      "by_relay": "自动",
+      "next_review": "请查看结果，然后在任务中验收。",
+      "next_blocked": "解决问题后，在任务中重试。",
+      "next_assigned": "电脑有空闲时自动开始。",
+      "next_backlog": "在任务中将其移到就绪或直接开始。"
+    }
   },
   "composer": {
     "placeholder": "给智能体发消息…",

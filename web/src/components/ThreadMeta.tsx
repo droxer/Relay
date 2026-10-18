@@ -5,18 +5,28 @@ import { nodeOwnershipProfile } from "../lib/adminHelpers";
 import { pathForAppState } from "../lib/appRoute";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { useProjectLookup } from "../hooks/useProjectLookup";
-import type { DaemonNodeMonitorRecord, UserAgent, RelaySession } from "../types";
+import type { DaemonNodeMonitorRecord, UserAgent, RelaySession, TaskStatus } from "../types";
 import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
+import { TaskStatusIcon } from "./TaskStatusIcon";
 import { ICON, NavProjects, NodeOwnershipIcon } from "./icons";
+
+/** The task a thread is doing, as the header names it. */
+export type ThreadTaskFact = {
+  /** `#12` / `AUTO-3`. */
+  ref: string;
+  status: TaskStatus;
+  href: string;
+  onOpen: () => void;
+};
 
 /**
  * A thread's coordinates, as marks rather than a table of words.
  *
- * Who is in the room, which machine answers for them, which project the work
- * belongs to — the three facts a reader checks mid
- * conversation. They were an eyebrow-and-value band under the header, which
+ * Which task the work is for and where that task stands, who is in the room,
+ * which machine answers for them, which project the work belongs to — the
+ * facts a reader checks mid conversation. They were an eyebrow-and-value band under the header, which
  * cost a whole row of transcript and set uppercase labels against a
  * title; the room was ALSO drawn a second time beside them as a face stack.
  *
@@ -28,12 +38,15 @@ import { ICON, NavProjects, NodeOwnershipIcon } from "./icons";
  */
 export function ThreadMeta({
   session,
+  task,
   agentName,
   participants,
   computers,
   onOpenProject,
 }: {
   session: RelaySession;
+  /** The task this thread works on, when it has one. */
+  task?: ThreadTaskFact;
   /** The agent that last answered here, for a room the roster cannot name. */
   agentName?: string;
   /** The room, in join order. */
@@ -50,6 +63,7 @@ export function ThreadMeta({
 
   return (
     <div className="thread-meta" aria-label={t("thread.band_label")}>
+      {task ? <TaskChip task={task} /> : null}
       {project ? (
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
@@ -58,6 +72,35 @@ export function ThreadMeta({
         <ComputerChip computerId={session.computerId} node={computer} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The thread's task and where it stands — the status the transcript's
+ * lifecycle markers lead up to, readable without scrolling to the last one.
+ * It is a link: the task is where a person accepts, retries, or moves it.
+ */
+function TaskChip({ task }: { task: ThreadTaskFact }) {
+  const { t } = useTranslation();
+  const status = t(`backlog.statuses.${task.status}`);
+  const label = t("thread.band_task_status", { ref: task.ref, status });
+  return (
+    <a
+      className="thread-meta-chip thread-meta-task"
+      href={task.href}
+      title={label}
+      data-status={task.status}
+      onClick={(event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+        event.preventDefault();
+        task.onOpen();
+      }}
+    >
+      <TaskStatusIcon status={task.status} />
+      <span className="sr-only">{t("thread.band_task")}: </span>
+      <span className="thread-meta-ref" translate="no">{task.ref}</span>
+      <span className="thread-meta-status">{status}</span>
+    </a>
   );
 }
 

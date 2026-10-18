@@ -286,6 +286,94 @@
   color: var(--ink-4);
 }
 
+/* ---- Task lifecycle markers ---------------------------------------------
+   Every status change of the thread's task, where it happened. Same rule-
+   and-label shape as the phase divider above so it never competes with a
+   turn; the glyph carries the status hue, and the move the task still sits
+   on reads a step stronger and says what a person does next. */
+.transcript-lifecycle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) 0;
+  color: var(--ink-4);
+}
+
+.transcript-lifecycle-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+}
+
+.transcript-lifecycle-line::before,
+.transcript-lifecycle-line::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--line-1);
+}
+
+.transcript-lifecycle-label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1-5);
+  max-width: 80%;
+  overflow: hidden;
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
+.transcript-lifecycle-icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.transcript-lifecycle-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transcript-lifecycle-status {
+  color: var(--ink-3);
+}
+
+.transcript-lifecycle[data-current] .transcript-lifecycle-status {
+  color: var(--ink-1);
+}
+
+/* A reason is a sentence, not a label: it wraps inside the column and stops
+   at two lines; the whole text stays in its tooltip. */
+.transcript-lifecycle-detail {
+  display: -webkit-box;
+  max-width: min(60ch, 100%);
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.transcript-lifecycle-link {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.transcript-lifecycle-link:hover {
+  color: var(--ink-1);
+}
+
 /* ---- Team handoff cue ---------------------------------------------------
    The quiet gap between two team members' turns. It holds the rail slot the
    next turn will land in — the incoming teammate's mark on a dashed, live
@@ -991,6 +1079,29 @@
   text-decoration: underline;
 }
 
+/* The task chip leads to the task, like the project chip; its glyph keeps
+   the status hue (task-status.css) instead of the row's quiet ink. */
+.thread-meta-task {
+  text-decoration: none;
+}
+
+.thread-meta-task:hover {
+  color: var(--ink-1);
+}
+
+.thread-meta-task:hover .thread-meta-ref {
+  text-decoration: underline;
+}
+
+.thread-meta-ref {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.thread-meta-status {
+  white-space: nowrap;
+}
+
 /* An offline computer recedes a step, the same way the composer's readout
    and the fleet cards do. The dot carries why; the name stays readable. */
 .thread-meta-computer:has(.adm-presence[data-online="false"]) {
@@ -1002,7 +1113,7 @@
    panel each take their share of this row — in reverse order of what a
    reader checks mid-conversation. The computer goes first, then the room:
    both are a glance away on the composer's targets rail. What survives to
-   the narrowest panel is the project, the only fact that leads somewhere. */
+   the narrowest panel is what leads somewhere: the task and the project. */
 @media (max-width: 1400px) {
   .thread-meta-computer {
     display: none;
@@ -1011,7 +1122,7 @@
 
 @media (max-width: 1100px) {
   .thread-meta-room,
-  .thread-meta .thread-meta-chip:not(.thread-meta-project):not(.thread-meta-computer) {
+  .thread-meta .thread-meta-chip:not(.thread-meta-project):not(.thread-meta-computer):not(.thread-meta-task) {
     display: none;
   }
 }
