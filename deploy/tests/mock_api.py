@@ -20,6 +20,8 @@ from urllib.parse import parse_qs, urlparse
 
 RAILWAY_TOKEN = "test-railway-token"
 CLOUDFLARE_TOKEN = "test-cloudflare-token"
+MAIL_TOKEN = "send-only"
+MAIL_ACCOUNT = "acct"
 ZONE = "get-relay.cc"
 
 STATE = {
@@ -189,6 +191,11 @@ def railway(op, v):
         assert v["input"]["skipDeploys"] is True
         service(v["input"]["serviceId"])["variables"].update(v["input"]["variables"])
         return {"variableCollectionUpsert": True}
+    if op == "VariableDelete":
+        variables = service(v["input"]["serviceId"])["variables"]
+        assert v["input"]["name"] in variables, f"delete of unset {v['input']['name']}"
+        del variables[v["input"]["name"]]
+        return {"variableDelete": True}
     if op == "Volumes":
         return {"environment": {"volumeInstances": edges(STATE["volumes"])}}
     if op == "VolumeCreate":
@@ -401,6 +408,13 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/client/v4/accounts/acct-1/workers/assets/upload":
                 content_type, raw = self.body()
                 return self.send(201, {"success": True, "errors": [], "result": asset_upload(auth, content_type, raw)})
+            if url.path.endswith("/tokens/verify"):
+                # The email token is account-owned: it verifies only under its
+                # own account, never under /user.
+                count("cf.tokens.verify")
+                if auth == f"Bearer {MAIL_TOKEN}" and url.path == f"/client/v4/accounts/{MAIL_ACCOUNT}/tokens/verify":
+                    return self.send(200, {"success": True, "errors": [], "result": {"id": "tok-1", "status": "active"}})
+                return self.send(401, {"success": False, "errors": [{"code": 1000, "message": "Invalid API Token"}]})
             if url.path.startswith("/client/v4/"):
                 if auth != f"Bearer {CLOUDFLARE_TOKEN}":
                     return self.send(403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]})

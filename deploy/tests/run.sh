@@ -358,6 +358,33 @@ RELAY_MAIL_FROM=invites@mail.get-relay.cc'
 deploy railway 2>/dev/null
 STATE=$(state)
 check "waitlist and mail variables set" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\" and .variables.RELAY_MAIL_FROM == \"invites@mail.get-relay.cc\" and .variables.RELAY_MAIL_CLOUDFLARE_API_TOKEN == \"send-only\""
+MAIL_OUT=$(deploy mail 2>&1)
+if grep -q "email token is active on account acct" <<<"$MAIL_OUT" && grep -q "sender invites@mail.get-relay.cc is inside" <<<"$MAIL_OUT"; then
+  echo "ok    mail preflight passes a live token and an in-zone sender"
+else
+  echo "FAIL  mail preflight: $MAIL_OUT"; FAILURES=$((FAILURES + 1))
+fi
+
+echo "--- dropping the mail keys leaves Railway alone; blanking them removes them"
+write_config 'RELAY_WAITLIST_ENABLED=1'
+DROP_OUT=$(deploy railway 2>&1)
+STATE=$(state)
+check "missing mail keys keep the values set in Railway" "$BACKEND | .variables.RELAY_MAIL_FROM == \"invites@mail.get-relay.cc\""
+if grep -q "keeps RELAY_MAIL_\* set outside the config" <<<"$DROP_OUT"; then
+  echo "ok    the run says the mail keys were kept"
+else
+  echo "FAIL  no note about kept mail keys: $DROP_OUT"; FAILURES=$((FAILURES + 1))
+fi
+write_config 'RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=
+RELAY_MAIL_CLOUDFLARE_API_TOKEN=
+RELAY_MAIL_FROM='
+deploy railway 2>/dev/null
+STATE=$(state)
+check "blank mail keys remove them from the API" "$BACKEND | .variables | has(\"RELAY_MAIL_FROM\") or has(\"RELAY_MAIL_CLOUDFLARE_API_TOKEN\") or has(\"RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID\") | not"
+check "and their references from the worker" '[.projects[].services[] | select(.name == "relay-worker") | .variables | keys[] | select(startswith("RELAY_MAIL_"))] | length == 0'
+deploy railway 2>/dev/null
+STATE=$(state)
+check "a second blank run deletes nothing more" "$BACKEND | .variables | has(\"RELAY_MAIL_FROM\") | not"
 
 echo "--- the waitlist can be turned off"
 start_mock
@@ -381,6 +408,18 @@ write_config 'RELAY_R2_ACCOUNT_ID='
 expect_failure "partial R2 config is refused" "RELAY_R2_ACCOUNT_ID is required" deploy railway
 write_config 'RELAY_MAIL_FROM=invites@mail.get-relay.cc'
 expect_failure "partial mail config is refused" "RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID is required" deploy railway
+write_config 'RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=acct
+RELAY_MAIL_CLOUDFLARE_API_TOKEN=send-only
+RELAY_MAIL_FROM=Relay <invites@mail.get-relay.cc>'
+expect_failure "an unquoted display name stops the run" "syntax error" deploy railway
+write_config 'RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=acct
+RELAY_MAIL_CLOUDFLARE_API_TOKEN=send-only
+RELAY_MAIL_FROM=invites'
+expect_failure "a sender without an address is refused" "RELAY_MAIL_FROM must be an address" deploy railway
+write_config 'RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=other-account
+RELAY_MAIL_CLOUDFLARE_API_TOKEN=send-only
+RELAY_MAIL_FROM="Relay <invites@mail.get-relay.cc>"'
+expect_failure "a token that does not verify on its account fails the mail check" "is not an active Cloudflare token" deploy mail
 write_config 'WEB_DOMAIN=relay.example.com'
 expect_failure "domain outside the zone is refused" "is not inside CLOUDFLARE_ZONE" deploy railway
 write_config 'RAILWAY_API_TOKEN=wrong'

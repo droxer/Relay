@@ -199,6 +199,14 @@ railway_upsert_variables() {
       '{input: {projectId: $p, environmentId: $e, serviceId: $s, variables: $v, skipDeploys: true}}')" >/dev/null
 }
 
+# railway_delete_variable <service-id> <name>. Unlike an upsert this can start
+# a deploy, so callers delete only what they mean to.
+railway_delete_variable() {
+  gql 'mutation VariableDelete($input: VariableDeleteInput!) { variableDelete(input: $input) }' \
+    "$(jq -nc --arg p "$PROJECT_ID" --arg e "$ENVIRONMENT_ID" --arg s "$1" --arg n "$2" \
+      '{input: {projectId: $p, environmentId: $e, serviceId: $s, name: $n}}')" >/dev/null
+}
+
 railway_ensure_volume() {
   local service_id=$1 mount=$2 data
   data=$(gql 'query Volumes($id: String!) { environment(id: $id) { volumeInstances { edges { node { serviceId mountPath } } } } }' \
