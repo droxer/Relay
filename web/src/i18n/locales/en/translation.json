@@ -422,7 +422,30 @@
     "band_label": "Thread record",
     "band_project": "Project",
     "band_agent": "Agent",
-    "band_computer": "Computer"
+    "band_computer": "Computer",
+    "band_task": "Task",
+    "band_task_status": "Task {{ref}}: {{status}}",
+    "lifecycle": {
+      "label": "Task status",
+      "to_backlog": "Moved back to Backlog",
+      "to_assigned": "Ready to start",
+      "to_running": "Work started",
+      "resumed": "Work resumed",
+      "reopened": "Reopened",
+      "to_waiting_for_human": "Waiting for your input",
+      "to_review": "Sent to review",
+      "to_done": "Completed",
+      "accepted": "Accepted",
+      "to_blocked": "Blocked",
+      "unblocked": "Unblocked",
+      "by_you": "by you",
+      "by_teammate": "by a teammate",
+      "by_relay": "automatically",
+      "next_review": "Review the result, then accept it on the task.",
+      "next_blocked": "Fix the cause, then retry from the task.",
+      "next_assigned": "Starts when the computer has a free slot.",
+      "next_backlog": "Move it to Ready or start it from the task."
+    }
   },
   "composer": {
     "placeholder": "Message the agent…",

@@ -254,6 +254,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     (nodeId: string) => computerSettingsDestination(nodeId, { isAdmin: user.role === "admin", ownNodeIds }),
     [ownNodeIds, user.role],
   );
+  const openTaskRecord = useStableEvent(({ taskId, routineId }: { taskId: string; routineId?: string }) => {
+    if (routineId) navigateToRoutineRecord(routineId, taskId);
+    else navigateToTaskRecord(taskId);
+  });
   const openNotice = useStableEvent(({ target }: { target: NotificationTarget }) => {
     if (target.kind === "task") {
       if (target.routineId) navigateToRoutineRecord(target.routineId, target.taskId);
@@ -608,6 +612,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
           />
         ) : (
           <ThreadsView
+            onOpenTaskRecord={openTaskRecord}
             taskThread={isTaskThread}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}

@@ -27,6 +27,9 @@ import { awaitingInput } from "../lib/awaitingInput";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
+import { TaskLifecycleMarker } from "./TaskLifecycleMarker";
+import { useTaskThreadLifecycle, type OpenTaskRecord } from "../hooks/useTaskThreadLifecycle";
+import type { LifecycleMarker } from "../lib/taskThreadLifecycle";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { parseAutomationOpening } from "../lib/automationOpening";
@@ -159,6 +162,8 @@ type ThreadsViewProps = {
   onResumeAgent: (agent: AgentName, agentId?: string) => void;
   onRetryExecutionRecovery?: () => Promise<void>;
   onReportExecutionGone?: () => Promise<void>;
+  /** Opens the record of the task a thread works on. */
+  onOpenTaskRecord: OpenTaskRecord;
   running: boolean;
 };
 
@@ -239,6 +244,7 @@ export function ThreadsView({
   onResumeAgent,
   onRetryExecutionRecovery,
   onReportExecutionGone,
+  onOpenTaskRecord,
   running,
 }: ThreadsViewProps) {
   const { t } = useTranslation();
@@ -259,6 +265,25 @@ export function ThreadsView({
     const scheduled = threadOriginIndex(tasks).get(activeSessionId)?.kind === "routine";
     return parseAutomationOpening(activeTaskGoal, { scheduled });
   }, [activeSessionId, activeTaskGoal, tasks]);
+  // The thread's task: its status in the header, and each status change it
+  // went through drawn between the turns where it happened.
+  const lifecycle = useTaskThreadLifecycle({
+    tasks,
+    session: activeSession,
+    messages: displayMessages,
+    currentUserId: currentUser.userId,
+    onOpenTaskRecord,
+  });
+  const lifecycleMarker = (marker: LifecycleMarker) => (
+    <TaskLifecycleMarker
+      key={marker.id}
+      marker={marker}
+      current={marker.id === lifecycle.currentMarkerId}
+      taskHref={lifecycle.task?.href}
+      taskLabel={lifecycle.task?.ref}
+      onOpenTask={lifecycle.task?.onOpen}
+    />
+  );
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
   // A thread is about to render markdown: start the pipeline download now so
@@ -431,6 +456,7 @@ export function ThreadsView({
           facts={activeSession ? (
             <ThreadMeta
               session={activeSession}
+              task={lifecycle.task}
               agentName={bandAgentName}
               participants={threadParticipants}
               computers={runtimeNodes}
@@ -475,6 +501,7 @@ export function ThreadsView({
                   const PhaseIcon = msg.kind === "agent" && isHandoff ? ActionRoute : null;
                   return (
                     <div key={msg.id} className="transcript-turn">
+                      {lifecycle.before.get(msg.id)?.map(lifecycleMarker)}
                       {phaseLabel ? (
                         <div className="transcript-phase" role="separator" aria-label={phaseLabel}>
                           <span className="transcript-phase-node" aria-hidden="true" />
@@ -507,6 +534,7 @@ export function ThreadsView({
                     </div>
                   );
                 })}
+                {lifecycle.trailing.map(lifecycleMarker)}
                 <TeamHandoffCue
                   session={activeSession}
                   logicalAgentNames={logicalAgentNames}
