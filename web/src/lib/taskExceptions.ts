@@ -5,8 +5,8 @@ import type { RelaySession, RelayTaskListItem } from "../types.js";
  *
  * The board card used to derive all of this inline and every other surface
  * would have derived it a second time, which is how two surfaces end up
- * disagreeing about whether a task is blocked. The card is a tile now and
- * states none of it; the list row reads this.
+ * disagreeing about whether a task is blocked. The tile and the row state
+ * only the hold-up (`taskHoldup`); the record reads the rest.
  *
  * Kept pure and free of `t()`: an unknown blocker resolves to a translation
  * key at the call site, not here.
@@ -67,4 +67,20 @@ export function taskExceptions(
   const days = taskWorkAgeDays(task);
   if (days !== null) exceptions.push({ kind: "age", days });
   return exceptions;
+}
+
+/**
+ * What a task is held up on, for the one-line summary every list surface
+ * shows beside its title: a blocker, or the question a person owes it. Null
+ * for a task that is simply moving. `text` is null when nothing was recorded;
+ * the caller renders its own copy for that rather than a bare label.
+ */
+export type TaskHoldup =
+  | { kind: "blocked"; text: string | null }
+  | { kind: "waiting"; text: string | null };
+
+export function taskHoldup(task: RelayTaskListItem): TaskHoldup | null {
+  if (task.status === "blocked") return { kind: "blocked", text: taskBlocker(task).reason };
+  if (task.status === "waiting_for_human") return { kind: "waiting", text: task.awaiting?.text?.trim() || null };
+  return null;
 }

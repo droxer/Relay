@@ -417,3 +417,50 @@
 .task-status-icon[data-status="review"],
 .task-status-icon[data-status="done"] { color: var(--ok); }
 .task-status-icon[data-status="blocked"] { color: var(--err); }
+
+/* ── Hold-up line — what a blocked or waiting task is stuck on ─────────────
+   One line, shared by the board tile and every list row. The status glyph
+   and word carry the tone; the reason itself stays in secondary ink, so a
+   lane of blocked work reads as flagged rather than as a wall of red. It
+   truncates to one line: the full text rides the title attribute, and in
+   full on the record. */
+.task-holdup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+.task-holdup > .task-status-icon { flex: none; }
+.task-holdup-label {
+  flex: none;
+  font: var(--type-label);
+}
+.task-holdup[data-kind="blocked"] .task-holdup-label { color: var(--err); }
+.task-holdup[data-kind="waiting"] .task-holdup-label { color: var(--warn); }
+.task-holdup-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-holdup-text--none { color: var(--ink-3); }
+
+/* In a list row it sits after the title and takes the slack, so the title
+   keeps its width and the reason gives way first. */
+.backlog-row-lead-main > .task-holdup {
+  flex: 1 1 0;
+  min-width: 12ch;
+}
+
+/* On a tile it is its own line under the title. The tile's height is fixed,
+   so a held-up tile gives the title one line instead of two — the hold-up is
+   the more urgent fact. */
+.task-holdup--tile { margin-block-start: var(--sp-2); }
+.backlog-task:has(.task-holdup--tile) .backlog-task-title {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  max-height: 1lh;
+}

@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
+import { TaskHoldupLine } from "./TaskHoldupLine";
 import { pathForAppState } from "../../lib/appRoute";
 import { TaskRefLink } from "./TaskRefLink";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
@@ -78,10 +79,12 @@ export function BacklogTaskCard({
       {...dragProps}
       className={cn("backlog-task group list-virtual", className)}
       data-priority={task.priority}
+      data-status={task.status}
       data-selected={selected ? "true" : undefined}
     >
-      {/* The card is a tile: an ID, a title, and one facts line. Everything else the
-          record carries — prose, exceptions, provenance, outcome, actions —
+      {/* The card is a tile: an ID, a title, and one facts line — plus, when the
+          task is blocked or waiting, the one line saying on what. Everything
+          else the record carries — prose, provenance, outcome, actions —
           is one click away in the record drawer; a lane of tiles is a
           scanning surface, not seven small dossiers. The checkbox holds the
           control gutter (a selection control that moves with the content is
@@ -108,6 +111,9 @@ export function BacklogTaskCard({
           }}
         >{task.title}</a>
         {projectName ? <span className="task-project-label">{projectName}</span> : null}
+          {/* A blocked or waiting task shares the lane of the stage it was
+              held up in, so the tile itself says it is held up, and on what. */}
+          <TaskHoldupLine task={task} className="task-holdup--tile" labeled />
           {/* One line of facts, and only facts the lane above does not already
               state: no status word (the lane IS the status) and no "No due
               date" on every undated card. The agent is named — a bare
@@ -309,6 +315,7 @@ export function BacklogTaskList({
               }}
             >{task.title}</a>
             {projectName ? <span className="task-project-label">{projectName}</span> : null}
+            <TaskHoldupLine task={task} />
           </div>
         );
       }}</BacklogCells.Read>,
