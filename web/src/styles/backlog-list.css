@@ -340,9 +340,12 @@ button.inline-field[aria-expanded="true"] {
   }
 
   /* Selectors still see the DOM: the group/sort menus are children of the
-     (display: contents) primary block, not of the bar. */
+     (display: contents) primary block, not of the bar. Each menu claims half
+     the row, so the pair wraps below Add filter as one row of its own —
+     three-up beside the button, "Group: Project" and "Default order" were
+     clipped to "Group: P" and "Default c" at 390px. */
   .backlog-filter-primary > :not(.backlog-filter-search-wrap) {
-    flex: 1 1 0;
+    flex: 1 1 calc(50% - var(--sp-2));
     min-width: 0;
   }
 

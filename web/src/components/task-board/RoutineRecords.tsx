@@ -240,7 +240,7 @@ export function RoutineTable({
       {
         id: "title",
         meta: { cellClass: "task-col-title" } satisfies ColumnChrome,
-        header: () => <RoutineCells.Read>{(s) => sortHead("title", s.t("backlog.col_task"))}</RoutineCells.Read>,
+        header: () => <RoutineCells.Read>{(s) => sortHead("title", s.t("backlog.col_automation"))}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
           /* A real href, so a routine can be opened in a new tab or copied;
