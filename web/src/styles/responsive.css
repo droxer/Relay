@@ -181,6 +181,14 @@
     letter-spacing: var(--type-title-track);
   }
 
+  .mobile-topbar-title-slot {
+    display: contents;
+  }
+
+  .mobile-topbar-heading:has(> .mobile-topbar-title-slot:not(:empty)) > .mobile-topbar-title {
+    display: none;
+  }
+
   .mobile-topbar-tools {
     display: inline-flex;
     align-items: center;
@@ -231,6 +239,33 @@
     color: var(--ink-1);
   }
 
+  /* A labelled create action (the admin console's "Add user") rides the bar
+     as the same bare "+" every list route uses; its name stays on the button
+     as aria-label. */
+  .mobile-topbar-tools .adm-create-action,
+  .mobile-topbar-tools .adm-create-action:hover {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink-1);
+  }
+
+  .mobile-topbar-tools .adm-create-action:active {
+    background: var(--control-fill);
+  }
+
+  .mobile-topbar-tools .adm-create-action-label {
+    display: none;
+  }
+
+  /* A fetch error keeps its mark in the bar; the sentence has no room. */
+  .mobile-topbar-tools .adm-command-status-text {
+    display: none;
+  }
+
   .mobile-topbar-tools .page-header-icon-action:active {
     background: var(--control-fill);
   }
@@ -238,7 +273,7 @@
   /* The list/board switch rides the bar as two glyphs with no fill on either:
      the current one keeps its ink and the other drops to --ink-4 (below). The
      framed segmented control was a third plate. */
-  .mobile-topbar-tools .backlog-view-toggle {
+  .mobile-topbar-tools .view-toggle {
     padding: 0;
     border: 0;
     background: transparent;
@@ -246,18 +281,18 @@
 
   /* Through the shell, to outrank the route-scoped phone button in
      backlog-list.css. */
-  .messenger-shell .mobile-topbar-tools .backlog-view-btn {
+  .messenger-shell .mobile-topbar-tools .view-toggle-btn {
     width: var(--touch-target);
     height: var(--touch-target);
     border-radius: var(--r-2);
   }
 
-  .mobile-topbar-tools .backlog-view-btn[data-active="true"] {
+  .mobile-topbar-tools .view-toggle-btn[data-active="true"] {
     background: transparent;
     box-shadow: none;
   }
 
-  .mobile-topbar-tools .backlog-view-btn:not([data-active="true"]) {
+  .mobile-topbar-tools .view-toggle-btn:not([data-active="true"]) {
     color: var(--ink-4);
   }
 

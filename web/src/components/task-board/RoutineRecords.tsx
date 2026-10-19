@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { ActionStart, ICON, NavAgents } from "../icons";
 import { PriorityBadge } from "../PriorityBadge";
+import { TaskTagList } from "../TaskTags";
 import { StateMark } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { TaskAssignee } from "../TaskAssignee";
@@ -98,7 +99,7 @@ export function RoutineAssignButton({ onAssign }: { onAssign: () => void }) {
       variant="icon"
       size="icon-dense"
       type="button"
-      className="backlog-action-icon"
+      className="backlog-action-icon routine-assign-btn"
       onClick={onAssign}
       aria-label={t("backlog.assign_task")}
       title={t("backlog.assign_task")}
@@ -246,15 +247,18 @@ export function RoutineTable({
           /* A real href, so a routine can be opened in a new tab or copied;
              a plain click navigates in place. */
           return (
-            <a
-              className="backlog-row-title"
-              href={hrefForRoutineRecord(task.id)}
-              onClick={(event) => {
-                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-                event.preventDefault();
-                s.handlersFor(task).onOpen();
-              }}
-            >{task.title}</a>
+            <div className="backlog-row-lead-main">
+              <a
+                className="backlog-row-title"
+                href={hrefForRoutineRecord(task.id)}
+                onClick={(event) => {
+                  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+                  event.preventDefault();
+                  s.handlersFor(task).onOpen();
+                }}
+              >{task.title}</a>
+              <TaskTagList tags={task.tags} max={2} />
+            </div>
           );
         }}</RoutineCells.Read>,
       },
@@ -272,9 +276,14 @@ export function RoutineTable({
           const task = row.original;
           /* The title names what starts it, so an event automation's "—"
              still answers "why no next run?" on hover. */
+          /* With no next run, say why in words ("Paused", "On demand")
+             rather than a bare "—": the leading dot is the same fact as a
+             shape, and on a phone it was the only explanation the row had. */
           return (
             <span className="backlog-due-value" title={describeTriggers(triggersOf(task), s.t)}>
-              {formatNextRunAt(task.routineNextRunAt)}
+              {task.routineNextRunAt
+                ? formatNextRunAt(task.routineNextRunAt)
+                : s.t(`routine.states.${s.stateFor(task)}`)}
             </span>
           );
         }}</RoutineCells.Read>,

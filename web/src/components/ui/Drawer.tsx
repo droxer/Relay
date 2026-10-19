@@ -81,6 +81,11 @@ interface DrawerProps {
  * a popup with `data-nested-dialog-open` when a drawer opens above it, and
  * admin-v2-drawers.css recesses it from there.
  */
+function coarsePointer(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    && window.matchMedia("(pointer: coarse)").matches;
+}
+
 export function Drawer({
   open,
   onClose,
@@ -152,12 +157,16 @@ export function Drawer({
                eight drawers mark their first meaningful field with it. What
                changed is who reads it: the primitive, through this prop,
                instead of a hand-rolled trap.
-               A coarse pointer keeps focus on the panel, because focusing a
-               field there throws up the on-screen keyboard over the drawer
-               the moment it opens. */
+               A coarse pointer keeps focus on the panel itself, because
+               focusing a field there throws up the on-screen keyboard over
+               the drawer the moment it opens — and `true` (the first
+               tabbable) landed on the close button, so every phone drawer
+               opened wearing a focus ring and a "Close drawer" tooltip over
+               its own tabs. A drawer opened by a route rather than a tap
+               (a deep link) reports no touch, so the pointer decides. */
             initialFocus={(openType) =>
-              openType === "touch"
-                ? true
+              openType === "touch" || coarsePointer()
+                ? panelRef.current ?? true
                 : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? true
             }
           >

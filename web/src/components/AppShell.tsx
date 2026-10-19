@@ -208,7 +208,11 @@ export function AppShell({
         : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
   const [leadSlot, setLeadSlot] = useState<HTMLDivElement | null>(null);
-  const topbarSlots = useMemo(() => ({ actions: actionsSlot, lead: leadSlot }), [actionsSlot, leadSlot]);
+  const [titleSlot, setTitleSlot] = useState<HTMLDivElement | null>(null);
+  const topbarSlots = useMemo(
+    () => ({ actions: actionsSlot, lead: leadSlot, title: titleSlot }),
+    [actionsSlot, leadSlot, titleSlot],
+  );
 
   return (
     <MobileTopbarSlotContext.Provider value={topbarSlots}>
@@ -260,6 +264,9 @@ export function AppShell({
         </div>
         <div className="mobile-topbar-heading" title={mobileTitle}>
           <span className="mobile-topbar-title">{mobileTitle}</span>
+          {/* A record screen's own name, portaled in by
+              useMobileTopbarTitle; filled, it replaces the route title. */}
+          <div className="mobile-topbar-title-slot" ref={setTitleSlot} />
         </div>
         <div className="mobile-topbar-tools">
           {isMobileChat && mobileChatChrome ? (

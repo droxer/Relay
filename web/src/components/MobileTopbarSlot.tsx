@@ -17,14 +17,18 @@ export const PHONE_QUERY = "(max-width: 820px)";
  *   portaled instead of keeping a band of their own under the bar;
  * - `lead`, before the title, where a nested screen's back control goes —
  *   so an open agent reads "← Agents" in the bar instead of the bar saying
- *   "Agents" and the page repeating "← Agents" just under it.
+ *   "Agents" and the page repeating "← Agents" just under it;
+ * - `title`, over the route's own title, where a record screen names itself —
+ *   an open agent reads "← Aria", not "← Agents" with "Aria" restated in a
+ *   row of its own just under the bar.
  */
 export interface MobileTopbarSlots {
   actions: HTMLElement | null;
   lead: HTMLElement | null;
+  title: HTMLElement | null;
 }
 
-export const MobileTopbarSlotContext = createContext<MobileTopbarSlots>({ actions: null, lead: null });
+export const MobileTopbarSlotContext = createContext<MobileTopbarSlots>({ actions: null, lead: null, title: null });
 
 /**
  * Renders `children` in place on wider screens and in the top bar on a phone.
@@ -63,4 +67,17 @@ export function MobileTopbarBack({ label, onBack, fallback }: {
     </Button>,
     slot,
   );
+}
+
+/**
+ * A record screen's name in the phone top bar, in place of the route title.
+ * Renders nothing in place on wider screens — the page's own header names the
+ * record there. Returns whether it took the bar, so the page can drop the
+ * header row that would otherwise repeat the name.
+ */
+export function useMobileTopbarTitle(title: string, active = true): ReactNode {
+  const slot = useContext(MobileTopbarSlotContext).title;
+  const phone = useMediaQuery(PHONE_QUERY);
+  if (!phone || !slot || !active) return null;
+  return createPortal(<span className="mobile-topbar-title">{title}</span>, slot);
 }

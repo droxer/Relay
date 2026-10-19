@@ -1,0 +1,227 @@
+/* Tags — the one tag mark (TagBadge in TaskTags.tsx), the lists of them on
+   rows, cards and the record, and the drawer's token field (TaskTagsField).
+
+   A tag badge is an OUTLINE, not a tint: tinted badges are status (done,
+   blocked, needs project), and a tag is a label that means nothing to Relay.
+   Its colour lives only in the leading dot (--tag-1…8, see palette.css). */
+
+/* ── The dot: tone → colour, the one place the tag palette is read ──── */
+
+.tag-dot {
+  flex: none;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  background: var(--tag-tone, var(--ink-4));
+}
+
+[data-tone="1"] { --tag-tone: var(--tag-1); }
+[data-tone="2"] { --tag-tone: var(--tag-2); }
+[data-tone="3"] { --tag-tone: var(--tag-3); }
+[data-tone="4"] { --tag-tone: var(--tag-4); }
+[data-tone="5"] { --tag-tone: var(--tag-5); }
+[data-tone="6"] { --tag-tone: var(--tag-6); }
+[data-tone="7"] { --tag-tone: var(--tag-7); }
+[data-tone="8"] { --tag-tone: var(--tag-8); }
+
+/* ── The badge ──────────────────────────────────────────────────────── */
+
+/* 20px tall, on the micro radius the palette reserves for tags (--r-1), so a
+   row of tags beside a status badge (--r-2, tinted) reads as a different
+   kind of thing at a glance. */
+.tag-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1-5);
+  height: var(--avatar-xs);
+  max-width: 18ch;
+  padding: 0 var(--sp-1-5);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+.tag-badge-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "+N" — the same box with no dot; its tooltip names the hidden tags. */
+.tag-badge--more {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+/* ── Lists of badges ────────────────────────────────────────────────── */
+
+.tag-list {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-list > li {
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* A board tile is a fixed frame (backlog.css), so its tags get one line of
+   their own under the title and the title gives up its second line to pay
+   for it — the precedent the hold-up line set (task-status.css). The row
+   never wraps; anything past two tags is already folded into "+N". A
+   held-up tile drops its tags instead: the hold-up is the more urgent fact,
+   and the record carries the tags in full. */
+.backlog-card-body > .tag-list {
+  flex: none;
+  max-width: 100%;
+  margin-block-start: var(--sp-2);
+  overflow: hidden;
+}
+
+.backlog-task:has(.backlog-card-body > .tag-list) .backlog-task-title {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  max-height: 1lh;
+}
+
+.backlog-task:has(.task-holdup--tile) .backlog-card-body > .tag-list {
+  display: none;
+}
+
+/* The record's settings list: the tags may wrap, and sit on the value
+   column's right edge like every other value in the list. */
+.record-facts .tag-list {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.record-facts .tag-badge {
+  max-width: 100%;
+}
+
+/* ── The drawer's token field ───────────────────────────────────────── */
+
+/* Shaped like the Input primitive beside it — same height floor, border,
+   radius, and hover — so the tags read as the field's value, not as chrome
+   sitting above an empty input. */
+.tag-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--control-h);
+  padding: var(--sp-1) var(--sp-1-5);
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-2);
+  background: var(--surface-0);
+  cursor: text;
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.tag-field:hover {
+  border-color: var(--control-border-hover);
+}
+
+/* The wrap draws the one ring, as .backlog-filter-search-wrap does: the
+   text input inside is bare, and a text field takes focus by pointer or
+   keyboard alike, so focus-within matches the ring it would have drawn. */
+.tag-field:focus-within {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+}
+
+.tag-field[data-disabled] {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+.tag-field .tag-badge {
+  background: var(--surface-1);
+}
+
+.tag-field-input {
+  flex: 1 1 10ch;
+  min-width: 10ch;
+  height: var(--control-h-2xs);
+  padding: 0 var(--sp-1);
+  border: 0;
+  background: transparent;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* Chrome draws a dropdown arrow on any input with a datalist; the
+   suggestions still open as the reader types, and the arrow made the field
+   read as a select. */
+.tag-field-input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.tag-field-input::placeholder {
+  color: var(--ink-4);
+}
+
+/* The field draws the ring; the borderless input inside must not draw a
+   second one inside it. */
+.tag-field-input:focus,
+.tag-field-input:focus-visible {
+  outline: none;
+}
+
+.tag-field-input:disabled {
+  cursor: default;
+}
+
+/* Removable badge: the remove button closes the badge on the right. */
+.tag-badge--removable {
+  max-width: 100%;
+  padding-right: var(--sp-0-5);
+}
+
+.tag-badge-remove {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+}
+
+.tag-badge-remove:hover {
+  background: var(--surface-3);
+  color: var(--ink-1);
+}
+
+.tag-badge-remove:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+@media (forced-colors: active) {
+  .tag-dot {
+    forced-color-adjust: none;
+  }
+
+  .tag-field:focus-within {
+    outline: 2px solid Highlight;
+  }
+}

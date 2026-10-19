@@ -200,7 +200,7 @@ it("offers one Resume action after the rate cap pauses an automation", async () 
   await userEvent.setup().click(resume);
   await waitFor(() => expect(resumeAutomation).toHaveBeenCalledWith({ taskId: "R-42" }));
   // The record's other actions wait while it resumes.
-  for (const name of ["record.edit", "backlog.delete_task", "automation.resume"]) {
+  for (const name of ["record.edit", "record.delete", "automation.resume"]) {
     expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   }
   finish({});

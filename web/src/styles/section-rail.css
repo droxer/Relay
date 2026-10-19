@@ -158,30 +158,13 @@
   .sec-rail {
     flex-direction: row;
     align-items: center;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 0;
     /* One plane with the list under it: the strip is a row of chips on the
        page, not a tinted band of its own. */
     background: var(--surface-0);
     scrollbar-width: none;
-    /* A chip never rests half-cut at either edge. The strip snaps each chip's
-       start clear of the gutter, and the scroll padding is that gutter — so
-       the SectionNav's scrollIntoView({ inline: "nearest" }) on the active
-       chip, and every flick, settles on a whole chip. Both edges fade over
-       the same gutter, so whatever runs past the box reads as "more" rather
-       than as a stray fragment ("2", "Organiz"). The fade is no wider than
-       the strip's own inline padding, so a chip at rest never sits in it. */
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: var(--sp-4);
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      black var(--sp-4),
-      black calc(100% - var(--sp-4)),
-      transparent
-    );
   }
 
   .sec-rail::-webkit-scrollbar { display: none; }
@@ -194,11 +177,37 @@
      sideways when the row runs out. Sharing the width evenly crushed long
      labels and pushed the last chip ("All open 10") off the edge with no
      hint the strip scrolled. */
-  /* Grows to its content and never shrinks below it, so the strip's inline
-     padding sits INSIDE the scroll area: the last chip can scroll clear of
-     the trailing fade instead of resting under it. */
-  .sec-nav { flex: 1 0 auto; min-width: 0; padding: var(--sp-2) var(--sp-4) 0; }
-  .sec-nav-list { flex-direction: row; gap: var(--sp-1); }
+  .sec-nav {
+    --strip-fade-start: 0px;
+    --strip-fade-end: 0px;
+    flex: 1;
+    min-width: 0;
+    padding: var(--sp-2) var(--sp-4) 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /* Chips snap their start to the strip's gutter, so a flick never leaves a
+       half-cut chip at rest; proximity, not mandatory, so useStripScroll's
+       own scroll to the active chip is never fought. */
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--sp-4);
+    /* The strip fades on whichever edge has more behind it (useStripScroll
+       marks them), so a chip cut by the edge reads as "more this way"
+       rather than as a stray count. */
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--strip-fade-start),
+      black calc(100% - var(--strip-fade-end)),
+      transparent 100%
+    );
+  }
+
+  .sec-nav::-webkit-scrollbar { display: none; }
+  .sec-nav[data-more-start] { --strip-fade-start: var(--sp-8); }
+  .sec-nav[data-more-end] { --strip-fade-end: var(--sp-8); }
+  .sec-nav-list { flex-direction: row; gap: var(--sp-1); padding-inline-end: var(--sp-4); }
   .sec-nav-item { flex: 0 0 auto; min-width: 0; scroll-snap-align: start; }
   .sec-nav-btn {
     justify-content: center;

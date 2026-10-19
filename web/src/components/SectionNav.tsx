@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { useRef, type ComponentType, type ReactNode } from "react";
+import { useStripScroll } from "../hooks/useStripScroll";
 import { Button } from "@/components/ui/button";
 import { ICON, type GlyphProps } from "./icons";
 
@@ -64,12 +65,9 @@ export function SectionNav<Id extends string>({
   /* A section list scrolls sideways wherever it runs as a strip — the tabs
      variant, and the rail itself on phones (section-rail.css folds it) — and
      the selected section can sit past the edge: "All open" selected with only
-     "Awaiting your input" in view. Keep it visible. `nearest` on both axes,
-     so a rail already showing it, and the page itself, never move. */
-  useEffect(() => {
-    const active = navRef.current?.querySelector<HTMLElement>('[data-active="true"]');
-    active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [value]);
+     "Awaiting your input" in view. Keep it visible, and fade the edge that
+     has more behind it. */
+  useStripScroll(navRef, value);
   /* The Button primitive types its handler against a <button>, and `render`
      does not re-type it — the fields read here (the modifier keys and the
      mouse button) are on the base MouseEvent either way. */

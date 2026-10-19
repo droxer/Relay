@@ -363,7 +363,7 @@ export const sessions = [
 /* Issues and routines                                                 */
 /* ------------------------------------------------------------------ */
 
-function task({ ref, title, description = "", priority = "normal", status, due, agentId, teamId, projectId, sessionIds = [], minutes = 90, routine, note }) {
+function task({ ref, title, description = "", priority = "normal", status, due, agentId, teamId, projectId, sessionIds = [], minutes = 90, routine, note, tags }) {
   const id = `task_mg${ref.slice(1, 5).toLowerCase()}7q_${ref.toLowerCase()}`;
   const lastActivity = note ? { id: `activity_${ref}`, createdAt: ago(minutes * MINUTE), message: note, ...(sessionIds[0] ? { sessionId: sessionIds[0] } : {}) } : undefined;
   return {
@@ -371,6 +371,7 @@ function task({ ref, title, description = "", priority = "normal", status, due, 
     title,
     description,
     priority,
+    ...(tags ? { tags } : {}),
     status,
     workflowStage: ["waiting_for_human", "blocked"].includes(status) ? "running" : status,
     acceptancePolicy: "human",
@@ -408,25 +409,25 @@ function numbered(list) {
 }
 
 export const tasks = numbered([
-  task({ ref: "B7D349", title: "Audit webhook retry backoff", priority: "low", status: "backlog", due: 9, minutes: 300 }),
-  task({ ref: "B32E83", title: "Draft Q4 capacity plan for shared runners", status: "backlog", projectId: "project_infra", due: 12, agentId: "agent_scout", minutes: 22 * 60 }),
-  task({ ref: "C0FBA2", title: "Document the export job runbook", priority: "low", status: "backlog", minutes: 900 }),
-  task({ ref: "D573E3", title: "Redesign onboarding checklist flow", status: "assigned", due: 3, teamId: "team_growth_pod", projectId: "project_onboarding", minutes: 180 }),
-  task({ ref: "E9F651", title: "Ship the welcome-email experiment", status: "assigned", projectId: "project_onboarding", due: 6, teamId: "team_growth_pod", minutes: 240 }),
-  task({ ref: "F0CB49", title: "Fix billing export race condition", priority: "high", status: "running", due: 1, teamId: "team_platform_guild", projectId: "project_billing", sessionIds: [HERO_ID], minutes: 1, note: "Cascade is reviewing the claim path." }),
-  task({ ref: "A41D07", title: "Tune infra alert thresholds", status: "running", projectId: "project_infra", due: 2, teamId: "team_infra_response", sessionIds: ["thread_alert_thresholds"], minutes: 6, note: "Scout drafted the rollout plan." }),
-  task({ ref: "A8C2E5", title: "Add per-tenant rate limiting to the public API", priority: "high", status: "review", projectId: "project_infra", due: 4, teamId: "team_platform_guild", sessionIds: ["thread_rate_limit"], minutes: 18, note: "Ready for review: 4 files changed." }),
-  task({ ref: "B6E1F4", title: "Investigate dashboard chart slowdown", status: "review", projectId: "project_infra", agentId: "agent_cascade", sessionIds: ["thread_chart_slowdown"], minutes: 52, note: "Root cause: unbounded tooltip re-render." }),
-  task({ ref: "C2A9D8", title: "Migrate CI cache to the shared runner", status: "blocked", projectId: "project_infra", due: -1, agentId: "agent_forge", sessionIds: ["thread_ci_cache"], minutes: 26 * 60, note: "Blocked on cache credentials." }),
-  task({ ref: "D7B3C1", title: "Invoice PDF totals are off by one cent", priority: "high", status: "done", agentId: "agent_aria", projectId: "project_billing", sessionIds: ["thread_invoice_pdf"], minutes: 30 * 60, note: "Rounding moved to the line-item level." }),
+  task({ ref: "B7D349", tags: ["reliability", "api"], title: "Audit webhook retry backoff", priority: "low", status: "backlog", due: 9, minutes: 300 }),
+  task({ ref: "B32E83", tags: ["planning", "infra"], title: "Draft Q4 capacity plan for shared runners", status: "backlog", projectId: "project_infra", due: 12, agentId: "agent_scout", minutes: 22 * 60 }),
+  task({ ref: "C0FBA2", tags: ["docs"], title: "Document the export job runbook", priority: "low", status: "backlog", minutes: 900 }),
+  task({ ref: "D573E3", tags: ["onboarding", "design"], title: "Redesign onboarding checklist flow", status: "assigned", due: 3, teamId: "team_growth_pod", projectId: "project_onboarding", minutes: 180 }),
+  task({ ref: "E9F651", tags: ["growth", "experiment"], title: "Ship the welcome-email experiment", status: "assigned", projectId: "project_onboarding", due: 6, teamId: "team_growth_pod", minutes: 240 }),
+  task({ ref: "F0CB49", tags: ["bug", "billing", "customer-reported"], title: "Fix billing export race condition", priority: "high", status: "running", due: 1, teamId: "team_platform_guild", projectId: "project_billing", sessionIds: [HERO_ID], minutes: 1, note: "Cascade is reviewing the claim path." }),
+  task({ ref: "A41D07", tags: ["infra", "alerts"], title: "Tune infra alert thresholds", status: "running", projectId: "project_infra", due: 2, teamId: "team_infra_response", sessionIds: ["thread_alert_thresholds"], minutes: 6, note: "Scout drafted the rollout plan." }),
+  task({ ref: "A8C2E5", tags: ["api", "security"], title: "Add per-tenant rate limiting to the public API", priority: "high", status: "review", projectId: "project_infra", due: 4, teamId: "team_platform_guild", sessionIds: ["thread_rate_limit"], minutes: 18, note: "Ready for review: 4 files changed." }),
+  task({ ref: "B6E1F4", tags: ["performance", "bug"], title: "Investigate dashboard chart slowdown", status: "review", projectId: "project_infra", agentId: "agent_cascade", sessionIds: ["thread_chart_slowdown"], minutes: 52, note: "Root cause: unbounded tooltip re-render." }),
+  task({ ref: "C2A9D8", tags: ["ci"], title: "Migrate CI cache to the shared runner", status: "blocked", projectId: "project_infra", due: -1, agentId: "agent_forge", sessionIds: ["thread_ci_cache"], minutes: 26 * 60, note: "Blocked on cache credentials." }),
+  task({ ref: "D7B3C1", tags: ["bug", "billing"], title: "Invoice PDF totals are off by one cent", priority: "high", status: "done", agentId: "agent_aria", projectId: "project_billing", sessionIds: ["thread_invoice_pdf"], minutes: 30 * 60, note: "Rounding moved to the line-item level." }),
   task({ ref: "E5F0A6", title: "Rotate the staging signing key", status: "done", projectId: "project_infra", agentId: "agent_forge", minutes: 49 * 60, note: "Both keys accepted during cutover." }),
-  task({ ref: "1A7C40", title: "Weekly dependency audit", description: "List outdated and vulnerable packages across every service and open an issue for anything critical.", status: "backlog", agentId: "agent_pixel", sessionIds: ["thread_dependency_audit"], minutes: 5 * 60, routine: { cadence: "weekly", next: 6 }, note: "3 upgrades proposed, 0 critical." }),
-  task({ ref: "2B90E3", title: "Daily error-budget report", description: "Summarize yesterday's SLO burn per service and flag any budget below 20%.", status: "backlog", teamId: "team_infra_response", minutes: 7 * 60, routine: { cadence: "daily", next: 1 }, note: "All services within budget." }),
-  task({ ref: "3C4D81", title: "Nightly flaky-test triage", description: "Re-run last night's failures, quarantine the flaky ones, and file the real ones.", priority: "high", status: "backlog", agentId: "agent_pixel", minutes: 9 * 60, routine: { cadence: "daily", next: 1 }, note: "2 tests quarantined." }),
-  task({ ref: "4DA6F2", title: "Monthly cloud cost review", description: "Compare spend against last month by team and call out anything that grew more than 15%.", status: "backlog", agentId: "agent_scout", minutes: 6 * DAY / MINUTE, routine: { cadence: "monthly", next: 24 }, note: "Runner spend up 8%." }),
+  task({ ref: "1A7C40", tags: ["security", "dependencies"], title: "Weekly dependency audit", description: "List outdated and vulnerable packages across every service and open an issue for anything critical.", status: "backlog", agentId: "agent_pixel", sessionIds: ["thread_dependency_audit"], minutes: 5 * 60, routine: { cadence: "weekly", next: 6 }, note: "3 upgrades proposed, 0 critical." }),
+  task({ ref: "2B90E3", tags: ["reliability", "reports"], title: "Daily error-budget report", description: "Summarize yesterday's SLO burn per service and flag any budget below 20%.", status: "backlog", teamId: "team_infra_response", minutes: 7 * 60, routine: { cadence: "daily", next: 1 }, note: "All services within budget." }),
+  task({ ref: "3C4D81", tags: ["ci", "quality"], title: "Nightly flaky-test triage", description: "Re-run last night's failures, quarantine the flaky ones, and file the real ones.", priority: "high", status: "backlog", agentId: "agent_pixel", minutes: 9 * 60, routine: { cadence: "daily", next: 1 }, note: "2 tests quarantined." }),
+  task({ ref: "4DA6F2", tags: ["cost", "reports"], title: "Monthly cloud cost review", description: "Compare spend against last month by team and call out anything that grew more than 15%.", status: "backlog", agentId: "agent_scout", minutes: 6 * DAY / MINUTE, routine: { cadence: "monthly", next: 24 }, note: "Runner spend up 8%." }),
   task({ ref: "6F28C9", title: "Weekly on-call handoff summary", description: "Summarize open incidents, noisy alerts, and pending follow-ups for the next on-call.", status: "backlog", teamId: "team_infra_response", minutes: 2 * DAY / MINUTE, routine: { cadence: "weekly", next: 5 }, note: "2 follow-ups carried over." }),
-  task({ ref: "7A35D0", title: "Monthly access review", description: "List every service account and token that has not been used in 30 days.", priority: "high", status: "backlog", agentId: "agent_forge", minutes: 11 * DAY / MINUTE, routine: { cadence: "monthly", next: 19 }, note: "4 stale tokens flagged." }),
-  task({ ref: "8B42E1", title: "Daily standup digest", description: "Collect what every agent finished, is doing, and is blocked on since yesterday.", priority: "low", status: "backlog", agentId: "agent_scout", minutes: 8 * 60, routine: { cadence: "daily", next: 1 }, note: "Posted to #platform." }),
+  task({ ref: "7A35D0", tags: ["security", "compliance"], title: "Monthly access review", description: "List every service account and token that has not been used in 30 days.", priority: "high", status: "backlog", agentId: "agent_forge", minutes: 11 * DAY / MINUTE, routine: { cadence: "monthly", next: 19 }, note: "4 stale tokens flagged." }),
+  task({ ref: "8B42E1", tags: ["reports"], title: "Daily standup digest", description: "Collect what every agent finished, is doing, and is blocked on since yesterday.", priority: "low", status: "backlog", agentId: "agent_scout", minutes: 8 * 60, routine: { cadence: "daily", next: 1 }, note: "Posted to #platform." }),
   task({ ref: "5E13B7", title: "Friday release notes draft", description: "Draft customer-facing notes from everything merged this week.", priority: "low", status: "backlog", agentId: "agent_aria", minutes: 4 * DAY / MINUTE, routine: { cadence: "weekly", next: 3, enabled: false } }),
 ]);
 

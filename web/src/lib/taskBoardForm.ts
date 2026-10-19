@@ -5,6 +5,7 @@ import type {
 
 import { defaultSchedule } from "./automationSchedule.ts";
 import { normalizeTriggerForSave, triggersEqual, triggersOf } from "./automationTrigger.ts";
+import { tagsEqual } from "./taskTags.ts";
 
 export type TaskBoardFormBase = {
   id?: string;
@@ -14,6 +15,7 @@ export type TaskBoardFormBase = {
   title: string;
   description: string;
   priority: TaskPriority;
+  tags: string[];
   assigneeUserId: string;
   assignedAgent: "" | AgentName;
   assignedAgentId?: string;
@@ -45,6 +47,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
     description: "",
     acceptancePolicy: "human",
     priority: "normal",
+    tags: [],
     status: "backlog",
     dueDate: "",
     assigneeUserId: currentUser.userId ?? currentUser.username,
@@ -61,6 +64,7 @@ export function emptyRoutineForm(currentUser: CurrentUser): RoutineTaskFormState
     description: "",
     acceptancePolicy: "human",
     priority: "normal",
+    tags: [],
     assigneeUserId: currentUser.userId ?? currentUser.username,
     assignedAgent: "",
     assignedAgentId: "",
@@ -104,6 +108,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.title !== b.title
     || a.description !== b.description
     || a.priority !== b.priority
+    || !tagsEqual(a.tags, b.tags)
     || a.assigneeUserId !== b.assigneeUserId
     || a.assignedAgent !== b.assignedAgent
     || a.assignedAgentId !== b.assignedAgentId

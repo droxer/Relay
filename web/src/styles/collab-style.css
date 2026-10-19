@@ -183,9 +183,9 @@
   /* Stacked, the art sits beside the words rather than above them. */
   .collab-style-card {
     display: grid;
-    /* The art column is drawing geometry (it holds no text), so a fixed
-       track cannot clip a translation; the words column is the flexible one. */
-    grid-template-columns: 88px minmax(0, 1fr);
+    /* The art column holds no text; it is the stacked art plate (the
+       --avatar-2xl box plus its gutter), and the words column flexes. */
+    grid-template-columns: calc(var(--avatar-2xl) + var(--sp-6)) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     column-gap: var(--sp-3);
     row-gap: var(--sp-1);

@@ -41,6 +41,7 @@ import {
   type IssueGroupLabels,
 } from "../lib/issueQueues";
 import { emptyBacklogForm } from "../lib/taskBoardForm";
+import { collectTags } from "../lib/taskTags";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { taskRef } from "../lib/taskRef";
@@ -178,6 +179,7 @@ export function IssuesPage({
     return tasks.filter((task) => !task.deletedAt && !task.isRoutine
       && (!task.projectId || !archived.has(task.projectId) || task.projectId === projectFilter));
   }, [tasks, projects, projectFilter]);
+  const tagOptions = useMemo(() => collectTags(issues), [issues]);
   const queueContext = useMemo(
     () => ({ userId: currentUser.userId ?? "", today: isoToday() }),
     [currentUser.userId],
@@ -345,6 +347,7 @@ export function IssuesPage({
           extraField={projectField}
           agents={logicalAgents}
           teams={teams}
+          tags={tagOptions}
           onChange={(next) => { setFilters(next); setPage(1); }}
           sortMenu={(
             <>
@@ -474,6 +477,7 @@ export function IssuesPage({
           projectChoice={projectChoice}
           logicalAgents={logicalAgents}
           projects={projects}
+          tagSuggestions={tagOptions}
           onCreateProject={onCreateProject
             ? () => onCreateProject((id) => setForm((current) => (current ? { ...current, projectId: id } : current)))
             : undefined}

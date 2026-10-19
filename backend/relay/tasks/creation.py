@@ -22,6 +22,7 @@ from .requests import (
     TaskRequestReader,
     acceptance_policy_field,
     collaboration_style_field,
+    tags_field,
 )
 from ..teams.dispatch import TeamDispatchError, task_thread_assignments, task_thread_ownership
 from ..security.actor import Actor
@@ -141,6 +142,7 @@ def _create_record(
             "title": request.title,
             "description": request.reader.string(body, "description"),
             "priority": task_priority(body.get("priority")) or "normal",
+            **({"tags": tags} if (tags := tags_field(body)) else {}),
             "ownerUserId": request.owner,
             "assigneeUserId": assignment.assignee,
             **({"projectId": project["id"]} if project else {}),

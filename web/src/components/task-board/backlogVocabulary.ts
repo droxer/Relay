@@ -32,6 +32,7 @@ export const initialFilters: BacklogFilters = {
   query: "",
   status: "all",
   priority: "all",
+  tag: "all",
   agent: "all",
   team: "all",
   assignment: "all",
@@ -47,6 +48,7 @@ export const BACKLOG_FILTER_SPEC: FilterSpec<BacklogFilters> = {
   query: { param: "q" },
   status: { param: "status", allowed: TASK_STATUSES },
   priority: { param: "priority", allowed: TASK_PRIORITIES },
+  tag: { param: "tag" },
   agent: { param: "agent" },
   team: { param: "team" },
   assignment: { param: "assignment", allowed: ["assigned", "unassigned"] },
@@ -73,6 +75,7 @@ export function activeFilterCount(filters: BacklogFilters): number {
   let count = 0;
   if (filters.status !== "all") count += 1;
   if (filters.priority !== "all") count += 1;
+  if (filters.tag !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
   if (filters.team !== "all") count += 1;
   if (filters.assignment !== "all") count += 1;

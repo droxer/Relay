@@ -125,7 +125,7 @@
   .sidenav-btn,
   .artifact-index-btn,
   .adm-placement-remove,
-  .backlog-view-btn,
+  .view-toggle-btn,
   #thread-panel .page-header-actions button,
   .chat-header [data-variant="icon"],
   .send-button,
@@ -193,6 +193,16 @@
     min-height: var(--control-h-xs);
     width: var(--control-h-xs);
     height: var(--control-h-xs);
+  }
+
+  /* The thread row's one overflow glyph (it replaced the pencil and the
+     cross on touch) is a single target, so it takes the row's full touch
+     height; only its width stays narrow, to leave the title its line. */
+  .conversation-more-btn {
+    width: var(--sp-7);
+    min-width: var(--sp-7);
+    height: var(--touch-target);
+    min-height: var(--touch-target);
   }
 
   /* The command expander is a text label, not a glyph: it takes the same 32px

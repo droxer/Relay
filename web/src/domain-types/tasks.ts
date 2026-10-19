@@ -94,6 +94,8 @@ export interface TaskMutationInput {
   title?: string;
   description?: string;
   priority?: TaskPriority;
+  /** Replaces the task's tags; an empty list clears them. */
+  tags?: string[];
   status?: TaskStatus;
   dueDate?: string;
   isRoutine?: boolean;

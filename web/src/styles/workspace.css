@@ -65,7 +65,7 @@
    navigation, and a bordered track with a raised active chip dressed them as
    a toggle. ONE recipe for all three tab rows, because the thread space had
    grown a pill copy and the file browser a segmented copy of the same idea.
-   The genuine toggles (.backlog-view-toggle, the roster picker) keep the
+   The genuine toggles (.view-toggle, the roster picker) keep the
    segmented language. The rail carries one hairline the tabs sit on; the
    active tab's 2px rule overlaps it. The record tabs are scoped under
    .workspace-page so they beat the shared atelier.css selectors. */
@@ -650,6 +650,30 @@
 .agent-dossier-identity-meta .workspace-dossier-stamp {
   padding-top: 0;
   border-top: 0;
+}
+
+/* Phones: the avatar heads the block and the fields take the full width
+   under it. Side by side, the role and model fields were squeezed into a
+   200px column beside the image and the model field wrapped its own hint. */
+@media (max-width: 640px) {
+  .agent-dossier-identity {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* The picker centres itself in a row; in a column it leads, flush with
+     the fields under it. */
+  .agent-dossier-identity > .profile-image-picker {
+    align-self: flex-start;
+  }
+
+  .agent-dossier-identity-meta {
+    width: 100%;
+  }
+
+  .agent-model-setting {
+    max-width: none;
+  }
 }
 
 .workspace-profile .adm-cred-row {

@@ -2,6 +2,7 @@
 
 import type { MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { TaskTagList } from "../TaskTags";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -157,6 +158,7 @@ export function IssuesTable({
                       {task.title}
                     </a>
                     {intake && task.status !== "done" ? <Badge variant="warning" className="issue-intake-chip">{t("issues.needs_project")}</Badge> : null}
+                    <TaskTagList tags={task.tags} max={2} />
                     <TaskHoldupLine task={task} />
                   </div>
                 </TableCell>

@@ -10,8 +10,11 @@ import {
 } from "../icons";
 import { TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "../../lib/backlog";
 import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { PHONE_QUERY } from "../MobileTopbarSlot";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
+import { tagFilterField } from "./tagFilterField";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { TaskStatusIcon } from "../TaskStatusIcon";
@@ -47,7 +50,7 @@ interface ExtraBacklogFilter {
 
 /* The bar's fields, as the page state names them. "all" is how the state
    says "not filtering"; the chips say it by having no chip. */
-const BACKLOG_BAR_KEYS = ["priority", "due", "agent", "team", "assignment", "assignee", "source"] as const;
+const BACKLOG_BAR_KEYS = ["priority", "tag", "due", "agent", "team", "assignment", "assignee", "source"] as const;
 
 export function BacklogFiltersBar({
   sortMenu,
@@ -55,11 +58,14 @@ export function BacklogFiltersBar({
   filters,
   agents,
   teams,
+  tags = [],
   onChange,
 }: {
   filters: BacklogFilters;
   agents: UserAgent[];
   teams: AgentTeam[];
+  /** Every tag on the page's tasks; the tag filter offers these. */
+  tags?: readonly string[];
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */
   sortMenu?: ReactNode;
@@ -71,6 +77,7 @@ export function BacklogFiltersBar({
     ...(extraFilterField ? [extraFilterField] : []),
     { id: "priority", label: t("backlog.priority"), kind: "select",
       options: TASK_PRIORITIES.map((priority) => ({ value: priority, label: t(`backlog.priorities.${priority}`) })) },
+    ...[tagFilterField(tags, filters.tag, t("tags.label"))].filter((field) => field !== null),
     { id: "due", label: t("backlog.due"), kind: "select", options: [
       { value: "overdue", label: t("backlog.overdue") },
       { value: "today", label: t("backlog.today") },
@@ -90,7 +97,7 @@ export function BacklogFiltersBar({
       { value: "direct", label: t("backlog.source_direct") },
       { value: "routine", label: t("backlog.source_routine") },
     ] },
-  ], [agents, teams, t, extraFilterField]);
+  ], [agents, teams, tags, filters.tag, t, extraFilterField]);
   const selections = {
     ...(extraField ? { [extraField.field.id]: extraField.value } : {}),
     ...selectionsFromState(filters, BACKLOG_BAR_KEYS),
@@ -120,11 +127,28 @@ export function BacklogFiltersBar({
 }
 export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onChange: (view: BacklogView) => void }) {
   const { t } = useTranslation();
-  return (
-    <div className="backlog-view-toggle" role="group" aria-label={t("backlog.view")}>
+  const phone = useMediaQuery(PHONE_QUERY);
+  /* A phone top bar has room for one glyph here, not a two-segment switch:
+     the button shows the view it switches TO, as a toolbar toggle does. */
+  if (phone) {
+    const next: BacklogView = view === "board" ? "list" : "board";
+    const NextIcon = next === "board" ? ViewBoard : ViewList;
+    return (
       <Button variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn page-header-icon-action"
+        aria-label={t(next === "board" ? "backlog.view_board" : "backlog.view_list")}
+        onClick={() => onChange(next)}
+      >
+        <NextIcon size={ICON.md} />
+      </Button>
+    );
+  }
+  return (
+    <div className="view-toggle" role="group" aria-label={t("backlog.view")}>
+      <Button variant="ghost"
+        type="button"
+        className="view-toggle-btn"
         data-active={view === "board" ? "true" : "false"}
         aria-pressed={view === "board"}
         tooltip={t("backlog.view_board")}
@@ -134,7 +158,7 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
       </Button>
       <Button variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn"
         data-active={view === "list" ? "true" : "false"}
         aria-pressed={view === "list"}
         tooltip={t("backlog.view_list")}

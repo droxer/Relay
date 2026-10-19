@@ -180,6 +180,19 @@
   color: var(--ink-4);
 }
 
+/* Phones: what the machine is on one line, when it was last heard from on
+   the next. Left to wrap, the break fell before the last item and opened
+   the second line on a stray "·". */
+@media (max-width: 640px) {
+  .computer-card-sub > span:last-child {
+    display: block;
+  }
+
+  .computer-card-sub > span:last-child::before {
+    content: none;
+  }
+}
+
 /* The client on this machine is older than the server: what to do about it,
    under the line that says what the machine is. */
 .computer-card-outdated {
@@ -656,4 +669,12 @@ button.computer-run-open:hover {
   color: var(--ink-3);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
+}
+
+/* Phones: the footer's id leaves the trailing edge, where it sat alone under
+   a wrapped path, and reads under the path. After the base rule on purpose. */
+@media (max-width: 640px) {
+  .computer-fact-id {
+    margin-inline-start: 0;
+  }
 }

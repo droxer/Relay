@@ -38,6 +38,7 @@
 @import "./task-status.css" layer(relay);
 @import "./roster-select.css" layer(relay);
 @import "./task-drawer.css" layer(relay);
+@import "./task-tags.css" layer(relay);
 @import "./task-record.css" layer(relay);
 @import "./record-panels.css" layer(relay);
 @import "./recovery.css" layer(relay);
@@ -45,6 +46,7 @@
 @import "./thread-task-status.css" layer(relay);
 @import "./list-sort.css" layer(relay);
 @import "./list-group.css" layer(relay);
+@import "./view-toggle.css" layer(relay);
 @import "./backlog-list.css" layer(relay);
 @import "./issues.css" layer(relay);
 @import "./agents.css" layer(relay);

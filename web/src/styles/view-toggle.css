@@ -1,0 +1,43 @@
+/* View toggle — the icon switch between two layouts of the same records:
+   board / list on the task pages, grid / table on the admin console. It was
+   born in backlog-list.css as `.backlog-view-btn`, and the admin console
+   borrowed a class named for another page; it is a shared control, so it has
+   a shared name and its own sheet. Route-scoped phone variants stay with
+   their routes (backlog-list.css, responsive.css). Segmented FORM choices are
+   a different control — .adm-profile-segment / the ToggleGroup primitive. */
+
+
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: var(--sp-0-5);
+  border: var(--sp-hairline) solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.view-toggle-btn:not([data-active="true"]):hover {
+  background: var(--control-fill-hover);
+  color: var(--ink-1);
+}
+
+.view-toggle-btn[data-active="true"] {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-1);
+}

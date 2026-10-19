@@ -438,11 +438,10 @@
 }
 
 @media (max-width: 820px) {
-  /* Touch rows: the same taller padding the roster rails take on small
-     screens. The list keeps its own inset, so the body adds none. */
-  .teams-list-row {
-    padding: var(--sp-4) var(--sp-3);
-  }
+  /* No row padding here: the row's button already carries the inset (it is
+     the focus target), and padding both stacked them into a 93px row — half
+     again the agent roster's next door. The 44px touch floor comes from the
+     button itself. */
 
   .team-profile-inline-actions {
     align-items: stretch;

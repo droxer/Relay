@@ -458,6 +458,16 @@
     padding: var(--sp-6);
   }
 
+  /* One pane at a time (SkillsPage): the library, or the picked skill with a
+     back control in the top bar — never the detail stacked under the list. */
+  .skills-page[data-phone-pane="list"] > .skill-detail,
+  .skills-page[data-phone-pane="detail"] > .skills-list {
+    display: none;
+  }
+
+  .skills-page[data-phone-pane="detail"] > .skill-detail {
+    border-top: 0;
+  }
 }
 
 

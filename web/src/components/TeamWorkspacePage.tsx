@@ -584,6 +584,7 @@ export function TeamWorkspacePage({
             {team.name}
           </span>
         )}
+        topbarTitle={team.name}
         titleVariant="record"
         titleAs="h2"
         layout="stacked"

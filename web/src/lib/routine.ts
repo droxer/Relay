@@ -1,5 +1,6 @@
 import { triggersOf } from "./automationTrigger.ts";
 import { taskRef } from "./taskRef.ts";
+import { matchesTagFilter } from "./taskTags.ts";
 import { TASK_PRIORITIES } from "./backlog.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { RelaySession, RelayTaskListItem, RoutineTriggerKind } from "../types.js";
@@ -8,6 +9,8 @@ export interface RoutineFilters {
   /** `none` is a Run-now-only automation: one with no triggers. */
   trigger: "all" | "none" | RoutineTriggerKind;
   query: string;
+  /** One tag the automation must carry; `all` for any. */
+  tag: string;
   agent: string;
   assignee: string;
   state: "all" | RoutineListState;
@@ -21,10 +24,11 @@ export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineF
     if (!task.isRoutine) return false;
     if (!matchesTriggerFilter(task, filters.trigger)) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
+    if (!matchesTagFilter(task, filters.tag)) return false;
     if (assignee && !(task.assigneeUserId ?? task.ownerUserId ?? "").toLowerCase().includes(assignee)) return false;
     if (filters.state !== "all" && routineState(task, running, now) !== filters.state) return false;
     if (query) {
-      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
+      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id} ${(task.tags ?? []).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
