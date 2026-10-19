@@ -1,10 +1,11 @@
 import { AGENT_NAMES, initialAgentState, runAgentNode } from "relay-core";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { localProcessExecStream, runRelayDaemonDoctor } from "../src/index.js";
+import { agentHealthStatusFor, localProcessExecStream, runRelayDaemonDoctor } from "../src/index.js";
+import { createLocalRuntime } from "../src/local-runtime.js";
 import { assertKimiConfigured } from "../src/agent-auth.js";
 
 function fixture(env: NodeJS.ProcessEnv, action: (home: string) => void): void {
@@ -156,4 +157,51 @@ test("local Kimi uses the saved model despite Relay-only key and model settings"
     writeFileSync(join(home, "config.toml"), 'default_model = "saved"\n[models.saved]\nprovider = "kimi"\nmodel = "user-model"\n[providers.kimi]\ntype = "kimi"\napi_key = "user-key"');
     assert.doesNotThrow(() => assertKimiConfigured(home, { native: true }));
   });
+});
+
+async function localPiStatus(piScript: string | undefined): Promise<{ status: string; detail: string }> {
+  const home = mkdtempSync(join(tmpdir(), "relay-local-pi-"));
+  const previous = process.env;
+  const bin = join(home, "bin");
+  mkdirSync(bin);
+  // Expose only the preflight's tools, never a host-installed Pi beside Node.
+  symlinkSync(process.execPath, join(bin, "node"));
+  symlinkSync("/bin/bash", join(bin, "bash"));
+  symlinkSync("/usr/bin/grep", join(bin, "grep"));
+  if (piScript !== undefined) writeFileSync(join(bin, "pi"), `#!/bin/sh\n${piScript}\n`, { mode: 0o755 });
+  process.env = {
+    PATH: bin,
+    RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: home, RELAY_AGENT_WORKSPACE: home,
+  };
+  try {
+    await createLocalRuntime().ensureAgentReady("pi");
+    return { status: "ready", detail: "" };
+  } catch (error) {
+    return { status: agentHealthStatusFor(error), detail: (error as Error).message };
+  } finally {
+    process.env = previous;
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test("a local computer without Pi reports it not installed rather than failed", async () => {
+  const { status, detail } = await localPiStatus(undefined);
+  assert.equal(status, "unavailable");
+  assert.match(detail, /Pi is not installed/);
+});
+
+test("a local Pi that no provider is signed in to reports failed with Pi's own hint", async () => {
+  // `pi --list-models` exits 0 and says so on stderr when nothing is signed in.
+  const { status, detail } = await localPiStatus(
+    'case "$1" in --version) echo 0.73.1 ;; --list-models) echo "No models available. Use /login to log into a provider via OAuth or API key." >&2 ;; esac',
+  );
+  assert.equal(status, "failed");
+  assert.match(detail, /No models available\. Use \/login/);
+});
+
+test("a local Pi that lists models is ready", async () => {
+  const { status } = await localPiStatus(
+    'case "$1" in --version) echo 0.73.1 ;; --list-models) printf "provider  model\\nanthropic claude-sonnet-4-5\\n" >&2 ;; esac',
+  );
+  assert.equal(status, "ready");
 });
