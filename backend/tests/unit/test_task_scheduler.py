@@ -918,6 +918,7 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
             daemon_store=SimpleNamespace(list_active_runs=list),
             list_ready=lambda: current,
             is_live=lambda _node_id: True,
+            is_dispatchable=lambda _node_id: True,
         )
         task = {"assigneeUserId": "alice"}
         declared = agents.create_agent(

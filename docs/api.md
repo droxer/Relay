@@ -609,6 +609,18 @@ The request is authenticated with the daemon node token and may include
 `leaseSeconds` requests the same command lease used by polling: 1–3600 seconds,
 with a 60-second default for older clients. Invalid, nonfinite, or out-of-range
 values return 400. Updated daemons send their configured lease on every heartbeat.
+An optional `state` of `ready`, `draining`, or `stopped` is accepted (anything
+else is 400): `draining` keeps the node online for its running agents but marks
+it as no longer taking work, and `stopped` is the graceful exit, replacing the
+`stopped` registration for daemons that know the backend accepts it. The
+response's `heartbeat` carries `intervalMs`, `timeoutMs`, and `features`
+(`poll-liveness`: an open command poll already renews liveness and leases, so
+the daemon may skip beats while one is in flight; `state`: the body may carry
+`state`). Node records report `online` (a fresh heartbeat) and separately
+`dispatchable` (online, and its last command poll is fresh or it has not polled
+yet), with `lastSeenAgeMs` and `lastPollAgeMs`; dispatch admits only
+dispatchable nodes, so a daemon whose heartbeat works while its poll fails is
+never handed work it cannot take.
 
 New computers must enroll before registration. An authenticated admin may also
 register a new computer; anonymous registration cannot create an ownerless node.

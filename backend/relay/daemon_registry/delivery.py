@@ -679,8 +679,11 @@ class AssignmentDeliveryMixin(RegistryState):
                 and assignment.get("agentId")
             ):
                 self.logical_assignment_validator(assignment)
-            if not self._liveness(sandbox)["online"]:
+            liveness = self._liveness(sandbox)
+            if not liveness["online"]:
                 raise ValueError("Runtime node heartbeat is not live.")
+            if not liveness["dispatchable"]:
+                raise ValueError("Runtime node is online but not taking commands.")
             if assignment["executorKind"] in set(sandbox.get("disabledAgents") or []):
                 raise ValueError(
                     f"Executor {assignment['executorKind']} is disabled on this runtime node."

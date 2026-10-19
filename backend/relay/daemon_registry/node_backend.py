@@ -685,6 +685,8 @@ class ServerDaemonNodeBackend:
                 self._validate_logical_assignment(assignment)
             if not self.registry.is_live(node_id):
                 raise ValueError(f"Sandbox {node_id} daemon node heartbeat expired.")
+            if not self.registry.is_dispatchable(node_id):
+                raise ValueError(f"Sandbox {node_id} is online but not taking commands.")
             executor_kind = assignment["executorKind"]
             if executor_kind in set(node.get("disabledAgents") or []):
 

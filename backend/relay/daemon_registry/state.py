@@ -47,6 +47,7 @@ class RegistryState:
     _last_reap_at: float
     _last_prune_at: float
     _last_seen_persisted_at: dict[str, float]
+    _last_fleet_liveness_refresh_at: float
     _last_progress_persisted_at: dict[str, float]
 
     if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class RegistryState:
         def _liveness(self, sandbox: dict[str, Any]) -> dict[str, Any]:
             ...
 
-        def _mark_seen(self, sandbox_id: str) -> None:
+        def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
             ...
 
         def _note_run_progress(self, command: dict[str, Any]) -> None:

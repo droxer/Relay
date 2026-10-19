@@ -19,6 +19,11 @@ DAEMON_RUN_MAX_DURATION_MS = REGISTRY_SETTINGS.run_max_duration_ms
 DAEMON_RUN_PROGRESS_PERSIST_INTERVAL_SECONDS = REGISTRY_SETTINGS.run_progress_persist_interval_seconds
 DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS = REGISTRY_SETTINGS.node_seen_persist_interval_seconds
 DAEMON_COMMAND_LEASE_SECONDS = REGISTRY_SETTINGS.command_lease_seconds
+# The longest a command long-poll may be held. A node whose last poll is older
+# than this plus the liveness timeout is alive but not listening for work.
+COMMAND_POLL_MAX_WAIT_SECONDS = 30.0
+# Heartbeats per liveness window: a daemon may miss four beats before expiry.
+HEARTBEATS_PER_LIVENESS_WINDOW = 5
 # How long past expiry a delivered run.start's lease must sit unrenewed on a
 # live node before the reaper treats the start as lost. One full lease period
 # leaves room for heartbeats delayed by a slow poll or a backend restart.

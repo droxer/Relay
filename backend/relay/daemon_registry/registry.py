@@ -99,6 +99,7 @@ class DaemonNodeRegistry(
         self._last_reap_at = 0.0
         self._last_prune_at = 0.0
         self._last_seen_persisted_at: dict[str, float] = {}
+        self._last_fleet_liveness_refresh_at = 0.0
         self._last_progress_persisted_at: dict[str, float] = {}
         self._load_persisted_state()
 

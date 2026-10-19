@@ -249,7 +249,9 @@ class RegistrySettings:
             load_backend_env()
         env = EnvReader(environ)
         settings = cls(
-            node_liveness_timeout_ms=env.integer("RELAY_DAEMON_NODE_LIVENESS_TIMEOUT_MS", 15_000, minimum=1),
+            # 30 s: a daemon beats every fifth of this, so one hung request
+            # (bounded to one interval) plus two retries still fits inside it.
+            node_liveness_timeout_ms=env.integer("RELAY_DAEMON_NODE_LIVENESS_TIMEOUT_MS", 30_000, minimum=1),
             run_timeout_ms=env.integer("RELAY_DAEMON_RUN_TIMEOUT_MS", 15 * 60 * 1000, minimum=1),
             run_max_duration_ms=env.integer("RELAY_DAEMON_RUN_MAX_DURATION_MS", 24 * 60 * 60 * 1000, minimum=1),
             run_progress_persist_interval_seconds=env.number(

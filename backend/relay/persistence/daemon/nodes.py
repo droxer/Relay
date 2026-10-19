@@ -28,6 +28,9 @@ from .rules import (
     _node_for_storage,
     assigned_node_location,
     node_setting_update,
+    NODE_POLL_DRAINED_AT,
+    _poll_observation,
+    preserve_node_poll,
     preserve_node_retirement,
 )
 from .rows import (
@@ -142,6 +145,7 @@ class NodeRows(DaemonStoreState):
             )
             previous = row_to_node(row) if row else None
             node = preserve_node_retirement(previous, node)
+            node = preserve_node_poll(previous, node)
             changed = self._node_state_changed(conn, node)
             self._save_node(conn, node)
             # The row always advances lastSeenAt; only a material change is worth
@@ -195,10 +199,19 @@ class NodeRows(DaemonStoreState):
             return existing, False
 
     def mark_node_seen(
-        self, node_id: str, patch: dict[str, Any] | None = None
+        self,
+        node_id: str,
+        patch: dict[str, Any] | None = None,
+        *,
+        polled: bool | None = None,
     ) -> dict[str, Any] | None:
+        """Advance liveness; ``polled`` True also records a command poll, False clears it.
+
+        A cleared poll is a daemon saying it will not take work again (it is
+        draining); None leaves the poll observation as it was.
+        """
         if not patch:
-            return self._touch_node_liveness(node_id)
+            return self._touch_node_liveness(node_id, polled=polled)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -221,6 +234,7 @@ class NodeRows(DaemonStoreState):
                 **{k: v for k, v in patch.items() if v is not None},
                 "updatedAt": now,
                 "lastSeenAt": now,
+                **_poll_observation(node, now, polled),
             }
             updated = preserve_node_retirement(node, updated)
             if patch.get("lastError") is None and "lastError" in patch:
@@ -231,20 +245,29 @@ class NodeRows(DaemonStoreState):
             # record is the only thing anything reads.
         return updated
 
-    def _touch_node_liveness(self, node_id: str) -> dict[str, Any] | None:
-        """The idle heartbeat: advance the two liveness columns and nothing else.
+    def _touch_node_liveness(
+        self, node_id: str, *, polled: bool | None = None
+    ) -> dict[str, Any] | None:
+        """The idle heartbeat: advance the liveness columns and nothing else.
 
         No row lock and no read-modify-write of the other 20 columns or the
         per-agent rows -- a heartbeat with nothing to report cannot change
-        them. Neither column is indexed, so this stays a HOT update.
+        them. None of the columns is indexed, so this stays a HOT update.
         """
         now = _require_iso(now_iso())
+        poll_values = (
+            {"last_poll_at": now}
+            if polled
+            else {"last_poll_at": _require_iso(NODE_POLL_DRAINED_AT)}
+            if polled is False
+            else {}
+        )
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
                     update(self.nodes)
                     .where(self.nodes.c.id == node_id)
-                    .values(updated_at=now, last_seen_at=now)
+                    .values(updated_at=now, last_seen_at=now, **poll_values)
                     .returning(*self.nodes.c)
                 )
                 .mappings()

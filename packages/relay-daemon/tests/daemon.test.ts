@@ -19,6 +19,7 @@ import {
   resolveBoxliteHome,
   resolveSandboxMode,
   runRelayDaemon,
+  jittered,
   DEFAULT_MAX_CONCURRENT_RUNS,
   runRelayDaemonDoctor,
   shutdownBoxliteRuntime,
@@ -1473,6 +1474,174 @@ test("daemon renews liveness while an idle command poll is in flight", async () 
 
   assert.equal(commandPolls, 1);
   assert.equal(heartbeats, 1);
+});
+
+test("daemon skips the beat while a poll is open on a backend that renews liveness from polls", async () => {
+  const stop = new AbortController();
+  let heartbeatsDuringPoll = 0;
+  let pollOpen = false;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_poll_renews",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    commandPollWaitMs: 25_000,
+    livenessHeartbeatIntervalMs: 2,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment(),
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000, features: ["poll-liveness"] } });
+      }
+      if (path.endsWith("/heartbeat")) {
+        if (pollOpen) heartbeatsDuringPoll += 1;
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000, features: ["poll-liveness"] } });
+      }
+      if (path.endsWith("/commands")) {
+        pollOpen = true;
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        pollOpen = false;
+        stop.abort();
+        return jsonResponse({ commands: [] });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.equal(heartbeatsDuringPoll, 0);
+});
+
+test("a failed beat does not stop the heartbeat; the next tick retries", async () => {
+  const stop = new AbortController();
+  const heartbeatStatuses: number[] = [];
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_beat_retry",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    commandPollWaitMs: 25_000,
+    livenessHeartbeatIntervalMs: 2,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment(),
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000 } });
+      }
+      if (path.endsWith("/heartbeat")) {
+        // A 400 used to end the heartbeat loop for the daemon's lifetime.
+        const status = heartbeatStatuses.length === 0 ? 400 : heartbeatStatuses.length === 1 ? 503 : 200;
+        heartbeatStatuses.push(status);
+        if (status === 200) stop.abort();
+        return jsonResponse(status === 200 ? { heartbeat: { intervalMs: 5_000, timeoutMs: 15_000 } } : { detail: "no" }, status);
+      }
+      if (path.endsWith("/commands")) {
+        // Held open so only beats reach the backend; the fake ignores the abort.
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        return jsonResponse({ commands: [] });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.deepEqual(heartbeatStatuses, [400, 503, 200]);
+});
+
+test("shutdown drains with a heartbeat before aborting runs and stops with one instead of a registration", async () => {
+  const stop = new AbortController();
+  const heartbeatStates: Array<string | undefined> = [];
+  const registrationStatuses: Array<string | undefined> = [];
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_drain",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    commandPollWaitMs: 25_000,
+    livenessHeartbeatIntervalMs: 60_000,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment(),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = await jsonBody<{ status?: string }>(init);
+        registrationStatuses.push(body.status);
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000, features: ["poll-liveness", "state"] } });
+      }
+      if (path.endsWith("/heartbeat")) {
+        const body = await jsonBody<{ state?: string }>(init);
+        heartbeatStates.push(body.state);
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000, features: ["poll-liveness", "state"] } });
+      }
+      if (path.endsWith("/commands")) {
+        stop.abort();
+        return jsonResponse({ commands: [] });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.deepEqual(heartbeatStates, ["draining", "stopped"]);
+  assert.deepEqual(registrationStatuses, ["ready"]);
+});
+
+test("an older backend without heartbeat state still gets the stopped registration", async () => {
+  const stop = new AbortController();
+  const heartbeatStates: Array<string | undefined> = [];
+  const registrationStatuses: Array<string | undefined> = [];
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_old_stop",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    commandPollWaitMs: 25_000,
+    livenessHeartbeatIntervalMs: 60_000,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment(),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = await jsonBody<{ status?: string }>(init);
+        registrationStatuses.push(body.status);
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000 } });
+      }
+      if (path.endsWith("/heartbeat")) {
+        const body = await jsonBody<{ state?: string }>(init);
+        heartbeatStates.push(body.state);
+        return jsonResponse({ heartbeat: { intervalMs: 5_000, timeoutMs: 15_000 } });
+      }
+      if (path.endsWith("/commands")) {
+        stop.abort();
+        return jsonResponse({ commands: [] });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.deepEqual(heartbeatStates, []);
+  assert.deepEqual(registrationStatuses, ["ready", "stopped"]);
+});
+
+test("heartbeat jitter stays within ten percent of the period", () => {
+  assert.equal(jittered(6_000, () => 0), 5_400);
+  assert.equal(jittered(6_000, () => 0.5), 6_000);
+  assert.equal(jittered(6_000, () => 1), 6_600);
 });
 
 test("relay daemon doctor reports per-agent preflight failures", async () => {

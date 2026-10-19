@@ -238,11 +238,22 @@ export interface DaemonNodeRegistration {
   status?: DaemonNodeStatus;
 }
 
+/**
+ * What a backend's heartbeat understands. `poll-liveness`: an open command
+ * poll already renews liveness and leases, so a daemon may skip beats while
+ * one is in flight. `state`: the heartbeat body may carry `state`.
+ */
+export type DaemonNodeHeartbeatFeature = "poll-liveness" | "state";
+
+export type DaemonNodeHeartbeatState = "ready" | "draining" | "stopped";
+
 export interface DaemonNodeHeartbeatSettings {
   /** Recommended renewal cadence chosen by the backend. */
   intervalMs: number;
   /** Time since the last accepted observation before the node is offline. */
   timeoutMs: number;
+  /** Absent on an older backend, which then needs a beat during every poll. */
+  features?: DaemonNodeHeartbeatFeature[];
   /** Backend timestamp for the accepted renewal. */
   observedAt?: string;
   commandLeases?: Array<{ commandId: string; leaseId?: string; leaseExpiresAt: string }>;
@@ -252,6 +263,9 @@ export interface DaemonNodeHeartbeatSettings {
 
 export interface DaemonNodeHeartbeat {
   activeCommandLeases: Array<{ commandId: string; leaseId?: string }>;
+  leaseSeconds?: number;
+  /** `draining`: still alive for its runs, but will not poll again; `stopped`: gone. */
+  state?: DaemonNodeHeartbeatState;
 }
 
 export interface DaemonNodeRegistrationResponse {

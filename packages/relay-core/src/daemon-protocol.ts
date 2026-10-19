@@ -74,7 +74,10 @@ export interface DaemonNodeMonitorRecord extends Omit<SandboxRecord, "token" | "
   activeRuns: DaemonNodeActiveRun[];
   online: boolean;
   stale: boolean;
+  /** Online and its command poll is fresh: the backend will hand it work. */
+  dispatchable?: boolean;
   lastSeenAgeMs?: number;
+  lastPollAgeMs?: number;
 }
 
 export interface ControlPanelDaemonNodeRecord extends DaemonNodeMonitorRecord {

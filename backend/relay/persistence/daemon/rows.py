@@ -47,6 +47,7 @@ def node_to_row(
         "created_at": _parse_iso(node["createdAt"]),
         "updated_at": _parse_iso(node["updatedAt"]),
         "last_seen_at": _parse_iso(node.get("lastSeenAt")),
+        "last_poll_at": _parse_iso(node.get("lastPollAt")),
     }
 
 
@@ -181,6 +182,11 @@ def row_to_node(row: Any) -> dict[str, Any]:
         **(
             {"lastSeenAt": _format_iso(row["last_seen_at"])}
             if row.get("last_seen_at")
+            else {}
+        ),
+        **(
+            {"lastPollAt": _format_iso(row["last_poll_at"])}
+            if row.get("last_poll_at")
             else {}
         ),
     }

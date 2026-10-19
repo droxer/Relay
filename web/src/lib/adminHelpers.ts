@@ -61,7 +61,6 @@ export function buildDaemonStartCommand(
   return `read -rsp 'Relay node token: ' RELAY_DAEMON_NODE_TOKEN && echo && export RELAY_DAEMON_NODE_TOKEN && ${parts.map(shellQuote).join(" ")}`;
 }
 
-const STALE_AFTER_MS = 15_000;
 export interface StoredNodeToken {
   userId?: string;
   sandboxToken?: string;
@@ -73,11 +72,14 @@ export interface StoredNodeToken {
 export type StoredNodeTokenMap = Record<string, StoredNodeToken>;
 let volatileNodeTokens: StoredNodeTokenMap = {};
 
+/**
+ * The backend owns the liveness timeout and sends `stale` on every node; the
+ * web never re-derives it from `lastSeenAt` against its own clock, or the two
+ * would disagree the moment the timeout is tuned.
+ */
 export function isStale(node: ControlPanelDaemonNodeRecord): boolean {
   if (typeof node.stale === "boolean") return node.stale;
-  if (!node.online) return true;
-  if (!node.lastSeenAt) return true;
-  return Date.now() - new Date(node.lastSeenAt).getTime() > STALE_AFTER_MS;
+  return !node.online;
 }
 
 export function visualStatus(node: ControlPanelDaemonNodeRecord): string {

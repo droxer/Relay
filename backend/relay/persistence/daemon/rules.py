@@ -115,10 +115,10 @@ def _node_for_event(node: dict[str, Any]) -> dict[str, Any]:
 
 # Advance on every heartbeat by design, so they say nothing about whether a
 # registration is materially new.
-_NODE_LIVENESS_FIELDS = ("updatedAt", "lastSeenAt")
+_NODE_LIVENESS_FIELDS = ("updatedAt", "lastSeenAt", "lastPollAt")
 
 
-_NODE_LIVENESS_COLUMNS = frozenset({"updated_at", "last_seen_at"})
+_NODE_LIVENESS_COLUMNS = frozenset({"updated_at", "last_seen_at", "last_poll_at"})
 
 
 def _comparable_node_value(value: Any) -> Any:
@@ -149,6 +149,38 @@ def node_registration_changed(
         for key, value in previous.items()
         if key not in _NODE_LIVENESS_FIELDS
     } != {key: value for key, value in node.items() if key not in _NODE_LIVENESS_FIELDS}
+
+
+# What a draining daemon's `lastPollAt` becomes: a poll so old it can never
+# count as fresh. Distinct from "never polled", which gets the benefit of the
+# doubt, because the daemon told us it will not take work again.
+NODE_POLL_DRAINED_AT = "1970-01-01T00:00:00.000Z"
+
+
+def preserve_node_poll(
+    previous: dict[str, Any] | None, node: dict[str, Any]
+) -> dict[str, Any]:
+    """A registration says nothing about polling, so the prior observation stays.
+
+    Clearing it on every registration would let a daemon stuck re-registering
+    after each failed poll look dispatchable forever.
+    """
+    if not previous or not previous.get("lastPollAt") or node.get("lastPollAt"):
+        return node
+    return {**node, "lastPollAt": previous["lastPollAt"]}
+
+
+def _poll_observation(
+    node: dict[str, Any], now: str, polled: bool | None
+) -> dict[str, Any]:
+    """The `lastPollAt` a liveness write carries: advanced, kept, or (False) drained."""
+    if polled:
+        return {"lastPollAt": now}
+    if polled is False:
+        return {"lastPollAt": NODE_POLL_DRAINED_AT}
+    if node.get("lastPollAt"):
+        return {"lastPollAt": node["lastPollAt"]}
+    return {}
 
 
 def preserve_node_retirement(
