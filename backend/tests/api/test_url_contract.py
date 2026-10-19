@@ -151,6 +151,8 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
         "/automations",
         "/automations/R-1",
         "/computer",
+        "/computers",
+        "/skills",
         "/issues",
         "/issues/T-1",
         "/tasks",
@@ -160,7 +162,9 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
         "/teams",
         "/teams/team_123",
         "/settings",
-        # The device-authorization verificationUrl the installer opens.
+        # The device-authorization verificationUrl the installer opens, and
+        # the address it had while Computers was a settings section.
+        "/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
         "/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
     ):
         browser_route = client.get(path, headers={"accept": "text/html"})
@@ -191,12 +195,12 @@ def test_split_deployment_redirects_browser_routes_to_the_web_origin(
     client = _client(monkeypatch, tmp_path)
 
     response = client.get(
-        "/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
+        "/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
         follow_redirects=False,
     )
     assert response.status_code == 307
     assert response.headers["location"] == (
-        "https://relay.example.com/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw"
+        "https://relay.example.com/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw"
     )
     assert client.get("/", follow_redirects=False).headers["location"] == "https://relay.example.com/"
 

@@ -33,6 +33,8 @@ describe("app pathname routes", () => {
       "/agents": "agents",
       "/teams": "teams",
       "/admin": "admin",
+      "/computers": "computers",
+      "/skills": "skills",
       "/settings": "settings",
     } as const;
     for (const [path, route] of Object.entries(routes)) {
@@ -44,26 +46,15 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/channels"), { route: "main", mobileView: "chat", sessionId: null, notFound: true });
   });
 
-  it("parses a settings section, and keeps the paths its sections came from", () => {
+  it("parses a settings section", () => {
     assert.deepEqual(parseAppPath("/settings"), {
-      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
-    });
-    assert.deepEqual(parseAppPath("/settings/skills"), {
-      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "notifications",
     });
     assert.deepEqual(parseAppPath("/settings/notifications"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "notifications",
     });
     assert.deepEqual(parseAppPath("/settings/appearance"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
-    });
-    // Computers and Skills were routes of their own before they became
-    // settings sections; their links still resolve.
-    assert.deepEqual(parseAppPath("/computer"), {
-      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
-    });
-    assert.deepEqual(parseAppPath("/skills"), {
-      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
     });
     // An unknown section is a bad link, not the default section.
     assert.equal(parseAppPath("/settings/nope").notFound, true);
@@ -124,9 +115,24 @@ describe("app pathname routes", () => {
     assert.equal(canonicalBrowserUrl("/admin/users", "?sort=-due"), "/admin/users");
   });
 
+  it("parses Computers and Skills as Infra routes, and keeps the paths they came from", () => {
+    assert.deepEqual(parseAppPath("/computers"), { route: "computers", mobileView: "chat", sessionId: null });
+    assert.deepEqual(parseAppPath("/skills"), { route: "skills", mobileView: "chat", sessionId: null });
+    // /computer came first, then both were settings sections; old links resolve.
+    assert.deepEqual(parseAppPath("/computer"), { route: "computers", mobileView: "chat", sessionId: null });
+    assert.deepEqual(parseAppPath("/settings/computers"), { route: "computers", mobileView: "chat", sessionId: null });
+    assert.deepEqual(parseAppPath("/settings/skills"), { route: "skills", mobileView: "chat", sessionId: null });
+    // ...and the address bar canonicalizes on arrival.
+    assert.equal(canonicalBrowserUrl("/settings/computers"), "/computers");
+    assert.equal(canonicalBrowserUrl("/settings/skills"), "/skills");
+    assert.equal(canonicalBrowserUrl("/computer"), "/computers");
+    assert.equal(hrefForRoute("computers"), "/computers");
+    assert.equal(hrefForRoute("skills"), "/skills");
+  });
+
   it("writes only the canonical settings path", () => {
-    assert.equal(hrefForRoute("settings"), "/settings/computers");
-    assert.equal(hrefForSettingsSection("skills"), "/settings/skills");
+    assert.equal(hrefForRoute("settings"), "/settings/notifications");
+    assert.equal(hrefForSettingsSection("appearance"), "/settings/appearance");
     assert.equal(
       pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: "language" }),
       "/settings/language",
@@ -145,7 +151,7 @@ describe("app pathname routes", () => {
     assert.equal(hrefForRoute("projects"), "/projects");
     assert.equal(hrefForRoute("backlog"), "/tasks");
     assert.equal(hrefForRoute("routine"), "/automations");
-    assert.equal(hrefForRoute("settings"), "/settings/computers");
+    assert.equal(hrefForRoute("settings"), "/settings/notifications");
   });
 
   it("marks unknown paths as not found instead of opening chat", () => {
@@ -286,7 +292,8 @@ describe("app pathname routes", () => {
     // back out, so the pager would advance its own highlight and show page 1.
     assert.equal(canonicalBrowserUrl("/backlog", "?page=3"), "/backlog?page=3");
     assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/automations?page=2");
-    assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/settings/computers?page=2");
+    assert.equal(canonicalBrowserUrl("/computers", "?page=2"), "/computers?page=2");
+    assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/computers?page=2");
     assert.equal(
       canonicalBrowserUrl("/admin", "?userPage=2&nodePage=4"),
       "/admin?userPage=2&nodePage=4",
@@ -434,12 +441,15 @@ describe("the Tasks address", () => {
 });
 
 it("preserves computer device approval through login redirects", () => {
-  const url = "/computer?connect=abcdefghijklmnopqrstuvwxyz123456";
-  assert.equal(canonicalBrowserUrl("/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), url);
+  const code = "?connect=abcdefghijklmnopqrstuvwxyz123456";
+  assert.equal(canonicalBrowserUrl("/computers", code), `/computers${code}`);
+  assert.equal(canonicalBrowserUrl("/computer", code), `/computers${code}`);
 });
 
-it("preserves approval when the legacy computer path redirects to settings", () => {
-  assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
+it("preserves approval when a legacy computer path redirects to /computers", () => {
+  const code = "?connect=abcdefghijklmnopqrstuvwxyz123456";
+  assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", code), `/computers${code}`);
+  assert.equal(browserUrlForAppState(parseAppPath("/settings/computers"), "/settings/computers", code), `/computers${code}`);
 });
 
 it("keeps the project tasks tab explicit and canonicalizes Dashboard as the default", () => {

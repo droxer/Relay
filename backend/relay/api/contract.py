@@ -21,6 +21,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "backlog",
         "channels",
         "computer",
+        "computers",
         "forgot-password",
         "issues",
         "join",

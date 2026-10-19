@@ -24,6 +24,14 @@
   color: var(--ink-2);
 }
 
+/* One header step across both columns, so the rail's identity block and the
+   open skill's header draw one rule across the page. The section rail gave
+   the library this (--sec-header-h) while it was a settings section; as a
+   page of its own it has to claim it here. */
+.skills-page .page-header {
+  min-height: calc(var(--header-h) + var(--sp-3));
+}
+
 /* Rail shell, on the .agents-roster recipe: the shared list elevation between
    the nav rail and the detail canvas, not the canvas itself. */
 .skills-list {

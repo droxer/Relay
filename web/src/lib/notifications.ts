@@ -12,9 +12,9 @@ import type { Tone } from "../domain-types/core.ts";
 import { pathForAppState, type AppLocationState } from "./appRoute.ts";
 import { taskRef } from "./taskRef.ts";
 
-/** Where opening a notice takes the reader. A computer resolves to a section
+/** Where opening a notice takes the reader. A computer resolves to a surface
     only at click time, because which surface manages it depends on who owns
-    it (`computerSettingsDestination`). */
+    it (`computerManagementDestination`). */
 export type NotificationTarget =
   | { kind: "task"; taskId: string; routineId: string | null }
   | { kind: "computer"; nodeId: string };
@@ -165,22 +165,25 @@ export function desktopBurst(
   return { shown: arrivals.slice(0, cap), overflow: Math.max(0, arrivals.length - cap) };
 }
 
-/** Which surface manages a computer: the person's own settings for a
+/** Which surface manages a computer. */
+export type ComputerDestination = "computers" | "admin";
+
+/** Which surface manages a computer: the person's own Computers page for a
     computer they hold, the control panel for one they reach as an admin.
     An admin is told about shared hardware no user holds, which only the
     control panel lists. */
-export function computerSettingsDestination(
+export function computerManagementDestination(
   nodeId: string,
   { isAdmin, ownNodeIds }: { isAdmin: boolean; ownNodeIds: ReadonlySet<string> },
-): "settings" | "admin" {
-  if (ownNodeIds.has(nodeId)) return "settings";
-  return isAdmin ? "admin" : "settings";
+): ComputerDestination {
+  if (ownNodeIds.has(nodeId)) return "computers";
+  return isAdmin ? "admin" : "computers";
 }
 
 /** The app location a notice opens. */
 export function notificationLocation(
   target: NotificationTarget,
-  computerDestination: "settings" | "admin" = "settings",
+  computerDestination: ComputerDestination = "computers",
 ): AppLocationState {
   if (target.kind === "task") {
     return target.routineId
@@ -189,12 +192,12 @@ export function notificationLocation(
   }
   return computerDestination === "admin"
     ? { route: "admin", mobileView: "chat", sessionId: null, adminSection: "computers" }
-    : { route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers" };
+    : { route: "computers", mobileView: "chat", sessionId: null };
 }
 
 export function notificationHref(
   target: NotificationTarget,
-  computerDestination: "settings" | "admin" = "settings",
+  computerDestination: ComputerDestination = "computers",
 ): string {
   return pathForAppState(notificationLocation(target, computerDestination));
 }

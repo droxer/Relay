@@ -39,6 +39,7 @@ import {
   ICON_STROKE_LARGE,
 } from "./icons";
 import { omit } from "../lib/omit";
+import { isNodeOnline } from "../lib/adminHelpers";
 
 export function ComputerPage({
   nodes,
@@ -96,6 +97,7 @@ export function ComputerPage({
   }, [nodes, currentUser.userId, overrides, removedIds]);
 
   const pagedNodes = useMemo(() => paginate(myNodes, page), [myNodes, page]);
+  const onlineCount = useMemo(() => myNodes.filter(isNodeOnline).length, [myNodes]);
   const manageExecutorsNode = myNodes.find((node) => node.id === manageExecutorsNodeId) ?? null;
   const tokenNode = myNodes.find((node) => node.id === tokenNodeId) ?? null;
 
@@ -215,14 +217,18 @@ export function ComputerPage({
 
   return (
     <section id="computer-panel" className="computer-page" aria-label={t("computer.title")} tabIndex={-1}>
-      {/* Rendered as a section of Settings (its rail h1 owns the page), so
-          the header demotes to the 16px pane-title rung, not the 28px
-          page-title tier. */}
+      {/* A dedicated Infra page with no rail beside it, so it owns the page
+          heading: the display tier under the Infra eyebrow, the same frame
+          Channels uses, with a line saying what the page is for. */}
       <PageHeader
+        kicker={t("nav.infra")}
         title={t("computer.title")}
-        count={t("computer.count", { count: myNodes.length })}
-        titleAs="h2"
-        titleVariant="title"
+        count={myNodes.length > 0
+          ? `${t("computer.count", { count: myNodes.length })} · ${t("computer.online_count", { count: onlineCount })}`
+          : t("computer.count", { count: myNodes.length })}
+        subtitle={t("computer.page_sub")}
+        titleVariant="display"
+        layout="stacked"
         actions={phone ? connectIconAction : connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
         /* On a phone the title lives in the top bar, so the create control
            goes there too (as Skills does) instead of keeping a band of its

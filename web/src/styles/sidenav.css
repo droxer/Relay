@@ -202,9 +202,23 @@
   justify-content: center;
 }
 
-/* The toggle acts on the rail's own edge, so it sits at that edge. */
-.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-toggle {
+/* The toggle acts on the rail's own edge, so it sits at that edge. The admin
+   console, when present, leads that trailing pair: the account controls read
+   left to right, then the org's control panel and the rail edge sit apart at
+   the far end. */
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-toggle,
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-admin {
   margin-inline-start: auto;
+}
+
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-admin + .sidenav-toggle {
+  margin-inline-start: 0;
+}
+
+/* Collapsed, the footer is one column of squares; a gap sets the control
+   panel apart from the account controls above it. */
+.sidenav-panel:not([data-expanded="true"]) .sidenav-bottom .sidenav-admin {
+  margin-top: var(--sp-2);
 }
 
 /* The accent tick marks a current ROUTE in the destination list. The footer's
@@ -320,12 +334,13 @@
    1,2 / 2,3 / 2,3 / 2,3,4 down the rail instead of counting to eight.
    Group-level steps are monotonic by construction and stay correct when
    an item is added to or removed from a group. Delays step against
-   --t-stagger (the reveal-ladder base), preserving the 1–4 ordering that
+   --t-stagger (the reveal-ladder base), preserving the 1–5 ordering that
    lets the rail's width transition lead each label's fade. */
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(1) .sidenav-label { transition-delay: calc(var(--t-stagger) * 1); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(2) .sidenav-label { transition-delay: calc(var(--t-stagger) * 2); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(3) .sidenav-label { transition-delay: calc(var(--t-stagger) * 3); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(4) .sidenav-label { transition-delay: calc(var(--t-stagger) * 4); }
+.sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(5) .sidenav-label { transition-delay: calc(var(--t-stagger) * 5); }
 
 /* Expanded button layout: icon + label side by side. Compact rows at the
    40px control height (not the 48px collapsed square), tight label rhythm. */

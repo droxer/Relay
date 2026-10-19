@@ -34,10 +34,12 @@ const NAV_COMMANDS: readonly { route: AppRoute; labelKey: string; hint: string; 
   { route: "routine", labelKey: "nav.routine", hint: "G R", keywords: ["routines", "schedule"] },
   { route: "agents", labelKey: "nav.agents", hint: "G A", keywords: ["agents", "workforce"] },
   { route: "teams", labelKey: "nav.teams", hint: "G E", keywords: ["teams"] },
+  { route: "computers", labelKey: "nav.computers", hint: "G C", keywords: ["computers", "computer", "machines", "infra", "daemon"] },
+  { route: "skills", labelKey: "nav.skills", hint: "G K", keywords: ["skills", "library", "infra"] },
   { route: "channels", labelKey: "nav.channels", hint: "G H", keywords: ["channels", "integrations"] },
-  // One destination, and the section names stay searchable: a reader looking
-  // for "skills" or "my computers" finds Settings, which opens on them.
-  { route: "settings", labelKey: "nav.settings", hint: "G S", keywords: ["settings", "preferences", "appearance", "theme", "language", "skills", "computer", "machines"] },
+  // The section names stay searchable: a reader looking for "theme" finds
+  // Settings, which holds it.
+  { route: "settings", labelKey: "nav.settings", hint: "G S", keywords: ["settings", "preferences", "appearance", "theme", "language", "notifications"] },
   { route: "admin", labelKey: "nav.admin", hint: "G D", keywords: ["admin", "dashboard"] },
 ];
 
