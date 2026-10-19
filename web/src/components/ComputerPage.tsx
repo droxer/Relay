@@ -19,6 +19,8 @@ import {
   nodesAssignedToUser,
 } from "../lib/computerNodes";
 import { useMutationError } from "../hooks/useMutationError";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { ComputerCard } from "./computer/ComputerCard";
 import { ConnectComputerDrawer } from "./computer/ConnectComputerDrawer";
@@ -109,6 +111,26 @@ export function ComputerPage({
     ? t("computer.limit_reached", { used: computersUsed, limit: computerLimit })
     : null;
 
+  const phone = useMediaQuery(PHONE_QUERY);
+  /* In the phone top bar the create control is the same quiet icon square
+     every list header portals there (Skills, Agents, Teams): the bar has room
+     for glyphs, not a labelled cobalt button beside the title and the bell.
+     The usage readout rides in the tooltip; the limit reason still shows
+     with the empty state and in the drawer. */
+  const connectIconAction = (
+    <Button
+      variant="ghost"
+      type="button"
+      className="page-header-icon-action page-header-icon-action--primary"
+      tooltip={computerLimit !== undefined
+        ? `${t("computer.connect_button")} · ${computersUsed}/${computerLimit}`
+        : t("computer.connect_button")}
+      disabled={atLimit}
+      onClick={() => setConnectDrawerOpen(true)}
+    >
+      <ActionAdd size={ICON.md} aria-hidden="true" />
+    </Button>
+  );
   const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
     <div className="computer-connect-cta">
       {/* Connecting a computer is what this page is for, so the CTA carries
@@ -197,12 +219,15 @@ export function ComputerPage({
           the header demotes to the 16px pane-title rung, not the 28px
           page-title tier. */}
       <PageHeader
-        trail={[{ label: t("nav.settings") }]}
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
         titleAs="h2"
         titleVariant="title"
-        actions={connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
+        actions={phone ? connectIconAction : connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
+        /* On a phone the title lives in the top bar, so the create control
+           goes there too (as Skills does) instead of keeping a band of its
+           own under the section tabs. */
+        topbarActions
       />
       {/* The shell clips its children, so the roster needs its own scroll
           container — see computer.css. */}

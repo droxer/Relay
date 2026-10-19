@@ -119,9 +119,10 @@
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* The hint is the tile's one qualification ("excludes cache reads"), so it
+     wraps to a second line rather than truncating — a nowrap ellipsis cut it
+     to "excludes cache re…" in the four-up row at 1440px and on phones. */
+  text-wrap: pretty;
 }
 
 .adm-dash-delta {
