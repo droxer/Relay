@@ -528,6 +528,12 @@ export function nodeOwnershipProfile(node: Pick<ControlPanelDaemonNodeRecord, "n
   return "pending";
 }
 
+/** A user's own computer. The admin console shows it read-only — only its
+    owner changes it, from their Computers page (`backend/relay/computer/access.py`). */
+export function isPersonalComputer(node: Pick<ControlPanelDaemonNodeRecord, "nodeLocation" | "userId">): boolean {
+  return node.nodeLocation === "user-device" && Boolean(node.userId);
+}
+
 export function nodeSandboxProfile(
   node: Pick<ControlPanelDaemonNodeRecord, "sandboxMode">,
 ): NodeSandboxProfile {

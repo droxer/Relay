@@ -1,7 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
 import { statusTone, visualStatus } from "./helpers";
 import { NodeActions } from "./NodeActions";
@@ -14,7 +14,7 @@ import { isNodeOnline } from "../../lib/adminHelpers";
 
 interface NodeCardProps {
   node: ControlPanelDaemonNodeRecord;
-  userName?: string;
+  user?: UserRecord;
   onReveal?: (node: ControlPanelDaemonNodeRecord) => void;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
@@ -26,7 +26,7 @@ interface NodeCardProps {
 
 export function NodeCard({
   node,
-  userName,
+  user,
   onReveal,
   onRename,
   onManageExecutors,
@@ -91,7 +91,7 @@ export function NodeCard({
         </div>
       </header>
 
-      <NodeMeta node={node} userName={userName} t={t} />
+      <NodeMeta node={node} user={user} t={t} />
 
       <footer className="adm-node-card-runtimes">
         <span className="adm-node-runtimes" title={t("admin.v2.node_runtimes")}>

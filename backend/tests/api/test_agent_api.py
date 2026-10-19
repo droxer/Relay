@@ -727,12 +727,13 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
 
         _set_priority(managed_agent["id"], enrolled["sandboxId"], 100)
         _set_priority(local_agent["id"], local_node_id, 200)
+        # A user's own computer is read-only to the admin; only Alice names it.
         assert (
             client.patch(
                 f"/api/v1/daemon-nodes/{local_node_id}",
                 json={"displayName": "Alice's MacBook"},
             ).status_code
-            == 200
+            == 403
         )
 
         listed = {
@@ -747,7 +748,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
         assert managed_placement["nodeDisplayName"] == "Alice managed node"
         assert managed_placement["nodeOwnership"] == "managed"
         assert managed_placement["nodeSandboxMode"] == "boxlite"
-        assert local_placement["nodeDisplayName"] == "Alice's MacBook"
+        assert local_placement["nodeDisplayName"] == local_node_id
         assert local_placement["nodeOwnership"] == "user-device"
         assert local_placement["nodeSandboxMode"] == "none"
 

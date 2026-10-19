@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  isPersonalComputer,
   agentsOnNodes,
   buildUserSummaries,
   userEmptyStateTranslationKey,
@@ -500,5 +501,14 @@ describe("formatRelativeTime", () => {
     assert.equal(formatRelativeTime(ago(14 * DAY), t), "2 weeks ago");
     assert.equal(formatRelativeTime(ago(90 * DAY), t), "3 months ago");
     assert.equal(formatRelativeTime(ago(800 * DAY), t), "2 years ago");
+  });
+});
+
+describe("isPersonalComputer", () => {
+  it("treats only an owned user-device computer as the user's own", () => {
+    assert.equal(isPersonalComputer({ nodeLocation: "user-device", userId: "alice" }), true);
+    assert.equal(isPersonalComputer({ nodeLocation: "user-device", userId: undefined }), false);
+    assert.equal(isPersonalComputer({ nodeLocation: "managed", userId: "alice" }), false);
+    assert.equal(isPersonalComputer({ nodeLocation: undefined, userId: "alice" }), false);
   });
 });

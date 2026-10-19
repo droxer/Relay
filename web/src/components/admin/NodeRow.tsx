@@ -1,10 +1,11 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
 import { nodeOwnershipProfile } from "./helpers";
 import { NodeActions } from "./NodeActions";
+import { NodeOwner } from "./NodeOwner";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { ICON, NodeOwnershipIcon } from "../icons";
@@ -60,11 +61,18 @@ export function NodeIdentityCell({
   );
 }
 
-export function NodeUserCell({ userName }: { userName?: string }) {
-  if (!userName) return null;
+export function NodeUserCell({
+  node,
+  user,
+  t,
+}: {
+  node: ControlPanelDaemonNodeRecord;
+  user?: UserRecord;
+  t: TFunction;
+}) {
   return (
-    <span className="adm-node-row-user" translate="no" title={userName}>
-      {userName}
+    <span className="adm-node-row-user group-data-[online=false]:opacity-(--opacity-dormant)">
+      <NodeOwner userId={node.userId} user={user} t={t} />
     </span>
   );
 }

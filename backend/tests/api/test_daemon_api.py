@@ -2909,7 +2909,7 @@ def test_user_cannot_manage_another_users_computer_executors(
         assert response.status_code == 403
 
 
-def test_admin_can_manage_any_computers_executors(monkeypatch) -> None:
+def test_admin_cannot_change_a_users_own_computer(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2942,13 +2942,52 @@ def test_admin_can_manage_any_computers_executors(monkeypatch) -> None:
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login_admin(client)
 
-        response = client.patch(
+        listed = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+        assert node_id in {node["id"] for node in listed}
+        refused = [
+            client.patch(
+                f"/api/v1/daemon-nodes/{node_id}/disabled-agents",
+                json={"disabledAgents": ["pi"]},
+            ),
+            client.patch(
+                f"/api/v1/daemon-nodes/{node_id}", json={"displayName": "Mine now"}
+            ),
+            client.patch(
+                f"/api/v1/daemon-nodes/{node_id}/agent-role-overrides",
+                json={"agentRoleOverrides": {}},
+            ),
+            client.post(f"/api/v1/daemon-nodes/{node_id}/runtime-refresh"),
+            client.delete(f"/api/v1/daemon-nodes/{node_id}"),
+            client.patch(
+                f"/api/v1/admin/daemon-nodes/{node_id}/disabled-agents",
+                json={"disabledAgents": ["pi"]},
+            ),
+            client.patch(
+                f"/api/v1/admin/daemon-nodes/{node_id}/agent-role-defaults",
+                json={"agentRoleDefaults": {}},
+            ),
+            client.delete(f"/api/v1/admin/daemon-nodes/{node_id}/assignment"),
+            client.delete(f"/api/v1/admin/daemon-nodes/{node_id}"),
+        ]
+        assert [response.status_code for response in refused] == [403] * len(refused)
+        listed = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+        node = next(node for node in listed if node["id"] == node_id)
+        assert node.get("disabledAgents", []) == []
+        assert node.get("userId")
+
+        assert client.post("/api/v1/auth/logout").status_code == 200
+        assert (
+            client.post(
+                "/api/v1/auth/login", json={"username": "alice", "password": "userpass"}
+            ).status_code
+            == 200
+        )
+        owned = client.patch(
             f"/api/v1/daemon-nodes/{node_id}/disabled-agents",
             json={"disabledAgents": ["pi"]},
         )
-
-        assert response.status_code == 200
-        assert response.json()["node"]["disabledAgents"] == ["pi"]
+        assert owned.status_code == 200
+        assert owned.json()["node"]["disabledAgents"] == ["pi"]
 
 
 def test_disabled_agents_endpoint_rejects_invalid_payload(monkeypatch) -> None:
@@ -3473,11 +3512,11 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
             == 401
         )
 
+        # An admin sees Bob's own computer but cannot rename it.
         renamed_by_admin = admin_client.patch(
             "/api/v1/daemon-nodes/sbx_bob", json={"displayName": "Bob's laptop"}
         )
-        assert renamed_by_admin.status_code == 200
-        assert renamed_by_admin.json()["node"]["displayName"] == "Bob's laptop"
+        assert renamed_by_admin.status_code == 403
 
         assert (
             alice_client.patch(

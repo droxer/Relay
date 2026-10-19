@@ -8,14 +8,16 @@ async function source(path: string): Promise<string> {
 }
 
 describe("node card layout", () => {
-  it("states kind and owner as one quiet line, not chips", async () => {
+  it("names every computer's user on the card and the list row", async () => {
     const [card, row, meta] = await Promise.all([
       source("web/src/components/admin/NodeCard.tsx"),
       source("web/src/components/admin/NodeRow.tsx"),
       source("web/src/components/admin/NodeMeta.tsx"),
     ]);
 
-    assert.match(card, /<NodeMeta node=\{node\} userName=\{userName\}/);
+    assert.match(card, /<NodeMeta node=\{node\} user=\{user\}/);
+    assert.match(meta, /<NodeOwner userId=\{node\.userId\} user=\{user\}/);
+    assert.match(row, /<NodeOwner userId=\{node\.userId\} user=\{user\}/);
     for (const surface of [card, row]) {
       assert.doesNotMatch(surface, /NodeProfileBadges/, "fleet surfaces no longer render ownership chips");
       assert.doesNotMatch(surface, /<Badge\b/, "the owner is plain text, not a badge");

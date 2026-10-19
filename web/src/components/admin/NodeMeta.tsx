@@ -1,33 +1,29 @@
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import { ICON, NodeOwnershipIcon } from "../icons";
 import { nodeOwnershipProfile } from "./helpers";
+import { NodeOwner } from "./NodeOwner";
 
-/** The quiet second tier of a fleet card or row: what kind of computer it is
-    and whose it is, as one line of muted text. These used to be two bordered
-    chips, which made the most ordinary facts on the card read as the loudest. */
+/** The second tier of a fleet card: whose computer it is, then what kind.
+    The owner leads — it is the fact an admin scans a fleet for — and the kind
+    stays a quiet trailing label, not a chip. */
 export function NodeMeta({
   node,
-  userName,
+  user,
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
-  userName?: string;
+  user?: UserRecord;
   t: TFunction;
 }) {
   const ownership = nodeOwnershipProfile(node);
   return (
-    <span className="adm-node-meta" title={t(`admin.v2.node_ownership_${ownership}_hint`)}>
-      <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-meta-icon" aria-hidden="true" />
-      <span className="adm-node-meta-text">
-        {t(`admin.v2.node_ownership_${ownership}`)}
-        {userName ? (
-          <>
-            <span className="adm-node-meta-sep" aria-hidden="true"> · </span>
-            <span translate="no">{userName}</span>
-          </>
-        ) : null}
+    <div className="adm-node-meta">
+      <NodeOwner userId={node.userId} user={user} t={t} />
+      <span className="adm-node-meta-kind" title={t(`admin.v2.node_ownership_${ownership}_hint`)}>
+        <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-meta-icon" aria-hidden="true" />
+        <span className="adm-node-meta-text">{t(`admin.v2.node_ownership_${ownership}`)}</span>
       </span>
-    </span>
+    </div>
   );
 }
