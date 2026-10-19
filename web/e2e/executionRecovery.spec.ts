@@ -109,7 +109,7 @@ for (const phase of ["queued", "unresponsive", "stopping", "finalizing"]) {
     const writes = await serveRecoveryThread(page, "future_reason", phase);
     await page.goto("/threads/recovery-thread");
     const panel = page.getByRole("region", { name: "Next steps" });
-    await expect(panel).toContainText("The cause of this blocker is unknown");
+    await expect(panel).toContainText("Cause unknown");
     await expect(panel.getByRole("button")).toHaveCount(0);
     expect(writes).toEqual([]);
   });
@@ -122,7 +122,7 @@ test("online computer with pending deletion keeps exit recovery visible", async 
   });
   await page.goto("/threads/recovery-thread");
   const panel = page.getByRole("region", { name: "Next steps" });
-  await expect(panel).toContainText("Computer online; agent exit unconfirmed");
+  await expect(panel).toContainText("Computer online, agent stop unconfirmed");
   await expect(panel).toContainText("Deletion is pending");
   await expect(panel).not.toContainText("Computer is not responding");
   await expect(panel.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);

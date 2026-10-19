@@ -33,6 +33,6 @@ it("shows a failed app chunk to the error boundary instead of waiting forever", 
   // Vitest rewords a throwing mock factory's message; what matters is that the
   // failure reached the boundary and the gate did not stay up.
   expect(await screen.findByText(/^boundary:/)).toBeTruthy();
-  expect(screen.queryByText("Checking authentication…")).toBeNull();
+  expect(screen.queryByText("Checking sign-in…")).toBeNull();
   window.history.replaceState(null, "", "/");
 });

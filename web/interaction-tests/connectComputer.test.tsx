@@ -25,7 +25,7 @@ it("explains installation before generating a command", () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   expect(screen.getByRole("button", { name: "Generate install command" })).toBeTruthy();
-  expect(screen.getByText(/No npm required/)).toBeTruthy();
+  expect(screen.getByText(/No npm or admin rights needed/)).toBeTruthy();
 });
 
 it("guides command and token steps without claiming registration means connected", async () => {
