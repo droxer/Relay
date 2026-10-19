@@ -80,7 +80,7 @@ _Avoid_: Invitation code, access key
 New table, created by migration `20261016_0096_waitlist_entries`. Waitlist
 entries aren't sessions or tasks, so they don't go through the event log. This
 is a plain row store like `org_settings`, behind a protocol in
-`backend/relay/persistence/waitlist_store.py`.
+`backend/relay/persistence/account/waitlist.py`.
 
 | column | type | notes |
 |---|---|---|
@@ -345,8 +345,8 @@ status per row, and a **Resend** action rotates the token and sends again.
 ## Code layout
 
 ```text
-backend/relay/persistence/waitlist_store.py      # DatabaseWaitlistStore + protocol
-backend/relay/services/waitlist.py               # join / invite / accept rules (pure-ish, store-injected)
+backend/relay/persistence/account/waitlist.py      # DatabaseWaitlistStore + protocol
+backend/relay/accounts/waitlist.py               # join / invite / accept rules (pure-ish, store-injected)
 backend/relay/api/waitlist_routes.py             # public routes
 backend/relay/notifications/mailer.py            # Mailer protocol, CloudflareMailer, NullMailer, mailer_from_env
 backend/relay/notifications/templates.py         # invite + confirmation copy (en, zh-CN), text + html
@@ -358,7 +358,7 @@ web/src/components/admin/waitlist/WaitlistView.tsx
 web/src/lib/waitlist.ts                          # email normalization mirror, status grouping
 ```
 
-`services/waitlist.py` is the one place that decides transitions (join,
+`accounts/waitlist.py` is the one place that decides transitions (join,
 invite, decline, accept). The routes only parse, authorize, and delegate. That
 is the same split the collaboration policy uses.
 

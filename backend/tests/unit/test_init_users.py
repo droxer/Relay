@@ -7,7 +7,8 @@ from uuid import UUID
 
 import pytest
 from relay.init_users import main
-from relay.security.auth import DatabaseAccountAuthStore, hash_password
+from relay.security.auth import DatabaseAccountAuthStore
+from relay.security.credentials import hash_password
 
 
 def _store() -> DatabaseAccountAuthStore:

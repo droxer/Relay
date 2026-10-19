@@ -4,9 +4,9 @@ import json
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
-from relay.api.session_routes import _STREAM_FALLBACK_SECONDS
+from relay.api.threads.events import _STREAM_FALLBACK_SECONDS
 from relay.app import create_app
-from relay.persistence.stores import relay_event
+from relay.persistence.events import relay_event
 
 
 def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:

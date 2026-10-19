@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from relay.services.project_runtime import (
+from relay.projects.runtime import (
     ProjectDispatchError,
     project_member_assignments,
     project_runtime_node,
@@ -118,7 +118,7 @@ def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style
         assert kwargs["user_id"] == "alice"
         return assignments
 
-    monkeypatch.setattr("relay.services.project_runtime.resolve_agent_assignments", resolve)
+    monkeypatch.setattr("relay.projects.runtime.resolve_agent_assignments", resolve)
     assignments, snapshot = resolve_project_task_assignments(
         {"projectId": project["id"], "assignedTeamId": team["id"],
          "ownerUserId": "alice", "collaborationStyle": task_style},
@@ -150,7 +150,7 @@ def _crewless_project() -> dict:
 
 def test_crewless_project_runs_a_task_assigned_to_an_agent_on_its_computer(monkeypatch):
     monkeypatch.setattr(
-        "relay.services.project_runtime.resolve_agent_assignments",
+        "relay.projects.runtime.resolve_agent_assignments",
         lambda assignments, **kwargs: assignments,
     )
     assignments, snapshot = resolve_project_task_assignments(

@@ -326,7 +326,7 @@ request's `locale`, then `en`.
 ## Implementation slices
 
 1. **Store and service.** Migration `0097`, store methods on both auth stores,
-   and `backend/relay/services/password_reset.py` (issue/peek/complete,
+   and `backend/relay/accounts/password_reset.py` (issue/peek/complete,
    cooldown, sending). Unit tests run against both stores.
 2. **Routes and templates.** The three public routes, the admin route, the
    `auth/status` flag, shared mailer wiring, and both templates. API tests.

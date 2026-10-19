@@ -28,7 +28,7 @@ The complete task API file passed (37 tests before adding the rollback case).
 The final deletion selection passed all 6 tests. Coverage measured with:
 
 ```sh
-UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev --with coverage coverage run --data-file=/tmp/routine-deletion.coverage --source=relay.services.task_deletion -m pytest backend/tests/api/test_tasks.py -q -k delete
+UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev --with coverage coverage run --data-file=/tmp/routine-deletion.coverage --source=relay.tasks.deletion -m pytest backend/tests/api/test_tasks.py -q -k delete
 UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev --with coverage coverage report --data-file=/tmp/routine-deletion.coverage -m
 ```
 

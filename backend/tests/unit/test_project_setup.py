@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from relay.services.project_setup import ProjectSetupError, choose_setup_agent, resolved_setup
-from relay.services.project_setup_result import completed_setup, normalize_setup_proposal
+from relay.projects.setup import ProjectSetupError, choose_setup_agent, resolved_setup
+from relay.projects.setup_result import completed_setup, normalize_setup_proposal
 
 
 def test_proposal_is_held_to_the_shape_the_patch_accepts() -> None:
@@ -82,7 +82,7 @@ def test_refining_an_existing_crew_defaults_to_its_lead() -> None:
 
 def test_a_draft_still_dispatching_blocks_a_second_start() -> None:
     from relay.core.ids import now_iso
-    from relay.services.project_setup import setup_in_progress
+    from relay.projects.setup import setup_in_progress
 
     assert setup_in_progress({"state": "drafting", "threadId": None, "startedAt": now_iso()}, None)
     assert not setup_in_progress(

@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from relay.persistence.store_common import materialize_task_events
-from relay.persistence.task_numbering import task_number_scope
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.reducer import materialize_task_events
+from relay.persistence.task.numbering import task_number_scope
+from relay.persistence.task.store import DatabaseTaskStore
 from sqlalchemy import delete, select, update
 
 from automation_helpers import fire_now

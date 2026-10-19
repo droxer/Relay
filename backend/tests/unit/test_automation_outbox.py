@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, UTC
 from tempfile import TemporaryDirectory
 
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_event
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_event
+from relay.persistence.task.store import DatabaseTaskStore
 
 NOW = datetime(2026, 10, 2, 12, tzinfo=UTC)
 

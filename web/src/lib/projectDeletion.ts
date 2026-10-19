@@ -1,7 +1,7 @@
 /**
  * What a person is told after deleting a project, or after a refusal.
  *
- * The backend (`backend/relay/services/project_deletion.py`) decides what
+ * The backend (`backend/relay/projects/deletion.py`) decides what
  * happens to the workspace files and which threads block the delete; this
  * module only turns those answers into message keys.
  */

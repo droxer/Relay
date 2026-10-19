@@ -14,7 +14,7 @@ held a dropped legacy team public id.
 
 So this migration repairs before it converts. For each column it resolves the
 authoritative value using the snapshot rule documented in
-``persistence/store_common.py`` -- the snapshot wins, the derived column is a
+the reducers (``persistence/session/reducer.py``, ``persistence/task/reducer.py``) -- the snapshot wins, the derived column is a
 projection -- falling back to the column when the snapshot lacks the key, and
 to an employee-handle lookup when neither holds a uuid.
 """

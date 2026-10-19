@@ -13,12 +13,8 @@ from sqlalchemy import insert, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
 from ..core.ids import new_relay_id, now_iso
-from ..persistence.store_common import (
-    _parse_iso,
-    create_all_tables,
-    shared_engine,
-    store_transaction,
-)
+from ..persistence.db_time import parse_db_time
+from ..persistence.engine import create_all_tables, shared_engine, store_transaction
 from ..persistence.sql import metadata as shared_metadata
 from ..persistence.tables import chat as chat_tables
 
@@ -546,7 +542,7 @@ class DatabaseChatIntegrationStore:
         return row["payload"]
 
     def _write_document(self, key: str, payload: Any) -> None:
-        now = _parse_iso(now_iso())
+        now = parse_db_time(now_iso())
         conn = self._transaction_connection
         if conn is not None:
             self._upsert_document(conn, key, payload, now)

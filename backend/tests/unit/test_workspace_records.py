@@ -1,7 +1,7 @@
 import pytest
 
 from relay.sessions.handoff_files import handoff_file
-from relay.daemon_registry.artifacts import is_snapshotable_path
+from relay.daemon_registry.runs.artifacts import is_snapshotable_path
 
 
 @pytest.mark.parametrize("layout", ["thread", "task", "project", "node-root"])

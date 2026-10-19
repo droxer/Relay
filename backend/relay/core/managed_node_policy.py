@@ -1,7 +1,7 @@
 """Managed-node lifecycle vocabulary and the validation rules every store applies.
 
 A managed node is admin-provisioned capacity; its records live in
-``persistence/managed_node_store.py``. Nothing here does IO.
+``persistence/daemon/managed_nodes.py``. Nothing here does IO.
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 
-from relay.api.collaboration_routes import _leading_mention_agent_ids
+from relay.api.threads.messages import _leading_mention_agent_ids
 
 AGENTS: list[dict[str, Any]] = [
     {"id": "kimi", "displayName": "Kimi", "enabled": True},

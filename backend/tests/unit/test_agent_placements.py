@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from relay.persistence.agent_placement_store import (
+from relay.persistence.agent.placements import (
     DatabaseAgentPlacementStore,
     _new_placement,
     _placement_row,
@@ -12,7 +12,7 @@ from relay.persistence.agent_placement_store import (
     reconcile_single_active_placement,
 )
 from store_fixtures import make_agent_placement_store
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.store import DatabaseAgentStore
 from store_fixtures import make_agent_store
 
 
@@ -501,7 +501,7 @@ def test_placement_denormalized_agent_fields_cannot_drift(
 
 
 def test_placement_records_the_computer_identity(tmp_path) -> None:
-    from relay.persistence.agent_placement_store import create_node_placement
+    from relay.persistence.agent.placements import create_node_placement
     from store_fixtures import make_agent_placement_store
     from store_fixtures import make_agent_store
 

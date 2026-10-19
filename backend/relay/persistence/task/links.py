@@ -15,13 +15,11 @@ from sqlalchemy import (
     text,
     update,
 )
-from ..automation_store import insert_outbox_rows, task_outbox_rows
-from ..store_common import (
-    AgentName,
-    _parse_iso,
-    new_database_id,
-    relay_task_event,
-)
+from ..automation.store import insert_outbox_rows, task_outbox_rows
+from ...core.models import AgentName
+from ..db_time import parse_db_time
+from ...core.ids import new_database_id
+from ..events import relay_task_event
 from .rules import (
     _HYDRATE_TASK_WRITES,
     _TaskWriteConflict,
@@ -192,6 +190,6 @@ class TaskLinkRows(TaskStoreState):
                     id=new_database_id(),
                     task_id=task_pk,
                     session_id=session_id,
-                    created_at=_parse_iso(timestamp),
+                    created_at=parse_db_time(timestamp),
                 )
             )

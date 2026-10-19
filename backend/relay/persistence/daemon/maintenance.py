@@ -12,11 +12,9 @@ from sqlalchemy import (
     or_,
     select,
 )
-from ..store_common import (
-    _require_iso,
-    now_iso,
-    store_transaction,
-)
+from ..db_time import require_db_time
+from ...core.ids import now_iso
+from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .rules import (
     PRUNABLE_DAEMON_EVENT_PREFIXES,
@@ -45,7 +43,7 @@ class DaemonRecordMaintenance(DaemonStoreState):
         retries, so they get their own, longer window and are skipped when it
         is None.
         """
-        now = _require_iso(now_iso())
+        now = require_db_time(now_iso())
         cutoff = now - timedelta(seconds=max(0.0, retention_seconds))
         counts = {"commands": 0, "runs": 0, "events": 0, "runRequests": 0}
         with store_transaction(self.engine) as conn:

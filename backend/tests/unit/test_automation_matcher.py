@@ -5,9 +5,9 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from relay.automations.service import AutomationService
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
 
@@ -224,7 +224,7 @@ def test_scheduler_tick_fires_automation_through_app(monkeypatch, tmp_path):
 
 
 def test_run_completion_uses_linked_task_filters_and_loop_provenance(world):
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
     tasks, _, service, _ = world
     routine = _automation(tasks, {"kind": "run_event", "on": "failed", "filters": {"priority": "high"}})
     source = tasks.create_task({"title": "Build release", "priority": "high"})
@@ -307,8 +307,8 @@ def test_manual_requests_share_coalescing_and_hourly_cap(world, kind) -> None:
 
 
 def test_ledger_metadata_is_authoritative_after_replay(world) -> None:
-    from relay.persistence.store_common import materialize_task_events
-    from relay.api.task_routes import run_row
+    from relay.persistence.task.reducer import materialize_task_events
+    from relay.api.tasks.runs import run_row
     from types import SimpleNamespace
     tasks, _, service, _ = world
     routine = _automation(tasks)
@@ -538,7 +538,7 @@ def test_run_now_request_without_target_is_rejected_up_front(world) -> None:
 
 def _finish(world, occurrence, status):
     """Complete one agent run on a session linked to ``occurrence``."""
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
     tasks, _, service, _ = world
     sessions = service.matcher.session_store
     session = sessions.create_session({"workspacePath": "/w", "taskGoal": "Run", "participants": ["human"]})
@@ -811,8 +811,8 @@ def test_targeted_event_retry_rechecks_current_definition(world, monkeypatch, ch
 
 
 def test_targeted_retry_preserves_timestamp_provenance_and_event_count(world, monkeypatch):
-    from relay.persistence.automation_store import automation_outbox
-    from relay.persistence.store_common import store_transaction
+    from relay.persistence.automation.store import automation_outbox
+    from relay.persistence.engine import store_transaction
     from sqlalchemy import select
 
     tasks, automations, _, _ = world

@@ -2,8 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
-from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.events import relay_task_event
+from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
 
 

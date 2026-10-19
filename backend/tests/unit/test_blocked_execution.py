@@ -11,11 +11,11 @@ from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_agent_store
 from store_fixtures import make_daemon_store
-from relay.persistence.project_store import DatabaseProjectStore
+from relay.persistence.project.store import DatabaseProjectStore
 from store_fixtures import make_session_store
 from store_fixtures import make_task_store
-from relay.services.dispatch_failure import record_dispatch_failure
-from relay.services.task_dispatch import start_task_on_ready_node
+from relay.tasks.dispatch_failure import record_dispatch_failure
+from relay.tasks.dispatch import start_task_on_ready_node
 from relay.tasks.scheduler import TaskScheduler
 
 from issue_projects import PROJECT_CAPABILITY, project_for

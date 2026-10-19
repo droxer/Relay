@@ -7,8 +7,8 @@ import pytest
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_agent_store
 from store_fixtures import make_session_store
-from relay.persistence.stores import relay_event
-from relay.services.agent_routing import AgentRoutingError, resolve_agent_assignments
+from relay.persistence.events import relay_event
+from relay.agents.routing import AgentRoutingError, resolve_agent_assignments
 
 
 def node(
@@ -927,7 +927,7 @@ def test_phantom_placement_does_not_attach_to_non_ready_executor(
 
 
 def test_placement_resolves_to_the_same_computer_under_a_new_node_id() -> None:
-    from relay.services.agent_routing import placement_node
+    from relay.agents.routing import placement_node
 
     placement = {"daemonNodeId": "node-old", "computerId": "device:alice:machine-a"}
     nodes = {
@@ -941,7 +941,7 @@ def test_placement_resolves_to_the_same_computer_under_a_new_node_id() -> None:
 
 
 def test_legacy_placement_without_computer_id_falls_back_to_node_id() -> None:
-    from relay.services.agent_routing import placement_node
+    from relay.agents.routing import placement_node
 
     placement = {"daemonNodeId": "node-old"}
     nodes = {"node-old": {"id": "node-old"}}
@@ -949,14 +949,14 @@ def test_legacy_placement_without_computer_id_falls_back_to_node_id() -> None:
 
 
 def test_placement_node_is_none_when_the_computer_is_offline() -> None:
-    from relay.services.agent_routing import placement_node
+    from relay.agents.routing import placement_node
 
     placement = {"daemonNodeId": "node-old", "computerId": "device:alice:machine-a"}
     assert placement_node(placement, {}) is None
 
 
 def test_thread_follows_its_computer_across_a_new_node_id() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {"id": "s1", "computerId": "device:alice:machine-a"}
     nodes = [
@@ -973,7 +973,7 @@ def test_thread_follows_its_computer_across_a_new_node_id() -> None:
 
 
 def test_offline_computer_resolves_to_nothing_instead_of_borrowing() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {"id": "s1", "computerId": "device:alice:machine-a"}
     other_machine = [
@@ -990,7 +990,7 @@ def test_offline_computer_resolves_to_nothing_instead_of_borrowing() -> None:
 
 
 def test_offline_runtime_on_the_same_computer_resolves_to_nothing() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {"id": "s1", "computerId": "managed:mnode-7"}
     offline = [
@@ -1006,7 +1006,7 @@ def test_offline_runtime_on_the_same_computer_resolves_to_nothing() -> None:
 
 
 def test_online_node_wins_over_an_offline_one_on_the_same_computer() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {"id": "s1", "computerId": "managed:mnode-7"}
     nodes = [
@@ -1028,14 +1028,14 @@ def test_online_node_wins_over_an_offline_one_on_the_same_computer() -> None:
 
 
 def test_session_without_computer_id_falls_back_to_its_recorded_node() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {"id": "s1", "daemonNodeId": "node-old"}
     assert resolve_session_daemon_node_id(session, []) == "node-old"
 
 
 def test_legacy_session_with_managed_node_id_resolves_without_computer_id() -> None:
-    from relay.services.agent_routing import resolve_session_daemon_node_id
+    from relay.agents.routing import resolve_session_daemon_node_id
 
     session = {
         "id": "s1",
@@ -1142,7 +1142,7 @@ def test_legacy_rebind_chasing_uses_the_latest_run_with_a_daemon_node_id(
     """resolve_legacy_session_computer_id must anchor on the most recent run
     that actually has a daemonNodeId, even when that run has no placementId
     — it must not skip past it to chase an older run's placement rebind."""
-    from relay.services.agent_routing import resolve_legacy_session_computer_id
+    from relay.agents.routing import resolve_legacy_session_computer_id
 
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)
@@ -1191,8 +1191,8 @@ def test_legacy_rebind_chasing_uses_the_latest_run_with_a_daemon_node_id(
 def test_legacy_session_recovers_device_identity_from_its_run_placement(
     tmp_path: Path,
 ) -> None:
-    from relay.persistence.agent_placement_store import create_node_placement
-    from relay.services.agent_routing import resolve_legacy_session_computer_id
+    from relay.persistence.agent.placements import create_node_placement
+    from relay.agents.routing import resolve_legacy_session_computer_id
 
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)

@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.session.store import DatabaseSessionStore
 from store_fixtures import make_session_store
-from relay.persistence.stores import relay_event
-from relay.services.agent_routing import persist_legacy_session_computer_id
+from relay.persistence.events import relay_event
+from relay.agents.routing import persist_legacy_session_computer_id
 from relay.sessions.controller import SessionController
 
 

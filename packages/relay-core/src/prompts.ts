@@ -217,7 +217,7 @@ export function kimiTaskPrompt(state: AgentState): string {
  * A setup round drafts the project instead of doing its work: the owner
  * reviews the proposal and applies it, so the agent must not start the work
  * or claim the crew exists. Mirrors normalize_setup_proposal in
- * backend/relay/services/project_setup.py — change both together.
+ * backend/relay/projects/setup.py — change both together.
  */
 function projectSetupPrelude(setup: ProjectSetupBrief): string {
   return [

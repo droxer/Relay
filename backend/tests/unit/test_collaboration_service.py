@@ -5,9 +5,10 @@ from dataclasses import asdict
 from types import SimpleNamespace
 
 from relay.collaboration.models import MessageIntent, RunIntent
-from relay.collaboration.service import CollaborationConductor, _request_fingerprint, _scoped_idempotency_key
+from relay.collaboration.intake import _request_fingerprint, _scoped_idempotency_key
+from relay.collaboration.service import CollaborationConductor
 from relay.collaboration.manifest import compile_assignment_work_graph, create_round_manifest
-from relay.services.team_dispatch import team_member_assignments
+from relay.teams.dispatch import team_member_assignments
 
 
 def test_addressed_agent_placement_follows_replacement_runtime_on_same_computer() -> (

@@ -8,11 +8,8 @@ from pathlib import Path
 
 import pytest
 from relay.notifications.mailer import DeliveryResult, EmailMessage
-from relay.persistence.waitlist_store import (
-    DatabaseWaitlistStore,
-    WaitlistConflictError,
-)
-from relay.services.waitlist import (
+from relay.persistence.account.waitlist import DatabaseWaitlistStore, WaitlistConflictError
+from relay.accounts.waitlist import (
     InviteNotLiveError,
     InviteOrigin,
     WaitlistConfig,

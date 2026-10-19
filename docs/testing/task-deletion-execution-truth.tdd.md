@@ -30,7 +30,7 @@ remain in place. No schema changes or data repair are needed.
 - React suite: 35 files, 204 tests passed.
 - Task and thread deletion API files: 61 passed.
 - Final deletion selection: 18 passed, including rollback.
-- Coverage: 88% of `relay.services.task_deletion`; remaining gaps are missing-record recovery and the unchanged fallback policy.
+- Coverage: 88% of `relay.tasks.deletion`; remaining gaps are missing-record recovery and the unchanged fallback policy.
 - Production web build and TypeScript compilation passed through `npm test`.
 - Node suite: 1,701 passed, one failed in the unrelated live Kimi inventory test;
   the same test fails on an isolated rerun (`expected ['kimi-live'], actual undefined`).
@@ -39,7 +39,7 @@ remain in place. No schema changes or data repair are needed.
 Coverage command:
 
 ```sh
-uv run --project backend --extra dev --with coverage coverage run --data-file=/tmp/relay-task-delete.coverage --source=relay.services.task_deletion -m pytest backend/tests/api/test_tasks.py -q -k delete
+uv run --project backend --extra dev --with coverage coverage run --data-file=/tmp/relay-task-delete.coverage --source=relay.tasks.deletion -m pytest backend/tests/api/test_tasks.py -q -k delete
 uv run --project backend --extra dev --with coverage coverage report --data-file=/tmp/relay-task-delete.coverage -m
 ```
 

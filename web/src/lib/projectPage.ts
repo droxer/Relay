@@ -22,7 +22,7 @@ export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 export const MAX_PROJECT_MEMBERS = 32;
 
 /* Member eligibility mirrors the backend's project_member_computer_mismatch
-   rule exactly (backend/relay/services/project_catalog.py): an agent can join
+   rule exactly (backend/relay/projects/catalog.py): an agent can join
    a project's roster only when one of its active placements points at the
    project's stable computer id, or — for legacy placements that predate
    computer ids — at the runtime node currently hosting that computer.

@@ -7,9 +7,11 @@ Layers, lowest first. A module may import its own layer or any lower one:
     security, chat  account and chat-integration stores
     sessions        thread mutation and continuity
     daemon_registry the execution mechanism (node admission, queue, run lifecycle)
-    application     services, collaboration, automations, notifications, and
-                    the registry's node backend, which routes runs into it
-    tasks           the background scheduler
+    application     the domain packages (accounts, agents, teams, projects,
+                    tasks, skills, computer, execution, realtime),
+                    collaboration, automations, notifications, and the
+                    registry's node backend, which routes runs into it
+    scheduler       the background task scheduler (``relay.tasks.scheduler``)
     api             HTTP routes
     root            app factory and CLI
 
@@ -36,19 +38,30 @@ LAYERS = {
     "chat": 2,
     "sessions": 3,
     "daemon_registry": 4,
-    "services": 5,
+    "accounts": 5,
+    "agents": 5,
+    "teams": 5,
+    "projects": 5,
+    "tasks": 5,
+    "skills": 5,
+    "computer": 5,
+    "execution": 5,
+    "realtime": 5,
     "collaboration": 5,
     "automations": 5,
     "notifications": 5,
     "migrations_runtime": 5,
-    "tasks": 6,
     "api": 7,
 }
 ROOT_LAYER = 9
 MODULE_LAYERS = {
     # The node backend routes a run to a node and then hands it to the
-    # registry; nothing in the registry calls back into it.
-    "relay.daemon_registry.node_backend": LAYERS["services"],
+    # registry; nothing in the registry calls back into it. Its run intake
+    # (``relay.daemon_registry.intake``) sits on the same layer.
+    "relay.daemon_registry.node_backend": LAYERS["tasks"],
+    "relay.daemon_registry.intake": LAYERS["tasks"],
+    # The scheduler drives the task services; none of them reach back into it.
+    "relay.tasks.scheduler": 6,
 }
 POLICY_MODULES = frozenset(
     {
@@ -63,16 +76,40 @@ POLICY_MODULES = frozenset(
         "relay.collaboration.styles",
         "relay.collaboration.work",
         "relay.notifications.rules",
-        "relay.services.issue_triage",
-        "relay.services.project_context",
-        "relay.services.project_setup_result",
-        "relay.services.task_workspace",
-        "relay.services.workspace_capabilities",
+        "relay.projects.context",
+        "relay.projects.setup_result",
+        "relay.tasks.issue_triage",
+        "relay.tasks.workspace",
     }
 )
 # Package initializers that must stay empty so importing one leaf module never
 # executes the rest of its package.
-EMPTY_PACKAGES = ("automations", "chat", "daemon_registry", "persistence", "sessions", "tasks")
+EMPTY_PACKAGES = (
+    "accounts",
+    "agents",
+    "api",
+    "api/accounts",
+    "api/admin",
+    "api/agents",
+    "api/chat",
+    "api/computers",
+    "api/projects",
+    "api/tasks",
+    "api/threads",
+    "api/web",
+    "automations",
+    "chat",
+    "computer",
+    "daemon_registry",
+    "execution",
+    "persistence",
+    "projects",
+    "realtime",
+    "sessions",
+    "skills",
+    "tasks",
+    "teams",
+)
 LAZY_IMPORT_ALLOWED = frozenset({"relay"})
 
 
@@ -143,9 +180,13 @@ def _import_graph() -> tuple[set[str], dict[str, dict[str, int]], dict[str, list
 
 
 def _layer(module: str) -> int:
-    if module in MODULE_LAYERS:
-        return MODULE_LAYERS[module]
+    """A module's layer: its own or its nearest package's ``MODULE_LAYERS``
+    entry, else its top-level package's ``LAYERS`` entry."""
     parts = module.split(".")
+    for depth in range(len(parts), 1, -1):
+        prefix = ".".join(parts[:depth])
+        if prefix in MODULE_LAYERS:
+            return MODULE_LAYERS[prefix]
     return LAYERS.get(parts[1], ROOT_LAYER) if len(parts) > 1 else ROOT_LAYER
 
 

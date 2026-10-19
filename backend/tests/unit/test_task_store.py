@@ -6,9 +6,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_task_event
+from relay.persistence.task.store import DatabaseTaskStore
 from relay.persistence.task.rules import TaskExecutionActiveError
 from sqlalchemy import event, text
 

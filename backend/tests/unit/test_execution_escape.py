@@ -19,7 +19,7 @@ from relay.persistence.daemon.rules import (
     EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
-from relay.services.execution_lifecycle import STOP_GRACE_SECONDS, execution_status
+from relay.execution.lifecycle import STOP_GRACE_SECONDS, execution_status
 
 NOW = datetime(2026, 10, 11, tzinfo=UTC)
 LONG_AGO = (NOW - timedelta(seconds=STOP_GRACE_SECONDS * 10)).isoformat()

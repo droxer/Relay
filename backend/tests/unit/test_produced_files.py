@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 
-from relay.daemon_registry.artifacts import (
+from relay.daemon_registry.runs.artifacts import (
     daemon_reported_generated_files,
     is_produced_file_path,
     is_snapshotable_path,

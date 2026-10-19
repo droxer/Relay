@@ -14,7 +14,7 @@ from typing import Any, overload
 
 from loguru import logger
 
-from ..services.project_runtime import project_work_error
+from ..projects.runtime import project_work_error
 from .context import trigger_context_block
 from .matcher import listens_for
 from .model import has_webhook, is_active

@@ -6,7 +6,8 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from store_fixtures import make_session_store
-from relay.sessions.controller import SessionController, initial_agent_state
+from relay.sessions.agent_state import initial_agent_state
+from relay.sessions.controller import SessionController
 
 
 def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:
@@ -204,7 +205,7 @@ def test_completion_retry_repairs_partial_task_write(
     monkeypatch, policy, task_status, expected,
 ) -> None:
     from store_fixtures import make_task_store
-    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.events import relay_task_event
 
     with TemporaryDirectory() as root:
         sessions, tasks = make_session_store(root), make_task_store(root)
@@ -233,7 +234,7 @@ def test_completion_retry_repairs_partial_task_write(
 @pytest.mark.parametrize("claimed", [False, True])
 def test_completion_retry_does_not_overwrite_newer_execution(monkeypatch, claimed) -> None:
     from store_fixtures import make_task_store
-    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.events import relay_task_event
 
     with TemporaryDirectory() as root:
         sessions, tasks = make_session_store(root), make_task_store(root)
@@ -287,7 +288,7 @@ def test_completion_retry_compares_all_structured_input_fields(field, new_value)
 @pytest.mark.parametrize("initial_status", ["running", "waiting_for_human"])
 def test_completion_retry_repairs_structured_task_question(monkeypatch, initial_status) -> None:
     from store_fixtures import make_task_store
-    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.events import relay_task_event
 
     with TemporaryDirectory() as root:
         sessions, tasks = make_session_store(root), make_task_store(root)

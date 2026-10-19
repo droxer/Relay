@@ -9,10 +9,10 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_event
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.services.task_deletion import delete_task
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_event
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.tasks.deletion import delete_task
 
 
 @pytest.mark.postgres

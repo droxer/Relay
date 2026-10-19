@@ -17,20 +17,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from ..artifact_blobs import (
-    artifact_blob_key,
-    blob_metadata,
-    read_blob_snapshot,
-)
-from ..store_common import (
-    _format_iso,
-    _parse_iso,
-    apply_session_event,
-    new_database_id,
-    now_iso,
-    relay_event,
-    store_transaction,
-)
+from .artifact_blobs import artifact_blob_key, blob_metadata, read_blob_snapshot
+from ..db_time import format_db_time, parse_db_time
+from .reducer import apply_session_event
+from ...core.ids import new_database_id, now_iso
+from ..events import relay_event
+from ..engine import store_transaction
 from .rows import (
     artifact_snapshot_extension,
     compact_session_snapshot,
@@ -94,8 +86,8 @@ class SessionArtifactRows(SessionStoreState):
                     if row["owner_user_id"]
                     else None,
                     "workspacePath": row["workspace_path"],
-                    "sessionUpdatedAt": _format_iso(
-                        _parse_iso(updated) if isinstance(updated, str) else updated
+                    "sessionUpdatedAt": format_db_time(
+                        parse_db_time(updated) if isinstance(updated, str) else updated
                     ),
                 }
             )

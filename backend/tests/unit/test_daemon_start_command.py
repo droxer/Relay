@@ -7,7 +7,7 @@ import subprocess
 import pytest
 from starlette.requests import Request
 
-from relay.api.node_install import daemon_start_command
+from relay.api.computers.node_install import daemon_start_command
 
 
 def command(*, prompt: bool = True) -> str:
@@ -89,7 +89,7 @@ def test_token_does_not_remain_in_calling_shell(tmp_path):
 
 
 def test_public_domain_overrides_internal_request_for_command_and_env(monkeypatch):
-    from relay.api.node_install import daemon_start_env
+    from relay.api.computers.node_install import daemon_start_env
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com:8443/")
     request = Request({"type": "http", "scheme": "http", "server": ("backend.internal", 8790), "path": "/", "root_path": "", "headers": [(b"x-forwarded-host", b"attacker.example"), (b"x-forwarded-proto", b"http")]})

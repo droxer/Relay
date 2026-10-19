@@ -4,7 +4,7 @@ import hashlib
 import os
 
 import pytest
-from relay.persistence.skill_object_store import LocalSkillObjectStore
+from relay.persistence.skill.objects import LocalSkillObjectStore
 
 
 def test_local_skill_object_store_round_trips_content_by_digest(tmp_path):

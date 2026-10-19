@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.session.store import DatabaseSessionStore
 from store_fixtures import make_session_store
 from relay.sessions.handoff import compute_prior_handoff_note
-from relay.sessions.controller import SessionArchivedError, SessionController
+from relay.sessions.controller import SessionController
+from relay.sessions.errors import SessionArchivedError
 
 
 def test_compute_prior_handoff_note_requires_latest_decision_to_be_handoff() -> None:

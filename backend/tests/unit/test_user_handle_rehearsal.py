@@ -4,7 +4,7 @@ applies, so a dry run cannot disagree with the real thing."""
 from __future__ import annotations
 
 from relay.cli import rehearse_user_handles
-from relay.persistence.user_handle_backfill import plan_handles, summarize
+from relay.persistence.account.handle_backfill import plan_handles, summarize
 from sqlalchemy import create_engine, text
 
 

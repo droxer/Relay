@@ -30,7 +30,7 @@ FLOW_FIELDS = (
 
 
 def upgrade():
-    from relay.persistence.store_common import materialize_task_events
+    from relay.persistence.task.reducer import materialize_task_events
 
     conn = op.get_bind()
     metadata = sa.MetaData()

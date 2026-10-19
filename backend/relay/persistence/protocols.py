@@ -300,7 +300,7 @@ class ProjectStore(Protocol):
 
 
 class AuthStore(Protocol):
-    """Accounts, users, departments, and login sessions (``security/auth.py``)."""
+    """Accounts, users, departments, and login sessions (``security/auth.py`` and its mixins)."""
 
     session_ttl_seconds: int
 

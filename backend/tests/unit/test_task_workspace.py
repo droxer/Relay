@@ -1,4 +1,4 @@
-from relay.services.task_workspace import (
+from relay.tasks.workspace import (
     resolve_task_workspace,
     task_artifacts_dir,
     task_workspace_subpath,
@@ -118,7 +118,7 @@ def test_binding_survives_daemon_replacement_on_the_same_computer():
 
 def test_recorded_legacy_thread_is_reused_even_on_an_old_daemon():
     from types import SimpleNamespace
-    from relay.services.task_workspace import recorded_task_workspace, task_workspace_nodes
+    from relay.tasks.workspace import recorded_task_workspace, task_workspace_nodes
     node = {"id": "old", "userId": "alice", "workspaceId": "machine", **OLD_NODE}
     sessions = {"original": {"id": "original", "daemonNodeId": "old", "workspaceLayout": "thread"}}
     store = SimpleNamespace(get_session=lambda key: sessions[key])
@@ -131,14 +131,14 @@ def test_recorded_legacy_thread_is_reused_even_on_an_old_daemon():
 
 
 def test_new_task_does_not_restrict_node_selection():
-    from relay.services.task_workspace import task_workspace_nodes
+    from relay.tasks.workspace import task_workspace_nodes
     nodes = [{"id": "one"}, {"id": "two"}]
     assert task_workspace_nodes({"id": "task"}, nodes) == nodes
 
 
 def test_legacy_managed_computer_identity_survives_missing_node():
     from types import SimpleNamespace
-    from relay.services.task_workspace import recorded_task_workspace
+    from relay.tasks.workspace import recorded_task_workspace
     store = SimpleNamespace(get_session=lambda key: {"id": key, "managedNodeId": "managed", "workspaceLayout": "task", "workspaceSubpath": "tasks/original"})
     binding = recorded_task_workspace({"linkedSessionIds": ["session"]}, store)
     assert binding["computerId"] == "managed:managed"
@@ -162,7 +162,7 @@ def test_unrecoverable_history_or_changed_root_does_not_create_a_new_workspace()
 def test_unstarted_thread_can_choose_its_first_computer_but_executed_history_cannot():
     from types import SimpleNamespace
     import pytest
-    from relay.services.task_workspace import task_workspace_nodes
+    from relay.tasks.workspace import task_workspace_nodes
 
     node = {"id": "first", **OLD_NODE}
     session = {"id": "pending", "status": "running", "agentRuns": []}

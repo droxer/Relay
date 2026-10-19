@@ -19,15 +19,13 @@ from sqlalchemy import (
     update,
 )
 from ...core.ids import new_relay_id
-from ...services.issue_triage import issue_needs_project
+from ...tasks.issue_triage import issue_needs_project
 from ..protocols import TaskDispatchAssignment
-from ..store_common import (
-    AgentName,
-    _parse_iso,
-    now_iso,
-    relay_task_event,
-    store_transaction,
-)
+from ...core.models import AgentName
+from ..db_time import parse_db_time
+from ...core.ids import now_iso
+from ..events import relay_task_event
+from ..engine import store_transaction
 from .rules import (
     _HYDRATE_TASK_WRITES,
     apply_task_events,
@@ -98,7 +96,7 @@ class TaskDispatchRows(TaskStoreState):
                 _date.fromisoformat(after["dueDate"])
                 if after.get("dueDate")
                 else _date.max,
-                _parse_iso(after["createdAt"]),
+                parse_db_time(after["createdAt"]),
                 after["id"],
             ]
             statement = statement.where(

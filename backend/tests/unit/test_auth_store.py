@@ -7,14 +7,11 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi import HTTPException
-from relay.persistence.admin_token_store import DatabaseAdminTokenStore
-from relay.security import auth as auth_module
-from relay.security.auth import (
-    DatabaseAccountAuthStore,
-    configure_admin_token,
-    hash_session_token,
-    reissue_admin_token,
-)
+from relay.persistence.org.admin_tokens import DatabaseAdminTokenStore
+from relay.security import auth_rows, entity_ids
+from relay.security.admin_token import configure_admin_token, reissue_admin_token
+from relay.security.auth import DatabaseAccountAuthStore
+from relay.security.credentials import hash_session_token
 from sqlalchemy import create_engine, text
 
 
@@ -84,7 +81,7 @@ def test_database_auth_store_persists_users_and_hashes_session_tokens() -> None:
 
 
 def test_database_ids_reject_human_handles_for_uuid_queries() -> None:
-    normalize = auth_module.normalize_database_id
+    normalize = entity_ids.normalize_database_id
 
     assert normalize("alice") is None
     generated = normalize("550E8400-E29B-41D4-A716-446655440000")
@@ -188,8 +185,8 @@ def test_retired_traditional_chinese_preference_is_rejected_and_reads_as_simplif
 
 
 def test_normalize_user_language_falls_back_to_the_default() -> None:
-    assert auth_module.normalize_user_language("en") == "en"
-    assert auth_module.normalize_user_language("zh-CN") == "zh-CN"
-    assert auth_module.normalize_user_language("zh-TW") == "zh-CN"
-    assert auth_module.normalize_user_language("fr") == "en"
-    assert auth_module.normalize_user_language(None) == "en"
+    assert auth_rows.normalize_user_language("en") == "en"
+    assert auth_rows.normalize_user_language("zh-CN") == "zh-CN"
+    assert auth_rows.normalize_user_language("zh-TW") == "zh-CN"
+    assert auth_rows.normalize_user_language("fr") == "en"
+    assert auth_rows.normalize_user_language(None) == "en"

@@ -9,7 +9,7 @@ Initial dispatch and future scheduled routine occurrences remain enabled.
 
 ## Changes
 
-- Shared `services/dispatch_failure.py` replaces retry/backoff policy for manual
+- Shared `tasks/dispatch_failure.py` replaces retry/backoff policy for manual
   and scheduled dispatch. State changes still use task-store events.
 - Known rejections release their dispatch claim. Ambiguous outcomes retain the
   claim for reconciliation, but block the task so lease expiry cannot cause an

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from relay.persistence.org_settings_store import (
-    DatabaseOrgSettingsStore,
-    OrgSettingsValidationError,
-)
+from relay.persistence.org.settings import DatabaseOrgSettingsStore, OrgSettingsValidationError
 
 
 def test_import_allowlist_defaults_persists_and_preserves_other_settings(tmp_path):

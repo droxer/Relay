@@ -91,7 +91,7 @@ stores. They are additional to the three findings above.
 
 ### P1 — Expired execution is redelivered without confirming process exit
 
-Source: `backend/relay/persistence/daemon_store.py:797`, `:826`, `:2427`,
+Source: `backend/relay/persistence/daemon/store.py:797`, `:826`, `:2427`,
 `:2523`, `:3645`; `backend/relay/daemon_registry/registry.py:2273`.
 
 Both command stores make a dispatched command available again when its lease
@@ -121,7 +121,7 @@ fix this by accepting arbitrary stale terminal events over a newer owner.
 
 ### P1 — Skipped expired starts can starve every cancellation command
 
-Source: `backend/relay/persistence/daemon_store.py:797`, `:804`, `:2437`,
+Source: `backend/relay/persistence/daemon/store.py:797`, `:804`, `:2437`,
 `:2462`; `packages/relay-daemon/src/index.ts:1570`.
 
 Both stores apply the poll limit before filtering expired `run.start`
@@ -168,9 +168,9 @@ must not silently excuse an incomplete task transition.
 
 ### P2 — A disabled executor is treated as ambiguous dispatch acceptance
 
-Source: `backend/relay/persistence/agent_placement_store.py:1017`;
+Source: `backend/relay/persistence/agent/placements.py:1017`;
 `backend/relay/daemon_registry/node_backend.py:693`;
-`backend/relay/services/agent_routing.py:26`;
+`backend/relay/agents/routing.py:26`;
 `backend/relay/tasks/scheduler.py:651`.
 
 Placement readiness checks executor health but ignores `disabledAgents`.

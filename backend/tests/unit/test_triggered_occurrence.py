@@ -3,7 +3,7 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
 
 from automation_helpers import fire_now

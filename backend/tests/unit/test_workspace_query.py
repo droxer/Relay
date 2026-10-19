@@ -1,9 +1,9 @@
 import asyncio
 from types import SimpleNamespace
 
-from relay.api.workspace_transport import dispatch_workspace_command
-from relay.services.event_notifier import KeyedEventNotifier, workspace_response_key
-from relay.services.workspace_query import WorkspaceQueryBroker
+from relay.api.computers.workspace_transport import dispatch_workspace_command
+from relay.realtime.event_notifier import KeyedEventNotifier, workspace_response_key
+from relay.computer.workspace_query import WorkspaceQueryBroker
 
 
 def test_workspace_query_delivers_only_to_its_registered_node():

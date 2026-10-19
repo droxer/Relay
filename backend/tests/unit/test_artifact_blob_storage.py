@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from blob_fakes import MemoryBlobStore
-from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.session.store import DatabaseSessionStore
 from sqlalchemy import text
 
 ARTIFACT_ID = "22222222-2222-4222-8222-222222222222"
@@ -137,7 +137,7 @@ def test_deleting_a_session_deletes_its_blobs(store, blobs) -> None:
 
 @pytest.mark.parametrize("commit", [False, True])
 def test_session_blob_cleanup_waits_for_outer_commit(store, blobs, commit) -> None:
-    from relay.persistence.store_common import store_transaction
+    from relay.persistence.engine import store_transaction
 
     session = _session(store)
     store.index_workspace_artifact(session["id"], _artifact(session["id"]), CONTENT)

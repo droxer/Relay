@@ -2,8 +2,8 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.services.task_dispatch import TaskDispatcher
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.tasks.dispatch import TaskDispatcher
 
 
 @pytest.mark.parametrize("outcome", ["success", "failure"])

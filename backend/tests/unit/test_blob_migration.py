@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 from blob_fakes import MemoryBlobStore
-from relay.persistence.blob_migration import migrate_blobs
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.skill_object_store import LocalSkillObjectStore
-from relay.persistence.skill_store import DatabaseSkillStore
+from relay.persistence.blob.migration import migrate_blobs
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.skill.objects import LocalSkillObjectStore
+from relay.persistence.skill.store import DatabaseSkillStore
 from sqlalchemy import insert, select
 
 ARTIFACT_ID = "22222222-2222-4222-8222-222222222222"

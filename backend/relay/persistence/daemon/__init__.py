@@ -1,1 +1,1 @@
-"""The database daemon store, split by concern (see ``daemon_store.py``)."""
+"""The database daemon store, split by concern (assembled in ``store.py``)."""

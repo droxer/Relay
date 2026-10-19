@@ -12,16 +12,10 @@ from sqlalchemy import (
     insert,
     select,
 )
-from ..artifact_blobs import (
-    delete_session_blobs,
-)
-from ..store_common import (
-    _parse_iso,
-    after_store_commit,
-    new_database_id,
-    now_iso,
-    store_transaction,
-)
+from .artifact_blobs import delete_session_blobs
+from ..db_time import parse_db_time
+from ..engine import after_store_commit, store_transaction
+from ...core.ids import new_database_id, now_iso
 from ..sql import metadata as shared_metadata
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .state import SessionStoreState
@@ -72,7 +66,7 @@ class SessionDeletionRows(SessionStoreState):
                 title=snapshot.get("title"),
                 owner_user_id=snapshot.get("ownerUserId"),
                 deleted_by=deleted_by,
-                deleted_at=_parse_iso(now_iso()),
+                deleted_at=parse_db_time(now_iso()),
             )
         )
 

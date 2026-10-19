@@ -12,10 +12,8 @@ from sqlalchemy import (
     or_,
     select,
 )
-from ..store_common import (
-    materialize_task_events,
-    store_transaction,
-)
+from .reducer import materialize_task_events
+from ..engine import store_transaction
 from .rows import (
     compact_task_summary,
 )

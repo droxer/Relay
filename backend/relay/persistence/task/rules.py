@@ -11,10 +11,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta, UTC
 from typing import Any
 from ...core.ids import new_relay_id
-from ..store_common import (
-    TASK_EVENT_HANDLERS,
-    _parse_iso,
-)
+from .reducer import TASK_EVENT_HANDLERS
+from ..db_time import parse_db_time
 
 
 _HYDRATE_TASK_WRITES = ContextVar("hydrate_task_writes", default=True)
@@ -88,5 +86,5 @@ def dispatch_claim_active(task: dict[str, Any]) -> bool:
     claim = task.get("dispatchClaim")
     if not isinstance(claim, dict):
         return False
-    expires_at = _parse_iso(claim.get("expiresAt"))
+    expires_at = parse_db_time(claim.get("expiresAt"))
     return bool(expires_at and expires_at > datetime.now(UTC))

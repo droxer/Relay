@@ -14,9 +14,9 @@ from sqlalchemy import select
 from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
-from relay.services.agent_routing import placement_node
-from relay.services.node_agents import sync_node_agents
+from relay.persistence.agent.placements import DatabaseAgentPlacementStore
+from relay.agents.routing import placement_node
+from relay.computer.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
 from user_ids import user_id
 from datetime import UTC
@@ -4463,7 +4463,7 @@ def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -
     from datetime import datetime, timedelta
     from sqlalchemy import update
     from relay.persistence.tables.device_authorizations import computer_authorizations
-    from relay.persistence.store_common import store_transaction
+    from relay.persistence.engine import store_transaction
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

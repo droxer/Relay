@@ -1,4 +1,4 @@
-from relay.persistence.store_common import materialize_task_events
+from relay.persistence.task.reducer import materialize_task_events
 
 
 def ev(kind, n, **payload):
@@ -138,7 +138,8 @@ def test_lone_legacy_reason_on_v2_snapshot_is_ignored():
 
 
 def test_only_legacy_records_carry_routine_enabled() -> None:
-    from relay.persistence.store_common import materialize_task_events, relay_task_event
+    from relay.persistence.task.reducer import materialize_task_events
+    from relay.persistence.events import relay_task_event
 
     plain = materialize_task_events([relay_task_event("task.created", "t1", {"title": "Plain"})])
     assert "routineEnabled" not in plain

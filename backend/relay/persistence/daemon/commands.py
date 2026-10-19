@@ -15,14 +15,10 @@ from sqlalchemy import (
     update,
 )
 from ...core.ids import new_relay_id
-from ..store_common import (
-    _parse_iso,
-    _require_iso,
-    daemon_event,
-    now_iso,
-    publish_database_notification,
-    store_transaction,
-)
+from ..db_time import parse_db_time, require_db_time
+from ..events import daemon_event
+from ...core.ids import now_iso
+from ..engine import publish_database_notification, store_transaction
 from .rules import (
     DISPATCH_CLAIM_ID_STATE_KEY,
     TERMINAL_DAEMON_STATUSES,
@@ -248,7 +244,7 @@ class CommandQueueRows(DaemonStoreState):
     def complete_runtime_refresh(self, node_id: str, acknowledgement: dict[str, Any]) -> None:
         """Acknowledge only the refresh lease held by this authenticated node."""
         with store_transaction(self.engine) as conn:
-            now = _require_iso(now_iso())
+            now = require_db_time(now_iso())
             changed = conn.execute(
                 update(self.commands)
                 .where(self.commands.c.id == acknowledgement["commandId"])
@@ -314,7 +310,7 @@ class CommandQueueRows(DaemonStoreState):
         self, node_id: str, limit: int = 2**53, lease_seconds: float = 60.0
     ) -> list[dict[str, Any]]:
         now = now_iso()
-        now_dt = _parse_iso(now)
+        now_dt = parse_db_time(now)
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
             available_condition = (self.commands.c.status == "queued") | (
@@ -445,7 +441,7 @@ class CommandQueueRows(DaemonStoreState):
 
     def queued_command_count(self, node_id: str) -> int:
         now = now_iso()
-        now_dt = _parse_iso(now)
+        now_dt = parse_db_time(now)
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
             return int(
@@ -466,7 +462,7 @@ class CommandQueueRows(DaemonStoreState):
 
     def queued_command_counts(self) -> dict[str, int]:
         now = now_iso()
-        now_dt = _parse_iso(now)
+        now_dt = parse_db_time(now)
         with store_transaction(self.engine) as conn:
             rows = conn.execute(
                 select(self.commands.c.node_id, func.count(self.commands.c.id))
@@ -505,7 +501,7 @@ class CommandQueueRows(DaemonStoreState):
 
     def retire_command(self, command_id: str, reason: str) -> bool:
         """Close an unfinished command whose work was handed to another node."""
-        now = _require_iso(now_iso())
+        now = require_db_time(now_iso())
         with store_transaction(self.engine) as conn:
             result = conn.execute(
                 update(self.commands)

@@ -8,7 +8,7 @@ import pytest
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select, update
-from relay.api import task_routes
+from relay.api.tasks import payloads as task_payloads
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
@@ -1183,7 +1183,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         _user(client, "alice")
         # This test exercises the legacy phantom-placement attach path
         # (_attach_never_run_agent_to_managed_capacity in
-        # relay/services/agent_routing.py): an agent with a placement that
+        # relay/agents/routing.py): an agent with a placement that
         # has no computerId and points at a node that was never actually
         # registered, representing pre-Task-3 data or anything created by
         # writing directly to the store. computerId is optional at the
@@ -1676,7 +1676,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         def today(cls) -> date:
             return cls(2026, 7, 23)
 
-    monkeypatch.setattr(task_routes, "date", FixedDate)
+    monkeypatch.setattr(task_payloads, "date", FixedDate)
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
@@ -2766,7 +2766,7 @@ def recovery_team_thread(monkeypatch, tmp_path):
 @pytest.mark.parametrize("resume", [True, False])
 def test_resuming_a_rerun_reopens_the_agents_runtime_conversation(recovery_team_thread, resume) -> None:
     """Retry starts over; Resume hands the agent's own CLI conversation back."""
-    from relay.sessions.controller import initial_agent_state
+    from relay.sessions.agent_state import initial_agent_state
 
     client, controller, session, _team, reviewer = recovery_team_thread
     controller.record_agent_started(session["id"], {
@@ -3435,7 +3435,7 @@ def test_addressed_team_reviewer_keeps_specialization(
 def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
     recovery_team_thread, monkeypatch, task_backed
 ) -> None:
-    from relay.api.daemon_events import daemon_node_event
+    from relay.api.computers.daemon_events import daemon_node_event
 
     client, controller, session, _team, reviewer = recovery_team_thread
     task = None
@@ -3547,10 +3547,10 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
 
 @pytest.mark.parametrize("variant,accepted", [("legacy", True), ("v2", True), ("missing", False), ("future", False)])
 def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatch, variant, accepted):
-    from relay.collaboration import service
+    from relay.collaboration import request as round_request
 
     client, _controller, session, _team, reviewer = recovery_team_thread
-    capture = service.capture_handoff_context
+    capture = round_request.capture_handoff_context
 
     def versioned(*args, **kwargs):
         context = capture(*args, **kwargs)
@@ -3565,7 +3565,7 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
             context["receipt"]["contract"]["version"] = 99
         return context
 
-    monkeypatch.setattr(service, "capture_handoff_context", versioned)
+    monkeypatch.setattr(round_request, "capture_handoff_context", versioned)
     if variant in ("legacy", "v2"):
         client.app.state.registry.update_status("test_node_alice", {"capabilities": [PROJECT_CAPABILITY, "thread-workspaces"]})
     response = client.post(
@@ -3583,7 +3583,7 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
 
 @pytest.mark.parametrize("race_point", ["capture", "reservation"])
 def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch, race_point):
-    from relay.collaboration import service
+    from relay.collaboration import request as round_request
 
     client, controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
@@ -3595,14 +3595,14 @@ def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch
         )
 
     if race_point == "capture":
-        original = service.capture_handoff_context
+        original = round_request.capture_handoff_context
 
         def capture(*args, **kwargs):
             context = original(*args, **kwargs)
             replace_owner()
             return context
 
-        monkeypatch.setattr(service, "capture_handoff_context", capture)
+        monkeypatch.setattr(round_request, "capture_handoff_context", capture)
     else:
         original = registry.daemon_store.create_run_request
 
@@ -3631,7 +3631,7 @@ def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch
 
 
 def test_handoff_rejects_replaced_task_generation_and_preserves_rejection(recovery_team_thread, monkeypatch):
-    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.events import relay_task_event
 
     client, controller, session, _team, reviewer = recovery_team_thread
     tasks = client.app.state.task_store
@@ -3707,10 +3707,10 @@ def test_handoff_requires_runtime_validation(recovery_team_thread, capable):
 
 @pytest.mark.parametrize("mismatch", [None, "assignment", "workspace"])
 def test_handoff_validation_binds_receipt_evidence(recovery_team_thread, monkeypatch, mismatch):
-    from relay.collaboration import service
+    from relay.collaboration import request as round_request
 
     client, _controller, session, _team, reviewer = recovery_team_thread
-    capture = service.capture_handoff_context
+    capture = round_request.capture_handoff_context
     evidence = [{"artifactId": "snapshot", "path": "PROGRESS.md", "sha256": "a" * 64}]
 
     def captured(*args, **kwargs):
@@ -3722,7 +3722,7 @@ def test_handoff_validation_binds_receipt_evidence(recovery_team_thread, monkeyp
             context["receipt"]["workspace"]["layout"] = "node-root"
         return context
 
-    monkeypatch.setattr(service, "capture_handoff_context", captured)
+    monkeypatch.setattr(round_request, "capture_handoff_context", captured)
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
         json={"kind": "handoff", "targetAgentId": reviewer["id"]},

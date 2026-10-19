@@ -17,11 +17,9 @@ from sqlalchemy import (
     select,
     text,
 )
-from ..session_output_compaction import compact_completed_run_output
-from ..store_common import (
-    _format_iso,
-    store_transaction,
-)
+from .output_compaction import compact_completed_run_output
+from ..db_time import format_db_time
+from ..engine import store_transaction
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
@@ -315,7 +313,7 @@ class SessionReadRows(SessionStoreState):
                 "cacheRead": int(row["cache_read_tokens"] or 0),
                 "cacheWrite": int(row["cache_write_tokens"] or 0),
                 "total": int(row["total_tokens"] or 0),
-                "completedAt": _format_iso(row["completed_at"]),
+                "completedAt": format_db_time(row["completed_at"]),
             }
             for row in rows
         ]

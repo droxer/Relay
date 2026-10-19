@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from relay.persistence.store_common import database_engine_options
+from relay.persistence.engine import database_engine_options
 
 
 def test_postgres_pool_options_are_deployment_tunable(monkeypatch) -> None:

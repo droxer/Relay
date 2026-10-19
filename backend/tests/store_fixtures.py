@@ -14,12 +14,12 @@ from typing import Any
 from sqlalchemy import update
 
 from relay.chat.integrations import DatabaseChatIntegrationStore
-from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
-from relay.persistence.agent_store import DatabaseAgentStore
-from relay.persistence.daemon_store import DatabaseDaemonStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.persistence.team_store import DatabaseTeamStore
+from relay.persistence.agent.placements import DatabaseAgentPlacementStore
+from relay.persistence.agent.store import DatabaseAgentStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.persistence.team.store import DatabaseTeamStore
 from relay.security.auth import DatabaseAccountAuthStore
 
 DATABASE_FILE = "relay.db"

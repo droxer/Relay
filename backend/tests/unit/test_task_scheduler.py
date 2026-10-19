@@ -12,22 +12,22 @@ from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_daemon_store
 from store_fixtures import make_agent_store
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.project_store import DatabaseProjectStore
-from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.project.store import DatabaseProjectStore
+from relay.persistence.session.store import DatabaseSessionStore
 from store_fixtures import make_session_store
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
 from store_fixtures import make_team_store
-from relay.persistence.managed_node_store import LocalManagedNodeStore
+from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
 from relay.automations.service import AutomationService
 from relay.tasks.scheduler import SchedulerTickResult, TaskScheduler
-from relay.services.task_placement import materialize_legacy_agent_assignment
+from relay.tasks.placement import materialize_legacy_agent_assignment
 
 from issue_projects import PROJECT_CAPABILITY, project_for
 
 
-# Work outside a project never runs (services/issue_triage.py), except a
+# Work outside a project never runs (tasks/issue_triage.py), except a
 # routine's own runs: a routine names its agent or team. These tests exercise
 # the scheduler's projectless agent and team branches, so their work is a
 # routine run — the one kind of projectless work those branches still serve.

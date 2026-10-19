@@ -268,7 +268,8 @@ so nobody is greeted by a wizard they don't need.
   - `web/src/components/onboarding/steps/*.tsx` — one component per step,
     each wrapping the existing flow.
   - `web/src/components/onboarding/OnboardingChip.tsx` — the rail chip.
-  - `backend/relay/security/auth.py` + migration — `onboarding` preference.
+  - `backend/relay/security/onboarding.py`, `security/auth_accounts.py`
+    (`update_user_preferences`) + migration — `onboarding` preference.
 
 ## Testing
 

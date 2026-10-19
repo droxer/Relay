@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
-from relay.persistence.store_common import new_database_id
+from relay.core.ids import new_database_id
 from relay.sessions.controller import SessionController
 from datetime import UTC
 
@@ -139,7 +139,7 @@ def test_delete_releases_an_execution_whose_lease_lapsed_after_the_stop(monkeypa
 def test_delete_starts_the_grace_when_no_stop_marker_could_be_recorded(monkeypatch) -> None:
     """The stop marker is only written for a running request. A delete that hits
     a delivered run in any other status must still start the clock itself."""
-    from relay.services import execution_lifecycle
+    from relay.execution import lifecycle as execution_lifecycle
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

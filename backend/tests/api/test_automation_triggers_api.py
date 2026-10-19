@@ -654,7 +654,7 @@ def test_completed_once_remains_editable_and_active_resume_is_noop(monkeypatch) 
 
 @pytest.mark.parametrize("body, status", [({"routineState": "active"}, 403), ({"isRoutine": False}, 403), ({"routineTriggers": DAILY_9}, 200)])
 def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body: dict, status: int) -> None:
-    from relay.api import task_routes
+    from relay.api.tasks import payloads as task_payloads
 
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
@@ -663,7 +663,7 @@ def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body
         store = client.app.state.task_store
         store.update_task(task["id"], {"assigneeUserId": BOB})
         _login(client, "bob")
-        original = task_routes.routine_fields
+        original = task_payloads.routine_fields
         paused = False
 
         def racing_fields(payload, *, current=None):
@@ -674,7 +674,7 @@ def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body
                 store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
             return fields
 
-        monkeypatch.setattr(task_routes, "routine_fields", racing_fields)
+        monkeypatch.setattr(task_payloads, "routine_fields", racing_fields)
         response = client.patch(f"/api/v1/tasks/{task['id']}", json=body)
         assert response.status_code == status, response.text
         current = store.get_task(task["id"])

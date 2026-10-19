@@ -9,7 +9,7 @@ from pathlib import Path
 import sys, trace, pytest, threading
 root = Path.cwd()
 files = [root / 'backend/relay/automations/trigger.py', root / 'backend/relay/automations/matcher.py',
-         root / 'backend/relay/persistence/automation_store.py', root / 'backend/relay/api/automation_routes.py']
+         root / 'backend/relay/persistence/automation/store.py', root / 'backend/relay/api/automation_routes.py']
 executed = {str(f): set() for f in files}
 def record(frame, event, arg):
     filename = frame.f_code.co_filename

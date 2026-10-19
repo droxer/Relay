@@ -10,7 +10,7 @@
 
 ## 当前问题及代码依据
 
-1. `backend/relay/persistence/task_lifecycle.py:62`：blocked 事件没有 reason，
+1. `backend/relay/persistence/task/lifecycle.py:62`：blocked 事件没有 reason，
    且任务没有既有 blockerReason 时，写入 `Execution needs attention.`。
    手工阻塞 API 已要求原因，缺口主要需要沿内部事件、历史数据查证，不能归因于所有手工操作。
 2. `web/src/lib/executionRecovery.ts`：会话的未知 blockingReason 使用 unknown 提示。

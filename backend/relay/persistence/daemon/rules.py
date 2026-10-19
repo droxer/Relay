@@ -7,11 +7,9 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from typing import Any
-from ..store_common import (
-    _format_iso,
-    daemon_event,
-    now_iso,
-)
+from ..db_time import format_db_time
+from ..events import daemon_event
+from ...core.ids import now_iso
 
 
 TERMINAL_DAEMON_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -127,7 +125,7 @@ def _comparable_node_value(value: Any) -> Any:
     SQLite hands back naive datetimes where the incoming row holds UTC-aware
     ones, so compare timestamps in their formatted form.
     """
-    return _format_iso(value) if isinstance(value, datetime) else value
+    return format_db_time(value) if isinstance(value, datetime) else value
 
 
 def node_registration_changed(

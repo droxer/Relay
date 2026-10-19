@@ -10,28 +10,23 @@ from loguru import logger
 
 from ..chat.integrations import DatabaseChatIntegrationStore
 from ..core.storage_config import database_url_from_env
-from ..persistence.agent_placement_store import DatabaseAgentPlacementStore
-from ..persistence.agent_store import DatabaseAgentStore
-from ..persistence.blob_store import (
-    BlobStore,
-    blob_store_from_env,
-)
-from ..persistence.admin_token_store import DatabaseAdminTokenStore
-from ..persistence.org_settings_store import DatabaseOrgSettingsStore
-from ..persistence.project_store import DatabaseProjectStore
-from ..persistence.skill_store import DatabaseSkillStore
-from ..persistence.skill_object_store import BlobSkillObjectStore, LocalSkillObjectStore
-from ..persistence.stores import (
-    DatabaseDaemonStore,
-    DatabaseSessionStore,
-    DatabaseTaskStore,
-)
-from ..persistence.team_store import DatabaseTeamStore
-from ..persistence.waitlist_store import DatabaseWaitlistStore
-from ..persistence.notification_store import DatabaseNotificationStore
-from ..services.waitlist import WaitlistService, waitlist_config_from_env
+from ..persistence.agent.placements import DatabaseAgentPlacementStore
+from ..persistence.agent.store import DatabaseAgentStore
+from ..persistence.blob.store import BlobStore, blob_store_from_env
+from ..persistence.org.admin_tokens import DatabaseAdminTokenStore
+from ..persistence.org.settings import DatabaseOrgSettingsStore
+from ..persistence.project.store import DatabaseProjectStore
+from ..persistence.skill.store import DatabaseSkillStore
+from ..persistence.skill.objects import BlobSkillObjectStore, LocalSkillObjectStore
+from ..persistence.daemon.store import DatabaseDaemonStore
+from ..persistence.session.store import DatabaseSessionStore
+from ..persistence.task.store import DatabaseTaskStore
+from ..persistence.team.store import DatabaseTeamStore
+from ..persistence.account.waitlist import DatabaseWaitlistStore
+from ..persistence.notification.store import DatabaseNotificationStore
+from ..accounts.waitlist import WaitlistService, waitlist_config_from_env
 from ..notifications.mailer import Mailer
-from ..persistence.automation_store import DatabaseAutomationStore
+from ..persistence.automation.store import DatabaseAutomationStore
 from ..persistence.protocols import (
     AgentPlacementStore,
     AgentStore,
@@ -39,20 +34,17 @@ from ..persistence.protocols import (
     DaemonStore,
     TeamStore,
 )
-from ..persistence.managed_node_store import DatabaseManagedNodeStore
-from ..persistence.profile_image_store import DatabaseProfileImageStore
-from ..security.auth import (
-    DatabaseAccountAuthStore,
-    auth_store_from_env,
-    configure_admin_token,
-)
+from ..persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+from ..persistence.account.profile_images import DatabaseProfileImageStore
+from ..security.admin_token import configure_admin_token
+from ..security.auth import DatabaseAccountAuthStore, auth_store_from_env
 from dataclasses import dataclass
 
 
 # Accounts, daemon, agent, team, placement, and chat state used to have
 # file-backed twins selected by these variables. They are database-only now;
 # any existing JSON under the data directory is imported once at boot
-# (relay/security/auth_file_import.py, relay/persistence/file_store_import.py).
+# (relay/security/auth_file_import.py, relay/persistence/legacy/file_stores.py).
 RETIRED_STORE_SETTINGS = (
     "RELAY_STORAGE",
     "RELAY_AUTH_STORE",

@@ -6,7 +6,7 @@ import hashlib
 
 import pytest
 from blob_fakes import MemoryBlobStore
-from relay.persistence.skill_object_store import BlobSkillObjectStore, LocalSkillObjectStore
+from relay.persistence.skill.objects import BlobSkillObjectStore, LocalSkillObjectStore
 
 CONTENT = b"---\nname: demo\n---\nskill body\n"
 DIGEST = hashlib.sha256(CONTENT).hexdigest()
@@ -100,8 +100,8 @@ def test_published_skill_bundles_round_trip_through_the_blob_store(tmp_path) -> 
     from uuid import uuid4
 
     from relay.core.ids import now_iso
-    from relay.persistence.skill_store import DatabaseSkillStore
-    from relay.persistence.store_common import _parse_iso
+    from relay.persistence.skill.store import DatabaseSkillStore
+    from relay.persistence.db_time import parse_db_time
     from sqlalchemy import insert
 
     blobs = MemoryBlobStore()
@@ -117,7 +117,7 @@ def test_published_skill_bundles_round_trip_through_the_blob_store(tmp_path) -> 
             insert(store.users).values(
                 id=owner, handle="alice", display_name="Alice", email=None,
                 department_id=None, max_local_computers=None,
-                created_at=_parse_iso(now_iso()), updated_at=_parse_iso(now_iso()), deleted_at=None,
+                created_at=parse_db_time(now_iso()), updated_at=parse_db_time(now_iso()), deleted_at=None,
             )
         )
     manifest = b"---\nname: review\ndescription: Reviews code\n---\nBody"

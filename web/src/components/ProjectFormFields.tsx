@@ -8,7 +8,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-/** Backend caps (PROJECT_*_MAX_LENGTH in backend/relay/services/project_catalog.py). */
+/** Backend caps (PROJECT_*_MAX_LENGTH in backend/relay/projects/catalog.py). */
 const PROJECT_DESCRIPTION_MAX_LENGTH = 4000;
 const PROJECT_GOAL_MAX_LENGTH = 280;
 const PROJECT_CONTEXT_MAX_LENGTH = 8000;

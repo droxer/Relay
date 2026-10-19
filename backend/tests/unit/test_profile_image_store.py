@@ -5,12 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from relay.persistence.profile_image_store import (
-    LocalProfileImageStore,
-    ProfileImageError,
-)
-from relay.persistence.agent_store import DatabaseAgentStore
-from relay.persistence.team_store import DatabaseTeamStore
+from relay.persistence.account.profile_images import LocalProfileImageStore, ProfileImageError
+from relay.persistence.agent.store import DatabaseAgentStore
+from relay.persistence.team.store import DatabaseTeamStore
 
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nrelay-profile"

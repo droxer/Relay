@@ -92,7 +92,7 @@ It needs no extra dependency. It measures line coverage, not branch coverage.
 | --- | --- |
 | `automations/trigger.py` | 91.1% |
 | `automations/matcher.py` | 90.2% (PostgreSQL advisory-lock branch separately tested) |
-| `persistence/automation_store.py` | 98.7% |
+| `persistence/automation/store.py` | 98.7% |
 | `api/automation_routes.py` | 91.3% |
 
 No live agent or external webhook provider was invoked. The API workflow test

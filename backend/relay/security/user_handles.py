@@ -34,6 +34,19 @@ def normalize_user_handle(value: str) -> str:
     return handle
 
 
+def slugify_handle(value: str | None) -> str:
+    """Best-effort handle from free text, matching the admin form's grammar.
+
+    Used only for rows that predate the handle column or were created outside
+    the admin form; a real handle is stored verbatim."""
+    lowered = (value or "").strip().lower()
+    slug = re.sub(r"[^a-z0-9._-]+", "-", lowered).strip("-.")
+    slug = re.sub(r"-{2,}", "-", slug)
+    if len(slug) < 2:
+        return ""
+    return slug[:64]
+
+
 def user_handle_or_none(value: str | None) -> str | None:
     """``normalize_user_handle`` for data rather than a request: None, not 400."""
     try:

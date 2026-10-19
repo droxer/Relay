@@ -99,7 +99,7 @@ def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypat
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier, BrokenBarrierError
 
-    from relay.security import auth as auth_module
+    from relay.security import auth_accounts
 
     def make_store():
         return DatabaseAccountAuthStore(f"sqlite:///{tmp_path}/auth.db", create_schema=True)
@@ -107,7 +107,7 @@ def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypat
     first, second = make_store(), make_store()
     account = first.create_account("alice", "kestrel-vault-7719")
     rendezvous = Barrier(2)
-    original = auth_module.apply_onboarding_patch
+    original = auth_accounts.apply_onboarding_patch
 
     def overlapping_patch(*args):
         try:
@@ -118,7 +118,7 @@ def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypat
             pass
         return original(*args)
 
-    monkeypatch.setattr(auth_module, "apply_onboarding_patch", overlapping_patch)
+    monkeypatch.setattr(auth_accounts, "apply_onboarding_patch", overlapping_patch)
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
             pool.submit(store.update_user_preferences, account["id"], onboarding=patch)

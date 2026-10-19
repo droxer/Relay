@@ -9,7 +9,8 @@ from __future__ import annotations
 import copy
 
 from relay.persistence.session.rows import compact_session_snapshot
-from relay.persistence.store_common import TASK_EVENT_HANDLERS, apply_session_event
+from relay.persistence.task.reducer import TASK_EVENT_HANDLERS
+from relay.persistence.session.reducer import apply_session_event
 
 TS = "2026-10-18T00:00:00.000Z"
 

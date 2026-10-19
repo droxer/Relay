@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from relay.persistence.project_store import ProjectValidationError
-from relay.services.project_catalog import (
+from relay.persistence.project.store import ProjectValidationError
+from relay.projects.catalog import (
     PROJECT_CONTEXT_MAX_LENGTH,
     PROJECT_GOAL_MAX_LENGTH,
     update_project_payload,
 )
-from relay.services.project_context import project_context_brief
-from relay.services.project_runtime import project_runtime_snapshot
+from relay.projects.context import project_context_brief
+from relay.projects.runtime import project_runtime_snapshot
 
 
 def _project(**overrides) -> dict:
@@ -122,7 +122,7 @@ def test_goal_and_context_are_validated(field: str, value: object, code: str) ->
 
 
 def test_suggestions_are_attributed_bounded_and_deduplicated() -> None:
-    from relay.services.project_context import (
+    from relay.projects.context import (
         context_suggestions_from_run,
         merge_context_suggestions,
     )

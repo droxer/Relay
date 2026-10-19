@@ -11,13 +11,10 @@ from sqlalchemy import (
     select,
     update,
 )
-from ..store_common import (
-    _require_iso,
-    daemon_event,
-    now_iso,
-    publish_database_notification,
-    store_transaction,
-)
+from ..db_time import require_db_time
+from ..events import daemon_event
+from ...core.ids import now_iso
+from ..engine import publish_database_notification, store_transaction
 from .rows import (
     row_to_command,
 )
@@ -52,7 +49,7 @@ class WorkspaceResponseRows(DaemonStoreState):
                 raise ValueError("Workspace command already has a different response.")
             if command.get("status") != "dispatched":
                 raise ValueError("Workspace command is not actively dispatched.")
-            now = _require_iso(now_iso())
+            now = require_db_time(now_iso())
             conn.execute(
                 update(self.commands)
                 .where(self.commands.c.id == row["id"])

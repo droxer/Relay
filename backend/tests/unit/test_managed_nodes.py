@@ -7,8 +7,8 @@ from uuid import UUID
 
 import pytest
 import relay.core.managed_node_policy as managed_node_policy
-import relay.persistence.managed_node_store as managed_node_store_module
-from relay.persistence.managed_node_store import LocalManagedNodeStore
+import relay.persistence.daemon.managed_nodes as managed_node_store_module
+from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
 
 
 def test_managed_nodes_use_uuid_ids(tmp_path: Path) -> None:

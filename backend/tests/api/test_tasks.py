@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.services.task_dispatch import active_routine_occurrence
+from relay.tasks.routine_occurrences import active_routine_occurrence
 
 from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents
@@ -1873,7 +1873,7 @@ def test_blocked_dispatch_reports_the_recorded_failure_not_progress(
     created no thread — sending the operator looking for a thread that does not
     exist. The recorded outcome is what they need instead.
     """
-    from relay.services.task_dispatch import _unclaimable_dispatch
+    from relay.tasks.dispatch_outcome import _unclaimable_dispatch
 
     failed = {
         "status": "assigned",
@@ -1906,7 +1906,7 @@ def test_blocked_dispatch_reports_the_recorded_failure_not_progress(
 
 @pytest.mark.parametrize("active", [False, True, "reserved"])
 def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> None:
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -1966,7 +1966,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
 
 
 def test_task_delete_deletes_its_threads(monkeypatch) -> None:
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -2008,7 +2008,7 @@ def test_task_delete_deletes_its_threads(monkeypatch) -> None:
 @pytest.mark.parametrize("routine", [False, True])
 def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine) -> None:
     from blob_fakes import MemoryBlobStore
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -2065,7 +2065,7 @@ def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine)
 @pytest.mark.parametrize("session_status", ["created", "waiting_for_human", "completed"])
 @pytest.mark.parametrize("reserved", [False, True])
 def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, reserved) -> None:
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

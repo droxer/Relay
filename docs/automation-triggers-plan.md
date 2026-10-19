@@ -497,7 +497,7 @@ def _event_line(event: dict[str, Any]) -> str:
 
 **Files:**
 - Modify: `backend/relay/persistence/store_common.py` (`_apply_task_routine_fields`, task.created materialization ~L574)
-- Modify: `backend/relay/persistence/task_store.py` (`task_creation_events`, `task_update_events`, `routine_due_for_promotion`, `tasks` table, `task_to_row`)
+- Modify: `backend/relay/persistence/task/store.py` (`task_creation_events`, `task_update_events`, `routine_due_for_promotion`, `tasks` table, `task_to_row`)
 - Create: `backend/migrations/versions/20261002_0081_routine_trigger_kind.py`
 - Modify: `backend/relay/api/task_routes.py` (`routine_fields`, `create_task`, `update_task`)
 - Test: `backend/tests/api/test_automation_triggers_api.py`
@@ -698,8 +698,8 @@ Call `validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)` i
 ### Task 6: Automation store and transactional outbox
 
 **Files:**
-- Create: `backend/relay/persistence/automation_store.py`, `backend/migrations/versions/20261002_0082_automation_outbox.py`
-- Modify: `backend/relay/persistence/schema.py`, `backend/relay/persistence/task_store.py` (`DatabaseTaskStore.create_task`, `_append_events_once`), `backend/relay/persistence/session_store.py` (`DatabaseSessionStore._append_event_once`)
+- Create: `backend/relay/persistence/automation/store.py`, `backend/migrations/versions/20261002_0082_automation_outbox.py`
+- Modify: `backend/relay/persistence/schema.py`, `backend/relay/persistence/task/store.py` (`DatabaseTaskStore.create_task`, `_append_events_once`), `backend/relay/persistence/session/store.py` (`DatabaseSessionStore._append_event_once`)
 - Test: `backend/tests/unit/test_automation_outbox.py`
 
 **Interfaces:**
@@ -715,10 +715,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
 
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.session_store import DatabaseSessionStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.store_common import relay_event
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 NOW = datetime(2026, 10, 2, 12, tzinfo=timezone.utc)
 
@@ -812,7 +812,7 @@ def test_state_round_trips_and_lists_pending() -> None:
 
 - [ ] **Step 2: Run, expect FAIL** (`ModuleNotFoundError`).
 
-- [ ] **Step 3: Implement** `backend/relay/persistence/automation_store.py`:
+- [ ] **Step 3: Implement** `backend/relay/persistence/automation/store.py`:
 
 ```python
 """Durable plumbing for automations: the outbox, per-automation firing state,
@@ -1032,7 +1032,7 @@ SQLite returns naive datetimes; when comparing `pending_since`/`fired_window_sta
 ### Task 7: Triggered occurrences and the automation listing
 
 **Files:**
-- Modify: `backend/relay/persistence/task_store.py` (`routine_occurrence_events`, both stores: `create_triggered_occurrence`, `list_trigger_automations`)
+- Modify: `backend/relay/persistence/task/store.py` (`routine_occurrence_events`, both stores: `create_triggered_occurrence`, `list_trigger_automations`)
 - Modify: `backend/relay/persistence/protocols.py` (`TaskStore` protocol, next to `create_routine_occurrence` at ~L166)
 - Test: `backend/tests/unit/test_triggered_occurrence.py`
 
@@ -1051,7 +1051,7 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
+from relay.persistence.task.store import DatabaseTaskStore, LocalTaskStore
 
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
 
@@ -1241,9 +1241,9 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from relay.automations.matcher import AutomationMatcher
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
 

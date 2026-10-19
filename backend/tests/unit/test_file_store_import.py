@@ -11,7 +11,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from relay.app import create_app
-from relay.persistence.file_store_import import (
+from relay.persistence.legacy.file_stores import (
     local_file_stores_present,
     migrate_local_file_stores,
 )

@@ -1346,7 +1346,7 @@ def test_project_workspace_browses_persistent_root_without_thread(
             }
 
         monkeypatch.setattr(
-            "relay.api.project_routes.dispatch_workspace_command", dispatch
+            "relay.api.projects.projects.dispatch_workspace_command", dispatch
         )
 
         listing = client.get(

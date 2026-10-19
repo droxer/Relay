@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from relay.api.daemon_events import daemon_node_event
+from relay.api.computers.daemon_events import daemon_node_event
 
 
 def run(event_type: str, **extra: Any) -> dict[str, Any]:

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
-from relay.api.daemon_events import daemon_node_event
+from relay.api.computers.daemon_events import daemon_node_event
 from relay.app import create_app
 from relay.daemon_registry.registry import DaemonNodeRegistry
 

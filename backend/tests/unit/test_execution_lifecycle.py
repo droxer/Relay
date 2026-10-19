@@ -2,7 +2,7 @@ from datetime import datetime, UTC
 
 import pytest
 
-from relay.services.execution_lifecycle import ExecutionLifecycleService, execution_status
+from relay.execution.lifecycle import ExecutionLifecycleService, execution_status
 
 NOW = datetime(2026, 9, 16, tzinfo=UTC)
 

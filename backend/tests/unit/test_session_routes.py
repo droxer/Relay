@@ -3,13 +3,13 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
-from relay.api.session_routes import (
+from relay.api.threads.projections import session_awaits_human
+from relay.persistence.session.workspace_artifacts import (
     is_workspace_artifact,
-    session_awaits_human,
     workspace_artifacts,
 )
 from relay.app import create_app
-from relay.persistence.store_common import store_transaction
+from relay.persistence.engine import store_transaction
 from sqlalchemy import update
 
 

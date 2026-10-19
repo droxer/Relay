@@ -72,7 +72,7 @@ Backend coverage command:
 ```sh
 uv run --project backend --with coverage --extra dev python -m coverage run \
   --data-file=/tmp/relay-blockers.coverage \
-  --source=relay.api.daemon_node_routes,relay.daemon_registry.registry,relay.daemon_registry.node_backend,relay.persistence.agent_placement_store,relay.persistence.daemon_store,relay.sessions.controller \
+  --source=relay.api.daemon_node_routes,relay.daemon_registry.registry,relay.daemon_registry.node_backend,relay.persistence.agent.placements,relay.persistence.daemon.store,relay.sessions.controller \
   -m pytest backend/tests/unit/test_daemon_registry.py backend/tests/api/test_daemon_api.py \
   backend/tests/unit/test_execution_blocker_regressions.py backend/tests/unit/test_blocked_execution.py \
   backend/tests/unit/test_agent_routing.py backend/tests/unit/test_agent_placements.py \

@@ -15,7 +15,7 @@ Legacy layout read (relative to the data directory)::
     auth/sessions.json              login sessions            -- skipped
     auth/password-resets.json       password reset links      -- skipped
 
-Every file is read with ``_read_json``, which upgrades the pre-rename
+Every file is read with ``read_json``, which upgrades the pre-rename
 ``employee*`` keys on read, exactly as the file store did.
 
 Imported: every account (username, password hash, role, email, theme,
@@ -33,7 +33,7 @@ When ``RELAY_STORAGE=postgres`` or ``RELAY_AUTH_STORE=database`` is still set,
 the database already held the accounts and any files are leftovers the backend
 never read: the import records that and imports nothing.
 
-Idempotent and atomic like ``persistence/file_store_import.py``: a marker
+Idempotent and atomic like ``persistence/legacy/file_stores.py``: a marker
 keyed by the source root (kind ``auth-file-imports``) makes a second run a
 no-op, separate from the other stores' marker so an install that imported
 those first still gets its accounts. Without a marker, a row already in the
@@ -48,28 +48,20 @@ from typing import Any
 
 from sqlalchemy import select
 
-from ..persistence.file_store_import import (
+from ..persistence.legacy.file_stores import (
     RowImporter,
     import_marker,
     import_transaction,
     source_id,
     write_import_marker,
 )
-from ..persistence.store_common import (
-    _parse_iso,
-    _read_json,
-    create_all_tables,
-    shared_engine,
-    store_transaction,
-)
+from ..persistence.db_time import parse_db_time
+from ..persistence.legacy.files import read_json
+from ..persistence.engine import create_all_tables, shared_engine, store_transaction
 from ..persistence.tables import auth as auth_tables
-from .auth import (
-    database_account_to_row,
-    database_id_for_reference,
-    normalize_database_id,
-    slugify_handle,
-)
-from .user_handles import user_handle_or_none
+from .auth_rows import database_account_to_row
+from .entity_ids import database_id_for_reference, normalize_database_id
+from .user_handles import slugify_handle, user_handle_or_none
 
 ACCOUNT_IMPORT_MARKER_KIND = "auth-file-imports"
 _COUNT_KEYS = ("accounts", "users", "departments")
@@ -101,7 +93,7 @@ def accounts_imported(root: str | Path, database_url: str) -> bool:
 def _read_list(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    value = _read_json(path)
+    value = read_json(path)
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
 
@@ -145,7 +137,7 @@ class _AccountImporter(RowImporter):
         # A department is a shared label: one the database already has (the
         # same name hashes to the same id) is simply reused.
         if self._existing(auth_tables.departments, department_id) is None:
-            stamp = _parse_iso(account["createdAt"])
+            stamp = parse_db_time(account["createdAt"])
             name = (account.get("departmentName") or "").strip() or requested
             self._execute(
                 f"department {requested}",
@@ -191,9 +183,9 @@ class _AccountImporter(RowImporter):
             "email": account.get("email"),
             "department_id": department_id,
             "max_local_computers": None,
-            "created_at": _parse_iso(account["createdAt"]),
-            "updated_at": _parse_iso(account.get("updatedAt") or account["createdAt"]),
-            "deleted_at": _parse_iso(deleted_at) if deleted_at else None,
+            "created_at": parse_db_time(account["createdAt"]),
+            "updated_at": parse_db_time(account.get("updatedAt") or account["createdAt"]),
+            "deleted_at": parse_db_time(deleted_at) if deleted_at else None,
         }
         if self._put(auth_tables.users, row, label, ignore=_IGNORED_TIMESTAMPS):
             self.counts["users"] += 1

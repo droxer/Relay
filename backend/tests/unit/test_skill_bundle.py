@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from relay.services.skill_bundle import resolve_bundle
+from relay.skills.bundle import resolve_bundle
 
 
 class Store:

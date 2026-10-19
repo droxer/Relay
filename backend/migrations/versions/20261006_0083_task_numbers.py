@@ -47,7 +47,7 @@ task_events = sa.table(
 
 
 def _scope(snapshot: dict) -> str:
-    # Frozen copy of relay.persistence.task_numbering.task_number_scope.
+    # Frozen copy of relay.persistence.task.numbering.task_number_scope.
     owner = snapshot.get("ownerEmployeeId") or ""
     if snapshot.get("isRoutine"):
         return f"automation:{owner}"

@@ -11,8 +11,8 @@ from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import text
 
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY
-from ..persistence.store_common import store_transaction
+from ..persistence.automation.store import AUTOMATION_LOCK_KEY
+from ..persistence.engine import store_transaction
 from .clock import ScheduleClock, next_run_at
 from .firing import AutomationFiring, in_flight_occurrence, triggered_target
 from .matcher import AutomationMatcher
@@ -24,7 +24,8 @@ from .model import (
     triggers_of,
 )
 from .schedule import next_fire_after
-from ..services.task_dispatch import DispatchResult, existing_routine_occurrence_result
+from ..tasks.dispatch_outcome import DispatchResult
+from ..tasks.routine_occurrences import existing_routine_occurrence_result
 from ..security.actor import Actor
 
 if TYPE_CHECKING:
@@ -282,8 +283,6 @@ def _active_occurrence_result(
     need waking after its computer comes online; its assignment is immutable
     even if the definition was edited later."""
     if active.get("linkedSessionIds"):
-        # Deferred: services.task_dispatch imports relay.tasks, which imports this module.
-
         existing = existing_routine_occurrence_result(ctx, routine, active)
         if existing:
             return existing

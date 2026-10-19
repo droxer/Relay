@@ -1,9 +1,9 @@
 """Blocked explanations survive replay and remain tied to their execution."""
 import pytest
-from relay.persistence.task_lifecycle import apply_flow_status
-from relay.services.execution_lifecycle import execution_status
-from relay.services.dispatch_failure import record_dispatch_failure
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.lifecycle import apply_flow_status
+from relay.execution.lifecycle import execution_status
+from relay.tasks.dispatch_failure import record_dispatch_failure
+from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
 
 
@@ -60,7 +60,7 @@ def test_legacy_malformed_metadata_does_not_prevent_event_replay(metadata):
 
 @pytest.mark.parametrize("database", [False, True])
 def test_session_failure_records_source_in_detail_summary_and_replay(tmp_path, database):
-    from relay.persistence.session_store import DatabaseSessionStore
+    from relay.persistence.session.store import DatabaseSessionStore
     from store_fixtures import make_session_store
     from relay.sessions.controller import SessionController
     url = f"sqlite:///{tmp_path}/state.db"

@@ -11,54 +11,54 @@ from typing import Any
 from loguru import logger
 
 from ..automations.service import AutomationService
-from ..collaboration.service import assignment_team_snapshot
+from ..collaboration.assignments import assignment_team_snapshot
 from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.human_waits import WaitKind, new_question_id, wait_record
 from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
-from ..persistence.stores import valid_agent
+from ..persistence.validation import valid_agent
 from ..persistence.task.rows import task_claim_sort_key
 from ..persistence.task.rules import compact_task_writes, dispatch_claim_active
-from ..services.agent_routing import (
+from ..agents.routing import (
     AgentRoutingError,
     dispatch_failure_code,
     dispatch_reason_code,
     persist_legacy_session_computer_id,
     resolve_agent_assignments,
 )
-from ..services.dispatch_failure import (
+from ..tasks.dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
 )
-from ..services.issue_triage import issue_needs_project
-from ..services.project_runtime import (
+from ..tasks.issue_triage import issue_needs_project
+from ..projects.runtime import (
     ProjectDispatchError,
     resolve_project_task_assignments,
 )
-from ..services.task_rounds import (
+from ..tasks.rounds import (
     awaits_continuation,
     budget_exhausted_message,
     continuation_budget_exhausted,
     continuation_session_id,
 )
-from ..services.task_workspace import (
+from ..tasks.workspace import (
     recorded_task_workspace,
     resolve_task_workspace,
     task_workspace_nodes,
 )
-from ..services.team_dispatch import (
+from ..teams.dispatch import (
     TEAM_UNAVAILABLE_MESSAGE,
     TeamDispatchError,
     resolve_team_task_assignments,
     task_execution_user_id,
 )
-from ..services.task_placement import (
+from ..tasks.placement import (
     ensure_managed_capacity_for_task,
     materialize_legacy_task_assignment,
     task_goal_text,
 )
-from ..services.dispatch_results import dispatch_result_scope
+from ..tasks.dispatch_results import dispatch_result_scope
 
 PERMANENT_DISPATCH_CODES = {
     "agent_disabled",

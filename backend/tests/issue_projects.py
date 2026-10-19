@@ -1,6 +1,6 @@
 """Put test work inside a project.
 
-An issue outside a project never runs (relay/services/issue_triage.py), so a
+An issue outside a project never runs (relay/tasks/issue_triage.py), so a
 test that exercises dispatch mechanics — retries, blockers, WIP, teams — gives
 its work a project on the computer its agents already share. The project is
 the smallest one dispatch accepts: the first agent leads, every agent listed

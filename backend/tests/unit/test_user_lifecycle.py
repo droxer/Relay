@@ -4,12 +4,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
-from relay.persistence.agent_store import DatabaseAgentStore
-from relay.persistence.daemon_store import DatabaseDaemonStore
-from relay.persistence.team_store import DatabaseTeamStore
+from relay.persistence.agent.placements import DatabaseAgentPlacementStore
+from relay.persistence.agent.store import DatabaseAgentStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.team.store import DatabaseTeamStore
 from relay.security.auth import DatabaseAccountAuthStore
-from relay.services.user_lifecycle import cascade_engine, soft_delete_user
+from relay.accounts.user_lifecycle import cascade_engine, soft_delete_user
 
 
 class RaisingManagedNodeStore:

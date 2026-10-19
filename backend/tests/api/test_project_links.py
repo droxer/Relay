@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from relay.api import project_links
+from relay.api.projects import links as project_links
 from relay.app import create_app
 
 from test_project_routes import _bootstrap, _login_alice
@@ -303,7 +303,7 @@ def test_linked_project_artifacts_name_the_real_directory(env, daemon) -> None:
 
 def test_linked_workspace_browsing_requires_a_link_capable_daemon():
     from fastapi import HTTPException
-    from relay.api.workspace_transport import workspace_binding_target
+    from relay.api.computers.workspace_transport import workspace_binding_target
 
     binding = {"computerId": "node:one", "layout": "project", "subpath": "links/repo"}
     older = {"id": "one", "online": True, "capabilities": ["project-workspaces", "workspace-read-shared"]}

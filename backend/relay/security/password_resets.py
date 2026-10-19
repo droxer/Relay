@@ -6,7 +6,7 @@ spends the rest, so at most one link per Account works at a time. Redeeming
 sets the password and drops every session in one transaction.
 
 Which Accounts a request reaches, how often, and what gets emailed is decided
-by ``relay.services.password_reset``; this module only keeps the records.
+by ``relay.accounts.password_reset``; this module only keeps the records.
 """
 
 from __future__ import annotations
@@ -20,12 +20,10 @@ from typing import Any
 from sqlalchemy import delete, func, insert, or_, select, update
 
 from ..core.ids import new_database_id
-from ..persistence.store_common import store_transaction
-from .auth import (
-    DatabaseAccountAuthStore,
-    hash_password,
-    validate_password,
-)
+from ..persistence.engine import store_transaction
+from .auth import DatabaseAccountAuthStore
+from .credentials import hash_password
+from .passwords import validate_password
 
 # Spent and expired rows stay this long so the hourly request cap can count them.
 RETENTION = timedelta(days=1)

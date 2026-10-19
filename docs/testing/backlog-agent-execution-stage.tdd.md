@@ -51,7 +51,7 @@ Final validation:
 Focused lifecycle coverage combined the unit and API lifecycle suites:
 
 ```text
-backend/relay/persistence/task_lifecycle.py  64 statements, 3 missed, 95%
+backend/relay/persistence/task/lifecycle.py  64 statements, 3 missed, 95%
 ```
 
 The repository has no single configured JavaScript coverage script. The complete

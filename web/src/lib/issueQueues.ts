@@ -7,7 +7,7 @@
  * navigation is queues — each a saved slice over facts every task already
  * carries — rather than a status board.
  *
- * `issueNeedsProject` mirrors `backend/relay/services/issue_triage.py`: an
+ * `issueNeedsProject` mirrors `backend/relay/tasks/issue_triage.py`: an
  * issue outside a project is intake. It can be written and prioritised, but no
  * agent or team may take it and it never runs until triage moves it into a
  * project. Routine runs are exempt — a routine names its own crew.

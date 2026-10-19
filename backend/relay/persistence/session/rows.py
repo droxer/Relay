@@ -13,13 +13,11 @@ from sqlalchemy import (
     Text,
     literal_column,
 )
-from ..store_common import (
-    _parse_iso,
-    new_database_id,
-    split_cache_tokens,
-    safe_name,
-)
-from ..workspace_artifacts import workspace_file_key
+from ..db_time import parse_db_time
+from ...core.ids import new_database_id
+from ..token_usage import split_cache_tokens
+from ..validation import safe_name
+from .workspace_artifacts import workspace_file_key
 
 
 _AFFINITY_LOCKS: dict[str, RLock] = {}
@@ -63,8 +61,8 @@ def session_to_row(
         "final_outcome": session.get("finalOutcome"),
         "snapshot": compact_database_session_snapshot(session, event_count=version),
         "version": version,
-        "created_at": _parse_iso(session["createdAt"]),
-        "updated_at": _parse_iso(session["updatedAt"]),
+        "created_at": parse_db_time(session["createdAt"]),
+        "updated_at": parse_db_time(session["updatedAt"]),
         "deletion_requested_at": _parse_optional_iso(
             session.get("deletionRequestedAt")
         ),
@@ -75,7 +73,7 @@ def _parse_optional_iso(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return _parse_iso(value)
+        return parse_db_time(value)
     except ValueError:
         return None
 
@@ -123,7 +121,7 @@ def session_event_to_row(
         "session_id": session_pk,
         "sequence": sequence,
         "type": event["type"],
-        "timestamp": _parse_iso(event["timestamp"]),
+        "timestamp": parse_db_time(event["timestamp"]),
         "payload": event,
     }
 
@@ -157,7 +155,7 @@ def session_artifact_to_row(
         "content_type": artifact.get("contentType"),
         "byte_size": artifact.get("bytes", 0),
         "metadata": metadata or {},
-        "created_at": _parse_iso(artifact["createdAt"]),
+        "created_at": parse_db_time(artifact["createdAt"]),
     }
 
 
@@ -185,7 +183,7 @@ def session_run_token_usage_to_row(
         "total_tokens": record["total"],
         "agent": record["agent"],
         "reported": record["reported"],
-        "completed_at": _parse_iso(record["completedAt"]),
+        "completed_at": parse_db_time(record["completedAt"]),
     }
 
 

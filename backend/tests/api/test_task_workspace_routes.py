@@ -107,7 +107,7 @@ async def _stub_dispatch(_ctx: Any, node: dict, command: dict) -> dict:
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    monkeypatch.setattr("relay.api.task_routes.dispatch_workspace_command", _stub_dispatch)
+    monkeypatch.setattr("relay.api.tasks.workspace_files.dispatch_workspace_command", _stub_dispatch)
     with TemporaryDirectory() as root:
         app = create_app(root)
         test_client = TestClient(app)
@@ -298,7 +298,7 @@ def test_project_task_browses_the_recorded_project_workspace(
         }
 
     monkeypatch.setattr(
-        "relay.api.task_routes.dispatch_workspace_command", capture_dispatch
+        "relay.api.tasks.workspace_files.dispatch_workspace_command", capture_dispatch
     )
 
     response = client.get(
@@ -462,7 +462,7 @@ def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_t
     async def dispatch(ctx, node, command):
         captured.update(command)
         return {"type": "workspace.listing", "path": "", "exists": True, "entries": []}
-    monkeypatch.setattr("relay.api.task_routes.dispatch_workspace_command", dispatch)
+    monkeypatch.setattr("relay.api.tasks.workspace_files.dispatch_workspace_command", dispatch)
     response = client.get(f"/api/v1/tasks/{backlog_task['id']}/workspace/files")
     assert response.status_code == 200, response.text
     assert response.json()["nodeId"] == new["id"]
@@ -550,7 +550,7 @@ def test_unsnapshotted_artifact_reads_live_from_its_thread_workspace(
         return await _stub_dispatch(ctx, target, command)
 
     monkeypatch.setattr(
-        "relay.api.session_routes.dispatch_workspace_command", capture_dispatch
+        "relay.api.threads.artifacts.dispatch_workspace_command", capture_dispatch
     )
 
     response = client.get(
@@ -582,7 +582,7 @@ def test_unsnapshotted_artifact_past_the_live_limit_is_refused(
         return {**await _stub_dispatch(_ctx, _node, command), "truncated": True}
 
     monkeypatch.setattr(
-        "relay.api.session_routes.dispatch_workspace_command", truncated_dispatch
+        "relay.api.threads.artifacts.dispatch_workspace_command", truncated_dispatch
     )
 
     response = client.get(
@@ -620,7 +620,7 @@ def test_unsnapshotted_artifact_preserves_its_recorded_workspace_root(
         return await _stub_dispatch(ctx, target, command)
 
     monkeypatch.setattr(
-        "relay.api.session_routes.dispatch_workspace_command", capture_dispatch
+        "relay.api.threads.artifacts.dispatch_workspace_command", capture_dispatch
     )
     response = client.get(
         f"/api/v1/threads/{session['id']}/artifacts/{artifact['id']}"

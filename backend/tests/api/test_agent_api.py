@@ -11,7 +11,7 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from store_fixtures import overwrite_snapshot
 from user_ids import user_id
-from relay.services.node_agents import sync_node_agents
+from relay.computer.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
 
 ALICE = user_id("alice")

@@ -57,7 +57,7 @@ implementation. Test fixture corrections (computer identity and the phase name
     backend/tests/unit/test_task_scheduler.py \
     backend/tests/api/test_team_routes.py \
     backend/tests/api/test_project_routes.py -q \
-    --cov=relay.services.team_dispatch --cov=relay.services.project_runtime \
+    --cov=relay.teams.dispatch --cov=relay.projects.runtime \
     --cov-report=term-missing
   ```
 

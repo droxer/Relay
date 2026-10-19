@@ -7,7 +7,7 @@ import sys
 from .bootstrap.stores import retired_settings_chose_database_accounts
 from .core.environment import load_backend_env
 from .core.storage_config import database_url_from_env
-from .persistence.stores import DEFAULT_RELAY_DATA_DIR
+from .persistence.legacy.files import DEFAULT_RELAY_DATA_DIR
 from .security.auth import auth_store_from_env
 from .security.auth_file_import import (
     accounts_imported,

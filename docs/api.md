@@ -527,7 +527,7 @@ A project carries a brief every run in it reads: `description`, a one-line
 standing conventions, constraints, and definition of done. Changing `context`
 bumps `contextRevision`. The round's pinned project snapshot carries the brief;
 the backend renders it, with the enabled crew, into the agent's `[Project]`
-prompt section (`services/project_context.py`), and a daemon mirrors it to
+prompt section (`projects/context.py`), and a daemon mirrors it to
 `.relay/PROJECT.md` in the project workspace for that run.
 
 ```text
@@ -542,7 +542,7 @@ lead, then a planner. `revise: true` drafts again in the same thread from the
 last proposal and the owner's note. The run writes
 `.relay/project-setup-<runId>.json`; a daemon advertising `project-setup` reports it as
 `projectSetup` on `run.completed`, and the backend holds it to the shape the
-PATCH accepts (`services/project_setup.py`). `project.setup.state` moves
+PATCH accepts (`projects/setup.py`). `project.setup.state` moves
 `drafting` → `proposed` or `failed`, then `applied` or `dismissed` through the
 PATCH's `setupResolution` — applying is the same PATCH that carries the
 accepted name, brief, and roster, so every roster rule runs when it takes

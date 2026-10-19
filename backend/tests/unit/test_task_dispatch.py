@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.api.deps import AppContext
 from relay.app import create_app
-from relay.services.task_dispatch import start_task_on_ready_node
+from relay.tasks.dispatch import start_task_on_ready_node
 
 from issue_projects import PROJECT_CAPABILITY, project_for
 from user_ids import user_id as handle_user_id

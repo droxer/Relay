@@ -10,8 +10,8 @@ from relay.migrations_runtime.agent_computer_id import (
     log_agent_computer_id_status,
     pending_agent_computer_id_migrations,
 )
-from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore, create_node_placement
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.placements import DatabaseAgentPlacementStore, create_node_placement
+from relay.persistence.agent.store import DatabaseAgentStore
 
 
 def _node(node_id: str = "node-1") -> dict:

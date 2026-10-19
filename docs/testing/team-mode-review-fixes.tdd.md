@@ -52,7 +52,7 @@ COVERAGE_FILE=/tmp/relay-team-mode.coverage UV_CACHE_DIR=.uv-cache \
   backend/tests/unit/test_collaboration_policy.py \
   backend/tests/unit/test_daemon_registry.py \
   backend/tests/api/test_team_routes.py \
-  --cov=relay.services.team_dispatch --cov=relay.collaboration.service \
+  --cov=relay.teams.dispatch --cov=relay.collaboration.service \
   --cov-report=term-missing -q
 ```
 
