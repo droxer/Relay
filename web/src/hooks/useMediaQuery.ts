@@ -10,8 +10,14 @@ export function useMediaQuery(query: string): boolean {
     (onChange: () => void) => {
       if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
       const list = window.matchMedia(query);
-      list.addEventListener("change", onChange);
-      return () => list.removeEventListener("change", onChange);
+      // Safari before 14 (and some test doubles) only have the legacy
+      // addListener/removeListener pair.
+      if (typeof list.addEventListener === "function") {
+        list.addEventListener("change", onChange);
+        return () => list.removeEventListener("change", onChange);
+      }
+      list.addListener?.(onChange);
+      return () => list.removeListener?.(onChange);
     },
     [query],
   );

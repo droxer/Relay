@@ -235,6 +235,13 @@ export function ThreadListPanel({
                   <NavProjects size={ICON.sm} aria-hidden="true" />
                 </span>
                 <span className="project-folder-name">{project.name}</span>
+                {/* The crew and computer, which the tooltip says on a
+                    pointer. Touch has no tooltip, so on a phone this line is
+                    the only place a project row says anything but its name
+                    (thread.css shows it there only). */}
+                <span className="project-folder-meta" aria-hidden="true">
+                  {t("project.member_count", { count: project.members.length })} · {computerLabel}
+                </span>
                 {/* State only when it adds something. Active is the resting
                     state of nearly every project, so printing it on every row
                     made a column that reads identically all the way down and

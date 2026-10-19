@@ -639,6 +639,12 @@ tr[data-selected="true"] > td:first-child {
     display: none;
   }
 
+  /* The selection bar is gone on a phone, so a card's checkbox selected
+     into nothing — a 16px target on every board tile. */
+  .backlog-card-head .backlog-select-box {
+    display: none;
+  }
+
   .task-table > tbody > tr:not(.issues-band) {
     --row-mark-w: 22px;
     position: relative;
@@ -787,6 +793,17 @@ tr[data-selected="true"] > td:first-child {
   .task-table .task-col-ref a {
     min-height: 0;
     pointer-events: none;
+  }
+
+  /* An automation row keeps one action on a phone — Run now. Assigning is
+     a property edit, which happens in the record like every other one here;
+     its bare agent glyph beside the play button read as an unlabelled ○. */
+  .routine-table .routine-assign-btn {
+    display: none;
+  }
+
+  .routine-table > tbody > tr:has(.task-col-actions) {
+    --row-actions-w: var(--touch-target);
   }
 
   .task-table .task-col-assignee .task-assignee .agent-state {

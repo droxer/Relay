@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { MobileTopbarActions } from "./MobileTopbarSlot";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { MobileTopbarActions, PHONE_QUERY } from "./MobileTopbarSlot";
 import {
   ActionAdd,
   ICON,
@@ -27,13 +28,17 @@ export function TaskBoardHeaderActions({
   /** Omitted where nothing may be created (a read-only project). */
   onCreate?: () => void;
   leading?: ReactNode;
-  /** On a phone, refresh and create move into the top bar; `leading` (a view
-   *  toggle) stays where it is. For a toolbar that is not a PageHeader. */
+  /** On a phone, the view toggle and create move into the top bar. For a
+   *  toolbar that is not a PageHeader. */
   topbar?: boolean;
 }) {
+  /* A phone list is kept fresh by the shell's polling, and its top bar has
+     room for three glyphs beside the bell, not four: refresh is a desktop
+     affordance. */
+  const phone = useMediaQuery(PHONE_QUERY);
   const buttons = (
     <>
-      {onRefresh ? <Button
+      {onRefresh && !phone ? <Button
         type="button"
         variant="ghost"
         // Same ghost icon family as the create plus beside it — a bordered
@@ -59,10 +64,12 @@ export function TaskBoardHeaderActions({
       </Button> : null}
     </>
   );
-  return (
+  return topbar ? (
+    <MobileTopbarActions>{leading}{buttons}</MobileTopbarActions>
+  ) : (
     <>
       {leading}
-      {topbar ? <MobileTopbarActions>{buttons}</MobileTopbarActions> : buttons}
+      {buttons}
     </>
   );
 }

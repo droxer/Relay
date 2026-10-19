@@ -34,6 +34,8 @@ import { NodesView } from "./admin/NodesView";
 import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
 import { ManagedNodeHistory } from "./admin/ManagedNodeHistory";
 import { PageHeader } from "./PageHeader";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AdminViewToggle, type AdminView } from "./admin/AdminViewToggle";
 import { AddUserDrawer } from "./admin/AddUserDrawer";
 import { AddNodeDrawer, type AddNodeDrawerSuccess } from "./admin/AddNodeDrawer";
@@ -122,6 +124,10 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   const view = section;
   const setView = onSelectSection;
   const [layout, setLayout] = useState<AdminLayout>("card");
+  /* A phone has no width for the table: it always gets the cards, and the
+     card/list switch is hidden there (admin-v2-users.css). */
+  const phone = useMediaQuery(PHONE_QUERY);
+  const shownLayout: AdminLayout = phone ? "card" : layout;
   const { nodes, users, pollError, mergeNodes, refetch } = useAdminNodes(
     Boolean(admin),
     view === "dashboard" || layout === "list",
@@ -540,6 +546,10 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
           titleAs="h2"
           titleVariant="title"
           count={headerCount}
+          /* On a phone the section's create action is the top bar's "+",
+             as it is on every list route — not a full-width filled button on
+             a row of its own over the list. */
+          topbarActions={view === "users" || view === "computers"}
           actions={hasHeaderActions ? (
             <>
               {headerError ? (
@@ -565,11 +575,12 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                 <Button
                   type="button"
                   className="adm-create-action"
+                  aria-label={t("admin.v2.add_user_cta")}
                   onClick={() => setAddUserOpen(true)}
                   tooltip={t("admin.v2.add_user_cta")}
                 >
                   <ActionAdd size={ICON.md} aria-hidden="true" />
-                  {t("admin.v2.add_user_cta")}
+                  <span className="adm-create-action-label">{t("admin.v2.add_user_cta")}</span>
                 </Button>
               ) : null}
               {view === "waitlist" && waitlistOpen ? (
@@ -590,11 +601,12 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                 <Button
                   type="button"
                   className="adm-create-action"
+                  aria-label={t("admin.v2.add_node_cta")}
                   onClick={() => setAddNodeOpen(true)}
                   tooltip={t("admin.v2.add_node_cta")}
                 >
                   <ActionAdd size={ICON.md} aria-hidden="true" />
-                  {t("admin.v2.add_node_cta")}
+                  <span className="adm-create-action-label">{t("admin.v2.add_node_cta")}</span>
                 </Button>
               ) : null}
             </>
@@ -626,7 +638,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                 <UsersView
                   users={users}
                   nodes={nodes}
-                  layout={layout}
+                  layout={shownLayout}
                   onLayoutChange={setLayout}
                   onAddUser={() => setAddUserOpen(true)}
                   onDeleteUser={handleDeleteUser}
@@ -647,7 +659,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   <NodesView
                     nodes={nodes}
                     users={users}
-                    layout={layout}
+                    layout={shownLayout}
                     onLayoutChange={setLayout}
                     onRevealCredentials={handleRevealCredentials}
                     onRenameNode={(node) => void handleRenameNode(node)}

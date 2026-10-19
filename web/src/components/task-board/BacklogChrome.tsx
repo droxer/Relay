@@ -10,6 +10,8 @@ import {
 } from "../icons";
 import { TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "../../lib/backlog";
 import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { PHONE_QUERY } from "../MobileTopbarSlot";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
@@ -120,6 +122,23 @@ export function BacklogFiltersBar({
 }
 export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onChange: (view: BacklogView) => void }) {
   const { t } = useTranslation();
+  const phone = useMediaQuery(PHONE_QUERY);
+  /* A phone top bar has room for one glyph here, not a two-segment switch:
+     the button shows the view it switches TO, as a toolbar toggle does. */
+  if (phone) {
+    const next: BacklogView = view === "board" ? "list" : "board";
+    const NextIcon = next === "board" ? ViewBoard : ViewList;
+    return (
+      <Button variant="ghost"
+        type="button"
+        className="backlog-view-btn page-header-icon-action"
+        aria-label={t(next === "board" ? "backlog.view_board" : "backlog.view_list")}
+        onClick={() => onChange(next)}
+      >
+        <NextIcon size={ICON.md} />
+      </Button>
+    );
+  }
   return (
     <div className="backlog-view-toggle" role="group" aria-label={t("backlog.view")}>
       <Button variant="ghost"

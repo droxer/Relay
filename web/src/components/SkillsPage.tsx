@@ -19,6 +19,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "./PageHeader";
+import { MobileTopbarBack, PHONE_QUERY } from "./MobileTopbarSlot";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { SearchInput } from "@/components/ui/search-input";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
@@ -78,7 +80,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const { teams } = useTeams(currentUser.userId);
   const [pickedId, setSelectedId] = useState<string | null>(null);
   // Until the reader picks one, the list's first skill is the selection.
-  const selectedId = pickedId ?? skillsQuery.data?.skills[0]?.id ?? null;
+  /* A phone shows one pane at a time, as the agent and team rosters do: the
+     library until a skill is picked, then that skill alone. Wider screens open
+     on the first skill beside the list. */
+  const phone = useMediaQuery(PHONE_QUERY);
+  const selectedId = pickedId ?? (phone ? null : skillsQuery.data?.skills[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
@@ -260,7 +266,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   return (
     // A section, not a <main>: this renders inside the shell's <main>, and a
     // nested second main landmark is one screen readers cannot disambiguate.
-    <section className="skills-page" id="skills-panel" aria-label={t("skills.title")} data-view={skills.length ? "list" : "empty"}>
+    <section
+      className="skills-page"
+      id="skills-panel"
+      aria-label={t("skills.title")}
+      data-view={skills.length ? "list" : "empty"}
+      data-phone-pane={phone ? (selectedId ? "detail" : "list") : undefined}
+    >
       <nav className="skills-list" aria-label={t("skills.library_label")}>
         {/* A dedicated Infra page: the library rail heads it the way the
             agent and team rosters head theirs — kicker, title, and count
@@ -274,7 +286,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           titleAs="h2"
           titleVariant="title"
           layout="stacked"
-          topbarActions
+          topbarActions={phone && selectedId ? "inactive" : true}
           actions={
             <Button
               variant="ghost"
@@ -364,6 +376,9 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         )}
       </nav>
       <section className="skill-detail">
+        {phone && selectedId ? (
+          <MobileTopbarBack label={t("skills.title")} onBack={() => setSelectedId(null)} fallback={null} />
+        ) : null}
         {detailQuery.isLoading ? (
           <p className="route-loading" role="status">{t("skills.loading_detail")}</p>
         ) : detailQuery.error ? (
@@ -376,6 +391,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             <PageHeader
               kicker={`${t(`skills.source.${skill.source}`)} · ${t(`skills.visibility.${skill.visibility}`)}`}
               title={skill.displayName}
+              topbarTitle={skill.displayName}
               /* The slug rides beside the name rather than under it: a third
                  line made this the one header in the surface that could not
                  sit on the shared header step (section-rail.css). */
