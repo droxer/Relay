@@ -58,6 +58,10 @@ def missing_workspace_capability(
     )
 
 
+HEARTBEAT_FEATURES = ("poll-liveness", "state")
+HEARTBEAT_STATES = ("ready", "draining", "stopped")
+
+
 def run_request_is_live(
     run_request: dict[str, Any] | None, command: dict[str, Any]
 ) -> bool:
@@ -282,11 +286,21 @@ class CommandQueueMixin(RegistryState):
                 renew_known_active=renew_known_active,
             )
 
-    def heartbeat_settings(self) -> dict[str, int]:
-        """Return the server-owned lease policy advertised to every daemon."""
+    def heartbeat_settings(self) -> dict[str, Any]:
+        """Return the server-owned lease policy advertised to every daemon.
+
+        ``features`` tells a daemon what this backend's heartbeat understands:
+        ``poll-liveness`` — an in-flight command poll already renews liveness
+        and leases, so the daemon may skip beats while one is open;
+        ``state`` — the body may carry ``state`` (``draining``/``stopped``).
+        An older backend sends no list and the daemon keeps beating as before.
+        """
         return {
-            "intervalMs": max(1, self.liveness_timeout_ms // 3),
+            "intervalMs": max(
+                1, self.liveness_timeout_ms // config.HEARTBEATS_PER_LIVENESS_WINDOW
+            ),
             "timeoutMs": self.liveness_timeout_ms,
+            "features": list(HEARTBEAT_FEATURES),
         }
 
     def heartbeat(
@@ -296,6 +310,7 @@ class CommandQueueMixin(RegistryState):
         command_leases: list[tuple[str, str | None]] | None = None,
         *,
         lease_seconds: float = config.DAEMON_COMMAND_LEASE_SECONDS,
+        state: str | None = None,
     ) -> dict[str, Any]:
         """Renew node liveness and any run leases through one explicit seam.
 
@@ -303,14 +318,22 @@ class CommandQueueMixin(RegistryState):
         daemons, but new daemons no longer depend on either traffic pattern to
         remain live. Both user-device and managed nodes use this contract;
         infrastructure recovery remains a managed-node policy concern.
+
+        ``state`` ``draining`` marks the node as no longer taking work while it
+        stays online for its running agents; ``stopped`` is the graceful exit.
         """
+        if state is not None and state not in HEARTBEAT_STATES:
+            raise ValueError(f"Unknown heartbeat state {state!r}.")
         self._hydrate_node(sandbox_id)
         with self.dispatch_scope([sandbox_id]):
             self._assert_authorized(sandbox_id, token)
             sandbox = self.sandboxes[sandbox_id]
             if sandbox.get("retiredAt"):
                 raise PermissionError("Retired daemon node cannot renew its lease.")
-            self._mark_seen(sandbox_id)
+            if state == "stopped":
+                self.update_status(sandbox_id, {"status": "stopped", "lastError": None})
+            else:
+                self._mark_seen(sandbox_id, polled=False if state == "draining" else None)
             if command_leases:
                 self._renew_command_leases(
                     sandbox_id,
@@ -368,7 +391,7 @@ class CommandQueueMixin(RegistryState):
         renew_known_active: bool,
     ) -> list[dict[str, Any]]:
         self._assert_authorized(sandbox_id, token)
-        self._mark_seen(sandbox_id)
+        self._mark_seen(sandbox_id, polled=True)
         sandbox = self.sandboxes.get(sandbox_id)
         if sandbox and sandbox.get("retiredAt"):
             if renew_known_active:

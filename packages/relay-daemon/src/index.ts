@@ -14,8 +14,11 @@ import type {
   DaemonNodeCommand,
   DaemonNodeEvent,
   DaemonAgentHealth,
+  DaemonNodeHeartbeat,
+  DaemonNodeHeartbeatFeature,
   DaemonNodeHeartbeatResponse,
   DaemonNodeHeartbeatSettings,
+  DaemonNodeHeartbeatState,
   DaemonNodeRegistration,
   DaemonNodeRegistrationResponse,
   DaemonNodeRunCommand,
@@ -241,6 +244,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   // Set while execution endpoints fail transiently; cleared by an ownership
   // response or a 401/410 rejection. Registration alone cannot renew a run.
   let backendUnreachable = false;
+  let heartbeatFeatures = new Set<DaemonNodeHeartbeatFeature>();
+  let pollInFlightSince: number | undefined;
+  let sendDrainingHeartbeat: (() => Promise<void>) | undefined;
+  let sendStoppedHeartbeat: (() => Promise<void>) | undefined;
   const unreachableGraceMs = options.unreachableGraceMs
     ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
     ?? DEFAULT_UNREACHABLE_GRACE_MS;
@@ -413,6 +420,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       if (!shutdownController.signal.aborted) shutdownController.abort(`Daemon received ${signal}.`);
       setHealth("stopping", { signal });
       logger.info("daemon stopping", { sandboxId, signal });
+      // Tell the backend first that no more work will be taken, so nothing is
+      // dispatched into the drain and lost; the runs below keep their leases.
+      if (!credentialsRejected && heartbeatFeatures.has("state")) {
+        await sendDrainingHeartbeat?.();
+      }
       for (const active of activeRuns.values()) active.controller.abort(`Daemon received ${signal}.`);
       await Promise.race([
         Promise.allSettled([...activeRuns.values()].map((active) => active.promise)),
@@ -421,14 +433,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       // A deleted node has no record to mark stopped, and the backend rejects
       // the registration anyway. Skip it rather than log a bogus failure.
       if (!credentialsRejected) {
-        await postJson(
-          fetchFn,
-          relayApiUrl(backendUrl, "/daemon-node-registrations"),
-          buildRegistration(undefined, "stopped"),
-          undefined,
-          AbortSignal.timeout(shutdownRegistrationTimeoutMs),
-        ).catch((error: unknown) => {
-          logger.warn("daemon stopped registration failed", { sandboxId, error: error instanceof Error ? error.message : String(error) });
+        // One small beat says "stopped" where the backend understands it; an
+        // older backend still needs the full registration to learn the fact.
+        const stopNotice = heartbeatFeatures.has("state") && sendStoppedHeartbeat
+          ? sendStoppedHeartbeat()
+          : postJson(
+            fetchFn,
+            relayApiUrl(backendUrl, "/daemon-node-registrations"),
+            buildRegistration(undefined, "stopped"),
+            undefined,
+            AbortSignal.timeout(shutdownRegistrationTimeoutMs),
+          );
+        await stopNotice.catch((error: unknown) => {
+          logger.warn("daemon stopped notice failed", { sandboxId, error: error instanceof Error ? error.message : String(error) });
         });
       }
       await environment.close();
@@ -475,6 +492,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ?? initialHeartbeatSettings?.intervalMs
       ?? enrolledHeartbeatSettings?.intervalMs
       ?? DEFAULT_LIVENESS_HEARTBEAT_MS;
+    heartbeatFeatures = new Set(initialHeartbeatSettings?.features ?? enrolledHeartbeatSettings?.features ?? []);
     let lastRegisteredAt = Date.now();
     for (const record of provenExits) {
       // Persisted to the outbox before sending, so delivery survives another
@@ -508,7 +526,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       if (configuredLivenessHeartbeatIntervalMs === undefined) {
         livenessHeartbeatIntervalMs = settings.intervalMs;
       }
+      heartbeatFeatures = new Set(settings.features ?? []);
     };
+    const backendHeartbeatSupports = (feature: DaemonNodeHeartbeatFeature): boolean => heartbeatFeatures.has(feature);
+    // While a command poll is open on a backend that renews liveness and
+    // leases from it, a beat would only repeat what the poll already says.
+    // A poll held past its own wait is not trusted to be doing that.
+    const pollRenewsLiveness = (): boolean => backendHeartbeatSupports("poll-liveness")
+      && pollInFlightSince !== undefined
+      && performance.now() - pollInFlightSince < commandPollWaitMs;
     const renewExecutionLeases = (settings: DaemonNodeHeartbeatSettings | undefined, sentAt: number): void => {
       // A run the backend already settled while this daemon could not verify
       // its exit was reported gone by a person; only that frees its slot.
@@ -523,7 +549,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration, observedAt);
       }
     };
-    const sendHeartbeat = async (): Promise<void> => {
+    const sendHeartbeat = async (state?: DaemonNodeHeartbeatState, signal: AbortSignal = runtimeSignal): Promise<void> => {
       const sentAt = performance.now();
       const renewing = [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id));
       const url = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/heartbeat`);
@@ -537,9 +563,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               commandId: command.id,
               ...(command.leaseId ? { leaseId: command.leaseId } : {}),
             })),
-          },
+            ...(state ? { state } : {}),
+          } satisfies DaemonNodeHeartbeat,
           token,
-          runtimeSignal,
+          // A beat gets one interval, never the shared request timeout: a
+          // request that black-holes must not hold the schedule past the
+          // liveness window it exists to renew.
+          AbortSignal.any([signal, AbortSignal.timeout(heartbeatRequestTimeoutMs())]),
         );
         updateHeartbeatSettings(validHeartbeatSettings(response.heartbeat));
         if (response.heartbeat.commandLeases) {
@@ -561,6 +591,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         throw error;
       }
     };
+    const shutdownBeat = (state: DaemonNodeHeartbeatState) => async (): Promise<void> => {
+      // Not the runtime signal: it is already aborted while we drain.
+      await sendHeartbeat(state, AbortSignal.timeout(shutdownRegistrationTimeoutMs)).catch((error: unknown) => {
+        logger.warn(`daemon ${state} heartbeat failed`, { sandboxId, error: error instanceof Error ? error.message : String(error) });
+        if (state === "stopped") throw error;
+      });
+    };
+    sendDrainingHeartbeat = shutdownBeat("draining");
+    sendStoppedHeartbeat = shutdownBeat("stopped");
     // A busy computer still re-checks the runtimes no run is using, in the
     // background so the command poll (and any cancel it carries) is not held
     // up. Runtimes in use keep their last report: probing them would touch
@@ -607,16 +646,35 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     })().catch((error: unknown) => {
       if (!runtimeSignal.aborted) logger.error("terminal replay stopped", { error: String(error) });
     });
+    const heartbeatPeriodMs = (): number => Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3);
+    const heartbeatRequestTimeoutMs = (): number => Math.max(MIN_HEARTBEAT_REQUEST_TIMEOUT_MS, heartbeatPeriodMs());
     heartbeatTask = (async () => {
+      // Fixed rate with jitter, one attempt per tick. A failed beat is not
+      // retried inside the tick: the next tick is the retry, so a retry never
+      // waits longer than a beat, and a fleet started together drifts apart.
+      let nextBeatAt = performance.now() + heartbeatPeriodMs();
       while (!stopping && !runtimeSignal.aborted) {
-        await delay(Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3), runtimeSignal);
+        await delay(Math.max(0, nextBeatAt - performance.now()), runtimeSignal);
+        nextBeatAt = performance.now() + jittered(heartbeatPeriodMs());
         if (stopping || runtimeSignal.aborted) return;
-        await withBackendReconnect(
-          sendHeartbeat,
-          logger,
-          { sandboxId, what: "liveness heartbeat" },
-          reconnectControl,
-        );
+        if (pollRenewsLiveness()) continue;
+        try {
+          await sendHeartbeat();
+        } catch (error) {
+          if (stopping || runtimeSignal.aborted) return;
+          if (error instanceof DaemonHttpError && (error.status === 401 || error.status === 410)) {
+            reconnectControl.onCredentialRejected();
+            throw error;
+          }
+          const transient = !(error instanceof DaemonHttpError)
+            || error.status >= 500 || error.status === 408 || error.status === 429;
+          // Only an unreachable backend starts an execution grace; a refusal
+          // the backend itself answered is logged and tried again next beat.
+          if (transient) reconnectControl.onTransientFailure();
+          logger.warn("liveness heartbeat failed; next beat retries", {
+            sandboxId, error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     })().catch((error: unknown) => {
       if (stopping || runtimeSignal.aborted || error instanceof DaemonStoppedError) return;
@@ -661,6 +719,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           lastRegisteredAt = Date.now();
         }
         commandPollStartedAt = performance.now();
+        pollInFlightSince = commandPollStartedAt;
         const response = await getJson(
           fetchFn,
           daemonCommandsUrl(backendUrl, sandboxId, {
@@ -673,7 +732,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           }),
           token,
           runtimeSignal,
-        );
+        ).finally(() => { pollInFlightSince = undefined; });
         if (!response.ok) {
           const detail = `Command poll failed: ${response.status} ${await responseErrorDetail(response)}`;
           // A healthy registration route cannot renew execution ownership.
@@ -1984,7 +2043,16 @@ const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
 const SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS = 500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
-const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;
+const DEFAULT_LIVENESS_HEARTBEAT_MS = 6_000;
+// A beat's own request timeout is its period, but never so short that a
+// test-sized interval or a slow first byte fails every beat.
+const MIN_HEARTBEAT_REQUEST_TIMEOUT_MS = 1_000;
+const HEARTBEAT_JITTER_RATIO = 0.1;
+
+/** ±10 % so daemons started together do not beat in lockstep. */
+export function jittered(periodMs: number, random = Math.random): number {
+  return Math.round(periodMs * (1 + HEARTBEAT_JITTER_RATIO * (2 * random() - 1)));
+}
 // A hung agent CLI must not wedge busy-time refreshes for the rest of the run.
 const BUSY_RUNTIME_REFRESH_TIMEOUT_MS = 2 * 60_000;
 const MAX_COMMAND_LEASE_SECONDS = 60 * 60;

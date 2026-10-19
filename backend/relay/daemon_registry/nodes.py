@@ -18,7 +18,10 @@ from ..core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ..persistence.daemon.rules import EXECUTION_INTERRUPTED_STATE_KEY
+from ..persistence.daemon.rules import (
+    EXECUTION_INTERRUPTED_STATE_KEY,
+    NODE_POLL_DRAINED_AT,
+)
 from ..persistence.stores import (
     infer_node_location,
 )
@@ -205,8 +208,19 @@ def registered_node_record(
         "createdAt": prior.get("createdAt", now),
         "updatedAt": now,
         "lastSeenAt": now,
+        # A registration says nothing about polling; see preserve_node_poll.
+        **_present("lastPollAt", prior.get("lastPollAt")),
     }
 
+
+
+def _newest(key: str, *records: dict[str, Any]) -> dict[str, Any]:
+    """The later of two ISO timestamps by epoch, not by string shape."""
+    candidates = [(iso_epoch_ms(record.get(key)), record.get(key)) for record in records]
+    dated = [(ms, value) for ms, value in candidates if ms is not None and value]
+    if not dated:
+        return {}
+    return {key: max(dated)[1]}
 
 
 class NodeRegistrationMixin(RegistryState):
@@ -519,10 +533,16 @@ class NodeRegistrationMixin(RegistryState):
                     ],
                     "online": liveness["online"],
                     "stale": liveness["stale"],
+                    "dispatchable": liveness["dispatchable"],
                     "clientOutdated": client_outdated(sandbox),
                     **(
                         {"lastSeenAgeMs": liveness["lastSeenAgeMs"]}
                         if "lastSeenAgeMs" in liveness
+                        else {}
+                    ),
+                    **(
+                        {"lastPollAgeMs": liveness["lastPollAgeMs"]}
+                        if "lastPollAgeMs" in liveness
                         else {}
                     ),
                 }
@@ -614,7 +634,7 @@ class NodeRegistrationMixin(RegistryState):
             seen_at = 0.0
         return (
             0
-            if liveness["online"] and node_accepts_run(sandbox, active_runs=active_runs)
+            if liveness["dispatchable"] and node_accepts_run(sandbox, active_runs=active_runs)
             else 1,
             0 if liveness["online"] else 1,
             -seen_at,
@@ -625,6 +645,12 @@ class NodeRegistrationMixin(RegistryState):
         self._refresh_persisted_liveness(sandbox_id)
         sandbox = self.sandboxes.get(sandbox_id)
         return bool(sandbox and self._liveness(sandbox)["online"])
+
+    def is_dispatchable(self, sandbox_id: str) -> bool:
+        """Live and listening for commands: the admission rule for new work."""
+        self._refresh_persisted_liveness(sandbox_id)
+        sandbox = self.sandboxes.get(sandbox_id)
+        return bool(sandbox and self._liveness(sandbox)["dispatchable"])
 
     def assert_node_authenticated(self, sandbox_id: str, token: str | None) -> None:
         """Validate a runtime token without renewing liveness or changing node state."""
@@ -681,7 +707,13 @@ class NodeRegistrationMixin(RegistryState):
         self._last_seen_persisted_at[sandbox_id] = monotonic_now
         return True
 
-    def _mark_seen(self, sandbox_id: str) -> None:
+    def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
+        """Record an observation of the daemon.
+
+        ``polled`` True is a command poll (the node is listening for work);
+        False is a draining daemon saying it will not poll again; None is any
+        other authenticated traffic, which proves liveness only.
+        """
         with self.dispatch_scope([sandbox_id]):
             sandbox = self.sandboxes.get(sandbox_id)
             if not sandbox:
@@ -698,6 +730,13 @@ class NodeRegistrationMixin(RegistryState):
                 **{k: v for k, v in patch.items() if v is not None},
                 "updatedAt": now,
                 "lastSeenAt": now,
+                **(
+                    {"lastPollAt": now}
+                    if polled
+                    else {"lastPollAt": NODE_POLL_DRAINED_AT}
+                    if polled is False
+                    else {}
+                ),
             }
             if "lastError" in patch and patch["lastError"] is None:
                 updated.pop("lastError", None)
@@ -705,9 +744,10 @@ class NodeRegistrationMixin(RegistryState):
             # An idle long poll calls this several times per second per node.
             # The in-memory view above stays exact for this replica's liveness
             # checks; the durable write is throttled well inside the liveness
-            # timeout so other replicas still see the node as online.
-            if revived or self._should_persist_seen(sandbox_id):
-                self.daemon_store.mark_node_seen(sandbox_id, patch)
+            # timeout so other replicas still see the node as online. A drain
+            # is written at once: dispatch on every replica must stop now.
+            if revived or polled is False or self._should_persist_seen(sandbox_id):
+                self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
             if revived:
                 logger.info(
                     "Daemon node came online",
@@ -761,8 +801,22 @@ class NodeRegistrationMixin(RegistryState):
             self.active_commands[run["commandId"]] = {**run, "sandboxId": run["nodeId"]}
 
     def _refresh_persisted_liveness(self, sandbox_id: str | None = None) -> None:
-        """Merge newer durable lease observations from another backend replica."""
+        """Merge newer durable lease observations from another backend replica.
+
+        The fleet-wide form (no id) is throttled to one store read per persist
+        interval: another replica cannot have written anything newer than that
+        in between, and every list route calls this, so an unthrottled read
+        would scan ``daemon_nodes`` under the global lock on each request.
+        """
         with self.dispatch_lock:
+            if sandbox_id is None:
+                monotonic_now = time.monotonic()
+                if (
+                    monotonic_now - self._last_fleet_liveness_refresh_at
+                    < config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
+                ):
+                    return
+                self._last_fleet_liveness_refresh_at = monotonic_now
             persisted_nodes = (
                 [self.daemon_store.get_node(sandbox_id)]
                 if sandbox_id
@@ -783,20 +837,19 @@ class NodeRegistrationMixin(RegistryState):
                         },
                     }
                     continue
-                persisted_seen = persisted.get("lastSeenAt") or ""
-                current_seen = current.get("lastSeenAt") or ""
                 refreshed = {
                     **current,
                     **persisted,
-                    "lastSeenAt": max(persisted_seen, current_seen),
-                    "updatedAt": max(
-                        persisted.get("updatedAt") or "",
-                        current.get("updatedAt") or "",
-                    ),
+                    **_newest("lastSeenAt", persisted, current),
+                    **_newest("updatedAt", persisted, current),
+                    **_newest("lastPollAt", persisted, current),
                 }
                 if persisted.get("retiredAt"):
                     refreshed["agents"] = current.get("agents", refreshed.get("agents"))
-                if current_seen >= persisted_seen and not persisted.get("retiredAt"):
+                current_is_newer = (iso_epoch_ms(current.get("lastSeenAt")) or 0) >= (
+                    iso_epoch_ms(persisted.get("lastSeenAt")) or 0
+                )
+                if current_is_newer and not persisted.get("retiredAt"):
                     refreshed["status"] = current.get("status", persisted.get("status"))
                     if current.get("lastError"):
                         refreshed["lastError"] = current["lastError"]
@@ -806,7 +859,7 @@ class NodeRegistrationMixin(RegistryState):
 
     def _liveness(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         if sandbox.get("status") == "stopped" or not sandbox.get("lastSeenAt"):
-            return {"online": False, "stale": True}
+            return {"online": False, "stale": True, "dispatchable": False}
         seen_ms = iso_epoch_ms(sandbox["lastSeenAt"])
         if seen_ms is None:
             logger.warning(
@@ -814,11 +867,37 @@ class NodeRegistrationMixin(RegistryState):
                 sandbox_id=sandbox.get("id"),
                 last_seen=sandbox.get("lastSeenAt"),
             )
-            return {"online": False, "stale": True}
-        age = max(0, int(time.time() * 1000 - seen_ms))
+            return {"online": False, "stale": True, "dispatchable": False}
+        now_ms = time.time() * 1000
+        age = max(0, int(now_ms - seen_ms))
         online = age <= self.liveness_timeout_ms
         if not online:
             logger.debug(
                 "Daemon node stale", sandbox_id=sandbox["id"], last_seen_age_ms=age
             )
-        return {"online": online, "stale": not online, "lastSeenAgeMs": age}
+        # Alive is not the same as listening for work. A daemon that beats but
+        # whose command poll is failing (or that said it is draining) must not
+        # be handed a run it will never take. A node that has not polled yet
+        # keeps the benefit of the doubt: its first poll follows registration
+        # within a second.
+        poll_ms = iso_epoch_ms(sandbox.get("lastPollAt"))
+        poll_age = max(0, int(now_ms - poll_ms)) if poll_ms is not None else None
+        dispatchable = online and (
+            poll_age is None or poll_age <= self.poll_freshness_ms
+        )
+        return {
+            "online": online,
+            "stale": not online,
+            "dispatchable": dispatchable,
+            "lastSeenAgeMs": age,
+            **({"lastPollAgeMs": poll_age} if poll_age is not None else {}),
+        }
+
+    @property
+    def poll_freshness_ms(self) -> int:
+        """How old a node's last command poll may be and still count as listening.
+
+        One maximal long-poll hold plus the liveness window: a poll held the
+        full wait and then delayed by whatever the heartbeat tolerates.
+        """
+        return int(config.COMMAND_POLL_MAX_WAIT_SECONDS * 1000) + self.liveness_timeout_ms

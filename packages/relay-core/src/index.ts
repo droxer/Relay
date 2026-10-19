@@ -138,6 +138,8 @@ export {
   type DaemonNodeCommand,
   type DaemonNodeEvent,
   type DaemonNodeHeartbeat,
+  type DaemonNodeHeartbeatFeature,
+  type DaemonNodeHeartbeatState,
   type DaemonNodeHeartbeatResponse,
   type DaemonNodeHeartbeatSettings,
   type DaemonNodeRegistration,

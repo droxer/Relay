@@ -118,7 +118,7 @@ def ready_node_for_task(
             "stopped",
             "failed",
             "provisioning",
-        ) or not registry.is_live(node["id"]):
+        ) or not registry.is_dispatchable(node["id"]):
             continue
         disabled = set(node.get("disabledAgents") or [])
         if any(agent in disabled for agent in requested_agents):

@@ -57,10 +57,13 @@ nodes = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("last_seen_at", DateTime(timezone=True), nullable=True),
+    # When the daemon last took commands. Liveness says the daemon is alive;
+    # this says it is listening for work, which is what dispatch needs.
+    Column("last_poll_at", DateTime(timezone=True), nullable=True),
     Index("ix_daemon_nodes_user_id", "user_id"),
-    # updated_at and last_seen_at are deliberately unindexed: every
-    # heartbeat rewrites both, and leaving them out of every index is what
-    # lets PostgreSQL apply that write as a HOT update.
+    # updated_at, last_seen_at, and last_poll_at are deliberately unindexed:
+    # every heartbeat rewrites them, and leaving them out of every index is
+    # what lets PostgreSQL apply that write as a HOT update.
     Index("ix_daemon_nodes_managed_node_id", "managed_node_id"),
     Index("ix_daemon_nodes_workspace_id", "workspace_id"),
     Index("ix_daemon_nodes_retired_at", "retired_at"),

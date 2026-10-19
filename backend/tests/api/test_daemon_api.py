@@ -22,6 +22,12 @@ from user_ids import user_id
 from datetime import UTC
 
 ALICE = user_id("alice")
+# The default lease policy: a 30 s window, beats every fifth of it.
+HEARTBEAT_POLICY = {
+    "intervalMs": 6_000,
+    "timeoutMs": 30_000,
+    "features": ["poll-liveness", "state"],
+}
 BOB = user_id("bob")
 CAROL = user_id("carol")
 
@@ -235,8 +241,9 @@ def test_daemon_heartbeat_is_authenticated_and_returns_lease_policy(
 
         assert response.status_code == 200
         heartbeat = response.json()["heartbeat"]
-        assert heartbeat["intervalMs"] == 5_000
-        assert heartbeat["timeoutMs"] == 15_000
+        assert heartbeat["intervalMs"] == 6_000
+        assert heartbeat["timeoutMs"] == 30_000
+        assert heartbeat["features"] == ["poll-liveness", "state"]
         assert heartbeat["observedAt"]
         assert (
             client.post(
@@ -303,7 +310,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         assert enrollment.status_code == 201
         runtime = enrollment.json()
         assert runtime["sandboxMode"] == "boxlite"
-        assert runtime["heartbeat"] == {"intervalMs": 5_000, "timeoutMs": 15_000}
+        assert runtime["heartbeat"] == HEARTBEAT_POLICY
 
         duplicate = client.post(
             "/api/v1/daemon-node-enrollments",
@@ -328,10 +335,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         )
         assert registered.status_code == 200
         assert registered.json()["managedNodeId"] == managed_node["id"]
-        assert registered.json()["heartbeat"] == {
-            "intervalMs": 5_000,
-            "timeoutMs": 15_000,
-        }
+        assert registered.json()["heartbeat"] == HEARTBEAT_POLICY
 
         # Enrollment and readiness can beat the provider's allocation response.
         attempt_id = attempt_response.json()["attempt"]["id"]
@@ -4586,3 +4590,52 @@ def test_a_supervisor_that_predates_the_user_rename_still_reconciles(monkeypatch
         nodes = client.get("/api/v1/admin/daemon-nodes", headers=admin).json()["nodes"]
         assert [node["employeeId"] for node in nodes] == [ALICE]
         assert [node["userId"] for node in nodes] == [ALICE]
+
+
+def test_daemon_heartbeat_state_drains_and_rejects_unknown_values(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _login_admin(client)
+        app.state.registry.register(
+            {
+                "sandboxId": "sbx_drain",
+                "userId": ALICE,
+                "token": "node_token",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces"],
+                "status": "ready",
+            }
+        )
+        headers = {"Authorization": "Bearer node_token"}
+
+        rejected = client.post(
+            "/api/v1/daemon-nodes/sbx_drain/heartbeat",
+            json={"state": "sleeping"},
+            headers=headers,
+        )
+        assert rejected.status_code == 400
+
+        draining = client.post(
+            "/api/v1/daemon-nodes/sbx_drain/heartbeat",
+            json={"state": "draining", "activeCommandLeases": []},
+            headers=headers,
+        )
+        assert draining.status_code == 200
+
+        [node] = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+        assert node["online"] is True
+        assert node["dispatchable"] is False
+
+        stopped = client.post(
+            "/api/v1/daemon-nodes/sbx_drain/heartbeat",
+            json={"state": "stopped"},
+            headers=headers,
+        )
+        assert stopped.status_code == 200
+        [node] = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+        assert node["status"] == "stopped"
+        assert node["online"] is False

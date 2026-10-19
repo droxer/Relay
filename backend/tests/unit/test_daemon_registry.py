@@ -6635,9 +6635,9 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
             super().__init__(sqlite_url(root), create_schema=True)
             self.mark_seen_calls = 0
 
-        def mark_node_seen(self, node_id, patch=None):
+        def mark_node_seen(self, node_id, patch=None, *, polled=None):
             self.mark_seen_calls += 1
-            return super().mark_node_seen(node_id, patch)
+            return super().mark_node_seen(node_id, patch, polled=polled)
 
     with TemporaryDirectory() as root:
         session_store = make_session_store(root)
@@ -6711,8 +6711,9 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
 
         heartbeat = registry.heartbeat(node_id, "node_token")
 
-        assert heartbeat["intervalMs"] == 5_000
+        assert heartbeat["intervalMs"] == 3_000
         assert heartbeat["timeoutMs"] == 15_000
+        assert heartbeat["features"] == ["poll-liveness", "state"]
         assert heartbeat["observedAt"] != "2020-01-01T00:00:00.000Z"
         assert registry.get(node_id)["status"] == "ready"
         assert registry.get(node_id)["nodeLocation"] == node_location
@@ -8809,3 +8810,183 @@ def test_a_wordless_blocked_verdict_is_still_the_agents_question() -> None:
             assert (awaiting["kind"], awaiting["text"]) == ("question", None)
 
     asyncio.run(run_flow())
+
+
+# -- liveness versus listening for work -------------------------------------
+
+
+def _register_listening_node(registry: DaemonNodeRegistry, node_id: str = "sbx_poll") -> None:
+    registry.register(
+        {
+            "sandboxId": node_id,
+            "userId": "alice",
+            "token": "node_token",
+            "protocolVersion": 1,
+            "supportedAgents": ["codex"],
+            "capabilities": ["thread-workspaces"],
+            "status": "ready",
+        },
+        authorized_node_location="user-device",
+    )
+
+
+def test_node_that_never_polled_keeps_the_benefit_of_the_doubt() -> None:
+    with TemporaryDirectory() as root:
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
+        _register_listening_node(registry)
+
+        [node] = registry.monitor_nodes()
+
+        assert node["online"] is True
+        assert node["dispatchable"] is True
+        assert "lastPollAgeMs" not in node
+        assert registry.is_dispatchable("sbx_poll") is True
+
+
+def test_node_with_a_stale_poll_is_online_but_not_dispatchable() -> None:
+    with TemporaryDirectory() as root:
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
+        _register_listening_node(registry)
+        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+        assert registry.monitor_nodes()[0]["dispatchable"] is True
+
+        # The heartbeat keeps arriving while the command poll has gone quiet.
+        stale_poll = {**registry.sandboxes["sbx_poll"], "lastPollAt": "2020-01-01T00:00:00.000Z"}
+        registry.sandboxes["sbx_poll"] = stale_poll
+        registry.daemon_store.register_node(stale_poll)
+        registry.heartbeat("sbx_poll", "node_token")
+        [node] = registry.monitor_nodes()
+
+        assert node["online"] is True
+        assert node["dispatchable"] is False
+        assert node["lastPollAgeMs"] > registry.poll_freshness_ms
+        assert registry.is_live("sbx_poll") is True
+        assert registry.is_dispatchable("sbx_poll") is False
+        # Listening is pinned on the durable row too, so every replica agrees.
+        assert registry.daemon_store.get_node("sbx_poll")["lastPollAt"] == (
+            "2020-01-01T00:00:00.000Z"
+        )
+
+        # The next poll makes it dispatchable again.
+        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+        assert registry.monitor_nodes()[0]["dispatchable"] is True
+
+
+def test_draining_heartbeat_stops_dispatch_but_keeps_the_node_online() -> None:
+    with TemporaryDirectory() as root:
+        daemon_store = make_daemon_store(root)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        _register_listening_node(registry)
+        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+
+        registry.heartbeat("sbx_poll", "node_token", state="draining")
+        [node] = registry.monitor_nodes()
+
+        assert node["online"] is True
+        assert node["status"] == "ready"
+        assert node["dispatchable"] is False
+        # Written at once, not on the throttled heartbeat schedule.
+        assert daemon_store.get_node("sbx_poll")["lastPollAt"] == "1970-01-01T00:00:00.000Z"
+
+        # A replica that never saw the drain reads it from the store.
+        other = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        assert other.is_dispatchable("sbx_poll") is False
+
+        # Restarting the daemon (a fresh poll) puts the node back to work.
+        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+        assert registry.monitor_nodes()[0]["dispatchable"] is True
+
+
+def test_stopped_heartbeat_takes_the_node_offline() -> None:
+    with TemporaryDirectory() as root:
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
+        _register_listening_node(registry)
+
+        registry.heartbeat("sbx_poll", "node_token", state="stopped")
+        [node] = registry.monitor_nodes()
+
+        assert node["status"] == "stopped"
+        assert node["online"] is False
+        assert node["dispatchable"] is False
+
+
+def test_heartbeat_rejects_an_unknown_state() -> None:
+    with TemporaryDirectory() as root:
+        registry = DaemonNodeRegistry(make_session_store(root), make_daemon_store(root))
+        _register_listening_node(registry)
+        with pytest.raises(ValueError, match="state"):
+            registry.heartbeat("sbx_poll", "node_token", state="sleeping")
+
+
+def test_registration_keeps_the_prior_poll_observation() -> None:
+    """A daemon stuck re-registering after each failed poll must not look
+    dispatchable again just because it registered."""
+    with TemporaryDirectory() as root:
+        daemon_store = make_daemon_store(root)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        _register_listening_node(registry)
+        registry.sandboxes["sbx_poll"] = {
+            **registry.sandboxes["sbx_poll"],
+            "lastPollAt": "2020-01-01T00:00:00.000Z",
+        }
+        daemon_store.mark_node_seen("sbx_poll", {"status": "ready"})
+        daemon_store.register_node(
+            {**registry.sandboxes["sbx_poll"], "lastPollAt": "2020-01-01T00:00:00.000Z"}
+        )
+
+        _register_listening_node(registry)
+
+        assert registry.sandboxes["sbx_poll"]["lastPollAt"] == "2020-01-01T00:00:00.000Z"
+        assert daemon_store.get_node("sbx_poll")["lastPollAt"] == "2020-01-01T00:00:00.000Z"
+        assert registry.is_dispatchable("sbx_poll") is False
+
+
+def test_fleet_liveness_refresh_reads_the_store_once_per_interval() -> None:
+    """Every list route refreshes fleet liveness; only one of those per
+    persist interval may scan the node table."""
+
+    class CountingStore(DatabaseDaemonStore):
+        def __init__(self, root: str):
+            super().__init__(sqlite_url(root), create_schema=True)
+            self.list_calls = 0
+
+        def list_nodes(self):
+            self.list_calls += 1
+            return super().list_nodes()
+
+    with TemporaryDirectory() as root:
+        daemon_store = CountingStore(root)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        _register_listening_node(registry)
+        daemon_store.list_calls = 0
+
+        registry.monitor_nodes()
+        registry.monitor_nodes()
+        registry.list_ready()
+        registry.find_by_user("alice")
+
+        assert daemon_store.list_calls == 1
+
+        # The next interval reads again.
+        registry._last_fleet_liveness_refresh_at = 0.0
+        registry.monitor_nodes()
+        assert daemon_store.list_calls == 2
+
+
+def test_replica_merge_compares_timestamps_by_instant_not_by_string() -> None:
+    with TemporaryDirectory() as root:
+        daemon_store = make_daemon_store(root)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        _register_listening_node(registry)
+        # Same instant, longer string: a lexical max would pick the wrong one
+        # once the in-memory value is later but shorter.
+        registry.sandboxes["sbx_poll"] = {
+            **registry.sandboxes["sbx_poll"],
+            "lastSeenAt": "2030-01-01T00:00:01Z",
+        }
+        daemon_store.mark_node_seen("sbx_poll", {"status": "ready"})
+        registry._last_fleet_liveness_refresh_at = 0.0
+
+        registry._refresh_persisted_liveness()
+
+        assert registry.sandboxes["sbx_poll"]["lastSeenAt"] == "2030-01-01T00:00:01Z"

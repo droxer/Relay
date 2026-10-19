@@ -79,12 +79,12 @@ describe("isStale + visualStatus", () => {
     assert.equal(isStale(n), true);
   });
 
-  it("treats nodes seen >15s ago as stale", () => {
-    const n = node({ id: "a", lastSeenAt: new Date(Date.now() - 20_000).toISOString() });
-    assert.equal(isStale(n), true);
+  it("never judges staleness by its own clock when the backend sent no flag", () => {
+    const n = node({ id: "a", online: true, lastSeenAt: new Date(Date.now() - 20_000).toISOString() });
+    assert.equal(isStale(n), false);
   });
 
-  it("treats fresh online nodes as not stale", () => {
+  it("treats online nodes as not stale", () => {
     const n = node({ id: "a", lastSeenAt: new Date().toISOString() });
     assert.equal(isStale(n), false);
     assert.equal(visualStatus(n), "ready");
@@ -105,7 +105,7 @@ describe("nodeAgentPresence", () => {
 
     const stale = node({
       id: "b",
-      lastSeenAt: new Date(Date.now() - 20_000).toISOString(),
+      stale: true,
       agents: { claude: "ready", codex: "ready", pi: "ready", kimi: "ready" },
     });
     assert.equal(nodeAgentPresence(stale, "claude"), "offline");

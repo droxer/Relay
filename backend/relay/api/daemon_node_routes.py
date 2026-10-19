@@ -10,7 +10,9 @@ from starlette.concurrency import run_in_threadpool
 
 from ..core.ids import new_database_id
 from ..core.models import DaemonNodeRegistration
+from ..daemon_registry import config as registry_config
 from ..daemon_registry.records import public_sandbox_record
+from ..daemon_registry.commands import HEARTBEAT_STATES
 from ..daemon_registry.records import DeletedDaemonNodeError, UnknownDaemonNodeError
 from ..services.computer_limits import assert_local_computer_allowed
 from ..services.computer_names import (
@@ -62,7 +64,7 @@ WORKSPACE_EVENT_TYPES = frozenset(
 # the admin create route, so it lives in helpers rather than here.
 LOCAL_ENROLLMENT_SANDBOX_MODE = USER_DEVICE_SANDBOX_MODE
 
-MAX_COMMAND_POLL_WAIT_SECONDS = 30.0
+MAX_COMMAND_POLL_WAIT_SECONDS = registry_config.COMMAND_POLL_MAX_WAIT_SECONDS
 MAX_COMMAND_POLL_LIMIT = 50
 MAX_COMMAND_LEASE_SECONDS = 60 * 60.0
 MAX_ACTIVE_COMMAND_IDS = 50
@@ -636,6 +638,9 @@ async def daemon_heartbeat(
 ) -> dict[str, Any]:
     """Renew a daemon lease independently of command and event traffic."""
     body = await json_body(request)
+    state = body.get("state")
+    if state is not None and state not in HEARTBEAT_STATES:
+        raise HTTPException(400, "state must be one of ready, draining, stopped.")
     try:
         return {
             "heartbeat": await run_in_threadpool(
@@ -647,6 +652,7 @@ async def daemon_heartbeat(
                     body.get("leaseSeconds"), default=60.0, minimum=1.0,
                     maximum=MAX_COMMAND_LEASE_SECONDS, field="leaseSeconds",
                 ),
+                state=state,
             )
         }
     except DeletedDaemonNodeError as error:
