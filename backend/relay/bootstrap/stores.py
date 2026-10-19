@@ -43,15 +43,13 @@ from dataclasses import dataclass
 
 # Accounts, daemon, agent, team, placement, and chat state used to have
 # file-backed twins selected by these variables. They are database-only now;
-# any existing JSON under the data directory is imported once at boot
-# (relay/security/auth_file_import.py, relay/persistence/legacy/file_stores.py).
+# retired file-backed JSON is no longer imported.
 RETIRED_STORE_SETTINGS = (
     "RELAY_STORAGE",
     "RELAY_AUTH_STORE",
     "RELAY_DAEMON_STORE",
     "RELAY_CHAT_STORE",
 )
-_DATABASE_STORAGE_VALUES = frozenset({"postgres", "postgresql", "database", "db"})
 
 
 def warn_retired_store_settings() -> None:
@@ -61,18 +59,6 @@ def warn_retired_store_settings() -> None:
                 "{} is ignored: that state is always kept in the configured database.",
                 name,
             )
-
-
-def retired_settings_chose_database_accounts() -> bool:
-    """Whether the retired switches still say accounts lived in the database.
-
-    They chose the database account store, so any account files under the
-    data directory are leftovers the backend never read and must not be
-    imported over the real accounts.
-    """
-    storage = os.environ.get("RELAY_STORAGE", "").strip().lower()
-    auth = os.environ.get("RELAY_AUTH_STORE", "").strip().lower()
-    return storage in _DATABASE_STORAGE_VALUES or auth == "database"
 
 
 def _aggregate_database_url(aggregate: str) -> tuple[str, bool]:

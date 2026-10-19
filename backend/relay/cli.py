@@ -22,13 +22,7 @@ from .persistence.blob.migration import migrate_blobs
 from .persistence.blob.store import blob_store_from_env
 from .persistence.ops.backup import backup_database, backup_target_from_env
 from .persistence.account.handle_backfill import plan_handles, summarize
-from .persistence.legacy.sessions import migrate_local_sessions
-from .persistence.session.store import DatabaseSessionStore
 from .persistence.ops.storage_report import storage_report
-from .persistence.legacy.operational import migrate_local_operational_state
-from .persistence.legacy.file_stores import migrate_local_file_stores
-from .security.auth_file_import import migrate_legacy_accounts
-from .bootstrap.stores import retired_settings_chose_database_accounts
 
 load_backend_env()
 
@@ -82,9 +76,6 @@ def main(argv: list[str] | None = None) -> None:
             "serve-with-worker",
             "worker",
             "worker-schema",
-            "migrate-local-sessions",
-            "migrate-local-operational-state",
-            "migrate-local-file-stores",
             "migrate-blobs-to-r2",
             "backup-database",
             "rehearse-user-handles",
@@ -108,29 +99,6 @@ def main(argv: list[str] | None = None) -> None:
         else:
             asyncio.run(run_worker(args.data_dir))
         return
-    if args.command == "migrate-local-operational-state":
-        if not args.data_dir:
-            parser.error("migrate-local-operational-state requires --data-dir")
-        report = migrate_local_operational_state(args.data_dir,
-            database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
-        print(json.dumps(report, indent=2))
-        return
-    if args.command == "migrate-local-file-stores":
-        # The backend also runs this at boot; by hand it previews (--dry-run)
-        # or resolves a conflict the boot import refused.
-        if not args.data_dir:
-            parser.error("migrate-local-file-stores requires --data-dir")
-        database_url = database_url_from_env(setting="migrate-local-file-stores")
-        # Accounts first: the other stores' rows reference their users.
-        accounts = migrate_legacy_accounts(
-            args.data_dir,
-            database_url,
-            dry_run=args.dry_run,
-            accounts_already_in_database=retired_settings_chose_database_accounts(),
-        )
-        report = migrate_local_file_stores(args.data_dir, database_url, dry_run=args.dry_run)
-        print(json.dumps({**report, "accounts": accounts}, indent=2))
-        return
     if args.command == "backup-database":
         client, bucket = backup_target_from_env()
         report = backup_database(
@@ -151,19 +119,6 @@ def main(argv: list[str] | None = None) -> None:
             dry_run=args.dry_run,
         )
         print(json.dumps(report, indent=2))
-        return
-    if args.command == "migrate-local-sessions":
-        if not args.data_dir:
-            parser.error("migrate-local-sessions requires --data-dir")
-        store = DatabaseSessionStore(
-            database_url_from_env(setting="migrate-local-sessions"),
-            blob_store=blob_store_from_env(),
-        )
-        store.verify_schema()
-        report = migrate_local_sessions(args.data_dir, store, dry_run=args.dry_run)
-        print(json.dumps(report, indent=2))
-        if report["failures"]:
-            raise SystemExit(1)
         return
     if args.command == "rehearse-user-handles":
         # Reads only. Point it at a copy of production before running migration

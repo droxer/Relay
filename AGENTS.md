@@ -223,8 +223,7 @@ migration.
     `team/`, `project/`, `skill/` (plus `objects.py`), `automation/`,
     `notification/`, `org/` (`settings.py`, `admin_tokens.py`), `account/`
     (`profile_images.py`, `waitlist.py`, `handle_backfill.py`), and `blob/`.
-    `legacy/` holds the one-time file-store imports and their JSON helpers,
-    `ops/` the backup and storage report. The package root keeps only what
+    `ops/` holds the backup and storage report. The package root keeps only what
     every store shares: `engine.py` (engines, `store_transaction`,
     `after_store_commit`), `events.py` (event constructors), `db_time.py`,
     `token_usage.py`, `validation.py`, `sql.py`/`schema.py`/`tables/`,
@@ -240,14 +239,8 @@ migration.
     no re-export facade. Every
     aggregate (accounts, sessions, tasks, daemon nodes, agents, teams,
     placements, chat integrations) is database-only; tests build them on
-    sqlite through `backend/tests/store_fixtures.py`. The retired file-backed
-    twins' JSON is imported once at boot — accounts first by
-    `security/auth_file_import.py`, so the rows imported next find their
-    users, then the rest by `persistence/legacy/file_stores.py` (both also
-    `relay migrate-local-file-stores --data-dir <dir> [--dry-run]`): it never
-    touches the source files, skips a root already marked imported (one
-    marker per importer), and stops startup on a record the database holds
-    differently.
+    sqlite through `backend/tests/store_fixtures.py`. Retired file-backed
+    stores are no longer imported at startup or through the CLI.
     `listeners.py` is the one change-hint plumbing every store fires after a
     commit. Every table is declared once in `persistence/tables/`
     (importing only SQLAlchemy, `sql.py`, and `core`), and `schema.py`
@@ -261,8 +254,7 @@ migration.
     maps records to rows), `request_auth.py` (session cookie and
     `require_user_session`/`require_admin_session`), `admin_token.py`,
     `credentials.py` (password and session-token hashing), `entity_ids.py`
-    (stable user/department ids), `auth_file_import.py` (the retired accounts
-    file import), `user_handles.py`, `passwords.py`, `password_resets.py`,
+    (stable user/department ids), `user_handles.py`, `passwords.py`, `password_resets.py`,
     `rate_limit.py`.
   - `backend/relay/sessions/` — `controller.py` (session mutation),
     `bridge.py`/`conversation.py`/`handoff.py` (continuity and handoff).
@@ -386,7 +378,7 @@ migration.
 - **Never mock or seed data in the server.** It reads the configured database and real operational state under `.relay/`.
 - **A delivered execution reservation releases only on daemon exit evidence or a recorded human assertion.** The assertion paths are the reconcile endpoint (`POST /threads/{id}/execution/reconcile`) and thread deletion itself once the execution requires recovery (`canReportGone`); both append `session.execution_reconciled` with the actor, so the log never reads as observed exit. A dead computer's run becomes reportable (`execution_lost`, `execution_interrupted`, or a stop past its grace) but never self-releases. Every overdue deletion must have a way out — a person's action or automatic progress; `backend/tests/unit/test_execution_escape.py` sweeps the execution-status inputs to enforce it, so extend its axes with any new phase, status, or recovery reason.
 - **A personal computer is bounded; admin hardware is not.** How many `nodeLocation: "user-device"` computers a user may enroll comes from `users.max_local_computers` when one is pinned, and the single-row `org_settings` table otherwise (`backend/relay/persistence/org/settings.py`, default 3, range 0–50). `backend/relay/computer/limits.py` is the one seam that resolves and enforces it; call `assert_local_computer_allowed` only where a computer would actually be created (self-enrollment and the admin create route), never on adoption of a workspace the user already enrolled — a user at their limit must still be able to re-enroll a machine they have. Enforcement is creation-only: lowering a limit never disconnects an existing computer. The override lives on the users table; `GET /admin/settings` still reports `capabilities.userEdits` (always `true` now that accounts are database-only) because the web UI reads it.
-- **"Employee" is the pre-rename name of User; Account is the login.** Migration `20261015_0094` renamed `employees` → `users`, `auth_users` → `auth_accounts`, and every `*employee*` column, index, and constraint (generated names included); `20261015_0095` rewrites the JSON keys in event payloads and snapshots in committed, resumable batches, and its downgrade maps back exactly `LEGACY_KEYS`. State that never passes through it — the retired file stores' JSON as it is imported (`persistence/legacy/files.py` `read_json`/`read_jsonl`, accounts included), and bodies on `/daemon-node*`, `/computer-authorizations`, `/admin/daemon-nodes`, and `/admin/managed-nodes` routes — is upgraded on read by `backend/relay/core/legacy_names.py`; the daemon side is `relay-daemon/src/legacy-names.ts` (`--employee-id`, `RELAY_EMPLOYEE_ID`, installed-service argv). Responses an older daemon reads (`/computer-authorizations/token`, `/daemon-node-enrollments`) still echo `employeeId`. Two `employee` strings stay on purpose: handle-derived ids hash under `USER_ENTITY_KIND = "employee"` (`security/entity_ids.py`), and the password blocklist. Older supervisors keep working through the deprecated `GET /admin/employees`, `employeeId` mirrored onto `/admin/daemon-nodes` records (`with_legacy_user_id`), and body upgrades on `/admin/daemon-nodes` and `/admin/managed-nodes`; drop these once every supervisor is upgraded. Never write a new `employee` name.
+- **"Employee" is the pre-rename name of User; Account is the login.** Migration `20261015_0094` renamed `employees` → `users`, `auth_users` → `auth_accounts`, and every `*employee*` column, index, and constraint (generated names included); `20261015_0095` rewrites the JSON keys in event payloads and snapshots in committed, resumable batches, and its downgrade maps back exactly `LEGACY_KEYS`. State that never passes through it — bodies on `/daemon-node*`, `/computer-authorizations`, `/admin/daemon-nodes`, and `/admin/managed-nodes` routes — is upgraded on read by `backend/relay/core/legacy_names.py`; the daemon side is `relay-daemon/src/legacy-names.ts` (`--employee-id`, `RELAY_EMPLOYEE_ID`, installed-service argv). Responses an older daemon reads (`/computer-authorizations/token`, `/daemon-node-enrollments`) still echo `employeeId`. Two `employee` strings stay on purpose: handle-derived ids hash under `USER_ENTITY_KIND = "employee"` (`security/entity_ids.py`), and the password blocklist. Older supervisors keep working through the deprecated `GET /admin/employees`, `employeeId` mirrored onto `/admin/daemon-nodes` records (`with_legacy_user_id`), and body upgrades on `/admin/daemon-nodes` and `/admin/managed-nodes`; drop these once every supervisor is upgraded. Never write a new `employee` name.
 - **A user's id is a key; their handle is the name.** `users.id` is a UUID (uuid5 of the handle for anything created through the admin form; on SQLite, a user imported from the retired accounts file keeps its handle-shaped id so the rows that reference it still match) and stays the foreign key everywhere; `users.handle` is the unique `@name` every admin surface renders. Resolve a handle through `auth_store.resolve_user_id` (it consults the handle column before the uuid5 mapping, because backfilled rows have an id that is not uuid5 of their handle), and never render `user.id` as a handle — the web helpers `userHandleOf` / `handleForUserId` in `web/src/lib/userHandle.ts` are the one seam, and they never fall back to the raw UUID. Handles are validated on both sides by `normalize_user_handle` (`backend/relay/security/user_handles.py`) and its mirror in the same web module. `POST /admin/users` rejects a handle that already belongs to a live user (409) rather than letting `ensure_user` reuse and overwrite that row. The backfill rule for migration `20260831_0065` lives in `backend/relay/persistence/account/handle_backfill.py` so the migration and `relay rehearse-user-handles` (read-only; run it against a copy of production first) cannot disagree.
 - **One password policy, in `backend/relay/security/passwords.py`.** Length plus a blocklist, context words (the account's own username/handle/name/email), and degenerate shapes — no composition rules, per NIST SP 800-63B. Both stores' `create_user` call `validate_password`, and both `bootstrap_with_token` paths delegate to `create_user`, so no path sets a password without it; pass the account's `identifiers` at every call site. `web/src/lib/passwordPolicy.ts` mirrors every rule except the blocklist — that one stays server-side deliberately, since a few hundred entries duplicated in two languages would drift.
 - **Sessions and tasks carry an owner.** `RelaySession.ownerUserId` / `RelayTask.ownerUserId` (set from the `session.created` / `task.created` events) attribute work to the user whose agent runs it; `HumanDecision.actorUserId` records who approved/rejected/handed off. `ServerDaemonNodeBackend.run` threads the sandbox's `userId` into the owner, and `assert_session_owned_by_user` (`daemon_registry/intake/ownership.py`) is the authorization seam — a user's agent may only act on sessions its user owns (ownerless legacy sessions are allowed). This is where the future task-scope / tool-policy / approval checks belong; keep it the single checkpoint rather than scattering ownership checks.
@@ -431,20 +423,10 @@ state directory (never mounted into an agent sandbox) holds tokens/logs:
 ~/.relay/daemon-nodes/<sandboxId>/logs/*.jsonl                         # daemon structured logs
 ```
 
-Legacy `.relay/sessions/` and `.relay/tasks/` trees are migration inputs only;
-the runtime does not use them as its session/task store. Likewise
-`.relay/auth/{users,deleted_users,deleted_employees}.json` (accounts; the
-`sessions.json` and `password-resets.json` beside them are counted and
-skipped — people sign in again or ask for a new link) are import-only input
-for `security/auth_file_import.py`, and
-`.relay/daemon/{nodes,commands,runs,run-requests,events}/`, `.relay/agents/`,
-`.relay/teams/`, `.relay/agent-placements/`, and `.relay/chat/` (under
-`DEFAULT_RELAY_DATA_DIR` / `RELAY_DATA_DIR`) for
-`persistence/legacy/file_stores.py`. `RELAY_STORAGE`, `RELAY_AUTH_STORE`,
-`RELAY_DAEMON_STORE`, and `RELAY_CHAT_STORE` are retired and only log a
-warning when set; while `RELAY_STORAGE=postgres` or `RELAY_AUTH_STORE=database`
-is still set the database already held the accounts, so leftover account
-files are marked imported without being read.
+Retired file-backed state under `.relay/` is no longer read or imported.
+Installations must migrate that state with an earlier release before upgrading.
+`RELAY_STORAGE`, `RELAY_AUTH_STORE`, `RELAY_DAEMON_STORE`, and
+`RELAY_CHAT_STORE` are retired and only log a warning when set.
 
 Only the active thread's host directory mounts into the BoxLite guest at
 `/workspace` (`GUEST_WORKSPACE`). The guest `agent` user's UID/GID is aligned

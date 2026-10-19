@@ -64,7 +64,7 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .daemon_registry.registry import DaemonNodeRegistry
 from .daemon_registry.node_backend import ServerDaemonNodeBackend
-from .persistence.legacy.files import DEFAULT_RELAY_DATA_DIR
+from .core.environment import DEFAULT_RELAY_DATA_DIR
 from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
@@ -84,11 +84,9 @@ from .notifications.mailer import mailer_from_env
 from .computer.workspace_query import WorkspaceQueryBroker
 from .accounts.waitlist import WaitlistService
 from .persistence.task.lifecycle import wip_limit
-from .persistence.legacy.operational import require_operational_import
 from .execution.lifecycle import ExecutionLifecycleService
 from .core.settings import AppSettings
 from .migrations_runtime.startup import (
-    import_file_stores_before_serving,
     migrate_legacy_computer_ids,
     repair_records_before_serving,
 )
@@ -100,7 +98,6 @@ from .bootstrap.http import (
     configure_cors,
 )
 from .bootstrap.stores import (
-    retired_settings_chose_database_accounts,
     waitlist_service_from_env,
     Stores,
     build_stores,
@@ -133,13 +130,6 @@ def create_app(
     waitlist = waitlist_service_from_env(mailer)
     password_reset = PasswordResetService(
         password_reset_store_for(stores.auth), mailer, config=password_reset_config_from_env()
-    )
-    require_operational_import(root_dir, stores.managed_nodes)
-    import_file_stores_before_serving(
-        root_dir,
-        stores.sessions.engine.url.render_as_string(hide_password=False),
-        repairs_enabled=settings.startup_repairs_enabled,
-        accounts_already_in_database=retired_settings_chose_database_accounts(),
     )
     notifier = KeyedEventNotifier()
     notification_bridge = database_notification_bridge(stores.sessions, notifier)

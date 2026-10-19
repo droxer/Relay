@@ -539,21 +539,10 @@ holds tokens and logs:
 
 Accounts live in the configured database like every other store;
 `RELAY_STORAGE` and `RELAY_AUTH_STORE` are retired and only log a warning when
-set. Legacy `.relay/auth/` account files, `.relay/daemon/{nodes,commands,runs,run-requests,events}/`,
-`.relay/agents/`, `.relay/teams/`, `.relay/agent-placements/`, and
-`.relay/chat/` files are import-only: the backend moves them into the database
-once at startup, accounts first (or run `relay migrate-local-file-stores
---data-dir <path> [--dry-run]`), and never writes them again. Login sessions
-and password reset links in `.relay/auth/` are not imported, so everyone signs
-in again once. While `RELAY_STORAGE=postgres` or `RELAY_AUTH_STORE=database`
-is still set, the database already held the accounts: leftover account files
-are marked imported without being read, so remove those settings only after
-one start.
-
-Legacy `.relay/sessions/` and `.relay/tasks/` trees are migration inputs only;
-the runtime does not use them as its session/task store. Import them with
-`relay migrate-local-sessions --data-dir <path>` — see
-[`backend/migrations/README.md`](../backend/migrations/README.md).
+set. Retired file-backed state under `.relay/` is no longer read or imported.
+Installations with unmigrated account, thread, daemon, agent, team, placement,
+chat, managed-node, or profile-image files must migrate them using an earlier
+release before upgrading. Existing source files are left untouched.
 
 ## Source Map
 

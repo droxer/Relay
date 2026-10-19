@@ -13,17 +13,9 @@ The control plane keeps agent execution on daemons. This change addresses blocki
 
 ## Deployment
 
-1. Stop legacy backend writers before importing local operational state. Keep a database backup and the existing data directory.
-2. Run `make backend-migrate` against the configured database. Revision `20260917_0076` adds shared operational tables and recovery metadata. Revision `20260917_0077` builds the existing-table indexes concurrently in PostgreSQL, outside the migration transaction.
-3. On the host containing legacy `.relay/managed-nodes` or `.relay/profile-images`, preview and run the import using the same database configuration:
-
-   ```sh
-   uv run --project backend relay migrate-local-operational-state --data-dir /absolute/path/to/.relay --dry-run
-   uv run --project backend relay migrate-local-operational-state --data-dir /absolute/path/to/.relay
-   ```
-
-   Import is transactional, rejects conflicting destination records, preserves source files and grant hashes, and reports counts without printing grant credentials. A source-directory marker prevents replay from overwriting later changes. Startup refuses to silently ignore unimported local state. New installations without local state need no import.
-4. Start the new backend. For independent replicas, use the same PostgreSQL database across replicas; every store, accounts included, lives there. Run schedulers/recovery through the application lifespan.
+1. Run `make backend-migrate` against the configured database. Revision `20260917_0076` adds shared operational tables and recovery metadata. Revision `20260917_0077` builds the existing-table indexes concurrently in PostgreSQL, outside the migration transaction.
+2. Installations with unmigrated local operational state must import it with an earlier release before upgrading; the legacy file importers and startup checks have been removed.
+3. Start the new backend. For independent replicas, use the same PostgreSQL database across replicas; every store, accounts included, lives there. Run schedulers/recovery through the application lifespan.
 
 Budget database connections across processes: each process has its own configured pool and notification connection. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
 
