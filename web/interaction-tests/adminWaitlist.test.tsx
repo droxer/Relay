@@ -120,6 +120,16 @@ it("shows a single invite's failed email and its reason beside the link", async 
   expect(within(reveal).getByText("https://relay.test/join#token=solo")).toBeTruthy();
 });
 
+it("shows a link-only invite with no delivery status", () => {
+  render(<InviteReveal
+    invites={[{ entry: entry("link", "invited"), inviteUrl: "https://relay.test/join#token=link", delivery: null }]}
+    onDismiss={() => {}}
+  />);
+  const reveal = screen.getByRole("region", { name: "admin.waitlist.reveal_title" });
+  expect(within(reveal).getByText("https://relay.test/join#token=link")).toBeTruthy();
+  expect(within(reveal).queryByText(/admin\.waitlist\.delivery_/)).toBeNull();
+});
+
 it("refreshes background delivery failures without leaving stale queued results in the reveal", async () => {
   let delivered = false;
   const issued = entry("pending", "invited", { lastDeliveryStatus: "queued" });

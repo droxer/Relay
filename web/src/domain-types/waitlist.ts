@@ -36,11 +36,12 @@ export interface WaitlistListResponse {
 }
 
 /** One issued invite. `inviteUrl` carries the plaintext token, so it is shown
-    once and never fetched again — re-inviting rotates the token. */
+    once and never fetched again — re-inviting rotates the token. `delivery`
+    is null when invite email is off: the link is the whole invite. */
 export interface WaitlistInviteResult {
   entry: WaitlistEntry;
   inviteUrl: string;
-  delivery: { status: WaitlistDeliveryStatus; error: string | null };
+  delivery: { status: WaitlistDeliveryStatus; error: string | null } | null;
 }
 
 /** An admin's direct invitation; `locale` picks the email's language. */

@@ -253,8 +253,8 @@ def invite_waitlist_entry(entry_id: str, request: Request, ctx: AppContextDep) -
 def invite_by_email(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    """Invite an address directly. Sent now, like a single invite, so the
-    admin sees whether the email went out and always gets the link."""
+    """Invite an address directly. The admin always gets the link; when
+    invite email is on it is also sent now, so they see whether it went out."""
     account = require_admin_session(request, ctx.auth_store)
     with _entry_errors():
         return _service(request).invite_email(
