@@ -380,14 +380,14 @@
      — the token palette.css designates for "active nav". An identical
      `.mobile-topbar button.active` rule lived here too: same selector, same
      specificity, same media query, so it won on source order alone (this file
-     imports after atelier) and silently replaced the cobalt tint with
+     imports after atelier) and silently replaced the accent tint with
      --surface-2, while atelier's border-color/box-shadow still applied. One
      owner per state — the duplicate is gone. */
 
   /* The tab bar, Linear's way: a flat strip of glyph-over-label tabs with
      no plates. The active tab is told apart by ink alone — full-strength
      icon and label against the muted rest — so the bar never carries a
-     second "selected" shape (the old boxed tile, cobalt tick, AND the
+     second "selected" shape (the old boxed tile, accent tick, AND the
      desktop rail's left accent bar all stacked on one tab). */
   .sidenav-panel {
     grid-row: 3;

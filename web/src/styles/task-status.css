@@ -105,11 +105,12 @@
   background: var(--prio-accent);
 }
 
-/* The bars alone, for a control that names its rank in its label. Only
-   `high` takes a colour; the default and low ranks stay quiet so they do not
-   shout from every row the way the badge was taught not to. */
+/* The bars alone, for a control that names its rank in its label. Rank is
+   told by how many bars fill and how bright they are, never by hue: amber
+   (--warn) means "waiting on a person", and a high-priority task that nobody
+   is blocking must not read as one. `high` takes the loudest ink instead. */
 .priority-glyph { --prio-accent: var(--ink-4); display: inline-flex; }
-.priority-glyph[data-priority="high"] { --prio-accent: var(--warn); }
+.priority-glyph[data-priority="high"] { --prio-accent: var(--ink-1); }
 
 /* ── State mark — the shape half of the state vocabulary ────────────────
    Status tones stay small text/dot accents and the surfaces stay a neutral
@@ -163,8 +164,8 @@
   opacity: var(--opacity-dormant);
 }
 
-/* Compositor-friendly pulse: the dot keeps a static ring; a faint outer
-   pseudo breathes via opacity instead of animating box-shadow. */
+/* The live dot wears the shared live-ring (tokens/base.css): a hairline ring
+   leaves its edge and fades, on transform/opacity only. */
 .state-mark[data-shape="live"] {
   --mark-accent: var(--live);
 }
@@ -172,12 +173,12 @@
 .state-mark[data-shape="live"]::after {
   content: "";
   position: absolute;
-  /* -5px: the halo rides proud of the dot so the pulsing ring clears the
-     static mark instead of hugging it. */
-  inset: -5px;
+  inset: 0;
   border-radius: var(--r-full);
-  border: 2px solid color-mix(in srgb, var(--mark-accent) 30%, transparent);
-  animation: blink var(--t-pulse) var(--ease) infinite;
+  border: 1.5px solid var(--mark-accent);
+  opacity: 0.4;
+  transform: scale(1.6);
+  animation: live-ring var(--t-pulse) var(--ease) infinite;
   pointer-events: none;
 }
 
@@ -333,7 +334,7 @@
    `@layer relay` is declared after Tailwind's `utilities`, so a background /
    border / color / font declared here outranks the variant by LAYER ORDER, not
    specificity: there is no specificity war to notice in review, the variant
-   simply never applies. That is how the primary Start action lost its cobalt
+   simply never applies. That is how the primary Start action lost its accent
    fill (it rendered --surface-0 at weight 500). The neutral actions get their
    chip look from variant="outline". */
 

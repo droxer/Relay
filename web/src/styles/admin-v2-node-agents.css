@@ -195,7 +195,7 @@
 }
 
 /* A staged change is the row the reader has to remember to save: a stronger
-   edge, not a wash — a cobalt fill would read as the selected row. */
+   edge, not a wash — an accent fill would read as the selected row. */
 .adm-agent-toggle-item[data-pending="true"] {
   box-shadow: inset var(--accent-bar-w) 0 0 var(--line-strong);
 }

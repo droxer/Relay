@@ -264,7 +264,7 @@ button.onboarding-starter {
 /* The rail chip: a square like its footer neighbours whose face is the
    progress fraction itself — an icon under a badge read as neither. A
    neutral control fill marks it apart from the bare glyph buttons around it;
-   cobalt would read as the active nav item, which it never is. */
+   accent would read as the active nav item, which it never is. */
 .sidenav-btn.sidenav-onboarding {
   background: var(--control-fill);
   color: var(--ink-2);

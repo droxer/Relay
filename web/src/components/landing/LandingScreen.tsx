@@ -107,7 +107,7 @@ function SectionHead({ id, kicker, title }: { id: string; kicker: string; title:
 function Brand() {
   return (
     <PublicLink href="/" className="landing-brand">
-      <RelayMark size={ICON.xl} />
+      <RelayMark size={ICON.xl} tone="brand" />
       <span className="landing-wordmark">Relay</span>
     </PublicLink>
   );
@@ -246,7 +246,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
         </section>
 
         <section className="landing-closer" aria-labelledby="landing-closer-title">
-          <RelayMark size={ICON.hero} />
+          <RelayMark size={ICON.hero} tone="brand" />
           <h2 className="landing-section-title" id="landing-closer-title">{t("landing.cta_title")}</h2>
           <p className="landing-lede">{t(ctas.secondary ? "landing.cta_body" : "landing.cta_body_signin")}</p>
           <div className="landing-ctas">

@@ -178,7 +178,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   }
   // Save waits for something to save, like every other settings form here
   // (the control panel's organization Save is disabled until its field is
-  // dirty). Enabled at rest, it sat on the page as a live cobalt button beside
+  // dirty). Enabled at rest, it sat on the page as a live accent button beside
   // "Share" — a second primary with nothing to do.
   const metadataChanged = Boolean(skill) && (
     displayName !== skill?.displayName

@@ -132,14 +132,16 @@
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
-/* The product's neutral inverted CTA plate, per register. */
+/* The product's primary plate: the same --action fill and ink every default
+   Button wears inside the app, so the first click a visitor makes is the
+   brand blue. */
 .landing-button-primary {
-  background: var(--cta-fill);
-  color: var(--cta-ink);
+  background: var(--action);
+  color: var(--on-action);
 }
 
 .landing-button-primary:hover {
-  background: var(--cta-hover);
+  background: var(--action-hover);
 }
 
 .landing-button-secondary {
@@ -184,7 +186,10 @@
   right: calc(-1 * var(--sp-8));
   width: min(40vmin, 360px);
   height: min(40vmin, 360px);
-  color: color-mix(in srgb, var(--ld-ink) 4%, transparent);
+  /* The brand handoff as a watermark, the same wash the sign-in cover uses. */
+  --chevron-lead: color-mix(in srgb, var(--action) 10%, transparent);
+  --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
+  --chevron-trail-opacity: 1;
   pointer-events: none;
 }
 

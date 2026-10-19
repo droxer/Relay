@@ -85,7 +85,7 @@
 .backlog-row[data-status="assigned"] { --row-accent: var(--info); }
 .backlog-row[data-status="running"] { --row-accent: var(--live); }
 .backlog-row[data-status="waiting_for_human"] { --row-accent: var(--warn); }
-.backlog-row[data-status="review"] { --row-accent: var(--info); }
+.backlog-row[data-status="review"] { --row-accent: var(--ok); }
 .backlog-row[data-status="blocked"] { --row-accent: var(--err); }
 .backlog-row[data-status="done"] { --row-accent: var(--ok); }
 

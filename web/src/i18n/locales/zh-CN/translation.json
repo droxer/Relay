@@ -1636,11 +1636,11 @@
     "handoff_after_failure": "{{from}} 已停止 · 正在准备下一步"
   },
   "login": {
-    "lede": "与你并肩工作的 AI 伙伴，把时间留给真正重要的工作。",
+    "lede": "有名字的智能体、共享的记录，交付什么由你决定。",
     "lede_bootstrap": "粘贴后端启动日志中的 RELAY_ADMIN_TOKEN，然后创建管理员账户。",
     "kicker_setup": "首次配置",
     "kicker_attach": "登录",
-    "cover_headline": "你的 AI 团队的控制平面",
+    "cover_headline": "让 AI 智能体在你自己的电脑上工作",
     "username": "用户名",
     "password": "密码",
     "sign_in": "登录",
@@ -1653,9 +1653,9 @@
     "go_bootstrap": "创建首个管理员账户",
     "go_login": "返回登录",
     "error_generic": "出现问题，请重试。",
-    "do_ask": "尽管问公司知识库里的任何问题，答案都附来源。",
-    "do_handoff": "委派笔记整理、跟进和日常更新工作。",
-    "do_control": "有风险的操作都需你批准后才会执行。",
+    "do_assign": "把对话、任务和自动化交给智能体。",
+    "do_watch": "实时查看每一条命令的执行。",
+    "do_control": "未经你审查，什么都不会交付。",
     "forgot_password": "忘记密码？",
     "reset_done": "密码已更新，请使用新密码登录。"
   },

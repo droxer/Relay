@@ -1668,11 +1668,11 @@
     "handoff_after_failure": "{{from}} stopped · preparing the next step"
   },
   "login": {
-    "lede": "An AI partner that works alongside you, so you can focus on what matters.",
+    "lede": "Named agents, a shared record, and your say on what ships.",
     "lede_bootstrap": "Paste the RELAY_ADMIN_TOKEN from the backend startup log, then create an admin account.",
     "kicker_setup": "First-run setup",
     "kicker_attach": "Sign in",
-    "cover_headline": "The control plane for your AI workforce",
+    "cover_headline": "Put AI agents to work on your own computers",
     "username": "Username",
     "password": "Password",
     "sign_in": "Sign in",
@@ -1685,9 +1685,9 @@
     "go_bootstrap": "Create the first admin account",
     "go_login": "Back to sign in",
     "error_generic": "Something went wrong. Try again.",
-    "do_ask": "Ask anything your company knows, with sources.",
-    "do_handoff": "Delegate notes, follow-ups, and routine updates.",
-    "do_control": "Nothing risky happens without your approval.",
+    "do_assign": "Hand agents threads, tasks, and automations.",
+    "do_watch": "Watch every command as it runs.",
+    "do_control": "Nothing ships without your review.",
     "forgot_password": "Forgot password?",
     "reset_done": "Password updated. Sign in with your new password."
   },

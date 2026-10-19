@@ -349,10 +349,11 @@
   border-color: var(--ink-4);
 }
 
-/* Running state — quiet action hairline outside the edge at the one
-   accent-edge strength (--tone-line); send→stop carries the state change. */
+/* Running state — a quiet --live hairline outside the edge at the one
+   accent-edge strength (--tone-line): purple means an agent is working, and
+   the button blue would read as "act". Send→stop carries the state change. */
 .composer-input-wrap[data-running] {
-  --tone: var(--action);
+  --tone: var(--live);
   box-shadow: 0 0 0 1px var(--tone-line);
 }
 
@@ -455,7 +456,7 @@
 
 /* Send — a 32px disc in the neutral inverted fill (near-black on light,
    near-white on dark), the commit control of every agent app it is modelled
-   on. Cobalt is the selection colour; on the composer it read as one more
+   on. The accent is the selection colour; on the composer it read as one more
    status hue next to the agent's presence pip. Overrides the Button default
    variant's paint (this layer outranks Tailwind's utilities); Button still
    supplies size, focus, and the icon layout.

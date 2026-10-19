@@ -3,6 +3,12 @@
 Plain text is the real message; the HTML is the same words with a link, kept
 minimal so it renders the same in every client. Anything a person typed (their
 name) is escaped before it reaches the HTML part.
+
+The HTML wears Relay's mark: a text wordmark whose two chevrons are the brand
+handoff (the action blue leading, the live purple trailing) and the one link
+drawn as the action button. Mail clients ignore CSS variables and many drop
+SVG, so the light register's palette values are inlined here;
+tests/unit/test_email_brand_parity.py keeps them equal to palette.css.
 """
 
 from __future__ import annotations
@@ -56,8 +62,44 @@ _COPY = {
 }
 
 
+# The light register of web/src/styles/tokens/palette.css (--action,
+# --on-action, --live, --ink-1, --ink-3): mail is read on white.
+BRAND_ACTION = "#2a44d3"
+BRAND_ON_ACTION = "#ffffff"
+BRAND_LIVE = "#a121ce"
+BRAND_INK = "#171717"
+BRAND_MUTED = "#525252"
+
+_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+
+
 def _copy(locale: str | None) -> dict[str, str]:
     return _COPY.get(locale or "en", _COPY["en"])
+
+
+def _frame(body_html: str) -> str:
+    """Wrap a message body in the wordmark header and the brand ink."""
+    mark = (
+        f'<p style="margin:0 0 24px;font-weight:700;font-size:18px;color:{BRAND_INK}">'
+        f'<span style="color:{BRAND_ACTION}">&rsaquo;</span>'
+        f'<span style="color:{BRAND_LIVE}">&rsaquo;</span> Relay</p>'
+    )
+    return (
+        f'<div style="font-family:{_FONT};font-size:15px;line-height:1.5;color:{BRAND_INK}">'
+        f"{mark}{body_html}</div>"
+    )
+
+
+def _action_link(url: str, label: str) -> str:
+    return (
+        f'<p><a href="{escape(url, quote=True)}" style="display:inline-block;padding:10px 16px;'
+        f"border-radius:6px;background:{BRAND_ACTION};color:{BRAND_ON_ACTION};"
+        f'font-weight:600;text-decoration:none">{escape(label)}</a></p>'
+    )
+
+
+def _muted(text: str) -> str:
+    return f'<p style="color:{BRAND_MUTED}">{escape(text)}</p>'
 
 
 def invite_email(
@@ -78,14 +120,16 @@ def invite_email(
             copy["footer"],
         ]
     )
-    html = "".join(
-        [
-            f"<p>{greeting_html}</p>",
-            f"<p>{escape(copy['invite_body'])}</p>",
-            f'<p><a href="{escape(invite_url, quote=True)}">{escape(copy["invite_action"])}</a></p>',
-            f"<p>{escape(expiry)}</p>",
-            f"<p>{escape(copy['footer'])}</p>",
-        ]
+    html = _frame(
+        "".join(
+            [
+                f"<p>{greeting_html}</p>",
+                f"<p>{escape(copy['invite_body'])}</p>",
+                _action_link(invite_url, copy["invite_action"]),
+                f"<p>{escape(expiry)}</p>",
+                _muted(copy["footer"]),
+            ]
+        )
     )
     return EmailMessage(to=to, subject=copy["invite_subject"], text=text, html=html)
 
@@ -93,7 +137,7 @@ def invite_email(
 def confirmation_email(*, to: str, locale: str | None) -> EmailMessage:
     copy = _copy(locale)
     text = f"{copy['confirm_body']}\n\n{copy['footer']}"
-    html = f"<p>{escape(copy['confirm_body'])}</p><p>{escape(copy['footer'])}</p>"
+    html = _frame(f"<p>{escape(copy['confirm_body'])}</p>{_muted(copy['footer'])}")
     return EmailMessage(to=to, subject=copy["confirm_subject"], text=text, html=html)
 
 
@@ -106,13 +150,15 @@ def password_reset_email(
     text = "\n\n".join(
         [body, f"{copy['reset_action']}: {reset_url}", expiry, copy["reset_footer"]]
     )
-    html = "".join(
-        [
-            f"<p>{escape(body)}</p>",
-            f'<p><a href="{escape(reset_url, quote=True)}">{escape(copy["reset_action"])}</a></p>',
-            f"<p>{escape(expiry)}</p>",
-            f"<p>{escape(copy['reset_footer'])}</p>",
-        ]
+    html = _frame(
+        "".join(
+            [
+                f"<p>{escape(body)}</p>",
+                _action_link(reset_url, copy["reset_action"]),
+                f"<p>{escape(expiry)}</p>",
+                _muted(copy["reset_footer"]),
+            ]
+        )
     )
     return EmailMessage(to=to, subject=copy["reset_subject"], text=text, html=html)
 
@@ -124,5 +170,5 @@ def password_changed_email(
     copy = _copy(locale)
     body = copy["changed_body"].format(username=username, time=changed_at)
     text = f"{body}\n\n{copy['changed_footer']}"
-    html = f"<p>{escape(body)}</p><p>{escape(copy['changed_footer'])}</p>"
+    html = _frame(f"<p>{escape(body)}</p>{_muted(copy['changed_footer'])}")
     return EmailMessage(to=to, subject=copy["changed_subject"], text=text, html=html)

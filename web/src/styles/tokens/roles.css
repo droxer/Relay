@@ -9,7 +9,7 @@
   /* Links take the source system's meta-link blue — wayfinding only, never a fill
      and never an action. The role names stay separate from --action, and
      here that separation is load-bearing rather than decorative: the action
-     is cobalt and an anchor is a quieter blue, so "the colour of the primary
+     is accent and an anchor is a quieter blue, so "the colour of the primary
      button" and "the colour of a link" must never be spelled the same way. */
   --link: var(--link-blue);
   --link-hover: var(--link-blue-strong);
@@ -44,7 +44,7 @@
   --line-drag: color-mix(in srgb, var(--ink-1) 30%, var(--line-1));
 
   /* Selected-row accent bar — the 2px inset marker down the leading edge of
-     the active item in a list or drawer section, in the cobalt action.
+     the active item in a list or drawer section, in the accent action.
      Full-height, drawn as an inset shadow; the rail variant that stops short
      of the row's top and bottom edges is `.rail-row` in base.css. */
   --accent-bar: inset 2px 0 0 var(--action);
@@ -119,7 +119,7 @@
      container. `outline` is never clipped by an ancestor's overflow, and it is
      the one ring property forced-colors mode preserves.
 
-     The ring is LINK BLUE rather than the cobalt action, so a focused
+     The ring is LINK BLUE rather than the accent action, so a focused
      primary button shows a ring that is visibly not more of its own fill;
      --link clears 5.6:1 on every plane in both registers, well past the 3:1
      indicator floor. The danger ring differs by BOTH colour (--err, the

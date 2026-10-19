@@ -474,10 +474,10 @@
 }
 
 /* Compact filled pill for value-row micro-actions (copy, rename confirm).
-   Painted in the cobalt action, so call sites pair it with variant="default" — the variant
+   Painted in the accent action, so call sites pair it with variant="default" — the variant
    prop names the rendered plate; this class only shrinks the geometry and
    adds the `.copied` success state. */
-/* Nothing here paints the plate any more. `variant="default"` is the cobalt
+/* Nothing here paints the plate any more. `variant="default"` is the accent
    fill with --on-action ink, `size="dense"` is the --control-h-xs height and
    the --r-2 corner, and the variant's own `hover:bg-primary-active` is the
    hover this rule used to restate as --action-hover. All of it was written

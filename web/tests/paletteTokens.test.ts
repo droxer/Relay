@@ -61,7 +61,7 @@ function channels(hex: string): [number, number, number] {
   return [0, 1, 2].map((i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)) as [number, number, number];
 }
 
-describe("Meta commerce palette tokens", () => {
+describe("Relay palette tokens", () => {
   it("declares both registers: dark on :root, cream on html[data-theme=light]", () => {
     assert.match(palette, /:root\s*\{/);
     for (const name of ["--surface-0", "--ink-1", "--live", "--link-blue"]) {
@@ -70,8 +70,8 @@ describe("Meta commerce palette tokens", () => {
     }
   });
 
-  it("tunes --action per register: light blue on the dark canvas, deep cobalt on the light one", () => {
-    // One mid-tone cobalt sank into the charcoal and never quite led on white,
+  it("tunes --action per register: light periwinkle on the dark canvas, deep ultramarine on the light one", () => {
+    // One mid-tone accent sank into the charcoal and never quite led on white,
     // so each register declares its own fill, pressed state and ink.
     for (const name of ["--action", "--action-hover", "--on-action"]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `dark register is missing ${name}`);
@@ -93,9 +93,9 @@ describe("Meta commerce palette tokens", () => {
   });
 
   it("carries exactly one primary button, so there is no second fill to keep in step", () => {
-    // The source system runs two primary buttons: cobalt inside the commerce
+    // The source system runs two primary buttons: accent inside the commerce
     // flow, black on marketing surfaces. Relay is entirely in-product, so
-    // cobalt is the action on every surface and the black pill has no
+    // accent is the action on every surface and the black pill has no
     // consumer. It used to live here as --ink-button/--on-ink-button with
     // nothing painting it — a register-varying fill that had to be kept in
     // step with a canvas it never touched. Reintroduce it only with a caller.
@@ -103,7 +103,7 @@ describe("Meta commerce palette tokens", () => {
       assert.doesNotMatch(
         darkRegister + lightRegister,
         new RegExp(`${name}:`),
-        `${name} is declared with no consumer — the action is cobalt everywhere`,
+        `${name} is declared with no consumer — the action is accent everywhere`,
       );
     }
   });
@@ -146,8 +146,8 @@ describe("Meta commerce palette tokens", () => {
   });
 
   it("marks live work in the Oculus purple, legible as small text in both registers", () => {
-    // The source system sanctions exactly two accents beyond the neutrals: cobalt and
-    // Oculus purple. Cobalt is spoken for by the primary action, so liveness
+    // The source system sanctions exactly two accents beyond the neutrals: accent and
+    // Oculus purple. The accent is spoken for by the primary action, so liveness
     // takes the purple and can never be mistaken for "press this". Assert the
     // hue family (blue and red lead, green trails), not an exact hex — and the
     // AA floor, because an elapsed timer set in --live is legible, not
@@ -163,7 +163,7 @@ describe("Meta commerce palette tokens", () => {
     // and "click me" in the same channel.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
       const live = channels(tokenIn(register, "--live"));
-      assert.ok(live[0] > 96, `${label} --live has no red left in it — it has drifted into the cobalt action`);
+      assert.ok(live[0] > 96, `${label} --live has no red left in it — it has drifted into the accent action`);
     }
   });
 
@@ -272,11 +272,11 @@ describe("pre-auth login palette", () => {
     );
   });
 
-  it("paints the login CTA with the theme's neutral ink", () => {
+  it("leads the login screen with the product's --action, unrepainted", () => {
     const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
     assert.doesNotMatch(loginCode, /--action\s*:/, "login.css must not override the shared selection accent");
-    assert.match(login, /--lg-steel:\s*var\(--ink-1\);/);
-    assert.match(login, /--lg-steel-active:\s*var\(--ink-3\);/);
+    assert.match(loginCode, /--lg-accent:\s*var\(--action\);/);
+    assert.doesNotMatch(loginCode, /\.login-submit[^{]*\{/, "the submit is the default Button; do not repaint it");
   });
 
   it("originates no color of its own", () => {
@@ -302,15 +302,15 @@ describe("theme-picker swatches", () => {
     assert.match(preferences, /\.pref-theme-swatch\[data-tone="dark"\] \{\s*background: var\(--dark-canvas\);/);
   });
 
-  it("shows each register's own pinned cobalt, never the live --action", () => {
-    // The cobalt is tuned per register, so var(--action) would paint the
-    // active register's cobalt on both canvases. Each swatch reads its pinned
+  it("shows each register's own pinned accent, never the live --action", () => {
+    // The accent is tuned per register, so var(--action) would paint the
+    // active register's accent on both canvases. Each swatch reads its pinned
     // twin, and the system swatch splits on the canvas diagonal.
     for (const tone of ["light", "dark"]) {
       assert.match(
         preferences,
         new RegExp(`\\.pref-theme-swatch\\[data-tone="${tone}"\\]::after \\{[^}]*background: var\\(--${tone}-action\\);`, "s"),
-        `${tone} swatch strip must be the pinned --${tone}-action cobalt`,
+        `${tone} swatch strip must be the pinned --${tone}-action accent`,
       );
     }
     assert.match(
@@ -321,7 +321,7 @@ describe("theme-picker swatches", () => {
     assert.doesNotMatch(
       preferences,
       /linear-gradient\(90deg, var\(--light-ink\) 0 50%, var\(--dark-ink\) 50% 100%\)/,
-      "the split-ink strip was a Phosphor artifact — one cobalt serves both registers",
+      "the split-ink strip was a Phosphor artifact — one accent serves both registers",
     );
   });
 
@@ -689,7 +689,7 @@ function componentSources(): string[] {
 
 
 describe("accent primary and neutral CTA palette", () => {
-  it("routes shared primary buttons through the cobalt accent", () => {
+  it("routes shared primary buttons through the ultramarine accent", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
     assert.match(bridge, /--primary:\s*var\(--action\)/);
     assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);

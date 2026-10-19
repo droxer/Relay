@@ -26,12 +26,11 @@
      in either register. */
   --lg-hairline: color-mix(in srgb, var(--lg-ink) 14%, transparent);
   --lg-hairline-soft: color-mix(in srgb, var(--lg-ink) 8%, transparent);
-  /* --lg-steel names the screen's action fill role (the name is kept from
-     the old local palette). */
-  --lg-steel: var(--ink-1);
-  --lg-steel-active: var(--ink-3);
   --lg-err: var(--ink-1); /* error is the loud/bright tier — dots stay calm */
-  --lg-accent: var(--lg-steel);
+  /* The screen's accent is the product's: the submit is the default Button
+     (the --action fill), and the caret and the focused field edge take the
+     same blue, so the first screen a person sees speaks the brand. */
+  --lg-accent: var(--action);
   /* The cover's text measure, shared by the cover and the foot so both
      centre on the same left margin inside the cover column. */
   --lg-cover-measure: 38rem;
@@ -53,7 +52,7 @@
 
 /* The bled double-chevron — the login signature, echoed from the empty-state
    bleed mark. Fixed so it can leave the viewport without creating scrollable
-   overflow; the 5% ink wash keeps it a watermark, not a logo. It lands in the
+   overflow; a 10% wash of each accent keeps it a watermark, not a logo. It lands in the
    cover column, which is why the gate is a positioned element below: the
    panel's own plate has to paint over the watermark, and a fixed element
    otherwise sits above a non-positioned sibling's background. */
@@ -65,7 +64,11 @@
      stopped being a watermark and started competing with the proof lines. */
   width: min(34vmin, 300px);
   height: min(34vmin, 300px);
-  color: color-mix(in srgb, var(--lg-ink) 4%, transparent);
+  /* The brand handoff as a watermark: each accent at a wash strong enough
+     to read as colour, quiet enough to stay behind the proof lines. */
+  --chevron-lead: color-mix(in srgb, var(--action) 10%, transparent);
+  --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
+  --chevron-trail-opacity: 1;
   pointer-events: none;
   user-select: none;
 }
@@ -214,7 +217,7 @@
   /* Nudged onto the first line's baseline box — a 14px square glyph sits
      high against 14px text set at --leading-normal. */
   translate: 0 2px;
-  /* Muted ink, not --lg-accent: the bright neutral on this screen is the CTA and
+  /* Muted ink, not --lg-accent: the accent on this screen is the CTA and
      nothing else, so a decorative marker must not spend it. */
   color: var(--lg-muted);
 }
@@ -313,7 +316,7 @@
 .login-input:focus-visible {
   border-color: var(--lg-accent);
   /* The focused well lifts 2% toward the ink so it reads active at a glance,
-     not just by its cobalt edge. */
+     not just by its accent edge. */
   background: color-mix(in srgb, var(--lg-ink) 2%, var(--lg-elevated));
 }
 
@@ -386,25 +389,9 @@
   translate: 0 2px;
 }
 
-/* Palette-only overrides on the shared Button (variant="default" size="cta"
-   w-full): geometry (--control-h, --r-2), typography, the loading
-   glyph, and the focus ring all come from the primitive — this block only
-   re-paints the plate in the screen's neutral ink. */
-.login-submit {
-  background: var(--lg-accent);
-  color: var(--lg-canvas);
-}
-
-.login-submit:hover:not(:disabled) {
-  background: var(--lg-steel-active);
-}
-
-.login-submit:disabled {
-  background: var(--surface-1);
-  color: var(--lg-muted);
-  border-color: var(--lg-hairline);
-  opacity: 1;
-}
+/* .login-submit is the shared Button (variant="default" size="cta" w-full)
+   with nothing repainted: fill, hover, disabled, and focus ring all come from
+   the primitive, so sign-in leads with the same --action plate as the app. */
 
 /* ---------- Request access & invite ---------------------------------- */
 

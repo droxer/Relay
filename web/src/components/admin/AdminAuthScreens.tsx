@@ -27,7 +27,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
     <section className="adm-auth-shell">
       <div className="adm-auth-card">
         <div className="adm-auth-brand">
-          <RelayMark size={ICON.xl} />
+          <RelayMark size={ICON.xl} tone="brand" />
           <span className="sr-only">Relay · {t("nav.admin")}</span>
         </div>
         {children}

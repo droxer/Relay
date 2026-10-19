@@ -3,9 +3,18 @@ import { ICON } from "./icons";
 type RelayMarkProps = {
   className?: string;
   size?: number;
+  /** `ink` (default): register ink, for marks that sit inside working UI —
+   *  transcript phase separators and generic empty states. `brand`: the
+   *  handoff in colour, for the places Relay introduces itself. */
+  tone?: "ink" | "brand";
 };
 
-export function RelayMark({ className, size = ICON.xl }: RelayMarkProps) {
+export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMarkProps) {
+  // The brand tone is the logo's one sanctioned static use of --live, the
+  // same carve-out the app icons take: the lead chevron is what a person
+  // does (--action), the trailing chevron an agent carrying it on (--live).
+  // Everywhere else purple still means work in progress and always moves.
+  const isBrand = tone === "brand";
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -23,11 +32,12 @@ export function RelayMark({ className, size = ICON.xl }: RelayMarkProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/* Ink, not --action: the yellow is the action fill and the
-            live-work signal, and the logo is neither. The mark stays
-            register ink in every context. */}
-        <path d="M12 14 L32 32 L12 50" stroke="var(--ink-1)" />
-        <path d="M32 14 L52 32 L32 50" stroke="currentColor" opacity="0.45" />
+        <path d="M12 14 L32 32 L12 50" stroke={isBrand ? "var(--action)" : "var(--ink-1)"} />
+        <path
+          d="M32 14 L52 32 L32 50"
+          stroke={isBrand ? "var(--live)" : "currentColor"}
+          opacity={isBrand ? undefined : 0.45}
+        />
       </g>
     </svg>
   );

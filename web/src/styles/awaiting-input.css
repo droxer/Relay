@@ -6,13 +6,15 @@
    the card's hairline closes it.
 
    One loud thing: the agent's words, at the transcript's reading size behind
-   an accent rail. Cobalt, because this is the one place in the thread asking
-   the reader to act (--action means "act"); a gate stop rather than a
-   question takes the caution rail. Everything else is neutral ink. */
+   an amber rail — --warn is "waiting on a person" everywhere in Relay (the
+   thread rail's pip, the task status icon), so the prompt that asks for that
+   person says it in the same colour, whether it is a question or a gate stop.
+   The choices themselves are actions and take the --action wash. Everything
+   else is neutral ink. */
 
 .awaiting-input {
   --awaiting-inset: var(--composer-radius, var(--sp-5));
-  --awaiting-rail: var(--action);
+  --awaiting-rail: var(--warn);
   display: grid;
   gap: var(--sp-2);
   width: min(100% - var(--awaiting-inset) * 2, var(--thread-measure) - var(--awaiting-inset) * 2);
@@ -29,7 +31,6 @@
   animation: rise var(--t-slow) var(--ease) both;
 }
 
-.awaiting-input:is([data-kind="check"], [data-kind="budget"]) { --awaiting-rail: var(--warn); }
 
 .awaiting-input-head {
   display: flex;
@@ -245,5 +246,4 @@
 /* The task record quotes the same words in its recovery panel. There the
    panel's own rail already carries the tone, so the quote keeps the action
    rail only when it is a question. */
-.recovery-panel .awaiting-input-quote { --awaiting-rail: var(--action); }
-.recovery-panel:is([data-waiting="check"], [data-waiting="budget"]) .awaiting-input-quote { --awaiting-rail: var(--warn); }
+.recovery-panel .awaiting-input-quote { --awaiting-rail: var(--warn); }

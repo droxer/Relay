@@ -134,9 +134,9 @@
    register-varying --surface-0. They read the pinned --dark-* / --light-*
    register tokens in palette.css instead, which resolve to the same values
    both registers use and stay in sync with them by definition. The action
-   dot is pinned the same way: the cobalt is tuned per register (light blue
+   dot is pinned the same way: the accent is tuned per register (light blue
    on dark, deep on light), so --action would paint the live register's
-   cobalt on both canvases. */
+   accent on both canvases. */
 .pref-theme-swatch[data-tone="light"] {
   background: var(--light-canvas);
 }
@@ -161,7 +161,7 @@
 
 .pref-theme-swatch[data-tone="system"]::after {
   /* The dot splits on the same diagonal as the swatch, so each half shows
-     its own register's cobalt. */
+     its own register's accent. */
   background: linear-gradient(135deg, var(--light-action) 0 50%, var(--dark-action) 50% 100%);
 }
 

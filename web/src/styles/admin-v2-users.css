@@ -500,7 +500,7 @@ tr.is-pulse > td:first-child::after {
 
 .adm-node-card.is-pulse::after {
   /* Same one-shot 'recently updated' marker as .adm-emp-row.is-pulse — ink on
-     the --t-draw cadence, never the --action cobalt or --live purple. */
+     the --t-draw cadence, never the --action accent or --live purple. */
   content: "";
   position: absolute;
   inset: 0;

@@ -165,27 +165,22 @@
 .user-avatar.running::before {
   content: "";
   position: absolute;
-  /* -5px is centered, not arbitrary: it puts the 18px ring's center on the
-     10px pip's (the pip anchors at -1px), so the pulse reads as the pip
-     breathing rather than a second dot offset from it. */
-  right: -5px;
-  bottom: -5px;
-  width: 18px;
-  height: 18px;
+  /* Laid exactly over the presence pip (::after anchors at -1px), so the
+     shared live-ring leaves the pip's own edge. */
+  right: -1px;
+  bottom: -1px;
+  width: var(--dot-lg);
+  height: var(--dot-lg);
+  border: 1.5px solid var(--live);
   border-radius: var(--r-full);
-  background: var(--live);
-  opacity: 0.35;
+  opacity: 0.4;
+  transform: scale(1.6);
   z-index: 1;
-  --pulse-color: var(--live);
-  animation: pulse-ring var(--t-pulse) var(--ease) infinite;
+  animation: live-ring var(--t-pulse) var(--ease) infinite;
 }
 
 .user-avatar.running::after {
   background: var(--live);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .user-avatar.running::before { opacity: 0.45; }
 }
 
 .agent-avatar {
