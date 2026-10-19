@@ -1,6 +1,6 @@
 # Onboarding Wizard Design
 
-> Note (2026-10-18): the file-backed accounts store this plan mentions has since been retired; accounts and reset links are database-only, and an install's old `auth/` files are imported once at boot (`backend/relay/security/auth_file_import.py`).
+> Note (2026-10-18): the file-backed accounts store this plan mentions has since been retired; accounts and reset links are database-only, and legacy `auth/` file imports have also been removed; migrate those files with an earlier release before upgrading.
 
 Status: built · 2026-10-16 (see *As built* at the end for where it differs from this proposal)
 

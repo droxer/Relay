@@ -83,25 +83,6 @@ def test_anonymous_registration_cannot_create_a_computer(monkeypatch):
         assert app.state.registry.get('sbx_unprovisioned') is None
 
 
-def test_legacy_local_secrets_never_reach_the_database(tmp_path):
-    import json
-    from relay.persistence.legacy.file_stores import migrate_local_file_stores
-    from store_fixtures import make_daemon_store, sqlite_url
-    nodes = tmp_path / 'data' / 'daemon' / 'nodes'
-    nodes.mkdir(parents=True)
-    (nodes / 'legacy.json').write_text(json.dumps({
-        'id': 'legacy', 'status': 'ready', 'nodeTokenSecret': 'old-secret', 'nodeTokenHash': 'hash',
-        'createdAt': '2026-06-13T00:00:00.000Z', 'updatedAt': '2026-06-13T00:00:00.000Z',
-    }))
-    migrate_local_file_stores(tmp_path / 'data', sqlite_url(tmp_path / 'db'))
-    store = make_daemon_store(tmp_path / 'db')
-    assert store.get_node('legacy')['nodeTokenHash'] == 'hash'
-    with store.engine.connect() as conn:
-        dumped = json.dumps([list(row) for row in conn.execute(text('SELECT * FROM daemon_nodes'))], default=str)
-        events = json.dumps([list(row) for row in conn.execute(text('SELECT payload FROM daemon_events'))], default=str)
-    assert 'old-secret' not in dumped and 'old-secret' not in events
-
-
 def test_unknown_node_event_is_a_permanent_rejection(monkeypatch):
     monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
     with TemporaryDirectory() as root:

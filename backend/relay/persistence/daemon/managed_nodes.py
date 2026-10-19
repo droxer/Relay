@@ -21,7 +21,8 @@ from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
-from ..legacy.files import DEFAULT_RELAY_DATA_DIR, read_json, write_json
+from ...core.environment import DEFAULT_RELAY_DATA_DIR
+from ...core.legacy_names import upgrade_legacy_names
 from ...core.ids import now_iso
 from ..validation import safe_name
 from ...core.managed_node_policy import (
@@ -606,17 +607,24 @@ class LocalManagedNodeStore:
 
     def _read_record(self, kind: str, record_id: str) -> dict[str, Any] | None:
         path = self._record_path(kind, record_id)
-        return read_json(path) if path.exists() else None
+        return self._read_local_record(path) if path.exists() else None
+
+    @staticmethod
+    def _read_local_record(path: Path) -> dict[str, Any]:
+        return upgrade_legacy_names(json.loads(path.read_text(encoding="utf-8")))
 
     def _write_record(self, kind: str, record: dict[str, Any]) -> None:
-        write_json(self._record_path(kind, record["id"]), record)
+        path = self._record_path(kind, record["id"])
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(path)
 
     def _delete_record(self, kind: str, record_id: str) -> None:
         self._record_path(kind, record_id).unlink(missing_ok=True)
 
     def _records(self, kind: str, *, node_id: str | None = None) -> list[dict[str, Any]]:
         directory = {"nodes": self.nodes_dir, "attempts": self.attempts_dir, "grants": self.grants_dir}[kind]
-        return [read_json(path) for path in directory.glob("*.json")]
+        return [self._read_local_record(path) for path in directory.glob("*.json")]
 
 
 class DatabaseManagedNodeStore(LocalManagedNodeStore):

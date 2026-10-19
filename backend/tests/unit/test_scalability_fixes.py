@@ -178,42 +178,6 @@ def test_managed_attempt_creation_is_atomic_across_instances(tmp_path):
     assert len(stores[0].list_attempts(node["id"])) == 1
 
 
-def test_local_operational_import_is_dry_runnable_and_idempotent(tmp_path):
-    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
-    from relay.persistence.account.profile_images import (
-        LocalProfileImageStore,
-        DatabaseProfileImageStore,
-    )
-    from relay.persistence.legacy.operational import (
-        migrate_local_operational_state,
-        require_operational_import,
-    )
-    from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
-
-    root = tmp_path / "legacy"
-    local = LocalManagedNodeStore(root)
-    node = local.create_node({"userId": "alice"})
-    attempt, credential = local.create_attempt(node["id"])
-    image = b"\x89PNG\r\n\x1a\nimage"
-    LocalProfileImageStore(root).save(
-        "agents", "agent", "data:image/png;base64," + base64.b64encode(image).decode()
-    )
-    url = f"sqlite:///{tmp_path}/destination.db"
-    shared = DatabaseManagedNodeStore(url, create_schema=True)
-    with pytest.raises(RuntimeError, match="imported"):
-        require_operational_import(root, shared)
-    assert migrate_local_operational_state(root, url, dry_run=True)["nodes"] == 1
-    assert shared.list_nodes() == []
-    assert migrate_local_operational_state(root, url)["grants"] == 1
-    assert shared.consume_enrollment_grant(credential)[1] == attempt
-    assert DatabaseProfileImageStore(url).read("agents", "agent")[0] == image
-    shared.update_node(node["id"], {"displayName": "changed"})
-    assert migrate_local_operational_state(root, url)["alreadyImported"]
-    assert shared.get_node(node["id"])["displayName"] == "changed"
-    assert local.get_node(node["id"])["displayName"] != "changed"
-    require_operational_import(root, shared)
-
-
 def test_recovery_does_not_acquire_fleet_dispatch_lock():
     from relay.daemon_registry.registry import DaemonNodeRegistry
 
@@ -290,30 +254,6 @@ def test_retention_limits_deletes_and_does_not_load_command_payloads(tmp_path):
         "daemon_commands.command" not in s for s in statements if s.startswith("SELECT")
     )
     assert store.prune_terminal_records(0, 0)["commands"] == 10
-
-
-def test_import_conflict_rolls_back_prior_records(tmp_path):
-    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
-    from relay.persistence.legacy.operational import migrate_local_operational_state
-    from relay.persistence.account.profile_images import (
-        DatabaseProfileImageStore,
-        LocalProfileImageStore,
-    )
-    from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
-
-    root = tmp_path / "legacy"
-    source = LocalManagedNodeStore(root)
-    node = source.create_node({"userId": "alice"})
-    url = f"sqlite:///{tmp_path}/conflict.db"
-    shared = DatabaseManagedNodeStore(url, create_schema=True)
-    a = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nfirst").decode()
-    b = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nsecond").decode()
-    LocalProfileImageStore(root).save("agents", "agent", a)
-    DatabaseProfileImageStore(url).save("agents", "agent", b)
-    with pytest.raises(ValueError, match="Conflicting profile image"):
-        migrate_local_operational_state(root, url)
-    assert shared.get_node(node["id"]) is None
-    assert source.get_node(node["id"]) == node
 
 
 @pytest.mark.parametrize(

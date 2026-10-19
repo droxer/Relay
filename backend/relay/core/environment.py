@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_RELAY_DATA_DIR = BACKEND_ROOT / ".relay"
 
 
 def load_env_file(path: str | Path, *, override: bool = False) -> None:
