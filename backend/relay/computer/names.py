@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 from ..persistence.protocols import ManagedNodeStore
 from ..security.actor import Actor
+from .access import actor_may_manage_computer
 
 MAX_COMPUTER_DISPLAY_NAME_LENGTH = 64
 
@@ -64,7 +65,7 @@ def rename_computer_for_actor(
     node = ctx.registry.get(node_id)
     if not node:
         raise KeyError(node_id)
-    if not actor.get("isAdmin") and node.get("userId") != actor.get("userId"):
+    if not actor_may_manage_computer(actor, node):
         raise PermissionError(node_id)
 
     display_name = normalize_computer_display_name(requested_display_name)

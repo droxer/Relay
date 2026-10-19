@@ -66,35 +66,95 @@
   gap: var(--sp-1);
 }
 
-/* The owner is plain text: a bordered chip made the most ordinary column on
-   the row its loudest. */
+/* The owner cell holds the shared owner mark (NodeOwner); it only clips. */
 .adm-node-row-user {
   display: block;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-2);
 }
 
-/* Kind and owner on one line of muted text — what used to be two bordered
-   chips. The line ellipsises rather than wrapping so every card in a row
-   keeps the same rhythm. */
+/* Owner first, kind trailing — one line that ellipsises rather than wraps,
+   so every card in a row keeps the same rhythm. The kind gives way first. */
 .adm-node-meta {
   display: flex;
   align-items: center;
-  gap: var(--sp-1-5);
+  justify-content: space-between;
+  gap: var(--sp-3);
   min-width: 0;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
+.adm-node-meta-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 .adm-node-meta-icon {
   flex: none;
+}
+
+/* Whose a computer is: a monogram tile, the name, the @handle. The tile is
+   the user-avatar's shape at chip scale, without its status pip — presence
+   belongs to the computer, not to its owner. */
+.adm-node-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.adm-node-owner-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+  border-radius: var(--r-1);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 0.5px var(--line-2);
+  color: var(--ink-1);
+  font: var(--type-micro);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.adm-node-owner-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-1);
+}
+
+.adm-node-owner-handle {
+  min-width: 0;
+  flex: 0 10 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+
+/* Nobody holds it, or the console has no record of who does: a hollow tile
+   and muted copy, so the gap reads as a state rather than as missing data. */
+.adm-node-owner:not([data-owner="user"]) .adm-node-owner-mark {
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed var(--line-2);
+  color: var(--ink-3);
+}
+
+.adm-node-owner:not([data-owner="user"]) .adm-node-owner-name {
+  color: var(--ink-3);
 }
 
 .adm-node-meta-text {
@@ -506,4 +566,13 @@
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--err);
+}
+
+/* The read-only note under Copy ID on a user's own computer. */
+.adm-node-actions-note {
+  margin: 0;
+  padding: var(--sp-1-5) var(--sp-2);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  color: var(--ink-3);
 }

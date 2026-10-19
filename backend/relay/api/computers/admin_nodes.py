@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from ...computer.access import PERSONAL_COMPUTER_READ_ONLY, admin_may_manage_computer
 from ...computer.limits import assert_local_computer_allowed
 from ...computer.names import normalize_computer_display_name, present_computer
 from ...computer.node_agents import (
@@ -30,6 +31,11 @@ router = APIRouter()
 
 def with_node_display_name(ctx: AppContextDep, node: dict[str, Any]) -> dict[str, Any]:
     return present_computer(ctx, node)
+
+
+def assert_admin_may_manage(node: dict[str, Any]) -> None:
+    if not admin_may_manage_computer(node):
+        raise HTTPException(403, PERSONAL_COMPUTER_READ_ONLY)
 
 
 def public_control_panel_node(ctx: AppContextDep, node: dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +82,7 @@ def unassign_control_panel_daemon_node(
     existing_node = ctx.registry.get(node_id)
     if not existing_node:
         raise HTTPException(404, "Daemon node not found.")
+    assert_admin_may_manage(existing_node)
     if not existing_node.get("userId"):
         raise HTTPException(409, "Daemon node is not assigned.")
     try:
@@ -100,8 +107,10 @@ def update_control_panel_daemon_node_disabled_agents(
     raw = body.get("disabledAgents")
     if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):
         raise HTTPException(400, "disabledAgents must be an array of agent names.")
-    if not ctx.registry.get(node_id):
+    existing_node = ctx.registry.get(node_id)
+    if not existing_node:
         raise HTTPException(404, "Daemon node not found.")
+    assert_admin_may_manage(existing_node)
     try:
         updated = ctx.registry.set_disabled_agents(node_id, raw)
     except KeyError as error:
@@ -121,8 +130,10 @@ def update_control_panel_daemon_node_agent_role_defaults(
     raw = body.get("agentRoleDefaults")
     if not isinstance(raw, dict):
         raise HTTPException(400, "agentRoleDefaults must be an object keyed by agent name.")
-    if not ctx.registry.get(node_id):
+    existing_node = ctx.registry.get(node_id)
+    if not existing_node:
         raise HTTPException(404, "Daemon node not found.")
+    assert_admin_may_manage(existing_node)
     try:
         updated = ctx.registry.set_agent_role_defaults(node_id, raw)
     except KeyError as error:
@@ -143,6 +154,7 @@ def delete_control_panel_daemon_node(
             node = ctx.registry.get(node_id)
             if not node:
                 raise KeyError(node_id)
+            assert_admin_may_manage(node)
             if not node.get("retiredAt"):
                 assert_node_agent_runs_drained(ctx, node_id)
             if node.get("managedNodeId"):

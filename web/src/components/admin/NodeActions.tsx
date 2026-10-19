@@ -21,6 +21,7 @@ import {
   NavMore,
 } from "../icons";
 import { copyText } from "./helpers";
+import { isPersonalComputer } from "../../lib/adminHelpers";
 
 interface NodeActionsProps {
   node: ControlPanelDaemonNodeRecord;
@@ -35,10 +36,13 @@ interface NodeActionsProps {
 
 /** One overflow menu for a computer on the fleet card and list row. The
     actions are occasional, so they stay labelled but out of sight until asked
-    for — the same grammar as the personal Computers page. */
+    for — the same grammar as the personal Computers page. A user's own
+    computer is read-only here: the admin may copy its id and nothing else,
+    and the backend refuses the rest (`backend/relay/computer/access.py`). */
 export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDelete, deletePending, onDeleteRequest, t }: NodeActionsProps) {
   const { announce } = useDialogs();
   const name = node.displayName || node.id;
+  const readOnly = isPersonalComputer(node);
   const canReveal = Boolean(onReveal) && !node.managedNodeId;
 
   async function handleCopyId() {
@@ -68,32 +72,74 @@ export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDel
           <ActionCopy size={ICON.sm} aria-hidden="true" />
           {t("admin.copy_node_id")}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onRename(node)}>
-          <ActionEdit size={ICON.sm} aria-hidden="true" />
-          {t("thread.rename_computer")}
-        </DropdownMenuItem>
-        {canReveal ? (
-          <DropdownMenuItem onClick={() => onReveal?.(node)}>
-            <ActionKey size={ICON.sm} aria-hidden="true" />
-            {t("admin.v2.reveal_credentials")}
-          </DropdownMenuItem>
-        ) : null}
-        {node.provisioningPlaceholder ? null : (
-          <DropdownMenuItem onClick={() => onManageExecutors(node)}>
-            <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
-            {t("admin.v2.manage_executors")}
-          </DropdownMenuItem>
-        )}
-        {onDelete ? (
+        {readOnly ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem danger onClick={onDeleteRequest}>
-              <AdminDelete size={ICON.sm} aria-hidden="true" />
-              {t("admin.v2.delete_action")}
-            </DropdownMenuItem>
+            {/* A note, not a group label: base-ui's GroupLabel throws outside a group. */}
+            <p className="adm-node-actions-note" role="note">
+              {t("admin.v2.personal_computer_read_only")}
+            </p>
           </>
-        ) : null}
+        ) : (
+          <NodeManageItems
+            node={node}
+            canReveal={canReveal}
+            onReveal={onReveal}
+            onRename={onRename}
+            onManageExecutors={onManageExecutors}
+            onDeleteRequest={onDelete ? onDeleteRequest : undefined}
+            t={t}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function NodeManageItems({
+  node,
+  canReveal,
+  onReveal,
+  onRename,
+  onManageExecutors,
+  onDeleteRequest,
+  t,
+}: {
+  node: ControlPanelDaemonNodeRecord;
+  canReveal: boolean;
+  onReveal?: (node: ControlPanelDaemonNodeRecord) => void;
+  onRename: (node: ControlPanelDaemonNodeRecord) => void;
+  onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
+  onDeleteRequest?: () => void;
+  t: TFunction;
+}) {
+  return (
+    <>
+      <DropdownMenuItem onClick={() => onRename(node)}>
+        <ActionEdit size={ICON.sm} aria-hidden="true" />
+        {t("thread.rename_computer")}
+      </DropdownMenuItem>
+      {canReveal ? (
+        <DropdownMenuItem onClick={() => onReveal?.(node)}>
+          <ActionKey size={ICON.sm} aria-hidden="true" />
+          {t("admin.v2.reveal_credentials")}
+        </DropdownMenuItem>
+      ) : null}
+      {node.provisioningPlaceholder ? null : (
+        <DropdownMenuItem onClick={() => onManageExecutors(node)}>
+          <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
+          {t("admin.v2.manage_executors")}
+        </DropdownMenuItem>
+      )}
+      {onDeleteRequest ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem danger onClick={onDeleteRequest}>
+            <AdminDelete size={ICON.sm} aria-hidden="true" />
+            {t("admin.v2.delete_action")}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
   );
 }

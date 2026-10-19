@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from ...computer.access import actor_may_manage_computer
 from ...computer.names import (
     present_computer,
     rename_computer_for_actor,
@@ -121,7 +122,7 @@ def update_daemon_node_disabled_agents(
     node = ctx.registry.get(sandbox_id)
     if not node:
         raise HTTPException(404, "Daemon node not found.")
-    if not actor_can_access_sandbox(actor, node):
+    if not actor_may_manage_computer(actor, node):
         raise HTTPException(403, "Daemon node access denied.")
     body = _request_body
     raw = body.get("disabledAgents")
@@ -140,21 +141,26 @@ def update_daemon_node_disabled_agents(
     return {"node": present_computer(ctx, monitor_node)}
 
 
-def _runtime_refresh_node(request: Request, ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
+def _runtime_refresh_node(
+    request: Request, ctx: AppContextDep, sandbox_id: str, *, manage: bool = False
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
     node = ctx.registry.get(sandbox_id)
     if not node or node.get("status") == "deleted":
         raise HTTPException(404, "Computer not found.")
-    if not actor_can_access_sandbox(actor, node):
+    allowed = (
+        actor_may_manage_computer(actor, node) if manage else actor_can_access_sandbox(actor, node)
+    )
+    if not allowed:
         raise HTTPException(403, "Daemon node access denied.")
     return node
 
 
 @router.post("/daemon-nodes/{sandbox_id}/runtime-refresh", status_code=202)
 def request_runtime_refresh(sandbox_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    node = _runtime_refresh_node(request, ctx, sandbox_id)
+    node = _runtime_refresh_node(request, ctx, sandbox_id, manage=True)
     if not has_capability(node, DAEMON_CAPABILITY_RUNTIME_REFRESH):
         raise HTTPException(409, "Update Relay Computer to refresh runtimes.")
     if not ctx.registry.is_live(sandbox_id):
@@ -194,7 +200,7 @@ def disconnect_daemon_node(
             node = ctx.registry.get(sandbox_id)
             if not node:
                 raise KeyError(sandbox_id)
-            if not actor_can_access_sandbox(actor, node):
+            if not actor_may_manage_computer(actor, node):
                 raise HTTPException(403, "Daemon node access denied.")
             # Supervisor-provisioned hardware is torn down through the managed
             # node lifecycle, not by the user sitting in front of it.
@@ -228,7 +234,7 @@ def update_daemon_node_agent_role_overrides(
         if authorized_sandbox["id"] != sandbox_id:
             raise HTTPException(403, "Daemon node access denied.")
     elif actor:
-        if not actor_can_access_sandbox(actor, sandbox):
+        if not actor_may_manage_computer(actor, sandbox):
             raise HTTPException(403, "Daemon node access denied.")
     else:
         raise HTTPException(401, "Authentication required.")

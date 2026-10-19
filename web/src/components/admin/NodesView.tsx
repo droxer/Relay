@@ -141,9 +141,9 @@ function NodeIdentityColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
 }
 
 function NodeUserColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
-  const { userById } = useNodeCellState();
+  const { t, userById } = useNodeCellState();
   const user = node.userId ? userById.get(node.userId) : undefined;
-  return <NodeUserCell userName={user?.displayName} />;
+  return <NodeUserCell node={node} user={user} t={t} />;
 }
 
 function NodeRuntimesColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
@@ -433,12 +433,11 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
         <div className="adm-fleet-grid">
           {paged.items.map((node) => {
             const user = node.userId ? userById.get(node.userId) : undefined;
-            const userName = user?.displayName;
             return (
               <NodeCard
                 key={node.id}
                 node={node}
-                userName={userName}
+                user={user}
                 onReveal={onRevealCredentials}
                 onRename={onRenameNode}
                 onManageExecutors={onManageExecutors}
