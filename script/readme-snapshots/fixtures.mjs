@@ -681,6 +681,9 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (path === "/sandboxes") return { sandboxes: nodes };
   if (path === "/workspace/brief") return brief(params);
 
+  if (path === "/notifications") return { notifications: [], unreadCount: 0 };
+  if (path === "/notifications/preferences") return { mutedKinds: [], kinds: ["task_completed", "computer_status", "client_outdated"] };
+
   if (path === "/skills") return { skills: skills.map(({ revisions, files, grantedAgentIds, assignments, ...record }) => record) };
   if (head === "skills" && id && !tail) return byId(skills, id);
   if (head === "skills" && tail === "files") return { path: params.get("path"), bytes: SKILL_MD.length, sha256: "0f3a9c".padEnd(64, "b"), binary: false, truncated: false, content: SKILL_MD };

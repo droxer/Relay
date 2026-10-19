@@ -94,9 +94,10 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             # Off: the public join is not mounted (RELAY_WAITLIST_ENABLED), so
             # nobody can ask; admins can still invite people directly.
             "waitlist": ctx.settings.waitlist_enabled,
-            # Whether an invite goes out by email: mail is configured and a
-            # public web origin exists to link to. Off, the admin copies the link.
-            "inviteEmail": ctx.waitlist.mail_configured and trusted_web_origin() is not None,
+            # Whether an invite goes out by email: switched on
+            # (RELAY_WAITLIST_INVITE_EMAIL), mail configured, and a public web
+            # origin to link to. Off, the admin copies the link.
+            "inviteEmail": ctx.waitlist.invite_email_enabled and trusted_web_origin() is not None,
         },
         # Whether the bootstrap/supervisor bearer token exists. Only its hash
         # is stored, so the value itself is shown once, by the reissue route.

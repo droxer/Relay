@@ -361,7 +361,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           sortMenu={
             <SortMenu
               options={[
-                { key: "title", label: t("backlog.col_task") },
+                { key: "title", label: t("backlog.col_automation") },
                 { key: "priority", label: t("backlog.priority") },
                 { key: "assignee", label: t("backlog.assignee") },
                 { key: "nextRun", label: t("routine.next_run") },

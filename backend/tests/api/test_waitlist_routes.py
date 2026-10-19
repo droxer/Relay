@@ -33,6 +33,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer) 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     monkeypatch.setenv("RELAY_WAITLIST_ENABLED", "1")
     monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://get-relay.cc")
+    monkeypatch.setenv("RELAY_WAITLIST_INVITE_EMAIL", "1")
     app = create_app(tmp_path / "state")
     app.state.waitlist.mailer = mailer
     return TestClient(app)
@@ -81,6 +82,7 @@ def test_admin_can_invite_by_email_with_the_waitlist_off(
     monkeypatch.delenv("RELAY_WAITLIST_ENABLED", raising=False)
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://get-relay.cc")
+    monkeypatch.setenv("RELAY_WAITLIST_INVITE_EMAIL", "1")
     app = create_app(tmp_path / "state")
     app.state.waitlist.mailer = mailer
     client = TestClient(app)
@@ -133,6 +135,7 @@ def test_without_a_public_origin_the_link_is_shown_not_mailed(
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
     monkeypatch.delenv("RELAY_PUBLIC_BACKEND_URL", raising=False)
+    monkeypatch.setenv("RELAY_WAITLIST_INVITE_EMAIL", "1")
     app = create_app(tmp_path / "state")
     app.state.waitlist.mailer = mailer
     client = TestClient(app)
@@ -326,3 +329,23 @@ def test_a_deleted_users_address_can_be_invited_again(client: TestClient, mailer
     assert again.status_code == 200, again.text
     assert again.json()["entry"]["status"] == "invited"
     assert again.json()["entry"]["accountId"] is None
+
+
+def test_invites_are_links_only_unless_invite_email_is_on(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://get-relay.cc")
+    monkeypatch.delenv("RELAY_WAITLIST_INVITE_EMAIL", raising=False)
+    app = create_app(tmp_path / "state")
+    app.state.waitlist.mailer = mailer
+    client = TestClient(app)
+    _bootstrap_admin(client)
+    assert client.get(f"{API}/admin/settings").json()["capabilities"]["inviteEmail"] is False
+
+    response = client.post(f"{API}/admin/waitlist/invitations", json={"email": "grace@example.com"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["delivery"] is None
+    assert response.json()["inviteUrl"].startswith("https://get-relay.cc/join#token=")
+    assert mailer.sent == []

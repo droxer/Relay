@@ -26,7 +26,8 @@ interface InviteByEmailDrawerProps {
 }
 
 /**
- * Admin → Waitlist → Invite by email: invite someone who never asked. The
+ * Admin → Waitlist → Invite by email (or by link, while invite email is off):
+ * invite someone who never asked. The
  * server reuses the person's entry when they already did, so nobody is
  * invited twice, and refuses an address an account already holds.
  */
@@ -69,12 +70,19 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
     setIsBusy(true);
     setError(null);
     try {
-      const result = await inviteByEmail({ email: email.trim(), name: name.trim() || undefined, locale });
+      /* The language only picks the email's; a link-only invite has none. */
+      const result = await inviteByEmail({
+        email: email.trim(),
+        name: name.trim() || undefined,
+        locale: canEmail ? locale : undefined,
+      });
       onInvited([result]);
       await queryClient.invalidateQueries({ queryKey: WAITLIST_QUERY_KEY });
       onClose();
     } catch (err) {
-      setError(t("admin.waitlist.invite_email_error", { message: err instanceof Error ? err.message : String(err) }));
+      setError(t(canEmail ? "admin.waitlist.invite_email_error" : "admin.waitlist.invite_link_error", {
+        message: err instanceof Error ? err.message : String(err),
+      }));
     } finally {
       setIsBusy(false);
     }
@@ -129,7 +137,7 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
           <Field
             label={t("admin.display_name")}
             optional={t("admin.v2.optional")}
-            hint={t("admin.waitlist.invite_email_name_hint")}
+            hint={canEmail ? t("admin.waitlist.invite_email_name_hint") : undefined}
           >
             <Input
               name="invite-name"
@@ -141,7 +149,7 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
             />
           </Field>
 
-          <Field label={t("admin.waitlist.invite_email_language")} labelId={localeLabelId} wrapper="div">
+          {canEmail ? <Field label={t("admin.waitlist.invite_email_language")} labelId={localeLabelId} wrapper="div">
             <Select
               value={locale}
               items={localeItems}
@@ -156,7 +164,7 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
                 ))}
               </SelectContent>
             </Select>
-          </Field>
+          </Field> : null}
         </section>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}

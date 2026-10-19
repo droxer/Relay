@@ -1028,10 +1028,12 @@ and Threads share the same conversation and provide access to its owning task.
 Only the public join is gated: `POST /waitlist` is mounted when
 `RELAY_WAITLIST_ENABLED=1`, which `GET /api/v1/auth/status` reports as
 `waitlistEnabled` and `GET /api/v1/admin/settings` as `capabilities.waitlist`.
-The invite routes and the admin queue are always mounted. An invite is emailed
-only when a public web URL is configured (`RELAY_PUBLIC_WEB_URL`, else
-`RELAY_PUBLIC_BACKEND_URL`) and mail is set up — `capabilities.inviteEmail`;
-otherwise `delivery.status` is `skipped` and the admin hands the link over.
+The invite routes and the admin queue are always mounted. Invites are links
+by default: the admin hands the link over and `delivery` is `null`. Email
+requires `RELAY_WAITLIST_INVITE_EMAIL=1`, a configured mailer, and a public web
+URL (`RELAY_PUBLIC_WEB_URL`, else `RELAY_PUBLIC_BACKEND_URL`) —
+`capabilities.inviteEmail`. With invite email enabled and a configured mailer,
+an unconfigured public origin produces `delivery.status: "skipped"`.
 Rules and rationale: `docs/waitlist-design.md`.
 
 | Method and path | Auth | Answer |
@@ -1040,18 +1042,19 @@ Rules and rationale: `docs/waitlist-design.md`.
 | `POST /waitlist/invites/lookup` | none | Body `{token}`. `{invite: {email, name, suggestedHandle, expiresAt}}`; every dead token is one `404` |
 | `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken, `404` dead invite; a refused accept leaves the invite live |
 | `GET /admin/waitlist?status=&q=&limit=&offset=` | admin | `{entries, total, counts}`, oldest first |
-| `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and emails it. `{entry, inviteUrl, delivery: {status, error}}`; `inviteUrl` is the only time the token appears |
-| `POST /admin/waitlist/invitations` | admin | Body `{email, name?, locale?}` (`en`/`zh-CN`). Invites an address directly, reusing its entry if it asked (source `admin-invite` otherwise) and ignoring the queue cap; emailed now. `{entry, inviteUrl, delivery}`. `400` malformed, `409` a live account already uses the email, or the entry joined and its account still exists (a deleted user's entry is reopened and re-invited) |
-| `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service. A queued email whose entry was re-invited, declined, accepted, or erased meanwhile is not sent |
+| `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and returns its link. `{entry, inviteUrl, delivery: null \| {status, error}}`; `inviteUrl` is the only time the token appears |
+| `POST /admin/waitlist/invitations` | admin | Body `{email, name?, locale?}` (`en`/`zh-CN`). Invites an address directly, reusing its entry if it asked (source `admin-invite` otherwise) and ignoring the queue cap; emailed now only when invite email is enabled. `{entry, inviteUrl, delivery}`. `400` malformed, `409` a live account already uses the email, or the entry joined and its account still exists (a deleted user's entry is reopened and re-invited) |
+| `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery: null` by default. When email is enabled, emailable invites have `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service. A queued email whose entry was re-invited, declined, accepted, or erased meanwhile is not sent |
 | `POST /admin/waitlist/{id}/decline` | admin | `{entry}`; clears any live invite |
 | `PATCH /admin/waitlist/{id}` | admin | Body `{adminNote}`. `{entry}` |
 | `DELETE /admin/waitlist/{id}` | admin | Erases the entry (an account it created is untouched) |
 
 Invite links carry the token in the URL fragment (`/join#token=…`), and the
 page sends it to the API only in a POST body, so no server or edge access log
-records a redeemable token. `delivery.status` is `queued`, `sent`, `bounced`,
-`failed`, or `skipped` (no mail configured); it never changes the entry's
-status.
+records a redeemable token. `delivery` is `null` when invite email is disabled
+or no mailer is configured. Otherwise `delivery.status` is `queued`, `sent`,
+`bounced`, `failed`, or `skipped` (no public origin); it never changes the
+entry's status.
 
 ## Password Reset
 

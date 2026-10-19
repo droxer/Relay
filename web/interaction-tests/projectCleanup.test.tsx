@@ -30,7 +30,7 @@ it.each(["queued", "waiting_for_upgrade"] as const)("clears deleted records and 
   for (const key of [tasks, sessions]) expect(client.getQueryData(key)).toEqual([{ id: "other", projectId: "kept" }]);
   const message = announce.mock.calls[0][0];
   expect(message.tone).toBe(workspaceCleanup === "waiting_for_upgrade" ? "warn" : "info");
-  expect(message.message).toContain(workspaceCleanup === "waiting_for_upgrade" ? "Update and reconnect Relay Computer" : "queued");
+  expect(message.message).toContain(workspaceCleanup === "waiting_for_upgrade" ? "Update Relay Computer and reconnect it" : "deleted when the project’s computer connects");
   view.unmount();
   client.clear();
 });
