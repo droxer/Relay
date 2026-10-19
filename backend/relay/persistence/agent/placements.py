@@ -12,6 +12,7 @@ from sqlalchemy import (
 from ...core.computer_identity import computer_id
 from ...core.ids import new_database_id, now_iso
 from ...core.models import AGENT_NAMES
+from ...core.runtime_status import executor_not_ready_message
 from .store import DatabaseAgentStore
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
@@ -743,7 +744,9 @@ def placement_status(
             conditions.append(
                 {
                     "reason": "executor_not_ready",
-                    "message": f"{executor_kind} is not ready on this runtime node.",
+                    "message": executor_not_ready_message(
+                        str(executor_kind), executor_status
+                    ),
                 }
             )
         elif daemon_node.get("status") == "running":

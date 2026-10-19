@@ -1,6 +1,7 @@
 import type { AgentName } from "./state.js";
 import type {
   DaemonAgentAdapter,
+  DaemonAgentHealthStatus,
   DaemonAgentInventory,
   DaemonNodeCapability,
   DaemonNodeSandboxMode,
@@ -8,6 +9,9 @@ import type {
 import type { AgentRole } from "./session-store.js";
 
 export type SandboxStatus = "provisioning" | "ready" | "busy" | "running" | "stopped" | "failed";
+/** A runtime's status on a node record: the daemon's last report, or
+ * `unknown` when it never reported one. */
+export type AgentRuntimeStatus = DaemonAgentHealthStatus | "unknown";
 export type DaemonNodeLocation = "user-device" | "managed";
 
 export interface SandboxRecord {
@@ -25,7 +29,7 @@ export interface SandboxRecord {
   credentialVersion?: number;
   retiredAt?: string;
   status: SandboxStatus;
-  agents: Record<AgentName, "unknown" | "ready" | "failed">;
+  agents: Record<AgentName, AgentRuntimeStatus>;
   agentDetails?: Partial<Record<AgentName, {
     detail?: string;
     version?: string;

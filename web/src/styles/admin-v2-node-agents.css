@@ -245,6 +245,19 @@
   color: var(--ink-3);
 }
 
+/* Why the runtime cannot take work, in the daemon's words — the same line
+   the computer card prints under a runtime that is not ready. */
+.adm-agent-toggle-detail {
+  display: -webkit-box;
+  overflow: hidden;
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .adm-agent-toggle-pending {
   color: var(--warn);
 }

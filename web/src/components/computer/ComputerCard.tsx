@@ -31,7 +31,7 @@ import {
 } from "../icons";
 import { abbreviateNodeId, formatRunElapsed } from "../../lib/computerNodes";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
-import { runtimeStateLabel } from "./runtimeStateLabel";
+import { runtimeNotReadyDetail, runtimeStateLabel } from "./runtimeStateLabel";
 import {
   COPY_FEEDBACK_MS,
   agentStatusTone,
@@ -275,6 +275,7 @@ function RuntimeRow({
   const tone = agentStatusTone(agentStatus, { disabled });
   const presence = nodeAgentPresence(node, agent);
   const stateLabel = runtimeStateLabel(node, agent, disabled, t);
+  const detail = runtimeNotReadyDetail(node, agent, disabled);
 
   return (
     <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`}>
@@ -288,9 +289,8 @@ function RuntimeRow({
       />
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
       <span className="computer-runtime-state">{stateLabel}</span>
-      <span className="computer-runtime-version code" translate="no">
-        {version ?? node.agentDetails?.[agent]?.detail ?? ""}
-      </span>
+      <span className="computer-runtime-version code" translate="no">{version ?? ""}</span>
+      {detail ? <span className="computer-runtime-detail" title={detail}>{detail}</span> : null}
     </li>
   );
 }

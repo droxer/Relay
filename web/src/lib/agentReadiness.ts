@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import type { AgentName, DaemonNodeMonitorRecord } from "../types.js";
 
-type AgentReadiness = "ready" | "disabled" | "failed" | "unknown";
+type AgentReadiness = "ready" | "disabled" | "failed" | "unavailable" | "unresponsive" | "unknown";
 
 type NodeAgentState = Pick<DaemonNodeMonitorRecord, "agents" | "disabledAgents"> | undefined;
 
@@ -21,8 +21,7 @@ function errorCode(error: unknown): string | undefined {
 export function agentReadiness(node: NodeAgentState, agent: AgentName): AgentReadiness {
   if ((node?.disabledAgents ?? []).includes(agent)) return "disabled";
   const status = node?.agents?.[agent] ?? "unknown";
-  if (status === "ready") return "ready";
-  if (status === "failed") return "failed";
+  if (status === "ready" || status === "failed" || status === "unavailable" || status === "unresponsive") return status;
   return "unknown";
 }
 

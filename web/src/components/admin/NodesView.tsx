@@ -332,7 +332,11 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
         node.displayName ?? "",
         node.workspacePath ?? "",
         node.sandboxMode ?? "",
-        ...Object.keys(node.agents),
+        // Only runtimes the computer has: a search for "codex" should not
+        // match a machine where Codex is not installed.
+        ...Object.entries(node.agents)
+          .filter(([, status]) => status !== "unknown" && status !== "unavailable")
+          .map(([agent]) => agent),
         userName,
       ]
         .join(" ")

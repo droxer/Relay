@@ -21,6 +21,10 @@ describe("Relay web agent readiness", () => {
     assert.equal(agentReadiness(node, "codex"), "failed");
     assert.equal(agentReadiness(node, "kimi"), "disabled");
     assert.deepEqual(dispatchReadyAgents(node, ["claude", "pi", "codex", "kimi"]), ["pi"]);
+    const why = { agents: { claude: "unavailable", pi: "unresponsive", codex: "failed", kimi: "ready" } as const };
+    assert.equal(agentReadiness(why, "claude"), "unavailable");
+    assert.equal(agentReadiness(why, "pi"), "unresponsive");
+    assert.deepEqual(dispatchReadyAgents(why, ["claude", "pi", "codex", "kimi"]), ["kimi"]);
     assert.equal(isAgentDispatchReady(node, "claude"), false);
     assert.equal(isAgentDispatchReady(node, "pi"), true);
   });

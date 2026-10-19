@@ -388,6 +388,21 @@ button.computer-run-open:hover {
   letter-spacing: var(--type-code-track);
 }
 
+/* Why a runtime cannot take work, under its name: a sentence, not a
+   version, so it wraps on its own line instead of widening the version
+   column until the name collapses. Two lines at most; the title has it all. */
+.computer-runtime-detail {
+  display: -webkit-box;
+  grid-column: 2 / -1;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 /* ---- footer facts ---------------------------------------------------- */
 
 /* Workspace path, queue depth, and id are looked up, not read: one quiet

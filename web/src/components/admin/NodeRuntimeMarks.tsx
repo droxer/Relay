@@ -3,10 +3,11 @@
 import type { TFunction } from "i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { RuntimeMark } from "../RuntimeMark";
+import { runtimeNotReadyDetail, runtimeStateLabel } from "../computer/runtimeStateLabel";
 import {
   agentStatusTone,
   nodeAgentPresence,
-  nodeAgentPresenceLabel,
+  runtimeStatusLabel,
   visibleNodeAgentNames,
 } from "../../lib/adminHelpers";
 
@@ -15,21 +16,17 @@ function isAgentDisabled(node: ControlPanelDaemonNodeRecord, agent: AgentName): 
 }
 
 function agentTitle(node: ControlPanelDaemonNodeRecord, agent: AgentName, t: TFunction): string {
-  const agentStatus = node.agents[agent] ?? "unknown";
-  const statusLabel = t(`status.${agentStatus}`, { defaultValue: agentStatus });
-  const detail = node.agentDetails?.[agent];
+  const disabled = isAgentDisabled(node, agent);
+  const state = runtimeStateLabel(node, agent, disabled, t);
+  const reported = runtimeStatusLabel(node.agents[agent] ?? "unknown", t);
   const parts = [
-    // Presence leads: on a dark computer the last reported "ready" is stale,
-    // and the reader's question is "can this agent take work", not "what did
-    // it say last time it spoke".
-    t("nodes.agent_presence_title", {
-      agent,
-      presence: nodeAgentPresenceLabel(nodeAgentPresence(node, agent), t),
-    }),
-    t("nodes.agent_status_title", { agent, status: statusLabel }),
-    detail?.version,
-    detail?.detail,
-    isAgentDisabled(node, agent) ? t("admin.v2.agent_disabled") : null,
+    // The same words the computer card uses: "Not installed" on a live
+    // computer, never a bare "Offline" beside it. On a dark computer the
+    // state is Offline, so the last report follows as what it said.
+    t("nodes.agent_presence_title", { agent, presence: state }),
+    !disabled && state !== reported ? t("nodes.agent_status_title", { agent, status: reported }) : null,
+    node.agentDetails?.[agent]?.version,
+    runtimeNotReadyDetail(node, agent, disabled),
   ].filter(Boolean);
   return parts.join(" · ");
 }
@@ -69,7 +66,7 @@ export function NodeRuntimeMarks({
             disabled={disabled}
             glyphClassName="adm-agent-chip-mark"
             role="img"
-            aria-label={`${name} · ${nodeAgentPresenceLabel(presence, t)}`}
+            aria-label={`${name} · ${runtimeStateLabel(node, name, disabled, t)}`}
             title={agentTitle(node, name, t)}
             translate="no"
           />

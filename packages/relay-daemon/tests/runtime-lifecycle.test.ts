@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createBoxliteEnvironment, type DaemonLogger } from "../src/index.js";
+import { agentHealthStatusFor, createBoxliteEnvironment, type DaemonLogger } from "../src/index.js";
 import { BoxliteRuntimeOwner } from "../src/sandbox-session.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import type { ExecutionManager } from "../src/execution.js";
@@ -215,4 +215,60 @@ test("discovery re-probes a guest's cached runtime so a stopped one is reported"
   loggedIn = true;
   await environment.ensureAgentReady("codex");
   run.release();
+});
+
+test("a cloud computer's probes tell not installed, can't connect, not responding, and a dead sandbox apart", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-runtime-status-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, "runtime");
+  let boots = 0;
+  const owner = new BoxliteRuntimeOwner(home, async () => ({ shutdown: async () => {}, close() {} }));
+  const preflight: Record<string, () => Promise<{ exit_code: number; stdout: string; stderr: string }>> = {
+    claude: async () => ({ exit_code: 1, stdout: "", stderr: "Not logged in" }),
+    codex: async () => ({ exit_code: 127, stdout: "", stderr: "bash: codex: command not found" }),
+    pi: async () => ({ exit_code: 0, stdout: "", stderr: "" }),
+  };
+  let probing = "";
+  const manager = {
+    ensureImage: () => "/unused-rootfs",
+    createSandbox: async (_runtime, input) => {
+      if (++boots === 1) throw new Error("guest image is missing");
+      return { name: input.boxName, raw: {} };
+    },
+    setActiveSandbox() {},
+    stopActiveSandbox: async () => {},
+    removeSandbox: async () => {},
+    prepareWorkspace: async () => [501, 20],
+    prepareAgentAuth: async () => {},
+    prepareAgentSkills: async () => {},
+    execStream: async () => { throw new Error("unused"); },
+    runShell: async (_shell: string, signal?: AbortSignal) => {
+      const answer = preflight[probing];
+      if (answer) return answer();
+      // Kimi hangs until the deadline aborts it.
+      return new Promise((resolve) => signal?.addEventListener("abort", () => resolve({ exit_code: 143, stdout: "", stderr: "" })));
+    },
+  } as ExecutionManager;
+  const logger = { info() {}, warn() {}, error() {}, output() {} } satisfies DaemonLogger;
+  const prior = process.env.RELAY_DAEMON_AGENT_PREFLIGHT_TIMEOUT_MS;
+  process.env.RELAY_DAEMON_AGENT_PREFLIGHT_TIMEOUT_MS = "30";
+  t.after(() => {
+    if (prior === undefined) delete process.env.RELAY_DAEMON_AGENT_PREFLIGHT_TIMEOUT_MS;
+    else process.env.RELAY_DAEMON_AGENT_PREFLIGHT_TIMEOUT_MS = prior;
+  });
+  const environment = createBoxliteEnvironment("sandbox-status", root, logger, {
+    boxliteHome: home, executionManager: manager, runtimeOwner: owner,
+  });
+  t.after(() => environment.close());
+
+  const probe = (agent: "claude" | "codex" | "kimi" | "pi") => {
+    probing = agent;
+    return environment.ensureAgentReady(agent);
+  };
+  await assert.rejects(probe("pi"), (error) =>
+    agentHealthStatusFor(error) === "failed" && /^The sandbox did not start: .*guest image is missing/.test((error as Error).message));
+  await probe("pi");
+  await assert.rejects(probe("claude"), (error) => agentHealthStatusFor(error) === "failed");
+  await assert.rejects(probe("codex"), (error) => agentHealthStatusFor(error) === "unavailable");
+  await assert.rejects(probe("kimi"), (error) => agentHealthStatusFor(error) === "unresponsive");
 });

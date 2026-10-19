@@ -38,7 +38,7 @@ after(() => {
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
-import { AgentNotInstalledError } from "../src/agent-preflight.js";
+import { AgentNotInstalledError, AgentUnresponsiveError } from "../src/agent-preflight.js";
 import { askBroker } from "../src/permission-adapters/protocol.js";
 import { requestUpdatePause } from "../src/update-pause.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
@@ -1133,6 +1133,64 @@ test("relay daemon advertises only agents with passing capability preflight", as
   assert.equal(registrations[0].workspaceId, "repo:relay");
   assert.equal(registrations[0].agentHealth?.kimi?.status, "failed");
   assert.match(registrations[0].agentHealth?.kimi?.detail ?? "", /not logged in/);
+});
+
+test("relay daemon reports why each runtime is not ready", async () => {
+  const stop = new AbortController();
+  const registrations: DaemonNodeRegistration[] = [];
+  const logs: string[] = [];
+  const record = (level: string) => (message: string, fields?: Record<string, unknown>) => {
+    if (message.startsWith("agent ")) logs.push(`${level} ${String(fields?.agent)} ${message}`);
+  };
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_statuses",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    sandbox: "none",
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 50,
+    logger: { info: record("info"), warn: record("warn"), error: record("error"), output: () => undefined },
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      ensure: async (agent) => {
+        if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
+        if (agent === "kimi") throw new AgentUnresponsiveError("Kimi is not responding.");
+        if (agent === "claude") throw new Error("Claude Code is not logged in.");
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        registrations.push(await jsonBody<DaemonNodeRegistration>(init));
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) {
+        stop.abort();
+        return jsonResponse({ commands: [] });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  const [first] = registrations;
+  assert.deepEqual(first.supportedAgents, ["pi"]);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(first.agentHealth ?? {}).map(([agent, health]) => [agent, health?.status])),
+    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive" },
+  );
+  assert.deepEqual(
+    Object.fromEntries((first.executorCapabilities ?? []).map((item) => [item.executorKind, item.status])),
+    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive" },
+  );
+  assert.deepEqual(logs.sort(), [
+    "info codex agent not installed",
+    "info pi agent capability ready",
+    "warn claude agent capability failed",
+    "warn kimi agent not responding",
+  ]);
 });
 
 test("local node refreshes agent availability before heartbeat registration", async () => {
