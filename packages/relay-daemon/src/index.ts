@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { err, out } from "./terminal-style.js";
 import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
@@ -52,16 +53,16 @@ async function verifyBoxlitePrerequisites(sandboxId: string): Promise<void> {
   try {
     await import("@boxlite-ai/boxlite");
   } catch {
-    console.error(`Relay daemon requires @boxlite-ai/boxlite to run in boxlite sandbox mode.`);
-    console.error(`Run: npm install`);
+    console.error(err.error(`Relay daemon requires @boxlite-ai/boxlite to run in boxlite sandbox mode.`));
+    console.error(`Run: ${err.command("npm install")}`);
     process.exit(1);
   }
   try {
     ensureLocalDevboxOci((text) => console.log(`  ${text.trimEnd()}`));
   } catch (error) {
-    console.error(`Failed to prepare BoxLite devbox image for sandbox ${sandboxId}:`);
+    console.error(err.error(`Failed to prepare BoxLite devbox image for sandbox ${sandboxId}:`));
     console.error(error instanceof Error ? error.message : String(error));
-    console.error(`Run: make devbox-oci`);
+    console.error(`Run: ${err.command("make devbox-oci")}`);
     process.exit(1);
   }
 }
@@ -513,11 +514,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     }
     logger.info("daemon registered", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
-    console.log(`Relay daemon registered sandbox ${sandboxId} with backend at ${backendUrl} (sandbox: ${sandboxMode})`);
-    if (logger.logPath) console.log(`Relay daemon log: ${logger.logPath}`);
+    console.log(`${out.success(`Relay daemon registered sandbox ${sandboxId}`)} ${out.muted(`with backend at ${backendUrl} (sandbox: ${sandboxMode})`)}`);
+    if (logger.logPath) console.log(`${out.muted("Relay daemon log:")} ${out.command(logger.logPath)}`);
     if (tokenResolution.source === "generated" && tokenResolution.path) {
       logger.info("daemon generated token", { sandboxId, userId: effectiveUserId, path: tokenResolution.path });
-      console.log(`Relay daemon generated token for ${effectiveUserId}: ${tokenResolution.path}`);
+      console.log(`${out.muted(`Relay daemon generated token for ${effectiveUserId}:`)} ${out.command(tokenResolution.path)}`);
     }
 
     setHealth("polling");
@@ -1066,7 +1067,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         ? `node ${sandboxId} was deleted in the control panel.`
         : `the credential for node ${sandboxId} was rejected or reissued. Run setup again to reconnect this computer.`;
       logger.info("daemon credentials rejected; stopping", { sandboxId, reason });
-      console.log(`Relay daemon stopping: ${reason}`);
+      console.log(out.warn(`Relay daemon stopping: ${reason}`));
       shutdown("external", false);
       await shutdownPromise;
       return;
