@@ -104,7 +104,7 @@ export function softwareJsonLd(site: URL, description: string): Record<string, u
     image: new URL(SITE_SHARE_IMAGE.url, site).href,
     applicationCategory: "DeveloperApplication",
     operatingSystem: "macOS, Linux, Windows",
-    license: "https://www.gnu.org/licenses/agpl-3.0.html",
+    license: "https://opensource.org/license/mit",
     isAccessibleForFree: true,
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     sameAs: [RELAY_GITHUB_URL],

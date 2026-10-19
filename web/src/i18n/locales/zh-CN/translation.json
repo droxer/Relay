@@ -1709,7 +1709,7 @@
     "open_source_badge": "在 GitHub 上开源",
     "oss_kicker": "开源",
     "oss_title": "可阅读、可运行、可修改",
-    "oss_body": "Relay 基于 AGPL-3.0 开源。自托管后端，接入你自己的电脑，并在 GitHub 上关注开发进展。",
+    "oss_body": "Relay 基于 MIT 开源。自托管后端，接入你自己的电脑，并在 GitHub 上关注开发进展。",
     "oss_cta": "在 GitHub 上查看",
     "oss_clone_label": "克隆仓库",
     "cta_title": "给你的智能体一个工作的地方",
