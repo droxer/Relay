@@ -213,6 +213,7 @@ export function AppShell({
     <div
       className="messenger-shell"
       data-mobile-view={mobileView}
+      data-mobile-chat={isMobileChat || undefined}
       data-route={route}
       data-task-thread={taskThread || undefined}
       data-task-workspace={taskWorkspace || undefined}

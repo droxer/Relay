@@ -67,6 +67,8 @@
      and stay aligned with each other exactly as they do on desktop. */
   :root {
     --page-gutter: var(--sp-6);
+    /* The tab bar's rung: UITabBar's 49pt, rounded onto the 2px grid. */
+    --tabbar-h: 50px;
   }
 
   .messenger-shell,
@@ -213,10 +215,49 @@
     padding: 0;
   }
 
+  /* Bare glyphs, Linear's header grammar: no plates, no hairlines. The
+     create "+" is told apart by full-strength ink, not by a filled box that
+     made it the heaviest object on every list screen. */
+  .mobile-topbar-tools .page-header-icon-action,
+  .mobile-topbar-tools .page-header-icon-action:hover,
+  .mobile-topbar-tools .page-header-icon-action--primary,
+  .mobile-topbar-tools .page-header-icon-action--primary:hover {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .mobile-topbar-tools .page-header-icon-action--primary {
-    width: calc(var(--touch-target) - var(--sp-2));
-    height: calc(var(--touch-target) - var(--sp-2));
-    margin-inline: var(--sp-1);
+    color: var(--ink-1);
+  }
+
+  .mobile-topbar-tools .page-header-icon-action:active {
+    background: var(--control-fill);
+  }
+
+  /* The list/board switch rides the bar as two glyphs; only the current one
+     carries a quiet fill. The framed segmented control was a third plate. */
+  .mobile-topbar-tools .backlog-view-toggle {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  /* Through the shell, to outrank the route-scoped 40px button in
+     backlog-list.css. */
+  .messenger-shell .mobile-topbar-tools .backlog-view-btn {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    border-radius: var(--r-2);
+  }
+
+  .mobile-topbar-tools .backlog-view-btn[data-active="true"] {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-topbar-tools .backlog-view-btn:not([data-active="true"]) {
+    color: var(--ink-4);
   }
 
   /* A page's actions, portaled into the top bar (MobileTopbarActions), keep
@@ -343,6 +384,11 @@
      --surface-2, while atelier's border-color/box-shadow still applied. One
      owner per state — the duplicate is gone. */
 
+  /* The tab bar, Linear's way: a flat strip of glyph-over-label tabs with
+     no plates. The active tab is told apart by ink alone — full-strength
+     icon and label against the muted rest — so the bar never carries a
+     second "selected" shape (the old boxed tile, cobalt tick, AND the
+     desktop rail's left accent bar all stacked on one tab). */
   .sidenav-panel {
     grid-row: 3;
     position: relative;
@@ -350,18 +396,12 @@
     flex-direction: row;
     align-items: stretch;
     gap: 0;
-    min-height: calc(var(--control-h) + var(--sp-4));
-    padding: var(--sp-1) max(env(safe-area-inset-right), var(--sp-2)) max(env(safe-area-inset-bottom), var(--sp-1)) max(env(safe-area-inset-left), var(--sp-2));
-    border-top: 0.5px solid var(--line-1);
+    min-height: 0;
+    padding: 0 max(env(safe-area-inset-right), var(--sp-1)) env(safe-area-inset-bottom) max(env(safe-area-inset-left), var(--sp-1));
+    border-top: 0.5px solid var(--line-2);
     border-right: 0;
     background: var(--surface-0);
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-  }
-
-  .sidenav-panel::-webkit-scrollbar {
-    display: none;
+    overflow: hidden;
   }
 
   .sidenav-brand-row,
@@ -376,13 +416,9 @@
     flex: 1 0 auto;
     flex-direction: row;
     align-items: stretch;
-    gap: var(--sp-1);
-    /* `max-content` here floored the row at the sum of the tabs' unwrapped
-       label widths, which defeated the `flex: 1 1 0` below: at seven tabs
-       the row measured 412px inside a 390px phone and the rightmost tab
-       (More — the only route to Admin) was clipped off-screen, with
-       `scrollbar-width: none` on the rail hiding any hint it could scroll.
-       Let the tabs share the width and ellipsize instead. */
+    gap: 0;
+    /* The tabs share the width and ellipsize: a `max-content` floor here once
+       pushed More — the only route to Admin — off a 390px screen. */
     min-width: 0;
     width: 100%;
   }
@@ -392,49 +428,55 @@
     display: contents;
   }
 
-  .sidenav-btn,
+  /* Scoped through the panel so it outranks the coarse-pointer 44px square
+     in a11y.css: a tab is a column of the strip, not a square button. */
+  .sidenav-panel .sidenav-btn,
   .sidenav-panel[data-expanded="true"] .sidenav-btn {
     position: relative;
-    /* Equal-width tabs that shrink to share the row, so all destinations stay
-       visible without horizontal scroll on narrow phones (≤360px). Labels
-       ellipsize (below); the height keeps a comfortable touch target. */
     width: auto;
     min-width: 0;
-    height: calc(var(--control-h) + var(--sp-2));
+    height: var(--tabbar-h);
     flex: 1 1 0;
     flex-direction: column;
     justify-content: center;
-    gap: var(--sp-1);
-    padding: var(--sp-1);
+    gap: var(--sp-0-5);
+    padding: var(--sp-1) var(--sp-0-5) 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     text-align: center;
     white-space: normal;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .sidenav-btn.active::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: var(--sp-5);
-    height: var(--accent-bar-w);
-    border-radius: 0 0 var(--r-2) var(--r-2);
-    background: var(--action);
-    transform: translateX(-50%);
-  }
-
-  /* Active tab reads as selected via three cues: full-strength ink label +
-     icon (vs muted inactive), the soft accent tint, and the accent tick
-     above (.sidenav-btn.active::before). The accent stays the cobalt tick —
-     the text itself is high-contrast foreground, not an action fill. */
-  .sidenav-btn.active {
-    color: var(--ink-1);
-    background: var(--action-soft);
-    border-color: var(--line-strong);
+  .sidenav-btn:hover,
+  .sidenav-btn.active,
+  .sidenav-btn.active:hover {
+    background: transparent;
+    border-color: transparent;
     box-shadow: none;
   }
 
-  .sidenav-btn.active:hover {
-    background: var(--action-soft);
+  /* Ink is the whole selection signal, so the two states sit far apart on
+     the ramp. Through the panel to outrank the expanded-rail selectors. */
+  .sidenav-panel .sidenav-btn:not(.active) { color: var(--ink-4); }
+
+  .sidenav-panel .sidenav-btn.active,
+  .sidenav-panel .sidenav-btn.active:hover {
+    color: var(--ink-1);
+  }
+
+  /* Touch feedback: the tab dims under the finger — the press reads at once,
+     without a plate appearing behind the glyph. `filter`, not `opacity`:
+     the tab's entrance animation holds opacity with fill-mode forwards. */
+  .sidenav-panel .sidenav-btn:active {
+    filter: opacity(0.6);
+  }
+
+  /* The desktop rail's left accent bar is a vertical-list cue; on a
+     horizontal strip it read as a stray blue line beside the tab. */
+  .sidenav-btn.active::after {
+    display: none;
   }
 
   .messenger-shell .sidenav-btn {
@@ -481,7 +523,7 @@
     clip-path: none;
     color: inherit;
     font-size: var(--fs-1);
-    font-weight: 700;
+    font-weight: 500;
     line-height: var(--leading-display);
     letter-spacing: var(--track-0);
     text-align: center;
@@ -568,6 +610,37 @@
     grid-area: list;
   }
 
+  /* A filled search field, Linear's phone grammar: the bare input read as a
+     placeholder floating over the list rather than a control. */
+  #thread-panel .list-filter-search,
+  .agents-roster .list-filter-search,
+  .teams-roster .list-filter-search {
+    min-height: var(--touch-target);
+    padding-inline: var(--sp-3);
+    border-radius: var(--r-2);
+    background: var(--control-fill);
+  }
+
+  /* New thread is a bare "+" beside the search, like every other create
+     action in the top bar — not a framed square. */
+  #thread-panel .page-header-icon-action--primary,
+  #thread-panel .page-header-icon-action--primary:hover {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  /* Rail groups: the name and count are enough on a phone — the hairline
+     stretched after them doubled as a row divider — and the groups sit one
+     step apart rather than a full section rung. */
+  .conversation-group + .conversation-group {
+    margin-top: var(--sp-3);
+  }
+
+  .conversation-group-label::after,
+  .agents-roster-group-label::after {
+    display: none;
+  }
+
   .chat-header {
     min-width: 0;
     min-height: var(--header-h);
@@ -606,6 +679,18 @@
   .composer {
     --composer-inline: var(--sp-4);
     padding: var(--sp-3) var(--sp-3) var(--sp-4);
+  }
+
+  /* Inside an open conversation the tab bar steps aside, as it does on a
+     pushed screen in Linear's app: the top bar's back control is the way
+     out, and the composer gets the bottom edge — and so takes over the
+     safe-area inset the bar was holding. */
+  .messenger-shell[data-mobile-chat] .sidenav-panel {
+    display: none;
+  }
+
+  .messenger-shell[data-mobile-chat] .composer {
+    padding-bottom: max(env(safe-area-inset-bottom), var(--sp-4));
   }
 
   .composer-footer {

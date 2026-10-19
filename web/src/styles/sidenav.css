@@ -215,25 +215,6 @@
   content: none;
 }
 
-/* Mobile-only More overflow (Channels / Admin): hidden on desktop where
-   those destinations stay as primary rail items. The hide rule lives at the
-   end of this file so it outranks every `.sidenav-btn` display rule above.
-
-   Rows are `--touch-target` tall: this menu only ever opens from the mobile
-   tab bar. */
-
-.sidenav-more-menu {
-  min-width: 188px;
-}
-
-.sidenav-more-menu [data-slot="dropdown-menu-link-item"] {
-  min-height: var(--touch-target);
-  gap: var(--sp-3);
-  padding: 0 var(--sp-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
 /* A nav button is a CONTROL, not a container: --r-2 puts it on the same
    corner as every other button instead of the 8px the menus it opens use. */
 .sidenav-btn {

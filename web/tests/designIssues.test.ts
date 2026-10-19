@@ -91,10 +91,10 @@ describe("reviewed design regressions", () => {
 
     assert.match(responsive, /\.sidenav-secondary-item\s*\{[^}]*display:\s*none\s*!important/s);
 
-    // The secondary destinations live in the More overflow. They used to be
+    // The secondary destinations live in the More sheet. They used to be
     // hand-repeated <a className="sidenav-more-item"> blocks; they are
-    // one MORE_ROUTES table rendered through DropdownMenuLinkItem now, so the
-    // check reads the table rather than the markup it expands to.
+    // one MORE_ROUTES table rendered by MobileMoreSheet now, so the check
+    // reads the table rather than the markup it expands to.
     const table = nav.match(/const MORE_ROUTES[\s\S]*?\n\];/)?.[0];
     assert.ok(table, "SideNav must declare a MORE_ROUTES table");
     for (const route of ["routine", "teams", "settings", "admin"]) {
@@ -102,8 +102,9 @@ describe("reviewed design regressions", () => {
     }
     assert.doesNotMatch(nav, /data-nav="channels"|route: "channels"/);
     // Still real links, and still the app's own client-side navigation.
-    assert.match(nav, /DropdownMenuLinkItem[\s\S]*?href=\{hrefForRoute\(target\)\}/);
-    assert.match(nav, /onClick=\{\(event: MouseEvent<HTMLAnchorElement>\) => handleRouteClick\(event, target\)\}/);
+    const sheet = readWeb("src/components/MobileMoreSheet.tsx");
+    assert.match(nav, /<MobileMoreSheet[\s\S]*?routes=\{MORE_ROUTES[\s\S]*?onNavigate=\{handleRouteClick\}/);
+    assert.match(sheet, /<a[\s\S]*?href=\{hrefForRoute\(route\)\}[\s\S]*?onNavigate\(event, route\)/);
     assert.doesNotMatch(nav, /channelsHint|coming_soon_short/);
   });
 
