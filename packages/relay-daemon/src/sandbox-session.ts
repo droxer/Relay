@@ -27,7 +27,7 @@ import {
   type AgentOutputSink,
 } from "relay-core";
 import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
-import { agentPreflightError } from "./agent-preflight.js";
+import { runBoundedPreflight } from "./agent-preflight.js";
 
 export interface OrchestratorSession {
   rootfsPath: string;
@@ -180,12 +180,11 @@ async function runAgentPreflight(
   }
   // Skills are shared across every agent under ~/.claude/skills.
   if (options.provisionSkills) await executionManager.prepareAgentSkills(signal);
-  const result = await executionManager.runShell(
+  await runBoundedPreflight(agent, signal, (bounded) => executionManager.runShell(
     def.preflight.command(),
-    signal,
+    bounded,
     Object.fromEntries(agentCredentialEnv(agent)),
-  );
-  if (result.exit_code !== 0) throw agentPreflightError(agent, result);
+  ));
 }
 
 export async function shutdownBoxliteRuntime(runtime: BoxliteRuntimeLifecycle): Promise<void> {

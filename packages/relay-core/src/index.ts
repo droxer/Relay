@@ -306,4 +306,5 @@ export type {
   SandboxRecord,
   SandboxRunAssignment,
   SandboxStatus,
+  AgentRuntimeStatus,
 } from "./daemon-protocol.js";

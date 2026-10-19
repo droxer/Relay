@@ -12,6 +12,7 @@ from ...collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
 )
 from ...core.ids import new_database_id, new_relay_id, now_iso
+from ...core.runtime_status import executor_not_ready_message
 from ...core.workspace_layout import workspace_artifacts_dir
 from ...persistence.task.execution import request_execution_owner
 from ...core.daemon_capabilities import (
@@ -180,9 +181,12 @@ class AssignmentDeliveryMixin(RegistryState):
                 raise ValueError(
                     f"Executor {assignment['executorKind']} is disabled on this runtime node."
                 )
-            if (sandbox.get("agents") or {}).get(assignment["executorKind"]) != "ready":
+            executor_status = (sandbox.get("agents") or {}).get(assignment["executorKind"])
+            if executor_status != "ready":
                 raise ValueError(
-                    f"Executor {assignment['executorKind']} is not ready on this runtime node."
+                    executor_not_ready_message(
+                        assignment["executorKind"], executor_status, prefix="Executor "
+                    )
                 )
             node_runs = (
                 active_runs

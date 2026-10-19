@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { RuntimeMark } from "../RuntimeMark";
 import { ChevronDownIcon, ICON } from "../icons";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
-import { runtimeStateLabel } from "../computer/runtimeStateLabel";
+import { runtimeNotReadyDetail, runtimeStateLabel } from "../computer/runtimeStateLabel";
 import { agentStatusTone, nodeAgentPresence } from "./helpers";
 
 interface ManageAgentRowProps {
@@ -40,6 +40,7 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
   const presence = nodeAgentPresence(node, agent);
   const name = labelForExecutor(agent);
   const version = node.agentDetails?.[agent]?.version;
+  const detail = runtimeNotReadyDetail(node, agent, savedDisabled);
   const pending = enabled !== savedEnabled;
   const stateParts = [
     runtimeStateLabel(node, agent, savedDisabled, t),
@@ -78,6 +79,7 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
               </span>
             ) : null}
           </span>
+          {detail ? <span className="adm-agent-toggle-detail" title={detail}>{detail}</span> : null}
         </div>
         <Switch
           name={`node-${node.id}-${agent}-enabled`}

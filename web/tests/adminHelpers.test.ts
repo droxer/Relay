@@ -19,6 +19,9 @@ import {
   stableNodeOrder,
   statusTone,
   agentAvailabilityTone,
+  agentStatusTone,
+  runtimeStatusLabel,
+  visibleNodeAgentNames,
   truncateId,
   visualStatus,
 } from "../src/lib/adminHelpers.js";
@@ -119,6 +122,37 @@ describe("nodeAgentPresence", () => {
     // on a machine that happens to be off.
     const dark = node({ id: "b", online: false, disabledAgents: ["codex"] });
     assert.equal(nodeAgentPresence(dark, "codex"), "disabled");
+  });
+});
+
+describe("runtime status", () => {
+  const t = ((key: string) => key) as never;
+
+  it("tells a runtime that can't connect from one that is not installed or not responding", () => {
+    assert.equal(runtimeStatusLabel("ready", t), "status.ready");
+    assert.equal(runtimeStatusLabel("failed", t), "computer.runtime_failed");
+    assert.equal(runtimeStatusLabel("unavailable", t), "computer.runtime_unavailable");
+    assert.equal(runtimeStatusLabel("unresponsive", t), "computer.runtime_unresponsive");
+    assert.equal(runtimeStatusLabel("unknown", t), "computer.runtime_no_signal");
+  });
+
+  it("is loud only for a broken runtime; not installed is a fact, not a fault", () => {
+    assert.equal(agentStatusTone("ready"), "good");
+    assert.equal(agentStatusTone("failed"), "bad");
+    assert.equal(agentStatusTone("unresponsive"), "warn");
+    assert.equal(agentStatusTone("unavailable"), "neutral");
+    assert.equal(agentStatusTone("unknown"), "neutral");
+    assert.equal(agentStatusTone("failed", { disabled: true }), "neutral");
+  });
+
+  it("lists opt-in Pi only once the computer reports it installed", () => {
+    const listed = (pi: ControlPanelDaemonNodeRecord["agents"]["pi"]) =>
+      visibleNodeAgentNames(node({ id: "a", agents: { claude: "ready", codex: "ready", kimi: "ready", pi } })).includes("pi");
+    assert.equal(listed("unknown"), false);
+    assert.equal(listed("unavailable"), false);
+    assert.equal(listed("failed"), true);
+    assert.equal(listed("unresponsive"), true);
+    assert.equal(listed("ready"), true);
   });
 });
 

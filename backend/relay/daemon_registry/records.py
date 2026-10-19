@@ -25,6 +25,7 @@ from ..collaboration.policy import (
     ROUND_RESULT_STATE_KEY,
 )
 from ..core.model_policy import is_model_id
+from ..core.runtime_status import AGENT_RUNTIME_STATUSES
 from ..core.models import (
     AGENT_NAMES,
 )
@@ -203,10 +204,10 @@ def agent_registration_state(
         )
         status = raw.get("status") if isinstance(raw, dict) else None
         agents[agent] = (
-            "failed"
-            if status == "failed"
+            status
+            if status in AGENT_RUNTIME_STATUSES
             else "ready"
-            if status == "ready" or agent in supported
+            if agent in supported
             else "unknown"
         )
         if isinstance(raw, dict):

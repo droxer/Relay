@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
-import { AgentNotInstalledError } from "./agent-preflight.js";
+import { AgentNotInstalledError, AgentUnresponsiveError } from "./agent-preflight.js";
 import { responseErrorDetail } from "./http-error-detail.js";
 export { localProcessExecStream } from "./local-runtime.js";
 import { accessSync, chmodSync, constants, mkdirSync, statSync } from "node:fs";
@@ -1215,7 +1215,6 @@ async function discoverDaemonAgentHealth(
   const health: Partial<Record<AgentName, DaemonAgentHealth>> = {};
   for (const agent of agents) {
     const def = getAgent(agent);
-    let notInstalled = false;
     try {
       await environment.ensureAgentReady(agent, signal);
       health[agent] = {
@@ -1225,22 +1224,29 @@ async function discoverDaemonAgentHealth(
       };
     } catch (error) {
       health[agent] = {
-        status: "failed",
+        status: agentHealthStatusFor(error),
         detail: error instanceof Error ? error.message : String(error),
         adapter: "cli",
       };
-      // A runtime the user never installed is a fact about the computer, not a fault.
-      notInstalled = error instanceof AgentNotInstalledError;
     }
     // Periodic refreshes repeat the same answer; log only what changed.
     const current = health[agent]!;
     const before = previous?.[agent];
     if (before?.status === current.status && before.detail === current.detail) continue;
     if (current.status === "ready") logger.info("agent capability ready", { sandboxId, agent });
-    else if (notInstalled) logger.info("agent not installed", { sandboxId, agent, detail: current.detail });
+    // A runtime the user never installed is a fact about the computer, not a fault.
+    else if (current.status === "unavailable") logger.info("agent not installed", { sandboxId, agent, detail: current.detail });
+    else if (current.status === "unresponsive") logger.warn("agent not responding", { sandboxId, agent, error: current.detail });
     else logger.warn("agent capability failed", { sandboxId, agent, error: current.detail });
   }
   return health;
+}
+
+/** Which non-ready status a failed readiness check reports. */
+export function agentHealthStatusFor(error: unknown): Exclude<DaemonAgentHealth["status"], "ready"> {
+  if (error instanceof AgentNotInstalledError) return "unavailable";
+  if (error instanceof AgentUnresponsiveError) return "unresponsive";
+  return "failed";
 }
 
 function readyAgents(health: Partial<Record<AgentName, DaemonAgentHealth>>): AgentName[] {
@@ -1810,7 +1816,22 @@ export function createBoxliteEnvironment(
   return {
     sandboxMode: "boxlite",
     // Discovery probes afresh; runs keep the per-guest cache (workspaceExecution).
-    ensureAgentReady: (agent, signal) => withAnyGuest(signal, (lease) => probeAgentReadiness(agent, signal, lease.manager)),
+    ensureAgentReady: async (agent, signal) => {
+      let lease: GuestLease;
+      try {
+        lease = await pool.acquireAny(workspacePath, signal);
+      } catch (error) {
+        // Every runtime on this computer is unreachable, not misconfigured:
+        // say so, so the detail names the sandbox rather than the runtime.
+        if (signal?.aborted) throw error;
+        throw new Error(`The sandbox did not start: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      try {
+        await probeAgentReadiness(agent, signal, lease.manager);
+      } finally {
+        lease.release();
+      }
+    },
     canProbeWithoutBooting: () => pool.hasBootedGuest(),
     execStream: (cmd, args = [], execOptions = {}) =>
       withAnyGuest(execOptions.signal, (lease) => lease.manager.execStream(cmd, args, execOptions)),

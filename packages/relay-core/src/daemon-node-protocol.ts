@@ -6,7 +6,18 @@ import type { WorkspaceLayout } from "./session-store.js";
 export type DaemonNodeStatus = "ready" | "busy" | "stopped";
 export type DaemonNodeSandboxMode = "none" | "boxlite";
 export type DaemonAgentAdapter = "cli" | "service";
-export type DaemonAgentHealthStatus = "ready" | "failed";
+/**
+ * What one runtime's readiness check found on a computer.
+ * - `ready`: the check passed; the runtime can take work.
+ * - `failed`: the CLI is installed but its check failed — it could not
+ *   connect to its account or provider (not signed in, bad key, no network).
+ * - `unavailable`: the CLI is not installed. A fact about the computer, not a
+ *   fault.
+ * - `unresponsive`: the check did not finish in time; the CLI hung.
+ * A computer that stopped is not a runtime status: liveness is derived on
+ * read, so a dark computer's last report stays its last report.
+ */
+export type DaemonAgentHealthStatus = "ready" | "failed" | "unavailable" | "unresponsive";
 
 /** Runtime capability advertised by a daemon. Logical user agents are
  * control-plane identities and are connected to these capabilities by placements. */

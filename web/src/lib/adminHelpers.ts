@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import { backendPublicOrigin } from "./apiOrigin.ts";
 import { byNumber, byText, type SortColumn } from "./listSort.ts";
-import type { AgentName, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
+import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
 
 export const ADMIN_AGENTS_KEY = ["admin", "agents"] as const;
 
@@ -21,7 +21,8 @@ const DEFAULT_NODE_AGENT_NAMES: AgentName[] = ["claude", "codex", "kimi"];
 /** Agent executors shown on admin node surfaces (Pi only when the daemon reports it). */
 export function visibleNodeAgentNames(node: Pick<ControlPanelDaemonNodeRecord, "agents">): AgentName[] {
   const names: AgentName[] = [...DEFAULT_NODE_AGENT_NAMES];
-  if (node.agents.pi && node.agents.pi !== "unknown") names.push("pi");
+  // Pi is opt-in: list it only once the computer reports it installed.
+  if (node.agents.pi && node.agents.pi !== "unknown" && node.agents.pi !== "unavailable") names.push("pi");
   return names;
 }
 
@@ -134,15 +135,30 @@ export function agentAvailabilityTone(availability: LogicalAgentAvailability): T
   return "neutral";
 }
 
-/** Runtime-mark tone for a node's agent. Unknown ("no signal yet") falls
-    through to neutral — the canonical reading for an unrecognized state
-    (lib/statusTone.ts); deliberate "off" is passed via options.disabled by
-    callers that know it. */
+/** Runtime-mark tone for a node's agent. A runtime that can't connect is
+    broken (bad); one that stopped responding may come back on its own (warn).
+    Not installed is a fact about the computer, not a fault, so it stays
+    neutral with unknown ("no signal yet") — the canonical reading for an
+    unrecognized state (lib/statusTone.ts); deliberate "off" is passed via
+    options.disabled by callers that know it. */
 export function agentStatusTone(agentStatus: string, options?: { disabled?: boolean }): Tone {
   if (options?.disabled) return "neutral";
   if (agentStatus === "ready") return "good";
   if (agentStatus === "failed") return "bad";
+  if (agentStatus === "unresponsive") return "warn";
   return "neutral";
+}
+
+/** A runtime's reported status in words, without the computer's liveness
+    (`runtimeStateLabel` folds that in for a runtime row). */
+export function runtimeStatusLabel(agentStatus: AgentRuntimeStatus, t: TFunction): string {
+  switch (agentStatus) {
+    case "ready": return t("status.ready");
+    case "failed": return t("computer.runtime_failed");
+    case "unavailable": return t("computer.runtime_unavailable");
+    case "unresponsive": return t("computer.runtime_unresponsive");
+    default: return t("computer.runtime_no_signal");
+  }
 }
 
 export type NodeAgentPresence = "online" | "offline" | "disabled";
