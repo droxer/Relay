@@ -18,15 +18,16 @@
 .login-screen {
   /* Theme ramp — aliases of the active register in palette.css. */
   --lg-canvas: var(--surface-0);
-  --lg-elevated: var(--surface-3);
+  /* Same tiers as landing.css's --ld-* ramp: the two signed-out screens are
+     one product surface, so their planes and hairlines must agree. */
+  --lg-elevated: var(--surface-2);
   --lg-ink: var(--ink-1);
   --lg-muted: var(--ink-3);
-  /* Ink washes rather than --line-1/--line-2: the dot grid and the seams
-     stay as quiet as they were on the dark canvas, and scale with the ink
-     in either register. */
-  --lg-hairline: color-mix(in srgb, var(--lg-ink) 14%, transparent);
-  --lg-hairline-soft: color-mix(in srgb, var(--lg-ink) 8%, transparent);
-  --lg-err: var(--ink-1); /* error is the loud/bright tier — dots stay calm */
+  --lg-hairline: var(--line-1);
+  --lg-hairline-soft: var(--line-2);
+  /* Errors take the product's critical red, like every in-app form: a person
+     who mistypes a password must see the same error the app would show. */
+  --lg-err: var(--err);
   /* The screen's accent is the product's: the submit is the default Button
      (the --action fill), and the caret and the focused field edge take the
      same blue, so the first screen a person sees speaks the brand. */
@@ -202,7 +203,7 @@
      point needs more room than this, shorten the point. */
   max-width: 54ch;
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--lg-hairline-soft);
+  border: var(--sp-hairline) solid var(--lg-hairline-soft);
   border-radius: var(--r-3);
   background: var(--lg-canvas);
   text-wrap: pretty;
@@ -231,10 +232,10 @@
   display: grid;
   place-items: center;
   padding: var(--sp-8) var(--sp-7);
-  /* A firmer step than the old card's 35%: across half a viewport the two
-     planes have to separate on fill alone, with the hairline as a seam
-     rather than as the whole boundary. */
-  background: color-mix(in srgb, var(--lg-elevated) 55%, var(--lg-canvas));
+  /* The elevated tier itself: across half a viewport the two planes have
+     to separate on fill alone, with the hairline as a seam rather than as
+     the whole boundary. */
+  background: var(--lg-elevated);
   border-left: 0.5px solid var(--lg-hairline-soft);
   /* A 1px inner left highlight — edge refraction where the two halves meet,
      not elevation; the system stays flat (no drop shadow). */
@@ -278,63 +279,53 @@
 }
 
 /* Field primitive renders the label text as a plain <span> inside the
-   <label> wrapper; keep the screen's mono-caps label skin on it. */
+   <label> wrapper. It takes the app's 12px label role — the mono-caps skin
+   was a second label voice the in-app drawers never spoke. */
 .login-field > span:first-child {
   /* Block, not the primitive's inline-flex: a label long enough to wrap
      (the use-case question) must flow its "(optional)" marker inline after
      the last word instead of parking it in a second flex column, and its
      lines need real leading rather than the primitive's leading-none. */
   display: block;
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   line-height: var(--leading-normal);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2);
-  letter-spacing: var(--track-caps);
   color: var(--lg-muted);
 }
 
 .login-input {
   width: 100%;
   height: var(--control-h);
-  border: 0.5px solid var(--lg-hairline);
+  /* The text-field edge at the 3:1 boundary floor, as on every in-app
+     field (`border-field` on the Input primitive). */
+  border: 0.5px solid var(--field-border);
   border-radius: var(--r-2);
   /* A real fill tone (not a near-canvas tint) so the field reads as a well
      to type into, not just a hairline outline on empty space. */
   background: var(--lg-elevated);
   color: var(--lg-ink);
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
-  font-size: var(--fs-3);
+  /* The one field text size (14px), in the sans every in-app field uses. */
+  font-family: var(--font-sans);
+  font-size: var(--fs-2);
   caret-color: var(--lg-accent);
   touch-action: manipulation;
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
 .login-input:hover {
-  border-color: color-mix(in srgb, var(--lg-ink) 30%, var(--lg-canvas));
+  border-color: var(--field-border-hover);
 }
 
+/* The ring itself is base.css's focus contract; the edge takes the accent. */
 .login-input:focus-visible {
   border-color: var(--lg-accent);
-  /* The focused well lifts 2% toward the ink so it reads active at a glance,
-     not just by its accent edge. */
-  background: color-mix(in srgb, var(--lg-ink) 2%, var(--lg-elevated));
 }
 
-/* The shared Input primitive draws its aria-invalid state from --err via
-   Tailwind's border-destructive and --focus-outline-danger. That tone is
-   chromatic, which contradicts the achromatic status grammar the rest of
-   this screen (and paletteTokens.test.ts) commits to.
-
-   Restating the variables cannot fix it — --focus-outline-danger and
-   --color-destructive both SUBSTITUTE --err where they are DECLARED, on
-   :root, so re-pointing --err in this scope reaches neither. The rule is
-   spelled out instead; login.css sits in layer(relay), the last layer, so
-   it outranks the primitive's utilities. Dashed-vs-solid is the system's
-   own danger/normal distinction, and it survives the tone going achromatic. */
+/* Invalid: the --err edge at rest. The dashed danger RING on focus is
+   base.css's contract (`[aria-invalid="true"]:focus-visible`), so it is not
+   restated here. */
 .login-input[aria-invalid="true"] {
   border-color: var(--lg-err);
-  outline: var(--focus-w) dashed var(--lg-err);
-  outline-offset: var(--focus-offset);
 }
 
 /* A read-only field (the invited address) is a fact, not a well to type
@@ -346,7 +337,7 @@
 }
 
 .login-input[readonly]:hover {
-  border-color: var(--lg-hairline);
+  border-color: var(--field-border);
 }
 
 .login-input:-webkit-autofill {
@@ -355,24 +346,22 @@
   transition: background-color 9999s ease-out;
 }
 
-/* Error stays achromatic like every other status on this screen — it reads
-   as an error through the bad-tone shape grammar instead: a full hairline
-   border, bold weight, and a leading status glyph. */
+/* The form-level error: the same boxed alert the in-app drawers print
+   (ui/alert.tsx `boxed`) — --err ink, its --tone-line edge, the 8% tone tint
+   — plus a leading status glyph. */
 .login-error {
   margin: 0;
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  border: 0.5px solid color-mix(in srgb, var(--lg-err) 45%, var(--lg-canvas));
-  border-radius: var(--r-1);
-  background: color-mix(in srgb, var(--lg-err) 10%, var(--lg-canvas));
+  --tone: var(--lg-err);
+  border: 0.5px solid var(--tone-line);
+  border-radius: var(--r-2);
+  background: var(--tone-tint);
   color: var(--lg-err);
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
-  font-size: var(--fs-2);
-  font-weight: 700;
-  line-height: var(--leading-normal);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .login-error::before {
@@ -380,8 +369,8 @@
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   border: 0.5px solid currentColor;
   border-radius: var(--r-full);
   font-size: var(--fs-1);
@@ -389,7 +378,7 @@
   translate: 0 2px;
 }
 
-/* .login-submit is the shared Button (variant="default" size="cta" w-full)
+/* .login-submit is the shared Button (variant="default" size="lg" w-full — the public CTA rung, see landing.css .landing-button)
    with nothing repainted: fill, hover, disabled, and focus ring all come from
    the primitive, so sign-in leads with the same --action plate as the app. */
 
@@ -451,15 +440,10 @@
   resize: vertical;
 }
 
-/* The Field primitive draws errors in a chromatic tone; this canvas is
-   achromatic, so hints and errors read from the --lg-* ramp. */
+/* Hints read from the --lg-* ramp; field errors keep the Field primitive's
+   own --err voice, the same as in-app. */
 .login-field > p {
   color: var(--lg-muted);
-}
-
-.login-field [role="alert"] {
-  color: var(--lg-err);
-  font-weight: 700;
 }
 
 /* The honeypot: out of sight and out of the layout for people, still in the

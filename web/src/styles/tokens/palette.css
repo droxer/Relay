@@ -42,7 +42,7 @@
 
    Two rules of thumb: a new query should reuse a tier above rather than
    invent a neighbour (700/800/1024 were each ~20px from a real tier and have
-   been folded into 720/820/1040), and one component gets one breakpoint —
+   been folded into 820/1040), and one component gets one breakpoint —
    don't split a component's responsive behaviour across two files.
 
    The list is checked in BOTH directions (designGrid.test.ts), across @media
@@ -66,7 +66,8 @@
 
      Elevation is near-flat: the canvas → card step plus a hairline separates
      a card from the page, and only floating commerce chrome (drawers,
-     dialogs, sticky summaries) earns the one published shadow. */
+     dialogs, sticky summaries) earns the hairline ring (--shadow-2) — never a
+     drop shadow. */
   --surface-0: #0a0a0a; /* neutral charcoal canvas */
   --surface-1: #171717; /* cards, panels */
   --surface-2: #1f1f1f; /* fills, search, hover */
@@ -78,6 +79,9 @@
      surface-1 in dark, but the light register's raised-is-lighter ladder then
      puts the list ABOVE the rail (see the light block). These roles pin the
      zone order explicitly. Dark: rail is the lightest step, canvas darkest. */
+  /* Literal hexes, equal to surface-2/surface-1 here but not in the light
+     register: paletteTokens.test.ts computes contrast from each register's
+     literals, so a role that differs by register stays a literal. */
   --surface-rail: #1f1f1f;
   --surface-list: #171717;
 
@@ -111,8 +115,9 @@
      this hue (oklch 268), so the product never shows two unrelated blues.
      It sits 10° toward violet from stock SaaS cobalt (256) — enough to be
      ownable, while still 47° clear of --live so "act" never reads as
-     "working". */
-  /* Accent — tuned PER REGISTER. It has two jobs, both fills: the
+     "working".
+
+     Tuned PER REGISTER. It has two jobs, both fills: the
      button to press (shadcn's --primary, the page-header create action) and
      WHAT IS CHOSEN (the selected-row accent bar, the active nav marker,
      checked checkboxes / radios / switches, the current pager page,
@@ -184,7 +189,7 @@
      a fill, never a status, never an action. Same hue as --action (268),
      a softer shade of it: lighter and less saturated here, so a focused
      primary button rings in a visibly different blue than its own fill.
-     8.8:1 on --surface-2, the worst dark plane. */
+     8.05:1 on --surface-3, the worst dark plane. */
   --link-blue: #a2bcff;
   --link-blue-strong: #c3d4fd;
 
@@ -398,7 +403,7 @@
 
      These three tokens existed and the product ran on NINE heights — 24, 25,
      26, 28, 32, 34, 36, 38, 48 — every one a raw px literal, so no deviation
-     was greppable. The cost was not abstract: `.backlog-view-btn` was 28px on
+     was greppable. The cost was not abstract: `.view-toggle-btn` was 28px on
      the backlog and 34px on the routine route (one class, two heights), the
      backlog's own row-action cluster mixed 28 and 36, and the profile-image
      picker put a 24px button next to a 25px one.
@@ -424,7 +429,7 @@
                         only rung that exists to be loud rather than to fit.
 
      A control that wants a height not on this ladder is telling you it has
-     been mis-classified; re-read the four jobs above before adding a fifth. */
+     been mis-classified; re-read the five jobs above before adding a sixth. */
   --control-h-lg: 40px;
   --control-h: 36px;
   --control-h-sm: 32px;
@@ -443,8 +448,6 @@
        --card-h-tile    a backlog task tile: title, one facts line. The
                         smallest record frame — everything else the task
                         carries lives in the record drawer.
-       --card-h-fleet   control-panel computer or user: identity header,
-                        chip body, metric footer.
        --card-h-kpi     dashboard KPI tile: eyebrow, numeral, one hint.
        --card-h-panel   dashboard instrument panel (fleet health, top
                         users) — the list inside scrolls, the panel does
@@ -453,7 +456,6 @@
      A card that wants a height off this ladder is telling you it is not a
      card — it is a panel or a row; check which before adding a rung. */
   --card-h-tile: 128px;
-  --card-h-fleet: 232px;
   --card-h-kpi: 132px;
   --card-h-panel: 288px;
 
@@ -629,6 +631,9 @@
   --space-w-min: 288px;
   --space-w-cap: 30vw;
   --header-h: 52px; /* compact application header */
+  /* How much ink a text-field edge carries (roles.css --field-border): the
+     least that clears WCAG 1.4.11's 3:1 on every plane of this register. */
+  --field-border-strength: 42%;
   /* Shared inline gutter for page chrome — route PageHeaders, the thread
      rail, and the chat header/transcript all inset by this one token so the
      content edges of adjacent panes line up instead of each picking its own
@@ -643,8 +648,7 @@
 
   /* Elevation — flat. There are no shadow raw values: planes separate by a
      surface step plus a hairline, and floating chrome adds only the hairline
-     ring. roles.css names the two roles --shadow-1 (none) and --shadow-2
-     (the ring). */
+     ring. roles.css names that ring --shadow-2; there is no drop-shadow role. */
 
   /* Z layers — surface < drawer < dialog < float.
      Only three tiers are real, and every one of them has consumers.
@@ -676,13 +680,21 @@
 
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
-  /* Compact application typography: 12px utility text, 14px reading text,
-     15px section headings and 16px page titles. Transcript text stays 14px.
-     Higher display tiers remain reserved for KPI numerals and hero screens. */
+  /* Compact application typography (2026-10-02): 12px utility text, ONE 14px
+     reading size, 15px section headings, 16/17px titles, 22px page titles and
+     numerals, 28px display. The ladder is 12/14/15/16/17/22/28.
+
+     There is one reading rung, not three. --fs-3 and --fs-4 survive only as
+     names for the jobs call sites already ask for (dense prose, body copy),
+     and they are written as var(--fs-2) so the stylesheet cannot claim three
+     sizes while rendering one. Compact density therefore no longer steps
+     body text down: there is no rung below 14px that reads as body. If the
+     reading size ever splits again, give --fs-3/--fs-4 their own values
+     here AND restore the compact step (dimensionScales.test.ts pins both). */
   --fs-1: 0.8571rem; /* 12px — caption: badges, legal microcopy, compact metadata */
   --fs-2: 1rem;      /* 14px — reading text and transcript */
-  --fs-3: 1rem;      /* 14px — dense prose */
-  --fs-4: 1rem;      /* 14px — body copy, matching transcript text */
+  --fs-3: var(--fs-2); /* dense prose — the reading rung */
+  --fs-4: var(--fs-2); /* body copy — the reading rung */
   /* Code is NOT a rung of the sans ladder: the mono face is sized to its own
      metrics (wider advances, taller x-height), so it holds 14px while the
      reading rungs around it move. Every surface that shows code — fenced and
@@ -703,6 +715,8 @@
      and command lines outweighed the prose they sit in. Transcript code takes
      one mono step down; the file viewer, diffs, and document previews keep
      --fs-code. */
+  /* A MONO step, not a sans rung: nothing in the sans ladder reads it, and
+     the sans ladder deliberately has no 13px. */
   --fs-code-transcript: 0.9286rem;           /* 13px */
   --fs-heading: 1.0714rem; /* 15px — section headings */
   --fs-title: 1.1429rem;   /* 16px — pane and page titles */
@@ -723,14 +737,13 @@
   --leading-tight: 1.25;
   /* The subtitle/heading leading, named so Tailwind call sites can reference
      it (`leading-(--leading-heading)`) instead of spelling a literal. */
-  --leading-heading: 1.44;
   --leading-snug: 1.43;
-  /* The caps/meta line box (--type-micro, --type-meta) and the numeral tier
-     (--type-number, the source system's heading-lg leading). Both existed only
-     as literals inside roles.css, which is why the scale above looked complete
+  /* 1.44 and 1.43 were two names for one line box; heading is snug. */
+  --leading-heading: var(--leading-snug);
+  /* The caps/meta line box (--type-micro, --type-meta). It existed only as a
+     literal inside roles.css, which is why the scale above looked complete
      while 11 of 12 roles bypassed it. */
   --leading-caps: 1.33;
-  --leading-number: 1.28;
   --leading-normal: 1.5;
   --leading-loose: 1.65;
   /* Long-form prose (transcript answers, document previews). Loose is the
@@ -756,12 +769,10 @@
   --track-body: 0;
   --track-body-sm: 0;
   --track-0: 0;
-  /* Uppercase captions were set SOLID because the source system sets them at
-     700, where the extra stroke weight holds the caps apart on its own. This
-     app runs --type-micro at 500 (see roles.css — micro is structure, not
-     emphasis, and at 700 it made two elements in five bold), so the tracking
-     has to do the work the weight used to. Sentence-case consumers of the same
-     size live on --type-meta, which tracks as body text. */
+  /* Caps tracking — for the few genuinely UPPERCASE marks (login field
+     monograms, preference glyph labels). At 500 the weight alone does not
+     hold capitals apart, so the track does. Group labels (--type-micro) are
+     sentence case since 2026-10-09 and set solid. */
   --track-caps: 0.03em;
 
   /* Families — the platform's own UI face carries reading, control, and display
@@ -832,6 +843,7 @@
    Navigation and inset controls use neutral greys, without the previous
    blue tint. Floating surfaces use the shared shadow/ring tokens. */
 html[data-theme="light"] {
+  --field-border-strength: 50%;
   --cta-fill: #171717;
   --cta-hover: #383838;
   --cta-ink: #ffffff;
@@ -890,8 +902,8 @@ html[data-theme="light"] {
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on
-     --surface-2/--surface-0: keyword 5.2/5.7 · string 5.8/6.2 ·
-     number 4.5/5.0 · declaration 6.7/7.3 · attribute 7.3/7.9. */
+     --surface-2/--surface-0: keyword 5.48/6.26 · string 6.04/6.90 ·
+     number 4.80/5.49 · declaration 7.05/8.05 · attribute 7.64/8.72. */
   --code-keyword: #9c4221;
   --code-string: #41601f;
   --code-number: #895e05;
@@ -937,25 +949,29 @@ html:lang(zh-CN) {
 /* Density escape hatch — data-dense surfaces (admin tables, backlog). */
 [data-density="compact"] {
   --leading-loose: 1.5;
-  /* One rung below root's --sp-4, the same way --fs-4 drops one rung below.
-     8px was the old value and it was too tight for the two-line rows this
+  /* One rung below root's --sp-4. 8px was the old value and it was too tight for the two-line rows this
      scope actually wraps — every rail that used it overrode it back. */
   --sp-row: var(--sp-3);
-  /* Compact surfaces keep the shared 14px reading size and 12px supporting
-     text. Restate composite roles locally so scoped leading is applied. */
-  --fs-4: var(--fs-3);
+  /* Compact keeps the one 14px reading size (palette.css has no rung below
+     it that reads as body) and tightens only the LINE BOX: the body and name
+     roles are restated locally so the snug leading applies in this scope.
+     --type-body-sm is already snug at the root, so it is not restated. */
   --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-name: 500 var(--fs-4)/var(--leading-snug) var(--font-sans);
-  --type-body-sm: 400 var(--fs-1)/var(--leading-snug) var(--font-sans);
   /* Compact grids use shorter cards with the same text clamps. */
   --card-h-tile: 116px;
-  --card-h-fleet: 196px;
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a
-   dense Han list silently reverts to the standard 16px tier. */
+   dense Han list silently takes the Latin compact line box. The compound
+   selector outranks both the compact block and the zh-CN block, so it is
+   also where the Han tile height and loose leading win back from compact —
+   otherwise compact's 116px tile clips a two-line Han title. */
 html:lang(zh-CN) [data-density="compact"],
 html:lang(zh-CN)[data-density="compact"] {
+  --leading-loose: 1.8;
   --type-body: 400 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  --type-name: 500 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
+  --card-h-tile: 144px;
 }

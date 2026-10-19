@@ -40,6 +40,8 @@
    its own: ⌘K finds anything, so this box only narrows the list in view. */
 .backlog-filter-search-wrap {
   flex: none;
+  /* A field width, not grid geometry: room for a short query beside the
+     toolbar's filter controls. */
   width: 240px;
   min-width: 0;
   display: flex;
@@ -238,10 +240,11 @@
   letter-spacing: var(--type-label-track);
 }
 
+/* The label role beside the lane name, a quieter ink — one role, not a
+   hand-assembled family/size/weight triple. */
 .backlog-lane-count {
-  font-family: var(--font-sans);
-  font-size: var(--fs-3);
-  font-weight: 400;
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   color: var(--ink-4);
 }
 

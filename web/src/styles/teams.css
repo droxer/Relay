@@ -70,44 +70,9 @@
 }
 
 /* A team row is the same object as a thread row and an agent row — a
-   selectable list item — so it wears the same shell: no border, --r-2, a
-   hover wash, and selection as wash + 2px leading accent. */
-.teams-list-row {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  /* No `overflow: hidden`. It was here to clip the inner button's square
-     corners against this row's radius, but the button carries
-     `border-radius: inherit` and is the only thing that paints — while the
-     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
-     its border box (--focus-offset). The row's own radius was quietly eating
-     the keyboard focus indicator on every rail. */
-  border: 0;
-  border-radius: var(--r-2);
-  transition: background var(--t-fast) var(--ease);
-}
-
-/* Entrance — rows rise in on the shared --t-stagger ladder (the same
-   choreography rule as the sidenav groups and login cover), capped at eight
-   so a long roster never waits on a delay. */
-.teams-list-row {
-  opacity: 0;
-  --rise-from: var(--rise-sm);
-  animation: rise var(--t-slow) var(--ease) both;
-}
-
-.teams-list-row:nth-child(2) { animation-delay: calc(var(--t-stagger) * 1); }
-.teams-list-row:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
-.teams-list-row:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
-.teams-list-row:nth-child(5) { animation-delay: calc(var(--t-stagger) * 4); }
-.teams-list-row:nth-child(6) { animation-delay: calc(var(--t-stagger) * 5); }
-.teams-list-row:nth-child(7) { animation-delay: calc(var(--t-stagger) * 6); }
-.teams-list-row:nth-child(n+8) { animation-delay: calc(var(--t-stagger) * 7); }
-
-.teams-list-row:hover {
-  background: var(--row-hover);
-}
+   selectable list item — so it wears the same `.rail-row` shell (shell.css):
+   no border,
+   --r-2, a hover wash, and selection as wash + 2px leading accent. */
 
 /* Selection comes from `.rail-row` (tokens/base.css). */
 
@@ -115,7 +80,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-3);
+  /* One cell gap across the rails — the same --sp-2 the agent row uses. */
+  gap: var(--sp-2);
   width: 100%;
   min-width: 0;
   /* Geometry beats the Button base utilities (h-(--control-h)). */

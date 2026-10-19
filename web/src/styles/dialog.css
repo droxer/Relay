@@ -81,14 +81,16 @@
   border-radius: var(--r-2);
   background: var(--field-on-overlay);
   color: var(--ink-1);
-  font-size: var(--fs-4);
+  /* The one field text size (14px), the Input primitive's text-sm. */
+  font-size: var(--fs-2);
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--sp-2);
+  /* The drawer footer's gap (.adm-form-actions): one action-row rhythm. */
+  gap: var(--sp-3);
   margin-top: var(--sp-2);
 }
 

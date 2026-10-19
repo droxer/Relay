@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 
    Two deliberate departures from upstream shadcn:
    - No `shadow-sm`. Planes here are separated by hairlines, never lift
-     (`--shadow-1: none` in roles.css). A drop shadow would be the only faux
+     (roles.css keeps no drop-shadow role). A drop shadow would be the only faux
      depth in the app.
    - Padding is --sp-5 (20px) on the 4px scale rather than shadcn's 24px, which
      is what the existing admin cards already used.

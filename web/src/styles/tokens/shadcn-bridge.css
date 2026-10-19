@@ -1,5 +1,7 @@
-/* shadcn/ui + Tailwind bridge. Nothing here originates a value — every
-   declaration points at palette.css / roles.css. Utility names stay
+/* shadcn/ui + Tailwind bridge. Nothing here originates a COLOUR or a SIZE —
+   every one points at palette.css / roles.css. The one kind of literal kept
+   is the weight map below, which exists to fold Tailwind's nine stock weight
+   names onto the system's three rungs. Utility names stay
    stable so component markup never tracks token renames. */
 
 @theme inline {
@@ -7,7 +9,7 @@
      draw a 0.5px line, matching the 0.5px structural hairlines the surface
      sheets write by hand. On a 1x display the engines round this back up to
      one device pixel, so the floor is the old rendering, never invisible. */
-  --default-border-width: 0.5px;
+  --default-border-width: var(--sp-hairline);
 
   /* The bare `transition` / `transition-*` utilities fall back to these when
      no duration or ease utility is given. Tailwind's stock values (150ms,
@@ -34,6 +36,10 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  /* Text-field edge at the 3:1 boundary floor (roles.css --field-border);
+     `border-input` stays the quieter outline-button edge. */
+  --color-field: var(--field-border);
+  --color-field-hover: var(--field-border-hover);
   --color-ring: var(--ring);
 
   /* Relay palette as utilities: text-ink, border-hairline, bg-row-hover…
@@ -45,9 +51,10 @@
   --color-ink: var(--ink-1);
   --color-body: var(--ink-2);
   --color-muted-soft: var(--ink-4);
-  --color-on-primary: var(--on-action);
-  --color-primary-active: var(--action-hover);
-  --color-surface-strong: var(--surface-2);
+  --color-primary-hover: var(--action-hover);
+  /* The recessed fill (a neutral badge on a card). Named for what it is: it
+     sits BELOW the card plane, so "strong" was the wrong word for it. */
+  --color-surface-recessed: var(--surface-2);
   --color-surface-raised: var(--surface-3);
   --color-hairline: var(--line-1);
   --color-hairline-soft: var(--line-2);
@@ -158,7 +165,10 @@
   --font-weight-extrabold: 700;
   --font-weight-black: 700;
 
-  /* Leading → leading-tight / leading-loose. */
+  /* Leading → leading-tight / leading-loose. These read as self-references
+     but are not: `@theme inline` makes each utility emit the right-hand
+     var() directly, so the left-hand names only declare that the utility
+     exists, and the value comes from palette.css in @layer relay. */
   --leading-tight: var(--leading-tight);
   --leading-normal: var(--leading-normal);
   --leading-loose: var(--leading-loose);
@@ -186,9 +196,13 @@
      leads with its accent. Fill-only: see the --action proof in palette.css. */
   --primary: var(--action);
   --primary-foreground: var(--on-action);
-  --secondary: var(--surface-2);
+  /* Secondary and muted fills are the plane-independent control wash, not
+     --surface-2: that recessed plane sits BELOW a popover or dialog
+     (--surface-3), so a muted fill inside a calendar popover or a dialog
+     moved down instead of reading as a fill. */
+  --secondary: var(--control-fill);
   --secondary-foreground: var(--ink-1);
-  --muted: var(--surface-2);
+  --muted: var(--control-fill);
   --muted-foreground: var(--ink-3);
   /* shadcn "accent" = the highlighted row in a menu, select, or list. It was
      --surface-1, a fixed plane, and menus paint on --popover (--surface-3):

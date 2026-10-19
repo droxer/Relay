@@ -59,19 +59,16 @@
   flex-shrink: 0;
 }
 
-.workspace-page-tab-count {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-/* Section tabs — flat underline, not a segmented control. These switch the
-   page's sections (Profile / Skills / Activities); they are navigation, and a
-   bordered track with a raised active chip dressed them as a toggle. The
-   genuine toggles (.backlog-view-toggle, the roster picker) keep the
+/* Section tabs — flat underline, not a segmented control. These switch a
+   surface's sections (Profile / Skills / Activities, the thread space's
+   Project / Thread, a file browser's Artifacts / Activity); they are
+   navigation, and a bordered track with a raised active chip dressed them as
+   a toggle. ONE recipe for all three tab rows, because the thread space had
+   grown a pill copy and the file browser a segmented copy of the same idea.
+   The genuine toggles (.view-toggle, the roster picker) keep the
    segmented language. The rail carries one hairline the tabs sit on; the
-   active tab's 2px rule overlaps it. Scoped under .workspace-page so these
-   beat the shared atelier.css selectors. */
+   active tab's 2px rule overlaps it. The record tabs are scoped under
+   .workspace-page so they beat the shared atelier.css selectors. */
 .workspace-page .workspace-page-tabs {
   display: inline-flex;
   align-items: stretch;
@@ -83,7 +80,9 @@
   background: transparent;
 }
 
-.workspace-page .workspace-page-tab {
+.workspace-page .workspace-page-tab,
+.thread-space-tab,
+.workspace-files-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -104,18 +103,32 @@
     border-color var(--t-fast) var(--ease);
 }
 
-.workspace-page .workspace-page-tab:hover {
+.workspace-page .workspace-page-tab:hover,
+.thread-space-tab:hover,
+.workspace-files-tab:hover {
   color: var(--ink-1);
 }
 
 .workspace-page .workspace-page-tab[aria-selected="true"],
-.workspace-page .workspace-page-tab.is-active {
+.workspace-page .workspace-page-tab.is-active,
+.thread-space-tab.is-active,
+.workspace-files-tab.is-active {
   color: var(--ink-1);
   border-bottom-color: var(--ink-1);
 }
 
+/* The one tab-count treatment: caption size, quiet ink, one step up on the
+   active tab. */
+.workspace-page-tab-count,
+.thread-space-tab-count {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 .workspace-page .workspace-page-tab[aria-selected="true"] .workspace-page-tab-count,
-.workspace-page .workspace-page-tab.is-active .workspace-page-tab-count {
+.workspace-page .workspace-page-tab.is-active .workspace-page-tab-count,
+.thread-space-tab.is-active .thread-space-tab-count {
   color: var(--ink-2);
 }
 
@@ -368,7 +381,7 @@
 }
 
 .workspace-preview-close {
-  width: 28px;
+  width: var(--control-h-xs);
   height: var(--control-h-xs);
   color: var(--ink-3);
 }
@@ -562,14 +575,6 @@
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   text-wrap: pretty;
-}
-
-/* The team rail prints its stamps as chips: they wrap between chips, never
-   inside one (the badge itself is nowrap). */
-.workspace-dossier-stamps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
 }
 
 .workspace-dossier-admin {

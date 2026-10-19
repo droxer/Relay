@@ -218,17 +218,18 @@ export function ComputerPage({
   return (
     <section id="computer-panel" className="computer-page" aria-label={t("computer.title")} tabIndex={-1}>
       {/* A dedicated Infra page with no rail beside it, so it owns the page
-          heading: the display tier under the Infra eyebrow, the same frame
-          Channels uses, with a line saying what the page is for. */}
+          h1 — but it wears the same header grammar as the threads, agents,
+          teams and issues headers: the 17px title rung and a count on one
+          --header-h row, with the connect action centred on that row. The
+          Infra eyebrow, the 22px display title and the description line made
+          this the one ~126px header in the app; the empty state still says
+          what the page is for. */}
       <PageHeader
-        kicker={t("nav.infra")}
         title={t("computer.title")}
         count={myNodes.length > 0
           ? `${t("computer.count", { count: myNodes.length })} · ${t("computer.online_count", { count: onlineCount })}`
           : t("computer.count", { count: myNodes.length })}
-        subtitle={t("computer.page_sub")}
-        titleVariant="display"
-        layout="stacked"
+        titleVariant="title"
         actions={phone ? connectIconAction : connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
         /* On a phone the title lives in the top bar, so the create control
            goes there too (as Skills does) instead of keeping a band of its

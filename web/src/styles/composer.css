@@ -268,7 +268,7 @@
 
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"]:not(:disabled):hover,
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"][data-popup-open] {
-  background: color-mix(in srgb, var(--ink-1) 7%, transparent);
+  background: var(--control-fill);
   color: var(--ink-1);
 }
 
@@ -339,14 +339,18 @@
     box-shadow var(--t-fast) var(--ease);
 }
 
-/* Focus darkens the card's own edge instead of drawing the blue outline
-   around it — the caret is already the strongest focus cue a text field has,
-   and a 2px ring on a 20px-radius card read as an error state. Keyed to the
-   field, not the card: a focused picker in the footer draws its own ring
+/* The card draws the field's focus ring — the base contract's own ring
+   (--focus-outline / --focus-offset), moved from the bare textarea to the
+   card the eye reads as the field. Same wrapper pattern as
+   .backlog-filter-search-wrap and .command-menu. Keyed to the FIELD, not
+   :focus-within: a focused picker in the footer draws its own ring
    (base.css), and lighting the whole card for it would double that ring.
-   border-color, not box-shadow, so it never fights the running hairline. */
+   `:focus`, which for a text field is exactly when :focus-visible matches
+   (and keeps this a wrapper rule, not a restated :focus-visible ring).
+   outline, not box-shadow, so it never fights the running hairline. */
 .composer-input-wrap:has(.composer-textarea:focus) {
-  border-color: var(--ink-4);
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
 }
 
 /* Running state — a quiet --live hairline outside the edge at the one
@@ -402,10 +406,8 @@
   color: var(--ink-1);
 }
 
-/* The field draws no ring: focus lives on the field, but the card is what the
-   eye reads as focused, so `.composer-input-wrap:has(.composer-textarea:focus)`
-   darkens the card's own edge instead (see the rule above for why the card
-   takes no ring either). A bare `outline: 0` on the class loses to base.css's
+/* The field draws no ring of its own: the card above draws it, so the two
+   never double up. A bare `outline: 0` on the class loses to base.css's
    textarea:focus-visible ring inside the same @layer relay — the suppression
    must carry :focus-visible itself to win. */
 .composer-textarea:focus-visible {
@@ -490,14 +492,16 @@
    wait in the corner, not look broken. */
 .send-button:disabled {
   border-color: transparent;
-  background: color-mix(in srgb, var(--ink-1) 8%, transparent);
+  background: var(--control-fill);
   color: var(--ink-4);
   opacity: 1;
 }
 
 /* Stop keeps the send plate — the send↔stop transition is only a glyph
    swap, so the composer's primary control never changes silhouette. The
-   only stop-specific chrome is the danger focus ring. */
+   only stop-specific chrome is the danger focus ring. It stays here: the
+   button keeps variant="default" (so the plate never changes), and base.css
+   draws the danger ring only for variant="destructive" and aria-invalid. */
 .send-button.send-button-cancel:focus-visible {
   outline: var(--focus-outline-danger);
   outline-offset: var(--focus-offset);
@@ -603,7 +607,7 @@
   margin-inline: calc(-1 * var(--sp-hairline));
   padding-inline: var(--sp-hairline);
   border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--ink-1) 13%, transparent);
+  background: var(--control-fill-hover);
   /* A pill split across two lines keeps its full shape on both halves. */
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;

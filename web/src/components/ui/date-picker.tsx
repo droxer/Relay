@@ -72,9 +72,9 @@ function DatePicker({
           aria-disabled={readOnly || undefined}
           data-readonly={readOnly || undefined}
           className={cn(
-            "flex h-(--control-h) w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-start text-xs text-foreground transition-[border-color] hover:border-(--control-border-hover)",
+            "flex h-(--control-h) w-full min-w-0 items-center gap-2 rounded-md border border-field bg-background px-3 text-start text-sm text-foreground transition-[border-color] hover:border-field-hover",
             // Read-only reads as a value, not a control: dashed edge, no field fill, no hover firming.
-            "data-readonly:cursor-default data-readonly:border-dashed data-readonly:bg-transparent data-readonly:text-muted-foreground data-readonly:hover:border-input",
+            "data-readonly:cursor-default data-readonly:border-dashed data-readonly:bg-transparent data-readonly:text-muted-foreground data-readonly:hover:border-field",
             canClear && "pe-9"
           )}
         >

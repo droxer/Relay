@@ -56,7 +56,7 @@
 .agent-state--empty {
   background: transparent;
   box-shadow: none;
-  border: 1px dashed color-mix(in srgb, var(--line-1) 85%, var(--ink-4));
+  border: var(--well-dashed);
 }
 
 .agent-state--empty::after {
@@ -350,7 +350,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: var(--control-h-xs);
   padding: 0;
 }
 
@@ -378,7 +378,7 @@
 .backlog-empty {
   margin: 0;
   padding: var(--sp-6) var(--sp-3);
-  border: 1px dashed color-mix(in srgb, var(--line-1) 80%, transparent);
+  border: var(--well-dashed);
   border-radius: var(--r-3);
   color: var(--ink-4);
   font: var(--type-body-sm);

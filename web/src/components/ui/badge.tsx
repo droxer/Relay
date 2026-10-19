@@ -5,6 +5,8 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
+  /* Height is --chip-h (24px), the one chip/pill/status-badge height, rather
+     than whatever `py-0.5` plus the line box came to. */
   /* Badge chrome: caption-bold (12px/700) on a `4px 8px` pad inside the
      CONTROL radius (--r-2, 6px), not a pill. The source system squares
      nothing, but at 20px badge heights a --r-full lozenge has more curve than
@@ -15,7 +17,7 @@ const badgeVariants = cva(
      curve — reads wide against a 6px radius, so the badge takes the 8px step.
      The leading status dot is a `StateMark` child, not a pseudo-element —
      see the variant table below. */
-  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
+  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden min-h-(--chip-h) rounded-md border px-2 text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       /* Chrome only — border + ink per tone. The leading status dot is NOT
@@ -37,7 +39,10 @@ const badgeVariants = cva(
            little boxes. The fill carries the shape; the transparent border
            keeps the box model identical so nothing shifts. 8%, not 10%: on the
            canvas (--surface-0) a 10% green tint put --ok text at 4.49:1. */
-        neutral: "border-transparent bg-surface-strong text-ink",
+        /* Neutral chips share --control-fill, the one chip plane: an ink
+           tint lifts on every surface, where a fixed surface step inverted on
+           the --surface-3 overlays. */
+        neutral: "border-transparent bg-(--control-fill) text-ink",
         success: "border-transparent bg-success/8 text-success",
         info: "border-transparent bg-info/8 text-info",
         warning: "border-transparent bg-warning/8 text-warning",

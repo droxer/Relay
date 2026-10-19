@@ -468,7 +468,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                   hint={t(`skills.visibility_hints.${visibility}`)}
                 >
                   <div
-                    className="skill-segment"
+                    className="adm-profile-segment"
                     role="group"
                     aria-labelledby={editorVisibilityLabelId}
                   >
@@ -476,7 +476,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                       <button
                         key={option}
                         type="button"
-                        className={visibility === option ? "active" : ""}
+                        className="adm-profile-segment-btn"
+                        data-active={visibility === option ? "true" : "false"}
                         aria-pressed={visibility === option}
                         onClick={() => setVisibility(option)}
                       >
@@ -587,12 +588,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               wrapper="div"
               hint={t(`skills.source_hints.${mode}`)}
             >
-              <div className="skill-tabs" role="group" aria-labelledby={sourceLabelId}>
+              <div className="adm-profile-segment" role="group" aria-labelledby={sourceLabelId}>
                 {(["upload", "github"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
-                    className={mode === option ? "active" : ""}
+                    className="adm-profile-segment-btn"
+                    data-active={mode === option ? "true" : "false"}
                     aria-pressed={mode === option}
                     disabled={busy}
                     onClick={() => {
@@ -695,12 +697,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               wrapper="div"
               hint={t(`skills.visibility_hints.${draft.visibility}`)}
             >
-              <div className="skill-segment" role="group" aria-labelledby={visibilityLabelId}>
+              <div className="adm-profile-segment" role="group" aria-labelledby={visibilityLabelId}>
                 {(["private", "org"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
-                    className={draft.visibility === option ? "active" : ""}
+                    className="adm-profile-segment-btn"
+                    data-active={draft.visibility === option ? "true" : "false"}
                     aria-pressed={draft.visibility === option}
                     onClick={() => patchDraft({ visibility: option })}
                   >
@@ -714,7 +717,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 {error}
               </p>
             ) : null}
-            <footer>
+            <footer className="adm-form-actions">
               <Button variant="ghost" disabled={busy} onClick={resetCreate}>
                 {t("skills.cancel")}
               </Button>

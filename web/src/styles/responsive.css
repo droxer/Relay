@@ -270,28 +270,29 @@
     background: var(--control-fill);
   }
 
-  /* The list/board switch rides the bar as two glyphs; only the current one
-     carries a quiet fill. The framed segmented control was a third plate. */
-  .mobile-topbar-tools .backlog-view-toggle {
+  /* The list/board switch rides the bar as two glyphs with no fill on either:
+     the current one keeps its ink and the other drops to --ink-4 (below). The
+     framed segmented control was a third plate. */
+  .mobile-topbar-tools .view-toggle {
     padding: 0;
     border: 0;
     background: transparent;
   }
 
-  /* Through the shell, to outrank the route-scoped 40px button in
+  /* Through the shell, to outrank the route-scoped phone button in
      backlog-list.css. */
-  .messenger-shell .mobile-topbar-tools .backlog-view-btn {
+  .messenger-shell .mobile-topbar-tools .view-toggle-btn {
     width: var(--touch-target);
     height: var(--touch-target);
     border-radius: var(--r-2);
   }
 
-  .mobile-topbar-tools .backlog-view-btn[data-active="true"] {
+  .mobile-topbar-tools .view-toggle-btn[data-active="true"] {
     background: transparent;
     box-shadow: none;
   }
 
-  .mobile-topbar-tools .backlog-view-btn:not([data-active="true"]) {
+  .mobile-topbar-tools .view-toggle-btn:not([data-active="true"]) {
     color: var(--ink-4);
   }
 
@@ -531,13 +532,14 @@
   .messenger-shell .sidenav-nav .sidenav-group:nth-child(4) .sidenav-btn { animation-delay: calc(var(--t-stagger) * 4); }
 
   /* Keep five stable primary tabs on phones. Operational and management
-     destinations remain available through More without crushing their labels. */
-  .sidenav-secondary-item {
-    display: none !important;
-  }
-
-  .sidenav-overflow-item {
-    display: none !important;
+     destinations remain available through More without crushing their labels.
+     Specificity, not !important: through the shell and panel, plus the button
+     class, this outranks every `.sidenav-btn` display rule in sidenav.css (the
+     strongest is `.sidenav-panel[data-expanded="true"] .sidenav-btn`, 0-3-0)
+     and the shell-scoped mobile tab rules above it. */
+  .messenger-shell .sidenav-panel .sidenav-btn.sidenav-secondary-item,
+  .messenger-shell .sidenav-panel .sidenav-overflow-item {
+    display: none;
   }
 
   /* Matches the desktop hide rule's specificity (sidenav.css, end of file);
@@ -678,26 +680,9 @@
     display: none;
   }
 
-  .chat-header {
-    min-width: 0;
-    min-height: var(--header-h);
-    padding: var(--sp-3);
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .chat-title .user-avatar {
-    display: none;
-  }
-
-  .chat-title-text {
-    flex-wrap: nowrap;
-    align-items: center;
-  }
-
-  .chat-title h2 {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
+  /* No .chat-header / .chat-title overrides at this tier: the header only
+     renders inside the chat panel, which shows only in the "chat" mobile view,
+     where the top bar replaces the header (see the top of this block). */
 
   .transcript-inner {
     padding: var(--sp-5) var(--sp-4) var(--sp-6);

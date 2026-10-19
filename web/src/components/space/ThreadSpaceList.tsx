@@ -101,7 +101,8 @@ export function ThreadSpaceList({
             <Button
               variant="ghost"
               type="button"
-              className={`thread-space-row${artifact.id === selectedId ? " is-active" : ""}${highlightedIds.has(artifact.id) ? " is-new" : ""}`}
+              className={`thread-space-row rail-row${highlightedIds.has(artifact.id) ? " is-new" : ""}`}
+              data-selected={artifact.id === selectedId ? "true" : undefined}
               data-kind={artifact.kind}
               aria-current={artifact.id === selectedId || undefined}
               onClick={() => onSelect(artifact.id)}

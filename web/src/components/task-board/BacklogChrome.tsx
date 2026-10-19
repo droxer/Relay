@@ -136,7 +136,7 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
     return (
       <Button variant="ghost"
         type="button"
-        className="backlog-view-btn page-header-icon-action"
+        className="view-toggle-btn page-header-icon-action"
         aria-label={t(next === "board" ? "backlog.view_board" : "backlog.view_list")}
         onClick={() => onChange(next)}
       >
@@ -145,10 +145,10 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
     );
   }
   return (
-    <div className="backlog-view-toggle" role="group" aria-label={t("backlog.view")}>
+    <div className="view-toggle" role="group" aria-label={t("backlog.view")}>
       <Button variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn"
         data-active={view === "board" ? "true" : "false"}
         aria-pressed={view === "board"}
         tooltip={t("backlog.view_board")}
@@ -158,7 +158,7 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
       </Button>
       <Button variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn"
         data-active={view === "list" ? "true" : "false"}
         aria-pressed={view === "list"}
         tooltip={t("backlog.view_list")}

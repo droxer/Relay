@@ -20,11 +20,11 @@ interface AdminLayoutToggleProps {
 export function AdminLayoutToggle({ layout, onChange }: AdminLayoutToggleProps) {
   const { t } = useTranslation();
   return (
-    <div className="backlog-view-toggle adm-layout-toggle" role="group" aria-label={t("admin.v2.layout_label")}>
+    <div className="view-toggle adm-layout-toggle" role="group" aria-label={t("admin.v2.layout_label")}>
       <Button
         variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn"
         data-active={layout === "card" ? "true" : "false"}
         aria-pressed={layout === "card"}
         tooltip={t("admin.v2.view_card")}
@@ -35,7 +35,7 @@ export function AdminLayoutToggle({ layout, onChange }: AdminLayoutToggleProps) 
       <Button
         variant="ghost"
         type="button"
-        className="backlog-view-btn"
+        className="view-toggle-btn"
         data-active={layout === "list" ? "true" : "false"}
         aria-pressed={layout === "list"}
         tooltip={t("admin.v2.view_list")}

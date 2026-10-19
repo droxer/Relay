@@ -1,46 +1,8 @@
-/* Task board — the LIST view and its neighbours: the board/list toggle, the
-   assignee identity chip, row selection, the routine page variant, and inline
+/* Task board — the LIST view and its neighbours: the assignee identity chip, row selection, the routine page variant, and inline
    creation. Split out of a 1886-line backlog.css; the board (cards, lanes,
    drag) stays there. The list itself is a TanStack-driven shadcn table now
    (ui/table.tsx) — borders, hover, and horizontal overflow on small screens
    come from there; what remains here is the vocabulary layered on top. */
-
-/* ── View toggle (board / list) ────────────────────────────────────── */
-
-.backlog-view-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  padding: var(--sp-0-5);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-}
-
-.backlog-view-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h-xs);
-  height: var(--control-h-xs);
-  border: 0;
-  border-radius: var(--r-1);
-  background: transparent;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-
-.backlog-view-btn:not([data-active="true"]):hover {
-  background: var(--control-fill-hover);
-  color: var(--ink-1);
-}
-
-.backlog-view-btn[data-active="true"] {
-  background: var(--surface-0);
-  color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-1);
-}
 
 /* ── List view ─────────────────────────────────────────────────────── */
 
@@ -134,7 +96,24 @@
 
 /* A task's ref (#12, AUTO-3) opens its record, like the title beside it. It
    keeps the quiet ink of the cell it sits in until pointed at. */
-.task-ref-link { color: inherit; }
+.task-ref-link {
+  position: relative;
+  color: inherit;
+}
+
+/* The ref is a 12px figure, so the link itself is ~13×15px — under the 24px
+   target floor on a phone. The hit box grows, the glyphs do not: a centred
+   pseudo-element at least one chip rung square. It only ever spills a few px
+   onto the title beside it, which opens the same record. */
+.task-ref-link::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--chip-h));
+  height: max(100%, var(--chip-h));
+  transform: translate(-50%, -50%);
+}
 .task-ref-link:hover {
   color: var(--ink-1);
   text-decoration: underline;
@@ -300,33 +279,34 @@ button.inline-field[aria-expanded="true"] {
 
   /* Toggle keeps its natural width; the auto margin pushes refresh + create
      to the right edge. */
-  .messenger-shell[data-route="backlog"] .backlog-view-toggle,
-  .messenger-shell[data-route="routine"] .backlog-view-toggle {
+  .messenger-shell[data-route="backlog"] .view-toggle,
+  .messenger-shell[data-route="routine"] .view-toggle {
     margin-right: auto;
   }
 
-  /* Slightly larger tap targets than the desktop 30×28. */
-  .messenger-shell[data-route="backlog"] .backlog-view-btn,
-  .messenger-shell[data-route="routine"] .backlog-view-btn {
-    width: 40px;
-    height: var(--control-h-xs);
+  /* Larger tap targets than the desktop 28×28: one control rung up, still
+     square. */
+  .messenger-shell[data-route="backlog"] .view-toggle-btn,
+  .messenger-shell[data-route="routine"] .view-toggle-btn {
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
   }
 
   /* The same bare-glyph switch the top bar carries (responsive.css), where a
      toolbar keeps it in the page — a project's issue strip. */
-  .backlog-view-toggle {
+  .view-toggle {
     flex-shrink: 0;
     padding: 0;
     border: 0;
     background: transparent;
   }
 
-  .backlog-view-btn[data-active="true"] {
+  .view-toggle-btn[data-active="true"] {
     background: transparent;
     box-shadow: none;
   }
 
-  .backlog-view-btn:not([data-active="true"]) {
+  .view-toggle-btn:not([data-active="true"]) {
     color: var(--ink-4);
   }
 
@@ -491,10 +471,16 @@ tr[data-selected="true"] > td:first-child {
   box-shadow: inset var(--accent-bar-w) 0 0 var(--action);
 }
 
-/* The card floats on the lane rather than sitting in a table, so its selected
-   state is carried by the action ring, not by a row wash. */
+/* A card is the one selectable object that keeps a ring instead of the bar:
+   it floats on the lane as a bordered tile, and a leading bar inset from a
+   card's rounded edge reads as a stray stripe. It takes the same
+   --action-soft selection wash as the rails and the table rows, and the
+   action-coloured edge stands in for the bar — wash + edge, the rail
+   contract translated to a card. */
 .backlog-task[data-selected="true"] {
-  box-shadow: inset 0 0 0 1px var(--action);
+  background: var(--action-soft);
+  border-color: var(--action);
+  box-shadow: inset 0 0 0 0.5px var(--action);
 }
 
 /* Floating, not docked into the page header: the header keeps its create and
@@ -529,12 +515,6 @@ tr[data-selected="true"] > td:first-child {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-}
-
-.task-trigger-label {
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
 }
 
 /* ── Selection checkboxes appear on demand ─────────────────────────────
@@ -679,8 +659,9 @@ tr[data-selected="true"] > td:first-child {
      basis fills the line, so the meta cells after it wrap to line two. */
   .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"]:is(.task-col-mark, .issue-col-status) {
     position: absolute;
-    /* (20px title line − 14px status icon) / 2 */
-    top: calc(var(--sp-3) + 3px);
+    /* Centred on the 20px title line: (20px − the 14px status icon) / 2. The
+       20px is the title's rendered line box, not a token. */
+    top: calc(var(--sp-3) + (20px - var(--icon-sm)) / 2);
     left: var(--sp-4);
     width: auto;
     line-height: 0;
@@ -688,7 +669,7 @@ tr[data-selected="true"] > td:first-child {
 
   /* An automation's schedule state is the 8px dot, not the 14px icon. */
   .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-mark:has(.state-mark) {
-    top: calc(var(--sp-3) + 6px);
+    top: calc(var(--sp-3) + (20px - var(--dot)) / 2);
   }
 
   .task-table .task-col-title {

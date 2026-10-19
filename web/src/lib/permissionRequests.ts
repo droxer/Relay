@@ -1,5 +1,6 @@
 import type { PermissionDecision, PermissionRequest } from "relay-core";
 import type { RelaySession } from "../types.js";
+import { omit } from "./omit.ts";
 
 /**
  * Runtime permission prompts on a thread: a live run asked before a tool ran
@@ -73,9 +74,8 @@ function closed(session: RelaySession, requests: PermissionRequest[], outcome: O
     toolName: request.toolName,
     ...outcome,
   }));
-  const { permissionRequests: _open, ...rest } = session;
   return {
-    ...rest,
+    ...omit(session, "permissionRequests"),
     ...(remaining.length ? { permissionRequests: remaining } : {}),
     permissionDecisions: [...(session.permissionDecisions ?? []), ...decisions].slice(-HISTORY_LIMIT),
   };

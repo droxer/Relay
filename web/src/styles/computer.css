@@ -105,7 +105,9 @@
   padding: var(--sp-5);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
-  background: var(--surface-0);
+  /* The card plane (ui/card.tsx bg-card, --surface-1), shared with the
+     admin fleet's .adm-node-card — one computer, one card. */
+  background: var(--surface-1);
 }
 
 .computer-card-hero {
@@ -645,9 +647,11 @@ button.computer-run-open:hover {
   align-self: flex-start;
 }
 
+/* The step number sets in its step title's role, so the two align. */
 .computer-install-steps li::marker {
   color: var(--ink-3);
-  font-weight: 700;
+  font: var(--type-heading);
+  letter-spacing: var(--type-heading-track);
 }
 
 .computer-install-steps section {
@@ -655,7 +659,9 @@ button.computer-run-open:hover {
 }
 
 .computer-install-status strong {
-  font-weight: 700;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  color: var(--ink-1);
 }
 
 .computer-install-details summary {

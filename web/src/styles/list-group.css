@@ -54,16 +54,24 @@
 }
 
 /* The group's WHOLE size, not the page under it — a band that counted only
-   what is on screen would report a different number as the reader pages. */
-.list-group-count {
+   what is on screen would report a different number as the reader pages.
+
+   ONE count-chip recipe, shared with the thread header's Files pill count
+   (.chat-artifacts-count): the micro role (no weight stacked on a raw rung),
+   one plane — the --control-fill ink wash, which reads on any surface where a
+   --surface-* fill vanished on its own plane — and a height derived from the
+   chip rung: a count rides inside a chip-height row, so it is the chip less
+   the binding inset on each side. */
+.list-group-count,
+.chat-artifacts-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 18px;
+  min-width: calc(var(--chip-h) - var(--sp-1));
+  height: calc(var(--chip-h) - var(--sp-1-5));
   padding: 0 var(--sp-1-5);
   border-radius: var(--r-2);
-  background: var(--surface-0);
+  background: var(--control-fill);
   color: var(--ink-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);

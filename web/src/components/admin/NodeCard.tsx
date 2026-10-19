@@ -70,6 +70,7 @@ export function NodeCard({
         <div className="adm-node-card-status">
           {showStatusPill ? (
             <TonePill
+              className="adm-status-plain"
               tone={statusTone(status)}
               label={t(`status.${status}`, { defaultValue: status })}
               live={status === "running" || status === "busy"}

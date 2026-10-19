@@ -87,8 +87,10 @@ export function AgentModelField({
             onSubmitCustom();
           }}
           className={cn(
-            "h-(--control-h) w-full min-w-0 rounded-md border border-input bg-background py-2 pl-3 pr-16 text-xs text-foreground transition-[color,box-shadow,border-color] outline-none hover:border-(--control-border-hover) placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
-            "focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)]",
+            "h-(--control-h) w-full min-w-0 rounded-md border border-field bg-background py-2 pl-3 pr-16 text-sm text-foreground transition-[color,box-shadow,border-color] outline-none hover:border-field-hover placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
+            /* The ring itself is base.css's focus contract (the danger ring
+               included, for aria-invalid); only the edge colour is local. */
+            "focus-visible:border-ring",
             "aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)]",
           )}
         />

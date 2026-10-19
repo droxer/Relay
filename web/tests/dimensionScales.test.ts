@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
  *   dots      6, 7, 8, 9, 10, 12 across 24 declarations. thread.css drew a
  *             6px folder dot directly above a 7px thread dot in one rail.
  *   controls  24, 25, 26, 28, 32, 34, 36, 38, 48 against a documented ladder
- *             of three. `.backlog-view-btn` was 28px on one route and 34px on
+ *             of three. `.view-toggle-btn` was 28px on one route and 34px on
  *             another — one class, two heights.
  *   glyphs    eleven values across 183 call sites, including 24 uses of 13px
  *             and 12 of 15px, each a pixel off a neighbouring rung.

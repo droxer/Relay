@@ -48,18 +48,6 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-.issue-status {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  white-space: nowrap;
-}
-
-.backlog-row .issue-status .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
-
 .issue-project {
   display: block;
   overflow: hidden;

@@ -91,21 +91,21 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: var(--sp-3);
+  /* The inline empty well (see .adm-cred-empty in admin-v2-provision.css). */
+  padding: var(--sp-4);
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
-  border: 1px dashed var(--line-2);
+  border: var(--well-dashed);
   border-radius: var(--r-3);
-  background: var(--surface-1);
 }
 
-/* Height, fill, and the identity ink. The rest — gap, inline pad, hairline,
-   radius, label type — comes from Badge (variant="state"), which this rule
-   used to restate in full. */
+/* Fill and the identity ink. The rest — the --chip-h height, gap, inline
+   pad, hairline, radius, label type — comes from Badge (variant="state"),
+   which this rule used to restate in full. The fill is the one chip plane,
+   --control-fill. */
 .adm-agent-chip {
-  height: var(--control-h-2xs);
-  background: var(--surface-1);
+  background: var(--control-fill);
   color: var(--ink-3);
   flex: none;
 }

@@ -475,7 +475,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   if (!authChecked) {
     return (
       <section className="admin-console adm-bare">
-        <div className="adm-loading" role="status">{t("admin.loading")}</div>
+        <div className="route-loading" role="status" aria-live="polite">{t("admin.loading")}</div>
       </section>
     );
   }

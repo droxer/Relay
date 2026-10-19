@@ -45,10 +45,12 @@
 
 
 /* Column tracks for the per-band user tables. Lengths, not scale steps —
-   the design grid bans arbitrary bracket values in component classes. */
+   the design grid bans arbitrary bracket values in component classes.
+   FLOORS (min-width), not fixed widths: a header that runs longer in zh-CN
+   or a longer English string widens its column instead of clipping. */
 .adm-emp-col-identity { min-width: 220px; }
-.adm-emp-col-running { width: 5.5rem; }
-.adm-emp-col-actions { width: 4.5rem; }
+.adm-emp-col-running { min-width: 5.5rem; }
+.adm-emp-col-actions { min-width: 4.5rem; }
 /* A one-shot 'recently updated' marker, not live work — ink, drawn once on
    the --t-draw cadence (--live purple + the pulse cadences are reserved for
    live work). Rows are <tr> now, and a <tr> is not a reliable positioning
@@ -118,10 +120,10 @@ tr.is-pulse > td:first-child::after {
    that ever used them — .adm-computer-chip below — explicitly cancelled both,
    so the chip advertised a click nothing handled (it renders a <span>) and
    then took the affordance back one rule later. */
+/* Height (--chip-h) and inline pad are the Badge's; the fill is the one chip
+   plane, --control-fill. */
 .adm-node-chip {
-  height: var(--control-h-xs);
-  padding: 0 var(--sp-3);
-  background: var(--surface-0);
+  background: var(--control-fill);
   color: var(--ink-1);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
@@ -242,13 +244,14 @@ tr.is-pulse > td:first-child::after {
   color: var(--ink-1);
 }
 
-.adm-fleet-chip.active,
+/* A filter chip's "on" state is the neutral control fill — the same answer
+   the task status chips and the view toggle give — never the selection wash,
+   which marks a chosen RECORD, not an applied filter. */
 .adm-fleet-chip[data-active="true"] {
   color: var(--ink-1);
   background: var(--control-fill);
 }
 
-.adm-fleet-chip.active .adm-fleet-chip-count,
 .adm-fleet-chip[data-active="true"] .adm-fleet-chip-count {
   color: var(--ink-2);
 }

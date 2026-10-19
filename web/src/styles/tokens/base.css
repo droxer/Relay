@@ -191,6 +191,18 @@ summary:focus-visible,
   outline-offset: var(--focus-offset);
 }
 
+/* The danger ring. The contract above is in @layer relay, AFTER Tailwind's
+   utilities, so the destructive Button's own `focus-visible:[outline:…danger]`
+   utility always lost to it and a focused Delete showed the plain blue ring.
+   Destructive and invalid controls take the dashed red ring here, beside the
+   contract, so the primitives no longer need to restate either ring. */
+button[data-variant="destructive"]:focus-visible,
+button[data-danger]:focus-visible,
+[aria-invalid="true"]:focus-visible {
+  outline: var(--focus-outline-danger);
+  outline-offset: var(--focus-offset);
+}
+
 /* Same selector list as the contract above — it must not drift from it, or
    forced-colors mode loses the ring on whatever the two lists disagree about
    (which is what `.chat-panel` was doing here: named in this block, and in
@@ -225,8 +237,8 @@ summary:focus-visible,
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
-  /* Tabular figures exist to line up in a column; inheriting the body's
-     negative tracking narrows the advance and undoes that alignment. */
+  /* Tabular figures exist to line up in a column; pinned solid so a future
+     body tracking can never narrow the advance and undo that alignment. */
   letter-spacing: var(--track-0);
 }
 
@@ -258,9 +270,9 @@ summary:focus-visible,
    product — .backlog-lane-label set its lanes in caps while
    .conversation-group-label set the structurally identical thread groups in
    sentence case. Those named rules converged onto --type-micro +
-   --type-micro-track, the caps register that role already documents itself as.
+   --type-micro-track, which is sentence case too since 2026-10-09.
 
-   THIS UTILITY IS THE DELIBERATE EXCEPTION and keeps sentence case. It is a
+   THIS UTILITY keeps sentence case on purpose, whatever micro does. It is a
    GENERIC container for arbitrary, translated copy — forced uppercase there is
    a localization hazard, and Han glyphs have no case to transform. The same
    applies to .page-header-kicker. typographyTokens.test.ts pins both; do not
@@ -342,8 +354,21 @@ summary:focus-visible,
   top: var(--accent-bar-inset);
   bottom: var(--accent-bar-inset);
   width: var(--accent-bar-w);
-  border-radius: calc(var(--r-1) / 2);
+  /* Rounded ends, not a radius rung: half the bar's own width. */
+  border-radius: calc(var(--accent-bar-w) / 2);
   background: var(--action);
+}
+
+/* Meta ink on a selected or highlighted row. The 10% selection wash and the
+   16% menu-highlight wash lift the plane enough that --ink-4 meta fell to
+   4.14–4.33:1 (selected rail row, light) and 3.47–3.95:1 (highlighted menu
+   item). One step up the ink ladder restores 4.5:1 on every plane in both
+   registers; the row's primary text already sits on --ink-1/--ink-2. Remapped
+   here, on the row, so every meta line inside inherits the fix. */
+.rail-row[data-selected="true"],
+tr[data-selected="true"],
+[data-highlighted] {
+  --ink-4: var(--ink-3);
 }
 
 /* Ink utilities — "how loud is this text", with no status meaning at all.

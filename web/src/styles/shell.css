@@ -84,6 +84,41 @@
   display: none;
 }
 
+/* ── Rail row shell — every `.rail-row` ─────────────────────────────
+   The navigation rails (threads, project folders, agents, teams, skills) and
+   the artifact lists that drive a detail pane are one row grammar, so their
+   row shell is one rule, keyed on the class every one of those rows already
+   carries for its selection (`.rail-row[data-selected]`, tokens/base.css).
+   thread.css, agents.css and teams.css each used to hand-copy this block,
+   comment included. A row that lays itself out as a grid says so in its own
+   sheet, which loads after this one.
+
+   No `overflow: hidden`. It was there to clip the inner button's square
+   corners against the row's radius, but the button carries
+   `border-radius: inherit` and is the only thing that paints — while the
+   clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
+   its border box (--focus-offset). The row's own radius was quietly eating
+   the keyboard focus indicator on every rail.
+
+   `position: relative` is the `.rail-row` contract: the selection bar hangs
+   off the row's leading edge. No entrance animation on any rail — the teams
+   rail was the one that rose in, which made it read as a different list. */
+.rail-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--r-2);
+  transition: background var(--t-fast) var(--ease);
+}
+
+/* Hover still paints over the selection wash; the bar keeps saying "you are
+   here". */
+.rail-row:hover {
+  background: var(--row-hover);
+}
+
 /* ── PageHeader — shared route header ────────────────────────────────
    One component, one set of rules. Inline layout (default) centres the
    title bar vertically at --header-h; stacked layout (admin routes)
@@ -258,7 +293,8 @@
 .page-header-icon-action {
   display: grid;
   place-items: center;
-  width: 36px;
+  /* Square: an icon button's width is its height, one control-height rung. */
+  width: var(--control-h-sm);
   height: var(--control-h-sm);
   padding: 0;
   border: 0.5px solid transparent;

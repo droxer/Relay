@@ -19,8 +19,8 @@
      its title, so this surface runs one step taller and every column — the
      rail's identity block, the section's own header, and any list/detail pair
      a section brings with it — shares the step. They were 64px, 76px, 89px
-     and 97px, which drew three or four unaligned rules across the top. */
-  --sec-header-h: calc(var(--header-h) + var(--sp-3));
+     and 97px, which drew three or four unaligned rules across the top. The
+     step itself, --sec-header-h, is declared in roles.css. */
 
   display: grid;
   grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
@@ -187,6 +187,11 @@
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
+    /* Chips snap their start to the strip's gutter, so a flick never leaves a
+       half-cut chip at rest; proximity, not mandatory, so useStripScroll's
+       own scroll to the active chip is never fought. */
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--sp-4);
     /* The strip fades on whichever edge has more behind it (useStripScroll
        marks them), so a chip cut by the edge reads as "more this way"
        rather than as a stray count. */
@@ -203,7 +208,7 @@
   .sec-nav[data-more-start] { --strip-fade-start: var(--sp-8); }
   .sec-nav[data-more-end] { --strip-fade-end: var(--sp-8); }
   .sec-nav-list { flex-direction: row; gap: var(--sp-1); padding-inline-end: var(--sp-4); }
-  .sec-nav-item { flex: 0 0 auto; min-width: 0; }
+  .sec-nav-item { flex: 0 0 auto; min-width: 0; scroll-snap-align: start; }
   .sec-nav-btn {
     justify-content: center;
     gap: var(--sp-1-5);

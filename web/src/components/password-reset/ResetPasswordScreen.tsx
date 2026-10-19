@@ -69,7 +69,7 @@ export function ResetPasswordScreen() {
           <Button
             type="button"
             className="login-submit w-full"
-            size="cta"
+            size="lg"
             loading={resetQuery.isFetching}
             onClick={() => void resetQuery.refetch()}
           >
@@ -176,7 +176,7 @@ function ResetPasswordForm({
 
       <Button
         variant="default"
-        size="cta"
+        size="lg"
         type="submit"
         className="login-submit w-full"
         loading={isBusy}

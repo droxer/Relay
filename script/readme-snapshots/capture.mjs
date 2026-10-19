@@ -40,7 +40,7 @@ const MIME_TYPES = {
 /** Switches a project's issues from the list to the board, then parks the
  *  pointer so the toggle's tooltip is not in the picture. */
 async function openBoard(page) {
-  await page.locator(".backlog-view-btn").first().click();
+  await page.locator(".view-toggle-btn").first().click();
   await page.waitForSelector(".backlog-task", { timeout: READY_TIMEOUT_MS });
   await page.mouse.move(0, 0);
 }
@@ -52,7 +52,7 @@ const SHOTS = [
   { name: "threads", path: `/threads/${HERO_ID}`, ready: ".transcript .msg" },
   { name: "issues", path: "/tasks", ready: ".backlog-filter-search-wrap", sidenav: false },
   { name: "routines", path: "/automations", ready: ".backlog-filter-search-wrap", sidenav: false },
-  { name: "projects", path: "/projects/project_infra?tab=tasks", ready: ".backlog-view-btn", prepare: openBoard, sidenav: false },
+  { name: "projects", path: "/projects/project_infra?tab=tasks", ready: ".view-toggle-btn", prepare: openBoard, sidenav: false },
   { name: "agents", path: "/agents/agent_aria", ready: ".record-band, .agent-profile" },
   { name: "teams", path: "/teams/team_platform_guild", ready: ".record-band, .workspace-page" },
   { name: "skills", path: "/skills", ready: ".skills-roster-row" },

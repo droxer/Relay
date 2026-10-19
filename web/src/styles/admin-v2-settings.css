@@ -22,15 +22,20 @@
 
 /* The view's own load error sits inside the panel, above the rows. */
 .adm-settings > [role="alert"] {
-  margin: var(--sp-4) var(--sp-6) 0;
+  margin: var(--sp-4) var(--sp-5) 0;
 }
 
 .adm-settings-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  /* The control track is a rem measure (24rem ≈ 340px at the default size),
+     so it grows with the reader's font-size preference and a longer label
+     column keeps its share; minmax(0, …) still lets it shrink. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
   align-items: start;
   gap: var(--sp-3) var(--sp-8);
-  padding: var(--sp-6);
+  /* The one card padding (ui/card.tsx p-5), shared with the dashboard tiles
+     and the computer cards. */
+  padding: var(--sp-5);
 }
 
 .adm-settings-item + .adm-settings-item {
@@ -93,7 +98,8 @@
 /* Values here are small whole numbers — hold the control to a numeric
    measure instead of filling the row. */
 .adm-settings-input {
-  max-width: 7rem;
+  /* Sized to its digits — four plus the stepper — not to a fixed box. */
+  max-width: calc(4ch + var(--control-h) + var(--sp-6));
 }
 
 .adm-settings-control {

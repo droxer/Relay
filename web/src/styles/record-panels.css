@@ -209,12 +209,15 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+/* The marker is the small dot rung; the rail below hangs from its centre.
+   0.42em is optical — it drops the dot onto the first line's x-height, so it
+   scales with the entry's text rather than with the spacing grid. */
 .record-timeline-marker {
   position: absolute;
-  left: 2px;
+  left: var(--sp-0-5);
   top: 0.42em;
-  width: 5px;
-  height: 5px;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
   border: 0;
   border-radius: 50%;
   background: var(--ink-4);
@@ -225,8 +228,8 @@
    entry's rail is hidden by the component. */
 .record-timeline-rail {
   position: absolute;
-  left: 4px;
-  top: calc(0.42em + 7px);
+  left: calc(var(--sp-0-5) + (var(--dot-sm) - var(--sp-hairline)) / 2);
+  top: calc(0.42em + var(--dot-sm) + var(--sp-0-5));
   bottom: calc(-1 * var(--sp-2));
   width: 0.5px;
   height: auto;

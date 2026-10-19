@@ -88,12 +88,12 @@
 }
 
 .profile-image-picker-visual > svg {
-  width: 23px;
-  height: 23px;
+  width: var(--icon-xl);
+  height: var(--icon-xl);
 }
 
 /* The default mark is a profile image, not a stray icon: it fills the tile
-   like it does at every other size. Caught by the 23px icon rule above, its
+   like it does at every other size. Caught by the --icon-xl rule above, its
    12% padding (resolved against the 64px tile) left an ~8px glyph adrift in
    an empty square. */
 .profile-image-picker-visual > .identity-mark {
@@ -112,7 +112,9 @@
   place-items: center;
   width: var(--control-h-2xs);
   height: var(--control-h-2xs);
-  border: 3px solid var(--surface-0);
+  /* The cut-out ring that separates the disc from the tile: a quarter of
+     the 12px icon rung. */
+  border: calc(var(--icon-xs) / 4) solid var(--surface-0);
   border-radius: var(--r-full);
   /* Neutral at rest, accent under the pointer — the same grammar as the
      remove badge below, which rests in ink and takes its tone on hover. A
@@ -149,7 +151,6 @@
   background: var(--surface-0);
   color: var(--ink-2);
   cursor: pointer;
-  box-shadow: var(--shadow-1);
   transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
@@ -246,7 +247,6 @@
     border: 0.5px solid var(--line-1);
     border-radius: var(--r-full);
     background: var(--surface-0);
-    box-shadow: var(--shadow-1);
     transition: border-color var(--t-fast) var(--ease);
   }
 

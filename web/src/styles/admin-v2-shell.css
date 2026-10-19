@@ -30,17 +30,16 @@
   min-height: 100%;
 }
 
-.adm-loading {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
+/* Admin loading reads through the routes' .route-loading (routes.css), so
+   the console waits the same way every other surface does. */
 
 .adm-command-status {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  max-width: 28rem;
+  /* A reading measure, not a box width: it tracks the status line's own
+     glyphs, so Han and English both wrap near the same line length. */
+  max-width: 60ch;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
