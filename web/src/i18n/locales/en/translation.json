@@ -1741,7 +1741,7 @@
     "open_source_badge": "Open source on GitHub",
     "oss_kicker": "Open source",
     "oss_title": "Read it, run it, change it",
-    "oss_body": "Relay is open source under AGPL-3.0. Self-host the backend, connect your own computers, and follow development on GitHub.",
+    "oss_body": "Relay is open source under MIT. Self-host the backend, connect your own computers, and follow development on GitHub.",
     "oss_cta": "View on GitHub",
     "oss_clone_label": "Clone the repository",
     "cta_title": "Give your agents a place to work",

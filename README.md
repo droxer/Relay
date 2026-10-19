@@ -159,4 +159,6 @@ Start with the [`docs/` index](docs/README.md) for the canonical setup, API, arc
 
 ## License
 
-[AGPL-3.0-only](LICENSE)
+[MIT](LICENSE). You may use, modify, distribute, and sell Relay, including in
+closed-source products, provided you retain the copyright and license notices.
+Third-party components and assets retain their own licenses.

@@ -2,7 +2,7 @@
    what it says in each section, and which doors it opens. Kept apart from the
    component so the copy keys and assets can be checked without a DOM. */
 
-/** Relay is open source (AGPL-3.0); the landing page points visitors at the
+/** Relay is open source (MIT); the landing page points visitors at the
     public repository so they can read, self-host, and contribute. */
 export const RELAY_GITHUB_URL = "https://github.com/droxer/Relay";
 export const RELAY_CLONE_COMMAND = `git clone ${RELAY_GITHUB_URL}.git`;
