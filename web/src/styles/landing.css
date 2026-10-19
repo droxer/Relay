@@ -114,9 +114,15 @@
 
 /* ---------- Buttons --------------------------------------------------- */
 
-/* Links that look like the app's buttons: the neutral inverted plate for
-   the one primary door, a hairline outline for the other. Same geometry as
-   the shared Button's hero rung (--control-h-lg, --r-2). */
+/* Links that look like the app's buttons: the action plate for the one
+   primary door, a hairline outline for the other.
+
+   ONE public CTA recipe: the shared Button's `lg` hero rung — --control-h-lg,
+   --sp-5 inline pad, --r-2, the 12px/500 label (text-xs font-medium). The
+   sign-in, waitlist, join, and password-reset submits are `Button size="lg"`,
+   so a visitor's first two clicks (landing door, then the gate's submit) are
+   the same button. These anchors restate that geometry rather than wrap the
+   primitive because they are plain <a> links in a static page. */
 .landing-button {
   display: inline-flex;
   align-items: center;
@@ -125,8 +131,8 @@
   padding-inline: var(--sp-5);
   border: 0.5px solid transparent;
   border-radius: var(--r-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-decoration: none;
   white-space: nowrap;
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);

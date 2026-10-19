@@ -103,7 +103,7 @@ function Field({
    foot of a drawer form. Field errors sit inline under their control. */
 function FieldError({ id, children }: { id?: string; children: ReactNode }) {
   return (
-    <span id={id} role="alert" className="text-dense text-danger">
+    <span id={id} role="alert" className="text-xs leading-snug text-danger">
       {children}
     </span>
   )

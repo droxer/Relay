@@ -146,7 +146,9 @@
   display: flex;
   align-items: center;
   gap: var(--sp-1);
-  min-height: 34px;
+  /* The form-control rung, not a hand-picked 34px: the header's own select
+     button and its disclosure sit on a control-height row. */
+  min-height: var(--control-h);
   padding-left: var(--sp-1);
   border-radius: var(--r-2);
   transition: background var(--t-fast) var(--ease);
@@ -240,21 +242,10 @@
 
 .project-name-input { min-height: var(--control-h); }
 .project-computer-select { min-height: var(--control-h); }
-/* Edit mode: the computer is immutable, so it renders as text, not a dead select. */
-.project-computer-static {
-  display: flex;
-  align-items: center;
-  min-height: var(--control-h);
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-}
-
 .project-empty-hint {
   margin: 0;
   padding: var(--sp-3) var(--sp-4);
-  border: 1px dashed var(--line-2);
+  border: var(--well-dashed);
   border-radius: var(--r-3);
   color: var(--ink-3);
   font: var(--type-body-sm);
@@ -263,10 +254,9 @@
 }
 
 .conversation-row {
-  position: relative;
-  display: flex;
+  /* Shell (position, flex, radius, no-overflow note, hover) is `.rail-row`
+     in shell.css; only the row's own sizing and ink live here. */
   align-items: stretch;
-  width: 100%;
   /* .list-virtual supplies content-visibility; only the reserved height is
      row-specific. Rows are no longer one height: a row with status to speak
      keeps its meta line (~57px), a settled one collapses to the single-line
@@ -275,17 +265,8 @@
      set to the taller case, which reserves rather than under-reserves.
      Nested rows reserve their own size below. */
   contain-intrinsic-size: auto 57px;
-  /* No `overflow: hidden`. It was here to clip the inner button's square
-     corners against this row's radius, but the button carries
-     `border-radius: inherit` and is the only thing that paints — while the
-     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
-     its border box (--focus-offset). The row's own radius was quietly eating
-     the keyboard focus indicator on every rail. */
-  border: 0;
-  border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-1);
-  transition: background var(--t-fast) var(--ease);
 }
 
 /* Full-width inner button — carries the grid layout and all interactive content */
@@ -312,10 +293,6 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.conversation-row:hover {
-  background: var(--row-hover);
 }
 
 /* Selection (wash + leading accent bar) comes from `.rail-row` in
@@ -539,7 +516,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: var(--control-h-2xs);
   height: var(--control-h-2xs);
   padding: 0;
   border-radius: var(--r-2);

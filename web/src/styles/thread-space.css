@@ -105,7 +105,12 @@
   min-width: 0;
 }
 
+/* Selection is the rail contract (`.rail-row` in tokens/base.css): the
+   selection wash plus the leading bar, the same as every other list that
+   drives a detail pane. The recessed --surface-2 well this row used to wear
+   read as a third selection language. */
 .thread-space-row {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
@@ -126,10 +131,6 @@
   background: var(--row-hover);
 }
 
-.thread-space-row.is-active {
-  background: var(--surface-2);
-}
-
 .thread-space-row.is-new {
   animation: thread-space-row-new var(--t-slow) var(--ease);
 }
@@ -142,7 +143,7 @@
 .thread-space-row-icon {
   display: grid;
   place-items: center;
-  width: 28px;
+  width: var(--control-h-xs);
   height: var(--control-h-xs);
   border-radius: var(--r-2);
   /* Neutral row wash for the tile: status tones are dot/border/text, never
@@ -175,49 +176,21 @@
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
+  line-height: var(--leading-loose);
+  text-wrap: pretty;
 }
 
 /* ---- Files / Output switch ------------------------------------------ */
 
+/* The tab recipe itself is shared with the record tabs (workspace.css);
+   this row only seats it: the panel's gutter and the hairline the active
+   tab's rule overlaps. */
 .thread-space-tabs {
   display: flex;
-  gap: var(--sp-1);
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-1);
-}
-
-.thread-space-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: var(--control-h-sm);
+  align-items: stretch;
+  gap: var(--sp-5);
   padding: 0 var(--sp-3);
-  border: 0;
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-3);
-  cursor: pointer;
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-  white-space: nowrap;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-
-.thread-space-tab:hover {
-  color: var(--ink-1);
-  background: var(--row-hover);
-}
-
-.thread-space-tab.is-active {
-  background: var(--surface-2);
-  color: var(--ink-1);
-}
-
-.thread-space-tab-count {
-  color: var(--ink-3);
-  font-size: var(--fs-1);
+  border-bottom: 0.5px solid var(--line-1);
 }
 
 /* ---- project workspace inside the panel ----------------------------- */
@@ -328,21 +301,23 @@
   color: var(--ink-3);
 }
 
+/* Title and body take the shared empty state's roles (.relay-empty-title /
+   .relay-empty-body in empty-state.css), so an empty panel reads at the same
+   strength as every other first-use surface. */
 .thread-space-empty-title {
   margin: 0;
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
 }
 
 .thread-space-empty-body {
   margin: 0;
   max-width: var(--measure-tight);
   color: var(--ink-3);
-  font-size: var(--fs-3);
-  line-height: var(--leading-normal);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
-
 
 .thread-space-preview {
   /* The artifact header's container (artifact.css): at this panel's width

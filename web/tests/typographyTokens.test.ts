@@ -72,8 +72,6 @@ describe("application typography roles", () => {
     const expectedPixels = new Map([
       ["--fs-1", 12],
       ["--fs-2", 14],
-      ["--fs-3", 14],
-      ["--fs-4", 14],
       ["--fs-code", 14],
       ["--fs-heading", 15],
       ["--fs-title", 16],
@@ -88,6 +86,14 @@ describe("application typography roles", () => {
         `${name} should resolve to ${expected}px at the default browser size`,
       );
     }
+
+    // One reading rung: --fs-3/--fs-4 name jobs, not sizes, so they alias
+    // --fs-2 instead of restating its value — and compact density, which has
+    // no body rung below 14px to step onto, must not pretend to step them.
+    assert.match(palette, /--fs-3:\s*var\(--fs-2\);/);
+    assert.match(palette, /--fs-4:\s*var\(--fs-2\);/);
+    const compact = palette.match(/\[data-density="compact"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+    assert.doesNotMatch(compact, /--fs-[34]:/, "compact density must not redefine a reading rung");
 
     const hero = palette.match(/--fs-hero:\s*clamp\(([\d.]+)rem,\s*4vw,\s*([\d.]+)rem\);/);
     assert.ok(hero, "--fs-hero must remain a responsive clamp");

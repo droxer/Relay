@@ -28,10 +28,10 @@
 
 .collaboration-node summary {
   display: grid;
-  grid-template-columns: 8px 8px minmax(0, 1fr) auto;
+  grid-template-columns: var(--dot) var(--dot) minmax(0, 1fr) auto;
   gap: var(--sp-2);
   align-items: center;
-  min-height: 28px;
+  min-height: var(--control-h-xs);
   color: var(--ink-2);
   cursor: pointer;
   list-style: none;
@@ -53,8 +53,9 @@
 .collaboration-label {
   overflow: hidden;
   color: var(--ink-1);
-  font-size: var(--fs-transcript);
-  font-weight: 500;
+  /* The name role (14px/500), not a weight stacked on the raw rung. */
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -67,9 +68,10 @@
 }
 
 .collaboration-node-body {
-  /* 8px marker column + 3px optical nudge so the thread line sits under
-     the status dot center, not the grid edge. */
-  margin-left: 11px;
+  /* The marker column (--dot) + a 3px optical nudge so the thread line sits
+     under the status dot centre, not the grid edge. The nudge is optical,
+     so it stays a literal. */
+  margin-left: calc(var(--dot) + 3px);
   padding-left: var(--sp-4);
   border-left: 0.5px solid var(--line-2);
 }
@@ -113,6 +115,8 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code-transcript);
+  /* 500 is the .code utility's weight (tokens/base.css), copied verbatim
+     with the rest of its body — see the note above. */
   font-weight: 500;
 }
 
@@ -198,16 +202,16 @@
 }
 
 /* Off-scale optical values, both derived from the header above it: 6px is the
-   12px chevron's centre, so the rule hangs under the affordance, and
-   6 + 0.5 hairline + 13.5 lands the body text in the label's own 20px column
-   (12px chevron + --sp-2 gap).
+   12px chevron's centre, so the rule hangs under the affordance (optical, a
+   literal), and the padding is what is left of the label's own 20px column
+   (--sp-5: 12px chevron + --sp-2 gap) after that hang and the hairline.
    No italic: synthesized CJK oblique reads as a rendering bug (markdown.css
    normalizes zh blockquotes for the same reason); the rule and --ink-3 already
    separate the reasoning tier. */
 .agent-thinking-body {
   min-width: 0;
   margin-left: 6px;
-  padding-left: 13.5px;
+  padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
   border-left: 0.5px solid var(--line-2);
   font-family: var(--font-sans);
   font-size: var(--fs-transcript);
@@ -225,7 +229,8 @@
 .agent-thinking-title {
   margin: 0 0 var(--sp-1);
   color: var(--ink-2);
-  font-weight: 500;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
 }
 
 /* Reasoning is verbatim model output, one line per paragraph. `pre-wrap` keeps
@@ -300,7 +305,7 @@
   gap: var(--sp-1);
   min-width: 0;
   margin-left: 6px;
-  padding-left: 13.5px;
+  padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
   border-left: 0.5px solid var(--line-2);
 }
 
@@ -317,13 +322,18 @@
   align-items: baseline;
   gap: var(--sp-2);
   min-width: 0;
-  font-size: var(--fs-2);
   line-height: var(--leading-normal);
   color: var(--ink-2);
 }
 
 /* A command line is mono (`.code`), so it takes the transcript's code size;
-   a tool line is sans and stays on the body rung. */
+   a tool line is sans and stays on the body rung. One size per selector —
+   the shared block above used to set the body rung only for this rule to
+   restate it. */
+.agent-tool {
+  font-size: var(--fs-2);
+}
+
 .agent-command {
   font-size: var(--fs-code-transcript);
 }
@@ -350,7 +360,8 @@
 
 .agent-tool-name {
   flex: none;
-  font-weight: 500;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   color: var(--ink-1);
 }
 
@@ -551,7 +562,8 @@
 }
 
 .artifact-plan-note-label {
-  font-weight: 700;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   color: var(--ink-2);
 }
 
@@ -559,9 +571,11 @@
   opacity: var(--opacity-disabled);
 }
 
+/* Stands in for one line of the transcript-size note: as tall as that text,
+   and a placeholder length (120px is a typical summary, not a grid value). */
 .artifact-plan-skeleton {
   width: 120px;
-  height: 14px;
+  height: var(--fs-transcript);
 }
 
 .artifact-plan-note .artifact-plan-summary {

@@ -64,7 +64,6 @@
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-0);
-  box-shadow: var(--shadow-1);
 }
 
 .sidenav-brand-copy {
@@ -280,7 +279,9 @@
   /* As tall as the nav glyph it marks. */
   height: var(--icon-lg);
   transform: translateY(-50%);
-  border-radius: calc(var(--r-1) / 2);
+  /* Rounded ends, not a radius rung: half the bar's own width (as base.css
+     .rail-row does). */
+  border-radius: calc(var(--accent-bar-w) / 2);
   background: var(--action);
 }
 

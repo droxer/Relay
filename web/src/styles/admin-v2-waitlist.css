@@ -18,7 +18,7 @@
 }
 
 .adm-waitlist-col-detail {
-  width: 14rem;
+  min-width: 14rem;
 }
 
 .adm-waitlist-detail {

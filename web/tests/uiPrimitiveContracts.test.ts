@@ -113,7 +113,9 @@ describe("UI primitive contracts", () => {
     // siblings there, so the tier must also change SHAPE on hover and focus.
     assert.match(danger, /hover:border-\(--err\)/);
     assert.match(danger, /focus-visible:border-\(--err\)/);
-    assert.match(danger, /focus-visible:\[outline:var\(--focus-outline-danger\)\]/);
+    // The focus RING is not restated here: base.css (@layer relay, after the
+    // utilities) owns it, so a utility copy could only ever lose to it.
+    assert.doesNotMatch(danger, /focus-visible:\[outline/);
 
     // The quiet tier stays neutral at rest — the resting ring belongs to the
     // full `destructive` variant, and repeating it down every row would turn
@@ -185,10 +187,11 @@ describe("UI primitive contracts", () => {
 
   it("keeps floating chrome on the flat elevation role instead of a drop shadow", async () => {
     const roles = await readFile(resolve("web/src/styles/tokens/roles.css"), "utf8");
-    assert.match(roles, /--shadow-1:\s*none/);
+    // No "none" elevation role: a surface that wants no edge declares none.
+    assert.doesNotMatch(roles, /--shadow-1:/);
     // Anchored on the closing `;` so a drop shadow cannot be appended back:
-    // floating chrome gets the 0.5px hairline ring and nothing else.
-    assert.match(roles, /--shadow-2:\s*0 0 0 0\.5px var\(--line-1\);/);
+    // floating chrome gets the hairline ring and nothing else.
+    assert.match(roles, /--shadow-2:\s*0 0 0 var\(--sp-hairline\) var\(--line-1\);/);
 
     for (const file of ["select.tsx", "card.tsx", "toast.tsx"]) {
       const source = await readFile(resolve(`web/src/components/ui/${file}`), "utf8");

@@ -113,25 +113,15 @@
      browser replaces this with the real size after first render either way. */
   content-visibility: auto;
   contain-intrinsic-size: auto 58px;
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  /* No `overflow: hidden`. It was here to clip the inner button's square
-     corners against this row's radius, but the button carries
-     `border-radius: inherit` and is the only thing that paints — while the
-     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
-     its border box (--focus-offset). The row's own radius was quietly eating
-     the keyboard focus indicator on every rail. */
-  border: 0;
-  border-radius: var(--r-2);
-  transition: background var(--t-fast) var(--ease);
+  /* The shell — position, flex, radius, hover — is `.rail-row` in
+     shell.css. */
 }
 
 .agents-roster-row-select {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  /* One cell gap across the rails — the same --sp-2 the team row uses. */
   gap: var(--sp-2);
   flex: 1;
   min-width: 0;
@@ -151,10 +141,6 @@
   color: inherit;
   cursor: pointer;
   text-align: left;
-}
-
-.agents-roster-row:hover {
-  background: var(--row-hover);
 }
 
 /* Selection comes from `.rail-row` (tokens/base.css). Status never touches
@@ -310,7 +296,9 @@
    text that has to stay legible at a glance. */
 .agent-placement-badge {
   max-width: 100%;
-  background: var(--surface-1);
+  /* The Badge primitive's chip plane and --chip-h height; only the type
+     differs (supporting text, below). */
+  background: var(--control-fill);
   color: var(--ink-3);
   /* Supporting text takes --type-body-sm. This rule used to hand-assemble
      the role from --fs-2 + 400 + --leading-snug + --track-0, which is the

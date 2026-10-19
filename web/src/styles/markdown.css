@@ -60,6 +60,8 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
+  /* 500 is the .code utility's weight (tokens/base.css), copied verbatim
+     with the rest of its body — see the note above. */
   font-weight: 500;
 }
 
@@ -488,8 +490,10 @@ html:lang(zh-CN) .md-body blockquote {
 /* ---- math ----
    KaTeX ships its own stylesheet; these rules only place the output in the
    reading. A display equation can be wider than the column, so it scrolls. */
+/* KaTeX's serif runs small beside the sans at the same size, so math sits
+   one rung up the ladder (15px), not on an off-ladder 1.05em. */
 .md-body .katex {
-  font-size: 1.05em;
+  font-size: var(--fs-heading);
 }
 
 .md-body .katex-display {

@@ -87,7 +87,7 @@ export function AgentModelField({
             onSubmitCustom();
           }}
           className={cn(
-            "h-(--control-h) w-full min-w-0 rounded-md border border-input bg-background py-2 pl-3 pr-16 text-xs text-foreground transition-[color,box-shadow,border-color] outline-none hover:border-(--control-border-hover) placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
+            "h-(--control-h) w-full min-w-0 rounded-md border border-field bg-background py-2 pl-3 pr-16 text-sm text-foreground transition-[color,box-shadow,border-color] outline-none hover:border-field-hover placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)",
             "focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)]",
             "aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)]",
           )}

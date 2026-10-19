@@ -245,10 +245,10 @@ describe("pre-auth login palette", () => {
     const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
     assert.doesNotMatch(loginCode, /var\(--dark-/, "login.css must not pin the always-dark register");
     assert.match(login, /--lg-canvas:\s*var\(--surface-0\);/);
-    assert.match(login, /--lg-elevated:\s*var\(--surface-3\);/);
+    assert.match(login, /--lg-elevated:\s*var\(--surface-2\);/);
     assert.match(login, /--lg-ink:\s*var\(--ink-1\);/);
     assert.match(login, /--lg-muted:\s*var\(--ink-3\);/);
-    assert.match(login, /--lg-err:\s*var\(--ink-1\);/);
+    assert.match(login, /--lg-err:\s*var\(--err\);/);
     assert.match(login, /\.login-error \{[^}]*var\(--lg-err\)/s);
   });
 
@@ -259,16 +259,18 @@ describe("pre-auth login palette", () => {
     assert.doesNotMatch(loginCode, /--ink-1\s*:/);
   });
 
-  it("holds the shared Input's invalid state to the achromatic tier", () => {
-    // The primitive's aria-invalid ring is drawn from --err, which is
-    // chromatic and contradicts .login-error one element over. Re-pointing
-    // --err in the login scope does NOT reach it (both --focus-outline-danger
-    // and --color-destructive substitute --err where they are declared, on
-    // :root), so the rule is spelled out. Guard it.
+  it("speaks the product's error voice on the shared Input's invalid state", () => {
+    // Public forms print errors in --err like every in-app form, and the
+    // dashed danger ring on focus is base.css's contract, not restated here.
     assert.match(
       login,
       /\.login-input\[aria-invalid="true"\] \{[^}]*var\(--lg-err\)[^}]*\}/s,
-      "the login field's invalid state must use the achromatic --lg-err, not the theme register's --err",
+      "the login field's invalid edge must use --lg-err (--err)",
+    );
+    assert.doesNotMatch(
+      login.replace(/\/\*[\s\S]*?\*\//g, ""),
+      /\.login-input\[aria-invalid="true"\] \{[^}]*outline/s,
+      "the danger ring belongs to base.css",
     );
   });
 
@@ -693,9 +695,9 @@ describe("accent primary and neutral CTA palette", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
     assert.match(bridge, /--primary:\s*var\(--action\)/);
     assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);
-    assert.match(bridge, /--color-primary-active:\s*var\(--action-hover\)/);
+    assert.match(bridge, /--color-primary-hover:\s*var\(--action-hover\)/);
     const button = stripStyleComments(readWebSource("components/ui/button.tsx"));
-    assert.match(button, /bg-primary text-primary-foreground hover:bg-primary-active/);
+    assert.match(button, /bg-primary text-primary-foreground hover:bg-primary-hover/);
     assert.doesNotMatch(button, /hover:text-\(--action\)/);
   });
 

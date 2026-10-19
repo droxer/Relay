@@ -89,7 +89,10 @@ describe("reviewed design regressions", () => {
     const nav = readWeb("src/components/SideNav.tsx");
     const responsive = readWeb("src/styles/responsive.css");
 
-    assert.match(responsive, /\.sidenav-secondary-item\s*\{[^}]*display:\s*none\s*!important/s);
+    // Hidden by specificity, not !important: shell + panel + button class
+    // outranks every `.sidenav-btn` display rule in sidenav.css.
+    assert.match(responsive, /\.messenger-shell \.sidenav-panel \.sidenav-btn\.sidenav-secondary-item[^{]*\{[^}]*display:\s*none;/s);
+    assert.doesNotMatch(responsive, /\.sidenav-secondary-item[^{]*\{[^}]*!important/s);
 
     // The secondary destinations live in the More sheet. They used to be
     // hand-repeated <a className="sidenav-more-item"> blocks; they are

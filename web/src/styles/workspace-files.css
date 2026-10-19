@@ -12,41 +12,18 @@
   flex-direction: column;
 }
 
-/* The Artifacts / Activity switch heading the browse pane — a segmented
-   control, not section tabs: it changes which area of one workspace is on
-   screen, and the path bar below still names the folder. Same language as
-   .code-view-toggle so the browser reads as one control family. */
+/* The Artifacts / Activity switch heading the browse pane. It switches
+   which area of one workspace is on screen, so it wears the section-tab
+   recipe (workspace.css .workspace-files-tab) rather than a segmented
+   toggle; this row only seats it in the pane's gutter on the hairline the
+   active tab's rule overlaps. */
 .workspace-files-tabs {
-  display: inline-flex;
-  align-self: flex-start;
-  margin: var(--sp-2) var(--sp-4) 0;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  overflow: hidden;
-}
-
-.workspace-files-tab {
-  min-height: var(--control-h-2xs);
-  padding: 0 var(--sp-3);
-  border: 0;
-  background: var(--surface-0);
-  color: var(--ink-3);
-  cursor: pointer;
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-}
-
-.workspace-files-tab + .workspace-files-tab {
-  border-left: 0.5px solid var(--line-1);
-}
-
-.workspace-files-tab:hover {
-  color: var(--ink-1);
-}
-
-.workspace-files-tab.is-active {
-  background: var(--surface-2);
-  color: var(--ink-1);
+  display: flex;
+  align-self: stretch;
+  align-items: stretch;
+  gap: var(--sp-5);
+  padding: 0 var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
 }
 
 /* One toolbar carries scope, location, thread, and source. It replaced four
@@ -56,7 +33,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
-  min-height: 42px;
+  /* One dense control row plus the bar's own block padding. */
+  min-height: calc(var(--control-h-xs) + 2 * var(--sp-2));
   border-bottom: 0.5px solid var(--line-1);
   padding: var(--sp-2) var(--sp-4);
 }
@@ -130,7 +108,7 @@
 
 .workspace-path-segment:hover {
   color: var(--ink-1);
-  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  background: var(--row-hover);
 }
 
 .workspace-path-segment.is-current {
@@ -274,7 +252,9 @@
   min-height: var(--control-h-xs);
   border: 0;
   border-bottom: 0.5px solid var(--line-2);
-  background: color-mix(in srgb, var(--surface-1) 55%, var(--surface-0));
+  /* Opaque on purpose: this row is sticky over the scrolling list, so it
+     takes a solid surface rung rather than a wash the names show through. */
+  background: var(--surface-1);
   padding: 0 var(--sp-4);
   color: var(--ink-3);
   cursor: pointer;
@@ -285,7 +265,8 @@
 
 .workspace-file-up:hover {
   color: var(--ink-1);
-  background: color-mix(in srgb, var(--surface-1) 80%, var(--surface-0));
+  /* The shared hover wash, layered over the same opaque rung. */
+  background: linear-gradient(var(--row-hover), var(--row-hover)), var(--surface-1);
 }
 
 /* ---- preview pane --------------------------------------------------- */

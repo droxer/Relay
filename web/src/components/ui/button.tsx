@@ -7,7 +7,7 @@ import { NavRefresh } from "@/components/icons"
 import { Tooltip } from "@/components/ui/tooltip"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -18,7 +18,7 @@ const buttonVariants = cva(
            spends most of its life disabled (admin Settings' Save is disabled
            until its field is dirty). */
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-active disabled:opacity-100 disabled:border-(--line-1) disabled:bg-(--surface-2) disabled:text-(--ink-4)",
+          "bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-100 disabled:border-(--line-1) disabled:bg-(--surface-2) disabled:text-(--ink-4)",
         /* The neutral tiers wash with --control-fill rather than --surface-2.
            See the role's note in roles.css: a fixed surface step only lifts on
            the one plane it was sized against, and inverted on the --surface-3
@@ -42,7 +42,7 @@ const buttonVariants = cva(
            is kept alongside the hue so the variant survives forced-colors
            mode, where the red is dropped. */
         destructive:
-          "border-destructive/45 text-destructive hover:border-destructive hover:bg-destructive hover:text-destructive-foreground focus-visible:border-destructive focus-visible:[outline:var(--focus-outline-danger)] focus-visible:[outline-offset:var(--focus-offset)] disabled:opacity-100 disabled:border-(--line-1) disabled:text-(--ink-4)",
+          "border-destructive/45 text-destructive hover:border-destructive hover:bg-destructive hover:text-destructive-foreground focus-visible:border-destructive disabled:opacity-100 disabled:border-(--line-1) disabled:text-(--ink-4)",
         /* Circular icon-only action — the source system's 40px button-icon-circular:
            ink-3 idle; a control wash + line-2 + ink-1 on hover. Always paired
            with the `icon` (--control-h) / `icon-dense` (--control-h-xs) sizes.
@@ -99,7 +99,7 @@ const buttonVariants = cva(
          both are set (a tinted icon button that is destructive reads --err,
          not --action). */
       danger: {
-        true: "hover:border-(--err) hover:bg-[color-mix(in_srgb,var(--err)_10%,transparent)] hover:text-(--err) focus-visible:border-(--err) focus-visible:text-(--err) focus-visible:[outline:var(--focus-outline-danger)] focus-visible:[outline-offset:var(--focus-offset)]",
+        true: "hover:border-(--err) hover:bg-[color-mix(in_srgb,var(--err)_10%,transparent)] hover:text-(--err) focus-visible:border-(--err) focus-visible:text-(--err)",
         false: "",
       },
     },

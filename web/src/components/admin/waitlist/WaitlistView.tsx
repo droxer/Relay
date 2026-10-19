@@ -75,7 +75,7 @@ export function WaitlistView({ waitlistOpen, invites, onInvited, onDismissInvite
       ) : null}
 
       {!queue.loaded ? (
-        <div className="adm-loading" role="status">{t("admin.loading")}</div>
+        <div className="route-loading" role="status" aria-live="polite">{t("admin.loading")}</div>
       ) : queue.empty ? (
         <RelayEmptyState
           className="adm-users-empty"

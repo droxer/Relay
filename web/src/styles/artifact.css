@@ -40,7 +40,7 @@
 .artifact-chip-icon {
   display: grid;
   place-items: center;
-  width: 28px;
+  width: var(--control-h-xs);
   height: var(--control-h-xs);
   color: var(--ink-3);
 }
@@ -137,12 +137,17 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* Diff lines take the shared status tint (--tone-tint, 8% of the local
+   --tone) instead of a hand-mixed 16% plate; the sign column and the ink
+   carry the add/remove reading. */
 .artifact-diff-line.is-add {
-  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  --tone: var(--ok);
+  background: var(--tone-tint);
   color: color-mix(in srgb, var(--ok) 65%, var(--ink-1));
 }
 .artifact-diff-line.is-del {
-  background: color-mix(in srgb, var(--err) 16%, transparent);
+  --tone: var(--err);
+  background: var(--tone-tint);
   color: color-mix(in srgb, var(--err) 65%, var(--ink-1));
 }
 .artifact-diff-line.is-hunk {
@@ -275,6 +280,8 @@
   position: absolute;
   inset-block: 0;
   left: 0;
+  /* One-off panel width: wide enough for a file name and its date column,
+     narrow enough to leave the preview it overlays visible. */
   width: 280px;
   display: flex;
   flex-direction: column;
@@ -374,6 +381,7 @@
 }
 
 .artifact-index-row {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   height: auto;
@@ -394,18 +402,14 @@
   background: var(--row-hover);
 }
 
-/* Recessed well only — the thread space row's selected state. It also drew
-   the leading accent bar: wash + bar is the doubled chrome the flat pass
-   removed everywhere else. */
-.artifact-index-row.is-active {
-  background: var(--surface-2);
-}
-
+/* Selection is `.rail-row` (tokens/base.css) — the selection wash plus the
+   leading bar, the one selected-row language; the row is its positioned
+   ancestor. */
 
 .artifact-index-row-icon {
   display: grid;
   place-items: center;
-  width: 28px;
+  width: var(--control-h-xs);
   height: var(--control-h-xs);
   border-radius: var(--r-2);
   /* The thread space row's tile: a neutral wash, with --info on the glyph

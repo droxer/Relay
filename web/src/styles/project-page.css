@@ -143,7 +143,8 @@
 
 .project-member-tile-head {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  /* The column is the agent mark's own size (.agent-state below). */
+  grid-template-columns: var(--avatar-md) minmax(0, 1fr);
   align-items: center;
   column-gap: var(--sp-3);
   min-width: 0;

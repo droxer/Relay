@@ -26,10 +26,10 @@
 
 /* One header step across both columns, so the rail's identity block and the
    open skill's header draw one rule across the page. The section rail gave
-   the library this (--sec-header-h) while it was a settings section; as a
-   page of its own it has to claim it here. */
+   the library this step while it was a settings section; as a page of its
+   own it reads the same root token. */
 .skills-page .page-header {
-  min-height: calc(var(--header-h) + var(--sp-3));
+  min-height: var(--sec-header-h);
 }
 
 /* Rail shell, on the .agents-roster recipe: the shared list elevation between
@@ -173,12 +173,21 @@
   margin-top: var(--sp-7);
 }
 
-/* Section titles, on the drawer's own section-title role. */
-.skill-detail-body h3,
-.skill-drawer h3 {
+/* Section titles in the detail pane: the structural micro label. */
+.skill-detail-body h3 {
   margin: 0 0 var(--sp-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
+  color: var(--ink-3);
+}
+
+/* Section titles in a skill DRAWER take the drawers' section-title role
+   (.adm-provision-section-title / .adm-form-legend), so the share and
+   publish drawers title their groups like every other drawer. */
+.skill-drawer h3 {
+  margin: 0 0 var(--sp-2);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-3);
 }
 
@@ -264,47 +273,9 @@
   min-width: 260px;
 }
 
-/* Segmented control and drawer tabs, on the .adm-profile-segment recipe: a
-   recessed track, and an active chip drawn by a hairline inset rather than a
-   drop shadow — this system's elevation is --shadow-2, a 0.5px ring. */
-.skill-segment,
-.skill-tabs {
-  display: flex;
-  gap: var(--sp-0-5);
-  padding: var(--sp-0-5);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-}
-
-.skill-segment button,
-.skill-tabs button {
-  flex: 1;
-  height: var(--control-h-sm);
-  padding: 0 var(--sp-3);
-  border: 0;
-  border-radius: var(--r-1);
-  background: transparent;
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-
-.skill-segment button:hover,
-.skill-tabs button:hover {
-  color: var(--ink-1);
-}
-
-.skill-segment button.active,
-.skill-tabs button.active {
-  background: var(--surface-0);
-  color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-1);
-}
+/* The visibility and source choices are the shared segmented control,
+   .adm-profile-segment / .adm-profile-segment-btn (admin-v2-provision.css),
+   not a copy of it: both are a two-way choice the form submits. */
 
 /* A flex column, not a grid: this element IS the drawer body (the Drawer
    primitive appends the class), so `flex: 1` from .adm-drawer-body already
@@ -316,25 +287,8 @@
   gap: var(--sp-6);
 }
 
-/* Pinned action bar, on the .adm-form-actions recipe: the negative margins
-   cancel the drawer body's padding so the bar full-bleeds to the panel edges
-   instead of letting content scroll past it on both sides. */
-.skill-drawer > footer {
-  position: sticky;
-  bottom: calc(-1 * var(--sp-7));
-  z-index: 1;
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--sp-3);
-  /* `auto` top: anchor to the panel's bottom edge when the form is short.
-     The negative sides and bottom cancel the body's padding so the bar
-     full-bleeds, as .adm-form-actions does. */
-  margin: auto calc(-1 * var(--sp-7)) calc(-1 * var(--sp-7));
-  padding: var(--sp-4) var(--sp-7);
-  border-top: 0.5px solid var(--line-1);
-  background: var(--surface-3);
-  align-items: center;
-}
+/* The pinned action bar is the shared .adm-form-actions class itself
+   (admin-v2-drawers.css), not a copy of it. */
 
 /* Share targets: one compact checklist row for scope, teams, and agents —
    checkbox, name, and a muted fact on the trailing edge. No frame per row;
@@ -428,7 +382,8 @@
   width: 100%;
   min-height: var(--control-h);
   padding: var(--sp-2) var(--sp-3);
-  border: 1px dashed var(--control-border);
+  /* The one dashed empty-well border. */
+  border: var(--well-dashed);
   border-radius: var(--r-2);
   background: var(--field-on-overlay);
   font: var(--type-body-sm);
@@ -440,8 +395,8 @@
 .skill-file-input[data-filled="true"] {
   border-style: solid;
   /* Firms on solidify: the dashed empty state stays quiet, the ready well
-     takes the hover-strength edge so the state change reads at a glance. */
-  border-color: var(--control-border-hover);
+     takes the text-field edge so the state change reads at a glance. */
+  border-color: var(--field-border);
   color: var(--ink-1);
 }
 
@@ -449,11 +404,11 @@
   height: var(--control-h-sm);
   margin-right: var(--sp-3);
   padding: 0 var(--sp-3);
-  /* 1px, not 0.5px: --control-border is translucent ink now, and a sub-pixel
-     translucent edge renders as nothing. Matches the outline-button recipe. */
-  border: 1px solid var(--control-border);
+  /* The outline-button recipe (ui/button.tsx `outline`): the hairline
+     --control-border edge, transparent at rest, washed on hover. */
+  border: var(--sp-hairline) solid var(--control-border);
   border-radius: var(--r-2);
-  background: var(--control-fill);
+  background: transparent;
   color: var(--ink-1);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
@@ -462,7 +417,7 @@
 }
 
 .skill-file-input:hover::file-selector-button {
-  background: var(--control-fill-hover);
+  background: var(--control-fill);
   border-color: var(--control-border-hover);
 }
 

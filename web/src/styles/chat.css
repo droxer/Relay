@@ -41,8 +41,9 @@
   display: none;
 }
 
+/* Square — an avatar is a circle or a square tile, never a 36×32 oblong. */
 .chat-title .user-avatar {
-  width: 36px;
+  width: var(--control-h-sm);
   height: var(--control-h-sm);
   font-size: var(--fs-3);
 }
@@ -189,20 +190,8 @@
 }
 
 /* Inline count chip on the pill. Neutral, because it reports how much is in
-   there — a filled ink badge read as an unseen-notification signal. */
-.chat-artifacts-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 var(--sp-1);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: var(--fs-1);
-  font-weight: 500;
-  line-height: var(--leading-none);
-}
+   there — a filled ink badge read as an unseen-notification signal. The
+   recipe is the shared count chip in list-group.css (.list-group-count). */
 
 /* Flat landing: the canvas stays plain — the empty state composes itself
    with type and spacing, not an ambient wash. */
@@ -525,8 +514,10 @@
 }
 
 /* The user's turn is Markdown too (MessageBlock), so markdown.css owns the
-   blocks inside it; this rule sets the voice — one weight heavier than the
-   agent's prose — and keeps a pasted URL from widening the column.
+   blocks inside it; this rule sets the voice — the same 400 prose weight as
+   the agent's text (the turn's alignment and plate already say who spoke; a
+   500 stacked on the raw rung made every user turn read as a heading) — and
+   keeps a pasted URL from widening the column.
    No `white-space: pre-wrap`: remark-breaks already keeps typed line breaks,
    and pre-wrap would double the blank line between Markdown blocks. */
 .msg-user .user-text {
@@ -534,7 +525,7 @@
   color: var(--ink-1);
   /* Tracks .agent-text — both transcript voices read at one size. */
   font-size: var(--fs-transcript);
-  font-weight: 500;
+  font-weight: 400;
   line-height: var(--leading-transcript);
   word-break: break-word;
 }
@@ -799,7 +790,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  height: 26px;
+  /* The footer's dense control rung, so the usage line centres on the same
+     row as the icon actions beside it. */
+  height: var(--control-h-xs);
   padding: 0;
   border: none;
   background: none;
@@ -947,6 +940,8 @@
   align-items: center;
   gap: var(--sp-1-5);
   min-width: 0;
+  /* The one chip height (it read 17px, the line box of its label). */
+  min-height: var(--chip-h);
   color: var(--ink-2);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);

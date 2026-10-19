@@ -227,7 +227,7 @@ export function ShareSkillDrawer({
             {error}
           </p>
         ) : null}
-        <footer>
+        <footer className="adm-form-actions">
           {/* The one requirement, stated beside the button it gates. In the
               body it vanished on the first pick and shifted every row up. */}
           {!selected.length ? (

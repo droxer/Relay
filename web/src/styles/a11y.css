@@ -224,37 +224,8 @@
   }
 }
 
-/* OS “increase contrast” — boost hairlines and body copy. */
-@media (prefers-contrast: more) {
-  /* The neutral button tiers (secondary, ghost, outline, icon) rest at a low
-     wash by design — the label carries the contrast and the fill states the
-     hit area quietly. That is right for a flat, low-chrome system, and it is
-     exactly the cue a user asking for more contrast wants made explicit, so
-     raise both the rest fill and the hover step well clear of the 8%/16%
-     default rather than a token step above it. Register-agnostic: --ink-1
-     flips with the theme, so this lightens on dark and darkens on light
-     without a second declaration. */
-  :root {
-    --control-fill: color-mix(in srgb, var(--ink-1) 20%, transparent);
-    --control-fill-hover: color-mix(in srgb, var(--ink-1) 36%, transparent);
-  }
-
-  html[data-theme="light"] {
-    --ink-2: var(--ink-1);
-    --line-1: color-mix(in srgb, var(--ink-1) 42%, var(--surface-0));
-    --line-2: color-mix(in srgb, var(--ink-1) 28%, var(--surface-0));
-    --focus-w: 3px;
-    --focus-outline: var(--focus-w) solid var(--ink-1);
-  }
-
-  html[data-theme="dark"] {
-    --ink-2: color-mix(in srgb, var(--dark-ink) 92%, var(--dark-surface));
-    --line-1: color-mix(in srgb, var(--dark-ink) 38%, var(--dark-surface));
-    --line-2: color-mix(in srgb, var(--dark-ink) 26%, var(--dark-surface));
-    --focus-w: 3px;
-    --focus-outline: var(--focus-w) solid var(--dark-ink);
-  }
-}
+/* OS “increase contrast” token overrides live with the tokens, in
+   roles.css — the focus ring's high-contrast variant included. */
 
 /* The switch's pseudo-element supplies a 44px hit target around its compact
    36×20px drawing. Growing the track itself distorts the thumb geometry. */

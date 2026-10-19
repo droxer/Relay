@@ -5,6 +5,8 @@
 
 /* ---- popover -------------------------------------------------------- */
 
+/* Popover measure: the status line, next move, and history rows read at
+   this width; it is a one-off panel width, not grid geometry. */
 .task-status-popover {
   width: 320px;
   padding: var(--sp-3) var(--sp-4) var(--sp-4);

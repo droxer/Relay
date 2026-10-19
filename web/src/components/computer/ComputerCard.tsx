@@ -112,6 +112,7 @@ export function ComputerCard({
             <NodePresence node={node} t={t} withLabel />
             {showStatus ? (
               <TonePill
+                className="adm-status-plain"
                 tone={statusTone(status)}
                 label={t(`status.${status}`, { defaultValue: status })}
                 live={statusTone(status) === "info"}

@@ -87,9 +87,12 @@
   color: var(--ink-4);
 }
 
+/* Every KPI and metric numeral reads --type-number (22px/500, tightened):
+   the tile, the node-status stat, the channel metric. A number has one size
+   and weight app-wide. */
 .adm-dash-tile-value {
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
+  font: var(--type-number);
+  letter-spacing: var(--type-number-track);
   color: var(--ink-1);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
@@ -221,6 +224,7 @@
   width: 100%;
   height: auto;
   display: block;
+  /* Chart geometry: plot heights have no token rung, by design. */
   max-height: 220px;
 }
 
@@ -240,6 +244,7 @@
    evidence, not the headline — at full height its solid bars outweighed the
    thread trend and the fleet readout combined. */
 .adm-dash-token-chart {
+  /* Chart geometry (no token rung). */
   min-height: 110px;
   max-height: 140px;
 }
@@ -282,9 +287,10 @@
   gap: var(--sp-1-5);
 }
 
+/* A legend SWATCH, so square-ish rather than a status dot, at the --dot size. */
 .adm-token-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: var(--r-1);
   display: inline-block;
 }
@@ -295,6 +301,7 @@
 
 .adm-dash-empty {
   position: relative;
+  /* Holds the chart's own geometry while it has no data (no token rung). */
   min-height: 180px;
   max-height: 220px;
 }
@@ -355,6 +362,7 @@
 .adm-dash-bar {
   display: flex;
   width: 100%;
+  /* Chart geometry (a bar, not a dot — it must not read the dot scale). */
   height: 8px;
   border-radius: var(--r-full);
   background: var(--line-2);
@@ -417,8 +425,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1-5);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  /* The metric-label role, shared with .adm-chat-metric-label and
+     .adm-user-stat-label: a structural label, so --type-micro. */
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
   margin: 0;
 }
@@ -466,11 +476,9 @@
 
 .adm-dash-stat-value {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-5);
-  font-weight: 500;
+  font: var(--type-number);
+  letter-spacing: var(--type-number-track);
   line-height: var(--leading-none);
-  letter-spacing: var(--track-display);
   color: var(--ink-1);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
@@ -496,7 +504,9 @@
 
 .adm-dash-top-row {
   display: grid;
-  grid-template-columns: 1.25rem 28px minmax(0, 1fr) auto;
+  /* The avatar column is the UserAvatar it holds (AVATAR.md, 32px); it was
+     a 28px column that the avatar overflowed. */
+  grid-template-columns: 1.25rem var(--avatar-md) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
 }
@@ -517,11 +527,11 @@
 }
 
 .adm-dash-top-count {
-  /* A 16px numeral is not the display tier — weight and tabular figures
-     carry it; tightening is reserved for the 24px rung. */
-  font-size: var(--fs-3);
-  font-weight: 700;
-  letter-spacing: var(--track-0);
+  /* A LIST count, not a KPI: it reads at the row's own name role (14px/500)
+     with tabular figures, so it ranks beside the name rather than shouting
+     over it. KPI numerals take --type-number. */
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   color: var(--ink-1);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
@@ -565,13 +575,6 @@
 
   .adm-dash-tile {
     padding: var(--sp-4);
-  }
-
-  .adm-dash-tile-value {
-    /* Dropped onto the 24px rung the numeral joins the number tier
-       (--type-number), whose tracking is the tightened --track-display. */
-    font-size: var(--fs-5);
-    letter-spacing: var(--track-display);
   }
 
   /* Compact viewports drop a card to the `compact` padding tier. Scoped to

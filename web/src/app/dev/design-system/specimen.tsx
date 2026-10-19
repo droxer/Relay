@@ -206,20 +206,20 @@ export function DesignSystemSpecimen() {
       </RadioGroup>
       {/* The unstyled skin: semantics only, the caller draws the selected shape. */}
       <RadioGroup value={mode} onValueChange={(value) => setMode(String(value))} aria-label="Example radio choices" className="flex">
-        <RadioGroupChoice value="action" className="rounded-md border border-hairline px-3 py-1.5 text-sm data-checked:border-hairline-strong data-checked:bg-surface-strong">Action</RadioGroupChoice>
-        <RadioGroupChoice value="review" className="rounded-md border border-hairline px-3 py-1.5 text-sm data-checked:border-hairline-strong data-checked:bg-surface-strong">Review</RadioGroupChoice>
+        <RadioGroupChoice value="action" className="rounded-md border border-hairline px-3 py-1.5 text-sm data-checked:border-hairline-strong data-checked:bg-surface-recessed">Action</RadioGroupChoice>
+        <RadioGroupChoice value="review" className="rounded-md border border-hairline px-3 py-1.5 text-sm data-checked:border-hairline-strong data-checked:bg-surface-recessed">Review</RadioGroupChoice>
       </RadioGroup>
     </Section>
 
     <Section title="Toggle group">
       <ToggleGroup value={[view]} onValueChange={(value) => setView((value[0] as "preview" | "source") ?? "preview")} aria-label="Example view switch">
-        <ToggleGroupItem value="preview" className="rounded-md px-3 py-1.5 text-sm data-pressed:bg-surface-strong">Preview</ToggleGroupItem>
-        <ToggleGroupItem value="source" className="rounded-md px-3 py-1.5 text-sm data-pressed:bg-surface-strong">Source</ToggleGroupItem>
+        <ToggleGroupItem value="preview" className="rounded-md px-3 py-1.5 text-sm data-pressed:bg-surface-recessed">Preview</ToggleGroupItem>
+        <ToggleGroupItem value="source" className="rounded-md px-3 py-1.5 text-sm data-pressed:bg-surface-recessed">Source</ToggleGroupItem>
       </ToggleGroup>
     </Section>
 
     <Section title="Search input">
-      <SearchInput className="flex items-center gap-2 rounded-md border border-input px-3 hover:border-(--control-border-hover)" inputClassName="h-(--control-h-sm) bg-transparent text-sm outline-none" label="Example search" placeholder="Example search" />
+      <SearchInput className="flex items-center gap-2 rounded-md border border-field px-3 hover:border-field-hover" inputClassName="h-(--control-h-sm) bg-transparent text-sm outline-none" label="Example search" placeholder="Example search" />
     </Section>
 
     {/* ---- Disclosure and navigation ---- */}
@@ -243,8 +243,8 @@ export function DesignSystemSpecimen() {
     <Section title="Tabs">
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="flex min-w-0 flex-col gap-3">
         <TabsList className="gap-1" aria-label="Example tabs">
-          <TabsTrigger value="first" className="rounded-md px-3 py-1.5 text-sm data-selected:bg-surface-strong">First</TabsTrigger>
-          <TabsTrigger value="second" className="rounded-md px-3 py-1.5 text-sm data-selected:bg-surface-strong">Second</TabsTrigger>
+          <TabsTrigger value="first" className="rounded-md px-3 py-1.5 text-sm data-selected:bg-surface-recessed">First</TabsTrigger>
+          <TabsTrigger value="second" className="rounded-md px-3 py-1.5 text-sm data-selected:bg-surface-recessed">Second</TabsTrigger>
         </TabsList>
         <TabsContent value="first" className="text-sm text-body">First panel</TabsContent>
         <TabsContent value="second" className="text-sm text-body">Second panel</TabsContent>
@@ -314,7 +314,7 @@ export function DesignSystemSpecimen() {
       <div className="flex w-full flex-col gap-3">
         <span className="text-sm text-body">Grows inline-end: {endWidth}px</span>
         <ResizeHandle
-          className="h-4 w-full cursor-col-resize rounded-sm bg-surface-strong"
+          className="h-4 w-full cursor-col-resize rounded-sm bg-surface-recessed"
           label="Grows inline-end"
           width={endWidth}
           min={100}
@@ -328,7 +328,7 @@ export function DesignSystemSpecimen() {
         />
         <span className="text-sm text-body">Grows inline-start: {startWidth}px</span>
         <ResizeHandle
-          className="h-4 w-full cursor-col-resize rounded-sm bg-surface-strong"
+          className="h-4 w-full cursor-col-resize rounded-sm bg-surface-recessed"
           label="Grows inline-start"
           width={startWidth}
           min={100}

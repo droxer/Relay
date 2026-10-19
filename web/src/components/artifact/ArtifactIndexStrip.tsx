@@ -181,7 +181,8 @@ export function ArtifactIndexStrip({
               <Button variant="ghost"
                 key={a.id}
                 type="button"
-                className={`artifact-index-row${a.id === selectedId ? " is-active" : ""}`}
+                className="artifact-index-row rail-row"
+                data-selected={a.id === selectedId ? "true" : undefined}
                 data-kind={a.kind}
                 aria-current={a.id === selectedId || undefined}
                 onClick={() => onSelect(a.id)}

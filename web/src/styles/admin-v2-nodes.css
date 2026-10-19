@@ -14,10 +14,12 @@
    remains here are the inner cell vocabularies. ─────────────────────── */
 
 /* Column tracks for the per-band node tables. Lengths, not scale steps —
-   the design grid bans arbitrary bracket values in component classes. */
+   the design grid bans arbitrary bracket values in component classes.
+   FLOORS (min-width), not fixed widths: a header that runs longer in zh-CN
+   or a longer English string widens its column instead of clipping. */
 .adm-node-col-identity { min-width: 200px; }
 .adm-node-col-user { min-width: 120px; }
-.adm-node-col-actions { width: 11rem; }
+.adm-node-col-actions { min-width: 11rem; }
 
 .adm-node-row-id {
   display: flex;
@@ -122,9 +124,8 @@
   background: var(--surface-2);
   box-shadow: inset 0 0 0 0.5px var(--line-2);
   color: var(--ink-1);
-  font: var(--type-micro);
-  font-weight: 700;
-  letter-spacing: 0;
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 .adm-node-owner-name {
@@ -149,7 +150,7 @@
 .adm-node-owner:not([data-owner="user"]) .adm-node-owner-mark {
   background: transparent;
   box-shadow: none;
-  border: 1px dashed var(--line-2);
+  border: var(--well-dashed);
   color: var(--ink-3);
 }
 
@@ -172,7 +173,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  padding: var(--sp-4);
+  /* The card recipe (ui/card.tsx): --sp-5 padding on the --surface-1 card
+     plane — the same as /computers' .computer-card, the same entity. */
+  padding: var(--sp-5);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
@@ -400,8 +403,8 @@
   position: relative;
   display: inline-flex;
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: var(--dot);
+  height: var(--dot);
 }
 
 /* The dot itself: offline is a hollow ring, online fills in. */
@@ -438,18 +441,27 @@
 /* Geometry and the hairline are the neutral Badge variant's — this rule used
    to restate all of it. The badge is already on the CONTROL corner (--r-2, not
    a lozenge: see badge.tsx), so the note that used to live here is upstream
-   now. What stays is the presence readout's own voice: the micro tracking,
-   a wider gap for the dot, and the fixed 20px the node rows align on. */
+   now. What stays is the presence readout's own voice: the micro tracking
+   and a wider gap for the dot; the height is the Badge's --chip-h.
+
+   .adm-status-plain is the same dot + text treatment for the lifecycle
+   status (Running, Provisioning, Failed) where it replaces presence on a
+   computer card: one status readout, one drawing — not a dot+text "Online"
+   beside a tinted "Running" pill. */
 /* Sentence case, like every other status pill in the app (Ready, Busy,
    Failed). Shouting one state in caps makes presence read as the loudest
    fact on a computer card when it is the most ordinary one, and it left this
    pill as the only capitalised one in the product. */
-.adm-presence-pill {
+.adm-presence-pill,
+.adm-status-plain {
   letter-spacing: var(--type-micro-track);
   gap: var(--sp-1-5);
   flex: none;
-  height: 20px;
   background: transparent;
+}
+
+.adm-status-plain {
+  color: var(--ink-1);
 }
 
 .adm-presence-pill[data-online="false"] {

@@ -177,7 +177,7 @@ function WaitlistForm({ onSubmitted }: { onSubmitted: () => void }) {
 
       <Button
         variant="default"
-        size="cta"
+        size="lg"
         type="submit"
         className="login-submit w-full"
         loading={isBusy}

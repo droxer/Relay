@@ -196,8 +196,8 @@ describe("record surface hygiene", () => {
     /* The record replaced a drawer and kept wearing its classes, so the
        sheet named for the retired surface styled the live one and any
        change to the form drawer silently restyled the record. The form
-       drawer's own three classes are the only ones left. */
-    const DRAWER_OWN = new Set(["task-drawer-form-grid", "task-drawer-next-run", "task-drawer-title-error"]);
+       drawer's own classes are the only ones left. */
+    const DRAWER_OWN = new Set(["task-drawer-form-grid", "task-drawer-title-error"]);
     for (const panel of [
       "RecordRuns.tsx", "RecordHistory.tsx", "RecordArtifacts.tsx",
       "RecordResultLine.tsx", "RecordWorkspace.tsx", "TaskRecordPage.tsx",

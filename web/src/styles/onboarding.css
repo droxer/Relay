@@ -43,7 +43,7 @@
   gap: var(--sp-2);
   height: var(--control-h-xs);
   padding: 0 var(--sp-3) 0 var(--sp-1-5);
-  border: 1px solid var(--line-1);
+  border: var(--sp-hairline) solid var(--line-1);
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-3);
@@ -67,7 +67,7 @@
   justify-content: center;
   width: var(--sp-5);
   height: var(--sp-5);
-  border: 1px solid var(--line-1);
+  border: var(--sp-hairline) solid var(--line-1);
   border-radius: var(--r-full);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -86,7 +86,9 @@
   text-wrap: balance;
 }
 
-.onboarding-title:focus { outline: none; }
+/* Focused programmatically on each step so a screen reader announces it;
+   a pointer-less programmatic focus needs no ring, keyboard focus keeps it. */
+.onboarding-title:focus:not(:focus-visible) { outline: none; }
 
 .onboarding-body {
   margin: 0;
@@ -135,7 +137,7 @@
   justify-content: center;
   width: var(--control-h-xs);
   height: var(--control-h-xs);
-  border: 1px solid var(--line-1);
+  border: var(--sp-hairline) solid var(--line-1);
   border-radius: var(--r-2);
   color: var(--ink-3);
 }
@@ -173,7 +175,7 @@
 .onboarding-footer {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
-  border-top: 1px solid var(--line-2);
+  border-top: var(--sp-hairline) solid var(--line-2);
 }
 
 .onboarding-link {
@@ -234,7 +236,7 @@ button.onboarding-starter {
   justify-content: space-between;
   gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--line-1);
+  border: var(--sp-hairline) solid var(--line-1);
   border-radius: var(--r-3);
 }
 

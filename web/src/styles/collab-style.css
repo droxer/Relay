@@ -14,15 +14,16 @@
 
 /* Team style is identity, not health: use ink/surface tokens, never live,
    warning or success colors. Glyphs stay consistent from roster to composer. */
+/* The chip plane every neutral chip shares (--control-fill, see badge.tsx);
+   the height is the Badge's --chip-h. Pipeline is told by its dashed edge. */
 .collab-style-badge {
   max-width: 100%;
   color: var(--ink-2);
-  background: var(--surface-2);
+  background: var(--control-fill);
 }
 
 .collab-style-badge[data-style="pipeline"] {
   border-style: dashed;
-  background: var(--surface-1);
 }
 
 .collab-style-badge[data-style="lead_led"] {
@@ -98,14 +99,17 @@
 
 .collab-style-option-art {
   align-self: flex-start;
-  width: 72px;
-  height: 40px;
+  /* The schematic's height sits on the --control-h-lg rung; its width keeps
+     the drawing's own proportion. */
+  height: var(--control-h-lg);
+  aspect-ratio: 72 / 40;
   padding: var(--sp-0-5) var(--sp-1);
 }
 
 .collab-style-card-art {
   width: 100%;
   aspect-ratio: 88 / 44;
+  /* Schematic geometry: no token rung sits at 72px. */
   max-height: 72px;
   padding: var(--sp-2) var(--sp-3);
 }
@@ -179,6 +183,8 @@
   /* Stacked, the art sits beside the words rather than above them. */
   .collab-style-card {
     display: grid;
+    /* The art column is drawing geometry (it holds no text), so a fixed
+       track cannot clip a translation; the words column is the flexible one. */
     grid-template-columns: 88px minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     column-gap: var(--sp-3);
@@ -216,8 +222,10 @@
 }
 
 .collab-style-summary > .collab-style-card-art {
-  width: 120px;
-  height: 64px;
+  /* Height on the --avatar-2xl rung; width keeps the drawing's proportion. */
+  width: auto;
+  height: var(--avatar-2xl);
+  aspect-ratio: 120 / 64;
   padding: var(--sp-1) var(--sp-2);
 }
 

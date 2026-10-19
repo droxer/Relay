@@ -18,9 +18,9 @@
      floating chrome (drawers, dialogs, menus, sticky summaries) adds only the
      hairline ring so its edge stays crisp over the content below it. No drop
      shadows anywhere: in a flat system a blur is faux depth, and it was the
-     only one in the app. */
-  --shadow-1: none;
-  --shadow-2: 0 0 0 0.5px var(--line-1);
+     only one in the app. The ring is therefore the only elevation role; a
+     surface that wants no edge simply declares none. */
+  --shadow-2: 0 0 0 var(--sp-hairline) var(--line-1);
 
   /* Row wash under the pointer. Translucent INK, not a surface step — the
      same fix --control-fill below documents. Mixed from --surface-1 (60%),
@@ -70,6 +70,15 @@
   --control-border: color-mix(in srgb, var(--ink-1) 16%, transparent);
   --control-border-hover: color-mix(in srgb, var(--ink-1) 30%, transparent);
 
+  /* Text-field boundary (input, textarea, select trigger). A field, unlike an
+     outline button, has no label INSIDE it to identify it, so its edge is the
+     visual information WCAG 1.4.11 asks to hold 3:1 against the plane. The 16%
+     control border measured 1.39–1.60:1. --field-border-strength (palette.css)
+     is set per register: 42% clears 3.3:1 on every dark plane and 50% clears
+     3.27:1 on every light one. Hover firms it toward the ink. */
+  --field-border: color-mix(in srgb, var(--ink-1) var(--field-border-strength), transparent);
+  --field-border-hover: color-mix(in srgb, var(--ink-1) calc(var(--field-border-strength) + 16%), transparent);
+
   /* Unchecked checkbox / radio / switch track. These have no label-sized
      body to identify them, so the boundary IS the control: it keeps the
      3:1 floor against every surface (WCAG 1.4.11). */
@@ -110,6 +119,23 @@
      to answer this question in opposite ways). */
   --field-on-overlay: var(--surface-0);
 
+  /* The section-header step: one --sp-3 below the app header, shared by the
+     sec-* rails (/admin, /settings) and the skills library so their header
+     rows line up. Declared at the root so a page outside .sec-shell can read
+     it instead of re-deriving the calc. */
+  --sec-header-h: calc(var(--header-h) + var(--sp-3));
+
+  /* One chip height. Status pills, agent and computer chips, presence pills
+     and placement badges are the same object — a token-sized label in a row —
+     and they had drifted to 20, 24 and 28px, plus the Badge primitive that
+     took its height from padding. A chip is the 2xs control. */
+  --chip-h: var(--control-h-2xs);
+
+  /* The edge of an empty well — a dashed frame that says "something goes
+     here". Four recipes had grown (line-2, ink-4, two line-1/ink mixes); the
+     dash is 1px because a 0.5px dash rasterises as a dotted grey smear. */
+  --well-dashed: 1px dashed var(--line-1);
+
   /* Focus — 2px ring at a 2px offset (WCAG 1.4.11), drawn with `outline`.
 
      OUTLINE, NOT BOX-SHADOW. A box-shadow ring is painted inside the nearest
@@ -121,8 +147,8 @@
 
      The ring is LINK BLUE rather than the accent action, so a focused
      primary button shows a ring that is visibly not more of its own fill;
-     --link clears 5.6:1 on every plane in both registers, well past the 3:1
-     indicator floor. The danger ring differs by BOTH colour (--err, the
+     --link clears 4.8:1 on every solid plane in both registers (and on the
+     selected-row wash), well past the 3:1 indicator floor. The danger ring differs by BOTH colour (--err, the
      critical red) and shape (dashed) — the shape half is kept from the
      monochrome era because forced-colors mode drops the hue and the dashed
      stroke survives it. */
@@ -183,14 +209,15 @@
      TEAM ROLE — so the quietest structure on a page was its loudest shape, and
      Han copy had no case to transform anyway. Micro keeps its size and weight;
      the dimmer ink, not the case, is what separates it from a label. The caps
-     track stays declared for any future caps role but nothing reads it. */
+     track is still read by the few genuinely uppercase marks (login and
+     preference monograms), not by micro. */
   --type-micro:        500 var(--fs-1)/var(--leading-caps) var(--font-sans);
-  --type-number:       500 var(--fs-5)/var(--leading-number) var(--font-display);
+  --type-number:       500 var(--fs-5)/var(--leading-tight) var(--font-display);
+  /* KPI and metric numerals — every dashboard tile, stat and project figure
+     reads this one role, so a number has one size and weight app-wide. */
   /* Code sizes to the mono face's metrics, not the sans ladder. --fs-code
-     (14px) sits two pixels under the 16px body rung: mono advances are wider
-     than sans at the same size, so 14px mono already occupies the column
-     width of ~16px sans. It shares its value with --fs-2 today by coincidence,
-     not by design — it has its own token so the sans ladder can move without
+     shares its 14px with the reading rung today by coincidence, not by
+     design — it has its own token so the sans ladder can move without
      dragging the code face with it. */
   --type-code:         400 var(--fs-code)/var(--leading-snug) var(--font-mono);
 
@@ -248,6 +275,40 @@
   --type-title-content-track: var(--track-display);
 }
 
+/* OS “increase contrast” — boost hairlines, body copy and the focus ring.
+   Moved here from a11y.css: these are token values, and the focus ring
+   contract keeps its high-contrast variant beside its default. */
+@media (prefers-contrast: more) {
+  /* The neutral button tiers (secondary, ghost, outline, icon) rest at a low
+     wash by design — the label carries the contrast and the fill states the
+     hit area quietly. That is right for a flat, low-chrome system, and it is
+     exactly the cue a user asking for more contrast wants made explicit, so
+     raise both the rest fill and the hover step well clear of the 8%/16%
+     default rather than a token step above it. Register-agnostic: --ink-1
+     flips with the theme, so this lightens on dark and darkens on light
+     without a second declaration. */
+  :root {
+    --control-fill: color-mix(in srgb, var(--ink-1) 20%, transparent);
+    --control-fill-hover: color-mix(in srgb, var(--ink-1) 36%, transparent);
+  }
+
+  html[data-theme="light"] {
+    --ink-2: var(--ink-1);
+    --line-1: color-mix(in srgb, var(--ink-1) 42%, var(--surface-0));
+    --line-2: color-mix(in srgb, var(--ink-1) 28%, var(--surface-0));
+    --focus-w: 3px;
+    --focus-outline: var(--focus-w) solid var(--ink-1);
+  }
+
+  html[data-theme="dark"] {
+    --ink-2: color-mix(in srgb, var(--dark-ink) 92%, var(--dark-surface));
+    --line-1: color-mix(in srgb, var(--dark-ink) 38%, var(--dark-surface));
+    --line-2: color-mix(in srgb, var(--dark-ink) 26%, var(--dark-surface));
+    --focus-w: 3px;
+    --focus-outline: var(--focus-w) solid var(--dark-ink);
+  }
+}
+
 /* CJK — reading roles want looser leading. */
 html:lang(zh-CN) {
   --type-body:   400 var(--fs-4)/var(--leading-normal) var(--font-sans);
@@ -261,4 +322,7 @@ html:lang(zh-CN) {
 *::before,
 *::after {
   --tone-line: color-mix(in srgb, var(--tone, var(--ink-1)) 35%, transparent);
+  /* The 8% status tint every badge, diff line and flagged row fills with.
+     Hand-mixed at 7, 8, 13 and 16% across the surface sheets before. */
+  --tone-tint: color-mix(in srgb, var(--tone, var(--ink-1)) 8%, transparent);
 }

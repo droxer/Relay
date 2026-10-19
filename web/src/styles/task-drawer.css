@@ -20,10 +20,6 @@
   }
 }
 
-.task-drawer-next-run {
-  grid-column: 1 / -1;
-}
-
 /* Assignment is the decision that determines whether a task can run. Give it
    the full drawer width and show the operational consequence immediately,
    instead of hiding agent/team readiness in a narrow select. */
@@ -64,7 +60,9 @@
      its padding only — no third line. Was a bare 66px. */
   min-height: calc(var(--avatar-lg) + 2 * var(--sp-3));
   border-style: dashed;
-  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  /* An empty well recedes to the page plane rather than a hand-mixed 78%
+     card surface. */
+  background: var(--surface-0);
 }
 
 .task-assignment-summary-mark {

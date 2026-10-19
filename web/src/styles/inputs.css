@@ -9,10 +9,9 @@
   gap: var(--sp-2);
   min-height: var(--control-h);
   padding: 0 var(--sp-2) 0 var(--sp-4);
-  /* --line-1, not --line-2: this is a CONTROL boundary, and a soft hairline
-     on a fill that is one small step from its plane left the field with no
-     visible edge in the light register. */
-  border: 0.5px solid var(--line-1);
+  /* A text field, so the text-field edge (--field-border, the 3:1 boundary
+     floor) the Input primitive's `border-field` also draws. */
+  border: var(--sp-hairline) solid var(--field-border);
   border-radius: var(--r-2);
   background: var(--surface-2);
   color: var(--ink-1);
@@ -36,7 +35,8 @@
   background: transparent;
   color: var(--ink-1);
   font-family: var(--font-sans);
-  font-size: var(--fs-3);
+  /* The one field text size, shared with the Input primitive (text-sm). */
+  font-size: var(--fs-2);
 }
 
 .relay-search input::placeholder,
@@ -44,6 +44,9 @@
   color: var(--ink-3);
 }
 
+/* The wrapper owns the ring (focus-within), drawn with the contract's own
+   values; the bare input inside sets `outline: 0` above, and inputs.css sits
+   after base.css in @layer relay, so only one ring is ever drawn. */
 .relay-search:focus-within,
 .adm-search:focus-within {
   border-color: var(--ink-4);

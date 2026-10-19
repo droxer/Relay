@@ -166,9 +166,10 @@
 }
 
 .create-agent-runtime-option.is-selected {
-  border-color: var(--action);
-  /* Selection is a sanctioned action job, but the wash ratio is the token's
-     (24%/16%), not a hand-mix. */
+  /* The one selected-card recipe (.adm-assign-node.selected in
+     admin-v2-drawers.css): the --action-soft wash and the --line-drag edge,
+     no full-strength action border. */
+  border-color: var(--line-drag);
   background: var(--action-soft);
 }
 
@@ -215,9 +216,10 @@
   letter-spacing: var(--type-label-track);
 }
 
+/* A radio indicator drawn as a ring, on the --dot-lg rung. */
 .create-agent-runtime-check {
-  width: 10px;
-  height: 10px;
+  width: var(--dot-lg);
+  height: var(--dot-lg);
   border: 0.5px solid var(--ink-4);
   border-radius: var(--r-full);
 }
@@ -479,7 +481,7 @@
    adds the `.copied` success state. */
 /* Nothing here paints the plate any more. `variant="default"` is the accent
    fill with --on-action ink, `size="dense"` is the --control-h-xs height and
-   the --r-2 corner, and the variant's own `hover:bg-primary-active` is the
+   the --r-2 corner, and the variant's own `hover:bg-primary-hover` is the
    hover this rule used to restate as --action-hover. All of it was written
    twice, and the class won by layer order — so the variant prop at the call
    site described a button the reader never saw.
@@ -505,13 +507,17 @@
   line-height: var(--leading-loose);
 }
 
+/* The inline empty well — ONE recipe shared with .adm-agents-empty and
+   .adm-assign-empty: the --well-dashed border, --r-3, --sp-4 pad, no fill,
+   supporting text in --ink-3. A page- or pane-level empty is RelayEmptyState;
+   this is the in-drawer / in-card size it has no variant for. */
 .adm-cred-empty {
   margin: 0;
   padding: var(--sp-4);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
-  border: 1px dashed var(--line-1);
+  border: var(--well-dashed);
   border-radius: var(--r-3);
   text-align: center;
   line-height: var(--leading-loose);
