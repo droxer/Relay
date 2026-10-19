@@ -9,6 +9,7 @@ import {
   ICON,
 } from "./icons";
 import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PresetAvatarGrid } from "./PresetAvatarGrid";
 import { isPresetAvatarUrl, type PresetAvatarKind } from "../lib/presetAvatars";
 
@@ -129,6 +130,12 @@ export function ProfileImagePicker({
     />
   );
 
+  /* Touch has no hover to hide the corner × behind, so it sat on the avatar
+     for good and read as "dismiss". Where the presets popover exists, the
+     remove action moves inside it beside Upload. */
+  const touch = useMediaQuery("(hover: none)");
+  const removeInPopover = Boolean(presets && imageUrl && touch);
+
   return (
     <div className="profile-image-picker">
       {editable ? (
@@ -191,6 +198,23 @@ export function ProfileImagePicker({
                       <ActionImage size={ICON.sm} />
                       {t("profile_image.upload")}
                     </Button>
+                    {removeInPopover ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        danger
+                        type="button"
+                        className="profile-image-presets-upload"
+                        disabled={disabled}
+                        onClick={() => {
+                          togglePresets(false);
+                          void removeImage();
+                        }}
+                      >
+                        <ActionRemove size={ICON.sm} />
+                        {t("profile_image.remove")}
+                      </Button>
+                    ) : null}
                   </PopoverPrimitive.Popup>
                 </PopoverPrimitive.Positioner>
               </PopoverPrimitive.Portal>
@@ -210,7 +234,7 @@ export function ProfileImagePicker({
               </span>
             </Button>
           )}
-          {imageUrl ? (
+          {imageUrl && !removeInPopover ? (
             <Button
               variant="ghost"
               danger

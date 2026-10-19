@@ -98,7 +98,7 @@ export function RoutineAssignButton({ onAssign }: { onAssign: () => void }) {
       variant="icon"
       size="icon-dense"
       type="button"
-      className="backlog-action-icon"
+      className="backlog-action-icon routine-assign-btn"
       onClick={onAssign}
       aria-label={t("backlog.assign_task")}
       title={t("backlog.assign_task")}
@@ -272,9 +272,14 @@ export function RoutineTable({
           const task = row.original;
           /* The title names what starts it, so an event automation's "—"
              still answers "why no next run?" on hover. */
+          /* With no next run, say why in words ("Paused", "On demand")
+             rather than a bare "—": the leading dot is the same fact as a
+             shape, and on a phone it was the only explanation the row had. */
           return (
             <span className="backlog-due-value" title={describeTriggers(triggersOf(task), s.t)}>
-              {formatNextRunAt(task.routineNextRunAt)}
+              {task.routineNextRunAt
+                ? formatNextRunAt(task.routineNextRunAt)
+                : s.t(`routine.states.${s.stateFor(task)}`)}
             </span>
           );
         }}</RoutineCells.Read>,

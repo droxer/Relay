@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Breadcrumb, type BreadcrumbItem } from "./Breadcrumb";
-import { MobileTopbarActions } from "./MobileTopbarSlot";
+import { MobileTopbarActions, useMobileTopbarTitle } from "./MobileTopbarSlot";
 
 export function PageHeader({
   title,
@@ -13,6 +13,7 @@ export function PageHeader({
   toolbar,
   actions,
   topbarActions = false,
+  topbarTitle,
   titleVariant = "default",
   titleAs = "h1",
   layout = "inline",
@@ -34,6 +35,10 @@ export function PageHeader({
    *  so its actions leave the bar. Off by default — record and drawer headers
    *  keep their actions in place. */
   topbarActions?: boolean | "inactive";
+  /** On a phone, name the record in the top bar instead of in a title row of
+   *  its own under it (record screens nested under a list: an agent, a
+   *  team). Plain text — the bar has room for a name, not the avatar. */
+  topbarTitle?: string;
   /** "display" is the 28px hero tier for page-owning nouns; "title" is the
    *  17px tier for a fixed UI noun heading a subordinate pane (the thread
    *  rail — same rung a drawer title takes); "record" is regular sans for a
@@ -46,6 +51,7 @@ export function PageHeader({
 }) {
   const stacked = layout === "stacked";
   const TitleTag = titleAs;
+  const barTitle = useMobileTopbarTitle(topbarTitle ?? "", topbarTitle !== undefined);
 
   return (
     <header
@@ -56,7 +62,10 @@ export function PageHeader({
     >
       <div className={cn("page-header-lead", stacked && "page-header-lead--stacked")}>
         {kicker ? <span className="page-header-kicker">{kicker}</span> : null}
-        <div className={cn("page-header-title-row", stacked && "page-header-title-row--wrap")}>
+        {barTitle}
+        {/* With the name in the top bar the row would only repeat it; it
+            stays in the DOM, visually hidden, as the pane's heading. */}
+        <div className={cn("page-header-title-row", stacked && "page-header-title-row--wrap", barTitle && "sr-only")}>
           {trail?.length ? <Breadcrumb items={trail} /> : null}
           <TitleTag
             className={cn(

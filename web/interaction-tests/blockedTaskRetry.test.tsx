@@ -40,7 +40,7 @@ it("marks delete as destructive and holds it while another action runs", () => {
   render(<TaskRecordActions task={blockedTask} variant="task" busyAction="retry"
     onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
     onEdit={vi.fn()} onDelete={onDelete} />);
-  const remove = screen.getByRole("button", { name: "backlog.delete_task" }) as HTMLButtonElement;
+  const remove = screen.getByRole("button", { name: "record.delete" }) as HTMLButtonElement;
   expect(remove.disabled).toBe(true);
   fireEvent.click(remove);
   expect(onDelete).not.toHaveBeenCalled();

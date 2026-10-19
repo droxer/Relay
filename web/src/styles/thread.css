@@ -203,6 +203,33 @@
   white-space: nowrap;
 }
 
+.project-folder-meta {
+  display: none;
+}
+
+@media (hover: none) {
+  .project-folder-select {
+    flex-wrap: wrap;
+    row-gap: var(--sp-1);
+  }
+
+  /* Under the name, aligned with it: the 14px icon plus the row gap. */
+  .project-folder-meta {
+    display: block;
+    order: 3;
+    flex: 1 0 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding-inline-start: calc(14px + var(--sp-2));
+    color: var(--ink-3);
+    font: var(--type-body-sm);
+    letter-spacing: var(--type-body-sm-track);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: start;
+  }
+}
+
 .project-folder-count {
   margin-left: auto;
   color: var(--ink-4);
@@ -588,6 +615,14 @@
     align-self: center;
     transform: none;
     padding-inline-end: var(--sp-1);
+  }
+
+  /* The one overflow glyph that holds rename and delete on touch
+     (ThreadRow). Sized by a11y.css with the other touch exceptions; here
+     only quiet ink, so the title and state stay the loudest things on it. */
+  .conversation-more-btn {
+    padding: 0;
+    color: var(--ink-3);
   }
 }
 

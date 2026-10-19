@@ -181,6 +181,14 @@
     letter-spacing: var(--type-title-track);
   }
 
+  .mobile-topbar-title-slot {
+    display: contents;
+  }
+
+  .mobile-topbar-heading:has(> .mobile-topbar-title-slot:not(:empty)) > .mobile-topbar-title {
+    display: none;
+  }
+
   .mobile-topbar-tools {
     display: inline-flex;
     align-items: center;
@@ -229,6 +237,33 @@
 
   .mobile-topbar-tools .page-header-icon-action--primary {
     color: var(--ink-1);
+  }
+
+  /* A labelled create action (the admin console's "Add user") rides the bar
+     as the same bare "+" every list route uses; its name stays on the button
+     as aria-label. */
+  .mobile-topbar-tools .adm-create-action,
+  .mobile-topbar-tools .adm-create-action:hover {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink-1);
+  }
+
+  .mobile-topbar-tools .adm-create-action:active {
+    background: var(--control-fill);
+  }
+
+  .mobile-topbar-tools .adm-create-action-label {
+    display: none;
+  }
+
+  /* A fetch error keeps its mark in the bar; the sentence has no room. */
+  .mobile-topbar-tools .adm-command-status-text {
+    display: none;
   }
 
   .mobile-topbar-tools .page-header-icon-action:active {

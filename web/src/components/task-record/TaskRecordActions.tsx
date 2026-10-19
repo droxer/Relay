@@ -2,7 +2,16 @@
 
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ActionEdit, ActionStart, ICON } from "../icons";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { ActionEdit, ActionStart, AdminDelete, ICON, NavMore } from "../icons";
+import { PHONE_QUERY } from "../MobileTopbarSlot";
 import type { RelayTaskListItem } from "../../types";
 import { recordActions, type RecordAction } from "./recordActions";
 
@@ -29,6 +38,7 @@ export function TaskRecordActions({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+  const phone = useMediaQuery(PHONE_QUERY);
   const actions = recordActions(task, { readOnly });
   // One action at a time: every button reads the same lock the record holds.
   const busy = busyAction !== null;
@@ -77,31 +87,64 @@ export function TaskRecordActions({
           {t("backlog.done")}
         </Button>
       ) : null}
-      {/* The quiet outline tier every record header uses for its edit
-          action ("Edit profile", "Project settings"). At the 44px CTA size
-          these four buttons were the loudest thing in the drawer. */}
-      <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onEdit}>
-        <ActionEdit size={ICON.sm} aria-hidden="true" />
-        {t("record.edit")}
-      </Button>
-      {/* Destructive, and it says so. As a ghost beside Edit it was the one
-          irreversible action on the record wearing the same clothes as the
-          most reversible one — and with no busy state it took a second
-          click before the first delete had landed. */}
-      <Button
-        type="button"
-        variant="destructive"
-        size="dense"
-        loading={busyAction === "delete"}
-        disabled={busy}
-        onClick={onDelete}
-      >
-        {/* Plain "Delete" on both vocabularies: the record's title already
-            names what goes, the confirm dialog repeats it, and "Delete
-            routine" was the one label that pushed a narrow drawer's
-            actions onto a second row. */}
-        {t("backlog.delete_task")}
-      </Button>
+      {phone ? (
+        /* A phone row has room for the record's state action, not five
+           equal buttons: edit and delete fold into one overflow menu, so
+           the irreversible action is never the same size as the next step. */
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-dense"
+                disabled={busy}
+                aria-label={t("record.more_actions")}
+              >
+                <NavMore size={ICON.md} aria-hidden="true" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <ActionEdit size={ICON.sm} aria-hidden="true" />
+              {t("record.edit")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem danger onClick={onDelete}>
+              <AdminDelete size={ICON.sm} aria-hidden="true" />
+              {t("record.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <>
+          {/* The quiet outline tier every record header uses for its edit
+              action ("Edit profile", "Project settings"). At the 44px CTA size
+              these four buttons were the loudest thing in the drawer. */}
+          <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onEdit}>
+            <ActionEdit size={ICON.sm} aria-hidden="true" />
+            {t("record.edit")}
+          </Button>
+          {/* Destructive, and it says so. As a ghost beside Edit it was the
+              one irreversible action on the record wearing the same clothes
+              as the most reversible one — and with no busy state it took a
+              second click before the first delete had landed. */}
+          <Button
+            type="button"
+            variant="destructive"
+            size="dense"
+            loading={busyAction === "delete"}
+            disabled={busy}
+            onClick={onDelete}
+          >
+            {/* Plain "Delete" on both vocabularies: the record's title
+                already names what goes, and the confirm dialog repeats it.
+                "Delete task" on an automation was simply wrong. */}
+            {t("record.delete")}
+          </Button>
+        </>
+      )}
     </>
   );
 }

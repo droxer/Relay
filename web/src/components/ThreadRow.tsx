@@ -1,7 +1,9 @@
 import {
   ActionEdit,
   ActionRemove,
+  AdminDelete,
   ICON,
+  NavMore,
   NavBacklog,
   NavProjects,
   NavRoutine,
@@ -17,6 +19,13 @@ import { agentLabel } from "../lib/plan";
 import { AgentMark } from "./AgentMark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 
@@ -63,6 +72,11 @@ const PIP: Record<ThreadTone | "err", { tone: StateTone; shape?: StateShape }> =
    carried forward by reuseThreadItems, handlers by useStableCallback. */
 export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", now }: ThreadRowProps) {
   const { t, i18n } = useTranslation();
+  /* No hover on touch, so the hover-revealed pencil and cross would sit on
+     every row for good — two small targets that cost the title a third of
+     its width and put a delete one slip away from the row it ends. One
+     overflow glyph holds both there. */
+  const touch = useMediaQuery("(hover: none)");
   const { session } = item;
   const executionPhase = session.execution?.phase;
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
@@ -252,32 +266,65 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
           ) : null}
         </span>
       </Button>
-      <span className="conversation-row-actions">
-        {onRename ? (
-          <Button variant="icon"
-            size="icon-xs"
-            className="conversation-rename-btn"
-            type="button"
-            tooltip={t("thread.rename")}
-            onClick={() => onRename(session)}
-          >
-            <ActionEdit size={ICON.xs} />
-          </Button>
-        ) : null}
-        {onClose ? (
-          <Button variant="icon"
-            size="icon-xs"
-            danger
-            className="conversation-remove-btn"
-            type="button"
-            tooltip={deleteEnabled ? t("thread.delete") : t("thread.delete_blocked")}
-            disabled={!deleteEnabled}
-            onClick={handleClose}
-          >
-            <ActionRemove size={ICON.xs} />
-          </Button>
-        ) : null}
-      </span>
+      {touch && (onRename || onClose) ? (
+        <span className="conversation-row-actions">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="icon"
+                  size="icon-xs"
+                  className="conversation-more-btn"
+                  type="button"
+                  aria-label={t("thread.more_actions", { name: label })}
+                >
+                  <NavMore size={ICON.sm} aria-hidden="true" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              {onRename ? (
+                <DropdownMenuItem onClick={() => onRename(session)}>
+                  <ActionEdit size={ICON.sm} aria-hidden="true" />
+                  {t("thread.rename")}
+                </DropdownMenuItem>
+              ) : null}
+              {onClose ? (
+                <DropdownMenuItem danger disabled={!deleteEnabled} onClick={handleClose}>
+                  <AdminDelete size={ICON.sm} aria-hidden="true" />
+                  {deleteEnabled ? t("thread.delete") : t("thread.delete_blocked")}
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
+      ) : (
+        <span className="conversation-row-actions">
+          {onRename ? (
+            <Button variant="icon"
+              size="icon-xs"
+              className="conversation-rename-btn"
+              type="button"
+              tooltip={t("thread.rename")}
+              onClick={() => onRename(session)}
+            >
+              <ActionEdit size={ICON.xs} />
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button variant="icon"
+              size="icon-xs"
+              danger
+              className="conversation-remove-btn"
+              type="button"
+              tooltip={deleteEnabled ? t("thread.delete") : t("thread.delete_blocked")}
+              disabled={!deleteEnabled}
+              onClick={handleClose}
+            >
+              <ActionRemove size={ICON.xs} />
+            </Button>
+          ) : null}
+        </span>
+      )}
     </li>
   );
 });

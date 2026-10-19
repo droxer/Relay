@@ -158,8 +158,7 @@
   .sec-rail {
     flex-direction: row;
     align-items: center;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 0;
     /* One plane with the list under it: the strip is a row of chips on the
@@ -178,8 +177,32 @@
      sideways when the row runs out. Sharing the width evenly crushed long
      labels and pushed the last chip ("All open 10") off the edge with no
      hint the strip scrolled. */
-  .sec-nav { flex: 1; min-width: 0; padding: var(--sp-2) var(--sp-4) 0; }
-  .sec-nav-list { flex-direction: row; gap: var(--sp-1); }
+  .sec-nav {
+    --strip-fade-start: 0px;
+    --strip-fade-end: 0px;
+    flex: 1;
+    min-width: 0;
+    padding: var(--sp-2) var(--sp-4) 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /* The strip fades on whichever edge has more behind it (useStripScroll
+       marks them), so a chip cut by the edge reads as "more this way"
+       rather than as a stray count. */
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--strip-fade-start),
+      black calc(100% - var(--strip-fade-end)),
+      transparent 100%
+    );
+  }
+
+  .sec-nav::-webkit-scrollbar { display: none; }
+  .sec-nav[data-more-start] { --strip-fade-start: var(--sp-8); }
+  .sec-nav[data-more-end] { --strip-fade-end: var(--sp-8); }
+  .sec-nav-list { flex-direction: row; gap: var(--sp-1); padding-inline-end: var(--sp-4); }
   .sec-nav-item { flex: 0 0 auto; min-width: 0; }
   .sec-nav-btn {
     justify-content: center;

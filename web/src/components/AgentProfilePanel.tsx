@@ -324,9 +324,10 @@ export function AgentProfilePanel({
                 : t("admin.v2.agent_role_none")}
             </span>
           </div>
-          {/* The record band prints the model for everyone; this row exists
-              only to change it, so readers without edit rights don't see the
-              same fact twice. */}
+          {/* Readers see the model in the record band; an editor sees it
+              here instead, as the field that changes it (AgentDetailPage
+              drops it from the band on this tab), so nobody reads it twice.
+              An empty field says "Runtime default" in its placeholder. */}
           {canEditProfile ? (
             <div className="workspace-dossier-field">
               <span className="workspace-dossier-field-label" id={modelLabelId}>
