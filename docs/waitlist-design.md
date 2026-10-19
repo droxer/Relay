@@ -230,6 +230,11 @@ If only some of the settings are present, the backend fails at startup with a
 clear message. It doesn't quietly fall back to `NullMailer`, because that would
 silently drop invites.
 
+Invites are not emailed unless `RELAY_WAITLIST_INVITE_EMAIL=1`, even with a
+mailer configured (password resets still use it). By default every invite is a
+link: the admin copies it from the reveal panel and hands it over, the response
+carries `delivery: null`, and the entry records no delivery status.
+
 ### Result mapping
 
 The REST response groups recipients:

@@ -242,6 +242,6 @@ describe("waitlist API client", () => {
     const result = await inviteByEmail({ email: "grace@example.com", name: "Grace", locale: "en" });
     assert.match(new URL(requested, ORIGIN).pathname, /\/api\/v1\/admin\/waitlist\/invitations$/);
     assert.deepEqual(sent, { email: "grace@example.com", name: "Grace", locale: "en" });
-    assert.equal(result.delivery.status, "sent");
+    assert.equal(result.delivery?.status, "sent");
   });
 });

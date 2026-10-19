@@ -65,7 +65,7 @@ def store(tmp_path: Path) -> DatabaseWaitlistStore:
 
 @pytest.fixture
 def service(store: DatabaseWaitlistStore, mailer: FakeMailer, clock: Clock) -> WaitlistService:
-    return WaitlistService(store, mailer, config=WaitlistConfig(max_waiting=3), clock=clock)
+    return WaitlistService(store, mailer, config=WaitlistConfig(max_waiting=3, invite_email=True), clock=clock)
 
 
 def _token(invite: dict) -> str:
@@ -177,13 +177,49 @@ def test_invite_emails_a_link_and_stores_only_a_hash(
 
 def test_failed_delivery_still_invites(store, clock) -> None:
     mailer = FakeMailer(DeliveryResult("failed", "Email service error: throttled", retryable=True))
-    service = WaitlistService(store, mailer, clock=clock)
+    service = WaitlistService(store, mailer, config=WaitlistConfig(invite_email=True), clock=clock)
     invite = service.invite(_join(service)["id"], invited_by=None, origin=ORIGIN)
 
     assert invite["entry"]["status"] == "invited"
     assert invite["delivery"]["status"] == "failed"
     assert invite["entry"]["lastDeliveryError"] == "Email service error: throttled"
     assert service.live_invite(_token(invite))["email"] == "ada@example.com"
+
+
+def test_invites_are_links_only_by_default(store, mailer, clock) -> None:
+    service = WaitlistService(store, mailer, clock=clock)
+    assert service.invite_email_enabled is False
+    single = service.invite(_join(service)["id"], invited_by=None, origin=ORIGIN)
+    direct = service.invite_email(
+        {"email": "grace@example.com", "locale": "zh-CN"},
+        invited_by=None,
+        origin=ORIGIN,
+        email_in_use=_nobody,
+        account_live=_alive,
+    )
+    invites, pending = service.invite_batch(
+        count=None, ids=[_join(service, "bo@example.com")["id"]], invited_by=None, origin=ORIGIN
+    )
+    service.deliver_invites(pending)
+
+    for invite in (single, direct, *invites):
+        assert invite["delivery"] is None
+        assert invite["entry"]["status"] == "invited"
+        assert invite["entry"]["lastDeliveryStatus"] is None
+        assert service.live_invite(_token(invite))["id"] == invite["entry"]["id"]
+    assert all("invite" not in message.subject.lower() for message in mailer.sent)
+
+
+def test_a_link_only_reinvite_clears_an_earlier_delivery(store, clock) -> None:
+    failing = FakeMailer(DeliveryResult("failed", "Email service error: throttled"))
+    emailing = WaitlistService(store, failing, config=WaitlistConfig(invite_email=True), clock=clock)
+    entry = _join(emailing)
+    emailing.invite(entry["id"], invited_by=None, origin=ORIGIN)
+
+    linked = WaitlistService(store, failing, clock=clock).invite(entry["id"], invited_by=None, origin=ORIGIN)
+
+    assert linked["entry"]["lastDeliveryStatus"] is None
+    assert linked["entry"]["lastDeliveryError"] is None
 
 
 def test_reinvite_rotates_the_token(service: WaitlistService) -> None:

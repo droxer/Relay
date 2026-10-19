@@ -42,8 +42,9 @@ export function InviteReveal({ invites, onDismiss }: { invites: WaitlistInviteRe
           {/* What happened to the email, said where the link is: a failed
               send is exactly when the admin needs to copy it by hand. Only a
               final outcome — a batch's "queued" is a snapshot that goes stale,
-              so its result shows in the refreshing queue instead. */}
-          {delivery.status === "queued" ? null : <p className="adm-waitlist-delivery">
+              so its result shows in the refreshing queue instead. No delivery
+              at all means invite email is off and the link is the invite. */}
+          {!delivery || delivery.status === "queued" ? null : <p className="adm-waitlist-delivery">
             <TonePill tone={deliveryTone(delivery.status)} label={t(deliveryLabelKey(delivery.status))} />
             {delivery.error && (deliveryFailed(delivery.status) || delivery.status === "skipped") ? (
               <span className={deliveryFailed(delivery.status) ? "adm-waitlist-delivery-error" : undefined}>

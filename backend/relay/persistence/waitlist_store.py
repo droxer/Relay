@@ -222,7 +222,7 @@ class DatabaseWaitlistStore:
         return self._conditional_update(entry_id, None, admin_note=note, updated_at=now)
 
     def record_delivery(
-        self, entry_id: str, *, status: str, error: str | None, now: datetime
+        self, entry_id: str, *, status: str | None, error: str | None, now: datetime
     ) -> dict[str, Any]:
         return self._conditional_update(
             entry_id,

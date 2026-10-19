@@ -3,7 +3,9 @@
 This is the one place that decides a waitlist transition. Routes parse,
 authorize, and delegate; the store applies the conditional writes. Email goes
 through the injected ``Mailer`` and never decides an outcome — a failed send
-leaves the entry invited, and the admin still gets the link.
+leaves the entry invited, and the admin still gets the link. Invites are not
+emailed at all unless ``RELAY_WAITLIST_INVITE_EMAIL=1``: by default every
+invite is a link the admin hands over themself.
 
 An invite reaches a person two ways: an admin invites someone who asked
 (``invite``, ``invite_batch``), or invites an address directly
@@ -95,15 +97,25 @@ class WaitlistConfig:
     invite_ttl: timedelta = timedelta(days=DEFAULT_INVITE_TTL_DAYS)
     max_waiting: int = DEFAULT_MAX_WAITING
     confirmation_email: bool = True
+    # Off: an invite is only its link, shown to the admin, and nothing is
+    # mailed even when a mailer is configured (password resets still use it).
+    invite_email: bool = False
 
 
 def waitlist_config_from_env() -> WaitlistConfig:
     return WaitlistConfig(
         invite_ttl=timedelta(days=_positive_env("RELAY_WAITLIST_INVITE_TTL_DAYS", DEFAULT_INVITE_TTL_DAYS)),
         max_waiting=_positive_env("RELAY_WAITLIST_MAX_WAITING", DEFAULT_MAX_WAITING),
-        confirmation_email=os.environ.get("RELAY_WAITLIST_CONFIRMATION_EMAIL", "1").strip().lower()
-        not in ("0", "false", "no", "off"),
+        confirmation_email=_flag_env("RELAY_WAITLIST_CONFIRMATION_EMAIL", default=True),
+        invite_email=_flag_env("RELAY_WAITLIST_INVITE_EMAIL", default=False),
     )
+
+
+def _flag_env(name: str, *, default: bool) -> bool:
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw not in ("0", "false", "no", "off")
 
 
 def hash_invite_token(token: str) -> str:
@@ -164,10 +176,10 @@ class WaitlistService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
-    def mail_configured(self) -> bool:
-        """Whether an invite can go out by email at all; without it the admin
-        copies each link by hand."""
-        return not isinstance(self.mailer, NullMailer)
+    def invite_email_enabled(self) -> bool:
+        """Whether an invite can go out by email at all: switched on and a
+        mailer configured. Without it the admin copies each link by hand."""
+        return self.config.invite_email and not isinstance(self.mailer, NullMailer)
 
     # --- public -------------------------------------------------------------
 
@@ -247,9 +259,17 @@ class WaitlistService:
     def invite(self, entry_id: str, *, invited_by: str | None, origin: InviteOrigin) -> dict[str, Any]:
         """Invite one entry and email it now, so the admin sees the outcome."""
         pending = self._issue_invite(entry_id, invited_by=invited_by, origin=origin)
+        if not self.invite_email_enabled:
+            return self._link_only(pending)
         result = self._deliver(pending)
         entry = self.store.record_delivery(entry_id, status=result.status, error=result.error, now=self._clock())
         return {"entry": self.public_entry(entry), "inviteUrl": pending.url, "delivery": _delivery(result)}
+
+    def _link_only(self, issued: PendingInvite) -> dict[str, Any]:
+        """An invite with no email behind it: no delivery is recorded, and a
+        re-invite clears whatever an earlier send left on the row."""
+        entry = self.store.record_delivery(issued.entry_id, status=None, error=None, now=self._clock())
+        return {"entry": self.public_entry(entry), "inviteUrl": issued.url, "delivery": None}
 
     def invite_email(
         self,
@@ -304,6 +324,9 @@ class WaitlistService:
                 issued = self._issue_invite(entry_id, invited_by=invited_by, origin=origin)
             except (KeyError, WaitlistConflictError):
                 continue
+            if not self.invite_email_enabled:
+                invites.append(self._link_only(issued))
+                continue
             # Nothing is queued when nothing will be sent: the link is the
             # whole invite, and the row says so at once.
             delivery = {"status": "queued", "error": None} if issued.emailable else _delivery(_unsent(issued))
@@ -320,6 +343,8 @@ class WaitlistService:
         An entry re-invited, declined, or accepted since its link was issued is
         skipped: its queued email would carry a dead link, and its row already
         records what replaced it."""
+        if not self.invite_email_enabled:
+            return
         for issued in pending:
             if not issued.emailable:
                 continue

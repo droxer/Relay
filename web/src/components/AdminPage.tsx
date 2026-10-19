@@ -580,10 +580,10 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   type="button"
                   className="adm-create-action"
                   onClick={() => setInviteEmailOpen(true)}
-                  tooltip={t("admin.waitlist.invite_email_cta")}
+                  tooltip={t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
                 >
                   <AdminInvite size={ICON.md} aria-hidden="true" />
-                  {t("admin.waitlist.invite_email_cta")}
+                  {t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
                 </Button>
               ) : null}
               {view === "computers" ? (
