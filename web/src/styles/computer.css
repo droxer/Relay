@@ -484,28 +484,134 @@ button.computer-run-open:hover {
   list-style: decimal;
 }
 
-.computer-platform-support {
+/* What kind of computer — a row per kind, the selectable list-row recipe
+   (.adm-assign-node). The cloud row is shown disabled until it ships. */
+.computer-kind-picker {
   display: grid;
   gap: var(--sp-2);
+}
+
+.computer-kind {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-3);
+  width: 100%;
   margin: 0;
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  padding: var(--sp-3) var(--sp-4);
+  appearance: none;
+  background: var(--surface-0);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  color: inherit;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
 }
 
-.computer-platform-support > div {
-  display: grid;
-  grid-template-columns: 5rem minmax(0, 1fr);
+.computer-kind:hover:not([data-disabled]) {
+  border-color: var(--line-strong);
+  background: var(--control-fill-hover);
+}
+
+.computer-kind[data-checked] {
+  border-color: var(--line-drag);
+  background: var(--action-soft);
+}
+
+.computer-kind[data-disabled] {
+  cursor: default;
+  background: var(--surface-1);
+  border-style: dashed;
+}
+
+.computer-kind-icon {
+  margin-top: 1px;
+  color: var(--ink-2);
+}
+
+.computer-kind[data-checked] .computer-kind-icon {
+  color: var(--action);
+}
+
+.computer-kind[data-disabled] .computer-kind-icon,
+.computer-kind[data-disabled] .computer-kind-title {
+  color: var(--ink-3);
+}
+
+.computer-kind-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-0-5);
+  min-width: 0;
+}
+
+.computer-kind-title {
+  display: inline-flex;
+  align-items: center;
   gap: var(--sp-2);
-}
-
-.computer-platform-support dt {
-  font-weight: 700;
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   color: var(--ink-1);
 }
 
-.computer-platform-support dd {
+.computer-kind-desc {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+/* The target OS — underline tabs, the record-tab grammar (.workspace-page-tab). */
+.computer-os {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.computer-os-tabs {
+  gap: var(--sp-5);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.computer-os-tab {
+  min-height: var(--control-h-sm);
+  padding: 0;
+  margin-bottom: -0.5px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+
+.computer-os-tab:hover {
+  color: var(--ink-1);
+}
+
+.computer-os-tab[aria-selected="true"] {
+  color: var(--ink-1);
+  border-bottom-color: var(--ink-1);
+}
+
+.computer-os-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.computer-os-support {
   margin: 0;
-  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+.computer-manual-link {
+  align-self: flex-start;
 }
 
 .computer-install-steps li::marker {

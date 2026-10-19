@@ -14,7 +14,7 @@ import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { isNodeOnline } from "../../lib/adminHelpers";
 import { Alert } from "@/components/ui/alert";
 import { ComputerDeviceSetup } from "./ComputerDeviceSetup";
-import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
+import { OsInstallCommand, TargetOsTabs } from "./TargetOsTabs";
 import { useOnOpen } from "@/hooks/useKeyChange";
 import { useClientMounted } from "../../hooks/useClientMounted";
 
@@ -121,56 +121,48 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
     >
-      <ComputerPlatformSupport />
       {result ? (
         <div className="adm-form" ref={resultRef} tabIndex={-1}>
           <p className="adm-cred-note">
             {result.reused ? t("computer.connect_success_existing") : t("computer.connect_success")}
           </p>
-          <ol className="computer-install-steps">
-            <li>
-              <section aria-labelledby="computer-install-command-title">
-                <h3 id="computer-install-command-title">{t(result.installCommand ? "computer.connect_command_step" : "admin.daemon_command")}</h3>
-                <CredCopyRow
-                  label={t(result.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
-                  hint={t("computer.connect_setup_hint")}
-                  value={result.installCommand ?? result.daemonCommand ?? ""}
-                  copyLabel={t("computer.connect_setup_copy")}
-                  copied={copiedField === "setup"}
-                  onCopy={() => void copy("setup", result.installCommand ?? result.daemonCommand ?? "")}
-                />
-                {result.windowsInstallCommand ? (
-                  <CredCopyRow
-                    label={t("computer.connect_setup_windows_label")}
-                    hint={t("computer.connect_setup_windows_hint")}
-                    value={result.windowsInstallCommand}
-                    copyLabel={t("computer.connect_setup_windows_copy")}
-                    copied={copiedField === "setup-windows"}
-                    onCopy={() => void copy("setup-windows", result.windowsInstallCommand!)}
-                  />
-                ) : null}
-                {!result.installCommand ? <Alert>{t("computer.connect_legacy_hint")}</Alert> : null}
-              </section>
-            </li>
-            <li>
-              <section aria-labelledby="computer-install-token-title">
-                <h3 id="computer-install-token-title">{t("computer.connect_token_step")}</h3>
-                {token ? (
-                  <CredCopyRow
-                    label={t("admin.node_token")}
-                    hint={t("computer.connect_token_prompt")}
-                    value={token}
-                    copyLabel={t("admin.copy_node_token")}
-                    copied={copiedField === "node-token"}
-                    onCopy={() => void copy("node-token", token)}
-                  />
-                ) : null}
-                <p className="adm-cred-note">
-                  {token ? t("computer.connect_token_once") : t("computer.connect_token_on_device")}
-                </p>
-              </section>
-            </li>
-          </ol>
+          <TargetOsTabs>
+            {(os) => (
+              <ol className="computer-install-steps">
+                <li>
+                  <section aria-labelledby={`computer-install-command-title-${os}`}>
+                    <h3 id={`computer-install-command-title-${os}`}>{t(result.installCommand ? "computer.connect_command_step" : "admin.daemon_command")}</h3>
+                    <OsInstallCommand
+                      os={os}
+                      unixCommand={result.installCommand ?? result.daemonCommand ?? ""}
+                      windowsCommand={result.windowsInstallCommand}
+                      copied={copiedField === `setup-${os}`}
+                      onCopy={(command) => void copy(`setup-${os}`, command)}
+                    />
+                    {!result.installCommand ? <Alert>{t("computer.connect_legacy_hint")}</Alert> : null}
+                  </section>
+                </li>
+                <li>
+                  <section aria-labelledby={`computer-install-token-title-${os}`}>
+                    <h3 id={`computer-install-token-title-${os}`}>{t("computer.connect_token_step")}</h3>
+                    {token ? (
+                      <CredCopyRow
+                        label={t("admin.node_token")}
+                        hint={t("computer.connect_token_prompt")}
+                        value={token}
+                        copyLabel={t("admin.copy_node_token")}
+                        copied={copiedField === "node-token"}
+                        onCopy={() => void copy("node-token", token)}
+                      />
+                    ) : null}
+                    <p className="adm-cred-note">
+                      {token ? t("computer.connect_token_once") : t("computer.connect_token_on_device")}
+                    </p>
+                  </section>
+                </li>
+              </ol>
+            )}
+          </TargetOsTabs>
           <div className="computer-install-status" role="status" data-connected={connected}>
             <strong>{t(connected ? "computer.connect_online" : "computer.connect_waiting")}</strong>
             <p>{t(connected ? "computer.connect_online_hint" : "computer.connect_waiting_hint")}</p>
