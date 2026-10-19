@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
+import { OsInstallCommand, TargetOsTabs } from "./TargetOsTabs";
 import { reissueComputerToken } from "../../api";
 import type { ComputerTokenResponse, ControlPanelDaemonNodeRecord } from "../../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -83,28 +83,29 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
             {reissued ? (
               <p className="adm-cred-note">{t("computer.token_reissued_note")}</p>
             ) : null}
-            {credentials.installCommand || credentials.daemonCommand ? (
-              <>
-                <ComputerPlatformSupport />
-                <CredCopyRow
-                  label={t(credentials.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
-                  hint={t(credentials.installCommand ? "computer.connect_setup_hint" : "admin.daemon_command_hint")}
-                  value={credentials.installCommand ?? credentials.daemonCommand!}
-                  copyLabel={t(credentials.installCommand ? "computer.connect_setup_copy" : "admin.copy_daemon_command")}
-                  copied={copiedField === "command"}
-                  onCopy={() => void copy("command", credentials.installCommand ?? credentials.daemonCommand!)}
-                />
-                {credentials.windowsInstallCommand ? (
-                  <CredCopyRow
-                    label={t("computer.connect_setup_windows_label")}
-                    hint={t("computer.connect_setup_windows_hint")}
-                    value={credentials.windowsInstallCommand}
-                    copyLabel={t("computer.connect_setup_windows_copy")}
-                    copied={copiedField === "command-windows"}
-                    onCopy={() => void copy("command-windows", credentials.windowsInstallCommand!)}
+            {credentials.installCommand ? (
+              <TargetOsTabs>
+                {(os) => (
+                  <OsInstallCommand
+                    os={os}
+                    unixCommand={credentials.installCommand}
+                    windowsCommand={credentials.windowsInstallCommand}
+                    copied={copiedField === `command-${os}`}
+                    onCopy={(command) => void copy(`command-${os}`, command)}
                   />
-                ) : null}
-              </>
+                )}
+              </TargetOsTabs>
+            ) : credentials.daemonCommand ? (
+              // A start command for a computer Relay set up (BoxLite) — not a
+              // per-OS installer, so it has no tabs.
+              <CredCopyRow
+                label={t("admin.daemon_command")}
+                hint={t("admin.daemon_command_hint")}
+                value={credentials.daemonCommand}
+                copyLabel={t("admin.copy_daemon_command")}
+                copied={copiedField === "command"}
+                onCopy={() => void copy("command", credentials.daemonCommand!)}
+              />
             ) : null}
             <CredCopyRow
               label={t("admin.node_token")}

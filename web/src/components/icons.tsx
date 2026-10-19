@@ -351,7 +351,7 @@ export const ActionImage = withStandardStroke(ImagePlus, "ActionImage");
 // ownership is an unresolved ring. The earlier container/terminal pair
 // pictured the runtime instead and read as "box" and "shell".
 export const NodeManaged = withStandardStroke(Cloud, "NodeManaged");
-const NodeLocal = withStandardStroke(Laptop, "NodeLocal");
+export const NodeLocal = withStandardStroke(Laptop, "NodeLocal");
 const NodePending = withStandardStroke(CircleDashed, "NodePending");
 
 /** The one map from ownership to glyph. Two call sites — the placement badge

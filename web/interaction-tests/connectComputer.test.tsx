@@ -8,17 +8,36 @@ import { createLocalDeviceEnrollment } from "../src/api";
 vi.mock("../src/api", () => ({ createLocalDeviceEnrollment: vi.fn(), getComputerSetupCommand: vi.fn().mockResolvedValue({ installCommand: "setup-command", windowsInstallCommand: "irm 'https://relay.example/install.ps1' | iex" }) }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: vi.fn() }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({
-  t: (key: string) => key.split(".").reduce<any>((value, part) => value?.[part], en) ?? key,
+  t: (key: string, values?: Record<string, string>) =>
+    String(key.split(".").reduce<any>((value, part) => value?.[part], en) ?? key)
+      .replace(/\{\{(\w+)\}\}/g, (_, name: string) => values?.[name] ?? ""),
 }) }));
 
 beforeEach(() => { vi.mocked(createLocalDeviceEnrollment).mockReset(); });
 
-it("offers the Windows command beside the macOS / Linux one and lists Windows as supported", async () => {
+it("shows only the selected operating system's install command", async () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  expect(await screen.findByText("irm 'https://relay.example/install.ps1' | iex")).toBeTruthy();
-  expect(screen.getByText("Install command · macOS / Linux")).toBeTruthy();
+  expect(await screen.findByText("setup-command")).toBeTruthy();
+  expect(screen.getByText("Install command · macOS")).toBeTruthy();
+  expect(screen.queryByText("irm 'https://relay.example/install.ps1' | iex")).toBeNull();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Windows" }));
+  expect(screen.getByText("irm 'https://relay.example/install.ps1' | iex")).toBeTruthy();
   expect(screen.getByText("Install command · Windows")).toBeTruthy();
   expect(screen.getByText(/^Supported · x64 \/ ARM64 · Requires Git for Windows$/)).toBeTruthy();
+  expect(screen.queryByText("setup-command")).toBeNull();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Linux" }));
+  expect(screen.getByText("Install command · Linux")).toBeTruthy();
+  expect(screen.getByText("setup-command")).toBeTruthy();
+});
+
+it("shows the cloud computer as coming soon, not as a choice", () => {
+  render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
+  const cloud = screen.getByRole("radio", { name: /Cloud computer/ });
+  expect(cloud.getAttribute("aria-disabled") ?? cloud.hasAttribute("disabled").toString()).toBe("true");
+  expect(within(cloud).getByText("Coming soon")).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /Your computer/ }).getAttribute("aria-checked")).toBe("true");
 });
 
 it("explains installation before generating a command", () => {
@@ -45,12 +64,13 @@ it("guides command and token steps without claiming registration means connected
   expect(screen.getByRole("status").textContent).toContain("Waiting for connection");
   expect(screen.queryByText(/already connected/)).toBeNull();
   expect(screen.queryByText("old-daemon-command")).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Windows" }));
   expect(screen.getByText("Install command · Windows")).toBeTruthy();
   expect(screen.getByText(/\[scriptblock\]::Create/)).toBeTruthy();
 });
 
 it("does not retain the repository-install instructions in Simplified Chinese", () => {
-  expect(zhCN.computer.connect_setup_hint).not.toMatch(/relay-client|export PATH|仓库访问|存储库访问/);
+  expect(zhCN.computer.os_shell_hint_linux + zhCN.computer.connect_requirements).not.toMatch(/relay-client|export PATH|仓库访问|存储库访问/);
 });
 
 it("only reports connected after a fresh online status and copies the installer separately from the token", async () => {
