@@ -262,15 +262,18 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     // nested second main landmark is one screen readers cannot disambiguate.
     <section className="skills-page" id="skills-panel" aria-label={t("skills.title")} data-view={skills.length ? "list" : "empty"}>
       <nav className="skills-list" aria-label={t("skills.library_label")}>
-        {/* No kicker: the library is a section of personal settings, and the
-            section rail one column to the left already names it. The skill
-            detail's eyebrow below is record metadata (source · visibility),
-            not surface identity, so it stays. */}
+        {/* A dedicated Infra page: the library rail heads it the way the
+            agent and team rosters head theirs — kicker, title, and count
+            stacked, with the record pane beside it. The skill detail's
+            eyebrow below is record metadata (source · visibility), not
+            surface identity. */}
         <PageHeader
+          kicker={t("nav.infra")}
           title={t("skills.title")}
           count={t("skills.count", { count: skills.length })}
           titleAs="h2"
           titleVariant="title"
+          layout="stacked"
           topbarActions
           actions={
             <Button

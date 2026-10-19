@@ -28,20 +28,23 @@ describe("My Computer route shell", () => {
     assert.match(styles, /\.computer-page-body\s*\{[^}]*padding:[^;]*var\(--sp-7\)/s);
   });
 
-  it("is registered in the shared mobile row map", async () => {
-    // Every work route needs `grid-row: 2` under the mobile topbar. The
-    // roster is a settings section now, so the settings page is what claims
-    // the row and the roster fills its content column.
+  it("is registered in the shared mobile row map and the route grid", async () => {
+    // Every work route needs `grid-row: 2` under the mobile topbar, and a
+    // route-grid entry so the thread pane collapses beside the page. The
+    // roster is an Infra page of its own (/computers), as is the library.
     const responsive = await read("web/src/styles/responsive.css");
     const block = responsive.match(/([^}]*)\{\s*grid-row: 2;/)?.[1] ?? "";
-    assert.match(block, /\.settings-page/);
-    const settings = await read("web/src/styles/settings-page.css");
-    assert.match(settings, /\.settings-page \.sec-main > \.computer-page/);
+    assert.match(block, /\.computer-page/);
+    assert.match(block, /\.skills-page/);
+    const routes = await read("web/src/styles/routes.css");
+    assert.match(routes, /\[data-route="computers"\]/);
+    assert.match(routes, /\[data-route="skills"\]/);
   });
 
   it("has a client-route rewrite so a direct load does not 404", async () => {
     const config = await read("web/next.config.ts");
-    assert.match(config, /"\/settings\/:path\*"/);
+    assert.match(config, /"\/computers"/);
+    assert.match(config, /"\/skills"/);
   });
 
   it("keeps the connect action reachable on mobile", async () => {

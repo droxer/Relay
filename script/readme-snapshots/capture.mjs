@@ -55,8 +55,8 @@ const SHOTS = [
   { name: "projects", path: "/projects/project_infra?tab=tasks", ready: ".backlog-view-btn", prepare: openBoard, sidenav: false },
   { name: "agents", path: "/agents/agent_aria", ready: ".record-band, .agent-profile" },
   { name: "teams", path: "/teams/team_platform_guild", ready: ".record-band, .workspace-page" },
-  { name: "skills", path: "/settings/skills", ready: ".sec-nav" },
-  { name: "computers", path: "/settings/computers", ready: ".sec-nav" },
+  { name: "skills", path: "/skills", ready: ".skills-roster-row" },
+  { name: "computers", path: "/computers", ready: ".computer-card" },
   { name: "admin", path: "/admin/dashboard", ready: ".sec-nav" },
 ];
 

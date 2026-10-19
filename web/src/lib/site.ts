@@ -34,6 +34,7 @@ export const PRIVATE_PATHS: readonly string[] = [
   "/projects",
   "/channels",
   "/admin",
+  "/computers",
   "/computer",
   "/skills",
 ];

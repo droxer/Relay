@@ -76,7 +76,7 @@ def start_authorization(request: Request, ctx: AppContextDep, response: Response
             workspace_path=path, display_name=name.strip()))
     response.headers["Cache-Control"] = "no-store"
     return {"deviceCode": device_code, "userCode": user_code, "expiresIn": TTL_SECONDS,
-            "verificationUrl": f"{backend_base_url(request)}/settings/computers?connect={quote(user_code)}"}
+            "verificationUrl": f"{backend_base_url(request)}/computers?connect={quote(user_code)}"}
 
 
 @router.post("/computer-authorizations/token")

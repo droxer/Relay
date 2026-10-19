@@ -7,12 +7,14 @@ import {
   NavAdmin,
   NavAgents,
   NavBacklog,
+  NavComputer,
   NavLogout,
   NavMore,
   NavPreferences,
   NavProjects,
   NavRoutine,
   NavSidebarCollapse,
+  NavSkills,
   NavSidebarExpand,
   NavTeams,
   NavThreads,
@@ -44,6 +46,8 @@ const MORE_ROUTES: readonly {
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
+  { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
+  { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
   { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
@@ -110,7 +114,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
-  const moreActive = ["routine", "teams", "settings", "admin"].includes(route);
+  const moreActive = MORE_ROUTES.some((item) => item.route === route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
@@ -228,26 +232,42 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <span className="sidenav-label sr-only">{t("nav.teams")}</span>
           </a>
         </div>
-        {isAdmin ? (
-          <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.manage")}>
-            <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.manage")}</span>
-            <a
-              className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "admin" ? "active" : ""}`}
-              data-nav="admin"
-              href={hrefForRoute("admin")}
-              aria-label={t("nav.admin")}
-              aria-current={route === "admin" ? "page" : undefined}
-              onClick={(event) => handleRouteClick(event, "admin")}
-              onMouseEnter={(e) => showNavTooltip(t("nav.admin"), e.currentTarget)}
-              onMouseLeave={hideNavTooltip}
-              onFocus={(e) => showNavTooltip(t("nav.admin"), e.currentTarget)}
-              onBlur={hideNavTooltip}
-            >
-              <NavAdmin size={ICON.lg} />
-              <span className="sidenav-label sr-only">{t("nav.admin")}</span>
-            </a>
-          </div>
-        ) : null}
+        {/* Infra: what agents run on (computers) and what they carry
+            (skills). Both are the person's own, so neither is admin-gated;
+            on a phone they live in the More sheet. */}
+        <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.infra")}>
+          <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.infra")}</span>
+          <a
+            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "computers" ? "active" : ""}`}
+            data-nav="computers"
+            href={hrefForRoute("computers")}
+            aria-label={t("nav.computers")}
+            aria-current={route === "computers" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "computers")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.computers"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.computers"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavComputer size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.computers")}</span>
+          </a>
+          <a
+            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "skills" ? "active" : ""}`}
+            data-nav="skills"
+            href={hrefForRoute("skills")}
+            aria-label={t("nav.skills")}
+            aria-current={route === "skills" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "skills")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavSkills size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.skills")}</span>
+          </a>
+        </div>
         {/* Mobile-only: the destinations that do not fit the bottom tab bar. */}
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.more_label")}>
           {/* Opens the More sheet (MobileMoreSheet), rendered below. */}
@@ -347,6 +367,28 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           <NavLogout size={ICON.md} />
           <span className="sr-only">{t("nav.logout")}</span>
         </Button>
+        {/* The control panel is the org's configuration, not a place work
+            happens, so it sits with the account controls rather than in the
+            destination list — at the footer's far end, beside the rail's own
+            edge control. On a phone the footer is hidden and the More sheet
+            carries it. */}
+        {isAdmin ? (
+          <a
+            className={`sidenav-btn sidenav-admin ${route === "admin" ? "active" : ""}`}
+            data-nav="admin"
+            href={hrefForRoute("admin")}
+            aria-label={t("nav.admin")}
+            aria-current={route === "admin" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "admin")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.admin"), e.currentTarget, true)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.admin"), e.currentTarget, true)}
+            onBlur={hideNavTooltip}
+          >
+            <NavAdmin size={ICON.md} />
+            <span className="sr-only">{t("nav.admin")}</span>
+          </a>
+        ) : null}
         <Button
           type="button"
           variant="ghost"

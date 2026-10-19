@@ -74,13 +74,16 @@
   text-align: center;
 }
 
-/* One or two machines, not a fleet: a stack of records rather than an
-   auto-fill tile grid, capped so a 2560px display doesn't stretch a
-   short runtime list across the whole canvas. */
+/* A handful of machines, not a fleet: full records rather than survey tiles.
+   As a page of its own the roster has the whole canvas, so records sit two
+   abreast once each still gets a record's width (34rem) — and never more,
+   because the cap stops a 2560px display from stretching a short runtime
+   list across the screen. Narrower, it is the single stack it always was. */
 .computer-list {
-  display: flex;
-  max-width: 60rem;
-  flex-direction: column;
+  display: grid;
+  max-width: 72rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr));
+  align-items: start;
   gap: var(--sp-4);
   margin: 0;
   padding: 0;

@@ -454,7 +454,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_BACKGROUND_MODE` | `external` in the image | API periodic work is handled by the separate Procrastinate worker; local installs default to `embedded`. |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | at least `35` from deploy scripts | Grace period for each API/worker service to finish store writes. |
 | `RELAY_PUBLIC_BACKEND_URL` | request base URL | Public HTTPS API origin for enrollment/reconnect commands and daemon environment. No path, credentials, query, or fragment. HTTP allowed only for loopback development. |
-| `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/settings/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
+| `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | unset | Exact browser origins allowed to send credentials. |
 | `RELAY_CORS_ALLOW_ORIGIN_REGEX` | unset | Anchored origin pattern for preview deployments. |
 | `RELAY_SESSION_COOKIE_DOMAIN` | unset (host-only) | Cookie `Domain`, e.g. `.example.com`. |

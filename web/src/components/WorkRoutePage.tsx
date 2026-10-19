@@ -15,6 +15,8 @@ const ChannelsPage = lazy(() => import("./ChannelsPage").then((m) => ({ default:
 const RoutinesPage = lazy(() => import("./RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./TeamsPage").then((m) => ({ default: m.TeamsPage })));
+const ComputerPage = lazy(() => import("./ComputerPage").then((m) => ({ default: m.ComputerPage })));
+const SkillsPage = lazy(() => import("./SkillsPage").then((m) => ({ default: m.SkillsPage })));
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 
 const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
@@ -22,6 +24,8 @@ const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string
   routine: "routine-panel",
   agents: "agents-panel",
   teams: "teams-panel",
+  computers: "computer-panel",
+  skills: "skills-panel",
   settings: "settings-panel",
   channels: "channels-panel",
   admin: "admin-panel",
@@ -159,13 +163,14 @@ export function WorkRoutePage(props: WorkRoutePageProps) {
       onBackToAgents={() => props.onOpenAgent(null)}
       onOpenThread={onOpenThread}
     />
+  ) : route === "computers" ? (
+    <ComputerPage nodes={props.runtimeNodes} currentUser={user} onOpenThread={onOpenThread} />
+  ) : route === "skills" ? (
+    <SkillsPage currentUser={user} />
   ) : route === "settings" ? (
     <SettingsPage
       section={props.settingsSection}
       onSelectSection={props.onSelectSettingsSection}
-      currentUser={user}
-      nodes={props.runtimeNodes}
-      onOpenThread={onOpenThread}
       theme={props.theme}
       onThemeChange={props.onThemeChange}
       language={props.language}

@@ -76,6 +76,6 @@ describe("canonical filter params", () => {
 
   it("drops filter params on paths that do not own them", () => {
     assert.equal(canonicalBrowserUrl("/threads", "?status=blocked&q=foo"), "/threads");
-    assert.equal(canonicalBrowserUrl("/computer", "?state=overdue"), "/computer");
+    assert.equal(canonicalBrowserUrl("/computers", "?state=overdue"), "/computers");
   });
 });

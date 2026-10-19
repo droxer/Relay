@@ -11,21 +11,29 @@ import { resolve } from "node:path";
 
 const readWeb = (rel: string) => readFileSync(resolve("web", rel), "utf8");
 
-function clientRouteHeads(): Set<string> {
+/** Exact fallback paths, and the heads whose whole subtree falls back. */
+function clientRoutes(): { exact: Set<string>; subtrees: Set<string> } {
   const source = readWeb("next.config.ts");
   const block = source.match(/const CLIENT_ROUTES = \[([\s\S]*?)\] as const;/);
   assert.ok(block, "CLIENT_ROUTES block not found in next.config.ts");
-  const heads = new Set<string>();
+  const exact = new Set<string>();
+  const subtrees = new Set<string>();
   for (const m of block[1].matchAll(/"(\/[a-z-]*?)(\/:path\*)?"/g)) {
-    heads.add(m[1]);
+    (m[2] ? subtrees : exact).add(m[1]);
   }
-  return heads;
+  return { exact, subtrees };
+}
+
+function covered(routePath: string, { exact, subtrees }: ReturnType<typeof clientRoutes>): boolean {
+  if (exact.has(routePath)) return true;
+  const head = `/${routePath.split("/")[1]}`;
+  return head !== routePath && subtrees.has(head);
 }
 
 function appRoutePaths(): string[] {
   const source = readWeb(path.join("src", "lib", "appRoute.ts"));
   const work = source.match(/WORK_PATHS[^=]*= \{([\s\S]*?)\};/);
-  const legacy = source.match(/LEGACY_SECTION_PATHS[^=]*= \{([\s\S]*?)\};/);
+  const legacy = source.match(/LEGACY_INFRA_PATHS[^=]*= \{([\s\S]*?)\};/);
   const publicPages = source.match(/PUBLIC_PAGE_PATHS[^=]*= \{([\s\S]*?)\};/);
   assert.ok(work && legacy && publicPages, "route tables not found in appRoute.ts");
   const paths = [...work[1].matchAll(/: "(\/[^"]*)"/g)].map((m) => m[1]);
@@ -39,8 +47,8 @@ function appRoutePaths(): string[] {
 
 describe("SPA fallback routes", () => {
   it("covers every canonical and legacy path the app router owns", () => {
-    const heads = clientRouteHeads();
-    const missing = appRoutePaths().filter((p) => !heads.has(p));
+    const routes = clientRoutes();
+    const missing = appRoutePaths().filter((p) => !covered(p, routes));
     assert.deepEqual(missing, []);
   });
 });

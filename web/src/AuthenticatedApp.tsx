@@ -54,7 +54,7 @@ import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
 import { useNotifications } from "./hooks/useNotifications";
-import { computerSettingsDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
+import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
 import { hrefForSettingsSection } from "./lib/appRoute";
 import type { NotificationBellBinding } from "./components/notifications/NotificationBell";
 
@@ -244,14 +244,14 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     onClearPendingMessage: dropPendingMessage,
   });
   /* The inbox. A computer notice opens wherever that computer is managed:
-     the person's own settings for a machine they hold, the control panel
+     the person's own Computers page for a machine they hold, the control panel
      for shared hardware an admin is told about. */
   const ownNodeIds = useMemo(
     () => new Set(nodes.filter((node) => node.userId === user.userId).map((node) => node.id)),
     [nodes, user.userId],
   );
   const computerDestination = useCallback(
-    (nodeId: string) => computerSettingsDestination(nodeId, { isAdmin: user.role === "admin", ownNodeIds }),
+    (nodeId: string) => computerManagementDestination(nodeId, { isAdmin: user.role === "admin", ownNodeIds }),
     [ownNodeIds, user.role],
   );
   const openTaskRecord = useStableEvent(({ taskId, routineId }: { taskId: string; routineId?: string }) => {
@@ -265,7 +265,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       return;
     }
     if (computerDestination(target.nodeId) === "admin") navigateToAdminSection("computers");
-    else navigateToSettings("computers");
+    else navigateToRoute("computers");
   });
   const notificationController = useNotifications({
     // Session-cookie authenticated, so every signed-in account has an inbox —
@@ -275,7 +275,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   });
   const notificationBell = useMemo<NotificationBellBinding>(() => ({
     controller: notificationController,
-    hrefFor: (target) => notificationHref(target, target.kind === "computer" ? computerDestination(target.nodeId) : "settings"),
+    hrefFor: (target) => notificationHref(target, target.kind === "computer" ? computerDestination(target.nodeId) : undefined),
     settingsHref: hrefForSettingsSection("notifications"),
     onOpenSettings: () => navigateToSettings("notifications"),
   }), [computerDestination, navigateToSettings, notificationController]);
@@ -452,7 +452,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
         composerRef.current?.focus();
       }}
       onOpenRoute={navigateToRoute}
-      onOpenComputers={() => navigateToSettings("computers")}
+      onOpenComputers={() => navigateToRoute("computers")}
       onChanged={() => void refresh()}
     />
   ) : null;

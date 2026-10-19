@@ -276,7 +276,7 @@
   /* A skill's detail header names a record, not the route, so it keeps its
      lead — otherwise "Share" sat alone in a band with no skill name beside
      it. Same exception the record routes above take. */
-  .messenger-shell[data-route="settings"] .skill-detail .page-header-lead {
+  .messenger-shell[data-route="skills"] .skill-detail .page-header-lead {
     position: static;
     width: auto;
     height: auto;
@@ -286,7 +286,7 @@
     white-space: normal;
   }
 
-  .messenger-shell[data-route="settings"] .skill-detail .page-header {
+  .messenger-shell[data-route="skills"] .skill-detail .page-header {
     justify-content: space-between;
     align-items: flex-start;
   }
@@ -542,6 +542,8 @@
   .routine-page,
   .agents-page,
   .teams-page,
+  .computer-page,
+  .skills-page,
   .settings-page,
   .admin-console {
     grid-row: 2;

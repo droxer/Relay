@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import {
-  computerSettingsDestination,
+  computerManagementDestination,
   desktopBurst,
   newlyArrivedUnread,
   notificationHref,
@@ -60,7 +60,7 @@ describe("notificationView", () => {
     assert.equal(offline.tone, "warn");
     assert.equal(offline.title.key, "notifications.computer_offline");
     assert.deepEqual(offline.detail, { key: "notifications.computer_detail", params: { name: "Office Mac" } });
-    assert.equal(notificationHref(offline.target), "/settings/computers");
+    assert.equal(notificationHref(offline.target), "/computers");
     assert.equal(notificationHref(offline.target, "admin"), "/admin/computers");
 
     const online = notificationView(notice("computer_status", { nodeId: "node1", to: "online" }));
@@ -157,12 +157,12 @@ describe("newlyArrivedUnread", () => {
   });
 });
 
-describe("computerSettingsDestination", () => {
-  it("opens the person's own computer in settings, and shared hardware in the control panel for an admin", () => {
+describe("computerManagementDestination", () => {
+  it("opens the person's own computer on the Computers page, and shared hardware in the control panel for an admin", () => {
     const own = new Set(["mine"]);
-    assert.equal(computerSettingsDestination("mine", { isAdmin: true, ownNodeIds: own }), "settings");
-    assert.equal(computerSettingsDestination("shared", { isAdmin: true, ownNodeIds: own }), "admin");
-    assert.equal(computerSettingsDestination("shared", { isAdmin: false, ownNodeIds: own }), "settings");
+    assert.equal(computerManagementDestination("mine", { isAdmin: true, ownNodeIds: own }), "computers");
+    assert.equal(computerManagementDestination("shared", { isAdmin: true, ownNodeIds: own }), "admin");
+    assert.equal(computerManagementDestination("shared", { isAdmin: false, ownNodeIds: own }), "computers");
   });
 });
 

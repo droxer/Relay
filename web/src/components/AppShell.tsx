@@ -27,6 +27,8 @@ const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, stri
   routine: "nav.routine",
   agents: "nav.agents",
   teams: "nav.teams",
+  computers: "nav.computers",
+  skills: "nav.skills",
   settings: "nav.settings",
   channels: "nav.channels",
   admin: "nav.admin",
