@@ -161,28 +161,42 @@
     overflow-x: auto;
     overflow-y: hidden;
     border-right: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: 0;
+    /* One plane with the list under it: the strip is a row of chips on the
+       page, not a tinted band of its own. */
+    background: var(--surface-0);
+    scrollbar-width: none;
   }
+
+  .sec-rail::-webkit-scrollbar { display: none; }
 
   /* The content header already names the section, and the mobile topbar names
      the route — so the rail's own identity block is redundant here. */
   .sec-rail > .page-header { display: none; }
 
-  .sec-nav { flex: 1; min-width: 0; padding: var(--sp-2); }
-  .sec-nav-list { flex-direction: row; gap: var(--sp-2); }
-  .sec-nav-item { flex: 1; min-width: 0; }
-  .sec-nav-btn { justify-content: center; gap: var(--sp-2); }
-  .sec-nav-label { flex: none; }
+  /* Linear's view strip: every section is a chip at its own width, scrolling
+     sideways when the row runs out. Sharing the width evenly crushed long
+     labels and pushed the last chip ("All open 10") off the edge with no
+     hint the strip scrolled. */
+  .sec-nav { flex: 1; min-width: 0; padding: var(--sp-2) var(--sp-4) 0; }
+  .sec-nav-list { flex-direction: row; gap: var(--sp-1); }
+  .sec-nav-item { flex: 0 0 auto; min-width: 0; }
+  .sec-nav-btn {
+    justify-content: center;
+    gap: var(--sp-1-5);
+    padding: 0 var(--sp-3);
+    color: var(--ink-3);
+  }
+  .sec-nav-label { flex: none; white-space: nowrap; }
   .sec-nav-btn > svg { display: none; }
 
-  /* Four short sections divide a phone's width; seven do not. A rail this
-     long stops splitting the width evenly and becomes a scrolling strip of
-     chips at their own size — the container already scrolls (overflow-x
-     above), it was the `flex: 1` cells that were crushing seven labels into
-     55px each and stacking them on top of one another. */
-  .sec-nav-list:has(> :nth-child(5)) .sec-nav-item { flex: 0 0 auto; }
-  .sec-nav-list:has(> :nth-child(5)) .sec-nav-btn { padding: 0 var(--sp-3); }
-  .sec-nav-list:has(> :nth-child(5)) .sec-nav-label { white-space: nowrap; }
+  /* The current chip takes a neutral fill and full ink — on a strip of
+     chips the cobalt "you are here" wash read as a pressed button. */
+  .sec-nav-btn[data-active="true"],
+  .sec-nav-btn[data-active="true"]:hover {
+    color: var(--ink-1);
+    background: var(--control-fill);
+  }
 
   /* The mobile topbar names the route and the strip above names the section,
      so a header left holding nothing but a title is a dead band here. One
