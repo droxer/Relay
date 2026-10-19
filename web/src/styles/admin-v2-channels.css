@@ -219,7 +219,7 @@
 }
 
 /* Hero size of the same ink-on-neutral provider glyph — ownership is not an
-   action, so no cobalt wash here either. */
+   action, so no accent wash here either. */
 .adm-chat-avatar--hero {
   width: var(--avatar-2xl);
   height: var(--avatar-2xl);
@@ -392,7 +392,7 @@
 
 .adm-chat-callback code {
   overflow-wrap: anywhere;
-  /* The action cobalt is a FILL colour, not an ink for a code string; the
+  /* The action accent is a FILL colour, not an ink for a code string; the
      mono face already separates the string, so it takes plain ink. */
   color: var(--ink-1);
   font-size: var(--fs-2);

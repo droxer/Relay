@@ -287,7 +287,7 @@ summary:focus-visible,
    product spoke ten: `live` and `muted` were emitted from TS but had no
    entry here, so `--tone` went unset on them and every consumer reading
    `var(--tone, …)` silently took its fallback — a `.tone-live` badge halo
-   ringed in the cobalt action, a `.tone-live` hollow dot ringed in the
+   ringed in the accent action, a `.tone-live` hollow dot ringed in the
    critical red. The dashboard covered the hole by painting `--live` and
    `--ink-4` directly on its own selectors, which is why the gap stayed
    invisible outside it.
@@ -369,9 +369,9 @@ summary:focus-visible,
   --touch-target: 44px;
 }
 
-/* Generic ring/fade pulse — the one pattern behind every live/run indicator
-   (agent-stream pulse, agent live pulse, avatar pulse, dashboard live stat,
-   header busy pip). The ring reads --pulse-color so callers can re-tint; it
+/* Generic ring/fade pulse — for live OBJECTS larger than a dot, and for
+   passive presence at --t-pulse-calm (node online). A live dot takes
+   live-ring below instead. The ring reads --pulse-color so callers can re-tint; it
    falls back to --info. Set the cadence at the call site with --t-pulse
    (active work) or --t-pulse-calm (passive presence).
 
@@ -385,8 +385,38 @@ summary:focus-visible,
   100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pulse-color, var(--info)) 0%, transparent); }
 }
 
+/* The shared double-chevron (AuthCanvas `Chevrons`): each stroke reads its
+   own variable so a host can draw the brand handoff in place of ink. */
+.chevron-lead { stroke: var(--chevron-lead, currentColor); }
+.chevron-trail {
+  stroke: var(--chevron-trail, currentColor);
+  opacity: var(--chevron-trail-opacity, 0.45);
+}
+
+/* Live ring — Relay's signature "an agent is working" beat, and the ONE
+   motion every live DOT shares (state marks on the board and records, avatar
+   presence, the dashboard's running count). One exception: the thread-rail
+   pip sits in an overflow-hidden subline that would slice a ring into a
+   crescent, so it breathes in place on the same --t-pulse (thread.css). A hairline ring leaves the dot's
+   edge and fades as it grows, the visual of work being handed on — the same
+   handoff the logo's two chevrons draw.
+
+   The host is a pseudo-element laid exactly over its dot (inset: 0, or the
+   dot's own box) carrying `border: 1.5px solid var(--live)`. Only transform
+   and opacity move, so it stays on the compositor across a long list.
+   Its STATIC style is the settled halo (`opacity: 0.4; transform:
+   scale(1.6)`): under reduced motion a11y.css cuts the animation to one
+   instant iteration with no fill, so the ring rests there — "working" is
+   still told by shape, not by colour alone. Larger live objects (the
+   transcript rail node) keep pulse-ring / agent-rail-pulse; this is for dots. */
+@keyframes live-ring {
+  0%   { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(2.2); }
+}
+
 /* Opacity blink — the non-ring liveness pattern, for glyphs that breathe in
-   place rather than emit a ring (task status dot, login mark). Travel is read
+   place rather than emit a ring (thinking headlines, handoff dots). A live
+   DOT takes live-ring above instead. Travel is read
    from --blink-from so callers pick their floor without a new keyframe. */
 @keyframes blink {
   0%, 100% { opacity: var(--blink-from, 0); }

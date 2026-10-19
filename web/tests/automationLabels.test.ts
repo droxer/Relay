@@ -12,10 +12,10 @@ function flatten(tree: Tree, prefix = ""): Array<[string, string]> {
 }
 
 /* The feature is "Automations" wherever a reader sees it; `routine*` survives
-   only as a storage and wire name. "routine updates" on the login page is
-   plain English, not the feature. */
+   only as a storage and wire name. Add a key here only when "routine" is
+   plain English rather than the feature. */
 const RETIRED = /routine|例行/i;
-const PLAIN_ENGLISH = new Set(["login.do_handoff"]);
+const PLAIN_ENGLISH = new Set<string>();
 
 describe("Automation labels", () => {
   for (const locale of ["en", "zh-CN"]) {

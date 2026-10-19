@@ -31,7 +31,7 @@ export function TranscriptEmpty({
       body={t("transcript.landing_body")}
       illustration={(
         <span className="relay-empty-avatar" aria-hidden="true">
-          <RelayMark size={ICON.xl} />
+          <RelayMark size={ICON.xl} tone="brand" />
         </span>
       )}
       actions={ready && onSuggestion ? (

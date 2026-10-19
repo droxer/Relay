@@ -191,7 +191,7 @@
   .sec-nav-btn > svg { display: none; }
 
   /* The current chip takes a neutral fill and full ink — on a strip of
-     chips the cobalt "you are here" wash read as a pressed button. */
+     chips the accent "you are here" wash read as a pressed button. */
   .sec-nav-btn[data-active="true"],
   .sec-nav-btn[data-active="true"]:hover {
     color: var(--ink-1);

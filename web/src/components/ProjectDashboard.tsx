@@ -27,15 +27,16 @@ import { WorkspaceEmpty } from "./workspace/WorkspacePrimitives";
 
 const formatDays = (days: number | null) => (days === null ? "—" : `${days.toFixed(1)}d`);
 
-/* Five stages have to separate in one 8px bar, so each takes its own tone
-   (warn is textured as well, see admin-v2-dashboard.css). In progress takes
-   --live, which is reserved for work in flight and goes grey at zero. */
+/* Each stage takes the tone its status icon and row accent use everywhere
+   else: in progress is --live (grey at zero), review and done are --ok. Five
+   stages still separate in one 8px bar — review is hatched (delivered, not yet
+   accepted) beside done's solid fill; see admin-v2-dashboard.css. */
 type StageTone = "neutral" | "info" | "live" | "warn" | "good";
 const STAGE_TONE: Record<TaskWorkflowStage, StageTone> = {
   backlog: "neutral",
   assigned: "info",
   running: "live",
-  review: "warn",
+  review: "good",
   done: "good",
 };
 
@@ -143,6 +144,7 @@ function StageCard({ stages, total }: { stages: Record<TaskWorkflowStage, number
           <span
             key={stage}
             className={`adm-dash-bar-seg tone-${toneOf(stage)}`}
+            data-stage={stage}
             style={{ flexBasis: `${(stages[stage] / total) * 100}%` }}
             title={`${t(`backlog.statuses.${stage}`)}: ${stages[stage]}`}
           />

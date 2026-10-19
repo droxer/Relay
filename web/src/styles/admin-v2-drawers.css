@@ -347,7 +347,7 @@
 
 /* Static identity monogram, aria-hidden and never pressable — so it wears the
    neutral avatar recipe (.adm-node-avatar: surface fill, ink text, hairline),
-   not the cobalt action fill, which pressable things own. */
+   not the accent action fill, which pressable things own. */
 .adm-assign-avatar {
   display: inline-flex;
   align-items: center;

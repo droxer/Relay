@@ -377,11 +377,12 @@
    states have to separate in an 8px bar. */
 .adm-dash-bar-seg { background: var(--tone, var(--ink-4)); }
 
-.adm-dash-bar-seg.tone-warn {
+.adm-dash-bar-seg.tone-warn,
+.adm-dash-bar-seg[data-stage="review"] {
   background: repeating-linear-gradient(
     135deg,
-    var(--warn),
-    var(--warn) 2px,
+    var(--tone),
+    var(--tone) 2px,
     transparent 2px,
     transparent 4px
   );
@@ -431,6 +432,7 @@
    variable inherits past the label because --tone is not a property the
    label sets. */
 .adm-dash-stat-dot {
+  position: relative;
   width: var(--dot-sm);
   height: var(--dot-sm);
   border-radius: var(--r-full);
@@ -443,9 +445,15 @@
    instead of `live` at a zero count. */
 .adm-dash-stat { color: var(--tone, var(--ink-4)); }
 
-.adm-dash-stat.tone-live .adm-dash-stat-dot {
-  --pulse-color: var(--tone);
-  animation: pulse-ring var(--t-pulse) var(--ease) infinite;
+.adm-dash-stat.tone-live .adm-dash-stat-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--tone);
+  border-radius: var(--r-full);
+  opacity: 0.4;
+  transform: scale(1.6);
+  animation: live-ring var(--t-pulse) var(--ease) infinite;
 }
 
 /* Bad is told by shape, not brightness: at the --dot-sm tier a solid --err

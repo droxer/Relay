@@ -57,7 +57,7 @@ describe("Agent team management", () => {
     assert.doesNotMatch(agentDetailSource, /nav\.refresh|NavRefresh/);
     assert.doesNotMatch(teamWorkspaceSource, /nav\.refresh|NavRefresh/);
     // The shared list-header create affordance, in its primary tier — the
-    // modifier is what makes it the one cobalt control on the surface.
+    // modifier is what makes it the one accent control on the surface.
     assert.match(teamsSource, /className="page-header-icon-action page-header-icon-action--primary"[\s\S]*?onClick=\{\(\) => setAddTeam\(true\)\}/);
     // Creating a team must remain available from a selected team's detail
     // view; the dialog state itself is the sole authority for its visibility.

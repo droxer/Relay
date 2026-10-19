@@ -16,7 +16,7 @@ import { WAITLIST_QUERY_KEY } from "./useWaitlistQueue";
 const DEFAULT_BATCH = 10;
 
 /** "Invite next N": the waiting queue's oldest N, in one request. An outline
-    beside the section's primary, Invite by email — one cobalt fill per fold. */
+    beside the section's primary, Invite by email — one accent fill per fold. */
 export function InviteNextButton({ onInvited }: { onInvited: (results: WaitlistInviteResult[]) => void }) {
   const { t } = useTranslation();
   const { prompt, announce } = useDialogs();

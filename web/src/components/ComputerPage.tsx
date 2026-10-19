@@ -114,7 +114,7 @@ export function ComputerPage({
   const phone = useMediaQuery(PHONE_QUERY);
   /* In the phone top bar the create control is the same quiet icon square
      every list header portals there (Skills, Agents, Teams): the bar has room
-     for glyphs, not a labelled cobalt button beside the title and the bell.
+     for glyphs, not a labelled accent button beside the title and the bell.
      The usage readout rides in the tooltip; the limit reason still shows
      with the empty state and in the drawer. */
   const connectIconAction = (
@@ -134,7 +134,7 @@ export function ComputerPage({
   const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
     <div className="computer-connect-cta">
       {/* Connecting a computer is what this page is for, so the CTA carries
-          the cobalt — once. With no computers the empty state's CTA is the
+          the accent — once. With no computers the empty state's CTA is the
           primary and the header's steps down to ghost, so the two never
           compete. The usage readout (2/3) and limit reason stay attached to
           the action either way. */}

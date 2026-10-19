@@ -1,7 +1,7 @@
 /* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
    Near-black and near-white canvases, achromatic grey elevation and borders,
    and accessible neutral text keep the workspace quiet. The primary action
-   wears the cobalt accent (Linear-style, one per view), which also marks
+   wears the ultramarine accent (Linear-style, one per view), which also marks
    selection; links take their own blue; semantic hues identify status, liveness, and syntax.
    This is the only file allowed to originate a color.
    Reference: https://vercel.com/geist/colors
@@ -106,27 +106,33 @@
   --cta-hover: #d4d4d4;
   --cta-ink: #0a0a0a;
 
-  /* Accent — cobalt, tuned PER REGISTER. It has two jobs, both fills: the
+  /* Accent — ultramarine, tuned PER REGISTER, and Relay's one brand blue:
+     --link, the focus ring, and the app icon's lead chevron all come from
+     this hue (oklch 268), so the product never shows two unrelated blues.
+     It sits 10° toward violet from stock SaaS cobalt (256) — enough to be
+     ownable, while still 47° clear of --live so "act" never reads as
+     "working". */
+  /* Accent — tuned PER REGISTER. It has two jobs, both fills: the
      button to press (shadcn's --primary, the page-header create action) and
      WHAT IS CHOSEN (the selected-row accent bar, the active nav marker,
      checked checkboxes / radios / switches, the current pager page,
      ::selection, the skip link). Selection stays calm — a 10% wash plus the
      bar, never a solid fill — so a selected row never reads as a button.
 
-     One cobalt for both canvases read as a mid-tone that sank into the
+     One accent for both canvases read as a mid-tone that sank into the
      charcoal and never quite led on white. So each register gets its own
-     weight: a light sky blue here, carrying the dark canvas ink, and a deep
-     cobalt with white ink in the light register. Hover moves AWAY from the
-     canvas — lighter here, deeper there. Ratios, ink on fill: 6.95:1
-     (#4c9aff) and 8.6:1 on hover (#6aaeff). As an ink on the planes it
-     clears 4.5:1 too (6.95 / 6.29 / 5.79 on --surface-0/1/2), but text that
+     weight: a light periwinkle here, carrying the dark canvas ink, and a deep
+     ultramarine with white ink in the light register. Hover moves AWAY from
+     the canvas — lighter here, deeper there. Ratios, ink on fill: 6.95:1
+     (#7194fe) and 9.1:1 on hover (#90aefe). As an ink on the planes it
+     clears 4.5:1 too (6.95 / 6.29 / 5.78 on --surface-0/1/2), but text that
      needs a blue still takes --link: --action means "act" or "chosen". */
-  --action: #4c9aff;
-  --action-hover: #6aaeff;
-  /* Soft-cobalt callout tint, selection wash, active nav. 10% in both
+  --action: #7194fe;
+  --action-hover: #90aefe;
+  /* Soft-accent callout tint, selection wash, active nav. 10% in both
      registers: at 15% the selected rail row was a saturated blue block on the
      neutral charcoal, louder than the accent bar that already marks it. */
-  --action-soft: color-mix(in srgb, #4c9aff 10%, transparent);
+  --action-soft: color-mix(in srgb, #7194fe 10%, transparent);
   --on-action: #0a0a0a; /* the canvas ink — white measures 2.85:1 here */
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL
@@ -160,23 +166,27 @@
      bright enough here that the on-fill text is the canvas ink (6.8:1). */
   --on-err: #0a0a0a;
 
-  /* Live — work an agent is doing RIGHT NOW. The source system sanctions exactly two
-     accents beyond the neutrals: cobalt and Oculus purple. Cobalt is spoken
-     for by the primary action, so liveness takes the purple — a channel that
+  /* Live — work an agent is doing RIGHT NOW. Relay has exactly two accents
+     beyond the neutrals: the ultramarine action and this purple, so liveness
      can never be confused with "this is the button to press".
-     Legal only where --t-pulse is used; --t-pulse-calm surfaces stay
-     neutral. 5.7:1 on --surface-3, so an elapsed timer set in --live is
+     It labels running things (status icon, row accent, Busy badge, running
+     composer) and a live DOT always moves (live-ring); --t-pulse-calm
+     surfaces stay neutral. 5.7:1 on --surface-3, so an elapsed timer set in --live is
      legible, not decorative.
      Deliberately no --live-wash companion: a wash is a fill, and this colour
-     is never a fill. Tint a ring (see pulse-ring) or an ink, nothing else. */
+     is never a fill. Tint a ring (see live-ring) or an ink, nothing else.
+     One static exception: the logo. The app icons and RelayMark's `brand`
+     tone draw the handoff — an --action lead chevron and a --live trailing
+     one — so the two accents read as one story in the mark itself. */
   --live: #cf7ef0; /* the source system's oculus-purple #a121ce, lifted for the dark canvas */
 
   /* Link blue — wayfinding only: anchors in prose and the focus ring. Never
-     a fill, never a status, never an action. The light register takes
-     the source system's meta-link #385898; the dark register lifts it to keep AA on
-     the ink-deep canvas. */
-  --link-blue: #8ab4f8;
-  --link-blue-strong: #b9d3fb;
+     a fill, never a status, never an action. Same hue as --action (268),
+     a softer shade of it: lighter and less saturated here, so a focused
+     primary button rings in a visibly different blue than its own fill.
+     8.8:1 on --surface-2, the worst dark plane. */
+  --link-blue: #a2bcff;
+  --link-blue-strong: #c3d4fd;
 
   /* Code tokens — the ONE place hue is allowed to carry structure rather
      than meaning. Syntax highlighting is a reading aid, not a status: these
@@ -221,10 +231,10 @@
   --dark-surface: #171717;
   --dark-ink: #ededed;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
-  --dark-action: #4c9aff;
+  --dark-action: #7194fe;
 
   --light-canvas: #fafafa;
-  --light-action: #0052b8;
+  --light-action: #2a44d3;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's
@@ -826,16 +836,16 @@ html[data-theme="light"] {
   --line-1: #d4d4d4; /* hairline */
   --line-2: #e5e5e5; /* hairline-soft */
 
-  /* Deep cobalt with white ink: 7.24:1, 9.2:1 on the pressed #00449a, and
-     6.08:1 as an ink on --surface-2 (see the :root note). The soft selection
+  /* Deep ultramarine with white ink: 7.33:1, 9.4:1 on the pressed #2237af,
+     and 6.15:1 as an ink on --surface-2 (see the :root note). The soft selection
      tint follows the fill. 10%, not 15%: at 15% every
      selected row, active nav item and section-rail entry was a saturated blue
      block, and beside the leading accent bar that already marks the selection
      it read as a second, louder indicator. The flat register lets the bar
      lead and the wash only confirm it. */
-  --action: #0052b8;
-  --action-hover: #00449a;
-  --action-soft: color-mix(in srgb, #0052b8 10%, transparent);
+  --action: #2a44d3;
+  --action-hover: #2237af;
+  --action-soft: color-mix(in srgb, #2a44d3 10%, transparent);
   --on-action: #ffffff;
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
@@ -857,8 +867,9 @@ html[data-theme="light"] {
      5.5:1 on the canvas, so an elapsed timer set in it is legible. */
   --live: #a121ce;
 
-  --link-blue: #385898;      /* meta-link */
-  --link-blue-strong: #0457cb; /* deep cobalt — the active link colour */
+  /* The action's hue at lower chroma: 5.65:1 on --surface-2. */
+  --link-blue: #3e57a6;
+  --link-blue-strong: #2239a1; /* deeper on hover, like the action */
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on

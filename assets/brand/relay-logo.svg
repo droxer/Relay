@@ -1,21 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
-  <!-- Standalone wordmark. Ink adapts to the viewer's color scheme; the
-       cobalt action color remains reserved for the app-icon badge. -->
+  <!-- Standalone wordmark. The wordmark ink and both chevrons follow the
+       viewer's color scheme, using each register's palette ink-1, palette action
+       (lead chevron: what a person does) and palette live (trailing chevron: an
+       agent carrying the work on). -->
   <style>
-    :root { color-scheme: light dark; --relay-logo-ink: #0a1317; }
+    :root {
+      color-scheme: light dark;
+      --relay-logo-ink: #171717;
+      --relay-logo-lead: #2a44d3;
+      --relay-logo-trail: #a121ce;
+    }
     @media (prefers-color-scheme: dark) {
-      :root { --relay-logo-ink: #f3f6f7; }
+      :root {
+        --relay-logo-ink: #ededed;
+        --relay-logo-lead: #7194fe;
+        --relay-logo-trail: #cf7ef0;
+      }
     }
   </style>
   <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-ink, #0a1317)"/>
-    <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-ink, #0a1317)" opacity="0.45"/>
+    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #2a44d3)"/>
+    <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-trail, #a121ce)"/>
   </g>
   <text x="74" y="44"
-        font-family="'Optimistic VF', 'IBM Plex Sans', Montserrat, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
         font-size="42"
         font-weight="700"
         letter-spacing="0"
-        fill="var(--relay-logo-ink, #0a1317)">Relay</text>
+        fill="var(--relay-logo-ink, #171717)">Relay</text>
 </svg>

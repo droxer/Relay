@@ -10,7 +10,10 @@ import { PublicLink } from "./waitlist/PublicLink";
 /* The double-chevron geometry, shared by the bled watermark and the proof
    marks so the cover is signed by one shape at two sizes. `size` is omitted
    for the watermark, which CSS sizes against the viewport instead. The
-   landing page signs itself with the same shape. */
+   landing page signs itself with the same shape. Each chevron reads its own
+   stroke (--chevron-lead / --chevron-trail, default the current ink with the
+   trail at 45%), so a host can draw the brand handoff — the --action lead and
+   the --live trail — without a second component. */
 export function Chevrons({ size, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -26,18 +29,18 @@ export function Chevrons({ size, className }: { size?: number; className?: strin
       shapeRendering="geometricPrecision"
     >
       <g strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 14 L32 32 L12 50" stroke="currentColor" />
-        <path d="M32 14 L52 32 L32 50" stroke="currentColor" opacity="0.45" />
+        <path d="M12 14 L32 32 L12 50" className="chevron-lead" />
+        <path d="M32 14 L52 32 L32 50" className="chevron-trail" />
       </g>
     </svg>
   );
 }
 
-/* Three things you can do with Relay, in the order you meet them: ask, hand
-   off, stay in control. Verbs, not product tiers — a person at a sign-in
-   screen is deciding whether to bother, and the answer to that is what the
-   thing lets them do. */
-const COVER_POINTS = ["login.do_ask", "login.do_handoff", "login.do_control"] as const;
+/* Three things you do with Relay, in the order the landing page tells them:
+   assign the work, watch it run, decide what ships. The cover repeats the
+   landing headline, so a visitor who came through either door meets one
+   product. Verbs, not product tiers. */
+const COVER_POINTS = ["login.do_assign", "login.do_watch", "login.do_control"] as const;
 
 /**
  * The signed-out canvas: the cover on the left says what Relay is, the gate on
@@ -51,7 +54,8 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
     <main className="login-screen" data-mode={mode}>
       {/* The double-chevron mark bled huge off the canvas edge — the login
           signature. Fixed so it can leave the viewport without creating
-          scrollable overflow; washed from --lg-ink so it follows the theme. */}
+          scrollable overflow; a faint wash of the brand handoff (--action
+          lead, --live trail), so it follows the theme. */}
       <span className="login-bleed" aria-hidden="true">
         <Chevrons />
       </span>
@@ -63,7 +67,7 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
             The repository sits opposite it, as it does in the landing nav. */}
         <header className="login-cover-head">
           <PublicLink href="/" className="login-brand">
-            <RelayMark size={ICON.xl} />
+            <RelayMark size={ICON.xl} tone="brand" />
             <span className="login-wordmark">Relay</span>
           </PublicLink>
           <GithubLink className="login-github">

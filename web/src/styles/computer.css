@@ -301,9 +301,8 @@ button.computer-run-open:hover {
 
 /* Ink, not --live. The pulsing mark at the head of the row is the liveness
    signal; the elapsed time is the text channel that accompanies it, so colour
-   is never the only encoding (WCAG 1.4.1). A static purple timer was the one
-   place in the app where --live appeared without --t-pulse, which the scope
-   rule forbids: purple always moves. */
+   is never the only encoding (WCAG 1.4.1). A purple timer would repeat the
+   mark's message in a second, louder channel; the number reads as ink. */
 .computer-run-elapsed {
   color: var(--ink-3);
   font: var(--type-micro);

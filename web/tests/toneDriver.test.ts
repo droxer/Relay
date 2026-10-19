@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
  *   VOCABULARY — TS emitted ten tone names against a driver that knew five.
  *   `live` and `muted` set no variable at all, so consumers reading
  *   `var(--tone, …)` silently took a fallback (a `.tone-live` badge halo
- *   ringed in the cobalt ACTION; a `.tone-live` hollow dot in the critical
+ *   ringed in the accent ACTION; a `.tone-live` hollow dot in the critical
  *   red). The dashboard hid its own instance of the hole by painting --live
  *   directly on its selectors.
  *

@@ -558,7 +558,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
               {/* No manual refresh: the view polls on its own (useAdminNodes),
                   so the button was chrome for a job already done. */}
               {/* One primary per fold: the section's own create action wears
-                  the cobalt fill and anything beside it steps down to an
+                  the accent fill and anything beside it steps down to an
                   outline. Two ghost buttons side by side named no primary at
                   all, which is how a page ends up with no focal point. */}
               {view === "users" ? (
