@@ -1413,6 +1413,9 @@ describe("Pi provider config", () => {
         assert.match(command, /elif pi --help/);
         assert.match(preflight, /pi --list-models/);
         assert.match(preflight, /openai test-model/);
+        // A missing pi must reach bash's 127, and no step may run after a failure.
+        assert.doesNotMatch(preflight, /command -v pi/);
+        assert.match(preflight, /pi --version && \{ model_output=/);
       },
     );
   });

@@ -323,9 +323,17 @@ export function buildPiPreflightCommand(): string {
       `printf "%s\\n" "$model_output" | grep -E ${modelRowPattern}`,
     ].join("; ");
   } else {
-    modelCheck = shellCommand(listModelsArgv);
+    // With no provider signed in, `pi --list-models` still exits 0 and says
+    // "No models available"; surface that line as the failure detail.
+    modelCheck = [
+      `model_output=$(${shellCommand(listModelsArgv)} 2>&1) || { printf "%s\\n" "$model_output" >&2; exit 1; }`,
+      `if printf "%s\\n" "$model_output" | grep -q '^No models available'; then printf "%s\\n" "$model_output" >&2; exit 1; fi`,
+    ].join("; ");
   }
-  return runAsAgent(["node --version", "command -v pi", "pi --version", modelCheck].join(" && "));
+  // No `command -v pi`: a missing pi must fail `pi --version` with bash's 127
+  // so the daemon reads it as not installed. The braces keep the model check's
+  // `;` from running after an earlier step has failed.
+  return runAsAgent(["node --version", "pi --version", `{ ${modelCheck}; }`].join(" && "));
 }
 
 /**
