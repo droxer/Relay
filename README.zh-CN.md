@@ -35,12 +35,12 @@ Relay 采用本地优先架构：后端协调工作，守护进程在用户计�
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-issues-zh-CN.png" alt="Relay 议题表，按项目分组">
-      <br><strong>议题</strong><br>汇总所有项目中未完成的议题，并按待处理队列分类。
-    </td>
-    <td width="50%" valign="top">
       <img src="docs/images/relay-projects-zh-CN.png" alt="Relay 项目看板">
       <br><strong>项目</strong><br>从待办到完成的项目看板，附流动指标。
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-issues-zh-CN.png" alt="Relay 议题表，按项目分组">
+      <br><strong>议题</strong><br>汇总所有项目中未完成的议题，并按待处理队列分类。
     </td>
   </tr>
   <tr>
@@ -49,14 +49,14 @@ Relay 采用本地优先架构：后端协调工作，守护进程在用户计�
       <br><strong>例行任务</strong><br>周期性工作及其执行频率、下次运行时间和负责人。
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-agents-zh-CN.png" alt="Relay 智能体档案">
-      <br><strong>智能体</strong><br>运行时、所在计算机、角色、个性和技能。
+      <img src="docs/images/relay-teams-zh-CN.png" alt="Relay 团队档案">
+      <br><strong>团队</strong><br>成员、职责，以及工作如何在成员之间流转。
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-teams-zh-CN.png" alt="Relay 团队档案">
-      <br><strong>团队</strong><br>成员、职责，以及工作如何在成员之间流转。
+      <img src="docs/images/relay-agents-zh-CN.png" alt="Relay 智能体档案">
+      <br><strong>智能体</strong><br>运行时、所在计算机、角色、个性和技能。
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/relay-skills-zh-CN.png" alt="Relay 技能库">

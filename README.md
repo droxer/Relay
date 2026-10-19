@@ -35,12 +35,12 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-issues.png" alt="Relay tasks table grouped by project">
-      <br><strong>Tasks</strong><br>Open tasks across projects, with queues for work that needs your attention.
-    </td>
-    <td width="50%" valign="top">
       <img src="docs/images/relay-projects.png" alt="Relay project board">
       <br><strong>Projects</strong><br>A project board from backlog to done, with flow metrics.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-issues.png" alt="Relay tasks table grouped by project">
+      <br><strong>Tasks</strong><br>Open tasks across projects, with queues for work that needs your attention.
     </td>
   </tr>
   <tr>
@@ -49,14 +49,14 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
       <br><strong>Automations</strong><br>Recurring work with its cadence, next run, and assignee.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-agents.png" alt="Relay agent profile">
-      <br><strong>Agents</strong><br>Runtime, host computer, role, personality, and skills.
+      <img src="docs/images/relay-teams.png" alt="Relay team profile">
+      <br><strong>Teams</strong><br>Members, responsibilities, and how work moves between them.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-teams.png" alt="Relay team profile">
-      <br><strong>Teams</strong><br>Members, responsibilities, and how work moves between them.
+      <img src="docs/images/relay-agents.png" alt="Relay agent profile">
+      <br><strong>Agents</strong><br>Runtime, host computer, role, personality, and skills.
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/relay-skills.png" alt="Relay skills library">
