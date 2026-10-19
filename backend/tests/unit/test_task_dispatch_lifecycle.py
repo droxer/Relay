@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from relay.services import task_dispatch
+from relay.tasks import dispatch as task_dispatch
 
 
 @pytest.mark.parametrize(

@@ -19,14 +19,14 @@ from relay.daemon_registry.records import daemon_active_run
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from relay.daemon_registry.scheduling import effective_role_for_assignment, workspace_paths_match
 from relay.daemon_registry.credentials import sandbox_ui_token_matches
-from relay.daemon_registry.artifacts import is_snapshotable_path
+from relay.daemon_registry.runs.artifacts import is_snapshotable_path
 from relay.daemon_registry.records import _confined_workspace_path
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_agent_store
-from relay.persistence.daemon_store import DatabaseDaemonStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
 from store_fixtures import make_daemon_store, sqlite_url
 from store_fixtures import make_session_store
-from relay.persistence.store_common import new_database_id
+from relay.core.ids import new_database_id
 from store_fixtures import make_task_store
 from relay.sessions.controller import SessionController
 from relay.sessions.handoff_files import handoff_checkpoint_file, handoff_file
@@ -2658,7 +2658,7 @@ def test_next_member_starts_from_a_replica_that_missed_the_heartbeats(monkeypatc
             [command] = first.take_commands("sbx_alice", "node_token", renew_known_active=False)
             with monkeypatch.context() as patched:
                 # No slot when the first member finishes: the next one waits.
-                for module in ("delivery", "nodes"):
+                for module in ("dispatch.delivery", "nodes.liveness"):
                     patched.setattr(
                         f"relay.daemon_registry.{module}.node_accepts_run", lambda *args, **kwargs: False
                     )
@@ -4754,7 +4754,7 @@ def test_team_work_contract_survives_backend_restart(daemon_store_factory):
             # Polling revives the computer before its next full registration.
             assert recovered.take_commands("sbx_alice", "node_token") == []
             assert recovered.is_live("sbx_alice")
-            from relay.services.team_dispatch import team_member_assignments
+            from relay.teams.dispatch import team_member_assignments
 
             assignments = team_member_assignments(
                 [{"id": "lead", "executorKind": "codex"},
@@ -4881,7 +4881,7 @@ def test_team_work_contract_refuses_a_daemon_without_evidence_support(configured
     async def flow():
         with TemporaryDirectory() as root:
             _, _, registry = _pipeline_registry(root)
-            from relay.services.team_dispatch import team_member_assignments
+            from relay.teams.dispatch import team_member_assignments
 
             assignments = team_member_assignments(
                 [{"id": "lead", "executorKind": "codex"}, {"id": "builder", "executorKind": "claude"}],
@@ -5539,7 +5539,7 @@ def _take_report_reminder(registry: Any, command: dict[str, Any]) -> dict[str, A
 
 def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
     async def run_flow() -> None:
-        from relay.persistence.store_common import relay_task_event
+        from relay.persistence.events import relay_task_event
 
         with TemporaryDirectory() as root:
             _sessions, tasks, registry = _round_result_registry(root)
@@ -7918,7 +7918,7 @@ def test_finalization_retries_are_bounded_and_preserve_terminal_evidence(store_f
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 @pytest.mark.parametrize("delivered", [False, True])
 def test_failed_session_closes_agent_projection_only_after_execution_is_settled(store_factory, delivered):
-    from relay.services.execution_lifecycle import ExecutionLifecycleService
+    from relay.execution.lifecycle import ExecutionLifecycleService
 
     async def run_flow():
         with TemporaryDirectory() as root:
@@ -7998,7 +7998,7 @@ def test_terminal_projection_recovery_survives_event_write_failure(store_factory
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, monkeypatch):
-    from relay.services.execution_lifecycle import ExecutionLifecycleService
+    from relay.execution.lifecycle import ExecutionLifecycleService
 
     async def run_flow():
         with TemporaryDirectory() as root:
@@ -8008,7 +8008,7 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
                 "assignments": [{"agent": "codex"}, {"agent": "codex"}],
             })
             [command] = registry.take_commands("sbx_alice", "node_token")
-            for module in ("delivery", "nodes"):
+            for module in ("dispatch.delivery", "nodes.liveness"):
                 monkeypatch.setattr(
                     f"relay.daemon_registry.{module}.node_accepts_run", lambda *args, **kwargs: False
                 )
@@ -8033,9 +8033,9 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
     ("assignments", "broken"),
     [
         # The next member cannot be staged.
-        ([{"agent": "codex"}, {"agent": "codex"}], "delivery.compute_prior_agent_bridge"),
+        ([{"agent": "codex"}, {"agent": "codex"}], "dispatch.delivery.compute_prior_agent_bridge"),
         # The finished member was last and the round cannot close.
-        ([{"agent": "codex"}], "completion.completion_blockers"),
+        ([{"agent": "codex"}], "runs.completion.completion_blockers"),
     ],
 )
 def test_a_round_that_cannot_continue_after_a_turn_fails_visibly(
@@ -8249,7 +8249,7 @@ def test_a_restarted_daemon_reporting_a_journaled_run_marks_it_interrupted(store
     """A daemon that crashed mid-run comes back knowing it will not resume the
     run. Saying so turns a silent, indefinite reservation into one a person
     can see and release, and keeps the reaper from calling it never-received."""
-    from relay.services.execution_lifecycle import ExecutionLifecycleService
+    from relay.execution.lifecycle import ExecutionLifecycleService
 
     async def run_flow():
         with TemporaryDirectory() as root:
@@ -8335,7 +8335,7 @@ def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factor
     live for as long as the daemon kept renewing its lease. Saying so lets a
     person see it and report it gone, and the heartbeat then tells the daemon
     that run is settled so it can give the slot back."""
-    from relay.services.execution_lifecycle import ExecutionLifecycleService
+    from relay.execution.lifecycle import ExecutionLifecycleService
 
     async def run_flow():
         with TemporaryDirectory() as root:
@@ -8362,7 +8362,7 @@ def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factor
 
 
 def test_run_completed_keeps_the_output_truncated_flag():
-    from relay.api.daemon_events import daemon_node_event
+    from relay.api.computers.daemon_events import daemon_node_event
 
     base = {"type": "run.completed", "commandId": "c", "sessionId": "s", "runId": "r",
             "agent": "codex", "exitCode": 0, "agentLog": ""}
@@ -8425,7 +8425,7 @@ def test_a_run_remembers_the_runtime_conversation_it_ran_in():
 
 
 def test_a_malformed_runtime_session_id_is_dropped():
-    from relay.api.daemon_events import daemon_node_event
+    from relay.api.computers.daemon_events import daemon_node_event
 
     event = daemon_node_event({"type": "run.cancelled", "commandId": "c", "sessionId": "s", "runId": "r",
                                "agent": "claude", "runtimeSessionId": "x; rm -rf /"})
@@ -8456,7 +8456,7 @@ def test_resuming_a_rerun_hands_the_agent_its_conversation_back(capable):
 
 
 def test_only_a_rerun_decision_can_ask_to_resume():
-    from relay.collaboration.service import _validated_decision
+    from relay.collaboration.request import _validated_decision
 
     target = {"executorKind": "claude", "agentId": "agent_1"}
     assert _validated_decision({"kind": "rerun", "resume": True}, target)["resume"] is True

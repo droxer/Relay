@@ -4,7 +4,7 @@ import type { AgentTeam, UserAgent } from "../types.js";
  * A team lives on one computer. Team dispatch runs every member in one shared
  * workspace, so setup picks the computer first and the roster is drawn from
  * the agents on it — the same rule a project's crew follows. The backend
- * (`backend/relay/services/team_computer.py`) refuses a roster that spans
+ * (`backend/relay/teams/computer.py`) refuses a roster that spans
  * computers; these helpers keep the form from offering one.
  */
 

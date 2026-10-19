@@ -69,10 +69,10 @@ the same way a project's `workspaceSubpath` is a pure function of its id.
 | Routine itself (never runs) | `tasks/<routineId>` — browse-only parent |
 | Task inside a project | unchanged: the project's `workspaceSubpath` |
 
-Occurrences already carry `sourceRoutineId` (`backend/relay/persistence/task_store.py`,
+Occurrences already carry `sourceRoutineId` (`backend/relay/persistence/task/store.py`,
 `routine_occurrence_events`), so the two-level path needs no new field.
 
-One new module, `backend/relay/services/task_workspace.py`, owns this and nothing
+One new module, `backend/relay/tasks/workspace.py`, owns this and nothing
 else:
 
 - `task_workspace_subpath(task) -> str` — the table above.
@@ -81,7 +81,7 @@ else:
   fallback described in section 3.
 
 This is the single seam for the derivation, mirroring how
-`backend/relay/services/computer_limits.py` is the one place a personal-computer
+`backend/relay/computer/limits.py` is the one place a personal-computer
 limit resolves. Call sites do not recompute paths.
 
 The session continues to record `workspaceLayout` and `workspaceSubpath` exactly
@@ -112,7 +112,7 @@ so a task's layout is fixed at first dispatch.
 
 - The run-request builders stop hardcoding the layout and ask
   `resolve_task_workspace` instead:
-  - `backend/relay/services/task_dispatch.py`, `TaskDispatcher._request`
+  - `backend/relay/tasks/dispatch.py`, `TaskDispatcher._request`
   - `backend/relay/tasks/scheduler.py`, scheduled dispatch
   - `backend/relay/collaboration/service.py`, the project branch
   Chat threads without a task are untouched and stay on `thread`.

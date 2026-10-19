@@ -5,10 +5,10 @@ import json
 import threading
 from types import SimpleNamespace
 
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_event
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.services.execution_lifecycle import ExecutionLifecycleService
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_event
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.execution.lifecycle import ExecutionLifecycleService
 from relay.tasks.scheduler import TaskScheduler
 from sqlalchemy import event
 

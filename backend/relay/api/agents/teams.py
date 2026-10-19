@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
+
+from ...persistence.team.store import TeamValidationError, validate_team_payload
+from ...security.request_auth import require_admin_session
+from ...teams.computer import resolve_team_computer
+from .agents import _agent_with_placements, _user_exists
+from ..deps import AppContextDep
+from ..actors import request_actor
+from ..bodies import JsonBodyDep, string_field
+
+router = APIRouter()
+
+ROSTER_FIELDS = frozenset({"leadAgentId", "memberAgentIds", "computerId"})
+
+
+def _team_error(error: ValueError) -> HTTPException:
+    code = error.code if isinstance(error, TeamValidationError) else str(error)
+    return HTTPException(409 if code == "team_name_taken" else 400, code)
+
+
+def _active_team(ctx: AppContextDep, team_id: str) -> dict[str, Any]:
+    team = ctx.team_store.get_team(team_id)
+    if not team or team.get("deletedAt"):
+        raise HTTPException(404, "Team not found.")
+    return team
+
+
+def _owned_team(
+    ctx: AppContextDep, team_id: str, user_id: str
+) -> dict[str, Any]:
+    team = _active_team(ctx, team_id)
+    if team.get("ownerUserId") != user_id:
+        raise HTTPException(403, "Cannot access another user's team.")
+    return team
+
+
+def _validated_roster(
+    ctx: AppContextDep,
+    owner_user_id: str,
+    body: dict[str, Any],
+    *,
+    current: dict[str, Any] | None = None,
+) -> tuple[str | None, list[str], dict[str, Any]]:
+    """Validate a team write's roster and pin it to one computer.
+
+    Returns the lead, the members, and the computer fields to persist — empty
+    when the write touches neither roster nor computer.
+    """
+    if current is not None and not ROSTER_FIELDS & body.keys():
+        # Nothing about who is on the team or where it runs changes, so the
+        # stored roster is not re-judged. That keeps a team emptied by agent
+        # deletion renamable; the store still refuses to enable it.
+        return current.get("leadAgentId"), list(current.get("memberAgentIds") or []), {}
+    lead, members = validate_team_payload(
+        owner_user_id, body, ctx.agent_store, current=current
+    )
+    computer = resolve_team_computer(
+        owner_user_id,
+        body,
+        members,
+        current=current,
+        registry=ctx.registry,
+        agent_store=ctx.agent_store,
+        placement_store=ctx.agent_placement_store,
+    )
+    return lead, members, ({"computerId": computer} if computer else {})
+
+
+def _team_patch(
+    body: dict[str, Any], lead: str | None, members: list[str], computer: dict[str, Any]
+) -> dict[str, Any]:
+    patch = dict(body)
+    if "leadAgentId" in body:
+        patch["leadAgentId"] = lead
+    if "memberAgentIds" in body:
+        patch["memberAgentIds"] = members
+    return {**patch, **computer}
+
+
+def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
+    members = []
+    for agent_id in team.get("memberAgentIds", []):
+        agent = ctx.agent_store.get_agent(agent_id)
+        if agent and not agent.get("deletedAt"):
+            view = _agent_with_placements(ctx, agent)
+            members.append(
+                {
+                    "id": view["id"],
+                    "displayName": view["displayName"],
+                    "profileImageUrl": view.get("profileImageUrl"),
+                    "executorKind": view["executorKind"],
+                    "defaultRole": agent.get("defaultRole"),
+                    "enabled": view.get("enabled", True),
+                    "availability": view.get("availability", "offline"),
+                }
+            )
+    lead = next(
+        (member for member in members if member["id"] == team.get("leadAgentId")),
+        None,
+    )
+    return {**team, "members": members, "lead": lead}
+
+
+@router.get("/teams")
+def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    return {
+        "teams": [
+            _team_view(ctx, team)
+            for team in ctx.team_store.list_teams(actor["userId"])
+        ]
+    }
+
+
+@router.post("/teams", status_code=201)
+def create_team(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    body = _request_body
+    try:
+        lead, members, computer = _validated_roster(ctx, actor["userId"], body)
+        team = ctx.team_store.create_team(
+            actor["userId"],
+            {**body, "leadAgentId": lead, "memberAgentIds": members, **computer},
+        )
+    except ValueError as error:
+        raise _team_error(error) from error
+    return {"team": _team_view(ctx, team)}
+
+
+@router.patch("/teams/{team_id}")
+def update_team(
+    team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    current = _owned_team(ctx, team_id, actor["userId"])
+    body = _request_body
+    try:
+        lead, members, computer = _validated_roster(
+            ctx, actor["userId"], body, current=current
+        )
+        team = ctx.team_store.update_team(
+            team_id, _team_patch(body, lead, members, computer)
+        )
+    except ValueError as error:
+        raise _team_error(error) from error
+    return {"team": _team_view(ctx, team)}
+
+
+@router.delete("/teams/{team_id}", status_code=200)
+def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    _owned_team(ctx, team_id, actor["userId"])
+    deleted = ctx.team_store.delete_team(team_id)
+    ctx.profile_image_store.delete("teams", team_id)
+    return {"team": _team_view(ctx, deleted)}
+
+
+@router.get("/admin/teams")
+def list_control_panel_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    owner_user_id = request.query_params.get("ownerUserId") or None
+    return {
+        "teams": [
+            _team_view(ctx, team)
+            for team in ctx.team_store.list_teams(owner_user_id)
+        ]
+    }
+
+
+@router.post("/admin/teams", status_code=201)
+def create_control_panel_team(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    body = _request_body
+    owner_user_id = string_field(body, "ownerUserId")
+    if not owner_user_id:
+        raise HTTPException(400, "ownerUserId is required.")
+    if not _user_exists(ctx.auth_store, owner_user_id):
+        raise HTTPException(404, "User not found.")
+    try:
+        lead, members, computer = _validated_roster(ctx, owner_user_id, body)
+        team = ctx.team_store.create_team(
+            owner_user_id,
+            {
+                "name": body.get("name"),
+                "profileImageUrl": body.get("profileImageUrl"),
+                "enabled": body.get("enabled", True),
+                "memberConfigs": body.get("memberConfigs", {}),
+                "acceptanceCriteria": body.get("acceptanceCriteria", []),
+                "collaborationStyle": body.get("collaborationStyle"),
+                "leadAgentId": lead,
+                "memberAgentIds": members,
+                **computer,
+            },
+        )
+    except ValueError as error:
+        raise _team_error(error) from error
+    return {"team": _team_view(ctx, team)}
+
+
+@router.get("/admin/teams/{team_id}")
+def get_control_panel_team(
+    team_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    return {"team": _team_view(ctx, _active_team(ctx, team_id))}
+
+
+@router.patch("/admin/teams/{team_id}")
+def update_control_panel_team(
+    team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    current = _active_team(ctx, team_id)
+    body = _request_body
+    try:
+        lead, members, computer = _validated_roster(
+            ctx, current["ownerUserId"], body, current=current
+        )
+        team = ctx.team_store.update_team(
+            team_id, _team_patch(body, lead, members, computer)
+        )
+    except ValueError as error:
+        raise _team_error(error) from error
+    return {"team": _team_view(ctx, team)}
+
+
+@router.delete("/admin/teams/{team_id}", status_code=200)
+def delete_control_panel_team(
+    team_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    _active_team(ctx, team_id)
+    deleted = ctx.team_store.delete_team(team_id)
+    ctx.profile_image_store.delete("teams", team_id)
+    return {"team": _team_view(ctx, deleted)}

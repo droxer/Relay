@@ -11,8 +11,8 @@ from tempfile import TemporaryDirectory
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
-from relay.persistence.store_common import new_database_id
-from relay.persistence.stores import relay_event
+from relay.core.ids import new_database_id
+from relay.persistence.events import relay_event
 from relay.sessions.controller import SessionController
 
 NODE_AUTH = {"Authorization": "Bearer node_token"}

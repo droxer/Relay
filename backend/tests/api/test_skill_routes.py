@@ -138,7 +138,7 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
     def fetch(url, ref, subpath, *, allowed_hosts, **kwargs):
         calls.append((url, ref, subpath, allowed_hosts))
         return [{"path": "SKILL.md", "content": base64.b64decode(bundle()["files"][0]["contentBase64"])}]
-    monkeypatch.setattr("relay.services.skill_import.fetch_skill_bundle", fetch)
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
     payload = {"name": "review", "description": "Reviews code", "visibility": "org",
                "url": "https://github.com/example/skills", "ref": "main", "subpath": "review"}
     response = client.post("/api/v1/skills/import", json=payload)
@@ -156,10 +156,10 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
 
 
 def test_import_failure_does_not_publish(client, monkeypatch):
-    from relay.services.skill_import import SkillImportError
+    from relay.skills.git_import import SkillImportError
     def fail(*args, **kwargs):
         raise SkillImportError("host-not-allowed")
-    monkeypatch.setattr("relay.services.skill_import.fetch_skill_bundle", fail)
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fail)
     response = client.post("/api/v1/skills/import", json={
         "name": "review", "description": "d", "url": "https://example.com/o/r", "ref": "main",
     })

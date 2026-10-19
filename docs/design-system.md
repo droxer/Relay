@@ -419,7 +419,7 @@ metrics: every track is pinned to 0 because Han glyphs are square and must
 never be tightened, and reading leading loosens to 1.7/1.8/1.9. A language
 preference saved as `zh-TW` while Traditional Chinese was offered reads as
 `zh-CN` (`normalizeLanguage` in `web/src/lib/appStorage.ts`,
-`normalize_user_language` in `backend/relay/security/auth.py`).
+`normalize_user_language` in `backend/relay/security/auth_rows.py`).
 
 JetBrains Mono is vendored as a **latin** variable subset
 (`web/src/app/fonts/JetBrainsMono-Variable.woff2` with its OFL licence, wght

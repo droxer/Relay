@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 from issue_projects import routine_run_with_session
 
 from relay.app import create_app
-from relay.persistence.stores import relay_event
-from relay.services.produced_files import (
+from relay.persistence.events import relay_event
+from relay.tasks.produced_files import (
     file_currency,
     listing_directories,
     live_status,

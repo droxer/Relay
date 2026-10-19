@@ -5,7 +5,7 @@ from threading import RLock
 import pytest
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
-from relay.persistence.daemon_store import DatabaseDaemonStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
 from store_fixtures import make_daemon_store
 from store_fixtures import make_session_store
 from relay.sessions.controller import SessionController

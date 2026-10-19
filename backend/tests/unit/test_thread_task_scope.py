@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
-from relay.persistence.store_common import relay_task_event
+from relay.persistence.events import relay_task_event
 from store_fixtures import make_task_store
 from relay.sessions.task_scope import thread_task_scope
 

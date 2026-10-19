@@ -6,16 +6,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy import update
 
-from relay.persistence.session_import import migrate_local_sessions
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import (
-    SESSION_WORKSPACE_LAYOUT_THREAD,
-    _read_jsonl,
-    materialize_events,
-    new_database_id,
-    now_iso,
-    relay_event,
-)
+from relay.persistence.legacy.sessions import migrate_local_sessions
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.session.reducer import SESSION_WORKSPACE_LAYOUT_THREAD, materialize_events
+from relay.persistence.legacy.files import read_jsonl
+from relay.core.ids import new_database_id, now_iso
+from relay.persistence.events import relay_event
 
 
 class LegacySessionTree:
@@ -49,11 +45,11 @@ class LegacySessionTree:
         return self.get_session(session_id)
 
     def append_event(self, session_id: str, event: dict) -> dict:
-        self._write(session_id, [*_read_jsonl(self.events_path(session_id)), event])
+        self._write(session_id, [*read_jsonl(self.events_path(session_id)), event])
         return self.get_session(session_id)
 
     def get_session(self, session_id: str) -> dict:
-        return materialize_events(_read_jsonl(self.events_path(session_id)))
+        return materialize_events(read_jsonl(self.events_path(session_id)))
 
     def create_artifact(self, session_id: str, title: str, body: str) -> dict:
         artifact_id = new_database_id()

@@ -4,9 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.store import DatabaseAgentStore
 from store_fixtures import make_agent_store
-from relay.services.skill_grants import SkillGrantError, grant, read_grants, revoke
+from relay.skills.grants import SkillGrantError, grant, read_grants, revoke
 
 
 class Skills:

@@ -207,7 +207,8 @@ def test_setup_cannot_be_applied_before_it_is_proposed(setup_env):
 
 
 def test_a_revise_that_cannot_dispatch_restores_the_proposal(setup_env, monkeypatch):
-    from relay.collaboration.service import CollaborationConductor, CollaborationError
+    from relay.collaboration.errors import CollaborationError
+    from relay.collaboration.service import CollaborationConductor
 
     app, client, node, project, planner, builder = setup_env
     thread_id = client.post(f"/api/v1/projects/{project['id']}/setup", json={
@@ -240,7 +241,7 @@ def test_completion_rechecks_setup_inside_the_project_mutation(setup_env, monkey
         monkeypatch.setattr(store, "_mutate", mutate)
         current = store.get_project(project_id)
         if replacement == "dismissed":
-            from relay.services.project_setup import resolved_setup
+            from relay.projects.setup import resolved_setup
 
             intervening.update(store.update_project(
                 project_id, {"setup": resolved_setup(current["setup"], "dismissed")},

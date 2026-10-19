@@ -165,7 +165,7 @@ design as built differs from the proposal in three places, each noted below.
   prompt offers the same next steps as a gate stop ("Keep going" resumes,
   "Status" asks without resuming) under its own title.
 - Done: `done → review` is decided in one helper, `acceptance_status`
-  (`persistence/task_lifecycle.py`), used by the closeout, the task status
+  (`persistence/task/lifecycle.py`), used by the closeout, the task status
   write, and the completion-repair expectation.
 - Done: the workspace brief's "active threads" metric and its task links use
   the task's wait (`session_awaits_human(session, tasks)`, `awaiting.sessionId`).

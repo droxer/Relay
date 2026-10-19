@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from relay.core.agent_names import AGENT_NAME_POOL, generate_agent_name
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.store import DatabaseAgentStore
 from store_fixtures import make_agent_store
 
 

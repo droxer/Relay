@@ -10,7 +10,7 @@ from ..daemon_registry.node_backend import ServerDaemonNodeBackend
 from ..security.rate_limit import AuthRateLimiter
 from ..tasks.scheduler import TaskScheduler
 from ..automations.service import AutomationService, max_runs_per_hour_from_env
-from ..persistence.automation_store import DatabaseAutomationStore
+from ..persistence.automation.store import DatabaseAutomationStore
 from ..core.settings import AppSettings, RateLimit
 from ..persistence.protocols import (
     ManagedNodeStore,

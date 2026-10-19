@@ -22,18 +22,18 @@ from ..persistence.protocols import (
     TaskStore,
     TeamStore,
 )
-from ..persistence.profile_image_store import DatabaseProfileImageStore
-from ..persistence.skill_store import DatabaseSkillStore
-from ..services.event_notifier import KeyedEventNotifier, PostgresNotificationBridge
-from ..services.workspace_query import WorkspaceQueryBroker
-from ..persistence.managed_node_store import DatabaseManagedNodeStore
-from ..persistence.automation_store import DatabaseAutomationStore
-from ..persistence.notification_store import DatabaseNotificationStore
+from ..persistence.account.profile_images import DatabaseProfileImageStore
+from ..persistence.skill.store import DatabaseSkillStore
+from ..realtime.event_notifier import KeyedEventNotifier, PostgresNotificationBridge
+from ..computer.workspace_query import WorkspaceQueryBroker
+from ..persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+from ..persistence.automation.store import DatabaseAutomationStore
+from ..persistence.notification.store import DatabaseNotificationStore
 from ..core.settings import AppSettings
 from ..security.rate_limit import AuthRateLimiter
-from ..services.execution_lifecycle import ExecutionLifecycleService
-from ..services.password_reset import PasswordResetService
-from ..services.waitlist import WaitlistService
+from ..execution.lifecycle import ExecutionLifecycleService
+from ..accounts.password_reset import PasswordResetService
+from ..accounts.waitlist import WaitlistService
 
 ChatProbe = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
 ChatProvision = Callable[[dict[str, Any], str], Awaitable[tuple[bool, str]]]

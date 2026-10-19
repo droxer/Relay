@@ -27,8 +27,8 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from relay.persistence.schema import metadata
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.services.task_deletion import task_has_active_linked_session
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.tasks.deletion import task_has_active_linked_session
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import UTC
@@ -137,8 +137,8 @@ def test_dangling_legacy_session_id_is_treated_as_missing(
 def test_empty_project_migration_preserves_data_and_guards_downgrade(
     migrated_schema: tuple[str, str],
 ) -> None:
-    from relay.persistence.agent_store import DatabaseAgentStore
-    from relay.persistence.project_store import DatabaseProjectStore
+    from relay.persistence.agent.store import DatabaseAgentStore
+    from relay.persistence.project.store import DatabaseProjectStore
     from relay.security.auth import DatabaseAccountAuthStore
 
     url, _schema = migrated_schema
@@ -175,8 +175,8 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
 def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema, monkeypatch, scoped):
     from concurrent.futures import ThreadPoolExecutor
 
-    from relay.persistence.store_common import relay_task_event
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.events import relay_task_event
+    from relay.persistence.task.store import DatabaseTaskStore
     from relay.security.auth import DatabaseAccountAuthStore
 
     monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
@@ -209,8 +209,8 @@ def test_postgres_task_admission_does_not_lock_other_users(migrated_schema):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from relay.persistence.store_common import relay_task_event
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.events import relay_task_event
+    from relay.persistence.task.store import DatabaseTaskStore
 
     url, _ = migrated_schema
     store = DatabaseTaskStore(url)
@@ -245,9 +245,9 @@ def test_postgres_task_admission_does_not_lock_other_users(migrated_schema):
 
 
 def test_postgres_performance_projections_and_queue_pages(migrated_schema):
-    from relay.persistence.session_store import DatabaseSessionStore
-    from relay.persistence.store_common import relay_event
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.session.store import DatabaseSessionStore
+    from relay.persistence.events import relay_event
+    from relay.persistence.task.store import DatabaseTaskStore
 
     url, _ = migrated_schema
     owner = str(uuid.uuid4())
@@ -297,7 +297,7 @@ def test_postgres_performance_projections_and_queue_pages(migrated_schema):
 def test_postgres_managed_nodes_lock_independently_and_enrollment_is_shared(migrated_schema):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
     url, _ = migrated_schema
     a, b = DatabaseManagedNodeStore(url), DatabaseManagedNodeStore(url)
     one = a.create_node({'userId': 'one'})
@@ -326,7 +326,7 @@ def test_postgres_recovery_claims_disjoint_pages_and_expired_claims_recover(migr
     from concurrent.futures import ThreadPoolExecutor
     from datetime import datetime, timedelta
     from sqlalchemy import insert, update
-    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.store import DatabaseDaemonStore
     from relay.persistence.daemon.rows import node_to_row, run_request_to_row
     url, _ = migrated_schema
     a, b = DatabaseDaemonStore(url), DatabaseDaemonStore(url)
@@ -371,8 +371,8 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
     from datetime import datetime
     from threading import Event
     from relay.automations.service import AutomationService
-    from relay.persistence.automation_store import DatabaseAutomationStore
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.automation.store import DatabaseAutomationStore
+    from relay.persistence.task.store import DatabaseTaskStore
 
     url, _ = migrated_schema
     tasks = DatabaseTaskStore(url)
@@ -409,7 +409,7 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
 
 
 def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeypatch):
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.task.store import DatabaseTaskStore
     url, _ = migrated_schema
     tasks = DatabaseTaskStore(url)
     routine = tasks.create_task({"title": "Legacy routine", "isRoutine": True, "routineEnabled": True,
@@ -429,9 +429,9 @@ def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeyp
 
 
 def test_schema_review_backfills_derived_columns_and_projections(migrated_schema):
-    from relay.persistence.daemon_store import DatabaseDaemonStore
-    from relay.persistence.store_common import relay_event
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.daemon.store import DatabaseDaemonStore
+    from relay.persistence.events import relay_event
+    from relay.persistence.task.store import DatabaseTaskStore
 
     url, _ = migrated_schema
     owner = str(uuid.uuid4())
@@ -494,7 +494,7 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
 def test_postgres_output_compaction_redacts_in_place(migrated_schema):
     from datetime import datetime, timedelta
 
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     url, _ = migrated_schema
     sessions = DatabaseSessionStore(url)
@@ -537,7 +537,7 @@ def test_password_reset_redemption_waits_for_account_before_claiming_link(migrat
     from relay.notifications.mailer import NullMailer
     from relay.security.auth import DatabaseAccountAuthStore
     from relay.security.password_resets import ResetNotLiveError, password_reset_store_for
-    from relay.services.password_reset import PasswordResetService
+    from relay.accounts.password_reset import PasswordResetService
     from sqlalchemy import event, select, update
     from sqlalchemy.sql.dml import Update
 

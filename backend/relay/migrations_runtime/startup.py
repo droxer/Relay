@@ -13,8 +13,8 @@ from typing import Any
 
 from loguru import logger
 
-from ..persistence.agent_placement_store import reconcile_single_active_placement
-from ..persistence.file_store_import import (
+from ..persistence.agent.placements import reconcile_single_active_placement
+from ..persistence.legacy.file_stores import (
     CLI_COMMAND,
     file_stores_imported,
     import_local_file_stores_before_serving,
@@ -25,7 +25,7 @@ from ..security.auth_file_import import (
     legacy_accounts_present,
     migrate_legacy_accounts,
 )
-from ..services.team_membership import reconcile_team_memberships
+from ..teams.membership import reconcile_team_memberships
 from .agent_computer_id import (
     log_agent_computer_id_status,
     migrate_agent_computer_ids,

@@ -10,12 +10,13 @@ Follow the [quick start](README.md#quick-start) to run the backend, a daemon, an
 
 ```
 backend/                  Python / FastAPI control plane
-  relay/api/              HTTP routes, one module per domain (threads, tasks, agents, teams, projects, admin …)
+  relay/api/              HTTP routes, one subpackage per domain (threads, tasks, agents, projects, computers, admin …)
   relay/persistence/      Event-sourced stores for sessions, tasks, agents, teams, and projects
   relay/sessions/         Session controller, handoff, and conversation continuity
   relay/daemon_registry/  Computer admission, command leases, run dispatch
-  relay/tasks/            Scheduler that promotes routines and dispatches assigned issues
-  relay/services/         Assignment, workspaces, team and project runtime rules
+  relay/tasks/            Task assignment, workspaces, dispatch, and the background scheduler
+  relay/accounts/, agents/, teams/, projects/, skills/, computer/, execution/, realtime/
+                          Domain application operations
   relay/security/         Auth store, JWT, password policy, rate limiting
   migrations/             Alembic migrations
   tests/                  pytest suite

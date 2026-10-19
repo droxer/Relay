@@ -44,7 +44,7 @@ def test_installer_missing_build_fails_explicitly(monkeypatch, tmp_path):
 
 def test_setup_command_is_the_bare_installer_pipeline(monkeypatch):
     from starlette.requests import Request
-    from relay.api.computer_installer_routes import computer_setup_command
+    from relay.api.computers.installer import computer_setup_command
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://eveland.ai")
     monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
@@ -54,7 +54,7 @@ def test_setup_command_is_the_bare_installer_pipeline(monkeypatch):
 
 def test_setup_command_names_the_web_origin_when_split(monkeypatch):
     from starlette.requests import Request
-    from relay.api.computer_installer_routes import computer_setup_command
+    from relay.api.computers.installer import computer_setup_command
 
     # The web host redirects /install.sh to the API, so people see one domain.
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.get-relay.cc")
@@ -65,7 +65,7 @@ def test_setup_command_names_the_web_origin_when_split(monkeypatch):
 
 def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
     from starlette.requests import Request
-    from relay.api.computer_installer_routes import computer_install_command
+    from relay.api.computers.installer import computer_install_command
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
     monkeypatch.delenv("RELAY_PUBLIC_WEB_URL", raising=False)
@@ -344,7 +344,7 @@ cp "$fixture" "$2"
 
 def test_token_response_only_offers_installer_for_complete_personal_computers(monkeypatch):
     from starlette.requests import Request
-    from relay.api.daemon_node_routes import _token_response
+    from relay.api.computers.enrollment import _token_response
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
@@ -393,7 +393,7 @@ def test_windows_installer_missing_build_fails_explicitly(monkeypatch, tmp_path)
 
 def test_windows_commands_quote_every_argument_for_powershell(monkeypatch):
     from starlette.requests import Request
-    from relay.api.computer_installer_routes import computer_windows_install_command, computer_windows_setup_command
+    from relay.api.computers.installer import computer_windows_install_command, computer_windows_setup_command
 
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
@@ -422,7 +422,7 @@ def _bundle_with(tmp_path, manifest):
 
 
 def test_a_bundle_lacking_a_required_capability_is_named(tmp_path):
-    from relay.api.computer_installer_routes import bundle_missing_capabilities
+    from relay.api.computers.installer import bundle_missing_capabilities
     from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 
     current = _bundle_with(tmp_path, {"capabilities": sorted(DAEMON_NODE_CAPABILITIES)})
@@ -435,7 +435,7 @@ def test_a_bundle_lacking_a_required_capability_is_named(tmp_path):
 
 def test_startup_warns_about_a_stale_bundle(monkeypatch, tmp_path):
     from loguru import logger
-    from relay.api.computer_installer_routes import warn_if_bundle_stale
+    from relay.api.computers.installer import warn_if_bundle_stale
 
     messages: list[str] = []
     sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")

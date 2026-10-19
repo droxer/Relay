@@ -1,0 +1,206 @@
+"""Resolve task execution and browsing from one durable workspace binding."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ..core.computer_identity import computer_id
+from ..core.daemon_capabilities import (
+    DAEMON_CAPABILITY_ARTIFACT_LAYOUT,
+    has_capability,
+)
+from ..core.workspace_layout import (
+    TASK_WORKSPACE_ROOT,
+    WORKSPACE_LAYOUT_PROJECT,
+    WORKSPACE_LAYOUT_TASK,
+    WORKSPACE_LAYOUT_THREAD,
+    workspace_artifacts_dir,
+)
+from ..core.workspace_capabilities import required_workspace_capabilities
+
+__all__ = [
+    "TASK_WORKSPACE_ROOT",
+    "WORKSPACE_LAYOUT_PROJECT",
+    "WORKSPACE_LAYOUT_TASK",
+    "WORKSPACE_LAYOUT_THREAD",
+    "recorded_session_workspace",
+    "recorded_task_workspace",
+    "resolve_task_workspace",
+    "task_artifacts_dir",
+    "task_workspace_nodes",
+    "task_workspace_subpath",
+    "workspace_artifacts_dir",
+]
+
+
+def task_workspace_subpath(task: dict[str, Any], *, shared_automation: bool = True) -> str:
+    """The durable directory a task's rounds share below the node root.
+
+    An automation's occurrences share the automation's own directory
+    (`tasks/<routineId>/`) and keep their deliverables apart under it
+    (`workspace_artifacts_dir`). A daemon without the `artifact-layout`
+    capability would pile every run into one `artifacts/`, so it keeps the
+    older per-occurrence directory instead.
+    """
+    routine_id = task.get("sourceRoutineId")
+    if isinstance(routine_id, str) and routine_id:
+        if shared_automation:
+            return f"{TASK_WORKSPACE_ROOT}/{routine_id}"
+        return f"{TASK_WORKSPACE_ROOT}/{routine_id}/{task['id']}"
+    return f"{TASK_WORKSPACE_ROOT}/{task['id']}"
+
+
+def task_artifacts_dir(task: dict[str, Any]) -> str | None:
+    """The deliverables directory a task's workspace browser opens on.
+
+    Read from the recorded binding when the task has run; otherwise the
+    layout it will be given at dispatch, so an unstarted task still opens on
+    the right folder once files appear.
+    """
+    binding = task.get("workspaceBinding")
+    if binding:
+        return workspace_artifacts_dir(
+            binding.get("layout"), binding.get("subpath"), task=task
+        )
+    if task.get("projectId"):
+        return None
+    return workspace_artifacts_dir(
+        WORKSPACE_LAYOUT_TASK, task_workspace_subpath(task), task=task
+    )
+
+
+def recorded_task_workspace(
+    task: dict[str, Any],
+    session_store: Any | None = None,
+    nodes: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Prefer the durable task event; recover legacy layout from recorded sessions.
+
+    Never infer a legacy path from today's project membership or routine id.
+    The newest surviving session preserves the historical browsing convention.
+    """
+    if task.get("workspaceBinding"):
+        return dict(task["workspaceBinding"])
+    if session_store is None:
+        return None
+    by_id = {node["id"]: node for node in nodes or []}
+    for session_id in reversed(task.get("linkedSessionIds") or []):
+        try:
+            session = session_store.get_session(session_id)
+        except (KeyError, FileNotFoundError):
+            continue
+        if not session:
+            continue
+        layout = session.get("workspaceLayout") or "node-root"
+        identity = _session_computer_identity(session, by_id)
+        node_id = session.get("daemonNodeId")
+        # A thread created with the task has not necessarily been admitted yet.
+        # It has no files on a Computer to recover until its first execution.
+        unbound = not (
+            identity
+            or node_id
+            or task.get("startedAt")
+            or task.get("executionOwner")
+            or session.get("agentRuns")
+            or session.get("collaborationRounds")
+        )
+        return {
+            "computerId": identity or f"node:{node_id}",
+            "layout": layout,
+            "subpath": session.get("workspaceSubpath"),
+            "sessionId": session_id,
+            **({"unbound": True} if unbound else {}),
+        }
+    return None
+
+
+def _session_computer_identity(
+    session: dict[str, Any], nodes_by_id: dict[str, dict[str, Any]]
+) -> str | None:
+    identity = session.get("computerId")
+    if not identity and session.get("managedNodeId"):
+        identity = f"managed:{session['managedNodeId']}"
+    node_id = session.get("daemonNodeId")
+    if not identity and node_id in nodes_by_id:
+        identity = computer_id(nodes_by_id[node_id])
+    return identity
+
+
+def recorded_session_workspace(
+    session: dict[str, Any], nodes: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The workspace a thread's runs wrote into, in the task binding's shape.
+
+    Generated-file paths are relative to this root, so a live read of one
+    resolves here. None until the thread has run somewhere."""
+    by_id = {node["id"]: node for node in nodes}
+    identity = _session_computer_identity(session, by_id)
+    node_id = session.get("daemonNodeId")
+    if not identity and not node_id:
+        return None
+    return {
+        "computerId": identity or f"node:{node_id}",
+        "layout": session.get("workspaceLayout") or "node-root",
+        "subpath": session.get("workspaceSubpath"),
+        "sessionId": session["id"],
+        **(
+            {"workspaceRoot": session["workspacePath"]}
+            if session.get("workspacePath")
+            else {}
+        ),
+    }
+
+
+def task_workspace_nodes(
+    task: dict[str, Any], nodes: list[dict[str, Any]], session_store: Any | None = None
+) -> list[dict[str, Any]]:
+    binding = recorded_task_workspace(task, session_store, nodes)
+    if not binding or binding.get("unbound"):
+        return nodes
+    return [node for node in nodes if computer_id(node) == binding["computerId"]]
+
+
+def resolve_task_workspace(
+    task: dict[str, Any],
+    *,
+    node: dict[str, Any] | None,
+    project_snapshot: dict[str, Any] | None = None,
+    session_store: Any | None = None,
+) -> tuple[str, str | None]:
+    binding = recorded_task_workspace(task, session_store, [node] if node else [])
+    capabilities = (node or {}).get("capabilities") or []
+    if binding:
+        if not node or (
+            not binding.get("unbound") and computer_id(node) != binding["computerId"]
+        ):
+            raise ValueError(
+                "workspace_unavailable: this task's files are on another Computer."
+            )
+        if binding.get("workspaceRoot") and binding["workspaceRoot"] != node.get(
+            "workspacePath"
+        ):
+            raise ValueError(
+                "workspace_unavailable: this Computer's workspace root changed; restore it before resuming."
+            )
+        layout, subpath = binding["layout"], binding.get("subpath")
+    elif task.get("linkedSessionIds"):
+        raise ValueError(
+            "workspace_unavailable: this task's recorded workspace cannot be recovered."
+        )
+    elif project_snapshot:
+        layout, subpath = WORKSPACE_LAYOUT_PROJECT, project_snapshot["workspaceSubpath"]
+    else:
+        layout, subpath = WORKSPACE_LAYOUT_TASK, task_workspace_subpath(
+            task,
+            shared_automation=has_capability(node, DAEMON_CAPABILITY_ARTIFACT_LAYOUT),
+        )
+    for required in required_workspace_capabilities(layout, subpath):
+        if required not in capabilities:
+            raise ValueError(
+                f"workspace_unavailable: this Computer needs {required} support; upgrade its daemon."
+            )
+    if layout in ("task", "project") and not subpath:
+        raise ValueError(
+            "workspace_unavailable: the recorded workspace path is missing."
+        )
+    return layout, subpath

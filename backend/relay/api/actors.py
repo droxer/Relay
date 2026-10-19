@@ -10,7 +10,7 @@ from ..daemon_registry.registry import DaemonNodeRegistry
 from ..daemon_registry.credentials import sandbox_ui_token_matches
 from ..persistence.protocols import AuthStore, SessionStore, TaskStore
 from ..security.actor import Actor
-from ..security.auth import require_user_session
+from ..security.request_auth import require_user_session
 from .bodies import string_field
 from .deps import app_context
 

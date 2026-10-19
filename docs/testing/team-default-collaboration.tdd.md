@@ -47,7 +47,7 @@ UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest backend/tests
 Coverage command:
 
 ```sh
-UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev --with pytest-cov pytest backend/tests/unit/test_team_dispatch.py backend/tests/api/test_team_routes.py -k 'team_dispatch or default_team_delegates or task_assigned_to_team_starts' --cov=relay.services.team_dispatch --cov-report=term-missing -q
+UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev --with pytest-cov pytest backend/tests/unit/test_team_dispatch.py backend/tests/api/test_team_routes.py -k 'team_dispatch or default_team_delegates or task_assigned_to_team_starts' --cov=relay.teams.dispatch --cov-report=term-missing -q
 ```
 
 Result: **80%** of the dispatch module, **29 passed**. This is module coverage,

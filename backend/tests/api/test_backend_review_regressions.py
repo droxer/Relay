@@ -14,7 +14,7 @@ from issue_projects import routine_run_with_session
 from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.ids import new_database_id, now_iso
-from relay.services.event_notifier import (
+from relay.realtime.event_notifier import (
     KeyedEventNotifier,
     database_notification_bridge,
 )
@@ -387,7 +387,7 @@ def test_dispatching_decisions_are_refused_without_a_dispatch(review_client, rev
 
 @pytest.mark.parametrize("kind", ["cancel", "mark_done"])
 def test_old_round_cannot_settle_newer_task_execution(review_app, review_client, kind):
-    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.events import relay_task_event
 
     app = review_app
     task = app.state.task_store.create_task({"title": "Shared task", "ownerUserId": "admin"})
@@ -537,11 +537,11 @@ def test_mark_done_is_the_humans_acceptance(review_app, review_client):
 
 def test_reject_serializes_validation_with_run_admission(review_app, review_client, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
-    from relay.api import session_routes
+    from relay.api.threads import decisions as thread_decisions
 
     _task, session, controller = _blocked_task_thread(review_app)
     controller.complete_session(session["id"], "Done")
-    original = session_routes._assert_rejectable
+    original = thread_decisions._assert_rejectable
     with ThreadPoolExecutor(max_workers=1) as pool:
         def validate(snapshot, ctx):
             original(snapshot, ctx)
@@ -551,7 +551,7 @@ def test_reject_serializes_validation_with_run_admission(review_app, review_clie
                     ctx.registry.dispatch_lock.release()
                 return acquired
             assert not pool.submit(can_admit).result(timeout=2)
-        monkeypatch.setattr(session_routes, "_assert_rejectable", validate)
+        monkeypatch.setattr(thread_decisions, "_assert_rejectable", validate)
         response = review_client.post(f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"})
     assert response.status_code == 200
 

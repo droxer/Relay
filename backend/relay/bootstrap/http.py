@@ -12,7 +12,7 @@ from loguru import logger
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from ..core import deploy_config
-from ..security.auth import USER_COOKIE_NAME
+from ..security.request_auth import USER_COOKIE_NAME
 
 
 CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200

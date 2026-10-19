@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.store import DatabaseAgentStore
 from store_fixtures import make_agent_store
 
 

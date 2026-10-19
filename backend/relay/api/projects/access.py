@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import HTTPException
+
+from ...core.computer_identity import computer_id
+from ...projects.runtime import project_work_error
+from ..deps import AppContextDep
+from ...projects.access import ProjectAccessError, project_for_owner as owned_project
+
+
+def project_for_owner(
+    ctx: AppContextDep, project_id: str | None, owner_user_id: str | None,
+    *, require_enabled: bool = False,
+) -> dict[str, Any] | None:
+    try:
+        return owned_project(
+            ctx.project_store, project_id, owner_user_id, require_enabled=require_enabled
+        )
+    except ProjectAccessError as error:
+        raise HTTPException(error.status, error.detail) from error
+
+
+def ensure_task_project_writable(ctx: AppContextDep, task: dict[str, Any]) -> None:
+    # Call only after task access is authorized. Do not apply this to internal
+    # result/event recording: already admitted work may finish after archival.
+    if project_id := task.get("projectId"):
+        if code := project_work_error(ctx.project_store.get_project(project_id)):
+            raise HTTPException(409, code)
+
+
+def current_project_node(
+    ctx: AppContextDep, project: dict[str, Any]
+) -> dict[str, Any] | None:
+    candidates = [
+        node
+        for node in ctx.registry.monitor_nodes()
+        if not node.get("retiredAt") and computer_id(node) == project["computerId"]
+    ]
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda node: (
+            0
+            if node.get("online")
+            and not node.get("stale")
+            and node.get("status") in ("ready", "busy", "running")
+            else 1,
+            node["id"],
+        ),
+    )
+
+
+def project_session_fields(
+    ctx: AppContextDep, project: dict[str, Any]
+) -> dict[str, Any]:
+    node = current_project_node(ctx, project)
+    return {
+        "project_id": project["id"],
+        "workspace_layout": "project",
+        "workspace_subpath": project["workspaceSubpath"],
+        "computer_id": project["computerId"],
+        "workspace_path": (node or {}).get("workspacePath") or "/workspace",
+    }
+
+
+def ensure_project_node_matches(
+    project: dict[str, Any], node: dict[str, Any] | None
+) -> None:
+    if node is not None and computer_id(node) != project["computerId"]:
+        raise HTTPException(409, "project_computer_mismatch")

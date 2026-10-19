@@ -7,10 +7,12 @@ from tempfile import TemporaryDirectory
 from uuid import UUID
 
 import pytest
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import materialize_events, relay_event
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.sessions.controller import SessionController, SessionRunInFlightError
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.session.reducer import materialize_events
+from relay.persistence.events import relay_event
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.sessions.controller import SessionController
+from relay.sessions.errors import SessionRunInFlightError
 from sqlalchemy import select, text
 
 from store_fixtures import make_session_store
@@ -34,7 +36,7 @@ def test_work_outcome_survives_replay_and_clears_on_new_execution(outcome):
 
 
 def test_work_outcome_survives_database_snapshot_and_summary():
-    from relay.api.session_routes import session_brief_item
+    from relay.api.threads.projections import session_brief_item
 
     with TemporaryDirectory() as root:
         store = DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True)

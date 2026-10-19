@@ -6,9 +6,9 @@ import pytest
 
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
-from relay.persistence.daemon_store import DatabaseDaemonStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 
 @pytest.fixture

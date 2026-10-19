@@ -3,9 +3,10 @@
 The registry admits nodes, queues their commands, and walks each run request
 through its collaboration round. It decides nothing about the round itself;
 ``collaboration/policy.py`` and ``work.py`` choose transitions and the
-registry applies them. The class is assembled from one mixin per concern
-(see ``state.py``); this module owns the shared state and the two lock
-levels (``locks.py``).
+registry applies them. The class is assembled from one mixin per concern,
+grouped into the ``nodes``, ``dispatch``, and ``runs`` subpackages (see
+``state.py``); this module owns the shared state and the two lock levels
+(``locks.py``).
 """
 
 from __future__ import annotations
@@ -20,15 +21,19 @@ from typing import Any
 
 from ..persistence.protocols import SessionStore, TaskStore
 from . import config
-from .nodes import NodeRegistrationMixin
-from .node_admin import NodeAdministrationMixin
-from .commands import CommandQueueMixin
-from .admission import RunAdmissionMixin
-from .delivery import AssignmentDeliveryMixin
-from .progression import RunProgressionMixin
-from .completion import RunCompletionMixin
-from .events import EventIngestMixin
-from .reaper import RunReaperMixin
+from .nodes.registration import NodeRegistrationMixin
+from .nodes.liveness import NodeLivenessMixin
+from .nodes.admin import NodeAdministrationMixin
+from .dispatch.commands import CommandQueueMixin
+from .dispatch.admission import RunAdmissionMixin
+from .dispatch.delivery import AssignmentDeliveryMixin
+from .dispatch.follow_up import FollowUpRetryMixin
+from .runs.progression import RunProgressionMixin
+from .runs.transitions import RunTransitionMixin
+from .runs.failure import RunFailureMixin
+from .runs.completion import RunCompletionMixin
+from .runs.events import EventIngestMixin
+from .runs.reaper import RunReaperMixin
 from .locks import GlobalDispatchLock
 
 
@@ -40,11 +45,15 @@ class _DispatchLockEntry:
 
 class DaemonNodeRegistry(
     NodeRegistrationMixin,
+    NodeLivenessMixin,
     NodeAdministrationMixin,
     CommandQueueMixin,
     RunAdmissionMixin,
     AssignmentDeliveryMixin,
+    FollowUpRetryMixin,
     RunProgressionMixin,
+    RunTransitionMixin,
+    RunFailureMixin,
     RunCompletionMixin,
     EventIngestMixin,
     RunReaperMixin,

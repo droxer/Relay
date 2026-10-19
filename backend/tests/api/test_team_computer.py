@@ -16,7 +16,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
-from relay.services.node_agents import sync_node_agents
+from relay.computer.node_agents import sync_node_agents
 
 
 def _admin_id(app) -> str:

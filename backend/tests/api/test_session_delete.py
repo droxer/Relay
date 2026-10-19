@@ -60,7 +60,7 @@ def test_delete_requires_known_session(monkeypatch) -> None:
 
 @pytest.mark.parametrize("already_completed", [False, True])
 def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, already_completed) -> None:
-    from relay.persistence.store_common import new_database_id
+    from relay.core.ids import new_database_id
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -91,7 +91,7 @@ def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, alre
             "runId": command["runId"], "agent": "claude",
         })
         if already_completed:
-            from relay.persistence.store_common import relay_event
+            from relay.persistence.events import relay_event
             app.state.session_store.append_event(session_id, relay_event("session.completed", session_id, {"outcome": "done"}))
 
         response = client.delete(f"/api/v1/threads/{session_id}?stop=true")
@@ -111,7 +111,7 @@ def test_stop_and_delete_persists_intent_until_execution_exits(monkeypatch, alre
             })
 
         # A replacement service instance resumes durable intent after a restart.
-        from relay.services.execution_lifecycle import ExecutionLifecycleService
+        from relay.execution.lifecycle import ExecutionLifecycleService
         service = ExecutionLifecycleService(registry, app.state.chat_store)
         registry.daemon_store.mark_command_failed("sbx_alice", {
             "type": "run.cancelled", "commandId": command["id"],
@@ -249,7 +249,7 @@ def test_delete_clears_chat_conversation_binding(monkeypatch) -> None:
 
 
 def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> None:
-    from relay.persistence.store_common import relay_event
+    from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

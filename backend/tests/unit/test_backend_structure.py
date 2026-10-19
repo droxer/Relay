@@ -5,18 +5,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.api.daemon_events import daemon_node_event
+from relay.api.computers.daemon_events import daemon_node_event
 from relay.api.bodies import token_usage_field
 from relay.app import create_app
 from relay.chat.integrations import DatabaseChatIntegrationStore
 from relay.core.models import DaemonNodeRegistration
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
-from relay.persistence.daemon_store import (
-    DatabaseDaemonStore,
-)
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
 from relay.security.auth import DatabaseAccountAuthStore
 
 

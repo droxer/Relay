@@ -1,5 +1,5 @@
 /** Bounds for the personal-computer limit, mirroring the backend's range in
-    `relay/persistence/org_settings_store.py`. Kept as constants here so the
+    `relay/persistence/org/settings.py`. Kept as constants here so the
     admin forms can validate before a round trip; the backend stays the
     authority and rejects anything outside the range regardless. */
 export const MIN_LOCAL_COMPUTERS = 0;
@@ -20,6 +20,6 @@ export function parseLimitInput(raw: string): number | null | undefined {
 }
 
 /** Bounds for the automatic task-round budget, mirroring the backend's range in
-    `relay/persistence/org_settings_store.py`. */
+    `relay/persistence/org/settings.py`. */
 export const MIN_TASK_ROUNDS = 1;
 export const MAX_TASK_ROUNDS_CEILING = 50;

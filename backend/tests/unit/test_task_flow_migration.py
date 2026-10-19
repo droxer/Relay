@@ -4,7 +4,7 @@ from pathlib import Path
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import select, update
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 
 def test_flow_migration_replays_existing_tasks_without_changing_history(tmp_path):

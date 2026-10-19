@@ -17,14 +17,10 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.exc import IntegrityError
-from ..automation_store import insert_outbox_rows, session_outbox_rows
-from ..store_common import (
-    SNAPSHOT_NEUTRAL_SESSION_EVENTS,
-    apply_session_event,
-    new_database_id,
-    publish_database_notification,
-    store_transaction,
-)
+from ..automation.store import insert_outbox_rows, session_outbox_rows
+from .reducer import SNAPSHOT_NEUTRAL_SESSION_EVENTS, apply_session_event
+from ...core.ids import new_database_id
+from ..engine import publish_database_notification, store_transaction
 from .rows import (
     compact_session_snapshot,
     session_event_cursor_expression,

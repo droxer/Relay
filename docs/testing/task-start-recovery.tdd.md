@@ -55,7 +55,7 @@ PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/api/test_tas
   statement coverage: node backend 88%, task dispatch 85%, task workspace 98%.
 
   ```sh
-  uv run --project backend --with coverage --extra dev python -m coverage run --data-file=/tmp/relay-start-recovery.coverage --source=relay.services.task_dispatch,relay.services.task_workspace,relay.daemon_registry.node_backend -m pytest backend/tests -q
+  uv run --project backend --with coverage --extra dev python -m coverage run --data-file=/tmp/relay-start-recovery.coverage --source=relay.tasks.dispatch,relay.tasks.workspace,relay.daemon_registry.node_backend -m pytest backend/tests -q
   uv run --project backend --with coverage --extra dev python -m coverage report --data-file=/tmp/relay-start-recovery.coverage --show-missing
   ```
 

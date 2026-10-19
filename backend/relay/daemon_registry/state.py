@@ -1,8 +1,10 @@
 """The state every ``DaemonNodeRegistry`` mixin shares.
 
-The registry is split by concern into mixins (``nodes``, ``node_admin``,
-``commands``, ``admission``, ``delivery``, ``progression``, ``completion``,
-``events``, ``reaper``). They all act on one in-memory view and one set of
+The registry is split by concern into mixins, grouped by subpackage:
+``nodes`` (``registration``, ``liveness``, ``admin``), ``dispatch``
+(``commands``, ``admission``, ``delivery``, ``follow_up``), and ``runs``
+(``progression``, ``transitions``, ``failure``, ``completion``, ``events``,
+``reaper``). They all act on one in-memory view and one set of
 locks, owned and initialized by ``DaemonNodeRegistry.__init__``; this class
 only declares that state so each mixin reads as code against a known shape.
 
@@ -56,6 +58,9 @@ class RegistryState:
         def _age_ms(self, iso_timestamp: str) -> int:
             ...
 
+        def _apply_work_transition(self, run_request: dict[str, Any], controller: Any, assignment: dict[str, Any], work_result: Any, next_state: dict[str, Any]) -> tuple[list[dict[str, Any]], int, dict[str, Any]]:
+            ...
+
         def _assert_authorized(self, sandbox_id: str, token: str | None) -> None:
             ...
 
@@ -69,7 +74,13 @@ class RegistryState:
         def _claim_and_advance_run_request(self, event: dict[str, Any]) -> bool:
             ...
 
+        def _close_superseded_thread(self, session_id: str) -> None:
+            ...
+
         def _complete_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
+            ...
+
+        def _continue_after_non_action_failure(self, run_request: dict[str, Any], terminal_claim_id: str, next_state: dict[str, Any], outcome: str, agent_label: str, mode: str) -> bool:
             ...
 
         def _controller_for_sandbox(self, sandbox: dict[str, Any], task_id: str | None=None, run_request: dict[str, Any] | None=None) -> SessionController:
@@ -106,7 +117,16 @@ class RegistryState:
         def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
             ...
 
+        def _next_index_after_success(self, run_request: dict[str, Any], next_state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+            ...
+
         def _note_run_progress(self, command: dict[str, Any]) -> None:
+            ...
+
+        def _owes_round_result(self, run_request: dict[str, Any]) -> bool:
+            ...
+
+        def _record_context_suggestions(self, run_request: dict[str, Any], event: dict[str, Any], assignment: dict[str, Any]) -> None:
             ...
 
         def _record_exit_unconfirmed(self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]) -> None:
@@ -122,6 +142,9 @@ class RegistryState:
             ...
 
         def _record_permission_request(self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]) -> None:
+            ...
+
+        def _record_project_setup_result(self, run_request: dict[str, Any], event: dict[str, Any]) -> None:
             ...
 
         def _record_skipped_skills(self, command: dict[str, Any], daemon_skips: Any) -> None:
@@ -141,6 +164,9 @@ class RegistryState:
             ...
 
         def _run_request_command_link(self, command: dict[str, Any]) -> dict[str, Any]:
+            ...
+
+        def _send_back_for_repair(self, run_request: dict[str, Any], terminal_claim_id: str, next_state: dict[str, Any], outcome: str, agent_label: str) -> bool:
             ...
 
         def _track_active_command(self, sandbox_id: str, command: dict[str, Any]) -> None:

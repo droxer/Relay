@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from relay.core import deploy_config
 from relay.core.storage_config import normalize_database_url
-from relay.security.auth import user_session_cookie_attrs, user_session_cookie_scope
+from relay.security.request_auth import user_session_cookie_attrs, user_session_cookie_scope
 
 
 @pytest.fixture(autouse=True)

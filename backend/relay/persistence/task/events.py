@@ -8,13 +8,10 @@ from typing import Any
 from ...automations.model import is_active
 from ...core.human_waits import ensure_wait_record
 from ...core.ids import new_relay_id
-from ...services.issue_triage import project_move_error
-from ..store_common import (
-    AgentName,
-    new_database_id,
-    now_iso,
-    relay_task_event,
-)
+from ...tasks.issue_triage import project_move_error
+from ...core.models import AgentName
+from ...core.ids import new_database_id, now_iso
+from ..events import relay_task_event
 
 
 def _task_session_link_events(task_id: str, session_id: str) -> list[dict[str, Any]]:

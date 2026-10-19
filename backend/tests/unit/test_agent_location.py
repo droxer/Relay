@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from relay.services.agent_location import (
+from relay.agents.location import (
     AgentMoveError,
     agent_computer_ids,
     agent_placed_on_computer,

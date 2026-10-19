@@ -10,10 +10,8 @@ from sqlalchemy import (
     case,
 )
 from ...automations.model import listens, schedule_triggers, state_of
-from ..store_common import (
-    _parse_iso,
-    new_database_id,
-)
+from ..db_time import parse_db_time
+from ...core.ids import new_database_id
 from ..tables import tasks as tasks_tables
 
 
@@ -95,14 +93,14 @@ def task_to_row(
         "dispatch_failure_count": int(
             (task.get("dispatchRetry") or {}).get("failureCount") or 0
         ),
-        "dispatch_next_attempt_at": _parse_iso(
+        "dispatch_next_attempt_at": parse_db_time(
             (task.get("dispatchRetry") or {}).get("nextAttemptAt")
         ),
         "snapshot": compact_task_snapshot(task, event_count=version),
         "version": version,
-        "created_at": _parse_iso(task["createdAt"]),
-        "updated_at": _parse_iso(task["updatedAt"]),
-        "deleted_at": _parse_iso(task.get("deletedAt")),
+        "created_at": parse_db_time(task["createdAt"]),
+        "updated_at": parse_db_time(task["updatedAt"]),
+        "deleted_at": parse_db_time(task.get("deletedAt")),
     }
 
 
@@ -114,7 +112,7 @@ def task_event_to_row(
         "task_id": task_pk,
         "sequence": sequence,
         "type": event["type"],
-        "timestamp": _parse_iso(event["timestamp"]),
+        "timestamp": parse_db_time(event["timestamp"]),
         "payload": event,
     }
 

@@ -53,7 +53,7 @@ database-backed task stores:
   two corrected API tests):
 
   ```sh
-  uv run --project backend --with coverage --extra dev python -m coverage run --append --data-file=/tmp/relay-execution.coverage --source=relay.tasks.scheduler,relay.services.task_dispatch,relay.services.dispatch_retry -m pytest backend/tests/unit/test_blocked_execution.py backend/tests/api/test_project_routes.py::test_scheduler_dispatches_assigned_project_task backend/tests/api/test_tasks.py::test_scheduler_dispatches_assigned_backlog_task -q
+  uv run --project backend --with coverage --extra dev python -m coverage run --append --data-file=/tmp/relay-execution.coverage --source=relay.tasks.scheduler,relay.tasks.dispatch,relay.services.dispatch_retry -m pytest backend/tests/unit/test_blocked_execution.py backend/tests/api/test_project_routes.py::test_scheduler_dispatches_assigned_project_task backend/tests/api/test_tasks.py::test_scheduler_dispatches_assigned_backlog_task -q
   ```
 
 - Coverage collected across `backend/tests` and the final targeted rerun:

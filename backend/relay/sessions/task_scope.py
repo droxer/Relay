@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
-from ..persistence.task_execution import request_execution_owner
+from ..persistence.task.execution import request_execution_owner
 
 IN_FLIGHT_TASK_STATUSES = frozenset({"assigned", "running", "waiting_for_human"})
 

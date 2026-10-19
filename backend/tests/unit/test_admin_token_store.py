@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from relay.persistence.admin_token_store import DatabaseAdminTokenStore
-from relay.security import auth as auth_module
-from relay.security.auth import (
+from relay.persistence.org.admin_tokens import DatabaseAdminTokenStore
+from relay.security import admin_token as admin_token_module
+from relay.security.admin_token import (
     admin_token_configured,
     configure_admin_token,
     reissue_admin_token,
@@ -22,7 +22,7 @@ def store(tmp_path: Path) -> DatabaseAdminTokenStore:
 @pytest.fixture(autouse=True)
 def reset_admin_token_wiring(monkeypatch) -> None:
     monkeypatch.delenv("RELAY_ADMIN_TOKEN", raising=False)
-    monkeypatch.setattr(auth_module, "_admin_token_store", None)
+    monkeypatch.setattr(admin_token_module, "_admin_token_store", None)
 
 
 def _stored_hashes(store: DatabaseAdminTokenStore) -> list[str]:

@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import asyncio
 
-from relay.services.event_notifier import KeyedEventNotifier
+from relay.realtime.event_notifier import KeyedEventNotifier
 
 
 def test_keyed_event_notifier_wakes_only_matching_waiters() -> None:
     async def scenario() -> None:
         notifier = KeyedEventNotifier()
 
-        async def observed_wait(key: str, timeout: float) -> bool:
+        async def observed_wait(key: str, wait_seconds: float) -> bool:
             with notifier.observe(key) as version:
-                return await notifier.wait(key, version, timeout=timeout)
+                return await notifier.wait(key, version, timeout=wait_seconds)
 
         session_waiter = asyncio.create_task(observed_wait("session:one", 0.2))
         other_waiter = asyncio.create_task(observed_wait("session:two", 0.02))

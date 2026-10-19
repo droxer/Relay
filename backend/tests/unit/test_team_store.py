@@ -9,8 +9,8 @@ import pytest
 from sqlalchemy import update
 
 from store_fixtures import make_agent_store
-from relay.persistence import team_store as team_store_module
-from relay.persistence.team_store import DatabaseTeamStore
+from relay.persistence.team import store as team_store_module
+from relay.persistence.team.store import DatabaseTeamStore
 
 
 def test_membership_contract_survives_updates_and_removal(team_store) -> None:
@@ -263,7 +263,7 @@ def test_validate_team_payload_checks_membership(tmp_path: Path) -> None:
         "bob", {"displayName": "Outsider", "executorKind": "pi", "defaultRole": "implementer"}
     )
 
-    from relay.persistence.team_store import validate_team_payload
+    from relay.persistence.team.store import validate_team_payload
 
     assert validate_team_payload(
         "alice",

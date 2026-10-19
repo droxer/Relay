@@ -8,7 +8,7 @@ is what every record (``ownerUserId``, ``supervisorUserId``, a node's
 
 from __future__ import annotations
 
-from relay.security.auth import USER_ENTITY_KIND, database_id_for_reference
+from relay.security.entity_ids import USER_ENTITY_KIND, database_id_for_reference
 
 
 def user_id(handle: str) -> str:

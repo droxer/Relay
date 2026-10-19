@@ -10,7 +10,7 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, select, text
 
 from relay.core.model_policy import normalize_model_policy, policy_model
-from relay.persistence.agent_store import DatabaseAgentStore
+from relay.persistence.agent.store import DatabaseAgentStore
 
 
 @pytest.mark.parametrize(

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from issue_projects import routine_run_with_session
 
 from relay.app import create_app
-from relay.persistence.stores import relay_event
+from relay.persistence.events import relay_event
 from relay.sessions.controller import SessionController
 
 

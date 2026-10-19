@@ -15,8 +15,9 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import insert
 
-from ..persistence.automation_store import automation_outbox, subject_of
-from ..persistence.store_common import new_database_id, store_transaction
+from ..persistence.automation.store import automation_outbox, subject_of
+from ..core.ids import new_database_id
+from ..persistence.engine import store_transaction
 from .model import EVENT_KINDS, event_matches, has_webhook, is_active, triggers_of
 
 MAX_AUTOMATION_DEPTH = 3

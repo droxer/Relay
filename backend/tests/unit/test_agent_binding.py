@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from relay.services.agent_binding import binding_status
+from relay.agents.binding import binding_status
 
 
 def _agent(**overrides) -> dict:

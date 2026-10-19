@@ -20,7 +20,7 @@ revision, ``20261015_0095``, in committed batches so these table locks are not
 held for the length of a full event-log scan.
 
 Handle-derived ids are *not* recomputed: they hash under the "employee" kind
-(``relay.security.auth.USER_ENTITY_KIND``) on purpose.
+(``relay.security.entity_ids.USER_ENTITY_KIND``) on purpose.
 
 Revision ID: 20261015_0094
 Revises: 20261013_0093

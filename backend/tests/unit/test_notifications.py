@@ -16,8 +16,8 @@ from relay.notifications.rules import (
     task_recipients,
 )
 from relay.notifications.watcher import ComputerNotificationWatcher
-from relay.persistence.notification_store import DatabaseNotificationStore
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.notification.store import DatabaseNotificationStore
+from relay.persistence.task.store import DatabaseTaskStore
 from datetime import UTC
 
 SEEN = "2026-10-16T12:00:00Z"
@@ -146,7 +146,7 @@ def test_preferences_save_handles_a_competing_first_insert(tmp_path: Path) -> No
 
     from sqlalchemy import event, insert
 
-    from relay.persistence.notification_store import notification_preferences
+    from relay.persistence.notification.store import notification_preferences
 
     store = _store(tmp_path)
     competing = True

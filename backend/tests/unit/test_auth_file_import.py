@@ -12,9 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from relay.app import create_app
-from relay.persistence.file_store_import import migrate_local_file_stores
+from relay.persistence.legacy.file_stores import migrate_local_file_stores
 from relay.persistence.tables import auth as auth_tables
-from relay.security.auth import hash_password
+from relay.security.credentials import hash_password
 from relay.security.auth_file_import import (
     accounts_imported,
     legacy_accounts_present,

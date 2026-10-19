@@ -10,7 +10,7 @@ export interface ProjectMember {
 
 export type ProjectSetupState = "drafting" | "proposed" | "failed" | "applied" | "dismissed";
 
-/** Why a proposed member cannot be applied as is (services/project_setup.py). */
+/** Why a proposed member cannot be applied as is (projects/setup.py). */
 export type ProjectSetupMemberIssue = "agent_not_found" | "agent_wrong_owner" | "agent_disabled" | "agent_off_computer";
 
 export interface ProjectSetupProposal {

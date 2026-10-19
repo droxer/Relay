@@ -8,22 +8,24 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import event
 
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_event
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_event
 
 
 @pytest.mark.parametrize(
-    "endpoint",
+    "module_name, endpoint",
     [
-        "start_task",
-        "pickup_task",
-        "task_files",
-        "task_workspace_files",
-        "task_workspace_file",
+        ("runs", "start_task"),
+        ("runs", "pickup_task"),
+        ("workspace_files", "task_files"),
+        ("workspace_files", "task_workspace_files"),
+        ("workspace_files", "task_workspace_file"),
     ],
 )
-def test_task_dispatch_auth_does_not_run_on_event_loop(endpoint, monkeypatch):
-    from relay.api import task_routes
+def test_task_dispatch_auth_does_not_run_on_event_loop(module_name, endpoint, monkeypatch):
+    import importlib
+
+    module = importlib.import_module(f"relay.api.tasks.{module_name}")
     from fastapi import HTTPException
     from starlette.requests import Request
 
@@ -34,10 +36,10 @@ def test_task_dispatch_auth_does_not_run_on_event_loop(endpoint, monkeypatch):
             assert threading.get_ident() != loop_thread
             raise HTTPException(401)
 
-        monkeypatch.setattr(task_routes, "request_actor", auth)
+        monkeypatch.setattr(module, "request_actor", auth)
         request = Request({"type": "http", "method": "POST", "headers": []})
         with pytest.raises(HTTPException):
-            await getattr(task_routes, endpoint)(
+            await getattr(module, endpoint)(
                 "test", request, SimpleNamespace(auth_store=None)
             )
 
@@ -113,8 +115,8 @@ def test_reconnect_cursor_has_index(tmp_path):
 
 
 def test_managed_state_and_images_are_shared_between_replicas(tmp_path):
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
-    from relay.persistence.profile_image_store import DatabaseProfileImageStore
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+    from relay.persistence.account.profile_images import DatabaseProfileImageStore
 
     url = f"sqlite:///{tmp_path}/shared.db"
     a = DatabaseManagedNodeStore(url, create_schema=True)
@@ -140,7 +142,7 @@ def test_managed_state_and_images_are_shared_between_replicas(tmp_path):
 
 
 def test_recovery_queries_are_bounded_in_sql(tmp_path):
-    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.store import DatabaseDaemonStore
 
     store = DatabaseDaemonStore(f"sqlite:///{tmp_path}/daemon.db", create_schema=True)
     statements = []
@@ -156,7 +158,7 @@ def test_recovery_queries_are_bounded_in_sql(tmp_path):
 
 def test_managed_attempt_creation_is_atomic_across_instances(tmp_path):
     from concurrent.futures import ThreadPoolExecutor
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 
     url = f"sqlite:///{tmp_path}/concurrent.db"
     stores = [DatabaseManagedNodeStore(url, create_schema=True) for _ in range(2)]
@@ -177,16 +179,16 @@ def test_managed_attempt_creation_is_atomic_across_instances(tmp_path):
 
 
 def test_local_operational_import_is_dry_runnable_and_idempotent(tmp_path):
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
-    from relay.persistence.profile_image_store import (
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+    from relay.persistence.account.profile_images import (
         LocalProfileImageStore,
         DatabaseProfileImageStore,
     )
-    from relay.persistence.operational_import import (
+    from relay.persistence.legacy.operational import (
         migrate_local_operational_state,
         require_operational_import,
     )
-    from relay.persistence.managed_node_store import LocalManagedNodeStore
+    from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
 
     root = tmp_path / "legacy"
     local = LocalManagedNodeStore(root)
@@ -233,7 +235,7 @@ def test_recovery_does_not_acquire_fleet_dispatch_lock():
 
 
 def test_retention_limits_deletes_and_does_not_load_command_payloads(tmp_path):
-    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.store import DatabaseDaemonStore
     from relay.persistence.daemon.rows import command_to_row
     from relay.core.ids import new_database_id
     from sqlalchemy import insert
@@ -291,13 +293,13 @@ def test_retention_limits_deletes_and_does_not_load_command_payloads(tmp_path):
 
 
 def test_import_conflict_rolls_back_prior_records(tmp_path):
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
-    from relay.persistence.operational_import import migrate_local_operational_state
-    from relay.persistence.profile_image_store import (
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+    from relay.persistence.legacy.operational import migrate_local_operational_state
+    from relay.persistence.account.profile_images import (
         DatabaseProfileImageStore,
         LocalProfileImageStore,
     )
-    from relay.persistence.managed_node_store import LocalManagedNodeStore
+    from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
 
     root = tmp_path / "legacy"
     source = LocalManagedNodeStore(root)
@@ -318,7 +320,7 @@ def test_import_conflict_rolls_back_prior_records(tmp_path):
     "data_url", ["", "data:image/png;base64,bm90LWEtcG5n", "data:text/html;base64,eA=="]
 )
 def test_database_images_preserve_validation(data_url, tmp_path):
-    from relay.persistence.profile_image_store import (
+    from relay.persistence.account.profile_images import (
         DatabaseProfileImageStore,
         ProfileImageError,
     )
@@ -332,7 +334,7 @@ def test_database_images_preserve_validation(data_url, tmp_path):
 
 
 def test_managed_attempt_failure_rolls_back_across_records(tmp_path, monkeypatch):
-    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
+    from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 
     store = DatabaseManagedNodeStore(
         f"sqlite:///{tmp_path}/rollback.db", create_schema=True
@@ -353,7 +355,7 @@ def test_managed_attempt_failure_rolls_back_across_records(tmp_path, monkeypatch
 
 
 def test_dispatch_service_keeps_database_phases_off_loop_and_transport_on_loop():
-    from relay.services.task_dispatch import TaskDispatcher
+    from relay.tasks.dispatch import TaskDispatcher
 
     async def run():
         loop_thread = threading.get_ident()

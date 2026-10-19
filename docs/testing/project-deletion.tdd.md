@@ -7,7 +7,7 @@ must stop first. Archive remains a separate operation.
 ## Ownership and behavior
 
 - `api/project_routes.py` authorizes the owner and validates the expected version.
-- `services/project_deletion.py` locks the project, tasks, and sessions; removes
+- `projects/deletion.py` locks the project, tasks, and sessions; removes
   project records and owned histories; and queues execution-plane file cleanup.
 - Existing session deletion unlinks surviving tasks and preserves standard audit
   and usage retention. Shared agents, computers, and other projects survive.
@@ -38,7 +38,7 @@ must stop first. Archive remains a separate operation.
   **9 passed**, including repeated cleanup delivery and directory isolation.
 - `npm run test:react -w web -- --run interaction-tests/projectDeletion.test.tsx`:
   **3 passed**, covering cancel, confirm/navigation, and failure preserving settings.
-- Coverage for `relay.services.project_deletion`: **88%** (coverage.py).
+- Coverage for `relay.projects.deletion`: **88%** (coverage.py).
 
 ## Broader verification
 

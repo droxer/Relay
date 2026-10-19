@@ -35,12 +35,10 @@ def __getattr__(name: str) -> Any:
         "DatabaseSessionStore",
         "DatabaseTaskStore",
     }:
-        from .persistence.stores import (
-            DEFAULT_RELAY_DATA_DIR,
-            DatabaseDaemonStore,
-            DatabaseSessionStore,
-            DatabaseTaskStore,
-        )
+        from .persistence.legacy.files import DEFAULT_RELAY_DATA_DIR
+        from .persistence.daemon.store import DatabaseDaemonStore
+        from .persistence.session.store import DatabaseSessionStore
+        from .persistence.task.store import DatabaseTaskStore
 
         return {
             "DEFAULT_RELAY_DATA_DIR": DEFAULT_RELAY_DATA_DIR,

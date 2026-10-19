@@ -7,7 +7,7 @@ execution generations remain the ownership fences.
 
 ## Behavior and ownership
 
-- `services/execution_lifecycle.py` derives execution status and runs independent
+- `execution/lifecycle.py` derives execution status and runs independent
   recovery every five seconds, including immediately at startup. Database outages
   are retried. Deletion batches rotate so unreachable computers cannot starve
   other pending deletions.

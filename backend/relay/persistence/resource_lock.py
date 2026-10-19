@@ -6,7 +6,7 @@ from typing import Any
 from collections.abc import Iterator
 
 from sqlalchemy import text
-from .store_common import store_transaction
+from .engine import store_transaction
 
 
 @contextmanager

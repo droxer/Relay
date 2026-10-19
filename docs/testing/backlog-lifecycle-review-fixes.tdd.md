@@ -32,8 +32,8 @@ UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest backend/tests
 ## Broader verification
 
 - Dispatch unit and task/team API suites: 122 passed.
-- Coverage command: `UV_CACHE_DIR=.uv-cache COVERAGE_FILE=/tmp/relay-lifecycle-review.coverage uv run --project backend --extra dev --with coverage coverage run --source=relay.services.task_dispatch -m pytest backend/tests/unit/test_task_dispatch_lifecycle.py backend/tests/unit/test_task_dispatch.py backend/tests/api/test_tasks.py backend/tests/api/test_team_routes.py -q`.
-- Added `coverage run --append --source=relay.services.task_dispatch -m pytest backend/tests/api/test_project_routes.py -q` using the same environment: 21 passed.
+- Coverage command: `UV_CACHE_DIR=.uv-cache COVERAGE_FILE=/tmp/relay-lifecycle-review.coverage uv run --project backend --extra dev --with coverage coverage run --source=relay.tasks.dispatch -m pytest backend/tests/unit/test_task_dispatch_lifecycle.py backend/tests/unit/test_task_dispatch.py backend/tests/api/test_tasks.py backend/tests/api/test_team_routes.py -q`.
+- Added `coverage run --append --source=relay.tasks.dispatch -m pytest backend/tests/api/test_project_routes.py -q` using the same environment: 21 passed.
 - Combined dispatch module coverage: 81% (359 statements, 68 missed).
 - `npm run test:py`: 1,502 passed, 5 skipped (PostgreSQL-dependent checks).
 - `npx tsc -p packages/tsconfig.json`: passed.

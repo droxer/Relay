@@ -36,7 +36,7 @@ function agentComputerIds(agent: Pick<ComputerPlaced, "placements">): Set<string
   );
 }
 
-/** Mirrors `agent_on_project_computer` in `backend/relay/services/project_runtime.py`. */
+/** Mirrors `agent_on_project_computer` in `backend/relay/projects/runtime.py`. */
 export function agentOnComputer(
   agent: Pick<ComputerPlaced, "placements">,
   computerId: string,
@@ -47,7 +47,7 @@ export function agentOnComputer(
 /**
  * Who a project thread may address: its enabled crew, then every other agent
  * on the project's computer. A member the project disabled stays out. Mirrors
- * `project_thread_assignments` in `backend/relay/services/project_runtime.py`.
+ * `project_thread_assignments` in `backend/relay/projects/runtime.py`.
  */
 export function projectThreadRoster(
   project: Pick<ProjectRecord, "computerId" | "leadAgentId" | "members">,

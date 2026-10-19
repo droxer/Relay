@@ -4,8 +4,8 @@ import io
 from typing import Any
 
 import pytest
-from relay.persistence import blob_store as blob_store_module
-from relay.persistence.blob_store import R2BlobStore, blob_store_from_env
+from relay.persistence.blob import store as blob_store_module
+from relay.persistence.blob.store import R2BlobStore, blob_store_from_env
 
 R2_ENV = {
     "RELAY_BLOB_STORE": "r2",

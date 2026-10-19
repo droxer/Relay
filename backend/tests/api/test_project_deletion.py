@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 from fastapi.testclient import TestClient
 from relay.app import create_app
-from relay.persistence.store_common import relay_event
+from relay.persistence.events import relay_event
 
 from test_project_routes import _bootstrap, _login_alice, _register_computer, _agent
 from user_ids import user_id

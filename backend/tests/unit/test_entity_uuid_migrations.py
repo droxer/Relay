@@ -12,12 +12,12 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects import postgresql
 
-from relay.persistence.agent_placement_store import DatabaseAgentPlacementStore
-from relay.persistence.agent_store import DatabaseAgentStore
-from relay.persistence.daemon_store import DatabaseDaemonStore
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.task_store import DatabaseTaskStore
-from relay.persistence.team_store import DatabaseTeamStore
+from relay.persistence.agent.placements import DatabaseAgentPlacementStore
+from relay.persistence.agent.store import DatabaseAgentStore
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.persistence.team.store import DatabaseTeamStore
 
 MIGRATIONS = Path(__file__).parents[2] / "migrations" / "versions"
 

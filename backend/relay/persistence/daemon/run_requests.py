@@ -15,13 +15,10 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.exc import IntegrityError
-from ..store_common import (
-    _require_iso,
-    daemon_event,
-    new_database_id,
-    now_iso,
-    store_transaction,
-)
+from ..db_time import require_db_time
+from ..events import daemon_event
+from ...core.ids import new_database_id, now_iso
+from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .rules import (
     DISPATCH_CLAIM_EXPIRES_STATE_KEY,
@@ -162,7 +159,7 @@ class RunRequestRows(DaemonStoreState):
         return row_to_run_request(row) if row else None
 
     def claim_recovery_requests(self, *, limit: int = 100, lease_seconds: float = 5.0) -> list[dict[str, Any]]:
-        now = _require_iso(now_iso())
+        now = require_db_time(now_iso())
         with store_transaction(self.engine) as conn:
             statement = select(self.run_requests).where(
                 self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
@@ -273,7 +270,7 @@ class RunRequestRows(DaemonStoreState):
                 if state.get("_relay_recovery_required"):
                     return None
                 expires_at = state.get(TERMINAL_CLAIM_EXPIRES_STATE_KEY)
-                if expires_at and _require_iso(expires_at) > _require_iso(now):
+                if expires_at and require_db_time(expires_at) > require_db_time(now):
                     return None
             state.update(
                 {
@@ -337,7 +334,7 @@ class RunRequestRows(DaemonStoreState):
             state = dict(request.get("state") or {})
             if request.get("status") == "dispatching":
                 expires_at = state.get(DISPATCH_CLAIM_EXPIRES_STATE_KEY)
-                if expires_at and _require_iso(expires_at) > _require_iso(now):
+                if expires_at and require_db_time(expires_at) > require_db_time(now):
                     return None
             state.update(
                 {

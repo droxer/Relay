@@ -33,7 +33,7 @@ def _histories(connection, tasks, events):
 
 
 def upgrade() -> None:
-    from relay.persistence.store_common import materialize_task_events
+    from relay.persistence.task.reducer import materialize_task_events
 
     connection = op.get_bind()
     metadata = sa.MetaData()

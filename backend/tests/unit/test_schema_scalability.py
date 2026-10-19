@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy import event
 
-from relay.persistence.session_store import DatabaseSessionStore
-from relay.persistence.store_common import relay_event
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.events import relay_event
 from datetime import UTC
 
 
@@ -80,7 +80,7 @@ def test_streamed_output_keeps_event_order_and_counts(tmp_path):
 
 
 def test_neutral_session_events_never_have_a_reducer():
-    from relay.persistence.store_common import (
+    from relay.persistence.session.reducer import (
         SESSION_EVENT_HANDLERS,
         SNAPSHOT_NEUTRAL_SESSION_EVENTS,
     )
@@ -175,7 +175,7 @@ def test_pending_deletions_use_the_derived_column(tmp_path):
 
 
 def task_store(tmp_path):
-    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.task.store import DatabaseTaskStore
 
     return DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
 
@@ -198,7 +198,7 @@ def test_task_lists_filter_deleted_tasks_on_the_derived_column(tmp_path):
 
 
 def daemon_store(tmp_path):
-    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.daemon.store import DatabaseDaemonStore
 
     store = DatabaseDaemonStore(f"sqlite:///{tmp_path}/daemon.db", create_schema=True)
     store.register_node(
@@ -295,7 +295,7 @@ def insert_run_request(store, request_id, status, completed_at):
 def test_retention_prunes_old_terminal_run_requests_and_their_events(tmp_path, monkeypatch):
     from datetime import datetime, timedelta
 
-    from relay.persistence.store_common import daemon_event
+    from relay.persistence.events import daemon_event
 
     store = daemon_store(tmp_path)
     long_ago = datetime.now(UTC) - timedelta(days=30)
@@ -452,7 +452,7 @@ def test_dashboard_counters_share_one_pass_over_sessions(tmp_path):
 
 
 def test_storage_report_counts_rows_and_inline_content(tmp_path):
-    from relay.persistence.storage_report import storage_report
+    from relay.persistence.ops.storage_report import storage_report
 
     store = session_store(tmp_path)
     session = store.create_session({"taskGoal": "Report", "workspacePath": "/work"})

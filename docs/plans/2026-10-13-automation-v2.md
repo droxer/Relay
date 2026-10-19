@@ -54,8 +54,8 @@
 | `backend/relay/automations/service.py` (new) | `AutomationService`: tick, field validation, run now, resume |
 | `backend/relay/api/automation_routes.py` | Automation HTTP handlers (webhook, secret, preview, resume) |
 | `backend/relay/persistence/store_common.py` | Reducer `_apply_task_routine_fields` |
-| `backend/relay/persistence/task_store.py` | Columns, `task_to_row`, routine queries |
-| `backend/relay/persistence/automation_store.py` | `mark_pending`, `consecutive_failures` |
+| `backend/relay/persistence/task/store.py` | Columns, `task_to_row`, routine queries |
+| `backend/relay/persistence/automation/store.py` | `mark_pending`, `consecutive_failures` |
 | `backend/migrations/versions/20261013_0091_automation_v2.py` (new) | Columns, indexes, backfill |
 | `backend/relay/tasks/scheduler.py` | Dispatch only; calls `AutomationService.tick` |
 | `packages/relay-core/src/task-store.ts` | Shared task types (web imports these via `relay-core`) |
@@ -74,8 +74,8 @@ Branch `mc/automation-v2-restructure`. **Every task leaves the existing suite pa
 
 **Files:**
 - Modify: `backend/relay/api/task_routes.py` (remove `start_routine_occurrence_on_ready_node` ~line 397 and the import alias at line 44)
-- Modify: `backend/relay/services/task_dispatch.py` (remove `dispatch_routine_occurrence`, `_prepare_routine_occurrence`, `_create_manual_occurrence`, and `routine_next_run_date` if unused afterward)
-- Modify: `backend/relay/persistence/task_store.py` (remove `create_routine_occurrence` from both stores; `_open_routine_occurrence` if unused)
+- Modify: `backend/relay/tasks/dispatch.py` (remove `dispatch_routine_occurrence`, `_prepare_routine_occurrence`, `_create_manual_occurrence`, and `routine_next_run_date` if unused afterward)
+- Modify: `backend/relay/persistence/task/store.py` (remove `create_routine_occurrence` from both stores; `_open_routine_occurrence` if unused)
 - Modify: `backend/relay/persistence/protocols.py` (drop removed methods)
 
 **Interfaces:**
@@ -892,8 +892,8 @@ Then strip `_`-prefixed keys in the API serializer and add `test_legacy_accumula
 ### Task 9: Materialized columns, migration, store queries
 
 **Files:**
-- Modify: `backend/relay/persistence/task_store.py` — columns (~line 1038), indexes (~line 1078), `task_to_row` (~line 2375), the create/update field allowlists (~lines 228 and 329: add `"routineTriggers", "routineState", "routinePauseReason", "routineNextRunAt"`), `list_trigger_automations` (both stores), new `list_due_schedules` and `list_unseeded_schedules` (both stores)
-- Modify: `backend/relay/persistence/automation_store.py` — `consecutive_failures` column; `_empty_state` includes it
+- Modify: `backend/relay/persistence/task/store.py` — columns (~line 1038), indexes (~line 1078), `task_to_row` (~line 2375), the create/update field allowlists (~lines 228 and 329: add `"routineTriggers", "routineState", "routinePauseReason", "routineNextRunAt"`), `list_trigger_automations` (both stores), new `list_due_schedules` and `list_unseeded_schedules` (both stores)
+- Modify: `backend/relay/persistence/automation/store.py` — `consecutive_failures` column; `_empty_state` includes it
 - Create: `backend/migrations/versions/20261013_0091_automation_v2.py`
 - Test: `backend/tests/unit/test_task_store.py` (additions), `backend/tests/unit/test_automation_v2_migration.py` (new)
 
@@ -923,7 +923,7 @@ def list_trigger_automations(self) -> list[dict[str, Any]]            # active a
         "routine_trigger_kind": None,
 ```
 
-Use an existing datetime parser if `task_store.py` has one (`grep -n "def _parse_datetime\|def _parse_timestamp\|fromisoformat" backend/relay/persistence/task_store.py`); otherwise add beside `_parse_date`:
+Use an existing datetime parser if `task_store.py` has one (`grep -n "def _parse_datetime\|def _parse_timestamp\|fromisoformat" backend/relay/persistence/task/store.py`); otherwise add beside `_parse_date`:
 
 ```python
 def _parse_datetime(value: Any) -> datetime | None:
@@ -1050,8 +1050,8 @@ Before relying on `if_exists=True`, check the Alembic version pinned in `uv.lock
 - Modify: `backend/relay/automations/clock.py` (rewrite `ScheduleClock`; delete `next_routine_date` and `ROUTINE_SKIP_NO_AGENT_MESSAGE`)
 - Modify: `backend/relay/automations/service.py` (`tick(now)`; one locked transaction around clock → drain → fire)
 - Modify: `backend/relay/automations/matcher.py` (remove `run`; `_drain` → public `drain(now)`; `_mark_pending` moves to the store)
-- Modify: `backend/relay/persistence/automation_store.py` (add `mark_pending(routine_id, event, now)` — the body of the matcher's `_mark_pending`, plus `MAX_PENDING_EVENTS`)
-- Modify: `backend/relay/persistence/task_store.py` (delete `promote_due_routine`, `list_due_routines`, `routine_promotion_events`, `routine_due_for_promotion`, `routine_due_sort_key`, and the old `TRIGGERED_KINDS` if unused; in `routine_occurrence_events`, append the trigger context only when `trigger.get("context")` is non-empty)
+- Modify: `backend/relay/persistence/automation/store.py` (add `mark_pending(routine_id, event, now)` — the body of the matcher's `_mark_pending`, plus `MAX_PENDING_EVENTS`)
+- Modify: `backend/relay/persistence/task/store.py` (delete `promote_due_routine`, `list_due_routines`, `routine_promotion_events`, `routine_due_for_promotion`, `routine_due_sort_key`, and the old `TRIGGERED_KINDS` if unused; in `routine_occurrence_events`, append the trigger context only when `trigger.get("context")` is non-empty)
 - Modify: `backend/relay/tasks/scheduler.py`, `backend/relay/tasks/__init__.py` (drop `next_routine_date`), `backend/relay/app.py`
 - Create: `backend/tests/automation_helpers.py`
 - Test: `backend/tests/unit/test_automation_clock.py` (new); migrate the routine tests in `backend/tests/unit/test_task_scheduler.py`; switch other `promote_due_routine` callers in tests to `fire_now`
@@ -1090,9 +1090,9 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from relay.automations.clock import ScheduleClock
-from relay.persistence.automation_store import DatabaseAutomationStore
+from relay.persistence.automation.store import DatabaseAutomationStore
 from relay.persistence.store_common import store_transaction
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 
 UTC = timezone.utc
 DAILY_9 = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
@@ -1328,7 +1328,7 @@ Add the integration test (spec §5) to `test_task_scheduler.py`, extending its e
 **Files:**
 - Modify: `backend/relay/automations/matcher.py` (`_targets`)
 - Modify: `backend/relay/automations/firing.py` (`_fire_one`, new `pause`, `triggered_target`, `fired_kind`; constructor gains `project_store`, loses `today`)
-- Modify: `backend/relay/persistence/task_store.py` (`create_triggered_occurrence` gains `allow_paused: bool = False`; `triggered_occurrence_allowed(routine, *, allow_paused)` checks `is_active(routine) or (allow_paused and routine.get("isRoutine") and not routine.get("deletedAt"))` plus the existing target check)
+- Modify: `backend/relay/persistence/task/store.py` (`create_triggered_occurrence` gains `allow_paused: bool = False`; `triggered_occurrence_allowed(routine, *, allow_paused)` checks `is_active(routine) or (allow_paused and routine.get("isRoutine") and not routine.get("deletedAt"))` plus the existing target check)
 - Modify: `backend/relay/automations/context.py` (`EVENT_LABELS["schedule"] = "Schedule"`; `_event_line` returns `f"Schedule: {event['summary']}"` for schedule events)
 - Modify: `web/src/lib/automationOpening.ts` (add `Schedule: "schedule"` to `EVENT_TYPES_BY_LABEL`; parse `Schedule: <summary>` into `{ kind: "schedule"; summary: string }` and add that member to `OpeningEvent`), `web/src/components/AutomationOpening.tsx` (render it), `web/tests/automationOpening.test.ts` if present (else add the case to the nearest existing opening test: `grep -rln automationOpening web/tests`)
 - Test: `backend/tests/unit/test_automation_matcher.py`
@@ -1962,7 +1962,7 @@ Branch: `mc/automation-v2-autopause`, based on PR 2.
 ### Task 15: Consecutive failures, auto-pause, resume
 
 **Files:**
-- Modify: `backend/relay/persistence/automation_store.py`:
+- Modify: `backend/relay/persistence/automation/store.py`:
   - `record_outcome`;
   - `_empty_state` gains `consecutive_failures: 0`;
   - `clear_state` keeps `consecutive_failures`;

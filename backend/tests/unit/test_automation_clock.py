@@ -3,9 +3,9 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from relay.automations.clock import ScheduleClock
-from relay.persistence.automation_store import DatabaseAutomationStore
-from relay.persistence.store_common import store_transaction
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.automation.store import DatabaseAutomationStore
+from relay.persistence.engine import store_transaction
+from relay.persistence.task.store import DatabaseTaskStore
 
 UTC = UTC
 DAILY_9 = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
@@ -114,7 +114,7 @@ def test_exhausted_schedule_is_not_rewritten_every_tick(world):
 
 def test_failed_firing_rolls_back_the_clock_advance(world, monkeypatch):
     from relay.automations.service import AutomationService
-    from relay.persistence.session_store import DatabaseSessionStore
+    from relay.persistence.session.store import DatabaseSessionStore
 
     tasks, automations, _ = world
     sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)
@@ -129,7 +129,7 @@ def test_failed_firing_rolls_back_the_clock_advance(world, monkeypatch):
 
 def test_bad_schedule_firing_does_not_roll_back_healthy_schedule(world, monkeypatch):
     from relay.automations.service import AutomationService
-    from relay.persistence.session_store import DatabaseSessionStore
+    from relay.persistence.session.store import DatabaseSessionStore
 
     tasks, automations, _ = world
     sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)
@@ -161,7 +161,7 @@ def test_bad_schedule_firing_does_not_roll_back_healthy_schedule(world, monkeypa
 
 def test_outer_failure_rolls_back_released_schedule_savepoint(world, monkeypatch):
     from relay.automations.service import AutomationService
-    from relay.persistence.session_store import DatabaseSessionStore
+    from relay.persistence.session.store import DatabaseSessionStore
 
     tasks, automations, _ = world
     sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)

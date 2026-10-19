@@ -10,12 +10,8 @@ from typing import Any
 from sqlalchemy import (
     func,
 )
-from ..store_common import (
-    _format_iso,
-    _parse_iso,
-    _require_iso,
-    new_database_id,
-)
+from ..db_time import format_db_time, parse_db_time, require_db_time
+from ...core.ids import new_database_id
 
 
 def node_to_row(
@@ -33,7 +29,7 @@ def node_to_row(
         "managed_node_id": node.get("managedNodeId"),
         "provisioning_attempt_id": node.get("provisioningAttemptId"),
         "credential_version": int(node.get("credentialVersion") or 1),
-        "retired_at": _parse_iso(node.get("retiredAt")),
+        "retired_at": parse_db_time(node.get("retiredAt")),
         "status": node["status"],
         "capabilities": node.get("capabilities") or [],
         # The per-agent maps live in daemon_node_agents; see node_agent_rows.
@@ -44,10 +40,10 @@ def node_to_row(
         "node_token_hash": node.get("nodeTokenHash"),
         "node_token_secret": None,
         "last_error": node.get("lastError"),
-        "created_at": _parse_iso(node["createdAt"]),
-        "updated_at": _parse_iso(node["updatedAt"]),
-        "last_seen_at": _parse_iso(node.get("lastSeenAt")),
-        "last_poll_at": _parse_iso(node.get("lastPollAt")),
+        "created_at": parse_db_time(node["createdAt"]),
+        "updated_at": parse_db_time(node["updatedAt"]),
+        "last_seen_at": parse_db_time(node.get("lastSeenAt")),
+        "last_poll_at": parse_db_time(node.get("lastPollAt")),
     }
 
 
@@ -159,7 +155,7 @@ def row_to_node(row: Any) -> dict[str, Any]:
         ),
         "credentialVersion": int(row.get("credential_version") or 1),
         **(
-            {"retiredAt": _format_iso(row["retired_at"])}
+            {"retiredAt": format_db_time(row["retired_at"])}
             if row.get("retired_at")
             else {}
         ),
@@ -177,15 +173,15 @@ def row_to_node(row: Any) -> dict[str, Any]:
             else {}
         ),
         **({"lastError": row["last_error"]} if row.get("last_error") else {}),
-        "createdAt": _format_iso(row["created_at"]),
-        "updatedAt": _format_iso(row["updated_at"]),
+        "createdAt": format_db_time(row["created_at"]),
+        "updatedAt": format_db_time(row["updated_at"]),
         **(
-            {"lastSeenAt": _format_iso(row["last_seen_at"])}
+            {"lastSeenAt": format_db_time(row["last_seen_at"])}
             if row.get("last_seen_at")
             else {}
         ),
         **(
-            {"lastPollAt": _format_iso(row["last_poll_at"])}
+            {"lastPollAt": format_db_time(row["last_poll_at"])}
             if row.get("last_poll_at")
             else {}
         ),
@@ -206,13 +202,13 @@ def command_to_row(
         "command": record["command"],
         "exit_code": record.get("exitCode"),
         "error": record.get("error"),
-        "created_at": _parse_iso(record["createdAt"]),
-        "updated_at": _parse_iso(record["updatedAt"]),
-        "dispatched_at": _parse_iso(record.get("dispatchedAt")),
+        "created_at": parse_db_time(record["createdAt"]),
+        "updated_at": parse_db_time(record["updatedAt"]),
+        "dispatched_at": parse_db_time(record.get("dispatchedAt")),
         "lease_id": record.get("leaseId"),
-        "lease_expires_at": _parse_iso(record.get("leaseExpiresAt")),
+        "lease_expires_at": parse_db_time(record.get("leaseExpiresAt")),
         "attempt": int(record.get("attempt") or 0),
-        "completed_at": _parse_iso(record.get("completedAt")),
+        "completed_at": parse_db_time(record.get("completedAt")),
         "run_request_id": record["command"].get("_runRequestId"),
     }
 
@@ -223,22 +219,22 @@ def row_to_command(row: Any) -> dict[str, Any]:
         "nodeId": row["node_id"],
         "command": row["command"],
         "status": row["status"],
-        "createdAt": _format_iso(row["created_at"]),
-        "updatedAt": _format_iso(row["updated_at"]),
+        "createdAt": format_db_time(row["created_at"]),
+        "updatedAt": format_db_time(row["updated_at"]),
         **(
-            {"dispatchedAt": _format_iso(row["dispatched_at"])}
+            {"dispatchedAt": format_db_time(row["dispatched_at"])}
             if row.get("dispatched_at")
             else {}
         ),
         **({"leaseId": row["lease_id"]} if row.get("lease_id") else {}),
         **(
-            {"leaseExpiresAt": _format_iso(row["lease_expires_at"])}
+            {"leaseExpiresAt": format_db_time(row["lease_expires_at"])}
             if row.get("lease_expires_at")
             else {}
         ),
         "attempt": row.get("attempt") or 0,
         **(
-            {"completedAt": _format_iso(row["completed_at"])}
+            {"completedAt": format_db_time(row["completed_at"])}
             if row.get("completed_at")
             else {}
         ),
@@ -248,8 +244,8 @@ def row_to_command(row: Any) -> dict[str, Any]:
 
 
 def lease_expires_at(now: str, lease_seconds: float) -> str:
-    expires_at = _require_iso(now) + timedelta(seconds=max(0.001, lease_seconds))
-    return _format_iso(expires_at)
+    expires_at = require_db_time(now) + timedelta(seconds=max(0.001, lease_seconds))
+    return format_db_time(expires_at)
 
 
 def run_to_row(
@@ -268,8 +264,8 @@ def run_to_row(
         "status": run["status"],
         "exit_code": run.get("exitCode"),
         "error": run.get("error"),
-        "started_at": _parse_iso(run["startedAt"]),
-        "completed_at": _parse_iso(run.get("completedAt")),
+        "started_at": parse_db_time(run["startedAt"]),
+        "completed_at": parse_db_time(run.get("completedAt")),
     }
 
 
@@ -295,9 +291,9 @@ def row_to_run(row: Any) -> dict[str, Any]:
         "status": row["status"],
         **({"exitCode": row["exit_code"]} if row.get("exit_code") is not None else {}),
         **({"error": row["error"]} if row.get("error") else {}),
-        "startedAt": _format_iso(row["started_at"]),
+        "startedAt": format_db_time(row["started_at"]),
         **(
-            {"completedAt": _format_iso(row["completed_at"])}
+            {"completedAt": format_db_time(row["completed_at"])}
             if row.get("completed_at")
             else {}
         ),
@@ -323,12 +319,12 @@ def run_request_to_row(
         "current_command_id": record.get("currentCommandId"),
         "current_run_id": record.get("currentRunId"),
         "current_agent": record.get("currentAgent"),
-        "current_started_at": _parse_iso(record.get("currentStartedAt")),
-        "current_progress_at": _parse_iso(record.get("currentProgressAt")),
+        "current_started_at": parse_db_time(record.get("currentStartedAt")),
+        "current_progress_at": parse_db_time(record.get("currentProgressAt")),
         "error": record.get("error"),
-        "created_at": _parse_iso(record["createdAt"]),
-        "updated_at": _parse_iso(record["updatedAt"]),
-        "completed_at": _parse_iso(record.get("completedAt")),
+        "created_at": parse_db_time(record["createdAt"]),
+        "updated_at": parse_db_time(record["updatedAt"]),
+        "completed_at": parse_db_time(record.get("completedAt")),
     }
 
 
@@ -353,20 +349,20 @@ def row_to_run_request(row: Any) -> dict[str, Any]:
         ),
         **({"currentAgent": row["current_agent"]} if row.get("current_agent") else {}),
         **(
-            {"currentStartedAt": _format_iso(row["current_started_at"])}
+            {"currentStartedAt": format_db_time(row["current_started_at"])}
             if row.get("current_started_at")
             else {}
         ),
         **(
-            {"currentProgressAt": _format_iso(row["current_progress_at"])}
+            {"currentProgressAt": format_db_time(row["current_progress_at"])}
             if row.get("current_progress_at")
             else {}
         ),
         **({"error": row["error"]} if row.get("error") else {}),
-        "createdAt": _format_iso(row["created_at"]),
-        "updatedAt": _format_iso(row["updated_at"]),
+        "createdAt": format_db_time(row["created_at"]),
+        "updatedAt": format_db_time(row["updated_at"]),
         **(
-            {"completedAt": _format_iso(row["completed_at"])}
+            {"completedAt": format_db_time(row["completed_at"])}
             if row.get("completed_at")
             else {}
         ),
@@ -380,7 +376,7 @@ def daemon_event_to_row(event: dict[str, Any]) -> dict[str, Any]:
         "command_id": event.get("commandId"),
         "run_id": event.get("runId"),
         "type": event["type"],
-        "timestamp": _parse_iso(event["timestamp"]),
+        "timestamp": parse_db_time(event["timestamp"]),
         "payload": event,
     }
 

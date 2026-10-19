@@ -1,9 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
-from relay.persistence.store_common import relay_task_event
+from relay.persistence.events import relay_task_event
 
 from automation_helpers import fire_now
 
@@ -142,7 +142,7 @@ def test_concurrent_wip_admission_is_atomic(tmp_path, monkeypatch):
 
 
 def test_legacy_events_keep_automatic_acceptance():
-    from relay.persistence.store_common import materialize_task_events
+    from relay.persistence.task.reducer import materialize_task_events
 
     task = materialize_task_events(
         [relay_task_event("task.created", "legacy", {"title": "Historical"})]
@@ -161,7 +161,7 @@ def test_ready_backlog_and_templates_do_not_consume_wip(store, monkeypatch):
 
 
 def test_limit_must_be_positive(monkeypatch):
-    from relay.persistence.task_lifecycle import wip_limit
+    from relay.persistence.task.lifecycle import wip_limit
 
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "0")
     with pytest.raises(ValueError, match="positive integer"):

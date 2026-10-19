@@ -9,8 +9,8 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from relay.services import skill_import
-from relay.services.skill_import import SkillImportError, fetch_skill_bundle
+from relay.skills import git_import as skill_import
+from relay.skills.git_import import SkillImportError, fetch_skill_bundle
 
 
 def test_deadline_includes_dns_resolution(monkeypatch):

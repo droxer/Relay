@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from loguru import logger
 
-from relay.daemon_registry import reaper
+from relay.daemon_registry.runs import reaper
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from store_fixtures import make_daemon_store
 from store_fixtures import make_session_store

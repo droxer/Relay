@@ -564,7 +564,9 @@ backend/relay/bootstrap/                      store wiring, background runtime, 
 backend/relay/core/                           models, settings, env, ids, logging, storage config
 backend/relay/persistence/                    event-sourced session/task/daemon/agent/team/
                                               project stores; tables/ declares every table
-backend/relay/security/auth.py                account store and session helpers
+backend/relay/security/auth.py                account store, assembled from auth_accounts/
+                                              auth_users/auth_departments/auth_sessions mixins
+backend/relay/security/request_auth.py        login-session and admin checks for a request
 backend/relay/sessions/controller.py          session mutation controller
 backend/relay/sessions/bridge.py              session continuity and handoff
 backend/relay/daemon_registry/node_backend.py daemon admission and run dispatch
@@ -572,11 +574,11 @@ backend/relay/daemon_registry/registry.py     daemon registry (mixins: nodes, co
                                               admission, delivery, progression, events, reaper)
 backend/relay/tasks/scheduler.py              routine promotion and assigned-task dispatch
 backend/relay/chat/integrations.py            chat integration glue
-backend/relay/services/                       narrower runtime services (agent routing,
-                                              computer limits, task placement/dispatch, teams)
-backend/relay/api/                            HTTP routes split by domain (tasks, sessions,
-                                              daemon nodes, sandboxes, auth, admin, chat, web,
-                                              agents, managed nodes, teams, projects)
+backend/relay/{accounts,agents,teams,projects, domain use cases, one package per aggregate
+  tasks,skills,computer,execution,realtime}/
+backend/relay/api/                            HTTP routes, one subpackage per domain (threads,
+                                              tasks, projects, agents, computers, accounts,
+                                              admin, chat, web); shared plumbing at the root
 backend/migrations/                           Alembic backend storage migrations
 packages/relay-core/src/index.ts              shared protocol and agent runtime exports
 packages/relay-core/src/daemon-protocol.ts    TypeScript backend protocol types

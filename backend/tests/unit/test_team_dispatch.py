@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from relay.services.team_dispatch import (
+from relay.teams.dispatch import (
     TeamDispatchError,
     resolve_team_task_assignments,
     task_thread_assignments,
@@ -445,7 +445,7 @@ def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, 
         assert kwargs["is_admin"] is False
         return assignments
 
-    monkeypatch.setattr("relay.services.team_dispatch.resolve_agent_assignments", resolve)
+    monkeypatch.setattr("relay.teams.dispatch.resolve_agent_assignments", resolve)
     assignments = resolve_team_task_assignments(
         {"assignedTeamId": "team_1", "ownerUserId": "requester",
          "assigneeUserId": "alice", "collaborationStyle": task_style},

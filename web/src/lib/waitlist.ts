@@ -1,6 +1,6 @@
 /** Pure rules for the waitlist: the public form's limits and context, the
     invite token's one trip through the URL fragment, and the admin queue's
-    grouping. The backend (`backend/relay/services/waitlist.py`) stays the
+    grouping. The backend (`backend/relay/accounts/waitlist.py`) stays the
     authority; these mirror its limits so the form can answer before a round
     trip, and a value the server would refuse never leaves the browser. */
 import type { Tone, WaitlistDeliveryStatus, WaitlistEntry, WaitlistJoinInput, WaitlistStatus } from "../types.js";

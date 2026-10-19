@@ -10,12 +10,10 @@ from tempfile import TemporaryDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import delete as sa_delete, select, update as sa_update
 from relay.app import create_app
-from relay.persistence.stores import (
-    DatabaseDaemonStore,
-    DatabaseSessionStore,
-    DatabaseTaskStore,
-    relay_event,
-)
+from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.session.store import DatabaseSessionStore
+from relay.persistence.task.store import DatabaseTaskStore
+from relay.persistence.events import relay_event
 from relay.security.auth import DatabaseAccountAuthStore
 from user_ids import user_id
 

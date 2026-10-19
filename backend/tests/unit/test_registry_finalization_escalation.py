@@ -9,12 +9,12 @@ from typing import Any
 import pytest
 from loguru import logger
 
-from relay.daemon_registry import progression
-from relay.daemon_registry.progression import (
+from relay.daemon_registry.runs import finalization
+from relay.daemon_registry.runs.finalization import (
     FINALIZATION_ESCALATION_ATTEMPTS,
-    RunProgressionMixin,
     finalization_retry_state,
 )
+from relay.daemon_registry.runs.progression import RunProgressionMixin
 from relay.daemon_registry.records import TERMINAL_CLAIM_ID_STATE_KEY
 
 
@@ -59,7 +59,7 @@ def _finalize(registry: SimpleNamespace) -> list[str]:
 
 
 def test_escalation_threshold_is_named_and_matches_recovery_flag():
-    assert progression.FINALIZATION_ESCALATION_ATTEMPTS == 5
+    assert finalization.FINALIZATION_ESCALATION_ATTEMPTS == 5
     below = finalization_retry_state({"_relay_finalization_attempts": 3}, datetime.now(UTC))
     at = finalization_retry_state({"_relay_finalization_attempts": 4}, datetime.now(UTC))
     assert below["_relay_recovery_required"] is False

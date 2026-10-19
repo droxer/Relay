@@ -94,7 +94,7 @@ const ISSUE_PAGE_SIZE = 50;
  *
  * An issue can be filed with no project. It is intake: it takes no agent or
  * team and never runs (the server refuses both) until triage moves it into a
- * project. See lib/issueQueues and backend/relay/services/issue_triage.py.
+ * project. See lib/issueQueues and backend/relay/tasks/issue_triage.py.
  */
 export function IssuesPage({
   projects,

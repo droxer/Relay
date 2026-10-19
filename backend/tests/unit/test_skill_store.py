@@ -6,14 +6,14 @@ from uuid import uuid4
 
 import pytest
 from relay.core.ids import now_iso
-from relay.persistence.skill_store import (
+from relay.persistence.skill.rules import (
     MAX_FILE_BYTES,
     MAX_FILES,
-    DatabaseSkillStore,
     SkillValidationError,
 )
-from relay.persistence.skill_object_store import LocalSkillObjectStore
-from relay.persistence.store_common import _parse_iso
+from relay.persistence.skill.store import DatabaseSkillStore
+from relay.persistence.skill.objects import LocalSkillObjectStore
+from relay.persistence.db_time import parse_db_time
 from sqlalchemy import func, insert, select
 
 
@@ -34,8 +34,8 @@ def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
                     email=None,
                     department_id=None,
                     max_local_computers=None,
-                    created_at=_parse_iso(now_iso()),
-                    updated_at=_parse_iso(now_iso()),
+                    created_at=parse_db_time(now_iso()),
+                    updated_at=parse_db_time(now_iso()),
                     deleted_at=None,
                 )
             )

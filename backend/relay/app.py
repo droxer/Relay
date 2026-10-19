@@ -9,30 +9,45 @@ from typing import Any, cast
 from fastapi import FastAPI
 from loguru import logger
 
-from .api import (
-    admin_routes,
-    automation_routes,
-    agent_routes,
-    auth_routes,
-    chat_routes,
-    collaboration_routes,
-    computer_installer_routes,
-    device_authorization_routes,
-    daemon_node_routes,
-    managed_node_routes,
-    node_workspace_routes,
-    notification_routes,
-    password_reset_routes,
-    profile_image_routes,
-    project_routes,
-    sandbox_routes,
-    session_routes,
-    skill_routes,
-    task_routes,
-    team_routes,
-    waitlist_routes,
-    web_routes,
+from .api.accounts import (
+    auth as auth_routes,
+    notifications as notification_routes,
+    password_reset as password_reset_routes,
+    profile_images as profile_image_routes,
+    users as admin_user_routes,
+    waitlist as waitlist_routes,
 )
+from .api.admin import dashboard as admin_dashboard_routes, settings as admin_settings_routes
+from .api.agents import agents as agent_routes, skills as skill_routes, teams as team_routes
+from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
+from .api.computers import (
+    admin_nodes as admin_node_routes,
+    daemon_wire as daemon_wire_routes,
+    device_authorizations as device_authorization_routes,
+    enrollment as enrollment_routes,
+    installer as computer_installer_routes,
+    managed_nodes as managed_node_routes,
+    node_workspace as node_workspace_routes,
+    sandboxes as sandbox_routes,
+    user_nodes as user_node_routes,
+)
+from .api.projects import projects as project_routes
+from .api.tasks import (
+    automations as automation_routes,
+    history as task_history_routes,
+    records as task_record_routes,
+    runs as task_run_routes,
+    workspace_files as task_workspace_routes,
+)
+from .api.threads import (
+    artifacts as thread_artifact_routes,
+    decisions as thread_decision_routes,
+    events as thread_event_routes,
+    lifecycle as thread_lifecycle_routes,
+    messages as thread_message_routes,
+    reads as thread_read_routes,
+)
+from .api.web import routes as web_routes
 from .api.conditional_get import ConditionalGetMiddleware
 from .api.deps import AppContext
 from .api.contract import (
@@ -49,14 +64,12 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .daemon_registry.registry import DaemonNodeRegistry
 from .daemon_registry.node_backend import ServerDaemonNodeBackend
-from .persistence.stores import (
-    DEFAULT_RELAY_DATA_DIR,
-)
+from .persistence.legacy.files import DEFAULT_RELAY_DATA_DIR
 from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
 from .chat.integrations import DatabaseChatIntegrationStore
-from .services.event_notifier import (
+from .realtime.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
     KeyedEventNotifier,
     PostgresNotificationBridge,
@@ -65,14 +78,14 @@ from .services.event_notifier import (
     session_event_key,
     workspace_response_key,
 )
-from .services.password_reset import PasswordResetService, password_reset_config_from_env
+from .accounts.password_reset import PasswordResetService, password_reset_config_from_env
 from .security.password_resets import password_reset_store_for
 from .notifications.mailer import mailer_from_env
-from .services.workspace_query import WorkspaceQueryBroker
-from .services.waitlist import WaitlistService
-from .persistence.task_lifecycle import wip_limit
-from .persistence.operational_import import require_operational_import
-from .services.execution_lifecycle import ExecutionLifecycleService
+from .computer.workspace_query import WorkspaceQueryBroker
+from .accounts.waitlist import WaitlistService
+from .persistence.task.lifecycle import wip_limit
+from .persistence.legacy.operational import require_operational_import
+from .execution.lifecycle import ExecutionLifecycleService
 from .core.settings import AppSettings
 from .migrations_runtime.startup import (
     import_file_stores_before_serving,
@@ -315,6 +328,9 @@ def _publish_state(
     state.task_scheduler = scheduler
     state.computer_notifications = computer_notifications
 
+# Order matters: within each router group, a route registered earlier wins a
+# path both could match. A domain split across modules lists its routers in
+# the order its routes were declared.
 API_ROUTERS = (
     automation_routes.router,
     auth_routes.router,
@@ -324,13 +340,26 @@ API_ROUTERS = (
     project_routes.router,
     skill_routes.router,
     node_workspace_routes.router,
-    admin_routes.router,
-    chat_routes.router,
-    collaboration_routes.router,
-    task_routes.router,
-    session_routes.router,
+    admin_settings_routes.router,
+    admin_user_routes.router,
+    admin_node_routes.router,
+    chat_integration_routes.router,
+    admin_dashboard_routes.router,
+    chat_gateway_routes.router,
+    thread_message_routes.router,
+    task_record_routes.router,
+    task_run_routes.router,
+    task_history_routes.router,
+    task_workspace_routes.router,
+    thread_read_routes.router,
+    thread_lifecycle_routes.router,
+    thread_decision_routes.router,
+    thread_event_routes.router,
+    thread_artifact_routes.router,
     sandbox_routes.router,
-    daemon_node_routes.router,
+    user_node_routes.router,
+    enrollment_routes.router,
+    daemon_wire_routes.router,
     managed_node_routes.router,
     notification_routes.router,
     password_reset_routes.router,

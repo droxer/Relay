@@ -12,21 +12,21 @@ from .app import create_app
 from .background import apply_worker_schema, run_worker
 from .processes import serve_with_worker
 from .migrations_runtime.agent_computer_id import pending_agent_computer_id_migrations
-from .persistence.agent_placement_store import DatabaseAgentPlacementStore
-from .persistence.agent_store import DatabaseAgentStore
+from .persistence.agent.placements import DatabaseAgentPlacementStore
+from .persistence.agent.store import DatabaseAgentStore
 from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
-from .persistence.blob_migration import migrate_blobs
-from .persistence.blob_store import blob_store_from_env
-from .persistence.database_backup import backup_database, backup_target_from_env
-from .persistence.user_handle_backfill import plan_handles, summarize
-from .persistence.session_import import migrate_local_sessions
-from .persistence.session_store import DatabaseSessionStore
-from .persistence.storage_report import storage_report
-from .persistence.operational_import import migrate_local_operational_state
-from .persistence.file_store_import import migrate_local_file_stores
+from .persistence.blob.migration import migrate_blobs
+from .persistence.blob.store import blob_store_from_env
+from .persistence.ops.backup import backup_database, backup_target_from_env
+from .persistence.account.handle_backfill import plan_handles, summarize
+from .persistence.legacy.sessions import migrate_local_sessions
+from .persistence.session.store import DatabaseSessionStore
+from .persistence.ops.storage_report import storage_report
+from .persistence.legacy.operational import migrate_local_operational_state
+from .persistence.legacy.file_stores import migrate_local_file_stores
 from .security.auth_file_import import migrate_legacy_accounts
 from .bootstrap.stores import retired_settings_chose_database_accounts
 

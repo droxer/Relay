@@ -5,8 +5,8 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import select, update
 
-from relay.persistence.store_common import relay_task_event
-from relay.persistence.task_store import DatabaseTaskStore
+from relay.persistence.events import relay_task_event
+from relay.persistence.task.store import DatabaseTaskStore
 
 
 def test_execution_stage_migration_replays_claimed_tasks_without_changing_history(

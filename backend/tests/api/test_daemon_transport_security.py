@@ -85,7 +85,7 @@ def test_anonymous_registration_cannot_create_a_computer(monkeypatch):
 
 def test_legacy_local_secrets_never_reach_the_database(tmp_path):
     import json
-    from relay.persistence.file_store_import import migrate_local_file_stores
+    from relay.persistence.legacy.file_stores import migrate_local_file_stores
     from store_fixtures import make_daemon_store, sqlite_url
     nodes = tmp_path / 'data' / 'daemon' / 'nodes'
     nodes.mkdir(parents=True)

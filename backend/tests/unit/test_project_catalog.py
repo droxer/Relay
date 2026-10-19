@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from relay.persistence.project_store import ProjectValidationError
-from relay.services.project_catalog import update_project_payload
+from relay.persistence.project.store import ProjectValidationError
+from relay.projects.catalog import update_project_payload
 
 
 def member(agent_id, *, enabled=True):

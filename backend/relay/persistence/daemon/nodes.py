@@ -14,12 +14,10 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.exc import IntegrityError
-from ..store_common import (
-    _require_iso,
-    daemon_event,
-    now_iso,
-    store_transaction,
-)
+from ..db_time import require_db_time
+from ..events import daemon_event
+from ...core.ids import now_iso
+from ..engine import store_transaction
 from .rules import (
     _NODE_LIVENESS_COLUMNS,
     _comparable_node_value,
@@ -254,11 +252,11 @@ class NodeRows(DaemonStoreState):
         per-agent rows -- a heartbeat with nothing to report cannot change
         them. None of the columns is indexed, so this stays a HOT update.
         """
-        now = _require_iso(now_iso())
+        now = require_db_time(now_iso())
         poll_values = (
             {"last_poll_at": now}
             if polled
-            else {"last_poll_at": _require_iso(NODE_POLL_DRAINED_AT)}
+            else {"last_poll_at": require_db_time(NODE_POLL_DRAINED_AT)}
             if polled is False
             else {}
         )

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Depends, Request
 from fastapi.routing import APIRoute
 
-from ..security.auth import require_admin_session
+from ..security.request_auth import require_admin_session
 from .deps import app_context
 
 API_VERSION = "v1"

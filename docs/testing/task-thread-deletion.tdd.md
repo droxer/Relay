@@ -32,7 +32,7 @@ deletions of all tasks sharing a thread must remove that thread.
 - Complete task API and artifact blob targets: **63 passed**.
 - Session and task store targets: **93 passed**.
 - Coverage across `relay.persistence.store_common` and
-  `relay.services.task_deletion`: **81%** (80% and 87% respectively).
+  `relay.tasks.deletion`: **81%** (80% and 87% respectively).
 - `git diff --check`: clean.
 - Full backend suite (`UV_CACHE_DIR=.uv-cache uv run --project backend --extra
   dev pytest backend/tests -q`): **2,652 passed, 18 skipped, 2 failed**. The two

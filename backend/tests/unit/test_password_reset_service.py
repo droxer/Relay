@@ -17,7 +17,7 @@ from relay.notifications.mailer import DeliveryResult, EmailMessage, NullMailer
 from relay.security.auth import DatabaseAccountAuthStore
 from store_fixtures import make_auth_store
 from relay.security.password_resets import ResetThrottle, password_reset_store_for
-from relay.services.password_reset import (
+from relay.accounts.password_reset import (
     PasswordResetConfig,
     PasswordResetService,
     ResetNotLiveError,
