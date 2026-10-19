@@ -137,7 +137,6 @@ export function AssignNodeDrawer({
           const result = await createManagedNode({
             userId: nextUserId,
             displayName: displayName.trim() || undefined,
-            sandboxMode: "boxlite",
           });
           onCreateNodeSuccess({ kind: "managed", result });
         } else {

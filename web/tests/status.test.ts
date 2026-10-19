@@ -334,7 +334,6 @@ describe("Relay web thread status", () => {
       const result = await createManagedNode({
         userId: "alice",
         displayName: "Alice cloud",
-        sandboxMode: "boxlite",
       });
 
       assert.equal(requestPath, "/api/v1/admin/managed-nodes");
@@ -343,9 +342,8 @@ describe("Relay web thread status", () => {
         userId: "alice",
         displayName: "Alice cloud",
         assignmentMode: "dedicated",
-        provider: "local-process",
+        // The backend's RELAY_MANAGED_NODE_PROVIDER picks these, not the web.
         profile: "standard",
-        sandboxMode: "boxlite",
         workspacePolicy: { kind: "user-home" },
         desiredState: "running",
       });

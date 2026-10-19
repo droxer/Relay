@@ -19,15 +19,22 @@ the hosting:
 | `web/` (Next.js UI) | **Vercel**, a **Cloudflare Worker**, or its own **Railway** service (`web/Dockerfile`) | Static/edge-friendly client app; no server state. For Cloudflare or Railway, see [deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui). |
 | `backend/` (FastAPI + Procrastinate) | **Railway** | Supervised API and background-worker processes sharing the database and local skill files. |
 | Postgres | **Railway** | Sessions, tasks, events, auth, daemon registry. |
-| `relay-daemon` | **Neither** | Runs where the sandbox lives — see below. |
+| `relay-daemon` | **Neither** | On users' own machines, or on Fly Machines for [cloud computers](#cloud-computers-on-fly-machines) — see below. |
 | `relay-supervisor` | **Depends on its provider** | Control plane with `--provider command`, execution plane with `--provider local`. See [The supervisor](#the-supervisor). |
 
 **Daemons do not belong on Vercel or Railway.** The backend never executes
-agents; it queues commands that daemons poll for. A daemon in its default mode
-boots a BoxLite microVM, which needs hardware virtualization that neither
-platform's containers provide. Daemons run on user machines (`SANDBOX_MODE=none`)
-or on a VM host you control, and they connect *out* to the Railway backend URL —
-so the backend needs a public URL, but daemons never need inbound ports.
+agents; it queues commands that daemons poll for. Daemons run on user machines
+(`SANDBOX_MODE=none`) or, for cloud computers, on Fly Machines, and they connect
+*out* to the Railway backend URL — so the backend needs a public URL, but
+daemons never need inbound ports.
+
+**BoxLite is for local development only.** It boots a microVM per workspace,
+which needs hardware virtualization that Railway, Vercel, and Fly containers do
+not provide. Locally, the supervisor's default `local-process` provider runs a
+managed computer as a BoxLite-sandboxed daemon on your own machine — the
+development stand-in for a cloud computer. In production a cloud computer is a
+Fly Machine, which is its own VM, so it runs with `sandboxMode` `none`;
+`deploy/deploy.sh` sets `RELAY_MANAGED_NODE_PROVIDER=fly-machines` for that.
 
 You *can* run a daemon in a plain container with `--sandbox none`, where agents
 are host processes rather than VM guests. That trades the sandbox boundary for
@@ -88,6 +95,83 @@ fire-and-forget.
                       │ (BoxLite sandbox + agent CLIs)│
                       └──────────────────────────────┘
 ```
+
+### Cloud computers on Fly Machines
+
+For computers Relay runs in the cloud on a user's behalf, the supervisor's
+`fly-machines` provider gives each managed computer one
+[Fly Machine](https://fly.io/docs/machines/) and one Fly volume. The machine is
+a Firecracker microVM — the computer's isolation boundary — so the daemon runs
+agents directly in it (`sandboxMode: "none"`); BoxLite could not boot there,
+because Fly exposes no `/dev/kvm`. The volume, mounted at `/data`, holds the
+node workspace, the daemon's private state, and agent logins (`HOME` is
+`/data/home`), so they survive restarts, image upgrades, and new provisioning
+attempts. The supervisor needs no virtualization itself and can run beside the
+backend as a second Railway service.
+
+One-time setup:
+
+1. Create a Fly app for the computers and a token scoped to it:
+   `fly apps create relay-computers` and
+   `fly tokens create deploy -a relay-computers`.
+2. Build and push the image (Fly runs `linux/amd64`):
+   ```bash
+   make cloud-computer-image CLOUD_COMPUTER_IMAGE=registry.fly.io/relay-computers:v1
+   fly auth docker
+   docker push registry.fly.io/relay-computers:v1
+   ```
+   The image is the devbox (`dockerfile`, the same pinned agent CLIs) plus the
+   packaged client from `make backend`'s installer bundle.
+3. On the **backend**, set `RELAY_MANAGED_NODE_PROVIDER=fly-machines`
+   (`deploy/deploy.sh` does this for the hosted deploy). Every
+   managed computer created after that — from the admin console or from
+   on-demand capacity — uses Fly, with `sandboxMode` `none`. Existing
+   `local-process` computers are left alone, and on-demand capacity no longer
+   counts them, so a user who had one gets a Fly computer beside it; stop or
+   delete the old ones once their work is done. The name is not checked at
+   startup: a typo shows up as a `ProviderUnavailable` condition on each new
+   computer.
+4. Run the **supervisor** with the provider configured:
+
+   | Variable | Default | Purpose |
+   | --- | --- | --- |
+   | `RELAY_FLY_APP` | unset | Fly app the machines live in. Unset, the provider is not offered. |
+   | `FLY_API_TOKEN` / `RELAY_FLY_API_TOKEN` | — | Machines API token for that app. |
+   | `RELAY_FLY_IMAGE` | — | The pushed image, e.g. `registry.fly.io/relay-computers:v1`. |
+   | `RELAY_FLY_REGION` | — | Region for machines and volumes, e.g. `iad`. |
+   | `RELAY_FLY_CPU_KIND` | `shared` | `shared` or `performance`. |
+   | `RELAY_FLY_CPUS` | `2` | vCPUs per computer. |
+   | `RELAY_FLY_MEMORY_MB` | `4096` | Memory per computer. |
+   | `RELAY_FLY_VOLUME_GB` | `20` | Volume size for a new computer (extend later with `fly volumes extend`). |
+
+   It also needs `RELAY_BACKEND_URL` (the backend's public URL — the machines
+   connect out to it) and `RELAY_ADMIN_TOKEN`.
+
+How the lifecycle maps:
+
+- **Provision** creates the volume and the machine, passing the attempt's
+  single-use enrollment grant in the machine's environment; the daemon enrolls
+  and keeps its runtime token under `/data/home/.relay`. A later attempt — a
+  restart, a generation change, an image upgrade — updates the same machine
+  with the new grant instead of creating a second one.
+- **Stop** (`desiredState: "stopped"`) stops the machine; the volume and the
+  user's files stay. Starting it again is a cold boot of a few seconds plus
+  enrollment.
+- **Delete** destroys the machine and then the volume. Fly keeps the volume's
+  daily snapshots for their retention period.
+
+What to decide before opening it to users:
+
+- **Agent credentials.** Each computer starts with no agent logins. A person can
+  sign in once over `fly ssh console` (the login persists on the volume), or an
+  organization-wide API key can be set as a Fly app secret. Never bake a key into
+  the image.
+- **Permission prompts.** The daemon's default `native` permission policy asks a
+  person before each command and edit. Set `RELAY_LOCAL_PERMISSION_POLICY=trusted`
+  in the image only if unattended runs are the intent.
+- **Idle cost.** Machines run until stopped. Waking a computer when work is
+  queued for it, and suspending an idle one, are not automated yet: a stopped
+  computer is offline, so work sent to it is refused until it is started.
 
 ## Pick an origin model first
 
@@ -470,6 +554,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
 | `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
 | `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |
+| `RELAY_MANAGED_NODE_PROVIDER` | `local-process` | Provider for new managed computers; `fly-machines` for [cloud computers](#cloud-computers-on-fly-machines). |
 | `RELAY_DATA_DIR` | `.relay` | File-store state for local installs, and where a legacy `auth/admin-token` is imported from; `/data` in the image. |
 
 **Web (Vercel)**

@@ -186,6 +186,7 @@ check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .R
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
 check "waitlist on by default" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\""
+check "cloud computers run on Fly Machines" "$BACKEND | .variables.RELAY_MANAGED_NODE_PROVIDER == \"fly-machines\""
 check "R2 holds shared skill objects" "$BACKEND | .variables.RELAY_BLOB_STORE == \"r2\""
 check "R2 needs no new volume" ".volumes | length == 0"
 check "api domain on the backend" "$BACKEND | [.domains[].domain] == [\"api.get-relay.cc\"]"

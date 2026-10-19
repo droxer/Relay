@@ -123,7 +123,7 @@ def create_app(
         raise ValueError("background_mode must be embedded or external.")
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
-    stores = build_stores(root_dir)
+    stores = build_stores(root_dir, managed_node_provider=settings.managed_node_provider)
     # One mailer for every transactional email; a half-configured mail setup
     # fails startup here rather than silently dropping invites and resets.
     mailer = mailer_from_env()

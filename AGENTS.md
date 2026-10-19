@@ -135,6 +135,15 @@ newer and `uv` are required for the backend.
   `RELAY_DAEMON_ECHO_AGENT_OUTPUT` (default on). The supervisor sets it to `0`
   for every daemon it launches so supervisor logs stay lifecycle-only; output
   still streams to the backend and the daemon's JSONL run logs.
+- Cloud computers: BoxLite is only the local-development stand-in (the
+  default `local-process` provider); in production a cloud computer is a Fly
+  Machine. `RELAY_MANAGED_NODE_PROVIDER=fly-machines` on the backend (set by
+  `deploy/deploy.sh`) makes new managed computers Fly Machines, realized by
+  the supervisor's `fly-machines` provider (`packages/relay-supervisor/src/fly-machines.ts`,
+  configured by `RELAY_FLY_*`); the image is `make cloud-computer-image`. The
+  machine is the sandbox, so those nodes run `sandboxMode` `none`
+  (`managed_sandbox_mode_for` in `backend/relay/core/managed_node_policy.py`).
+  See `docs/deployment.md`.
 - Stop backend, daemon, and BoxLite processes: `make stop`.
 - Deploy to Railway behind Cloudflare, with the web UI as a Cloudflare Worker:
   `deploy/deploy.sh up` (config in git-ignored `deploy/.env`; see

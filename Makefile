@@ -28,10 +28,17 @@ COMPUTER_BUNDLE := backend/relay/computer/daemon.tar.gz
 COMPUTER_BUNDLE_SOURCES := $(shell find packages/relay-core/src packages/relay-daemon/src -name '*.ts') \
 	packages/relay-core/package.json packages/relay-daemon/package.json tools/build-computer.mjs
 
-.PHONY: devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
+.PHONY: cloud-computer-image devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
 
 devbox-image:
 	docker build --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t $(DEVBOX_IMAGE) -f $(DOCKERFILE) .
+
+# Fly Machines run linux/amd64. Push the result to registry.fly.io/<app>:<tag>
+# and point the supervisor's RELAY_FLY_IMAGE at it (docs/deployment.md).
+CLOUD_COMPUTER_IMAGE ?= relay-cloud-computer:latest
+cloud-computer-image:
+	docker build --platform linux/amd64 --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t relay-devbox:amd64 -f $(DOCKERFILE) .
+	docker build --platform linux/amd64 -t $(CLOUD_COMPUTER_IMAGE) -f deploy/cloud-computer/Dockerfile .
 
 devbox-check: devbox-image
 	docker run --rm $(DEVBOX_IMAGE) bash -lc 'node --version && command -v pi && pi --version && claude --version && codex --version && kimi --version'

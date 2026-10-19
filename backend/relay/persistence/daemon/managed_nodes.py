@@ -27,12 +27,14 @@ from ...core.ids import now_iso
 from ..validation import safe_name
 from ...core.managed_node_policy import (
     ATTEMPT_HISTORY_LIMIT,
+    DEFAULT_MANAGED_NODE_PROVIDER,
     MANAGED_NODE_ASSIGNMENT_MODES,
     MANAGED_NODE_DESIRED_STATES,
     MANAGED_NODE_PHASES,
     ManagedCapacityResolution,
     PROVISIONING_ATTEMPT_STATUSES,
     TERMINAL_ATTEMPT_STATUSES,
+    managed_sandbox_mode_for,
     validate_managed_provider,
     validate_managed_sandbox_mode,
 )
@@ -58,13 +60,14 @@ def _normalize_user_id(value: Any) -> str:
     return value.strip()
 
 
-def _managed_node_policy_slot(node: dict[str, Any]) -> tuple[Any, ...]:
+def _managed_node_policy_slot(node: dict[str, Any], default_provider: str) -> tuple[Any, ...]:
+    provider = node.get("provider") or default_provider
     return (
         node.get("assignmentMode") or "dedicated",
-        node.get("provider") or "local-process",
+        provider,
         node.get("providerConfigRef"),
         node.get("profile") or "standard",
-        node.get("sandboxMode") or "boxlite",
+        node.get("sandboxMode") or managed_sandbox_mode_for(provider),
         json.dumps(
             node.get("workspacePolicy") or {"kind": "user-home"},
             sort_keys=True,
@@ -85,6 +88,10 @@ def _canonical_node_rank(node: dict[str, Any]) -> tuple[int, int, str, str]:
 class LocalManagedNodeStore:
     """Durable local-first store for managed-node desired state and attempts."""
 
+    # The provider a node gets when its request names none; a deployment picks
+    # it with RELAY_MANAGED_NODE_PROVIDER.
+    default_provider = DEFAULT_MANAGED_NODE_PROVIDER
+
     def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
         root = Path(root_dir) / "managed-nodes"
         self.nodes_dir = root / "nodes"
@@ -101,13 +108,14 @@ class LocalManagedNodeStore:
     ) -> dict[str, Any]:
         assignment_mode = payload.get("assignmentMode") or "dedicated"
         desired_state = payload.get("desiredState") or "running"
-        sandbox_mode = payload.get("sandboxMode") or "boxlite"
+        validate_managed_provider(payload)
+        provider = payload.get("provider") or self.default_provider
+        sandbox_mode = payload.get("sandboxMode") or managed_sandbox_mode_for(provider)
         if assignment_mode not in MANAGED_NODE_ASSIGNMENT_MODES:
             raise ValueError("assignmentMode must be dedicated.")
         if desired_state not in MANAGED_NODE_DESIRED_STATES:
             raise ValueError("desiredState must be running, stopped, or deleted.")
-        validate_managed_sandbox_mode(sandbox_mode)
-        validate_managed_provider(payload)
+        validate_managed_sandbox_mode(sandbox_mode, provider)
         user_id = _normalize_user_id(payload.get("userId"))
         slot_lock = nullcontext() if _policy_slot_locked else self._policy_slot_lock()
         with slot_lock, self._mutation_scope():
@@ -117,7 +125,7 @@ class LocalManagedNodeStore:
                 "displayName": payload.get("displayName") or f"Managed node for {user_id or 'pool'}",
                 **({"userId": user_id} if user_id else {}),
                 "assignmentMode": assignment_mode,
-                "provider": payload.get("provider") or "local-process",
+                "provider": provider,
                 **({"providerConfigRef": payload["providerConfigRef"]} if payload.get("providerConfigRef") else {}),
                 "profile": payload.get("profile") or "standard",
                 "sandboxMode": sandbox_mode,
@@ -160,7 +168,7 @@ class LocalManagedNodeStore:
                 raw_user_id = node.get("userId")
                 if not isinstance(raw_user_id, str) or not raw_user_id.strip():
                     continue
-                key = (raw_user_id.strip(), _managed_node_policy_slot(node))
+                key = (raw_user_id.strip(), _managed_node_policy_slot(node, self.default_provider))
                 groups.setdefault(key, []).append(node)
             for candidates in groups.values():
                 if len(candidates) < 2:
@@ -180,7 +188,7 @@ class LocalManagedNodeStore:
     ) -> None:
         if candidate.get("desiredState") != "running":
             return
-        slot = _managed_node_policy_slot(candidate)
+        slot = _managed_node_policy_slot(candidate, self.default_provider)
         duplicate = next(
             (
                 node
@@ -188,7 +196,7 @@ class LocalManagedNodeStore:
                 if node["id"] != exclude_node_id
                 and node.get("desiredState") == "running"
                 and node.get("userId") == candidate.get("userId")
-                and _managed_node_policy_slot(node) == slot
+                and _managed_node_policy_slot(node, self.default_provider) == slot
             ),
             None,
         )
@@ -218,13 +226,13 @@ class LocalManagedNodeStore:
             raise ValueError(
                 f"Unsupported managed capacity policy field(s): {', '.join(sorted(unknown))}."
             )
-        requested_slot = _managed_node_policy_slot(policy)
+        requested_slot = _managed_node_policy_slot(policy, self.default_provider)
         with self._policy_slot_lock(), self._mutation_scope():
             candidates = [
                 node
                 for node in self.list_nodes()
                 if node.get("userId") == user_id
-                and _managed_node_policy_slot(node) == requested_slot
+                and _managed_node_policy_slot(node, self.default_provider) == requested_slot
             ]
             existing = next(
                 (node for node in candidates if node.get("desiredState") == "running"),
@@ -314,8 +322,9 @@ class LocalManagedNodeStore:
             if desired_state not in MANAGED_NODE_DESIRED_STATES:
                 raise ValueError("desiredState must be running, stopped, or deleted.")
             sandbox_mode = patch.get("sandboxMode", node["sandboxMode"])
-            if "sandboxMode" in patch or desired_state == "running":
-                validate_managed_sandbox_mode(sandbox_mode)
+            provider = patch.get("provider") or node["provider"]
+            if {"sandboxMode", "provider"} & set(patch) or desired_state == "running":
+                validate_managed_sandbox_mode(sandbox_mode, provider)
             assignment_mode = patch.get("assignmentMode", node["assignmentMode"])
             if (
                 "assignmentMode" in patch or desired_state == "running"
@@ -630,7 +639,14 @@ class LocalManagedNodeStore:
 class DatabaseManagedNodeStore(LocalManagedNodeStore):
     records = managed_nodes_tables.records
 
-    def __init__(self, database_url: str, *, create_schema: bool = False):
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        create_schema: bool = False,
+        default_provider: str = DEFAULT_MANAGED_NODE_PROVIDER,
+    ):
+        self.default_provider = default_provider
         self.engine = shared_engine(database_url)
         if create_schema:
             create_all_tables(self.engine)

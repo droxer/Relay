@@ -114,7 +114,8 @@ export interface ManagedNodeRecord {
   assignmentMode: "dedicated" | "pooled" | "shared";
   provider: string;
   profile: string;
-  sandboxMode: "boxlite";
+  // "none" on a provider that gives each computer its own VM.
+  sandboxMode: "boxlite" | "none";
   workspacePolicy: Record<string, unknown>;
   desiredState: "running" | "stopped" | "deleted";
   generation: number;
@@ -129,7 +130,6 @@ export interface ManagedNodeRecord {
 export interface CreateManagedNodeInput {
   userId: string;
   displayName?: string;
-  sandboxMode: "boxlite";
 }
 
 export interface CreateManagedNodeResponse {

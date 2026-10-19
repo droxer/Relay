@@ -53,7 +53,9 @@ The design preserves Relay's core invariants:
 
 ## Non-goals
 
-- Selecting a production cloud provider in this iteration.
+- Selecting a production cloud provider in this iteration. (Fly Machines was
+  added afterwards as the `fly-machines` provider; see
+  [deployment.md](deployment.md#cloud-computers-on-fly-machines).)
 - Replacing daemon command leasing, run scheduling, or BoxLite guest execution.
 - Moving task or session authority into a supervisor or provider.
 - Implementing autoscaling from task-queue demand in the first release.
@@ -141,10 +143,10 @@ controller instance can resume reconciliation.
 | `displayName` | string | Operator-facing name. |
 | `userId` | UUID, nullable | Owner for dedicated nodes; null for pooled nodes. |
 | `assignmentMode` | enum | `dedicated`, `pooled`, or `shared`. Only `dedicated` is currently accepted (`MANAGED_NODE_ASSIGNMENT_MODES` in `backend/relay/core/managed_node_policy.py`); `pooled`/`shared` are reserved for the assignment-policy work below. |
-| `provider` | string | Provider adapter name, initially `local-process`. |
+| `provider` | string | Provider adapter name: `local-process`, or `fly-machines` for cloud computers. A request that names none gets the deployment's `RELAY_MANAGED_NODE_PROVIDER`. |
 | `providerConfigRef` | string, nullable | Reference to server-side provider configuration; never embedded credentials. |
 | `profile` | string | Named capacity/runtime profile such as `standard`. |
-| `sandboxMode` | enum | `boxlite`; managed nodes always use a server-provisioned BoxLite VM. |
+| `sandboxMode` | enum | `boxlite`, or `none` on a provider that gives each computer its own VM (`fly-machines`, where BoxLite cannot boot); the provider fixes it (`managed_sandbox_mode_for`). |
 | `workspacePolicy` | JSON | Provider-neutral workspace intent, not a guessed guest path. |
 | `desiredState` | enum | `running`, `stopped`, or `deleted`. |
 | `generation` | integer | Incremented whenever provider-relevant desired state changes. |

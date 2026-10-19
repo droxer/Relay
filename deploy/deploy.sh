@@ -149,7 +149,10 @@ backend_variables() {
       RELAY_EDGE_SECRET: $edge,
       RELAY_CLIENT_IP_HEADER: "CF-Connecting-IP",
       RELAY_ADMIN_TOKEN: $admin,
-      RELAY_WAITLIST_ENABLED: $waitlist
+      RELAY_WAITLIST_ENABLED: $waitlist,
+      # A hosted deploy has no host that can boot BoxLite; its cloud computers
+      # are Fly Machines. BoxLite stays the local-development stand-in.
+      RELAY_MANAGED_NODE_PROVIDER: "fly-machines"
     }
     + $processes
     + (if $pg != "" then {PG_CLIENT_MAJOR: $pg} else {} end)
