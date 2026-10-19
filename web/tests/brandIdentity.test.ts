@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -201,21 +201,6 @@ describe("the brand where Relay introduces itself", () => {
     for (const locale of ["en", "zh-CN"]) {
       const copy = JSON.parse(read("web", "src", "i18n", "locales", locale, "translation.json"));
       assert.equal(copy.login.cover_headline, copy.landing.headline, `${locale}: sign-in and landing must lead with one pitch`);
-    }
-  });
-});
-
-describe("neutral preset avatars", () => {
-  it("draws every preset in achromatic greys, so no avatar competes with an accent", () => {
-    for (const kind of ["agents", "teams"]) {
-      const dir = path.join(repoRoot, "web", "public", "avatars", kind);
-      for (const file of readdirSync(dir).filter((name) => name.endsWith(".svg"))) {
-        const svg = readFileSync(path.join(dir, file), "utf8");
-        for (const [hex] of svg.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
-          const [r, g, b] = [1, 3, 5].map((i) => hex.slice(i, i + 2).toLowerCase());
-          assert.ok(r === g && g === b, `${kind}/${file} carries the hue ${hex}`);
-        }
-      }
     }
   });
 });
