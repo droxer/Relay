@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pendingRunCount, updateCommand } from './update.js';
 import { requestUpdatePause } from './update-pause.js';
+import { err, out, terminalStyle, type TerminalStyle } from './terminal-style.js';
 import { WINDOWS_SERVICE_SUFFIX, decodeServiceFile, windowsTaskArguments, startWindowsTask, stopWindowsTask, windowsLogTail, windowsServiceDirectory, windowsTaskState } from './windows-service.js';
 
 export const SERVICE_PREFIX = 'build.relay.computer.';
@@ -36,7 +37,11 @@ export interface ControlDeps {
   sleep?(ms: number): void;
   log(line: string): void;
   brand?: RelayBrand;
+  /** How results are styled; plain when absent. */
+  style?: TerminalStyle;
 }
+
+const PLAIN = terminalStyle(false);
 
 const help = ({ product, command }: RelayBrand): string => `${command} <command> [--computer <id>]
 
@@ -181,7 +186,7 @@ function stop(deps: ControlDeps, service: InstalledService): boolean {
 function logs(deps: ControlDeps, service: InstalledService, follow: boolean): boolean {
   if (deps.platform === 'darwin' || deps.platform === 'win32') {
     const file = join(deps.home, '.relay', 'daemon-nodes', service.id, 'logs', 'service.log');
-    if (!existsSync(file)) { deps.log(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`); return true; }
+    if (!existsSync(file)) { deps.log((deps.style ?? PLAIN).muted(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`)); return true; }
     if (deps.platform === 'win32') return windowsLogTail(deps, file, LOG_LINES, follow);
     return deps.run('tail', ['-n', LOG_LINES, ...(follow ? ['-f'] : []), file], { inherit: true }).status === 0;
   }
@@ -200,9 +205,13 @@ function selectServices(deps: ControlDeps, computer: string | undefined): Instal
   return match;
 }
 
-function applyCommand(deps: ControlDeps, command: string, service: InstalledService): { ok: boolean; message: string } {
+/** `tone` is how the result reads: done, worth a look (a stopped service), or failed. */
+function applyCommand(deps: ControlDeps, command: string, service: InstalledService): { ok: boolean; message: string; tone?: 'warn' } {
   const { product, command: cli } = deps.brand ?? RELAY_BRAND;
-  if (command === 'status') return { ok: true, message: `${product} is ${serviceState(deps, service).detail}.` };
+  if (command === 'status') {
+    const state = serviceState(deps, service);
+    return { ok: true, message: `${product} is ${state.detail}.`, ...(state.running ? {} : { tone: 'warn' as const }) };
+  }
   if (command === 'stop') {
     const ok = stop(deps, service);
     return { ok, message: ok ? `${product} stopped. Run "${cli} start" to start it again.` : `${product} could not be stopped.` };
@@ -223,7 +232,7 @@ function update(deps: ControlDeps, services: InstalledService[], force: boolean)
   for (const service of services) {
     // Validate saved settings before asking the daemon to pause.
     const { command, args } = updateCommand(deps.platform, serviceArguments(deps.platform, decodeServiceFile(readFileSync(service.file))));
-    deps.log(services.length > 1 ? `${service.id}: updating ${product}…` : `Updating ${product}…`);
+    deps.log((deps.style ?? PLAIN).step(services.length > 1 ? `${service.id}: updating ${product}…` : `Updating ${product}…`));
     const state = force ? undefined : serviceState(deps, service);
     const pause = state && !['stopped', 'failed'].includes(state.detail)
       ? requestUpdatePause(join(deps.home, '.relay', 'daemon-nodes', service.id)) : undefined;
@@ -240,18 +249,25 @@ function update(deps: ControlDeps, services: InstalledService[], force: boolean)
       const pending = pendingRunCount(deps.home, service.id);
       if (!force && pending > 0) throw new Error(`${product} has runs in progress (${service.id}: ${pending}). Wait for them to finish or add --force.`);
       const updated = deps.run(command, args, { inherit: true }).status === 0;
-      if (!updated) deps.log(`${product} could not be updated${services.length > 1 ? ` (${service.id})` : ''}. Run "${(deps.brand ?? RELAY_BRAND).command} status" to check the service.`);
+      if (!updated) deps.log((deps.style ?? PLAIN).error(`${product} could not be updated${services.length > 1 ? ` (${service.id})` : ''}. Run "${(deps.brand ?? RELAY_BRAND).command} status" to check the service.`));
       ok &&= updated;
     } finally { pause?.release(); }
   }
   return ok;
 }
 
+/** Section headings in bold and each command or option name highlighted. */
+function styledHelp(text: string, style: TerminalStyle): string {
+  return text
+    .replace(/^(Commands:|Options:)$/gm, heading => style.heading(heading))
+    .replace(/^ {2}(\S+(?: <id>)?)(?= {2})/gm, (_match, name: string) => `  ${style.command(name)}`);
+}
+
 /** Runs one control command and returns the process exit code. */
 export function runControl(args: string[], deps: ControlDeps): number {
   const options = parseControlArgs(args);
   const brand = deps.brand ?? RELAY_BRAND;
-  if (options.command === 'help') { deps.log(help(brand)); return 0; }
+  if (options.command === 'help') { deps.log(styledHelp(help(brand), deps.style ?? PLAIN)); return 0; }
   if (!COMMANDS.includes(options.command)) throw new Error(`Unknown command: ${options.command}. Run "${brand.command} --help".`);
   const services = selectServices(deps, options.computer);
   if (options.command === 'logs') {
@@ -264,7 +280,9 @@ export function runControl(args: string[], deps: ControlDeps): number {
     const result = applyCommand(deps, options.command, service);
     ok &&= result.ok;
     // Name the computer only when there is more than one to tell apart.
-    deps.log(services.length > 1 ? `${service.id}: ${result.message}` : result.message);
+    const style = deps.style ?? PLAIN;
+    const line = services.length > 1 ? `${service.id}: ${result.message}` : result.message;
+    deps.log(!result.ok ? style.error(line) : result.tone === 'warn' ? style.warn(line) : style.success(line));
   }
   return ok ? 0 : 1;
 }
@@ -280,6 +298,7 @@ export function systemControlDeps(): ControlDeps {
       return { status: result.status, stdout: result.stdout ?? '' };
     },
     log: line => console.log(line),
+    style: out,
     brand: process.env[BRAND_ENV] === 'dev' ? RELAY_DEV_BRAND : RELAY_BRAND,
   };
 }
@@ -288,7 +307,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   try {
     process.exitCode = runControl(process.argv.slice(2), systemControlDeps());
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(err.error(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;
   }
 }

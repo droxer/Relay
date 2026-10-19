@@ -154,6 +154,8 @@ test('installer verifies authentication and writes a service using the real pack
     assert.equal(readFileSync(join(bin, 'relay'), 'utf8'), '#!/bin/sh\nexit 99\n');
     assert.equal(existsSync(join(home, '.local/bin/relay')), false);
     assert.doesNotMatch(stdout, /launchctl|systemctl|journalctl|CLI installed at|Logs:/);
+    // The launcher directory is on this PATH, so there is nothing to fix.
+    assert.doesNotMatch(stdout, /is not on your PATH/);
     const credential = join(home, '.relay/daemon-nodes/node-install-test/credentials/alice.token');
     assert.equal(readFileSync(credential, 'utf8').trim(), 'fixture-token');
     assert.equal(statSync(credential).mode & 0o777, 0o600);
@@ -220,9 +222,12 @@ test('installer verifies authentication and writes a service using the real pack
     assert.equal(registrations.length, 0);
     assert.equal(existsSync(service), true);
     writeFileSync(calls, '');
-    await exec(process.execPath, [...setupCommand, '--foreground'], {
-      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
+    // Without the launcher directory on PATH, the user is told how to add it for their shell.
+    const foregroundRun = await exec(process.execPath, [...setupCommand, '--foreground'], {
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SHELL: '/bin/zsh', SERVICE_CALLS: calls }, timeout: 30_000,
     });
+    assert.match(foregroundRun.stdout, /\.local\/bin is not on your PATH, so `relay-dev` does not run by name yet\./);
+    assert.match(foregroundRun.stdout, /echo 'export PATH="\$HOME\/\.local\/bin:\$PATH"' >> ~\/\.zshrc/);
     assert.equal(registrations.length, 1);
     assert.equal(existsSync(service), true);
     registrations.length = 0;

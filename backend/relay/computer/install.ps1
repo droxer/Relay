@@ -4,6 +4,13 @@
 # Never call `exit`: the script runs inside the user's own PowerShell session.
 # ASCII only: Windows PowerShell may decode the download as Latin-1.
 
+# Progress lines; plain text when NO_COLOR is set (colors never reach redirected output).
+function Write-RelayStep([string]$Message) {
+    if ($env:NO_COLOR) { Write-Host $Message; return }
+    Write-Host '> ' -ForegroundColor Cyan -NoNewline
+    Write-Host $Message
+}
+
 function Get-RelayFile([string]$Uri, [string]$OutFile) {
     for ($attempt = 1; ; $attempt++) {
         try {
@@ -31,7 +38,7 @@ function Find-RelayNode {
 }
 
 function Install-RelayNode([string]$Root, [string]$Temp, [string]$Arch, [string]$Tar) {
-    Write-Host 'Installing a private Node.js 24 runtime...'
+    Write-RelayStep 'Installing a private Node.js 24 runtime...'
     $origin = 'https://nodejs.org/dist/latest-v24.x'
     Get-RelayFile "$origin/SHASUMS256.txt" (Join-Path $Temp 'SHASUMS256.txt')
     $pattern = "^([a-f0-9]{64})\s+(node-v24\.\d+\.\d+-win-$Arch\.zip)$"
@@ -86,7 +93,7 @@ function Install-Relay([string[]]$RelayArgs) {
     New-Item -ItemType Directory -Path $temp | Out-Null
     $tokenSet = $false
     try {
-        Write-Host 'Downloading Relay...'
+        Write-RelayStep 'Downloading Relay...'
         $bundle = Join-Path $temp 'daemon.tar.gz'
         Get-RelayFile @@BUNDLE_URL@@ $bundle
         if (-not (Test-RelaySha256 $bundle '@@BUNDLE_SHA256@@')) { throw 'Relay download checksum mismatch.' }

@@ -11,11 +11,12 @@ import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnviro
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { bootoutLaunchdService, installedComputers, removeService, sameComputer, serviceArguments, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { installedServices } from './control.js';
-import { launchdBootstrapError, lingerNotice, macProtectedFolder, macProtectedFolderNotice } from './install-notices.js';
+import { isOnPath, launchdBootstrapError, lingerNotice, macProtectedFolder, macProtectedFolderNotice, pathNotice, startupFileAddingDir } from './install-notices.js';
 import { installRootOf, pruneInstallDirectories } from './install-pruning.js';
 import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, withCurrentPath, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { localBash } from './local-shell.js';
+import { err, out } from './terminal-style.js';
 import { decodeServiceFile, encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
 interface InstallOptions {
@@ -132,7 +133,7 @@ function installLauncher(binDir: string, name: string, script: string, brand: Re
   mkdirSync(binDir, { recursive: true });
   const launcher = join(binDir, process.platform === 'win32' ? `${name}.cmd` : name);
   if (existsSync(launcher) && !readFileSync(launcher, 'utf8').includes(LAUNCHER_MARKER)) {
-    console.log(`Preserving existing executable: ${launcher}`);
+    console.log(out.muted(`Preserving existing executable: ${launcher}`));
     return undefined;
   }
   writeFileSync(launcher, launcherScript(process.platform, process.execPath, script, brand), { mode: 0o755 });
@@ -141,18 +142,26 @@ function installLauncher(binDir: string, name: string, script: string, brand: Re
 }
 
 function openBrowser(url: string): void {
-  console.log(`Confirm this computer in your browser:\n${url}`);
+  console.log(`${out.heading('Confirm this computer in your browser:')}\n${out.link(url)}`);
   const [command, args] = process.platform === 'darwin' ? ['open', [url]]
     : process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
     : ['xdg-open', [url]];
   const browser = spawn(command as string, args as string[], { stdio: 'ignore', detached: true, windowsHide: true });
-  browser.on('error', () => { console.log('Open the URL above in a browser to continue.'); });
+  browser.on('error', () => { console.log(out.step('Open the URL above in a browser to continue.')); });
   browser.unref();
 }
 
 /** How to run the control CLI in the shell the user installed from. */
 function controlCommand(control: string): string {
   return process.platform === 'win32' ? `& ${powershellLiteral(control)}` : shell(control);
+}
+
+/** What to tell the user when the launchers' directory is not on this shell's PATH. */
+function launcherPathNotice(binDir: string, brand: RelayBrand): string | undefined {
+  if (isOnPath(binDir, process.env.PATH, process.platform)) return undefined;
+  const directory = { binDir, home: homedir(), platform: process.platform, shell: process.env.SHELL };
+  const read = (file: string) => { try { return readFileSync(file, 'utf8'); } catch { return undefined; } };
+  return pathNotice({ ...directory, command: brand.command, configuredIn: startupFileAddingDir(directory, read) });
 }
 
 /**
@@ -195,7 +204,7 @@ function removeSupersededServices(installed: InstalledComputer[], options: Insta
   for (const computer of installed) {
     if (computer.id === options.sandboxId || !sameComputer(computer, options.backendUrl, options.workspace)) continue;
     removeService(process.platform, process.getuid?.() ?? 0, computer, runner);
-    console.log(`Removed an older ${brand.product} install for this workspace (${computer.id}).`);
+    console.log(out.muted(`Removed an older ${brand.product} install for this workspace (${computer.id}).`));
   }
   if (process.platform === 'linux') spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
 }
@@ -243,7 +252,7 @@ function pruneOldInstalls(brand: RelayBrand): void {
     }
   }
   const removed = pruneInstallDirectories(root, inUse, message => console.warn(message));
-  if (removed.length) console.log(`Removed ${removed.length} unused ${brand.product} download${removed.length === 1 ? '' : 's'}.`);
+  if (removed.length) console.log(out.muted(`Removed ${removed.length} unused ${brand.product} download${removed.length === 1 ? '' : 's'}.`));
 }
 
 async function install(): Promise<void> {
@@ -266,7 +275,7 @@ async function install(): Promise<void> {
   const existing = options.deviceSetup ? await reusableComputer(installed, options.backendUrl, options.workspace) : undefined;
   if (existing) {
     // Re-running the install command upgrades this computer in place: same node, same token, new release.
-    console.log(`${brand.product} is already installed for this workspace; upgrading it.`);
+    console.log(out.step(`${brand.product} is already installed for this workspace; upgrading it.`));
     options.sandboxId = existing.computer.id;
     options.userId = existing.computer.userId;
     process.env.RELAY_DAEMON_NODE_TOKEN = existing.token;
@@ -295,7 +304,7 @@ async function install(): Promise<void> {
     applyLocalRuntimeEnvironment(selectedEnvironment);
   }
   process.env.RELAY_LOCAL_PERMISSION_POLICY = options.localPermissionPolicy;
-  console.log('Checking backend, workspace and node credentials…');
+  console.log(out.step('Checking backend, workspace and node credentials…'));
   // Missing agent CLIs do not block computer enrollment; they can be installed later.
   let report;
   try {
@@ -332,7 +341,9 @@ async function install(): Promise<void> {
         stopService(process.platform, process.getuid?.() ?? 0, computer, runner);
       }
     }
-    console.log(`Starting ${brand.product} in this terminal. Press Ctrl+C to stop.`);
+    const pathHint = control && launcherPathNotice(binDir, brand);
+    if (pathHint) console.log(`${out.notice(pathHint)}\n`);
+    console.log(out.step(`Starting ${brand.product} in this terminal. Press Ctrl+C to stop.`));
     const child = spawnSync(argv[0]!, argv.slice(1), { stdio: 'inherit' });
     process.exitCode = child.status ?? 1;
     return;
@@ -356,7 +367,7 @@ async function install(): Promise<void> {
       throw new Error(launchdBootstrapError(process.env, brand.product));
     }
     if (options.verbose) {
-      console.log(`Logs: ${join(logDir, 'service.log')}`);
+      console.log(`${out.muted('Logs:')} ${out.command(join(logDir, 'service.log'))}`);
     }
   } else if (process.platform === 'win32') {
     const directory = windowsServiceDirectory(homedir());
@@ -365,7 +376,7 @@ async function install(): Promise<void> {
     writeFileSync(file, encodeTaskFile(service.content));
     registerWindowsTask(serviceRunner(), service.name, file);
     if (options.verbose) {
-      console.log(`Logs: ${join(logDir, 'service.log')}`);
+      console.log(`${out.muted('Logs:')} ${out.command(join(logDir, 'service.log'))}`);
     }
   } else {
     const directory = join(homedir(), '.config', 'systemd', 'user');
@@ -375,26 +386,29 @@ async function install(): Promise<void> {
     execFileSync('systemctl', ['--user', 'enable', `${service.name}.service`], { stdio: 'inherit' });
     execFileSync('systemctl', ['--user', 'restart', `${service.name}.service`], { stdio: 'inherit' });
     if (options.verbose) {
-      console.log(`Logs: journalctl --user -u ${service.name}`);
+      console.log(`${out.muted('Logs:')} ${out.command(`journalctl --user -u ${service.name}`)}`);
     }
   }
   const notices = platformNotices(options.workspace, brand);
   // Only after the new service started, so a failed install never leaves the computer with none.
   removeSupersededServices(installed, options, brand);
   pruneOldInstalls(brand);
-  console.log(`Connected to ${brand.product}. You can close this terminal.`);
-  console.log(`${brand.product} runs in the background and starts automatically when you log in.`);
-  for (const notice of notices) console.log(`\n${notice}\n`);
+  console.log(out.success(`Connected to ${brand.product}. You can close this terminal.`));
+  console.log(out.muted(`${brand.product} runs in the background and starts automatically when you log in.`));
+  for (const notice of notices) console.log(`\n${out.notice(notice)}\n`);
   if (control) {
+    // Always the full path: a different command of the same name may come earlier on PATH.
     const relay = controlCommand(control);
-    console.log(`Control ${brand.product} with:`);
-    console.log(`  Stop: ${relay} stop`);
-    console.log(`  Start: ${relay} start`);
-    console.log('Other commands: status, restart, logs.');
+    console.log(out.heading(`Control ${brand.product} with:`));
+    console.log(`  ${out.muted('Stop:')} ${out.command(`${relay} stop`)}`);
+    console.log(`  ${out.muted('Start:')} ${out.command(`${relay} start`)}`);
+    console.log(out.muted('Other commands: status, restart, logs.'));
+    const pathHint = launcherPathNotice(binDir, brand);
+    if (pathHint) console.log(`\n${out.notice(pathHint)}`);
   }
-  if (options.verbose) console.log(`CLI installed at ${wrapper ?? join(binDir, `${brand.command}-daemon`)}.`);
+  if (options.verbose) console.log(out.muted(`CLI installed at ${wrapper ?? join(binDir, `${brand.command}-daemon`)}.`));
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  install().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+  install().catch(error => { console.error(err.error(error instanceof Error ? error.message : String(error))); process.exitCode = 1; });
 }

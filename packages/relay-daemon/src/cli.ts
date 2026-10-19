@@ -8,6 +8,7 @@ import { resolveSandboxMode, runRelayDaemon, runRelayDaemonDoctor } from "./inde
 import { loadRuntimeProfile } from "./runtime-profile.js";
 import { serviceLogPath, watchServiceLog } from "./service-log.js";
 import { isUserIdFlag, userIdFromEnv } from "./legacy-names.js";
+import { err, out } from "./terminal-style.js";
 
 loadPackageEnv("relay-daemon");
 
@@ -213,21 +214,21 @@ export async function main(argv: string[] = process.argv): Promise<void> {
   const sandboxId = args.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   const enrollmentToken = args.enrollmentToken ?? process.env.RELAY_ENROLLMENT_TOKEN;
   if (!sandboxId && !enrollmentToken) {
-    console.error("Error: --sandbox-id/RELAY_SANDBOX_ID or --enrollment-token/RELAY_ENROLLMENT_TOKEN is required.");
+    console.error(err.error("Error: --sandbox-id/RELAY_SANDBOX_ID or --enrollment-token/RELAY_ENROLLMENT_TOKEN is required."));
     showHelp();
     process.exitCode = 1;
     return;
   }
   const workspacePath = args.workspace ?? process.env.RELAY_WORKSPACE ?? process.env.WORKSPACE;
   if (!workspacePath) {
-    console.error("Error: --workspace/RELAY_WORKSPACE is required and must point to the workspace root selected during setup.");
+    console.error(err.error("Error: --workspace/RELAY_WORKSPACE is required and must point to the workspace root selected during setup."));
     showHelp();
     process.exitCode = 1;
     return;
   }
   if (args.doctor) {
     if (!sandboxId) {
-      console.error("Error: --doctor requires an enrolled --sandbox-id.");
+      console.error(err.error("Error: --doctor requires an enrolled --sandbox-id."));
       process.exitCode = 1;
       return;
     }
@@ -243,7 +244,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
       agentHome: args.useLocalAgentHome ? homedir() : undefined,
     });
     for (const check of report.checks) {
-      console.log(`${check.ok ? "OK" : "FAIL"} ${check.name}: ${check.detail}`);
+      console.log(`${out.verdict(check.ok ? "OK" : "FAIL", check.ok)} ${out.heading(check.name)}: ${out.muted(check.detail)}`);
     }
     if (!report.ok) process.exitCode = 1;
     return;
@@ -278,7 +279,7 @@ export function isMainModule(moduleUrl: string, argvPath: string | undefined): b
 
 if (isMainModule(import.meta.url, process.argv[1])) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(err.error(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;
   });
 }

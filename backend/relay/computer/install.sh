@@ -5,7 +5,13 @@
 # the hand-off for commands copied while it was `| sudo bash` needs bash.
 set -eu
 
-fail() { printf '%s\n' "$*" >&2; exit 1; }
+# Color only a terminal that wants it; plain output stays exactly the same text.
+colorful() { [ -t "$1" ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != dumb ]; }
+fail() {
+    if colorful 2; then printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; else printf '%s\n' "$*" >&2; fi
+    exit 1
+}
+say() { if colorful 1; then printf '\033[36m›\033[0m %s\n' "$1"; else printf '%s\n' "$1"; fi; }
 sha256() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
     else shasum -a 256 "$1" | awk '{print $1}'; fi
@@ -26,7 +32,7 @@ install_as_invoking_user() {
     # travel in that stream, quoted, never through the login shell's command line.
     {
         printf 'set -eu\n'
-        declare -f fail sha256 download install_relay
+        declare -f colorful fail say sha256 download install_relay
         printf 'RELAY_SUDO_PATH=%q\ninstall_relay' "$PATH"
         [ "$#" -eq 0 ] || printf ' %q' "$@"
         printf '\n'
@@ -55,14 +61,14 @@ install_relay() {
     relay_tmp=$(mktemp -d "$relay_root/.install.XXXXXX")
     trap 'rm -rf "$relay_tmp"' EXIT
     trap 'exit 1' HUP INT TERM
-    printf '%s\n' 'Downloading Relay…'
+    say 'Downloading Relay…'
     download @@BUNDLE_URL@@ "$relay_tmp/daemon.tar.gz"
     [ "$(sha256 "$relay_tmp/daemon.tar.gz")" = '@@BUNDLE_SHA256@@' ] || fail 'Relay download checksum mismatch.'
     mkdir "$relay_tmp/client"
     tar -xzf "$relay_tmp/daemon.tar.gz" -C "$relay_tmp/client"
     relay_node=$(command -v node || true)
     if [ -z "$relay_node" ] || ! "$relay_node" -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22 || a===22 && b>=19 ? 0 : 1)'; then
-        printf '%s\n' 'Installing a private Node.js 24 runtime…'
+        say 'Installing a private Node.js 24 runtime…'
         node_origin=https://nodejs.org/dist/latest-v24.x
         download "$node_origin/SHASUMS256.txt" "$relay_tmp/SHASUMS256.txt"
         node_file=$(awk -v suffix="-$platform-$arch.tar.gz" '$2 ~ /node-v24\.[0-9]+\.[0-9]+-/ && substr($2,length($2)-length(suffix)+1)==suffix {print $2}' "$relay_tmp/SHASUMS256.txt")
