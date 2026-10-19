@@ -3,6 +3,8 @@ export { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForUser, workspa
 export { RelaySupervisor } from "./reconcile.js";
 export { ManagedNodeReconciler } from "./managed-reconcile.js";
 export { LocalProcessProvider } from "./providers.js";
+export { FlyMachinesProvider, flyMachinesConfigFromEnv } from "./fly-machines.js";
+export type { FlyMachinesConfig } from "./fly-machines.js";
 export type {
   DaemonLauncher,
   DaemonLaunchRequest,

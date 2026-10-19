@@ -16,7 +16,12 @@ MANAGED_NODE_DESIRED_STATES = frozenset({"running", "stopped", "deleted"})
 # only "dedicated" is wired into agent placement sync today, so the other
 # modes are rejected rather than silently accepted with no agents ever synced.
 MANAGED_NODE_ASSIGNMENT_MODES = frozenset({"dedicated"})
-MANAGED_NODE_SANDBOX_MODES = frozenset({"boxlite"})
+MANAGED_NODE_SANDBOX_MODES = frozenset({"boxlite", "none"})
+DEFAULT_MANAGED_NODE_PROVIDER = "local-process"
+# Providers that give every computer its own VM. That VM is the isolation
+# boundary, so the daemon runs agents directly in it — and BoxLite, which needs
+# the /dev/kvm these providers do not expose, could not boot there anyway.
+VM_ISOLATED_PROVIDERS = frozenset({"fly-machines"})
 MANAGED_NODE_PHASES = frozenset({
     "requested",
     "allocating",
@@ -89,9 +94,22 @@ def managed_node_placeholder(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_managed_sandbox_mode(value: Any) -> None:
+def managed_sandbox_mode_for(provider: str) -> str:
+    """The only sandbox mode a managed node on ``provider`` can run."""
+    return "none" if provider in VM_ISOLATED_PROVIDERS else "boxlite"
+
+
+def validate_managed_sandbox_mode(value: Any, provider: str) -> None:
     if value not in MANAGED_NODE_SANDBOX_MODES:
-        raise ValueError("Managed nodes require sandboxMode boxlite.")
+        raise ValueError("sandboxMode must be boxlite or none.")
+    if value == managed_sandbox_mode_for(provider):
+        return
+    if value == "none":
+        raise ValueError(
+            "Managed nodes require sandboxMode boxlite unless their provider "
+            "runs each computer in its own VM."
+        )
+    raise ValueError(f"Provider {provider} runs each computer in its own VM; sandboxMode must be none.")
 
 
 def validate_managed_provider(payload: dict[str, Any]) -> None:

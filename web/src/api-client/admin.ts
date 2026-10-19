@@ -132,9 +132,9 @@ export function createManagedNode(input: CreateManagedNodeInput): Promise<Create
       userId: input.userId,
       ...(input.displayName ? { displayName: input.displayName } : {}),
       assignmentMode: "dedicated",
-      provider: "local-process",
+      // The deployment picks the provider (RELAY_MANAGED_NODE_PROVIDER), and
+      // the provider fixes the sandbox mode, so neither is sent from here.
       profile: "standard",
-      sandboxMode: input.sandboxMode,
       workspacePolicy: { kind: "user-home" },
       desiredState: "running",
     },

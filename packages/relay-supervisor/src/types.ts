@@ -27,7 +27,8 @@ export interface ManagedNodeRecord {
   assignmentMode: "dedicated" | "pooled" | "shared";
   provider: string;
   profile: string;
-  sandboxMode: "boxlite";
+  // "none" on a provider that gives each computer its own VM (fly-machines).
+  sandboxMode: "boxlite" | "none";
   workspacePolicy: Record<string, unknown>;
   desiredState: ManagedNodeDesiredState;
   generation: number;

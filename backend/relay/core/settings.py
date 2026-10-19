@@ -26,6 +26,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .environment import load_backend_env
+from .managed_node_policy import DEFAULT_MANAGED_NODE_PROVIDER
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
@@ -155,6 +156,9 @@ class AppSettings:
     # "embedded" runs the scheduler, recovery, and notification loops in the
     # API process; "external" leaves them to `relay worker` (background.py).
     background_mode: str
+    # Which provider realizes a managed computer whose request names none
+    # (core/managed_node_policy.py); "fly-machines" for cloud computers.
+    managed_node_provider: str
     automation_webhook_limit: RateLimit
     automation_webhook_failure_limit: RateLimit
     waitlist_limit: RateLimit
@@ -184,6 +188,7 @@ class AppSettings:
             automation_outbox_batch=env.integer("RELAY_AUTOMATION_OUTBOX_BATCH", 200, minimum=1),
             startup_repairs_enabled=env.flag("RELAY_STARTUP_REPAIRS", True),
             background_mode=env.choice("RELAY_BACKGROUND_MODE", "embedded", ("embedded", "external")),
+            managed_node_provider=env.text("RELAY_MANAGED_NODE_PROVIDER", DEFAULT_MANAGED_NODE_PROVIDER),
             automation_webhook_limit=RateLimit(
                 env.integer("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", 60, minimum=1), 60
             ),

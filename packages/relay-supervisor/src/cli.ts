@@ -3,11 +3,12 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { loadPackageEnv } from "relay-core";
 import { SupervisorBackendClient } from "./backend-client.js";
+import { FlyMachinesProvider, flyMachinesConfigFromEnv } from "./fly-machines.js";
 import { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForUser, workspaceForManagedNode } from "./launchers.js";
 import { ManagedNodeReconciler } from "./managed-reconcile.js";
 import { LocalProcessProvider } from "./providers.js";
 import { RelaySupervisor } from "./reconcile.js";
-import type { DaemonLauncher, UserRecord, SupervisorLogger } from "./types.js";
+import type { DaemonLauncher, ManagedNodeProvider, UserRecord, SupervisorLogger } from "./types.js";
 
 loadPackageEnv("relay-supervisor");
 
@@ -52,6 +53,11 @@ Options:
   --once                    Run one reconcile pass and exit.
   --help                    Show this help message.
   --version                 Show version information.
+
+Managed computers on Fly Machines (provider "fly-machines") are offered when
+RELAY_FLY_APP is set; they also need FLY_API_TOKEN, RELAY_FLY_IMAGE, and
+RELAY_FLY_REGION, and take RELAY_FLY_CPU_KIND, RELAY_FLY_CPUS,
+RELAY_FLY_MEMORY_MB, and RELAY_FLY_VOLUME_GB. See docs/deployment.md.
 
 Command templates can use:
   {{userId}} {{sandboxId}} {{nodeToken}} {{workspacePath}} {{backendUrl}}
@@ -127,7 +133,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
       })
     : new ManagedNodeReconciler({
         backend,
-        providers: [new LocalProcessProvider({ logger: consoleLogger })],
+        providers: managedNodeProviders(),
         backendUrl,
         workspacePathForNode: (node) => workspaceForManagedNode(workspaceRoot, node.id),
         logger: consoleLogger,
@@ -155,6 +161,15 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     }
     await delay(intervalMs);
   }
+}
+
+/** Every provider this supervisor can realize managed computers with. */
+function managedNodeProviders(): ManagedNodeProvider[] {
+  const fly = flyMachinesConfigFromEnv(process.env);
+  return [
+    new LocalProcessProvider({ logger: consoleLogger }),
+    ...(fly ? [new FlyMachinesProvider({ config: fly, logger: consoleLogger })] : []),
+  ];
 }
 
 function buildLauncher(args: SupervisorCliArgs, backendUrl: string, workspaceRoot: string): DaemonLauncher {

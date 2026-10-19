@@ -215,6 +215,40 @@ def test_managed_nodes_require_boxlite(tmp_path: Path) -> None:
         store.create_node({"userId": "alice", "sandboxMode": "none"})
 
 
+def test_vm_isolated_provider_runs_without_boxlite(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+
+    node = store.create_node({"userId": "alice", "provider": "fly-machines"})
+
+    assert node["sandboxMode"] == "none"
+    with pytest.raises(ValueError, match="sandboxMode must be none"):
+        store.create_node({"userId": "bob", "provider": "fly-machines", "sandboxMode": "boxlite"})
+    with pytest.raises(ValueError, match="require sandboxMode boxlite"):
+        store.update_node(node["id"], {"provider": "local-process"})
+
+
+def test_malformed_provider_is_refused_before_choosing_a_sandbox(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+
+    with pytest.raises(ValueError, match="provider must be a non-empty string"):
+        store.create_node({"userId": "alice", "provider": ["fly-machines"]})
+
+
+def test_deployment_default_provider_applies_to_every_new_node(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    store.default_provider = "fly-machines"
+
+    created = store.create_node({"userId": "alice"})
+    resolved = store.ensure_node_for_user("alice")
+
+    assert created["provider"] == "fly-machines"
+    assert created["sandboxMode"] == "none"
+    # Capacity requested without a policy lands in the same slot rather than
+    # minting a second computer for the old default provider.
+    assert resolved.node["id"] == created["id"]
+    assert resolved.provisioning_requested is False
+
+
 def test_managed_capacity_restart_is_reported_as_requested(tmp_path: Path) -> None:
     store = LocalManagedNodeStore(tmp_path)
     node = store.create_node({"userId": "alice"})

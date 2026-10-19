@@ -34,6 +34,7 @@ from ..persistence.protocols import (
     DaemonStore,
     TeamStore,
 )
+from ..core.managed_node_policy import DEFAULT_MANAGED_NODE_PROVIDER
 from ..persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 from ..persistence.account.profile_images import DatabaseProfileImageStore
 from ..security.admin_token import configure_admin_token
@@ -192,7 +193,7 @@ class Stores:
     notifications: DatabaseNotificationStore
 
 
-def build_stores(root_dir: Path) -> Stores:
+def build_stores(root_dir: Path, *, managed_node_provider: str = DEFAULT_MANAGED_NODE_PROVIDER) -> Stores:
     # One client for every store that keeps bytes outside Postgres.
     warn_retired_store_settings()
     blob_store = blob_store_from_env()
@@ -211,7 +212,9 @@ def build_stores(root_dir: Path) -> Stores:
         daemon=daemon_store_from_env(),
         chat=chat_store_from_env(),
         auth=auth_store,
-        managed_nodes=DatabaseManagedNodeStore(database_url, create_schema=create_schema),
+        managed_nodes=DatabaseManagedNodeStore(
+            database_url, create_schema=create_schema, default_provider=managed_node_provider
+        ),
         agents=agent_store_from_env(),
         teams=team_store_from_env(),
         projects=project_store_from_env(root_dir),
