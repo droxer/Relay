@@ -134,6 +134,8 @@ export interface RelayTask {
   title: string;
   description: string;
   priority: TaskPriority;
+  /** Free-form labels a person files the task under; absent when none. */
+  tags?: string[];
   status: TaskStatus;
   /** User who owns this task; their agent carries it out on their behalf. */
   ownerUserId?: string;
@@ -234,6 +236,7 @@ export type RelayTaskEvent =
       title: string;
       description: string;
       priority: TaskPriority;
+      tags?: string[];
       acceptancePolicy?: "human" | "automatic";
       ownerUserId?: string;
       projectId?: string;
@@ -258,6 +261,8 @@ export type RelayTaskEvent =
       title?: string;
       description?: string;
       priority?: TaskPriority;
+      /** Present only when changed; an empty list clears them. */
+      tags?: string[];
       acceptancePolicy?: "human" | "automatic";
       assigneeUserId?: string;
       dueDate?: string;
@@ -402,6 +407,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     title: created.title,
     description: created.description,
     priority: created.priority,
+    ...(created.tags?.length ? { tags: [...created.tags] } : {}),
     ...(created.ownerUserId ? { ownerUserId: created.ownerUserId } : {}),
     ...(created.projectId ? { projectId: created.projectId } : {}),
     ...(created.assigneeUserId ? { assigneeUserId: created.assigneeUserId } : {}),
@@ -436,6 +442,10 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
       if (event.title !== undefined) task.title = event.title;
       if (event.description !== undefined) task.description = event.description;
       if (event.priority !== undefined) task.priority = event.priority;
+      if (Array.isArray(event.tags)) {
+        if (event.tags.length) task.tags = [...event.tags];
+        else delete task.tags;
+      }
       if (event.assigneeUserId !== undefined) {
         if (event.assigneeUserId) task.assigneeUserId = event.assigneeUserId;
         else delete task.assigneeUserId;

@@ -6,6 +6,7 @@ import type { RelaySession, RelayTask } from "../src/types.js";
 
 const baseFilters: RoutineFilters = {
   trigger: "all",
+  tag: "all",
   query: "",
   agent: "all",
   assignee: "",

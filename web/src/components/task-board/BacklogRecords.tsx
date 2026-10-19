@@ -3,6 +3,7 @@
 import { useMemo, type ComponentProps, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PriorityBadge } from "../PriorityBadge";
+import { TaskTagList } from "../TaskTags";
 import { cn } from "@/lib/utils";
 import { type RelaySession, type RelayTaskListItem } from "../../types";
 import { ActionCalendar, ICON } from "../icons";
@@ -111,6 +112,7 @@ export function BacklogTaskCard({
           }}
         >{task.title}</a>
         {projectName ? <span className="task-project-label">{projectName}</span> : null}
+          <TaskTagList tags={task.tags} max={2} />
           {/* A blocked or waiting task shares the lane of the stage it was
               held up in, so the tile itself says it is held up, and on what. */}
           <TaskHoldupLine task={task} className="task-holdup--tile" labeled />
@@ -315,6 +317,7 @@ export function BacklogTaskList({
               }}
             >{task.title}</a>
             {projectName ? <span className="task-project-label">{projectName}</span> : null}
+            <TaskTagList tags={task.tags} max={2} />
             <TaskHoldupLine task={task} />
           </div>
         );

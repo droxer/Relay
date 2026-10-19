@@ -12,6 +12,7 @@ import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, typ
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { triggerError } from "../lib/automationTrigger";
+import { collectTags } from "../lib/taskTags";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -90,6 +91,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const routineTasks = useMemo(() => tasks.filter((task) => task.isRoutine), [tasks]);
+  const tagOptions = useMemo(() => collectTags(routineTasks), [routineTasks]);
   // Derived once for the whole board: `routineState` then costs a Set lookup
   // per row instead of a full task scan.
   const runningIds = useMemo(() => runningRoutineIds(tasks), [tasks]);
@@ -168,6 +170,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       collaborationStyle: task.collaborationStyle ?? null,
       description: task.description,
       priority: task.priority,
+      tags: task.tags ?? [],
       assigneeUserId: task.assigneeUserId ?? task.ownerUserId ?? currentUser.userId ?? currentUser.username,
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
@@ -188,6 +191,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
         priority: form.priority,
+        tags: form.tags,
         ...routineMutationFields(form),
         ...taskAssignmentMutationFields(form),
       };
@@ -357,6 +361,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         <RoutineFiltersBar
           filters={filters}
           agents={logicalAgents}
+          tags={tagOptions}
           onChange={setFilters}
           sortMenu={
             <SortMenu
@@ -423,6 +428,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           form={form}
           logicalAgents={logicalAgents}
           projects={projects}
+          tagSuggestions={tagOptions}
           onCreateProject={() => setCreatingProject(true)}
           teams={teams}
           saving={saving}

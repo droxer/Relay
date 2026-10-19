@@ -35,6 +35,7 @@ from .requests import (
     TaskRequestReader,
     acceptance_policy_field,
     collaboration_style_field,
+    tags_field,
     update_task_unless_dispatching,
 )
 from ..security.actor import Actor
@@ -44,7 +45,7 @@ UNBLOCKED_WAIT_REASON = (
     "Tell the agent how to continue."
 )
 EMPTY_PATCH_DETAIL = (
-    "PATCH requires title, description, priority, dueDate, assigneeUserId, "
+    "PATCH requires title, description, priority, tags, dueDate, assigneeUserId, "
     "assignedAgentId, assignedTeamId, projectId, or status."
 )
 BLOCKER_REASON_MAX_CHARS = 2000
@@ -70,6 +71,7 @@ class _Fields:
     title: str | None
     description: str | None
     priority: str | None
+    tags: list[str] | None
     status: str | None
     acceptance_policy: Any
     collaboration_style: str | None
@@ -120,6 +122,7 @@ def update_task(
         "title": fields.title,
         "description": fields.description,
         "priority": fields.priority,
+        **({"tags": fields.tags} if fields.tags is not None else {}),
         "status": following.status,
         "acceptancePolicy": fields.acceptance_policy,
         "collaborationStyle": fields.collaboration_style,
@@ -188,6 +191,7 @@ def _read_fields(current: dict[str, Any], request: TaskPatchRequest) -> _Fields:
         title=title,
         description=description,
         priority=priority,
+        tags=tags_field(body),
         status=status,
         acceptance_policy=acceptance_policy,
         collaboration_style=collaboration_style,
@@ -305,6 +309,7 @@ def _ensure_patch_not_empty(
         not fields.title
         and fields.description is None
         and not fields.priority
+        and fields.tags is None
         and not fields.status
         and fields.due_date is None
         and assignment.assignee is None

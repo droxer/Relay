@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { ActionStart, ICON, NavAgents } from "../icons";
 import { PriorityBadge } from "../PriorityBadge";
+import { TaskTagList } from "../TaskTags";
 import { StateMark } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { TaskAssignee } from "../TaskAssignee";
@@ -246,15 +247,18 @@ export function RoutineTable({
           /* A real href, so a routine can be opened in a new tab or copied;
              a plain click navigates in place. */
           return (
-            <a
-              className="backlog-row-title"
-              href={hrefForRoutineRecord(task.id)}
-              onClick={(event) => {
-                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-                event.preventDefault();
-                s.handlersFor(task).onOpen();
-              }}
-            >{task.title}</a>
+            <div className="backlog-row-lead-main">
+              <a
+                className="backlog-row-title"
+                href={hrefForRoutineRecord(task.id)}
+                onClick={(event) => {
+                  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+                  event.preventDefault();
+                  s.handlersFor(task).onOpen();
+                }}
+              >{task.title}</a>
+              <TaskTagList tags={task.tags} max={2} />
+            </div>
           );
         }}</RoutineCells.Read>,
       },

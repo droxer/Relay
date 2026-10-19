@@ -4,6 +4,7 @@ import { TriggerKindField, EventTriggerFields } from "./AutomationTriggerFields"
 import { AutomationPauseBanner } from "./AutomationPauseBanner";
 import { ScheduleFields } from "./ScheduleFields";
 import { WebhookSecretPanel } from "./WebhookSecretPanel";
+import { TaskTagsField } from "./TaskTagsField";
 import { describeTrigger } from "../../lib/automationTrigger";
 import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -49,6 +50,8 @@ type TaskDrawerProps = {
   logicalAgents: UserAgent[];
   teams?: AgentTeam[];
   projects?: ProjectRecord[];
+  /** Every tag already in use on the page, offered while typing one. */
+  tagSuggestions?: readonly string[];
   onCreateProject?: () => void;
   saving: boolean;
   title: string;
@@ -200,6 +203,7 @@ export function TaskDrawer({
   logicalAgents,
   teams = [],
   projects = [],
+  tagSuggestions,
   onCreateProject,
   saving,
   title,
@@ -407,6 +411,13 @@ export function TaskDrawer({
             </Select>
           </Field>
         </div>
+        <TaskTagsField
+          name={`${fieldPrefix}-tags`}
+          tags={form.tags}
+          suggestions={tagSuggestions}
+          disabled={busy}
+          onChange={(tags) => updateBase({ tags })}
+        />
         {form.variant === "backlog" ? (
           <div className="task-drawer-form-grid">
             <BacklogFields form={form} onChange={onChange} canRun={!intake} />

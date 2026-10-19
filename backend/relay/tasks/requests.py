@@ -16,6 +16,7 @@ from typing import Any
 from ..automations.model import TriggerError
 from ..automations.service import automation_triggers_enabled, routine_fields_v2
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
+from ..core.task_tags import normalize_tags
 from ..persistence.task.rules import TaskExecutionActiveError
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 
@@ -47,6 +48,16 @@ def acceptance_policy_field(body: dict[str, Any]) -> Any:
     if "acceptancePolicy" in body and value not in ACCEPTANCE_POLICIES:
         raise TaskRequestError(400, "acceptancePolicy must be human or automatic.")
     return value
+
+
+def tags_field(body: dict[str, Any]) -> list[str] | None:
+    """The tags a body names (``[]`` clears them), or None when it names none."""
+    if "tags" not in body:
+        return None
+    try:
+        return normalize_tags(body["tags"] if body["tags"] is not None else [])
+    except ValueError as error:
+        raise TaskRequestError(400, str(error)) from error
 
 
 def collaboration_style_field(body: dict[str, Any], *, allow_clear: bool) -> str | None:

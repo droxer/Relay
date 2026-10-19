@@ -2888,5 +2888,16 @@
       "execution": "运行中停止",
       "operator": "由人工阻塞"
     }
+  },
+  "tags": {
+    "label": "标签",
+    "hint": "按回车或逗号添加标签。",
+    "placeholder": "添加标签…",
+    "remove": "移除标签 {{tag}}",
+    "more": "+{{count}}",
+    "none": "无",
+    "placeholder_more": "继续添加…",
+    "limit_other": "每个任务最多 {{count}} 个标签。",
+    "more_label_other": "另外 {{count}} 个标签：{{tags}}"
   }
 }

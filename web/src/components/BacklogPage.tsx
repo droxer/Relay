@@ -22,6 +22,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyBacklogForm } from "../lib/taskBoardForm";
+import { collectTags } from "../lib/taskTags";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
@@ -121,6 +122,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
   const drawerRecordId = recordMirror.record;
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
+  const tagOptions = useMemo(() => collectTags(backlogTasks), [backlogTasks]);
   const currentProject = projects.find((project) => project.id === projectId) ?? null;
 
   /* Sort is applied AFTER filtering, over the one list both views read — the
@@ -299,6 +301,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
             filters={filters}
             agents={logicalAgents}
             teams={teams}
+            tags={tagOptions}
             onChange={setFilters}
             sortMenu={
               <>
@@ -424,6 +427,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
           form={form}
           logicalAgents={logicalAgents}
           projects={projects}
+          tagSuggestions={tagOptions}
           onCreateProject={onCreateProject ? () => onCreateProject((id) => setForm((current) => current ? { ...current, projectId: id } : current)) : undefined}
           teams={teams}
           saving={saving}
