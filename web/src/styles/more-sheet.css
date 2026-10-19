@@ -1,0 +1,176 @@
+/* =====================================================================
+   More sheet (more-sheet-* namespace) — MobileMoreSheet.tsx
+
+   The phone tab bar's More destination. A bottom sheet, not a popover: it
+   rises from the edge the thumb is already on, spans the width, and groups
+   its rows into inset cards with hairline separators — the grouped-list
+   grammar of Linear's mobile app (and of the platform sheets it follows).
+   Only ever opened from the phone tab bar, so it needs no desktop shape.
+   ===================================================================== */
+
+@keyframes more-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes more-sheet-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.more-sheet-backdrop,
+.more-sheet-viewport {
+  z-index: var(--z-dialog);
+}
+
+.more-sheet-viewport {
+  align-items: flex-end;
+}
+
+.more-sheet {
+  width: 100%;
+  max-height: calc(100dvh - env(safe-area-inset-top) - var(--sp-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding:
+    0
+    max(env(safe-area-inset-right), var(--sp-4))
+    max(env(safe-area-inset-bottom), var(--sp-4))
+    max(env(safe-area-inset-left), var(--sp-4));
+  border-top: 0.5px solid var(--line-1);
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  /* One step under the cards it holds, so the groups read as raised. */
+  background: var(--surface-list);
+  outline: none;
+  animation: more-sheet-in var(--t-slow) var(--ease) both;
+  transition: transform var(--t-fast) var(--ease);
+}
+
+/* A drag follows the finger 1:1; the spring back on release is the
+   transition above. */
+.more-sheet[data-dragging] {
+  transition: none;
+}
+
+.more-sheet[data-ending-style] {
+  animation: more-sheet-out var(--t-slow) var(--ease) forwards;
+}
+
+/* The grabber: says the sheet can be pulled down, and is the drag handle.
+   The whole strip takes the gesture, not the 36px pill alone. */
+.more-sheet-grab {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-2) 0 var(--sp-3);
+  touch-action: none;
+  cursor: grab;
+}
+
+.more-sheet-grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.more-sheet-title {
+  margin: 0 0 var(--sp-4);
+  color: var(--ink-1);
+  font: var(--type-heading);
+  letter-spacing: var(--type-heading-track);
+  text-align: center;
+}
+
+/* An inset card per group. */
+.more-sheet-group {
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border-radius: var(--r-3);
+  background: var(--surface-3);
+}
+
+/* The route group sits inside its <nav>, so it is a last child there too —
+   only the sheet's own last group drops the gap. */
+.more-sheet > .more-sheet-group:last-child {
+  margin-bottom: 0;
+}
+
+.more-sheet-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  background: transparent;
+  color: var(--ink-1);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Separators start under the label, not at the card edge. */
+.more-sheet-group > li + li > .more-sheet-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(var(--sp-4) + var(--icon-lg) + var(--sp-3));
+  height: 0.5px;
+  background: var(--line-1);
+}
+
+.more-sheet-row:active {
+  background: var(--control-fill);
+}
+
+.more-sheet-row > svg:first-child {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.more-sheet-row[aria-current="page"] > svg:first-child {
+  color: var(--ink-1);
+}
+
+.more-sheet-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-sheet-check {
+  flex: none;
+  color: var(--action);
+}
+
+/* Setup progress sits in the icon column, as a count. */
+.more-sheet-count {
+  flex: none;
+  min-width: var(--icon-lg);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-align: center;
+}
+
+.more-sheet-row--danger,
+.more-sheet-row--danger > svg:first-child {
+  color: var(--err);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more-sheet,
+  .more-sheet[data-ending-style] {
+    animation-duration: 1ms;
+  }
+}

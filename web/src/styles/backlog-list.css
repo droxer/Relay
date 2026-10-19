@@ -312,31 +312,52 @@ button.inline-field[aria-expanded="true"] {
     height: var(--control-h-xs);
   }
 
+  /* The same bare-glyph switch the top bar carries (responsive.css), where a
+     toolbar keeps it in the page — a project's issue strip. */
   .backlog-view-toggle {
     flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .backlog-view-btn[data-active="true"] {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .backlog-view-btn:not([data-active="true"]) {
+    color: var(--ink-4);
   }
 
   .backlog-filter-bar {
-    padding-inline: var(--sp-4);
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+    border-bottom: 0;
   }
 
-  /* Phones: two rows. The search takes the first row whole; Add filter and
-     the group/sort menus share the second. `display: contents` lets the
-     search and its neighbours wrap as siblings of the chip group instead of
-     as one block — on one row the search was crushed to its icon. */
+  /* Phones: two rows, Linear's list toolbar. Search and Add filter share the
+     first; the group and sort menus split the second evenly. `display:
+     contents` lets the search and its neighbours wrap as siblings of the
+     chip group instead of as one block. Each item's basis decides its row:
+     search (50%) + Add filter + a menu (40%) cannot fit one line, so the
+     menus wrap together — they used to share a row with Add filter at a
+     third each and clipped to "Group: P" and "Default c". */
   .backlog-filter-primary {
     display: contents;
   }
 
   .backlog-filter-search-wrap {
-    order: -1;
-    flex: 1 1 100%;
+    order: -2;
+    flex: 1 1 50%;
     width: auto;
     min-width: 0;
   }
 
   .backlog-filter-chips {
+    order: -1;
     flex: 0 1 auto;
+    min-width: 0;
   }
 
   /* Selectors still see the DOM: the group/sort menus are children of the
@@ -347,6 +368,15 @@ button.inline-field[aria-expanded="true"] {
   .backlog-filter-primary > :not(.backlog-filter-search-wrap) {
     flex: 1 1 calc(50% - var(--sp-2));
     min-width: 0;
+  }
+
+  /* Filled, borderless controls: on a phone the toolbar is a row of soft
+     chips under the top bar, not a form of framed fields. */
+  .backlog-filter-search-wrap,
+  .backlog-filter-bar button[data-variant="outline"],
+  .backlog-filter-bar button[data-slot="select-trigger"] {
+    border-color: transparent;
+    background: var(--control-fill);
   }
 
   .backlog-page {
@@ -657,7 +687,7 @@ tr[data-selected="true"] > td:first-child {
 
   .task-table .task-col-title {
     order: 2;
-    flex: 1 0 calc(100% - var(--row-actions-w, 0px));
+    flex: 1 0 100%;
     min-width: 0;
   }
 
@@ -668,8 +698,11 @@ tr[data-selected="true"] > td:first-child {
     text-align: right;
   }
 
+  /* The actions are lifted out of the flow (below), so the row keeps their
+     width free on its trailing edge for both lines. */
   .task-table > tbody > tr:has(.task-col-actions) {
     --row-actions-w: 88px;
+    padding-right: calc(var(--row-actions-w) + var(--sp-2));
   }
 
   /* Line two: the meta, indented under the title. */
@@ -736,9 +769,16 @@ tr[data-selected="true"] > td:first-child {
     padding-block: 0;
   }
 
+  /* The actions ride the row's trailing edge, centred on both lines. In the
+     flow they sat on line one at their 44px touch height and pushed the meta
+     line a full row below the title. The title's basis already leaves their
+     width free, so nothing slides under them. */
   .task-table .task-col-actions {
-    position: relative;
+    position: absolute;
+    top: 50%;
+    right: var(--sp-2);
     z-index: 1;
+    transform: translateY(-50%);
   }
 
   /* The ref is read here, not pressed: the row already opens the record, and
@@ -762,7 +802,16 @@ tr[data-selected="true"] > td:first-child {
     display: block;
   }
 
-  .issues-band > td {
-    padding-inline: var(--sp-4);
+  /* Rows run edge to edge, each carrying its own --sp-4 inset, the way a
+     phone list does; the page gutter around them left every row and its
+     hairline floating 24px off both edges. */
+  .backlog-rows { padding-inline: 0; }
+
+  /* The intake hint is the band's second clause; it gives way first. */
+  .issues-band-hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

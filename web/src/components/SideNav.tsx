@@ -22,12 +22,7 @@ import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLinkItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { MobileMoreSheet } from "./MobileMoreSheet";
 import type { AppRoute } from "../lib/viewTypes";
 import {
   clampSidenavWidth, maxSidenavWidth, SIDENAV_WIDTH_DEFAULT, SIDENAV_WIDTH_MAX, SIDENAV_WIDTH_MIN,
@@ -255,48 +250,20 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
         ) : null}
         {/* Mobile-only: the destinations that do not fit the bottom tab bar. */}
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.more_label")}>
-          <DropdownMenu open={moreOpen} onOpenChange={onMoreOpenChange}>
-            {/* aria-haspopup / aria-expanded come from the trigger now — the
-                pair used to be written by hand on both rail menus. */}
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={`sidenav-btn sidenav-more-btn ${moreActive || moreOpen ? "active" : ""}`}
-                  data-nav="more"
-                  aria-label={t("nav.more_label")}
-                  onMouseEnter={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
-                  onMouseLeave={hideNavTooltip}
-                  onFocus={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
-                  onBlur={hideNavTooltip}
-                >
-                  <NavMore size={ICON.lg} />
-                  <span className="sidenav-label sr-only">{t("nav.more")}</span>
-                </Button>
-              }
-            />
-            {/* Rises above the mobile tab bar. The old hand-clamped x (More is
-                the rightmost tab, so the menu had to be nudged off the right
-                edge by hand) is the positioner's `shift` now. */}
-            <DropdownMenuContent side="top" align="start" className="sidenav-more-menu">
-              {MORE_ROUTES.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ route: target, Icon, labelKey }) => (
-                <DropdownMenuLinkItem
-                  key={target}
-                  render={
-                    <a
-                      href={hrefForRoute(target)}
-                      aria-current={route === target ? "page" : undefined}
-                      onClick={(event: MouseEvent<HTMLAnchorElement>) => handleRouteClick(event, target)}
-                    />
-                  }
-                >
-                  <Icon size={ICON.md} />
-                  <span>{t(labelKey)}</span>
-                </DropdownMenuLinkItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Opens the More sheet (MobileMoreSheet), rendered below. */}
+          <Button
+            type="button"
+            variant="ghost"
+            className={`sidenav-btn sidenav-more-btn ${moreActive || moreOpen ? "active" : ""}`}
+            data-nav="more"
+            aria-label={t("nav.more_label")}
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            onClick={() => onMoreOpenChange(true)}
+          >
+            <NavMore size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.more")}</span>
+          </Button>
         </div>
       </nav>
       <div className="sidenav-bottom">
@@ -392,6 +359,18 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           <span className="sr-only">{sidenavExpanded ? t("nav.collapse") : t("nav.expand")}</span>
         </Button>
       </div>
+      <MobileMoreSheet
+        open={moreOpen}
+        onOpenChange={onMoreOpenChange}
+        routes={MORE_ROUTES.filter(({ adminOnly }) => !adminOnly || isAdmin)}
+        currentRoute={route}
+        hrefForRoute={hrefForRoute}
+        onNavigate={handleRouteClick}
+        onSearch={onOpenCommandMenu}
+        onboarding={onboarding}
+        onOpenOnboarding={onOpenOnboarding}
+        onLogout={onLogout}
+      />
       {navTooltip ? createPortal(
         <div
           className="sidenav-tooltip"

@@ -123,3 +123,18 @@
 /* The band paints over the rows that scroll under it, so it cannot be
    translucent — --surface-0 is opaque. */
 .adm-grouped-list .list-group-band { z-index: 2; }
+
+/* Phones: the same full-bleed filled band the issue list uses (see
+   backlog-list.css), so every grouped list reads as one phone list. */
+@media (max-width: 820px) {
+  .list-group-band {
+    padding: var(--sp-2) var(--sp-4);
+    border-bottom: 0;
+    background: var(--surface-list);
+  }
+
+  .list-group-band .list-group-count {
+    background: transparent;
+    color: var(--ink-3);
+  }
+}

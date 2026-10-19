@@ -86,4 +86,20 @@
 @media (max-width: 820px) {
   .issue-col-project,
   .issue-col-status { display: none; }
+
+  /* Linear's group header: a full-bleed, quietly filled band that names the
+     group. The rule under a transparent band read as one more row divider,
+     and the desktop's section rung above every later band doubled its
+     height. Through the table so it outranks the cell padding in
+     backlog-list.css. */
+  .task-table .issues-band > td[data-slot="table-cell"] {
+    padding: var(--sp-2) var(--sp-4);
+    border-bottom: 0;
+    background: var(--surface-list);
+  }
+
+  .issues-band .list-group-count {
+    background: transparent;
+    color: var(--ink-3);
+  }
 }

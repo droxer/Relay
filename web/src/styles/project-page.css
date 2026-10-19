@@ -228,7 +228,8 @@
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: var(--sp-3);
+    gap: 0;
+    padding-block: var(--sp-1) 0;
   }
 
   .messenger-shell[data-route="projects"][data-mobile-view="chat"] .project-workspace-page .page-header-lead {
@@ -264,6 +265,21 @@
   .project-workspace-page .page-header-toolbar {
     margin-top: 0;
     overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  /* With the title clipped and the facts dropped (responsive.css), the title
+     row still held 44px open above the tabs — a blank band between the top
+     bar and the record's tabs. Clip the row itself so the tabs (the lead's
+     toolbar, below it) sit straight under the bar, Linear's record header. */
+  .project-workspace-page .page-header-lead--stacked > .page-header-title-row {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .project-workspace-page .page-header-actions {
