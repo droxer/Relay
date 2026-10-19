@@ -1,7 +1,7 @@
 import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import * as api from "../src/api";
 import { TaskStatusTimeline } from "../src/components/TaskStatusTimeline";
@@ -23,6 +23,17 @@ const marker = (partial: Partial<LifecycleMarker>): LifecycleMarker => ({
   to: "review",
   actor: "relay",
   ...partial,
+});
+
+// The history renders a relative time for a recent move and a date past a
+// day, so the clock is pinned beside the fixture's timestamps; without it the
+// first assertion below started failing the day after the fixture was written.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-18T12:00:00.000Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const task = (status: TaskStatus, onOpen = () => {}, extra: Partial<ThreadTaskFact> = {}): ThreadTaskFact => ({ id: "tsk_1", ref: "#12", status, current: true, href: "/issues/tsk_1", onOpen, ...extra });

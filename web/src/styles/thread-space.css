@@ -131,7 +131,9 @@
   background: var(--row-hover);
 }
 
-.thread-space-row.is-new {
+/* A selected row already carries the selection wash; flashing it from the
+   same wash to transparent and back read as a flicker, not an arrival. */
+.thread-space-row.is-new:not([data-selected="true"]) {
   animation: thread-space-row-new var(--t-slow) var(--ease);
 }
 
