@@ -162,6 +162,12 @@ The user who owns and can currently access a Project. Human collaborator
 membership is a separate future authorization concept, not the Project Agent roster.
 _Avoid_: Project Agent, lead Agent
 
+**Tag**:
+A free-form label a person files a Task or Automation under, to group and
+filter them. Tags are compared case-insensitively and carry no behaviour of
+their own; an Automation's tags are copied onto every Task it fires.
+_Avoid_: Label, category
+
 **Wait**:
 A Task parked at `waiting_for_human` on a person, recorded as its
 `waitingRequest`: a `questionId`, a kind — `question` (the agent asked),

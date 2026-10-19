@@ -162,6 +162,8 @@ class _TaskFields(RequestSchema):
     title: TrimmedStr = None
     description: VerbatimStr = None
     priority: TrimmedStr = None
+    # Checked by ``tags_field``: a wrong type answers its 400, not pydantic's.
+    tags: CheckedStrList = None
     status: TrimmedStr = None
     due_date: Annotated[CheckedStr, Field(alias="dueDate")] = None
     assignee_user_id: TrimmedStr = Field(None, alias="assigneeUserId")

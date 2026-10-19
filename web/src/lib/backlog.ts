@@ -1,5 +1,6 @@
 import { compareTaskQueue, taskWorkflowStage } from "./taskFlow.ts";
 import { taskRef } from "./taskRef.ts";
+import { matchesTagFilter } from "./taskTags.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, DaemonNodeMonitorRecord, UserAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
 
@@ -10,6 +11,8 @@ export interface BacklogFilters {
   query: string;
   status: "all" | TaskStatus;
   priority: "all" | TaskPriority;
+  /** One tag the task must carry, matched case-insensitively; `all` for any. */
+  tag: string;
   agent: string;
   team: string;
   assignment: "all" | "assigned" | "unassigned";
@@ -41,6 +44,7 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
       if (status !== filters.status) return false;
     }
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
+    if (!matchesTagFilter(task, filters.tag)) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
     if (filters.team !== "all" && task.assignedTeamId !== filters.team) return false;
     const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.assignedAgent);
@@ -48,7 +52,7 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     if (filters.assignment === "unassigned" && assigned) return false;
     if (assignee && !(task.assigneeUserId ?? task.ownerUserId ?? "").toLowerCase().includes(assignee)) return false;
     if (query) {
-      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
+      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id} ${(task.tags ?? []).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     if (filters.due === "overdue" && (!task.dueDate || task.dueDate >= today || task.status === "done")) return false;

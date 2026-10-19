@@ -7,6 +7,7 @@ import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { RosterAgentMark } from "../roster/RosterOption";
+import { tagFilterField } from "./tagFilterField";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import {
   ROUTINE_STATE_ORDER,
@@ -30,6 +31,7 @@ import type { UserAgent } from "../../types";
 export const initialRoutineFilters: RoutineFilters = {
   trigger: "all",
   query: "",
+  tag: "all",
   agent: "all",
   assignee: "",
   state: "all",
@@ -44,6 +46,7 @@ const TRIGGER_FILTER_VALUES = [...TRIGGER_KINDS, "none"] as const;
 export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
   trigger: { param: "trigger", allowed: TRIGGER_FILTER_VALUES },
   query: { param: "q" },
+  tag: { param: "tag" },
   agent: { param: "agent" },
   assignee: { param: "assignee" },
   state: { param: "state", allowed: ROUTINE_STATE_ORDER },
@@ -52,6 +55,7 @@ export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
 export function activeRoutineFilterCount(filters: RoutineFilters): number {
   let count = 0;
   if (filters.trigger !== "all") count += 1;
+  if (filters.tag !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
   if (filters.assignee.trim()) count += 1;
   return count;
@@ -83,17 +87,18 @@ export function formatNextRunDate(value: string): string {
   }).format(date);
 }
 
-const ROUTINE_BAR_KEYS = ["trigger", "agent", "assignee"] as const;
+const ROUTINE_BAR_KEYS = ["trigger", "tag", "agent", "assignee"] as const;
 
-export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: UserAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
+export function RoutineFiltersBar({ filters, agents, tags = [], onChange, sortMenu }: { filters: RoutineFilters; agents: UserAgent[]; tags?: readonly string[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
   const fields = useMemo<FilterBarField[]>(() => [
     { id: "trigger", label: t("automation.trigger"), kind: "select",
       options: TRIGGER_FILTER_VALUES.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
+    ...[tagFilterField(tags, filters.tag, t("tags.label"))].filter((field) => field !== null),
     { id: "agent", label: t("backlog.agent"), kind: "select",
       options: agents.map((agent) => ({ value: agent.id, label: agent.displayName, icon: <RosterAgentMark agent={agent} /> })) },
     { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
-  ], [agents, t]);
+  ], [agents, tags, filters.tag, t]);
 
   return (
     <FiltersBar

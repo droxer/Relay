@@ -14,6 +14,7 @@ const baseFilters: BacklogFilters = {
   assignee: "",
   due: "all",
   source: "all",
+  tag: "all",
 };
 
 function task(input: Partial<RelayTask> & { id: string; title: string }): RelayTask {

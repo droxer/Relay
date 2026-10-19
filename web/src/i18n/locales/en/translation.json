@@ -2944,5 +2944,18 @@
       "execution": "Stopped during a run",
       "operator": "Blocked by a person"
     }
+  },
+  "tags": {
+    "label": "Tags",
+    "hint": "Press Enter or a comma to add a tag.",
+    "placeholder": "Add a tag…",
+    "remove": "Remove tag {{tag}}",
+    "more": "+{{count}}",
+    "none": "None",
+    "placeholder_more": "Add another…",
+    "limit_one": "A task holds at most {{count}} tag.",
+    "limit_other": "A task holds at most {{count}} tags.",
+    "more_label_one": "{{count}} more tag: {{tags}}",
+    "more_label_other": "{{count}} more tags: {{tags}}"
   }
 }

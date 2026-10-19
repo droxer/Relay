@@ -5,6 +5,7 @@ import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { CollaborationStyleBadge } from "../CollaborationStyleBadge";
+import { TaskTagList } from "../TaskTags";
 import type { ReactNode } from "react";
 import type { RecordVariant } from "./recordVocabulary";
 
@@ -38,6 +39,11 @@ export function TaskRecordDefinition({
       key: "priority",
       label: t("backlog.priority"),
       value: t(`backlog.priorities.${task.priority}`),
+    },
+    {
+      key: "tags",
+      label: t("tags.label"),
+      value: task.tags?.length ? <TaskTagList tags={task.tags} /> : t("tags.none"),
     },
     {
       key: "acceptance",

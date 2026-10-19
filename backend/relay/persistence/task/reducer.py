@@ -55,6 +55,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["routineTriggerDepth"] = int(created["routineTriggerDepth"] or 0)
     if created.get("collaborationStyle"):
         task["collaborationStyle"] = created["collaborationStyle"]
+    if created.get("tags"):
+        task["tags"] = list(created["tags"])
     _apply_task_routine_fields(task, created)
     apply_task_number(task, created)
     for event in events:
@@ -99,6 +101,11 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
             task.pop(key, None)
         else:
             task[key] = event[key]
+    if isinstance(event.get("tags"), list):
+        if event["tags"]:
+            task["tags"] = list(event["tags"])
+        else:
+            task.pop("tags", None)
     _apply_task_routine_fields(task, event)
 
 

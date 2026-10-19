@@ -337,6 +337,7 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
     q: null,
     status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"]),
     priority: new Set(["high", "normal", "low"]),
+    tag: null,
     agent: null,
     team: null,
     assignment: new Set(["assigned", "unassigned"]),
@@ -346,6 +347,7 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
   },
   routines: {
     q: null,
+    tag: null,
     agent: null,
     assignee: null,
     trigger: new Set(["schedule", "task_event", "run_event", "webhook", "none"]),

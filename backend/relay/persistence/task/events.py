@@ -57,6 +57,8 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "priority": payload.get("priority", "normal"),
         "acceptancePolicy": payload.get("acceptancePolicy", "human"),
     }
+    if payload.get("tags"):
+        created_payload["tags"] = list(payload["tags"])
     for field in (
         "ownerUserId",
         "assigneeUserId",
@@ -177,7 +179,9 @@ def task_update_events(
         )
     }
     # v2 keys are sent only when supplied: their presence marks a v2 event.
+    # Tags likewise: an empty list clears them, so absence must stay distinct.
     for field in (
+        "tags",
         "routineTriggers",
         "routineState",
         "routinePauseReason",
@@ -260,6 +264,7 @@ def routine_occurrence_events(
                 "title": routine["title"],
                 "description": description,
                 "priority": routine.get("priority", "normal"),
+                **({"tags": list(routine["tags"])} if routine.get("tags") else {}),
                 "acceptancePolicy": routine.get("acceptancePolicy", "automatic"),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
