@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { AgentMark } from "../AgentMark";
@@ -19,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ActionApprove,
   ActionCopy,
   ActionEdit,
   ActionKey,
@@ -29,11 +27,10 @@ import {
   NavMore,
   NodeOwnershipIcon,
 } from "../icons";
-import { abbreviateNodeId, formatRunElapsed } from "../../lib/computerNodes";
+import { formatRunElapsed } from "../../lib/computerNodes";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
 import { runtimeNotReadyDetail, runtimeStateLabel } from "./runtimeStateLabel";
 import {
-  COPY_FEEDBACK_MS,
   agentStatusTone,
   copyText,
   formatRelativeTime,
@@ -73,20 +70,6 @@ export function ComputerCard({
   onOpenThread?: (sessionId: string) => void;
   t: TFunction;
 }) {
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<number | null>(null);
-
-  useEffect(() => () => {
-    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
-  }, []);
-
-  async function handleCopyId() {
-    await copyText(node.id);
-    setCopied(true);
-    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
-    copyTimerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-  }
-
   const named = Boolean(node.displayName?.trim()) && node.displayName !== node.id;
   const title = named ? node.displayName! : t("computer.unnamed");
   const status = visualStatus(node);
@@ -136,10 +119,10 @@ export function ComputerCard({
             <p className="computer-card-outdated">{t("computer.client_outdated_hint")}</p>
           ) : null}
         </div>
-        {/* One overflow menu instead of a row of five outlined buttons: rename,
-            token, and disconnect are occasional, so they stay labelled but out
-            of sight until asked for. The runtime controls live with the
-            runtimes they act on. */}
+        {/* One overflow menu instead of a row of outlined buttons: managing
+            agents, copying the id, rename, token, and disconnect are
+            occasional, so they stay labelled but out of sight until asked
+            for. */}
         <div className="computer-card-actions">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -156,6 +139,15 @@ export function ComputerCard({
               }
             />
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onManageExecutors(node)}>
+                <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
+                {t("admin.v2.manage_executors")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void copyText(node.id)}>
+                <ActionCopy size={ICON.sm} aria-hidden="true" />
+                {t("admin.copy_node_id")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onRename(node)}>
                 <ActionEdit size={ICON.sm} aria-hidden="true" />
                 {t("thread.rename")}
@@ -217,10 +209,6 @@ export function ComputerCard({
           <div className="computer-card-section-actions">
             <RuntimeRefreshButton nodeId={node.id} online={isNodeOnline(node)}
               supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
-            <Button type="button" variant="ghost" size="dense" onClick={() => onManageExecutors(node)}>
-              <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
-              {t("admin.v2.manage_executors")}
-            </Button>
           </div>
         </div>
         {runtimes.length === 0 ? (
@@ -234,8 +222,8 @@ export function ComputerCard({
         )}
       </section>
 
-      {/* Facts as one quiet footer line rather than a labelled panel: the
-          workspace path and id are looked up, not read. */}
+      {/* The workspace path is looked up, not read: one quiet footer line.
+          The id is copied, never read, so it lives in the overflow menu. */}
       <footer className="computer-card-meta">
         <span className="code computer-fact-path" title={node.workspacePath}>
           {node.workspacePath || t("computer.fact_unset")}
@@ -243,19 +231,6 @@ export function ComputerCard({
         {node.queuedCommandCount > 0 ? (
           <span className="tnum">{t("admin.queued")} {node.queuedCommandCount}</span>
         ) : null}
-        <span className="computer-fact-id">
-          <span className="code" title={node.id} translate="no">{abbreviateNodeId(node.id)}</span>
-          <Button
-            type="button"
-            variant="icon"
-            size="icon-dense"
-            tinted
-            onClick={() => void handleCopyId()}
-            aria-label={copied ? t("admin.copied") : t("admin.copy_node_id")}
-          >
-            {copied ? <ActionApprove size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
-          </Button>
-        </span>
       </footer>
     </article>
   );
@@ -278,8 +253,14 @@ function RuntimeRow({
   const stateLabel = runtimeStateLabel(node, agent, disabled, t);
   const detail = runtimeNotReadyDetail(node, agent, disabled);
 
+  // A chip, not a table row: a ready runtime is the expected case, so it is
+  // just its mark and name — the state is spoken only when it is something
+  // other than ready, and the version waits in the tooltip.
+  const ready = !disabled && agentStatus === "ready" && isNodeOnline(node);
+  const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
+
   return (
-    <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`}>
+    <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`} title={tooltip}>
       <RuntimeMark
         agent={agent}
         presence={presence}
@@ -289,9 +270,7 @@ function RuntimeRow({
         glyphClassName="computer-runtime-mark"
       />
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
-      <span className="computer-runtime-state">{stateLabel}</span>
-      <span className="computer-runtime-version code" translate="no">{version ?? ""}</span>
-      {detail ? <span className="computer-runtime-detail" title={detail}>{detail}</span> : null}
+      {ready ? null : <span className="computer-runtime-state">{stateLabel}</span>}
     </li>
   );
 }

@@ -27,8 +27,12 @@ vi.mock("@/components/ui/toast", () => ({ Toaster: () => null, toast: { add: vi.
 vi.mock("@/components/ui/button", () => ({
   // `render` swaps the element like the real base-ui primitive does, so a
   // link-button (a download anchor) stays an anchor under test.
-  Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, nativeButton: _native, render, ...props }: any) =>
-    render ? cloneElement(render, props, children) : createElement("button", props, children),
+  // A string tooltip names the button, as the real primitive's aria-label
+  // does — an explicit `aria-label` still wins.
+  Button: ({ children, tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, nativeButton: _native, render, ...rest }: any) => {
+    const props = { "aria-label": typeof tooltip === "string" ? tooltip : undefined, ...rest };
+    return render ? cloneElement(render, props, children) : createElement("button", props, children);
+  },
   // Real variants are class strings; tests only need a stable stand-in so
   // link-buttons stay distinguishable from bare anchors.
   buttonVariants: ({ variant = "default", size = "default" }: any = {}) => `btn-${variant} btn-${size}`,

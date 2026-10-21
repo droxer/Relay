@@ -101,8 +101,8 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--sp-5);
-  padding: var(--sp-5);
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   /* The card plane (ui/card.tsx bg-card, --surface-1), shared with the
@@ -329,30 +329,20 @@ button.computer-run-open:hover {
 
 /* ---- runtimes -------------------------------------------------------- */
 
-/* Two columns once the record is wide enough, so four runtimes take two
-   short rows instead of a tall single column beside an empty half. */
+/* One wrapping line of chips, not a table: a ready runtime is just its mark
+   and name. Four rows of "Ready 2.1.4" in mono were most of the card's
+   weight; the version and any failure detail wait in the row's tooltip. */
 .computer-runtime-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-2) var(--sp-6);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* Container, not viewport: the pane's width depends on whether the rail is
-   collapsed, so viewport width is not a usable proxy for it. */
-@container computer (min-width: 768px) {
-  .computer-runtime-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* Named, versioned, and stated — the admin tile's four bare vendor glyphs
-   left the reader guessing which mark was which and what it meant. */
 .computer-runtime-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
@@ -362,7 +352,7 @@ button.computer-run-open:hover {
 }
 
 /* A switched-off runtime dims whole: the mark's own is-disabled would leave
-   the name, state and version at full strength beside a faded pip. */
+   the name and state at full strength beside a faded pip. */
 .computer-runtime-row.is-disabled {
   opacity: var(--opacity-disabled);
 }
@@ -376,52 +366,23 @@ button.computer-run-open:hover {
 }
 
 .computer-runtime-name {
-  min-width: 0;
-  overflow: hidden;
   color: var(--ink-1);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.computer-runtime-state,
-.computer-runtime-version {
+/* Only a runtime that is not ready says so, so the word is the exception
+   the reader's eye should land on. */
+.computer-runtime-state {
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-}
-
-/* The `font` shorthand above resets family AND font-feature-settings, so the
-   .code utility loses to it at equal specificity. Re-asserted in the
-   documented `.<class>.code` compound form (base.css names this case) rather
-   than as a second bare `.computer-runtime-version` block, which is a
-   duplicate selector in one sheet — the exact shape designGrid.test.ts
-   forbids across sheets. */
-.computer-runtime-version.code {
-  font-family: var(--font-mono);
-  font-feature-settings: var(--font-features), "tnum" 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: var(--type-code-track);
-}
-
-/* Why a runtime cannot take work, under its name: a sentence, not a
-   version, so it wraps on its own line instead of widening the version
-   column until the name collapses. Two lines at most; the title has it all. */
-.computer-runtime-detail {
-  display: -webkit-box;
-  grid-column: 2 / -1;
-  overflow: hidden;
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
 }
 
 /* ---- footer facts ---------------------------------------------------- */
 
-/* Workspace path, queue depth, and id are looked up, not read: one quiet
-   line at the foot of the record instead of a labelled panel. */
+/* Workspace path and queue depth are looked up, not read: one quiet line
+   at the foot of the record instead of a labelled panel. */
 .computer-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -442,20 +403,6 @@ button.computer-run-open:hover {
   font-size: var(--fs-1);
   line-height: var(--leading-snug);
   overflow-wrap: anywhere;
-}
-
-.computer-fact-id {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-width: 0;
-  margin-inline-start: auto;
-}
-
-.computer-fact-id .code {
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
-  font-size: var(--fs-1);
 }
 
 @media (max-width: 820px) {
@@ -669,12 +616,4 @@ button.computer-run-open:hover {
   color: var(--ink-3);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
-}
-
-/* Phones: the footer's id leaves the trailing edge, where it sat alone under
-   a wrapped path, and reads under the path. After the base rule on purpose. */
-@media (max-width: 640px) {
-  .computer-fact-id {
-    margin-inline-start: 0;
-  }
 }

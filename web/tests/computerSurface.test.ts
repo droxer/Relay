@@ -73,11 +73,13 @@ describe("My Computer record card", () => {
     assert.doesNotMatch(page, /adm-fleet-grid/);
   });
 
-  it("names every runtime and states its version and health", async () => {
+  it("names every runtime, speaks only a state that is not ready, and keeps the version on hover", async () => {
+    // Four rows each saying "Ready 2.1.4" made the card read as a table; a
+    // ready runtime is the expected case, so it is just its mark and name.
     const card = await read("web/src/components/computer/ComputerCard.tsx");
     assert.match(card, /computer-runtime-name/);
-    assert.match(card, /computer-runtime-state/);
-    assert.match(card, /computer-runtime-version/);
+    assert.match(card, /\{ready \? null : <span className="computer-runtime-state">/);
+    assert.match(card, /\[labelForExecutor\(agent\), stateLabel, version, detail\]/);
     assert.match(card, /labelForExecutor\(agent\)/);
   });
 
