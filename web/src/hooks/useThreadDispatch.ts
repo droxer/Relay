@@ -251,6 +251,11 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       // started thread stays the target for its next round too.
       if (!sessionId) useComposerTargetStore.getState().clearPendingTeam();
       if (activeSession?.id !== done.id) useComposerTargetStore.getState().pickRoom();
+      // A new single-agent thread starts on the agent it was created with, so
+      // coming back to it later still names that agent.
+      if (!sessionId && !pendingTeam && !activeProject && activeTarget) {
+        useComposerTargetStore.getState().rememberThreadPick(done.id, { kind: "agent", agent: { id: activeTarget.id, executorKind: activeTarget.executorKind } });
+      }
       useRelayStore.getState().openSession(done.id);
       syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
       if (messageOperationKey) {

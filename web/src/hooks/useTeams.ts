@@ -10,7 +10,7 @@ const EMPTY_TEAMS: AgentTeam[] = [];
 
 export function useTeams(
   userId?: string,
-): { teams: AgentTeam[]; isFetching: boolean; error: string | null; refetch: () => Promise<unknown> } {
+): { teams: AgentTeam[]; isFetching: boolean; isSuccess: boolean; error: string | null; refetch: () => Promise<unknown> } {
   const query = useQuery({
     queryKey: [TEAMS_QUERY_KEY, userId],
     queryFn: ({ signal }) => listTeams(signal),
@@ -27,6 +27,7 @@ export function useTeams(
   // each poll's start and end. Only a caller that reads it now pays.
   return {
     teams: query.data?.teams ?? EMPTY_TEAMS,
+    get isSuccess() { return query.isSuccess; },
     get isFetching() { return query.isFetching; },
     get error() { return query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null; },
     refetch: query.refetch,

@@ -192,8 +192,8 @@ describe("composer agent selection", () => {
     // The pick itself lives in the composer target store; App only wires the
     // composer's handlers to it (the store's own tests pin the flag values).
     const targetStore = await readFile(resolve("web/src/lib/composerTargetStore.ts"), "utf8");
-    assert.match(app, /handleProjectRoomPicked = useStableEvent\(\(\) => pickRoom\(\)\)/);
-    assert.match(app, /handleLogicalAgentPicked = useStableEvent\([^)]*\) => pickAgent\(agent\)\)/);
+    assert.match(app, /handleProjectRoomPicked = useStableEvent\(\(\) => \{\s*pickRoom\(\);\s*rememberPick\(\);/);
+    assert.match(app, /handleLogicalAgentPicked = useStableEvent\([^)]*\) => \{\s*pickAgent\(agent\);\s*rememberPick\(\);/);
     assert.match(targetStore, /pickRoom: \(\) => set\(\{ projectRoomTarget: true \}\)/);
     assert.match(targetStore, /pickAgent: \(agent\) => set\(\{[\s\S]*?projectRoomTarget: false/);
     // A new project thread carries the narrowed roster as assignments.

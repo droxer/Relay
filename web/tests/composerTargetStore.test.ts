@@ -71,4 +71,47 @@ describe("composer target store", () => {
     setNewThreadNodeId((previous) => previous);
     assert.equal(useComposerTargetStore.getState(), before);
   });
+
+  it("reopening a thread restores the agent last picked there, not the whole team", () => {
+    const { pickAgent, rememberThreadPick, pickRoom, restoreThreadPick } = useComposerTargetStore.getState();
+    pickAgent(reviewer);
+    rememberThreadPick("ses_a");
+    pickRoom();
+    rememberThreadPick("ses_b");
+
+    restoreThreadPick("ses_a");
+    let state = useComposerTargetStore.getState();
+    assert.equal(state.projectRoomTarget, false);
+    assert.equal(state.activeLogicalAgentId, "agt_reviewer");
+    assert.equal(state.activeAgent, "codex");
+
+    restoreThreadPick("ses_b");
+    state = useComposerTargetStore.getState();
+    assert.equal(state.projectRoomTarget, true);
+    assert.equal(state.pendingThreadTeamId, null);
+  });
+
+  it("restores a team picked in a started thread and opens an unknown thread on its room", () => {
+    const { pickTeam, rememberThreadPick, restoreThreadPick } = useComposerTargetStore.getState();
+    pickTeam("team_2");
+    rememberThreadPick("ses_a");
+    useComposerTargetStore.getState().clearPendingTeam();
+
+    restoreThreadPick("ses_a");
+    assert.equal(useComposerTargetStore.getState().pendingThreadTeamId, "team_2");
+
+    restoreThreadPick("ses_never_picked");
+    assert.equal(useComposerTargetStore.getState().pendingThreadTeamId, null);
+    assert.equal(useComposerTargetStore.getState().projectRoomTarget, true);
+  });
+
+  it("records an explicit pick and keeps only the newest copy per thread", () => {
+    const { rememberThreadPick } = useComposerTargetStore.getState();
+    rememberThreadPick("ses_a", { kind: "room" });
+    rememberThreadPick("ses_b", { kind: "room" });
+    rememberThreadPick("ses_a", { kind: "agent", agent: reviewer });
+    const picks = useComposerTargetStore.getState().threadPicks;
+    assert.deepEqual(Object.keys(picks), ["ses_b", "ses_a"]);
+    assert.deepEqual(picks.ses_a, { kind: "agent", agent: reviewer });
+  });
 });

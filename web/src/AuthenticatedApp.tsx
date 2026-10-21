@@ -28,6 +28,7 @@ import { useStableCallback as useStableEvent } from "./hooks/useStableCallback";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
 import { useThreadDirectory } from "./hooks/useThreadDirectory";
+import { useThreadComposerSelection } from "./hooks/useThreadComposerSelection";
 import { useThreadTargets } from "./hooks/useThreadTargets";
 import type { useUserPreferences } from "./hooks/useUserPreferences";
 import { usePanelLayout } from "./hooks/usePanelLayout";
@@ -106,13 +107,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const pickAgent = useComposerTargetStore((s) => s.pickAgent);
   const pickTeam = useComposerTargetStore((s) => s.pickTeam);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
+  const restoreThreadPick = useComposerTargetStore((s) => s.restoreThreadPick);
+  const rememberThreadPick = useComposerTargetStore((s) => s.rememberThreadPick);
   const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
   const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
   const [threadQuery, setThreadQuery] = useState("");
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
-  const { agents: logicalAgents } = useUserAgents(user.userId);
-  const { teams } = useTeams(user.userId);
+  const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId);
+  const { teams, isSuccess: teamsReady } = useTeams(user.userId);
   const composerRef = useRef<ComposerHandle>(null);
   const messageOperationIdsRef = useRef(new Map<string, string>());
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
@@ -121,6 +124,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const {
     sandboxes,
     nodes,
+    nodesReady,
     sessions,
     tasks,
     projects,
@@ -193,18 +197,18 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     setNewThreadNodeId((previous) => resolveNewThreadComputer(previous, threadComputers, assignableComputers));
   }, [assignableComputers, initializingThread, setNewThreadNodeId, threadComputers]);
 
-  // A team picked while staging only holds while the picked computer hosts
-  // the whole roster; switching computers drops the pick back to an agent.
-  useEffect(() => {
-    if (!pendingThreadTeamId) return;
-    if (!composerTeams.some((team) => team.id === pendingThreadTeamId)) clearPendingTeam();
-  }, [clearPendingTeam, composerTeams, pendingThreadTeamId]);
+  const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
+  useThreadComposerSelection({
+    sessionId: activeSession?.id,
+    composingNew,
+    targetsReady: agentsReady && teamsReady && nodesReady,
+    teamIds: composerTeamIds,
+  });
 
   const applySessionFromHash = useCallback((sessionId: string) => {
-    clearPendingTeam();
-    pickRoom();
+    restoreThreadPick(sessionId);
     openSession(sessionId);
-  }, [clearPendingTeam, openSession, pickRoom]);
+  }, [openSession, restoreThreadPick]);
 
   const setComposingNewFromPath = useCallback((next: boolean) => {
     if (next) startComposing();
@@ -509,17 +513,29 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleResumeAgent = useStableEvent((agent: AgentName, agentId?: string) => { void resumeAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
-  const handleProjectRoomPicked = useStableEvent(() => pickRoom());
+  // A pick in a started thread is remembered for it, so reopening the thread
+  // keeps the last choice rather than resetting to the whole team.
+  const rememberPick = () => {
+    if (!requiresRuntimeSelection && activeSession) rememberThreadPick(activeSession.id);
+  };
+  const handleProjectRoomPicked = useStableEvent(() => {
+    pickRoom();
+    rememberPick();
+  });
   // Picking one member narrows a project round to them and drops a staged team.
-  const handleLogicalAgentPicked = useStableEvent((agent: UserAgent) => pickAgent(agent));
+  const handleLogicalAgentPicked = useStableEvent((agent: UserAgent) => {
+    pickAgent(agent);
+    rememberPick();
+  });
   // Re-picking a team thread's own team is picking its room, not naming it.
   const handleTeamPicked = useStableEvent((team: AgentTeam) => {
     if (!requiresRuntimeSelection && team.id === activeSession?.teamId) {
       clearPendingTeam();
       pickRoom();
-      return;
+    } else {
+      pickTeam(team.id);
     }
-    pickTeam(team.id);
+    rememberPick();
   });
 
   async function handleLogout() {

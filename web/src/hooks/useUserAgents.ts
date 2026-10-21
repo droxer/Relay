@@ -12,6 +12,7 @@ export const USER_AGENTS_QUERY_KEY = "user-agents";
 export function useUserAgents(userId?: string): {
   agents: UserAgent[];
   isFetching: boolean;
+  isSuccess: boolean;
   error: string | null;
   refetch: () => Promise<unknown>;
 } {
@@ -32,6 +33,7 @@ export function useUserAgents(userId?: string): {
   // each poll's start and end. Only a caller that reads it now pays.
   return {
     agents,
+    get isSuccess() { return query.isSuccess; },
     get isFetching() { return query.isFetching; },
     get error() { return query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null; },
     refetch: query.refetch,
