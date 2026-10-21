@@ -22,6 +22,7 @@ export const TASKS_QUERY_KEY = TASKS_KEY;
 type RelayDataResult = {
   sandboxes: SandboxRecord[];
   nodes: DaemonNodeMonitorRecord[];
+  nodesReady: boolean;
   sessions: RelaySession[];
   tasks: RelayTaskSummary[];
   projects: ProjectRecord[];
@@ -36,7 +37,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "sandboxes" | "nodes" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError"
+  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError"
 >;
 
 /* The only fields the app reads off the five polls, folded into one value.
@@ -54,6 +55,7 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
   const [sandboxesQuery, nodesQuery, sessionsQuery, tasksQuery, projectsQuery] = results;
   return {
     sandboxes: (sandboxesQuery.data as SandboxRecord[] | undefined) ?? [],
+    nodesReady: nodesQuery.isSuccess,
     nodes: (nodesQuery.data as DaemonNodeMonitorRecord[] | undefined) ?? [],
     sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
     tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
@@ -95,7 +97,7 @@ export function useRelayData(
   // sessions interval at once instead of after the next poll.
   const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
 
-  const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
+  const { sandboxes, nodes, nodesReady, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
     combine: combineRelayCollections,
     queries: [
       {
@@ -222,6 +224,7 @@ export function useRelayData(
   return {
     sandboxes,
     nodes,
+    nodesReady,
     sessions,
     tasks,
     projects,
