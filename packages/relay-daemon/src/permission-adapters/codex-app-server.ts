@@ -3,6 +3,8 @@
 // resumes a thread with approvals on request inside the workspace-write
 // sandbox, runs one turn, relays each approval request to the run's broker,
 // and prints the same JSONL `codex exec --json` would (codex-exec-events.ts).
+// A `request_user_input` from the agent becomes a question prompt the person
+// answers in Relay. Verified against codex-cli 0.163.0.
 // Usage: node codex-app-server.js [-c key=value]... --cwd <dir>
 //          [--model <id>] [--resume <thread id>] -- <prompt>
 import { spawn, type ChildProcessByStdio } from "node:child_process";
@@ -11,6 +13,7 @@ import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { CodexExecEventTranslator, type ExecEvent } from "./codex-exec-events.js";
+import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
 import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
 
 type Json = Record<string, unknown>;
@@ -127,11 +130,15 @@ export async function runCodexTurn(
   const translator = new CodexExecEventTranslator();
   const fileChanges = new Map<string, Json>();
   const emitAll = (events: ExecEvent[]): void => events.forEach(io.emit);
-  const child = spawn(io.codexBin ?? "codex", ["app-server", ...options.config.flatMap((entry) => ["-c", entry])], {
+  // A `.cmd` shim on Windows only starts through a shell, which joins the
+  // arguments itself, so each one is quoted for it there.
+  const shell = process.platform === "win32";
+  const argv = ["app-server", ...options.config.flatMap((entry) => ["-c", entry])];
+  const child = spawn(io.codexBin ?? "codex", shell ? argv.map(cmdQuote) : argv, {
     cwd: options.cwd,
     env: runtimeEnv(),
     stdio: ["pipe", "pipe", "pipe"],
-    shell: process.platform === "win32",
+    shell,
   });
   // A write racing the app-server's exit must not crash the adapter.
   child.stdin.on("error", () => {});
@@ -268,9 +275,21 @@ export async function answerServerRequest(
       });
       return { decision: legacyDecision(answer) };
     }
-    // Relay has no channel for free-form questions or MCP forms mid-run.
-    case "item/tool/requestUserInput":
-      return { answers: {} };
+    // The agent asks the person something: each question with its offered
+    // answers goes to Relay as one prompt; a skipped prompt answers nothing.
+    case "item/tool/requestUserInput": {
+      const questions = userInputQuestions(params.questions);
+      if (!questions) return { answers: {} };
+      const answer = await ask({
+        kind: "question",
+        toolName: "request_user_input",
+        input: { questions: params.questions },
+        toolUseId: str(params.itemId) || undefined,
+        questions,
+      });
+      return { answers: userInputAnswers(answer) };
+    }
+    // Relay has no channel for MCP forms mid-run.
     case "mcpServer/elicitation/request":
       return { action: "decline", content: null, _meta: null };
     case "item/tool/call":
@@ -309,6 +328,34 @@ function fileChangeQuestion(params: Json, item: Json | undefined): PermissionQue
     toolUseId: str(params.itemId) || undefined,
     ...(str(params.reason) ? { reason: str(params.reason) } : {}),
   };
+}
+
+/** Codex's `request_user_input` questions in the broker's shape, keyed by their ids. */
+export function userInputQuestions(value: unknown): PermissionQuestionItem[] | undefined {
+  const questions = array(value).flatMap((raw) => {
+    const question = record(raw);
+    const id = str(question.id);
+    const text = str(question.question) || str(question.header);
+    if (!id || !text) return [];
+    const options = array(question.options).flatMap((option) => {
+      const label = str(record(option).label);
+      const description = str(record(option).description);
+      return label ? [{ label, ...(description ? { description } : {}) }] : [];
+    });
+    return [{ id, text, options }];
+  });
+  return questions.length ? questions : undefined;
+}
+
+/** `{questionId: {answers: [...]}}`, as the app-server reads it. */
+export function userInputAnswers(answer: PermissionAnswer): Record<string, { answers: string[] }> {
+  const answers: PermissionAnswers = answer.behavior === "allow" && answer.answers ? answer.answers : {};
+  return Object.fromEntries(Object.entries(answers).map(([id, picks]) => [id, { answers: picks }]));
+}
+
+/** One argument as cmd.exe will hand it back whole. */
+export function cmdQuote(argument: string): string {
+  return /[\s"&|<>^()]/.test(argument) ? `"${argument.replace(/"/g, '\\"')}"` : argument;
 }
 
 /** Grant what was asked: the requested profile minus its absent parts. */

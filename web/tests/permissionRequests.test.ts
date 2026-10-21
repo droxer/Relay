@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { applySessionEvent } from "../src/lib/sessionEvents.js";
 import { threadAwaitsHuman } from "../src/lib/awaitingInput.js";
-import { permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
+import { answersComplete, isQuestionPrompt, permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
 import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
 const created = relayEvent("session.created", "ses_1", { workspacePath: "/workspace", taskGoal: "Clean up", participants: ["human", "claude"] });
@@ -45,6 +45,48 @@ describe("runtime permission prompts", () => {
       assert.equal(session.permissionRequests, undefined);
       assert.deepEqual(session.permissionDecisions?.map((item) => item.decision), ["expired"]);
     }
+  });
+
+  it("closes a question prompt with the person's answers, in replay and live alike", () => {
+    const questions = [{ id: "Which?", text: "Which?", options: [{ label: "A" }, { label: "B" }], multiSelect: true }];
+    const askedQuestion = relayEvent("agent.permission_requested", "ses_1", {
+      request: { id: "perm_00000002", runId: "run_1", agent: "claude", toolName: "AskUserQuestion", input: "{}", questions },
+    });
+    const answered = relayEvent("agent.permission_resolved", "ses_1", { requestId: "perm_00000002", decision: "allow", answers: { "Which?": ["A", "B"] }, actorUserId: "user_1" });
+    const open = both([started, askedQuestion]);
+    for (const session of [open.replay, open.live]) {
+      assert.deepEqual(session.permissionRequests?.[0].questions, questions);
+      assert.equal(isQuestionPrompt(session.permissionRequests![0]), true);
+    }
+    const closed = both([started, askedQuestion, answered]);
+    for (const session of [closed.replay, closed.live]) {
+      assert.equal(session.permissionRequests, undefined);
+      assert.deepEqual(closed.replay.permissionDecisions?.[0].answers, { "Which?": ["A", "B"] });
+      assert.equal(session.permissionDecisions?.[0].decision, "allow");
+    }
+  });
+
+  it("closes a withdrawn prompt as expired with the daemon's reason", () => {
+    const withdrawn = relayEvent("agent.permission_resolved", "ses_1", { requestId: "perm_00000001", decision: "expired", note: "No one answered within 30 minutes." });
+    const { replay, live } = both([started, asked, withdrawn]);
+    for (const session of [replay, live]) {
+      assert.equal(session.permissionRequests, undefined);
+      assert.deepEqual(session.permissionDecisions?.map(({ decision, note }) => ({ decision, note })), [{ decision: "expired", note: "No one answered within 30 minutes." }]);
+      assert.equal(threadAwaitsHuman(session, []), false);
+    }
+  });
+
+  it("knows when every question has an answer, one each unless it allows several", () => {
+    const request = { questions: [
+      { id: "a", text: "A?", options: [{ label: "x" }] },
+      { id: "b", text: "B?", options: [{ label: "y" }, { label: "z" }], multiSelect: true },
+    ] };
+    assert.equal(answersComplete(request, {}), false);
+    assert.equal(answersComplete(request, { a: ["x"] }), false);
+    assert.equal(answersComplete(request, { a: ["x"], b: ["y", "z"] }), true);
+    assert.equal(answersComplete(request, { a: ["x", "own"], b: ["y"] }), false);
+    assert.equal(answersComplete({ questions: [] }, {}), true);
+    assert.equal(isQuestionPrompt({}), false);
   });
 
   it("offers a deny note only where the runtime carries it to the agent", () => {

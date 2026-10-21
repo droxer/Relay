@@ -243,6 +243,8 @@ export class ProjectMessagesAccumulator {
   private out: DerivedMessage[] = [];
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
+  /** Open permission prompts by id: the resolution names only the id. */
+  private readonly prompts = new Map<string, { toolName: string; question: boolean }>();
 
   /** Derive the next projection without changing this committed accumulator. */
   advance(session: RelaySession | undefined, t: TFunction): { accumulator: ProjectMessagesAccumulator; messages: DerivedMessage[] } {
@@ -255,6 +257,7 @@ export class ProjectMessagesAccumulator {
     next.lastEventId = this.lastEventId;
     next.out = [...this.out];
     next.snapshot = this.snapshot;
+    for (const [requestId, prompt] of this.prompts) next.prompts.set(requestId, prompt);
     for (const [runId, state] of this.runState) {
       next.runState.set(runId, {
         ...state,
@@ -296,6 +299,7 @@ export class ProjectMessagesAccumulator {
     this.processedEvents = 0;
     this.lastEventId = undefined;
     this.runState.clear();
+    this.prompts.clear();
     this.out = [{
       kind: "user",
       id: `${session.id}:goal`,
@@ -313,6 +317,7 @@ export class ProjectMessagesAccumulator {
     this.processedEvents = 0;
     this.lastEventId = undefined;
     this.runState.clear();
+    this.prompts.clear();
     this.out = [];
     this.snapshot = [];
   }
@@ -440,6 +445,28 @@ export class ProjectMessagesAccumulator {
           label: t("message.artifact", { kind: t(`artifact.kind.${event.artifact.kind}`, { defaultValue: event.artifact.kind }) }),
           detail: event.artifact.title,
           artifact: event.artifact,
+        });
+        return true;
+      }
+      case "agent.permission_requested":
+        this.prompts.set(event.request.id, { toolName: event.request.toolName, question: (event.request.questions?.length ?? 0) > 0 });
+        return false;
+      case "agent.permission_resolved": {
+        // The audit line of a prompt: who allowed what, or that nobody did.
+        const prompt = this.prompts.get(event.requestId);
+        if (!prompt) return false;
+        this.prompts.delete(event.requestId);
+        const answers = Object.values(event.answers ?? {}).map((picks) => picks.join(", ")).join(" · ");
+        const label = prompt.question
+          ? t(event.decision === "allow" ? "message.permission_answered" : event.decision === "deny" ? "message.permission_skipped" : "message.permission_expired", { tool: prompt.toolName })
+          : t(`message.permission_${event.decision}`, { tool: prompt.toolName });
+        this.out.push({
+          kind: "system",
+          id: event.id,
+          timestamp: event.timestamp,
+          tone: event.decision === "allow" ? "info" : event.decision === "deny" ? "warn" : "neutral",
+          label,
+          detail: event.decision === "allow" && answers ? answers : event.note,
         });
         return true;
       }

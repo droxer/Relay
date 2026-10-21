@@ -4,31 +4,48 @@
 // private socket, and the broker asks a person through the backend: it posts
 // `run.permission_requested`, then polls the request until someone answers.
 // Anything that keeps Relay from asking denies the tool use; the run itself
-// stays alive either way.
+// stays alive either way. A prompt the run stops waiting on — its runtime hung
+// up, or the daemon's deadline passed — is withdrawn (`run.permission_withdrawn`)
+// so the thread never shows a question nobody is waiting on.
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   PERMISSION_INPUT_LIMIT,
+  PERMISSION_OPTIONS_LIMIT,
+  PERMISSION_QUESTIONS_LIMIT,
+  PERMISSION_TEXT_LIMIT,
   relayApiUrl,
   type AgentName,
   type DaemonNodeEvent,
   type DaemonNodeRunCommand,
   type DaemonNodeSandboxMode,
   type DaemonPermissionDecision,
+  type PermissionQuestionItem,
   getAgent,
 } from "relay-core";
-import type { PermissionAnswer, PermissionQuestion } from "./permission-adapters/protocol.js";
+import { BROKER_FILE_ENV, parseAnswers, type PermissionAnswer, type PermissionQuestion } from "./permission-adapters/protocol.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 1_500;
 const POLL_REQUEST_TIMEOUT_MS = 30_000;
+/** How long a prompt waits for a person before the daemon withdraws it and
+ *  denies the tool: `RELAY_DAEMON_PERMISSION_TIMEOUT_MS`, 0 to wait forever. */
+export const DEFAULT_PERMISSION_TIMEOUT_MS = 30 * 60_000;
 /** A request line larger than this is not a permission question. */
 const MAX_REQUEST_BYTES = 1_048_576;
 const DENIED_BY_USER = "Denied by the user in Relay.";
 const EXPIRED = "The permission request expired.";
 const CANNOT_ASK = "Relay could not ask a person for permission";
+const HUNG_UP = "The permission prompt disconnected.";
+
+export function permissionTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.RELAY_DAEMON_PERMISSION_TIMEOUT_MS;
+  if (raw === undefined || raw === "") return DEFAULT_PERMISSION_TIMEOUT_MS;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 ? value : DEFAULT_PERMISSION_TIMEOUT_MS;
+}
 
 export type PermissionRunScope = Pick<DaemonNodeRunCommand, "id" | "sessionId" | "runId" | "agent" | "leaseId">;
 
@@ -44,6 +61,8 @@ export interface PermissionBrokerOptions {
   signal?: AbortSignal;
   logger?: { warn(message: string, fields?: Record<string, unknown>): void };
   pollIntervalMs?: number;
+  /** How long a prompt waits for a person; 0 waits forever. */
+  timeoutMs?: number;
   /** Parent of the private socket directory; defaults to the OS temp dir. */
   socketParent?: string;
   /** Override the platform; tests use it to cover the named-pipe path. */
@@ -51,9 +70,11 @@ export interface PermissionBrokerOptions {
 }
 
 export interface PermissionBroker {
-  /** What an adapter needs to reach this broker: socket and secret. */
-  readonly env: { RELAY_PERMISSION_SOCKET: string; RELAY_PERMISSION_SECRET: string };
+  /** What an adapter needs to reach this broker: the path of its address file. */
+  readonly env: { RELAY_PERMISSION_FILE: string };
   readonly socketPath: string;
+  /** The 0700 directory holding the socket and the address file. */
+  readonly privateDir: string;
   close(): Promise<void>;
 }
 
@@ -71,7 +92,8 @@ export function permissionPromptsApply(
 
 export async function startPermissionBroker(options: PermissionBrokerOptions): Promise<PermissionBroker> {
   const secret = randomBytes(32).toString("hex");
-  const { socketPath, socketDir } = privateSocketPath(options);
+  const { socketPath, privateDir } = privatePaths(options);
+  const addressFile = join(privateDir, "broker.json");
   const closing = new AbortController();
   const brokerSignal = options.signal ? AbortSignal.any([options.signal, closing.signal]) : closing.signal;
   const sockets = new Set<Socket>();
@@ -82,14 +104,16 @@ export async function startPermissionBroker(options: PermissionBrokerOptions): P
   });
   try {
     await listen(server, socketPath);
+    writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret }), { mode: 0o600 });
   } catch (error) {
-    if (socketDir) rmSync(socketDir, { recursive: true, force: true });
+    rmSync(privateDir, { recursive: true, force: true });
     throw error;
   }
   let closed: Promise<void> | undefined;
   return {
     socketPath,
-    env: { RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: secret },
+    privateDir,
+    env: { [BROKER_FILE_ENV]: addressFile },
     close: () => {
       closed ??= (async () => {
         closing.abort("The run ended before a person answered.");
@@ -98,22 +122,21 @@ export async function startPermissionBroker(options: PermissionBrokerOptions): P
         await new Promise((resolve) => setImmediate(resolve));
         for (const socket of sockets) socket.destroy();
         await stopped;
-        if (socketDir) rmSync(socketDir, { recursive: true, force: true });
+        rmSync(privateDir, { recursive: true, force: true });
       })();
       return closed;
     },
   };
 }
 
-function privateSocketPath(options: PermissionBrokerOptions): { socketPath: string; socketDir?: string } {
-  const name = randomBytes(12).toString("hex");
+/** A 0700 directory only this user can reach, holding the socket (a named pipe on Windows) and the address file. */
+function privatePaths(options: PermissionBrokerOptions): { socketPath: string; privateDir: string } {
+  const privateDir = mkdtempSync(join(options.socketParent ?? tmpdir(), "relay-perm-"));
+  chmodSync(privateDir, 0o700);
   if ((options.platform ?? process.platform) === "win32") {
-    return { socketPath: `\\\\.\\pipe\\relay-permission-${name}` };
+    return { socketPath: `\\\\.\\pipe\\relay-permission-${randomBytes(12).toString("hex")}`, privateDir };
   }
-  // mkdtemp creates the directory 0700, so only this user can reach the socket.
-  const socketDir = mkdtempSync(join(options.socketParent ?? tmpdir(), "relay-perm-"));
-  chmodSync(socketDir, 0o700);
-  return { socketPath: join(socketDir, "broker.sock"), socketDir };
+  return { socketPath: join(privateDir, "broker.sock"), privateDir };
 }
 
 function listen(server: Server, socketPath: string): Promise<void> {
@@ -138,8 +161,8 @@ function serveConnection(socket: Socket, secret: string, options: PermissionBrok
     if (!socket.destroyed) socket.end(`${JSON.stringify(decision)}\n`);
   };
   socket.setEncoding("utf8");
-  socket.on("error", () => hungUp.abort("The permission prompt disconnected."));
-  socket.on("close", () => hungUp.abort("The permission prompt disconnected."));
+  socket.on("error", () => hungUp.abort(HUNG_UP));
+  socket.on("close", () => hungUp.abort(HUNG_UP));
   socket.on("data", (chunk: string) => {
     if (answered) return;
     buffer += chunk;
@@ -163,17 +186,44 @@ function parseRequest(line: string, secret: string): PermissionQuestion | undefi
     return undefined;
   }
   if (!parsed || typeof parsed !== "object" || !secretMatches(parsed.secret, secret)) return undefined;
+  const questions = parsed.kind === "question" ? parseQuestions(parsed.questions) : undefined;
   return {
-    kind: isQuestionKind(parsed.kind) ? parsed.kind : "tool",
+    kind: questions ? "question" : isQuestionKind(parsed.kind) && parsed.kind !== "question" ? parsed.kind : "tool",
     toolName: typeof parsed.toolName === "string" ? parsed.toolName : "",
     input: parsed.input ?? {},
     ...(typeof parsed.toolUseId === "string" && parsed.toolUseId ? { toolUseId: parsed.toolUseId } : {}),
     ...(typeof parsed.reason === "string" && parsed.reason ? { reason: parsed.reason } : {}),
+    ...(questions ? { questions } : {}),
   };
 }
 
 function isQuestionKind(value: unknown): value is PermissionQuestion["kind"] {
-  return value === "command" || value === "file_change" || value === "tool";
+  return value === "command" || value === "file_change" || value === "tool" || value === "question";
+}
+
+/**
+ * The questions a runtime asks, within the backend's bounds; undefined when
+ * there are none well-formed, so the prompt falls back to a plain approval.
+ */
+export function parseQuestions(value: unknown): PermissionQuestionItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const text = (item: unknown): string => (typeof item === "string" ? item.trim().slice(0, PERMISSION_TEXT_LIMIT) : "");
+  const questions: PermissionQuestionItem[] = [];
+  for (const raw of value.slice(0, PERMISSION_QUESTIONS_LIMIT)) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    const id = text(item.id);
+    const question = text(item.text);
+    if (!id || !question) continue;
+    const options = (Array.isArray(item.options) ? item.options : []).slice(0, PERMISSION_OPTIONS_LIMIT).flatMap((option) => {
+      if (!option || typeof option !== "object") return [];
+      const label = text((option as Record<string, unknown>).label);
+      const description = text((option as Record<string, unknown>).description);
+      return label ? [{ label, ...(description ? { description } : {}) }] : [];
+    });
+    questions.push({ id, text: question, options, ...(item.multiSelect === true ? { multiSelect: true } : {}) });
+  }
+  return questions.length ? questions : undefined;
 }
 
 function secretMatches(given: unknown, secret: string): boolean {
@@ -183,7 +233,11 @@ function secretMatches(given: unknown, secret: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Posts the question, then polls until a person answers or Relay cannot ask. */
+/**
+ * Posts the question, then polls until a person answers or Relay cannot ask.
+ * `signal` is the connection's: the run ending, the runtime hanging up, or
+ * the broker closing. The deadline is the broker's own.
+ */
 export async function askPerson(
   request: PermissionQuestion,
   options: PermissionBrokerOptions,
@@ -191,19 +245,23 @@ export async function askPerson(
 ): Promise<PermissionAnswer> {
   const requestId = `perm_${randomBytes(12).toString("hex")}`;
   const { command } = options;
+  const scope = {
+    commandId: command.id,
+    ...(command.leaseId ? { leaseId: command.leaseId } : {}),
+    sessionId: command.sessionId,
+    runId: command.runId,
+    agent: command.agent,
+  };
   try {
     await options.postEvent({
       type: "run.permission_requested",
-      commandId: command.id,
-      ...(command.leaseId ? { leaseId: command.leaseId } : {}),
-      sessionId: command.sessionId,
-      runId: command.runId,
-      agent: command.agent,
+      ...scope,
       request: {
         id: requestId,
         toolName: request.toolName,
         ...(request.toolUseId ? { toolUseId: request.toolUseId } : {}),
         input: cappedInput(withReason(request)),
+        ...(request.questions ? { questions: request.questions } : {}),
       },
     }, signal);
   } catch (error) {
@@ -211,7 +269,44 @@ export async function askPerson(
     options.logger?.warn("permission request not delivered", { ...scopeFields(command), requestId, error: errorMessage(error) });
     return deny(`${CANNOT_ASK}: the backend did not accept the request.`);
   }
-  return await pollDecision(requestId, options, signal);
+  const timeoutMs = options.timeoutMs ?? permissionTimeoutMs();
+  const deadline = new AbortController();
+  const timer = timeoutMs > 0 ? setTimeout(() => deadline.abort(timedOut(timeoutMs)), timeoutMs) : undefined;
+  const waiting = AbortSignal.any([signal, deadline.signal]);
+  try {
+    const answer = await pollDecision(requestId, options, waiting);
+    // Nobody is waiting on an answer any more: the run gave up, the runtime
+    // hung up, or the deadline passed. Only the run ending leaves nothing
+    // open — the backend expires its prompts itself.
+    if (answer.behavior === "deny" && waiting.aborted && typeof waiting.reason === "string" && !options.signal?.aborted) {
+      await withdraw(requestId, waiting.reason, scope, options);
+    }
+    return answer;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function timedOut(timeoutMs: number): string {
+  const minutes = Math.round(timeoutMs / 60_000);
+  return minutes >= 1 ? `No one answered within ${minutes} minute${minutes === 1 ? "" : "s"}.` : "No one answered in time.";
+}
+
+/** Tell the backend the prompt is moot; a failure here only leaves it to expire with the run. */
+async function withdraw(
+  requestId: string,
+  reason: string,
+  scope: Omit<Extract<DaemonNodeEvent, { type: "run.permission_withdrawn" }>, "type" | "requestId" | "reason">,
+  options: PermissionBrokerOptions,
+): Promise<void> {
+  try {
+    await options.postEvent(
+      { type: "run.permission_withdrawn", ...scope, requestId, reason },
+      AbortSignal.any([...(options.signal ? [options.signal] : []), AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS)]),
+    );
+  } catch (error) {
+    options.logger?.warn("permission request not withdrawn", { ...scopeFields(options.command), requestId, error: errorMessage(error) });
+  }
 }
 
 async function pollDecision(requestId: string, options: PermissionBrokerOptions, signal: AbortSignal): Promise<PermissionAnswer> {
@@ -258,8 +353,10 @@ async function pollOnce(url: string, options: PermissionBrokerOptions, signal: A
     return undefined;
   }
   switch (body.status) {
-    case "allow":
-      return { behavior: "allow" };
+    case "allow": {
+      const answers = parseAnswers(body.answers);
+      return answers ? { behavior: "allow", answers } : { behavior: "allow" };
+    }
     case "deny":
       return deny(typeof body.note === "string" && body.note.trim() ? body.note : DENIED_BY_USER);
     case "expired":

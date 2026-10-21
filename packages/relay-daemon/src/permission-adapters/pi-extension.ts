@@ -6,9 +6,11 @@
 // Pi loads the script itself (through jiti, in every mode including
 // `--mode json` and `-p`), so this file stays plain ESM with `node:*` imports
 // and the relative protocol import only, and never touches `ctx.ui`. The
-// broker's address and secret are read once and removed from the process
+// broker's address file is read once and removed from the process
 // environment before any tool runs: Pi's bash tool inherits process.env, and
-// an agent that can reach the broker can answer its own questions.
+// an agent that can reach the broker can put questions of its own in front of
+// the person. Verified against Pi 0.73.1 (`tool_call` carries `toolName`,
+// `toolCallId`, `input`; returning `{ block, reason }` stops the call).
 import { BROKER_UNAVAILABLE, askBroker, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
 
 /** The slice of Pi's `tool_call` event this extension reads. */
@@ -103,8 +105,8 @@ export function createToolCallHandler(ask: AskBroker): PiToolCallHandler {
 }
 
 /**
- * Takes the broker's address and secret out of the process environment and
- * returns a copy for the extension alone, so no tool Pi runs can see them.
+ * Takes the broker's address out of the process environment and returns a
+ * copy for the extension alone, so no tool Pi runs can see it.
  */
 export function captureBrokerEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const captured: NodeJS.ProcessEnv = {};

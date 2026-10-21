@@ -14,7 +14,10 @@ from typing import Any
 TASK_COMPLETED = "task_completed"
 COMPUTER_STATUS = "computer_status"
 CLIENT_OUTDATED = "client_outdated"
-NOTIFICATION_KINDS: tuple[str, ...] = (TASK_COMPLETED, COMPUTER_STATUS, CLIENT_OUTDATED)
+PERMISSION_REQUESTED = "permission_requested"
+NOTIFICATION_KINDS: tuple[str, ...] = (
+    TASK_COMPLETED, PERMISSION_REQUESTED, COMPUTER_STATUS, CLIENT_OUTDATED,
+)
 
 
 def task_recipients(task: dict[str, Any]) -> list[str]:
@@ -95,3 +98,23 @@ def client_outdated_rows(
 ) -> list[dict[str, Any]]:
     data = {"nodeId": node["id"], "computerName": computer_name(node), "missingCapabilities": missing}
     return [{"user_id": user_id, "kind": CLIENT_OUTDATED, "data": data} for user_id in recipients]
+
+
+def permission_request_rows(session: dict[str, Any], request: dict[str, Any]) -> list[dict[str, Any]]:
+    """A live run paused on a prompt tells the thread's owner: the run is stuck
+    until someone answers, and nothing else on the thread says so to a person
+    who is not looking at it. An ownerless legacy thread notifies nobody."""
+    owner = session.get("ownerUserId")
+    if not isinstance(owner, str) or not owner:
+        return []
+    data = {
+        "sessionId": session["id"],
+        "requestId": request["id"],
+        "toolName": request["toolName"],
+        "agent": request.get("agent"),
+        "question": bool(request.get("questions")),
+        **({"logicalAgentId": request["logicalAgentId"]} if request.get("logicalAgentId") else {}),
+        **({"title": session["title"]} if session.get("title") else {}),
+        **({"projectId": session["projectId"]} if session.get("projectId") else {}),
+    }
+    return [{"user_id": owner, "kind": PERMISSION_REQUESTED, "data": data}]

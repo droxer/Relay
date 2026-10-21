@@ -1,4 +1,5 @@
 import type { AgentName } from "./state.js";
+import type { PermissionAnswers, PermissionQuestionItem } from "./daemon-node-protocol.js";
 import { mergeTokenUsage, type TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
@@ -106,6 +107,9 @@ export interface PermissionRequest {
   /** The tool input as JSON text, capped by the backend. */
   input: string;
   toolUseId?: string;
+  /** Set when the runtime is asking the person something rather than
+   *  seeking approval for an action; the person answers instead of allowing. */
+  questions?: PermissionQuestionItem[];
   requestedAt: string;
 }
 
@@ -121,6 +125,8 @@ export interface PermissionDecision {
   resolvedAt: string;
   note?: string;
   decidedBy?: string;
+  /** The person's answers to a question prompt. */
+  answers?: PermissionAnswers;
 }
 
 /** How many closed prompts the snapshot remembers. */
@@ -479,8 +485,11 @@ export type RelayEvent =
       sessionId: string;
       timestamp: string;
       requestId: string;
-      decision: "allow" | "deny";
+      /** `expired` when the daemon withdrew the prompt (its runtime gave up
+       *  or the deadline passed) rather than a person answering it. */
+      decision: PermissionDecisionKind;
       note?: string;
+      answers?: PermissionAnswers;
       actorUserId?: string;
     }
   | {
@@ -591,7 +600,7 @@ function expirePermissionRequests(session: RelaySession, timestamp: string, runI
 function closePermissionRequest(
   session: RelaySession,
   request: PermissionRequest,
-  outcome: Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy">,
+  outcome: Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers">,
 ): void {
   const remaining = (session.permissionRequests ?? []).filter((item) => item.id !== request.id);
   if (remaining.length) session.permissionRequests = remaining;
@@ -743,6 +752,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
           decision: event.decision,
           resolvedAt: event.timestamp,
           ...(event.note ? { note: event.note } : {}),
+          ...(event.answers ? { answers: event.answers } : {}),
           ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
         });
       }

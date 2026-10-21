@@ -7,7 +7,11 @@ from collections.abc import Callable
 from typing import Any
 
 from loguru import logger
-from ...core.permission_requests import parse_permission_request
+from ...core.permission_requests import (
+    PERMISSION_WITHDRAW_REASON_MAX_CHARS,
+    is_permission_request_id,
+    parse_permission_request,
+)
 from ...persistence.validation import valid_agent
 from ..bodies import raw_string_field, string_field, token_usage_field
 
@@ -221,6 +225,14 @@ def _run_permission_requested(value: dict[str, Any], envelope: EventFields) -> E
     return {"request": parse_permission_request(value.get("request"))}
 
 
+def _run_permission_withdrawn(value: dict[str, Any], envelope: EventFields) -> EventFields:
+    request_id = value.get("requestId")
+    if not is_permission_request_id(request_id):
+        raise ValueError("invalid permission request id.")
+    reason = string_field(value, "reason")[:PERMISSION_WITHDRAW_REASON_MAX_CHARS]
+    return {"requestId": request_id, "reason": reason or "The run stopped waiting for an answer."}
+
+
 def _is_output_entry(entry: Any) -> bool:
     return (
         isinstance(entry, dict)
@@ -394,6 +406,7 @@ RUN_PARSERS: dict[str, RunParser] = {
     "run.exit_unconfirmed": _run_exit_unconfirmed,
     "run.workspace": _run_workspace,
     "run.permission_requested": _run_permission_requested,
+    "run.permission_withdrawn": _run_permission_withdrawn,
     "run.output": _run_output,
     "run.output.batch": _run_output_batch,
     "run.collaboration": _run_collaboration,

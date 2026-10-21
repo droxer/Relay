@@ -8,7 +8,7 @@ from typing import Any
 from loguru import logger
 
 from ..core.ids import new_relay_id, now_iso
-from ..core.permission_requests import open_permission_request
+from ..core.permission_requests import open_permission_request, validate_answers
 from ..persistence.events import relay_event
 from .controller_state import SessionControllerState
 
@@ -62,12 +62,21 @@ class SessionDecisionMixin(SessionControllerState):
         decision: str,
         note: str | None = None,
         *,
+        answers: Any = None,
         actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
-        """Answer a live run's permission prompt; None when it is no longer open."""
+        """Answer a live run's permission prompt; None when it is no longer
+        open. A question prompt is allowed with `answers`, which must answer
+        every question it asked (ValueError otherwise)."""
         with self.store.mutation_scope(session_id):
-            if not open_permission_request(self.store.get_session(session_id), request_id):
+            request = open_permission_request(self.store.get_session(session_id), request_id)
+            if not request:
                 return None
+            checked = (
+                validate_answers(request, answers)
+                if decision == "allow" and request.get("questions")
+                else None
+            )
             logger.info(
                 "Permission request answered",
                 session_id=session_id,
@@ -83,6 +92,7 @@ class SessionDecisionMixin(SessionControllerState):
                         "requestId": request_id,
                         "decision": decision,
                         **({"note": note} if note else {}),
+                        **({"answers": checked} if checked else {}),
                         **_decided_by(actor_user_id),
                     },
                 ),

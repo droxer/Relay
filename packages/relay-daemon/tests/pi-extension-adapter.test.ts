@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,12 +27,15 @@ const bash = (command: string, id = "call_1"): PiToolCallEvent => ({ toolName: "
 describe("Pi permission adapter (extension)", () => {
   let directory: string;
   let socketPath: string;
+  let addressFile: string;
   let broker: Server;
   const seen: Array<Record<string, unknown>> = [];
 
   before(async () => {
     directory = mkdtempSync(join(tmpdir(), "relay-pi-ext-test-"));
     socketPath = join(directory, "broker.sock");
+    addressFile = join(directory, "broker.json");
+    writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret: SECRET }));
     // A fake broker: a command mentioning "rm" is denied with a note, anything else is allowed.
     broker = createServer((socket) => {
       socket.setEncoding("utf8");
@@ -74,29 +77,27 @@ describe("Pi permission adapter (extension)", () => {
   }
 
   it("registers one tool_call handler and scrubs the broker env from the process", () => {
-    process.env.RELAY_PERMISSION_SOCKET = socketPath;
-    process.env.RELAY_PERMISSION_SECRET = SECRET;
+    process.env.RELAY_PERMISSION_FILE = addressFile;
     const pi = fakePi();
     relayPermissionExtension(pi);
     assert.equal(pi.handlers.length, 1);
-    assert.equal(process.env.RELAY_PERMISSION_SOCKET, undefined);
-    assert.equal(process.env.RELAY_PERMISSION_SECRET, undefined);
+    assert.equal(process.env.RELAY_PERMISSION_FILE, undefined);
   });
 
   it("asks the broker about bash and lets an allowed command run", async () => {
-    const handler = loaded({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const handler = loaded({ RELAY_PERMISSION_FILE: addressFile });
     assert.equal(await handler(bash("echo hi", "call_echo")), undefined);
     const request = seen.find((entry) => entry.toolUseId === "call_echo");
     assert.deepEqual(request, { secret: SECRET, kind: "command", toolName: "bash", input: { command: "echo hi" }, toolUseId: "call_echo" });
   });
 
   it("blocks a denied command with the person's reason", async () => {
-    const handler = loaded({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const handler = loaded({ RELAY_PERMISSION_FILE: addressFile });
     assert.deepEqual(await handler(bash("rm -rf /")), { block: true, reason: "Not that command." });
   });
 
   it("asks about write and edit as file changes with previews, and lets a read pass unasked", async () => {
-    const handler = loaded({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const handler = loaded({ RELAY_PERMISSION_FILE: addressFile });
     const before = seen.length;
     assert.equal(await handler({ toolName: "read", toolCallId: "call_read", input: { path: "/tmp/a.txt" } }), undefined);
     assert.equal(seen.length, before, "a read asks no one");
@@ -109,14 +110,16 @@ describe("Pi permission adapter (extension)", () => {
   });
 
   it("asks about a custom tool with its input", async () => {
-    const handler = loaded({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const handler = loaded({ RELAY_PERMISSION_FILE: addressFile });
     assert.equal(await handler({ toolName: "deploy", toolCallId: "call_deploy", input: { target: "prod" } }), undefined);
     const request = seen.find((entry) => entry.toolUseId === "call_deploy");
     assert.deepEqual(request, { secret: SECRET, kind: "tool", toolName: "deploy", input: { target: "prod" }, toolUseId: "call_deploy" });
   });
 
   it("blocks when the broker is down or not configured", async () => {
-    const down = loaded({ RELAY_PERMISSION_SOCKET: join(directory, "missing.sock"), RELAY_PERMISSION_SECRET: SECRET });
+    const missing = join(directory, "missing.json");
+    writeFileSync(missing, JSON.stringify({ socket: join(directory, "missing.sock"), secret: SECRET }));
+    const down = loaded({ RELAY_PERMISSION_FILE: missing });
     const verdict = await down(bash("echo hi"));
     assert.equal(verdict?.block, true);
     assert.match(String(verdict?.reason), new RegExp(BROKER_UNAVAILABLE));
@@ -143,9 +146,9 @@ describe("Pi permission adapter (extension)", () => {
   });
 
   it("captures only the broker keys and leaves the rest of the environment alone", () => {
-    const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", RELAY_PERMISSION_SOCKET: "/s", RELAY_PERMISSION_SECRET: "k", RELAY_BACKEND_URL: "http://b" };
+    const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", RELAY_PERMISSION_FILE: "/s/broker.json", RELAY_BACKEND_URL: "http://b" };
     const captured = captureBrokerEnv(env);
-    assert.deepEqual(captured, { RELAY_PERMISSION_SOCKET: "/s", RELAY_PERMISSION_SECRET: "k" });
+    assert.deepEqual(captured, { RELAY_PERMISSION_FILE: "/s/broker.json" });
     assert.deepEqual(env, { PATH: "/usr/bin", RELAY_BACKEND_URL: "http://b" });
   });
 });

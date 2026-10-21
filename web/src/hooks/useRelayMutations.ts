@@ -29,6 +29,7 @@ import {
   updateTeam,
 } from "../api";
 import type { AgentRunInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { PermissionAnswers } from "relay-core";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -137,9 +138,10 @@ export function useRelayMutations() {
       requestId,
       decision,
       note,
+      answers,
       token,
-    }: { sessionId: string; requestId: string; decision: "allow" | "deny"; note?: string } & TokenArg) =>
-      answerPermissionRequest(sessionId, requestId, decision, note, token),
+    }: { sessionId: string; requestId: string; decision: "allow" | "deny"; note?: string; answers?: PermissionAnswers } & TokenArg) =>
+      answerPermissionRequest(sessionId, requestId, decision, note, token, answers),
     onSuccess: (session) => cacheSession(session),
     onError: (error: unknown) => {
       // Someone answered first, or the run ended: the stream will drop the card.

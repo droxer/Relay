@@ -17,6 +17,7 @@ import { taskRef } from "./taskRef.ts";
     it (`computerManagementDestination`). */
 export type NotificationTarget =
   | { kind: "task"; taskId: string; routineId: string | null }
+  | { kind: "thread"; sessionId: string; projectId: string | null }
   | { kind: "computer"; nodeId: string };
 
 /** i18n key plus its interpolation values. */
@@ -77,6 +78,20 @@ function taskCompleted(data: Data): Body | null {
   };
 }
 
+function permissionRequested(data: Data): Body | null {
+  const sessionId = text(data.sessionId);
+  const toolName = text(data.toolName);
+  if (!sessionId || !toolName) return null;
+  const question = data.question === true;
+  const title = text(data.title);
+  return {
+    tone: "info",
+    title: { key: question ? "notifications.permission_question" : "notifications.permission_requested", params: { tool: toolName } },
+    detail: title ? { key: "notifications.thread_detail", params: { title } } : { key: "notifications.thread_detail_untitled", params: {} },
+    target: { kind: "thread", sessionId, projectId: text(data.projectId) },
+  };
+}
+
 function computerName(data: Data, nodeId: string): string {
   return text(data.computerName) ?? nodeId;
 }
@@ -106,6 +121,7 @@ function clientOutdated(data: Data): Body | null {
 
 const READERS: Record<NotificationKind, (data: Data) => Body | null> = {
   task_completed: taskCompleted,
+  permission_requested: permissionRequested,
   computer_status: computerStatus,
   client_outdated: clientOutdated,
 };
@@ -189,6 +205,11 @@ export function notificationLocation(
     return target.routineId
       ? { route: "routine", mobileView: "chat", sessionId: null, taskId: target.routineId, runId: target.taskId }
       : { route: "backlog", mobileView: "chat", sessionId: null, taskId: target.taskId };
+  }
+  if (target.kind === "thread") {
+    return target.projectId
+      ? { route: "projects", mobileView: "chat", projectId: target.projectId, sessionId: target.sessionId }
+      : { route: "main", mobileView: "chat", sessionId: target.sessionId };
   }
   return computerDestination === "admin"
     ? { route: "admin", mobileView: "chat", sessionId: null, adminSection: "computers" }

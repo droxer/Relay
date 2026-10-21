@@ -13,7 +13,7 @@ const launch = {
   adapter: "claude-mcp" as const,
   command: "/usr/local/bin/node",
   args: ["/opt/relay/dist/permission-prompt-server.js"],
-  env: { RELAY_PERMISSION_SOCKET: "/tmp/relay-perm-x/broker.sock", RELAY_PERMISSION_SECRET: "s3cret" },
+  env: { RELAY_PERMISSION_FILE: "/tmp/relay-perm-x/broker.json" },
 };
 const prompted = { ...initialAgentState("task"), permission_prompt: launch };
 
@@ -81,13 +81,13 @@ const codexLaunch = {
   adapter: "codex-app-server" as const,
   command: "/usr/local/bin/node",
   args: ["/opt/relay/dist/permission-adapters/codex-app-server.js"],
-  env: { RELAY_PERMISSION_SOCKET: "/tmp/relay-perm-x/broker.sock", RELAY_PERMISSION_SECRET: "s3cret" },
+  env: { RELAY_PERMISSION_FILE: "/tmp/relay-perm-x/broker.json" },
 };
 const codexPrompted = { ...initialAgentState("task"), permission_prompt: codexLaunch, agent_model: "gpt-pinned", resume_session_id: "01a1479f-47fd-75c3-8178-9c48c983d4e0" };
 
 test("a native local Codex run goes through the app-server adapter instead of codex exec", () => withEnv(LOCAL, () => {
   const command = buildCodexCommand(codexPrompted, "/work/space");
-  assert.match(command, /export RELAY_PERMISSION_SOCKET=\/tmp\/relay-perm-x\/broker\.sock && export RELAY_PERMISSION_SECRET=s3cret && /);
+  assert.match(command, /export RELAY_PERMISSION_FILE=\/tmp\/relay-perm-x\/broker\.json && /);
   assert.match(command, /\/usr\/local\/bin\/node \/opt\/relay\/dist\/permission-adapters\/codex-app-server\.js --cwd \/work\/space --model gpt-pinned --resume 01a1479f-47fd-75c3-8178-9c48c983d4e0 -- '/);
   assert.doesNotMatch(command, /codex'? exec|--dangerously-bypass/);
   assert.match(command, /< \/dev\/null$/);

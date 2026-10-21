@@ -3,7 +3,7 @@ import { apiJson } from "./client.ts";
 /** The kinds this build knows how to render. A server may send others; the
     inbox reads them through `notificationView`, which skips what it cannot
     name. */
-export const NOTIFICATION_KINDS = ["task_completed", "computer_status", "client_outdated"] as const;
+export const NOTIFICATION_KINDS = ["task_completed", "permission_requested", "computer_status", "client_outdated"] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

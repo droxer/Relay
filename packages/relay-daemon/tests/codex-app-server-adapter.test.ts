@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
 
-import { answerServerRequest, parseCodexAdapterArgs } from "../src/permission-adapters/codex-app-server.js";
+import { answerServerRequest, cmdQuote, parseCodexAdapterArgs, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
 import { CodexExecEventTranslator } from "../src/permission-adapters/codex-exec-events.js";
 
 const ADAPTER = fileURLToPath(new URL("../src/permission-adapters/codex-app-server.js", import.meta.url));
@@ -75,6 +75,7 @@ describe("Codex app-server adapter", () => {
   let directory: string;
   let fake: string;
   let socketPath: string;
+  let addressFile: string;
   let broker: Server;
   const questions: Array<Record<string, unknown>> = [];
 
@@ -84,6 +85,8 @@ describe("Codex app-server adapter", () => {
     writeFileSync(fake, FAKE_APP_SERVER);
     chmodSync(fake, 0o755);
     socketPath = join(directory, "broker.sock");
+    addressFile = join(directory, "broker.json");
+    writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret: SECRET }));
     // Allows commands, denies file changes.
     broker = createServer((socket) => {
       socket.setEncoding("utf8");
@@ -111,8 +114,7 @@ describe("Codex app-server adapter", () => {
       env: {
         PATH: process.env.PATH ?? "",
         RELAY_CODEX_BIN: fake,
-        RELAY_PERMISSION_SOCKET: socketPath,
-        RELAY_PERMISSION_SECRET: SECRET,
+        RELAY_PERMISSION_FILE: addressFile,
         FAKE_LOG: logFile,
         ...env,
       },
@@ -176,7 +178,9 @@ describe("Codex app-server adapter", () => {
   });
 
   it("declines every approval when the broker is unreachable", async () => {
-    const result = await run(["--cwd", directory, "--", "go"], { RELAY_PERMISSION_SOCKET: join(directory, "missing.sock") });
+    const missing = join(directory, "missing.json");
+    writeFileSync(missing, JSON.stringify({ socket: join(directory, "missing.sock"), secret: SECRET }));
+    const result = await run(["--cwd", directory, "--", "go"], { RELAY_PERMISSION_FILE: missing });
     assert.equal(result.code, 0);
     assert.deepEqual(result.log.find((entry) => entry.answered === "command")?.result, { decision: "decline" });
   });
@@ -193,6 +197,38 @@ describe("Codex app-server adapter", () => {
     assert.deepEqual(parseCodexAdapterArgs(["-c", "a=1", "--cwd", "/w", "--resume", "r", "--", "hello", "there"]),
       { config: ["a=1"], cwd: "/w", resume: "r", prompt: "hello there" });
     assert.throws(() => parseCodexAdapterArgs(["--cwd", "/w", "--"]), /prompt/);
+  });
+
+  it("asks the person the agent's request_user_input questions and relays their answers", async () => {
+    const params = {
+      threadId: "t", turnId: "u", itemId: "q1",
+      questions: [
+        { id: "db", header: "Database", question: "Which database?", isOther: true, isSecret: false, options: [{ label: "Postgres", description: "shared" }, { label: "SQLite", description: "local" }] },
+        { id: "name", header: "Name", question: "", isOther: true, isSecret: false, options: null },
+      ],
+    };
+    const asked: Array<Record<string, unknown>> = [];
+    const answered = await answerServerRequest("item/tool/requestUserInput", params, async (question) => {
+      asked.push(question as unknown as Record<string, unknown>);
+      return { behavior: "allow", answers: { db: ["SQLite"], name: ["relay"] } };
+    });
+    assert.deepEqual(answered, { answers: { db: { answers: ["SQLite"] }, name: { answers: ["relay"] } } });
+    assert.equal(asked[0].kind, "question");
+    assert.equal(asked[0].toolUseId, "q1");
+    assert.deepEqual(userInputQuestions(params.questions), [
+      { id: "db", text: "Which database?", options: [{ label: "Postgres", description: "shared" }, { label: "SQLite", description: "local" }] },
+      { id: "name", text: "Name", options: [] },
+    ]);
+    // A skipped prompt answers nothing, and a malformed one never asks.
+    assert.deepEqual(await answerServerRequest("item/tool/requestUserInput", params, async () => ({ behavior: "deny" })), { answers: {} });
+    assert.deepEqual(await answerServerRequest("item/tool/requestUserInput", { questions: "?" }, async () => { throw new Error("never"); }), { answers: {} });
+  });
+
+  it("quotes app-server arguments for cmd.exe only when they need it", () => {
+    assert.equal(cmdQuote("app-server"), "app-server");
+    assert.equal(cmdQuote("model_reasoning_effort=high"), "model_reasoning_effort=high");
+    assert.equal(cmdQuote('notify=["say","done"]'), '"notify=[\\"say\\",\\"done\\"]"');
+    assert.equal(cmdQuote("a b"), '"a b"');
   });
 
   it("maps legacy and permission approvals without ever granting a session", async () => {

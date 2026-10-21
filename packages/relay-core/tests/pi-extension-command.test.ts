@@ -14,7 +14,7 @@ const piLaunch = {
   adapter: "pi-extension" as const,
   command: "/usr/local/bin/node",
   args: [SCRIPT],
-  env: { RELAY_PERMISSION_SOCKET: "/tmp/relay-perm-x/broker.sock", RELAY_PERMISSION_SECRET: "s3cret" },
+  env: { RELAY_PERMISSION_FILE: "/tmp/relay-perm-x/broker.json" },
 };
 const plain = (): AgentState => initialAgentState("task");
 const prompted = (overrides: Partial<AgentState> = {}): AgentState => ({ ...plain(), permission_prompt: piLaunch, ...overrides });
@@ -33,7 +33,7 @@ function piVariants(command: string): string[] {
 describe("buildPiCommand with the Pi extension adapter", () => {
   it("loads the extension in every fallback command and exports the broker env ahead of them", () => withEnv(LOCAL, () => {
     const command = buildPiCommand(prompted(), "/work/space");
-    assert.match(command, /^export HOME=.* && cd \/work\/space && export RELAY_PERMISSION_SOCKET=\/tmp\/relay-perm-x\/broker\.sock && export RELAY_PERMISSION_SECRET=s3cret && if pi --help/);
+    assert.match(command, /^export HOME=.* && cd \/work\/space && export RELAY_PERMISSION_FILE=\/tmp\/relay-perm-x\/broker\.json && if pi --help/);
     const variants = piVariants(command);
     assert.equal(variants.length, 3);
     for (const variant of variants) assert.match(variant, new RegExp(`^pi --no-session --extension ${SCRIPT} `));

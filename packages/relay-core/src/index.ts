@@ -149,6 +149,11 @@ export {
   type DaemonNodeStatus,
   type DaemonPermissionDecision,
   type DaemonPermissionRequest,
+  type PermissionAnswers,
+  type PermissionQuestionItem,
+  PERMISSION_OPTIONS_LIMIT,
+  PERMISSION_QUESTIONS_LIMIT,
+  PERMISSION_TEXT_LIMIT,
   PERMISSION_INPUT_LIMIT,
 } from "./daemon-node-protocol.js";
 

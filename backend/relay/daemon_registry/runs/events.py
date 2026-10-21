@@ -47,6 +47,7 @@ class EventIngestMixin(RegistryState):
     _EVENT_HANDLERS = {
         "run.exit_unconfirmed": "_handle_run_exit_unconfirmed",
         "run.permission_requested": "_handle_run_permission_requested",
+        "run.permission_withdrawn": "_handle_run_permission_withdrawn",
         "run.workspace": "_handle_run_workspace",
         "run.executing": "_handle_run_executing",
         "run.output": "_handle_run_output",
@@ -201,6 +202,13 @@ class EventIngestMixin(RegistryState):
             return
         self._record_permission_request(sandbox_id, command, event)
         self._note_run_progress(command)
+
+    def _handle_run_permission_withdrawn(
+        self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any], late_output: bool
+    ) -> None:
+        if late_output:
+            return
+        self._withdraw_permission_request(sandbox_id, event)
 
     def _handle_run_workspace(
         self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any], late_output: bool

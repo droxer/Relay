@@ -7,6 +7,7 @@ import type {
   ThreadRecoveryInput,
 } from "../types.ts";
 import { apiJson, RelayApiError } from "./client.ts";
+import type { PermissionAnswers } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
 export function listSessionSummaries(signal?: AbortSignal): Promise<SessionSummariesResponse> {
@@ -138,10 +139,11 @@ export function answerPermissionRequest(
   decision: "allow" | "deny",
   note?: string,
   token?: string,
+  answers?: PermissionAnswers,
 ): Promise<RelaySession> {
   return apiJson<RelaySession>(
     `/threads/${encodeURIComponent(sessionId)}/permission-requests/${encodeURIComponent(requestId)}`,
-    { method: "POST", token, body: { decision, ...(note ? { note } : {}) } },
+    { method: "POST", token, body: { decision, ...(note ? { note } : {}), ...(answers ? { answers } : {}) } },
   );
 }
 
