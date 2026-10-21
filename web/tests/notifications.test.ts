@@ -54,6 +54,21 @@ describe("notificationView", () => {
     assert.equal(notificationHref(view.target), "/automations/r1/runs/occ1");
   });
 
+  it("reads a paused run's prompt as an info notice that opens its thread", () => {
+    const view = notificationView(notice("permission_requested", { sessionId: "ses_1", requestId: "perm_1", toolName: "Bash", agent: "claude", question: false, title: "Clean up" }));
+    assert.ok(view);
+    assert.equal(view.tone, "info");
+    assert.deepEqual(view.title, { key: "notifications.permission_requested", params: { tool: "Bash" } });
+    assert.deepEqual(view.detail, { key: "notifications.thread_detail", params: { title: "Clean up" } });
+    assert.deepEqual(view.target, { kind: "thread", sessionId: "ses_1", projectId: null });
+    assert.equal(notificationHref(view.target), "/threads/ses_1");
+    const question = notificationView(notice("permission_requested", { sessionId: "ses_2", requestId: "perm_2", toolName: "AskUserQuestion", question: true, projectId: "proj_1" }));
+    assert.deepEqual(question?.title, { key: "notifications.permission_question", params: { tool: "AskUserQuestion" } });
+    assert.deepEqual(question?.detail, { key: "notifications.thread_detail_untitled", params: {} });
+    assert.equal(notificationHref(question!.target), "/projects/proj_1/threads/ses_2");
+    assert.equal(notificationView(notice("permission_requested", { sessionId: "ses_3" })), null);
+  });
+
   it("reads computer liveness and opens where the computer is managed", () => {
     const offline = notificationView(notice("computer_status", { nodeId: "node1", computerName: "Office Mac", from: "online", to: "offline" }));
     assert.ok(offline);

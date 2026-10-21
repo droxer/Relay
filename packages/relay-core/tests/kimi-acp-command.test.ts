@@ -13,7 +13,7 @@ const kimiLaunch = {
   adapter: "kimi-acp" as const,
   command: "/usr/local/bin/node",
   args: ["/opt/relay/dist/permission-adapters/kimi-acp.js"],
-  env: { RELAY_PERMISSION_SOCKET: "/tmp/relay-perm-x/broker.sock", RELAY_PERMISSION_SECRET: "s3cret" },
+  env: { RELAY_PERMISSION_FILE: "/tmp/relay-perm-x/broker.json" },
 };
 const plain = (): AgentState => initialAgentState("task");
 const prompted = (overrides: Partial<AgentState> = {}): AgentState => ({ ...plain(), permission_prompt: kimiLaunch, ...overrides });
@@ -21,7 +21,7 @@ const prompted = (overrides: Partial<AgentState> = {}): AgentState => ({ ...plai
 describe("buildKimiCommand", () => {
   it("runs the ACP adapter for a native local run with a kimi-acp launch", () => withEnv(LOCAL, () => {
     const command = buildKimiCommand(prompted(), "/work/space");
-    assert.match(command, /export RELAY_PERMISSION_SOCKET=\/tmp\/relay-perm-x\/broker\.sock && export RELAY_PERMISSION_SECRET=s3cret && /);
+    assert.match(command, /export RELAY_PERMISSION_FILE=\/tmp\/relay-perm-x\/broker\.json && /);
     assert.match(command, /\/usr\/local\/bin\/node \/opt\/relay\/dist\/permission-adapters\/kimi-acp\.js --cwd \/work\/space /);
     assert.match(command, / --prompt /);
     assert.match(command, /^export HOME=.* && cd \/work\/space && /);

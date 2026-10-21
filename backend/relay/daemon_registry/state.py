@@ -31,6 +31,7 @@ class RegistryState:
     daemon_store: Any
     task_store: TaskStore | None
     project_store: Any
+    notification_store: Any
     liveness_timeout_ms: int
     sandboxes: dict[str, dict[str, Any]]
     active_commands: dict[str, dict[str, Any]]
@@ -142,6 +143,9 @@ class RegistryState:
             ...
 
         def _record_permission_request(self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]) -> None:
+            ...
+
+        def _withdraw_permission_request(self, sandbox_id: str, event: dict[str, Any]) -> None:
             ...
 
         def _record_project_setup_result(self, run_request: dict[str, Any], event: dict[str, Any]) -> None:

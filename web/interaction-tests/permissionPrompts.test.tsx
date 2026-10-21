@@ -21,7 +21,62 @@ it("shows what the run wants to do and sends the person's answer with a note", a
 
   fireEvent.change(screen.getByLabelText("permission.note_label"), { target: { value: "  Use a temp dir  " } });
   fireEvent.click(screen.getByRole("button", { name: "permission.deny" }));
-  await waitFor(() => expect(onAnswer).toHaveBeenCalledWith("perm_00000001", "deny", "Use a temp dir"));
+  await waitFor(() => expect(onAnswer).toHaveBeenCalledWith("perm_00000001", "deny", "Use a temp dir", undefined));
+});
+
+it("leaves the caret alone when a prompt lands while someone is typing", () => {
+  const draft = document.createElement("textarea");
+  document.body.appendChild(draft);
+  draft.focus();
+  try {
+    render(<PermissionPrompts requests={[request]} agentLabel={() => "Builder"} onAnswer={vi.fn()} />);
+    expect(document.activeElement).toBe(draft);
+    expect(screen.getByRole("status").textContent).toBe("");
+  } finally {
+    draft.remove();
+  }
+});
+
+const question: PermissionRequest = {
+  ...request,
+  id: "perm_00000002",
+  toolName: "AskUserQuestion",
+  input: "{}",
+  questions: [{ id: "Which database?", text: "Which database?", options: [{ label: "Postgres", description: "shared" }, { label: "SQLite" }] }],
+};
+
+it("answers a single question on the pick, the way the agent's own prompt would", async () => {
+  const onAnswer = vi.fn().mockResolvedValue(undefined);
+  render(<PermissionPrompts requests={[question]} agentLabel={() => "Builder"} onAnswer={onAnswer} />);
+  expect(screen.getByText("Which database?")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /permission.allow/ })).toBeNull();
+  const sqlite = screen.getByRole("radio", { name: /SQLite/ });
+  expect(document.activeElement).toBe(screen.getByRole("radio", { name: /Postgres/ }));
+  fireEvent.click(sqlite);
+  await waitFor(() => expect(onAnswer).toHaveBeenCalledWith("perm_00000002", "allow", undefined, { "Which database?": ["SQLite"] }));
+});
+
+it("collects several picks and a written answer until Answer, and Skip sends none", async () => {
+  const onAnswer = vi.fn().mockResolvedValue(undefined);
+  const multi: PermissionRequest = {
+    ...question,
+    questions: [
+      { ...question.questions![0], multiSelect: true },
+      { id: "name", text: "Service name?", options: [] },
+    ],
+  };
+  render(<PermissionPrompts requests={[multi]} agentLabel={() => "Builder"} onAnswer={onAnswer} />);
+  const answer = screen.getByRole("button", { name: /permission.answer$/ });
+  expect((answer as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: /Postgres/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /SQLite/ }));
+  expect((answer as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("permission.answer_label"), { target: { value: " relay " } });
+  expect((answer as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(answer);
+  await waitFor(() => expect(onAnswer).toHaveBeenCalledWith("perm_00000002", "allow", undefined, { "Which database?": ["Postgres", "SQLite"], name: ["relay"] }));
+  fireEvent.click(screen.getByRole("button", { name: "permission.skip" }));
+  await waitFor(() => expect(onAnswer).toHaveBeenLastCalledWith("perm_00000002", "deny", undefined, undefined));
 });
 
 it("asks for a reason only where the runtime passes it to the agent", () => {

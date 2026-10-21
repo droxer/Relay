@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useTranslation } from "react-i18next";
 import { logout, reconcileExecution, retryExecutionRecovery } from "./api";
 import type { AgentName, AgentTeam, CollaborationStyle, CurrentUser, UserAgent, RelayArtifact, ThreadMessageInput } from "./types";
+import type { PermissionAnswers } from "relay-core";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
@@ -264,6 +265,11 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       else navigateToTaskRecord(target.taskId);
       return;
     }
+    if (target.kind === "thread") {
+      // A paused run's prompt sits in its thread's transcript; open it there.
+      void navigateToAppPath(notificationHref(target));
+      return;
+    }
     if (computerDestination(target.nodeId) === "admin") navigateToAdminSection("computers");
     else navigateToRoute("computers");
   });
@@ -492,10 +498,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => sendMessage(style, intent, options));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
-  const handleAnswerPermission = useStableEvent(async (requestId: string, decision: "allow" | "deny", note?: string) => {
+  const handleAnswerPermission = useStableEvent(async (requestId: string, decision: "allow" | "deny", note?: string, answers?: PermissionAnswers) => {
     if (!activeSession) return;
     try {
-      await answerPermissionMutation.mutateAsync({ sessionId: activeSession.id, requestId, decision, note, token: selectedToken });
+      await answerPermissionMutation.mutateAsync({ sessionId: activeSession.id, requestId, decision, note, answers, token: selectedToken });
     } catch {
       // mutation onError surfaces a toast.
     }

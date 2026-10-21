@@ -42,7 +42,7 @@ async function prompt(id, params) {
   log({ decision });
   const allowed = decision.outcome.optionId === "approve_once";
   update(sid, { sessionUpdate: "tool_call_update", toolCallId: call, status: allowed ? "completed" : "failed", rawOutput: allowed ? "ok" : { error: "rejected" } });
-  const question = await ask("perm-2", { sessionId: sid, options: [{ optionId: "q0_opt_0", name: "A", kind: "allow_once" }, { optionId: "q0_skip", name: "Skip", kind: "reject_once" }], toolCall: { toolCallId: "turn_1:ask", title: "AskUserQuestion" } });
+  const question = await ask("perm-2", { sessionId: sid, options: [{ optionId: "q0_opt_0", name: "A", kind: "allow_once" }, { optionId: "q0_opt_1", name: "B", kind: "allow_once" }, { optionId: "q0_skip", name: "Skip", kind: "reject_once" }], toolCall: { toolCallId: "turn_1:ask", title: "AskUserQuestion", rawInput: process.env.FAKE_KIMI_BARE_QUESTION ? undefined : { questions: [{ question: "Which?", options: [{ label: "A" }, { label: "B", description: "second" }] }] } } });
   log({ question });
   update(sid, { sessionUpdate: "plan", entries: [] });
   update(sid, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Done." } });
@@ -91,7 +91,7 @@ interface Captured {
 
 async function run(
   answer: "allow" | "deny",
-  { env = {}, model, signal }: { env?: Record<string, string>; model?: string; signal?: AbortSignal } = {},
+  { env = {}, model, signal, answers }: { env?: Record<string, string>; model?: string; signal?: AbortSignal; answers?: Record<string, string[]> } = {},
 ): Promise<Captured> {
   const logPath = newLog();
   let stdout = "";
@@ -99,7 +99,8 @@ async function run(
   const questions: PermissionQuestion[] = [];
   const ask: AskBroker = async (question) => {
     questions.push(question);
-    return answer === "allow" ? { behavior: "allow" } : { behavior: "deny", message: "no" };
+    if (answer !== "allow") return { behavior: "deny", message: "no" };
+    return question.kind === "question" && answers ? { behavior: "allow", answers } : { behavior: "allow" };
   };
   const code = await runKimiAcp(
     { kimiCommand: fakeKimi, cwd: root, prompt: "do the thing", ...(model ? { model } : {}) },
@@ -154,7 +155,7 @@ describe("Kimi ACP adapter", () => {
 
   it("asks the broker once per approval and answers allow with allow_once", async () => {
     const result = await run("allow");
-    assert.deepEqual(result.questions, [{
+    assert.deepEqual(result.questions.filter((question) => question.kind !== "question"), [{
       kind: "command",
       toolName: "Bash",
       input: { command: "touch x" },
@@ -174,11 +175,23 @@ describe("Kimi ACP adapter", () => {
     assert.equal(tool?.content, "{\"error\":\"rejected\"}");
   });
 
-  it("skips an AskUserQuestion without asking the broker", async () => {
-    const result = await run("allow");
-    assert.equal(result.questions.length, 1);
-    const question = result.log.find((entry) => "question" in entry)?.question;
-    assert.deepEqual(question, { outcome: { outcome: "selected", optionId: "q0_skip" } });
+  it("asks the person an AskUserQuestion and selects the option they picked", async () => {
+    const result = await run("allow", { answers: { "Which?": ["B"] } });
+    assert.equal(result.questions.length, 2);
+    const asked = result.questions[1];
+    assert.equal(asked.kind, "question");
+    assert.equal(asked.toolUseId, "turn_1:ask");
+    assert.deepEqual(asked.questions, [{ id: "Which?", text: "Which?", options: [{ label: "A" }, { label: "B", description: "second" }] }]);
+    assert.deepEqual(result.log.find((entry) => "question" in entry)?.question, { outcome: { outcome: "selected", optionId: "q0_opt_1" } });
+  });
+
+  it("skips an AskUserQuestion the person did not answer, or that carries no questions", async () => {
+    const unanswered = await run("allow");
+    assert.equal(unanswered.questions.length, 2);
+    assert.deepEqual(unanswered.log.find((entry) => "question" in entry)?.question, { outcome: { outcome: "selected", optionId: "q0_skip" } });
+    const bare = await run("allow", { env: { FAKE_KIMI_BARE_QUESTION: "1" } });
+    assert.equal(bare.questions.length, 1);
+    assert.deepEqual(bare.log.find((entry) => "question" in entry)?.question, { outcome: { outcome: "selected", optionId: "q0_skip" } });
   });
 
   it("fails the run when Kimi stops the turn for anything but end_turn", async () => {
@@ -232,6 +245,8 @@ describe("Kimi ACP adapter", () => {
     assert.equal(script, fileURLToPath(new URL("../src/permission-adapters/kimi-acp.js", import.meta.url)));
     const received: Array<Record<string, unknown>> = [];
     const socketPath = join(root, "broker.sock");
+    const addressFile = join(root, "broker.json");
+    writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret: "s3cret" }));
     const broker = createServer((socket) => {
       socket.setEncoding("utf8");
       socket.on("data", (chunk: string) => {
@@ -243,17 +258,17 @@ describe("Kimi ACP adapter", () => {
     try {
       const logPath = newLog();
       const child = spawn(process.execPath, [script, "--kimi", fakeKimi, "--cwd", root, "--prompt", "hi"], {
-        env: { ...process.env, FAKE_KIMI_LOG: logPath, RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: "s3cret" },
+        env: { ...process.env, FAKE_KIMI_LOG: logPath, RELAY_PERMISSION_FILE: addressFile },
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "";
       child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
       const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
       assert.equal(code, 0);
-      assert.equal(received.length, 1);
+      // The Bash approval and the AskUserQuestion both reach the broker.
+      assert.deepEqual(received.map((request) => request.kind), ["command", "question"]);
       assert.equal(received[0].secret, "s3cret");
       assert.equal(received[0].toolName, "Bash");
-      assert.equal(received[0].kind, "command");
       assert.deepEqual(readLog(logPath).find((entry) => "decision" in entry)?.decision, { outcome: { outcome: "selected", optionId: "reject" } });
       assert.match(stdout, /"type":"session.resume_hint"/);
     } finally {

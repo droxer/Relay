@@ -9,10 +9,12 @@ from __future__ import annotations
 from typing import Any
 from loguru import logger
 from ...core.permission_requests import (
+    open_permission_request,
     permission_request_node,
     permission_request_status,
 )
 from ...core.ids import now_iso
+from ...notifications.rules import permission_request_rows
 from ...persistence.daemon.rules import EXIT_UNCONFIRMED_STATE_KEY
 from ...persistence.events import relay_event
 from ...core.daemon_capabilities import (
@@ -139,10 +141,42 @@ class CommandQueueMixin(RegistryState):
             request_id=request["id"],
             tool=request["toolName"],
         )
-        self.store.append_event(
+        # A retried post reopens nothing (the reducer dedupes), so it must
+        # not notify twice either: only a prompt this write opens does.
+        known = permission_request_status(self.store.get_session(event["sessionId"]), request["id"])
+        session = self.store.append_event(
             event["sessionId"],
             relay_event(
                 "agent.permission_requested", event["sessionId"], {"request": request}
+            ),
+        )
+        opened = open_permission_request(session, request["id"])
+        if self.notification_store is None or known is not None or not opened:
+            return
+        self.notification_store.add(permission_request_rows(session, opened))
+
+    def _withdraw_permission_request(self, sandbox_id: str, event: dict[str, Any]) -> None:
+        """The run stopped waiting on its prompt: close it so nobody answers a
+        question no one is waiting on. Only the asking computer may."""
+        session = self.store.get_session(event["sessionId"])
+        request_id = event["requestId"]
+        if permission_request_node(session, request_id) != sandbox_id:
+            return
+        if not open_permission_request(session, request_id):
+            return
+        logger.info(
+            "Run withdrew its permission request",
+            session_id=event["sessionId"],
+            run_id=event["runId"],
+            request_id=request_id,
+            reason=event["reason"],
+        )
+        self.store.append_event(
+            event["sessionId"],
+            relay_event(
+                "agent.permission_resolved",
+                event["sessionId"],
+                {"requestId": request_id, "decision": "expired", "note": event["reason"]},
             ),
         )
 

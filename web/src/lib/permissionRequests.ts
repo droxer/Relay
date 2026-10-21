@@ -1,4 +1,4 @@
-import type { PermissionDecision, PermissionRequest } from "relay-core";
+import type { PermissionAnswers, PermissionDecision, PermissionRequest } from "relay-core";
 import type { RelaySession } from "../types.js";
 import { omit } from "./omit.ts";
 
@@ -13,7 +13,7 @@ import { omit } from "./omit.ts";
 /** Mirrors `PERMISSION_HISTORY_LIMIT` there. */
 const HISTORY_LIMIT = 50;
 
-type Outcome = Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy">;
+type Outcome = Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers">;
 
 export function withPermissionRequested(
   session: RelaySession,
@@ -50,6 +50,22 @@ export function openPermissionRequests(session: Pick<RelaySession, "permissionRe
  */
 export function permissionNoteReachesAgent(request: Pick<PermissionRequest, "agent">): boolean {
   return request.agent === "claude" || request.agent === "pi";
+}
+
+/** A prompt that asks the person something, rather than for an approval. */
+export function isQuestionPrompt(request: Pick<PermissionRequest, "questions">): boolean {
+  return (request.questions?.length ?? 0) > 0;
+}
+
+/**
+ * Whether the picks so far answer every question: at least one pick each,
+ * one at most unless the question allows several. Free text counts as a pick.
+ */
+export function answersComplete(request: Pick<PermissionRequest, "questions">, answers: PermissionAnswers): boolean {
+  return (request.questions ?? []).every((question) => {
+    const picks = answers[question.id] ?? [];
+    return picks.length > 0 && (question.multiSelect || picks.length === 1);
+  });
 }
 
 /**

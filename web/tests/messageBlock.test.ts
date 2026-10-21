@@ -141,6 +141,24 @@ describe("memoized transcript messages", () => {
   });
 });
 
+describe("projectMessages permission audit lines", () => {
+  it("records how each prompt closed: the person's answer, or that nobody answered", () => {
+    const messages = projectMessages(session([
+      { id: "ev_run", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_1", agent: "claude" },
+      { id: "ev_ask", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_1", runId: "run_1", agent: "claude", toolName: "Bash", input: "{}" } },
+      { id: "ev_q", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_2", runId: "run_1", agent: "claude", toolName: "AskUserQuestion", input: "{}", questions: [{ id: "Which?", text: "Which?", options: [{ label: "A" }] }] } },
+      { id: "ev_deny", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_1", decision: "deny", note: "Not that" },
+      { id: "ev_answer", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_2", decision: "allow", answers: { "Which?": ["A"] } },
+      { id: "ev_stale", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_unknown", decision: "allow" },
+    ]), t);
+    const lines = messages.filter((message) => message.kind === "system");
+    assert.deepEqual(lines.map((line) => line.kind === "system" && [line.label, line.detail, line.tone]), [
+      ["message.permission_deny", "Not that", "warn"],
+      ["message.permission_answered", "A", "info"],
+    ]);
+  });
+});
+
 describe("projectMessages artifact projection", () => {
   it("attaches structured collaboration events to the matching run", () => {
     const collaboration = {

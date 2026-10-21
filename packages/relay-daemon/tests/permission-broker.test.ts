@@ -1,17 +1,28 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { dirname } from "node:path";
-import { describe, it } from "node:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, describe, it } from "node:test";
 import { AGENT_NAMES, getAgent, type DaemonNodeEvent, type PermissionPromptAdapter } from "relay-core";
 
-import { permissionPromptsApply, startPermissionBroker, type PermissionBrokerOptions } from "../src/permission-broker.js";
+import { permissionPromptsApply, permissionTimeoutMs, startPermissionBroker, type PermissionBrokerOptions } from "../src/permission-broker.js";
 import { permissionAdapterLaunch, permissionAdapterScript } from "../src/permission-adapters/index.js";
-import { askBroker, runtimeEnv, type PermissionQuestion } from "../src/permission-adapters/protocol.js";
+import { askBroker, brokerAddress, runtimeEnv, type PermissionQuestion } from "../src/permission-adapters/protocol.js";
 
-/** Asks the broker at `socket` the way every adapter does. */
-function brokerClient(socket: string, secret: string) {
+const scratch = mkdtempSync(join(tmpdir(), "relay-broker-test-"));
+after(() => rmSync(scratch, { recursive: true, force: true }));
+
+/** An address file naming `socket` and `secret`, as the broker writes one. */
+function addressFile(socket: string, secret: string): string {
+  const file = join(scratch, `address-${Math.random().toString(16).slice(2)}.json`);
+  writeFileSync(file, JSON.stringify({ socket, secret }));
+  return file;
+}
+
+/** Asks the broker behind `env` the way every adapter does. */
+function brokerClient(env: { RELAY_PERMISSION_FILE: string }) {
   return (question: Omit<PermissionQuestion, "kind"> & { kind?: PermissionQuestion["kind"] }) =>
-    askBroker({ kind: "tool", ...question }, { RELAY_PERMISSION_SOCKET: socket, RELAY_PERMISSION_SECRET: secret });
+    askBroker({ kind: "tool", ...question }, env);
 }
 
 const command = { id: "cmd-1", sessionId: "session-1", runId: "run-1", agent: "claude" as const, leaseId: "lease-1" };
@@ -55,12 +66,14 @@ const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(
 async function ask(options: PermissionBrokerOptions, request: Omit<PermissionQuestion, "kind"> & { kind?: PermissionQuestion["kind"] }) {
   const broker = await startPermissionBroker(options);
   try {
-    const env = broker.env;
-    return await brokerClient(env.RELAY_PERMISSION_SOCKET, env.RELAY_PERMISSION_SECRET)(request);
+    return await brokerClient(broker.env)(request);
   } finally {
     await broker.close();
   }
 }
+
+const withdrawn = (posted: DaemonNodeEvent[]) =>
+  posted.filter((event): event is Extract<DaemonNodeEvent, { type: "run.permission_withdrawn" }> => event.type === "run.permission_withdrawn");
 
 describe("permission broker", () => {
   it("posts the request, then polls until a person allows it", async () => {
@@ -133,8 +146,7 @@ describe("permission broker", () => {
     const h = harness([json({ status: "pending" })], { signal: run.signal });
     const broker = await startPermissionBroker(h.options);
     try {
-      const env = broker.env;
-      const pending = brokerClient(env.RELAY_PERMISSION_SOCKET, env.RELAY_PERMISSION_SECRET)({ toolName: "Write", input: {} });
+      const pending = brokerClient(broker.env)({ toolName: "Write", input: {} });
       while (h.polls.length < 2) await new Promise((resolve) => setTimeout(resolve, 5));
       run.abort("Cancelled by human.");
       const decision = await pending;
@@ -143,21 +155,76 @@ describe("permission broker", () => {
       const polled = h.polls.length;
       await new Promise((resolve) => setTimeout(resolve, 30));
       assert.equal(h.polls.length, polled);
+      // The run ending expires its prompts on the backend; nothing to withdraw.
+      assert.equal(withdrawn(h.posted).length, 0);
     } finally {
       await broker.close();
     }
+  });
+
+  it("withdraws a prompt nobody answered before the deadline, and denies it", async () => {
+    const h = harness([json({ status: "pending" })], { timeoutMs: 40 });
+    const decision = await ask(h.options, { toolName: "Write", input: {} });
+    assert.equal(decision.behavior, "deny");
+    assert.match((decision as { message: string }).message, /No one answered in time/);
+    const [event] = withdrawn(h.posted);
+    const request = (h.posted[0] as Extract<DaemonNodeEvent, { type: "run.permission_requested" }>).request;
+    assert.deepEqual(event, {
+      type: "run.permission_withdrawn", commandId: "cmd-1", leaseId: "lease-1", sessionId: "session-1", runId: "run-1", agent: "claude",
+      requestId: request.id, reason: "No one answered in time.",
+    });
+  });
+
+  it("withdraws a prompt whose runtime hung up before the answer", async () => {
+    const h = harness([json({ status: "pending" })]);
+    const broker = await startPermissionBroker(h.options);
+    try {
+      const { connect } = await import("node:net");
+      const address = brokerAddress(broker.env)!;
+      const socket = connect(address.socket);
+      await new Promise<void>((resolve) => socket.on("connect", resolve));
+      socket.write(`${JSON.stringify({ secret: address.secret, kind: "tool", toolName: "Write", input: {} })}\n`);
+      while (h.polls.length < 1) await new Promise((resolve) => setTimeout(resolve, 5));
+      socket.destroy();
+      while (withdrawn(h.posted).length < 1) await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(withdrawn(h.posted)[0].reason, "The permission prompt disconnected.");
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it("reads the deadline from the environment, 0 waiting forever", () => {
+    assert.equal(permissionTimeoutMs({}), 30 * 60_000);
+    assert.equal(permissionTimeoutMs({ RELAY_DAEMON_PERMISSION_TIMEOUT_MS: "5000" }), 5000);
+    assert.equal(permissionTimeoutMs({ RELAY_DAEMON_PERMISSION_TIMEOUT_MS: "0" }), 0);
+    assert.equal(permissionTimeoutMs({ RELAY_DAEMON_PERMISSION_TIMEOUT_MS: "soon" }), 30 * 60_000);
   });
 
   it("refuses a caller without the run's secret and asks nobody", async () => {
     const h = harness([json({ status: "allow" })]);
     const broker = await startPermissionBroker(h.options);
     try {
-      const decision = await brokerClient(broker.env.RELAY_PERMISSION_SOCKET, "wrong")({ toolName: "Write", input: {} });
+      const decision = await brokerClient({ RELAY_PERMISSION_FILE: addressFile(broker.socketPath, "wrong") })({ toolName: "Write", input: {} });
       assert.equal(decision.behavior, "deny");
       assert.equal(h.posted.length, 0);
+      const unconfigured = await askBroker({ kind: "tool", toolName: "Write", input: {} }, {});
+      assert.match(unconfigured.message ?? "", /not configured/);
     } finally {
       await broker.close();
     }
+  });
+
+  it("carries a question's choices to the backend and the person's answers back", async () => {
+    const h = harness([json({ status: "allow", answers: { "Which?": ["B"], ignored: [] } })]);
+    const questions = [{ id: "Which?", text: "Which?", options: [{ label: "A" }, { label: "B", description: "second" }], multiSelect: true }];
+    const decision = await ask(h.options, { kind: "question", toolName: "AskUserQuestion", input: { questions: [] }, questions });
+    assert.deepEqual(decision, { behavior: "allow", answers: { "Which?": ["B"] } });
+    const request = (h.posted[0] as Extract<DaemonNodeEvent, { type: "run.permission_requested" }>).request;
+    assert.deepEqual(request.questions, questions);
+    // A question with no well-formed questions is an ordinary approval.
+    const plain = harness([json({ status: "allow" })]);
+    await ask(plain.options, { kind: "question", toolName: "AskUserQuestion", input: {}, questions: [{ id: "", text: "", options: [] }] });
+    assert.equal((plain.posted[0] as Extract<DaemonNodeEvent, { type: "run.permission_requested" }>).request.questions, undefined);
   });
 
   it("answers overlapping questions independently", async () => {
@@ -175,7 +242,7 @@ describe("permission broker", () => {
     }) as typeof fetch;
     const broker = await startPermissionBroker(h.options);
     try {
-      const client = brokerClient(broker.env.RELAY_PERMISSION_SOCKET, broker.env.RELAY_PERMISSION_SECRET);
+      const client = brokerClient(broker.env);
       const [write, bash] = await Promise.all([
         client({ toolName: "Write", input: {} }),
         client({ toolName: "Bash", input: {} }),
@@ -196,14 +263,21 @@ describe("permission broker", () => {
     assert.ok(input.endsWith("…"));
   });
 
-  it("serves a private socket it removes on close", async () => {
+  it("serves a private socket and a 0600 address file, both removed on close", async () => {
     const h = harness([json({ status: "allow" })]);
     const broker = await startPermissionBroker(h.options);
-    assert.equal(broker.env.RELAY_PERMISSION_SOCKET, broker.socketPath);
-    assert.match(broker.env.RELAY_PERMISSION_SECRET, /^[0-9a-f]{64}$/);
+    const file = broker.env.RELAY_PERMISSION_FILE;
+    assert.equal(file, join(broker.privateDir, "broker.json"));
+    assert.equal(statSync(broker.privateDir).mode & 0o777, 0o700);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    const address = JSON.parse(readFileSync(file, "utf8")) as { socket: string; secret: string };
+    assert.equal(address.socket, broker.socketPath);
+    assert.match(address.secret, /^[0-9a-f]{64}$/);
     assert.ok(existsSync(broker.socketPath));
+    // Only the file's path reaches a runtime, never the secret.
+    assert.deepEqual(Object.keys(broker.env), ["RELAY_PERMISSION_FILE"]);
     await broker.close();
-    assert.equal(existsSync(dirname(broker.socketPath)), false);
+    assert.equal(existsSync(broker.privateDir), false);
   });
 
   it("carries a question's kind and reason, folding the reason into the shown input", async () => {
@@ -216,7 +290,7 @@ describe("permission broker", () => {
 
 describe("permission adapter launch", () => {
   it("runs each adapter's compiled script with the daemon's node and the broker env", () => {
-    const env = { RELAY_PERMISSION_SOCKET: "/tmp/s.sock", RELAY_PERMISSION_SECRET: "abc" };
+    const env = { RELAY_PERMISSION_FILE: "/tmp/relay-perm-x/broker.json" };
     const adapters = new Set<PermissionPromptAdapter>();
     for (const name of AGENT_NAMES) {
       const support = getAgent(name).permissionPrompts;
@@ -250,8 +324,8 @@ describe("permissionPromptsApply", () => {
 });
 
 describe("runtimeEnv", () => {
-  it("keeps the broker's address and secret away from the runtime and its tools", () => {
-    const env = runtimeEnv({ PATH: "/usr/bin", HOME: "/home/a", RELAY_PERMISSION_SOCKET: "/tmp/s", RELAY_PERMISSION_SECRET: "x", RELAY_BACKEND_URL: "http://b" });
+  it("keeps the broker's address away from the runtime and its tools", () => {
+    const env = runtimeEnv({ PATH: "/usr/bin", HOME: "/home/a", RELAY_PERMISSION_FILE: "/tmp/s/broker.json", RELAY_BACKEND_URL: "http://b" });
     assert.deepEqual(env, { PATH: "/usr/bin", HOME: "/home/a", RELAY_BACKEND_URL: "http://b" });
   });
 });

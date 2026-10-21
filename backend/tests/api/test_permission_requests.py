@@ -237,3 +237,125 @@ def test_a_malformed_prompt_is_refused(monkeypatch) -> None:
             headers=NODE_AUTH,
         )
         assert response.status_code == 400
+
+
+QUESTIONS = [
+    {"id": "db", "text": "Which database?", "options": [{"label": "Postgres", "description": "shared"}, {"label": "SQLite"}]},
+    {"id": "name", "text": "Service name?", "options": [], "multiSelect": True},
+]
+
+
+def test_a_question_prompt_carries_the_persons_answers_to_the_daemon(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command, toolName="AskUserQuestion", questions=QUESTIONS)
+
+        [prompt] = client.get(f"/api/v1/threads/{session_id}").json()["permissionRequests"]
+        assert prompt["questions"] == QUESTIONS
+
+        # Every question needs an answer, one each unless it allows several.
+        assert _answer(client, session_id, decision="allow").status_code == 400
+        assert _answer(client, session_id, decision="allow", answers={"db": ["SQLite"]}).status_code == 400
+        assert _answer(
+            client, session_id, decision="allow", answers={"db": ["SQLite", "Postgres"], "name": ["relay"]},
+        ).status_code == 400
+        answered = _answer(
+            client, session_id, decision="allow", answers={"db": "SQLite", "name": ["relay", " api "]},
+        )
+        assert answered.status_code == 200, answered.text
+        [decision] = answered.json()["permissionDecisions"]
+        assert decision["answers"] == {"db": ["SQLite"], "name": ["relay", "api"]}
+        assert _poll(client, session_id).json() == {
+            "status": "allow", "answers": {"db": ["SQLite"], "name": ["relay", "api"]},
+        }
+
+
+def test_a_skipped_question_and_a_plain_prompt_take_no_answers(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command, toolName="AskUserQuestion", questions=QUESTIONS)
+        assert _answer(client, session_id, decision="deny").status_code == 200
+        assert _poll(client, session_id).json() == {"status": "deny"}
+
+
+def test_a_plain_prompt_ignores_answers(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        _ask(client, _dispatched_run(app, session_id))
+        allowed = _answer(client, session_id, decision="allow", answers={"db": ["x"]})
+        assert allowed.status_code == 200
+        assert "answers" not in allowed.json()["permissionDecisions"][0]
+
+
+def test_the_daemon_may_withdraw_its_own_prompt(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command)
+
+        withdraw = {
+            "type": "run.permission_withdrawn",
+            "commandId": command["id"],
+            "sessionId": session_id,
+            "runId": command["runId"],
+            "agent": "claude",
+            "requestId": REQUEST_ID,
+            "reason": "No one answered within 30 minutes.",
+        }
+        response = client.post("/api/v1/daemon-nodes/sbx_alice/events", json=withdraw, headers=NODE_AUTH)
+        assert response.status_code == 200, response.text
+        thread = client.get(f"/api/v1/threads/{session_id}").json()
+        assert not thread.get("permissionRequests")
+        [decision] = thread["permissionDecisions"]
+        assert decision["decision"] == "expired"
+        assert decision["note"] == "No one answered within 30 minutes."
+        assert "decidedBy" not in decision
+        assert _poll(client, session_id).json() == {
+            "status": "expired", "note": "No one answered within 30 minutes.",
+        }
+        # Withdrawing again, or an unknown prompt, changes nothing.
+        assert client.post("/api/v1/daemon-nodes/sbx_alice/events", json=withdraw, headers=NODE_AUTH).status_code == 200
+        assert len(client.get(f"/api/v1/threads/{session_id}").json()["permissionDecisions"]) == 1
+        malformed = client.post(
+            "/api/v1/daemon-nodes/sbx_alice/events", json={**withdraw, "requestId": "nope"}, headers=NODE_AUTH,
+        )
+        assert malformed.status_code == 400
+
+
+def test_a_prompt_notifies_the_threads_owner_once(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command)
+        _ask(client, command)  # the retried post is not news
+
+        inbox = client.get("/api/v1/notifications").json()
+        prompts = [item for item in inbox["notifications"] if item["kind"] == "permission_requested"]
+        assert len(prompts) == 1
+        assert prompts[0]["data"]["sessionId"] == session_id
+        assert prompts[0]["data"]["requestId"] == REQUEST_ID
+        assert prompts[0]["data"]["toolName"] == "Bash"
+        assert prompts[0]["data"]["question"] is False
+        assert "permission_requested" in client.get("/api/v1/notifications/preferences").json()["kinds"]

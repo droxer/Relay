@@ -124,6 +124,18 @@ CASES: list[tuple[str, dict[str, Any]]] = [
     ("permission", run("run.permission_requested", request=PERMISSION)),
     ("permission_not_dict", run("run.permission_requested", request="x")),
     ("permission_bad_tool", run("run.permission_requested", request={**PERMISSION, "toolName": " "})),
+    ("permission_question", run("run.permission_requested", request={**PERMISSION, "questions": [
+        {"id": "db", "text": " Which? ", "options": [{"label": "A", "description": "first"}, {"label": "B"}], "multiSelect": True},
+    ]})),
+    ("permission_question_bad_option", run("run.permission_requested", request={**PERMISSION, "questions": [
+        {"id": "db", "text": "Which?", "options": [{"label": ""}]},
+    ]})),
+    ("permission_too_many_questions", run("run.permission_requested", request={**PERMISSION, "questions": [
+        {"id": str(index), "text": "q", "options": []} for index in range(5)
+    ]})),
+    ("permission_withdrawn", run("run.permission_withdrawn", requestId="perm_0123abcd", reason=" gave up ")),
+    ("permission_withdrawn_bare", run("run.permission_withdrawn", requestId="perm_0123abcd")),
+    ("permission_withdrawn_bad_id", run("run.permission_withdrawn", requestId="nope", reason="x")),
     # run.output
     ("output", run("run.output", stream="stderr", sequence=4.9, text="  hi  ")),
     ("output_replayed", run("run.output", stream="stdout", sequence=1, text="", replayed=True)),
@@ -462,6 +474,52 @@ EXPECTED: dict[str, tuple[str, Any]] = {
     ),
     "permission_not_dict": ("error", "invalid run.permission_requested request."),
     "permission_bad_tool": ("error", "invalid permission request toolName."),
+    "permission_question": (
+        "ok",
+        {
+            "type": "run.permission_requested",
+            "commandId": "cmd-1",
+            "leaseId": "lease-1",
+            "sessionId": "sess-1",
+            "runId": "run-1",
+            "agent": "claude",
+            "request": {
+                "id": "perm_0123abcd", "toolName": "Bash", "input": "ls", "toolUseId": "tu-1",
+                "questions": [
+                    {"id": "db", "text": "Which?", "options": [{"label": "A", "description": "first"}, {"label": "B"}], "multiSelect": True},
+                ],
+            },
+        },
+    ),
+    "permission_question_bad_option": ("error", "invalid permission request question option."),
+    "permission_too_many_questions": ("error", "invalid permission request questions."),
+    "permission_withdrawn": (
+        "ok",
+        {
+            "type": "run.permission_withdrawn",
+            "commandId": "cmd-1",
+            "leaseId": "lease-1",
+            "sessionId": "sess-1",
+            "runId": "run-1",
+            "agent": "claude",
+            "requestId": "perm_0123abcd",
+            "reason": "gave up",
+        },
+    ),
+    "permission_withdrawn_bare": (
+        "ok",
+        {
+            "type": "run.permission_withdrawn",
+            "commandId": "cmd-1",
+            "leaseId": "lease-1",
+            "sessionId": "sess-1",
+            "runId": "run-1",
+            "agent": "claude",
+            "requestId": "perm_0123abcd",
+            "reason": "The run stopped waiting for an answer.",
+        },
+    ),
+    "permission_withdrawn_bad_id": ("error", "invalid permission request id."),
     "output": (
         "ok",
         {

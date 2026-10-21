@@ -440,6 +440,30 @@ export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: 
 /** Longest tool input, in characters, a permission request carries. */
 export const PERMISSION_INPUT_LIMIT = 4000;
 
+/** Most questions one prompt may carry; the backend refuses more. */
+export const PERMISSION_QUESTIONS_LIMIT = 4;
+/** Most offered answers per question. */
+export const PERMISSION_OPTIONS_LIMIT = 8;
+/** Longest question text, option label, or free-text answer. */
+export const PERMISSION_TEXT_LIMIT = 500;
+
+/**
+ * One question a runtime's "ask the user" tool poses mid-run (Claude's
+ * AskUserQuestion, Codex's request_user_input, Kimi's AskUserQuestion). The
+ * person picks from `options` or writes an answer; `multiSelect` allows
+ * several picks.
+ */
+export interface PermissionQuestionItem {
+  /** The runtime's own key for the question; answers are keyed by it. */
+  id: string;
+  text: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect?: boolean;
+}
+
+/** A person's answers, by question id; each a non-empty list of labels or free text. */
+export type PermissionAnswers = Record<string, string[]>;
+
 /** One tool use a runtime wants a person to approve. */
 export interface DaemonPermissionRequest {
   /** Daemon-minted id, `perm_<hex>`; the poll route names it. */
@@ -448,12 +472,16 @@ export interface DaemonPermissionRequest {
   toolUseId?: string;
   /** The tool input as JSON, capped at PERMISSION_INPUT_LIMIT characters. */
   input: string;
+  /** Set when the tool is a question for the person rather than an action. */
+  questions?: PermissionQuestionItem[];
 }
 
 /** Answer to `GET /daemon-nodes/{id}/permission-requests/{requestId}`. */
 export interface DaemonPermissionDecision {
   status: "pending" | "allow" | "deny" | "expired";
   note?: string;
+  /** The person's answers to a question prompt, on `allow`. */
+  answers?: PermissionAnswers;
 }
 
 export type DaemonNodeEvent =
@@ -478,6 +506,18 @@ export type DaemonNodeEvent =
       runId: string;
       agent: AgentName;
       request: DaemonPermissionRequest;
+    }
+  | {
+      /** The run stopped waiting on a prompt (its runtime gave up, or the
+       *  daemon's deadline passed), so the prompt closes as expired. */
+      type: "run.permission_withdrawn";
+      commandId: string;
+      leaseId?: string;
+      sessionId: string;
+      runId: string;
+      agent: AgentName;
+      requestId: string;
+      reason: string;
     }
   | {
       type: "run.workspace";

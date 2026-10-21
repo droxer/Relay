@@ -151,6 +151,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         decision: event.decision,
         resolvedAt: event.timestamp,
         ...(event.note ? { note: event.note } : {}),
+        ...(event.answers ? { answers: event.answers } : {}),
         ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
       });
     case "artifact.created": {

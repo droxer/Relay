@@ -139,7 +139,11 @@ def create_app(
             team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
         )
     registry = DaemonNodeRegistry(
-        stores.sessions, stores.daemon, task_store=stores.tasks, project_store=stores.projects
+        stores.sessions,
+        stores.daemon,
+        task_store=stores.tasks,
+        project_store=stores.projects,
+        notification_store=stores.notifications,
     )
     backend = ServerDaemonNodeBackend(
         registry,

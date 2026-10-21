@@ -87,7 +87,7 @@ def test_muted_kinds_hide_notices_until_unmuted(ada: TestClient) -> None:
     ada.put(f"{API}/notifications/preferences", json={"mutedKinds": []})
     assert ada.get(f"{API}/notifications").json()["unreadCount"] == 1
     assert set(ada.get(f"{API}/notifications/preferences").json()["kinds"]) == {
-        "task_completed", "computer_status", "client_outdated",
+        "task_completed", "permission_requested", "computer_status", "client_outdated",
     }
 
 

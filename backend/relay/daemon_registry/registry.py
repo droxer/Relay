@@ -65,6 +65,7 @@ class DaemonNodeRegistry(
         *,
         task_store: TaskStore | None = None,
         project_store: Any = None,
+        notification_store: Any = None,
         liveness_timeout_ms: int = config.DAEMON_NODE_LIVENESS_TIMEOUT_MS,
     ):
         self.store = store
@@ -72,6 +73,9 @@ class DaemonNodeRegistry(
         self.daemon_store.session_store = store
         self.task_store = task_store
         self.project_store = project_store
+        # Tells a thread's owner about a prompt their run is paused on; None
+        # (tests, tools) notifies nobody.
+        self.notification_store = notification_store
         self.liveness_timeout_ms = liveness_timeout_ms
         self.sandboxes: dict[str, dict[str, Any]] = {}
         self.active_commands: dict[str, dict[str, Any]] = {}

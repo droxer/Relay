@@ -8,10 +8,13 @@
 // Needed": routine edits and commands run, risky actions still ask. Each ask
 // (`session/request_permission`) becomes one broker question; the answer picks
 // the one-shot option (allow_once / reject_once), never an "always" rule.
+// Verified against kimi-code 2.0.2; re-check `ASK_WHEN_NEEDED_MODE` and the
+// AskUserQuestion option ids on upgrade.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import type { PermissionQuestionItem } from "relay-core";
 import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
 
 export type AskBroker = (question: PermissionQuestion) => Promise<PermissionAnswer>;
@@ -191,9 +194,24 @@ export async function answerPermissionRequest(
   const toolCallId = typeof toolCall.toolCallId === "string" ? toolCall.toolCallId : undefined;
   const known = toolCallId ? translator.toolCall(toolCallId) : undefined;
   const toolName = typeof toolCall.title === "string" && toolCall.title ? toolCall.title : known?.name ?? "tool";
-  // A question (AskUserQuestion) wants one of several answers, which a
-  // yes/no prompt cannot give; Kimi treats the skip as "dismissed".
-  if (isQuestion(toolName, options)) return selected(options, "reject_once");
+  // A question (AskUserQuestion) offers its answers as the permission
+  // options; the person's pick selects the option carrying that label. One
+  // ACP reply names one option, so only the first question's first pick can
+  // be carried; a pick with no matching option skips the question, which
+  // Kimi treats as "dismissed".
+  if (isQuestion(toolName, options)) {
+    const questions = askUserQuestions(toolCall.rawInput ?? known?.rawInput);
+    if (!questions) return selected(options, "reject_once");
+    let answer: PermissionAnswer;
+    try {
+      answer = await ask({ kind: "question", toolName, input: toolCall.rawInput ?? known?.rawInput ?? {}, ...(toolCallId ? { toolUseId: toolCallId } : {}), questions });
+    } catch {
+      answer = { behavior: "deny" };
+    }
+    const pick = answer.behavior === "allow" ? answer.answers?.[questions[0].id]?.[0] : undefined;
+    const option = pick === undefined ? undefined : options.find((candidate) => candidate.name === pick);
+    return option ? { outcome: { outcome: "selected", optionId: option.optionId } } : selected(options, "reject_once");
+  }
   let answer: PermissionAnswer;
   try {
     answer = await ask(permissionQuestion(toolName, toolCall, known, toolCallId));
@@ -201,6 +219,26 @@ export async function answerPermissionRequest(
     answer = { behavior: "deny" };
   }
   return selected(options, answer.behavior === "allow" ? "allow_once" : "reject_once");
+}
+
+/** Kimi's AskUserQuestion input mirrors Claude's: `questions[{question, options[{label, description}], multiSelect}]`. */
+export function askUserQuestions(input: unknown): PermissionQuestionItem[] | undefined {
+  const raw = asRecord(input).questions;
+  if (!Array.isArray(raw)) return undefined;
+  const questions = raw.flatMap((item) => {
+    const question = asRecord(item);
+    const text = typeof question.question === "string" ? question.question.trim() : "";
+    if (!text) return [];
+    const options = (Array.isArray(question.options) ? question.options : []).flatMap((option) => {
+      const label = asRecord(option).label;
+      const description = asRecord(option).description;
+      return typeof label === "string" && label.trim()
+        ? [{ label: label.trim(), ...(typeof description === "string" && description.trim() ? { description: description.trim() } : {}) }]
+        : [];
+    });
+    return [{ id: text, text, options, ...(question.multiSelect === true ? { multiSelect: true } : {}) }];
+  });
+  return questions.length ? questions : undefined;
 }
 
 function permissionQuestion(
@@ -236,6 +274,8 @@ export function questionKind(acpKind: string | undefined, toolName: string): Per
 interface PermissionOption {
   optionId: string;
   kind: string;
+  /** The label Kimi shows for the option; a question's answers carry theirs here. */
+  name?: string;
 }
 
 function permissionOptions(value: unknown): PermissionOption[] {
@@ -243,7 +283,7 @@ function permissionOptions(value: unknown): PermissionOption[] {
   return value.flatMap((option) => {
     const record = asRecord(option);
     return typeof record.optionId === "string" && typeof record.kind === "string"
-      ? [{ optionId: record.optionId, kind: record.kind }]
+      ? [{ optionId: record.optionId, kind: record.kind, ...(typeof record.name === "string" ? { name: record.name } : {}) }]
       : [];
   });
 }

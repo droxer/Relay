@@ -144,9 +144,17 @@ def answer_permission_request(
     note = string_field(body, "note")
     if len(note) > PERMISSION_NOTE_MAX_CHARS:
         raise HTTPException(400, "note is too long.")
-    result = SessionController(ctx.session_store).resolve_permission_request(
-        session_id, request_id, decision, note or None, actor_user_id=actor["userId"]
-    )
+    try:
+        result = SessionController(ctx.session_store).resolve_permission_request(
+            session_id,
+            request_id,
+            decision,
+            note or None,
+            answers=body.get("answers"),
+            actor_user_id=actor["userId"],
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if result is None:
         raise HTTPException(409, "permission_request_closed")
     return result

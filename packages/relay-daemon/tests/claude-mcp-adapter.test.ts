@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -51,13 +51,17 @@ function toolText(response: Record<string, any>): Record<string, unknown> {
 describe("Claude permission adapter (MCP server)", () => {
   let directory: string;
   let socketPath: string;
+  let addressFile: string;
   let broker: Server;
   const seen: Array<Record<string, unknown>> = [];
+  const brokerEnv = () => ({ RELAY_PERMISSION_FILE: addressFile });
 
   before(async () => {
     directory = mkdtempSync(join(tmpdir(), "relay-mcp-test-"));
     socketPath = join(directory, "broker.sock");
-    // A fake broker: Bash is denied with a note, anything else is allowed.
+    addressFile = join(directory, "broker.json");
+    writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret: SECRET }));
+    // A fake broker: Bash is denied with a note, a question is answered, anything else is allowed.
     broker = createServer((socket) => {
       socket.setEncoding("utf8");
       let buffer = "";
@@ -70,7 +74,9 @@ describe("Claude permission adapter (MCP server)", () => {
           ? { behavior: "deny", message: "wrong secret" }
           : request.toolName === "Bash"
             ? { behavior: "deny", message: "Not that command." }
-            : { behavior: "allow" };
+            : request.kind === "question"
+              ? { behavior: "allow", answers: { "Which database?": ["Postgres", "SQLite"] } }
+              : { behavior: "allow" };
         socket.end(`${JSON.stringify(decision)}\n`);
       });
     });
@@ -83,7 +89,7 @@ describe("Claude permission adapter (MCP server)", () => {
   });
 
   it("initializes, lists the approve tool, and answers ping and unknown methods", async () => {
-    const rpc = startMcp({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const rpc = startMcp(brokerEnv());
     try {
       rpc.send({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {} } });
       const init = await rpc.response(1);
@@ -110,7 +116,7 @@ describe("Claude permission adapter (MCP server)", () => {
   });
 
   it("defaults the protocol version when the client names none", async () => {
-    const rpc = startMcp({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const rpc = startMcp(brokerEnv());
     try {
       rpc.send({ id: 1, method: "initialize", params: {} });
       assert.equal((await rpc.response(1)).result.protocolVersion, "2024-11-05");
@@ -120,7 +126,7 @@ describe("Claude permission adapter (MCP server)", () => {
   });
 
   it("relays allow with the original input and deny with the broker's message", async () => {
-    const rpc = startMcp({ RELAY_PERMISSION_SOCKET: socketPath, RELAY_PERMISSION_SECRET: SECRET });
+    const rpc = startMcp(brokerEnv());
     try {
       const input = { file_path: "/tmp/a.txt", content: "hi" };
       rpc.send({ id: 5, method: "tools/call", params: { name: "approve", arguments: { tool_name: "Write", input, tool_use_id: "toolu_1" } } });
@@ -134,8 +140,31 @@ describe("Claude permission adapter (MCP server)", () => {
     }
   });
 
+  it("answers AskUserQuestion with the person's picks on updatedInput", async () => {
+    const rpc = startMcp(brokerEnv());
+    try {
+      const input = {
+        questions: [{ question: "Which database?", header: "Database", multiSelect: true, options: [{ label: "Postgres", description: "shared" }, { label: "SQLite" }] }],
+      };
+      rpc.send({ id: 9, method: "tools/call", params: { name: "approve", arguments: { tool_name: "AskUserQuestion", input, tool_use_id: "toolu_q" } } });
+      assert.deepEqual(toolText(await rpc.response(9)), {
+        behavior: "allow",
+        updatedInput: { ...input, answers: { "Which database?": "Postgres, SQLite" } },
+      });
+      const asked = seen.find((request) => request.toolUseId === "toolu_q");
+      assert.equal(asked?.kind, "question");
+      assert.deepEqual(asked?.questions, [
+        { id: "Which database?", text: "Which database?", options: [{ label: "Postgres", description: "shared" }, { label: "SQLite" }], multiSelect: true },
+      ]);
+    } finally {
+      rpc.close();
+    }
+  });
+
   it("denies when the broker cannot be reached", async () => {
-    const rpc = startMcp({ RELAY_PERMISSION_SOCKET: join(directory, "missing.sock"), RELAY_PERMISSION_SECRET: SECRET });
+    const missing = join(directory, "missing.json");
+    writeFileSync(missing, JSON.stringify({ socket: join(directory, "missing.sock"), secret: SECRET }));
+    const rpc = startMcp({ RELAY_PERMISSION_FILE: missing });
     try {
       rpc.send({ id: 7, method: "tools/call", params: { name: "approve", arguments: { tool_name: "Write", input: {} } } });
       const answer = toolText(await rpc.response(7));
