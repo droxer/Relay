@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getRuntimeRefresh, requestRuntimeRefresh } from "../../api";
 import { Button } from "../ui/button";
+import { ICON, NavRefresh } from "../icons";
 import { useKeyChange } from "../../hooks/useKeyChange";
 
 export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
@@ -51,10 +52,13 @@ export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
     }
   }
   return <>
-    <Button type="button" variant="ghost" size="dense" onClick={() => { void refresh(); }}
+    {/* A quiet glyph beside the section label: refreshing is occasional, so
+        it does not earn a labelled button on every card. The tooltip names
+        it, and the outcome still reads out in words beside it. */}
+    <Button type="button" variant="icon" size="icon-dense" onClick={() => { void refresh(); }}
       disabled={!online || !supported || status === "pending"}
-      title={!supported ? t("computer.refresh_upgrade") : undefined}>
-      {t("computer.refresh_runtimes")}
+      tooltip={supported ? t("computer.refresh_runtimes") : t("computer.refresh_upgrade")}>
+      <NavRefresh size={ICON.sm} aria-hidden="true" />
     </Button>
     {status !== "idle" && <span role="status">{t(`computer.refresh_${status === "pending" && busy ? "waiting" : status}`)}</span>}
   </>;
