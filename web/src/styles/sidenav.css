@@ -176,12 +176,16 @@
    expanded-only layout; collapsed keeps the column, just at the dense tier. */
 .sidenav-panel[data-expanded="true"] .sidenav-bottom {
   flex-direction: row;
-  /* Wrap, never clip: seven 28px squares need 220px and the open rail
-     leaves ~196px inside its padding — less once dragged toward its floor. */
+  /* Wrap so the setup chip can take its own row (onboarding.css), but never
+     strand a square: lines break on each square's 24px basis (below), so
+     all six fit one line even at the rail's 180px floor (164px inside the
+     panel padding, the footer's own inset dropped); with room they grow
+     back to 28px and the leftover space goes to the auto-margin gap. */
   flex-wrap: wrap;
+  gap: var(--sp-0-5);
   row-gap: var(--sp-1);
   align-items: center;
-  padding: var(--sp-2) var(--sp-2) 0;
+  padding: var(--sp-2) 0 0;
 }
 
 /* `padding: 0` is load-bearing: these three are <Button> primitives, whose
@@ -198,8 +202,10 @@
    than `.sidenav-label` ones, so the expanded reveal never reaches them and
    nothing here has to hide them again. */
 .sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn {
-  flex: 0 0 auto;
-  width: var(--control-h-xs);
+  flex: 1 1 var(--control-h-2xs);
+  min-width: var(--control-h-2xs);
+  max-width: var(--control-h-xs);
+  width: auto;
   height: var(--control-h-xs);
   padding: 0;
   justify-content: center;

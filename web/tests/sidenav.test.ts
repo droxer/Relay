@@ -152,6 +152,18 @@ describe("sidenav footer", () => {
     assert.match(footer, /flex-wrap: wrap;/);
   });
 
+  it("keeps every footer square on one line down to the rail's floor", () => {
+    // Lines break on the flex basis, so the squares wrap on a 24px basis and
+    // grow back to 28px: six fit the 164px row at the 180px floor, where a
+    // fixed 28px basis stranded admin + collapse on a second line.
+    const css = readWeb("src/styles/sidenav.css");
+    const square = rule(css, `.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn`);
+    assert.match(square, /flex: 1 1 var\(--control-h-2xs\);/);
+    assert.match(square, /max-width: var\(--control-h-xs\);/);
+    const footer = rule(css, `.sidenav-panel[data-expanded="true"] .sidenav-bottom`);
+    assert.match(footer, /padding: var\(--sp-2\) 0 0;/);
+  });
+
   it("gives the setup chip its own labelled row in the open rail", () => {
     const css = readWeb("src/styles/onboarding.css");
     const row = rule(css, `.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn.sidenav-onboarding`);
