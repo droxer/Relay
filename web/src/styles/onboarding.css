@@ -281,3 +281,23 @@ button.onboarding-starter {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
+
+.sidenav-onboarding-label {
+  display: none;
+}
+
+/* Open rail: the chip leaves the square row for a labelled row of its own
+   above it — "Get started" and the fraction — so the squares keep their room
+   and the fraction finally says what it counts. Collapsed it stays a square. */
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn.sidenav-onboarding {
+  order: -1;
+  flex: 1 0 100%;
+  justify-content: space-between;
+  padding-inline: var(--sp-2);
+}
+
+.sidenav-panel[data-expanded="true"] .sidenav-onboarding-label {
+  display: inline;
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}

@@ -136,3 +136,27 @@ describe("sidenav destinations", () => {
     }
   });
 });
+
+describe("sidenav footer", () => {
+  const readWeb = (path: string) => readFileSync(resolve("web", path), "utf8");
+  const rule = (css: string, selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    assert.ok(at >= 0, `missing rule ${selector}`);
+    return css.slice(at, css.indexOf("}", at));
+  };
+
+  it("wraps the expanded footer row instead of clipping squares past the rail edge", () => {
+    // Seven 28px squares need 220px; the open rail leaves ~196px inside its
+    // padding (and less once dragged toward its 180px floor).
+    const footer = rule(readWeb("src/styles/sidenav.css"), `.sidenav-panel[data-expanded="true"] .sidenav-bottom`);
+    assert.match(footer, /flex-wrap: wrap;/);
+  });
+
+  it("gives the setup chip its own labelled row in the open rail", () => {
+    const css = readWeb("src/styles/onboarding.css");
+    const row = rule(css, `.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn.sidenav-onboarding`);
+    assert.match(row, /flex: 1 0 100%;/);
+    assert.match(row, /order: -1;/);
+    assert.match(readWeb("src/components/SideNav.tsx"), /className="sidenav-onboarding-label"[^>]*>\{t\("onboarding\.eyebrow"\)\}/);
+  });
+});
