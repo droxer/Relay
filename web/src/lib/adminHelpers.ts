@@ -115,7 +115,7 @@ export function isNodeOnline(node: ControlPanelDaemonNodeRecord): boolean {
 
 // Canonical semantics (lib/statusTone.ts): active work → info, queued/paused
 // → warn, ready → good, failure → bad, absence/unknown → neutral. `stale` is
-// degraded rather than broken, so it takes the same amber the fleet readout
+// degraded rather than broken, so it takes the same gold the fleet readout
 // on the dashboard already draws it with.
 export function statusTone(status: string): Tone {
   if (status === "ready") return "good";
@@ -279,7 +279,7 @@ export function userSummaryStatus(
   // One bucket ("Failed / stale" — the machines that need attention), two
   // severities. Its tone follows the worst machine in it: a failure is bad,
   // but a computer that has only stopped checking in is degraded, the same
-  // amber `statusTone("stale")` gives it everywhere else. The whole bucket
+  // gold `statusTone("stale")` gives it everywhere else. The whole bucket
   // painted red made a user with one quiet laptop look like an incident.
   if (member.failedCount > 0) {
     const anyFailed = member.nodes.some((node) => visualStatus(node) === "failed");

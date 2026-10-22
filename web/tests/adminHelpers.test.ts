@@ -170,7 +170,7 @@ describe("statusTone", () => {
   });
   it("keeps the critical tone for failure and spends nothing on absence", () => {
     // A computer that has not checked in lately is degraded, not broken, and
-    // takes the same amber the control panel's fleet readout already draws it
+    // takes the same gold the control panel's fleet readout already draws it
     // with; a computer that is simply not connected is a resting state. Red is
     // reserved for something that actually went wrong.
     assert.equal(statusTone("stale"), "warn");
@@ -250,7 +250,7 @@ describe("buildUserSummaries", () => {
 
   it("reads a fleet whose only problem is a quiet computer as degraded, not failed", () => {
     // Same "Failed / stale" bucket for filtering and sorting, but the tone
-    // follows the worst machine in it: a lapsed heartbeat is amber everywhere
+    // follows the worst machine in it: a lapsed heartbeat is gold everywhere
     // else in the app, so it must not turn the user's card red.
     const nodes = [node({ id: "n1", userId: "bob", stale: true, status: "ready" })];
     const bob = buildUserSummaries([user({ id: "bob" })], nodes).find((s) => s.id === "bob");

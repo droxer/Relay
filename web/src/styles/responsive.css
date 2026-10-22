@@ -510,7 +510,7 @@
   }
 
   /* The desktop rail's left accent bar is a vertical-list cue; on a
-     horizontal strip it read as a stray blue line beside the tab. */
+     horizontal strip it read as a stray accent line beside the tab. */
   .sidenav-btn.active::after {
     display: none;
   }

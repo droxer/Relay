@@ -140,7 +140,7 @@
 
 /* The product's primary plate: the same --action fill and ink every default
    Button wears inside the app, so the first click a visitor makes is the
-   brand blue. */
+   brand orange. */
 .landing-button-primary {
   background: var(--action);
   color: var(--on-action);

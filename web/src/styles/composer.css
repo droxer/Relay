@@ -53,7 +53,7 @@
 
 /* Ownership reads on the mark, matching the fleet badges: a cloud computer
    Relay runs steps down a rung of ink while a person's own machine keeps
-   full ink. Yellow is reserved for action/live, so it can't carry
+   full ink. Accent hues are reserved for action/live, so they can't carry
    ownership. */
 .thread-runtime-select[data-ownership="managed"] > svg {
   color: var(--ink-2);
@@ -355,7 +355,7 @@
 
 /* Running state — a quiet --live hairline outside the edge at the one
    accent-edge strength (--tone-line): purple means an agent is working, and
-   the button blue would read as "act". Send→stop carries the state change. */
+   the action orange would read as "act". Send→stop carries the state change. */
 .composer-input-wrap[data-running] {
   --tone: var(--live);
   box-shadow: 0 0 0 1px var(--tone-line);

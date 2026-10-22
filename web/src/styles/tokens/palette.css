@@ -1,8 +1,8 @@
 /* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
    Near-black and near-white canvases, achromatic grey elevation and borders,
    and accessible neutral text keep the workspace quiet. The primary action
-   wears the ultramarine accent (Linear-style, one per view), which also marks
-   selection; links take their own blue; semantic hues identify status, liveness, and syntax.
+   wears the baton-orange accent (Linear-style, one per view), which also marks
+   selection; links take a softer shade of it; semantic hues identify status, liveness, and syntax.
    This is the only file allowed to originate a color.
    Reference: https://vercel.com/geist/colors
 
@@ -110,12 +110,14 @@
   --cta-hover: #d4d4d4;
   --cta-ink: #0a0a0a;
 
-  /* Accent — ultramarine, tuned PER REGISTER, and Relay's one brand blue:
+  /* Accent — baton orange, tuned PER REGISTER, and Relay's one brand hue:
      --link, the focus ring, and the app icon's lead chevron all come from
-     this hue (oklch 268), so the product never shows two unrelated blues.
-     It sits 10° toward violet from stock SaaS cobalt (256) — enough to be
-     ownable, while still 47° clear of --live so "act" never reads as
-     "working".
+     this hue (oklch ~50 here, ~46 in the light register), so the product
+     never shows two unrelated accents. It is the relay baton: the thing a
+     person hands over. Orange is rare among developer tools, which mostly
+     sit on blue, so the plate is ownable at a glance. It holds ~90° of
+     clearance from --live (purple, "working") and ~25° from --err (hue 22) —
+     the warning moved to gold to make room (see Status below).
 
      Tuned PER REGISTER. It has two jobs, both fills: the
      button to press (shadcn's --primary, the page-header create action) and
@@ -124,21 +126,20 @@
      ::selection, the skip link). Selection stays calm — a 10% wash plus the
      bar, never a solid fill — so a selected row never reads as a button.
 
-     One accent for both canvases read as a mid-tone that sank into the
-     charcoal and never quite led on white. So each register gets its own
-     weight: a light periwinkle here, carrying the dark canvas ink, and a deep
-     ultramarine with white ink in the light register. Hover moves AWAY from
-     the canvas — lighter here, deeper there. Ratios, ink on fill: 6.95:1
-     (#7194fe) and 9.1:1 on hover (#90aefe). As an ink on the planes it
-     clears 4.5:1 too (6.95 / 6.29 / 5.78 on --surface-0/1/2), but text that
-     needs a blue still takes --link: --action means "act" or "chosen". */
-  --action: #7194fe;
-  --action-hover: #90aefe;
+     Each register gets its own weight: a bright orange here, carrying the
+     dark canvas ink, and a deep burnt orange with white ink in the light
+     register. Hover moves AWAY from the canvas — lighter here, deeper
+     there. Ratios, ink on fill: 8.44:1 (#ff8a3d) and 9.85:1 on hover
+     (#ffa060). As an ink on the planes it clears 4.5:1 too (8.44 / 7.64 /
+     7.03 on --surface-0/1/2), but prose links take --link: --action means
+     "act" or "chosen". */
+  --action: #ff8a3d;
+  --action-hover: #ffa060;
   /* Soft-accent callout tint, selection wash, active nav. 10% in both
-     registers: at 15% the selected rail row was a saturated blue block on the
+     registers: at 15% the selected rail row was a saturated block on the
      neutral charcoal, louder than the accent bar that already marks it. */
-  --action-soft: color-mix(in srgb, #7194fe 10%, transparent);
-  --on-action: #0a0a0a; /* the canvas ink — white measures 2.85:1 here */
+  --action-soft: color-mix(in srgb, #ff8a3d 10%, transparent);
+  --on-action: #0a0a0a; /* the canvas ink — white measures 2.3:1 here */
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL
      colors (white text on a saturated pill), and Relay renders status as ink
@@ -148,31 +149,31 @@
      the lightness is ours.
      Two further constraints shape the warning and the critical tone, and both
      come from the three status hues sharing one screen — a row can carry a
-     green dot, an amber count, and a red label at once:
+     green dot, a gold count, and a red label at once:
 
-       Amber, not golden yellow. The published #f7b928 sits at oklch hue 82,
-       lightness 82 — the loudest token in the palette, brighter against most
-       planes than the foreground ink, so a WAITING state out-shouted the
-       error beside it. A warning is a caution, not a highlighter: hue 65 at
-       L 78 stays warm, drops ~1.2 points on the worst plane, and holds 43°
-       of hue clearance from the critical red so the two never blur on a 6px
-       dot or a count badge.
+       Gold, because orange is the action. The warning used to sit on
+       amber (hue 65); once the action took the baton orange (hue ~50), an
+       amber count beside an orange button read as the same colour. So the
+       warning moved to a muted gold at hue ~89 — 39° from the action and
+       67° from the red. Not the published highlighter #f7b928 either: it was
+       the loudest token in the palette and out-shouted the error beside it;
+       this gold sits at L 0.81 and stays a caution.
 
        The critical red keeps its saturation. Pulling a red toward the ink
        ramp to buy contrast is what makes a destructive control read bland;
        this one holds chroma 0.19 at hue 22 and spends LIGHTNESS, not chroma,
        on the AA floor.
 
-     Worst-plane ratios: ok 6.6 · warn 7.3 · err 5.2. */
+     Worst-plane ratios: ok 6.6 · warn 8.2 · err 5.2. */
   --ok: #4ac16a;   /* success — the source system's #31a24c, lifted for the dark canvas */
-  --warn: #fc9f30; /* warning — the source system's #f7b928, moved off the highlighter */
+  --warn: #e8b923; /* warning — a muted gold, off the action's orange and the highlighter */
   --err: #ff6367;  /* critical — the source system's #e41e3f, lifted for the dark canvas */
   /* Text on an --err FILL (destructive hover inversion). The lifted red is
      bright enough here that the on-fill text is the canvas ink (6.8:1). */
   --on-err: #0a0a0a;
 
   /* Live — work an agent is doing RIGHT NOW. Relay has exactly two accents
-     beyond the neutrals: the ultramarine action and this purple, so liveness
+     beyond the neutrals: the baton-orange action and this purple, so liveness
      can never be confused with "this is the button to press".
      It labels running things (status icon, row accent, Busy badge, running
      composer) and a live DOT always moves (live-ring); --t-pulse-calm
@@ -185,13 +186,13 @@
      one — so the two accents read as one story in the mark itself. */
   --live: #cf7ef0; /* the source system's oculus-purple #a121ce, lifted for the dark canvas */
 
-  /* Link blue — wayfinding only: anchors in prose and the focus ring. Never
-     a fill, never a status, never an action. Same hue as --action (268),
-     a softer shade of it: lighter and less saturated here, so a focused
-     primary button rings in a visibly different blue than its own fill.
-     8.05:1 on --surface-3, the worst dark plane. */
-  --link-blue: #a2bcff;
-  --link-blue-strong: #c3d4fd;
+  /* Link ink — wayfinding only: anchors in prose and the focus ring. Never
+     a fill, never a status, never an action. Same hue as --action, a softer
+     shade of it: lighter and less saturated here, so a focused primary
+     button rings in a visibly different orange than its own fill.
+     8.11:1 on --surface-3, the worst dark plane. */
+  --link-ink: #ffaa75;
+  --link-ink-strong: #ffc49e;
 
   /* Code tokens — the ONE place hue is allowed to carry structure rather
      than meaning. Syntax highlighting is a reading aid, not a status: these
@@ -253,10 +254,10 @@
   --dark-surface: #171717;
   --dark-ink: #ededed;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
-  --dark-action: #7194fe;
+  --dark-action: #ff8a3d;
 
   --light-canvas: #fafafa;
-  --light-action: #2a44d3;
+  --light-action: #ad4800;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's
@@ -865,28 +866,30 @@ html[data-theme="light"] {
   --line-1: #d4d4d4; /* hairline */
   --line-2: #e5e5e5; /* hairline-soft */
 
-  /* Deep ultramarine with white ink: 7.33:1, 9.4:1 on the pressed #2237af,
-     and 6.15:1 as an ink on --surface-2 (see the :root note). The soft selection
-     tint follows the fill. 10%, not 15%: at 15% every
-     selected row, active nav item and section-rail entry was a saturated blue
-     block, and beside the leading accent bar that already marks the selection
-     it read as a second, louder indicator. The flat register lets the bar
-     lead and the wash only confirm it. */
-  --action: #2a44d3;
-  --action-hover: #2237af;
-  --action-soft: color-mix(in srgb, #2a44d3 10%, transparent);
+  /* Deep burnt orange with white ink: 5.67:1, 7.52:1 on the pressed #8f3b00,
+     and 4.76:1 as an ink on --surface-2 (see the :root note). Held at hue
+     ~46, not the brighter #c2410c family (hue 38), which sat only 17° from
+     the light --err and blurred with it on a small control. The soft
+     selection tint follows the fill. 10%, not 15%: at 15% every selected
+     row, active nav item and section-rail entry was a saturated block, and
+     beside the leading accent bar that already marks the selection it read
+     as a second, louder indicator. The flat register lets the bar lead and
+     the wash only confirm it. */
+  --action: #ad4800;
+  --action-hover: #8f3b00;
+  --action-soft: color-mix(in srgb, #ad4800 10%, transparent);
   --on-action: #ffffff;
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
      small text on the worst plane here (--surface-2). The source system's own values
      measure 3.1 (success), 1.8 (warning), and 4.0 (critical) on white; they
      are badge-fill colours, not text colours.
-     The warning follows the dark register off the golden-yellow hue onto the
-     amber at 65; the critical red already sits at the saturated hue 22 the
-     dark register moves to, so it is unchanged.
-     Ratios against --surface-2: ok 4.9 · warn 5.0 · err 4.9. */
+     The warning follows the dark register onto the gold at hue ~86, clear
+     of the action's orange; the critical red already sits at the saturated
+     hue 22 the dark register moves to, so it is unchanged.
+     Ratios against --surface-2: ok 4.9 · warn 5.3 · err 4.9. */
   --ok: #12752f;   /* success #31a24c, deepened */
-  --warn: #8f560f; /* warning, deepened on the amber hue */
+  --warn: #7a5c00; /* warning, deepened on the gold hue */
   --err: #c81232;  /* critical #e41e3f, deepened */
   /* Text on an --err fill — white, as the source system's badge-critical prints it
      (5.9:1 on this red). */
@@ -896,9 +899,9 @@ html[data-theme="light"] {
      5.5:1 on the canvas, so an elapsed timer set in it is legible. */
   --live: #a121ce;
 
-  /* The action's hue at lower chroma: 5.65:1 on --surface-2. */
-  --link-blue: #3e57a6;
-  --link-blue-strong: #2239a1; /* deeper on hover, like the action */
+  /* The action's hue, a step deeper: 5.31:1 on --surface-2. */
+  --link-ink: #a14300;
+  --link-ink-strong: #823600; /* deeper on hover, like the action */
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on

@@ -8,19 +8,19 @@
     :root {
       color-scheme: light dark;
       --relay-logo-ink: #171717;
-      --relay-logo-lead: #2a44d3;
+      --relay-logo-lead: #ad4800;
       --relay-logo-trail: #a121ce;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --relay-logo-ink: #ededed;
-        --relay-logo-lead: #7194fe;
+        --relay-logo-lead: #ff8a3d;
         --relay-logo-trail: #cf7ef0;
       }
     }
   </style>
   <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #2a44d3)"/>
+    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #ad4800)"/>
     <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-trail, #a121ce)"/>
   </g>
   <text x="74" y="44"

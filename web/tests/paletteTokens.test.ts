@@ -64,13 +64,13 @@ function channels(hex: string): [number, number, number] {
 describe("Relay palette tokens", () => {
   it("declares both registers: dark on :root, cream on html[data-theme=light]", () => {
     assert.match(palette, /:root\s*\{/);
-    for (const name of ["--surface-0", "--ink-1", "--live", "--link-blue"]) {
+    for (const name of ["--surface-0", "--ink-1", "--live", "--link-ink"]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `dark register is missing ${name}`);
       assert.match(lightRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `light register is missing ${name}`);
     }
   });
 
-  it("tunes --action per register: light periwinkle on the dark canvas, deep ultramarine on the light one", () => {
+  it("tunes --action per register: bright orange on the dark canvas, deep burnt orange on the light one", () => {
     // One mid-tone accent sank into the charcoal and never quite led on white,
     // so each register declares its own fill, pressed state and ink.
     for (const name of ["--action", "--action-hover", "--on-action"]) {
@@ -81,13 +81,13 @@ describe("Relay palette tokens", () => {
     const brightness = (hex: string) => contrast(hex, "#000000");
     const darkFill = brightness(tokenIn(darkRegister, "--action"));
     const lightFill = brightness(tokenIn(lightRegister, "--action"));
-    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter blue");
+    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter orange");
     // Hover moves away from the canvas: lighter on dark, deeper on light.
     assert.ok(brightness(tokenIn(darkRegister, "--action-hover")) > darkFill);
     assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) < lightFill);
     for (const register of [darkRegister, lightRegister]) {
-      const [r, , b] = channels(tokenIn(register, "--action"));
-      assert.ok(b > r, "--action stays a blue");
+      const [r, g, b] = channels(tokenIn(register, "--action"));
+      assert.ok(r > g && g > b, "--action stays the baton orange");
     }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
   });
@@ -159,7 +159,7 @@ describe("Relay palette tokens", () => {
       const ratio = contrast(live, tokenIn(register, "--surface-0"));
       assert.ok(ratio >= 4.5, `${label} --live on --surface-0 is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
     }
-    // And it must not collapse into the action: two blues would put "working"
+    // And it must not collapse into the action: one hue would put "working"
     // and "click me" in the same channel.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
       const live = channels(tokenIn(register, "--live"));
@@ -184,21 +184,21 @@ describe("Relay palette tokens", () => {
     }
   });
 
-  it("keeps the link blue above the AA floor on every plane in both registers", () => {
-    // Blue is the system's second sanctioned hue, reserved for wayfinding:
+  it("keeps the link ink above the AA floor on every plane in both registers", () => {
+    // Link ink is the action's hue, reserved for wayfinding:
     // anchors in prose and the focus ring. It must read as text wherever it
     // lands, so the bar is every plane, not just the canvas.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
       for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]) {
-        const ratio = contrast(tokenIn(register, "--link-blue"), tokenIn(register, plane));
-        assert.ok(ratio >= 4.5, `${label} --link-blue on ${plane} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
+        const ratio = contrast(tokenIn(register, "--link-ink"), tokenIn(register, plane));
+        assert.ok(ratio >= 4.5, `${label} --link-ink on ${plane} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
       }
     }
   });
 
   it("keeps status on the source system's semantic hues, each still reading as its meaning", () => {
     // Status here is chromatic by design — the source system publishes a green
-    // success, an amber warning, and a red critical — so the guard is that
+    // success, a gold warning, and a red critical — so the guard is that
     // each tone still reads as ITS hue after the deepening that AA forced on
     // the light register. Relationships, not hexes: a green whose red channel
     // has crept past its green is no longer a green.
@@ -206,7 +206,7 @@ describe("Relay palette tokens", () => {
       const [okR, okG, okB] = channels(tokenIn(register, "--ok"));
       assert.ok(okG > okR && okG > okB, `${label} --ok is no longer a green`);
       const [warnR, warnG, warnB] = channels(tokenIn(register, "--warn"));
-      assert.ok(warnR > warnG && warnG > warnB, `${label} --warn is no longer an amber`);
+      assert.ok(warnR > warnG && warnG > warnB, `${label} --warn is no longer a gold`);
       const [errR, errG, errB] = channels(tokenIn(register, "--err"));
       assert.ok(errR > errG && errR > errB, `${label} --err is no longer a red`);
       // The three must stay distinguishable from each other as hues, not just
@@ -516,12 +516,12 @@ describe("surface ladder", () => {
 describe("focus contract", () => {
   const roles = readStyle("tokens/roles.css");
 
-  it("draws the ring with outline in link blue, which no ancestor's overflow can clip", () => {
+  it("draws the ring with outline in link ink, which no ancestor's overflow can clip", () => {
     // A box-shadow ring is painted inside the nearest overflow:hidden ancestor
     // and gets sliced off by it. This app is built out of scrollers and clipped
     // rows, so the ring silently lost an edge against container boundaries.
-    // The ring is LINK BLUE, not the action yellow: #f7a501 measures 1.7:1 on
-    // the cream canvas, far under the 3:1 floor for focus indicators.
+    // The ring is LINK INK, not the action fill, so a focused primary button
+    // rings in a visibly different shade than its own plate.
     assert.match(roles, /--focus-outline:\s*var\(--focus-w\) solid var\(--link\);/);
     assert.match(roles, /--focus-offset:\s*\d+px;/);
     assert.doesNotMatch(roles, /--focus-ring\s*:/, "the box-shadow ring contract was replaced by outline");
@@ -691,7 +691,7 @@ function componentSources(): string[] {
 
 
 describe("accent primary and neutral CTA palette", () => {
-  it("routes shared primary buttons through the ultramarine accent", () => {
+  it("routes shared primary buttons through the baton-orange accent", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
     assert.match(bridge, /--primary:\s*var\(--action\)/);
     assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);

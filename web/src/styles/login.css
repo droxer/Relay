@@ -30,7 +30,7 @@
   --lg-err: var(--err);
   /* The screen's accent is the product's: the submit is the default Button
      (the --action fill), and the caret and the focused field edge take the
-     same blue, so the first screen a person sees speaks the brand. */
+     same orange, so the first screen a person sees speaks the brand. */
   --lg-accent: var(--action);
   /* The cover's text measure, shared by the cover and the foot so both
      centre on the same left margin inside the cover column. */
@@ -413,7 +413,7 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-/* Ink, not the link blue: the screen spends no accent, and the underline is
+/* Ink, not the link orange: the screen spends no accent, and the underline is
    what says link. */
 .login-link {
   color: var(--lg-ink);

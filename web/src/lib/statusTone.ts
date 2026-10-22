@@ -13,7 +13,7 @@ import type { StatusValue } from "./threadStatus";
 // checked in lately, is the resting state of half a roster. Painting those
 // red makes a quiet workforce look like an incident and spends the loudest
 // tone in the palette on the most common condition — so `offline` takes the
-// ink ramp and `stale` takes the amber it is already drawn with in the
+// ink ramp and `stale` takes the gold it is already drawn with in the
 // control panel's fleet readout.
 export function statusTone(value: StatusValue): Tone {
   switch (value) {

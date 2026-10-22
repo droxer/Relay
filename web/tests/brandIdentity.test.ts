@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The brand contract: one blue hue for action, link and focus; a mark that
+// The brand contract: one baton-orange hue for action, link and focus; a mark that
 // draws the handoff in its register's own --action and --live; and one motion
 // for every live dot. Property checks, not hex pins, wherever a relationship
 // is what matters.
@@ -39,7 +39,7 @@ const tokenIn = (register: string, name: string): string => {
   return value;
 };
 
-/** OKLCH hue in degrees, so "same blue" is asserted perceptually. */
+/** OKLCH hue in degrees, so "same orange" is asserted perceptually. */
 function oklchHue(hex: string): number {
   const lin = (i: number) => {
     const c = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
@@ -59,21 +59,34 @@ const hueGap = (x: string, y: string) => {
   return Math.min(d, 360 - d);
 };
 
-describe("one brand blue", () => {
-  it("puts --action, its hover, and the link blues on one hue", () => {
+describe("one brand orange", () => {
+  it("puts --action, its hover, and the link inks on one hue", () => {
     for (const [label, register] of Object.entries(registers)) {
       const action = tokenIn(register, "--action");
-      for (const name of ["--action-hover", "--link-blue", "--link-blue-strong"]) {
+      for (const name of ["--action-hover", "--link-ink", "--link-ink-strong"]) {
         const gap = hueGap(action, tokenIn(register, name));
         assert.ok(gap <= 4, `${label} ${name} sits ${gap.toFixed(1)}° off the --action hue`);
       }
     }
   });
 
-  it("keeps the brand blue clear of the --live purple", () => {
+  it("keeps the brand orange clear of the --live purple", () => {
     for (const [label, register] of Object.entries(registers)) {
       const gap = hueGap(tokenIn(register, "--action"), tokenIn(register, "--live"));
       assert.ok(gap >= 40, `${label} --action is only ${gap.toFixed(1)}° from --live; "act" would read as "working"`);
+    }
+  });
+
+  it("keeps the brand orange clear of the warning gold and the critical red", () => {
+    // Orange sits between two status hues. The warning moved from amber to
+    // gold to make room; a gap under these floors makes a 6px status dot
+    // and the action read as one colour.
+    for (const [label, register] of Object.entries(registers)) {
+      const action = tokenIn(register, "--action");
+      const warnGap = hueGap(action, tokenIn(register, "--warn"));
+      assert.ok(warnGap >= 30, `${label} --action is only ${warnGap.toFixed(1)}° from --warn`);
+      const errGap = hueGap(action, tokenIn(register, "--err"));
+      assert.ok(errGap >= 20, `${label} --action is only ${errGap.toFixed(1)}° from --err`);
     }
   });
 });
@@ -160,11 +173,11 @@ describe("one meaning per colour", () => {
     return body;
   };
 
-  it("draws a running composer in --live, not the action blue", () => {
+  it("draws a running composer in --live, not the action orange", () => {
     assert.match(rule("composer.css", /\.composer-input-wrap\[data-running\] \{([^}]*)\}/), /--tone: var\(--live\);/);
   });
 
-  it("asks for a person in the waiting amber, question or gate stop alike", () => {
+  it("asks for a person in the waiting gold, question or gate stop alike", () => {
     const css = readStyle("awaiting-input.css");
     assert.match(rule("awaiting-input.css", /\.awaiting-input \{([^}]*)\}/), /--awaiting-rail: var\(--warn\);/);
     assert.doesNotMatch(css, /--awaiting-rail: var\(--action\)/);
@@ -177,7 +190,7 @@ describe("one meaning per colour", () => {
     assert.match(read("web", "src", "components", "ProjectDashboard.tsx"), /review: "good",/);
   });
 
-  it("keeps the waiting amber off priority", () => {
+  it("keeps the waiting gold off priority", () => {
     assert.doesNotMatch(readStyle("task-status.css"), /--prio-accent: var\(--warn\)/);
   });
 });

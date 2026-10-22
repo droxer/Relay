@@ -26,7 +26,7 @@ other blockers actionable; there was no external plan file.
   review, completion, or a subsequently started execution.
 - The notice warns only about faults. Work that is simply waiting on a person —
   a result in review, a question awaiting an answer — carries an informational
-  rail instead, so the amber edge keeps meaning something.
+  rail instead, so the warning edge keeps meaning something.
 - An execution whose computer will never report exit can be reported gone. The
   action appears only where the evidence Relay waits for can no longer arrive
   (`termination_unconfirmed`, `orphaned_run`, `execution_unconfirmed`, and an

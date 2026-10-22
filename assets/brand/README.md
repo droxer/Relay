@@ -6,7 +6,7 @@ do not duplicate its token table here.
 
 ## The mark
 
-Two chevrons draw a handoff. The lead chevron is the ultramarine action
+Two chevrons draw a handoff. The lead chevron is the baton-orange action
 (`--action`, what a person does); the trailing chevron is the `--live` purple
 (an agent carrying the work on). The colours are the palette's own tokens for
 each register, never new hexes, and `web/tests/paletteTokens.test.ts` fails if
