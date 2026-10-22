@@ -301,6 +301,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
               onOpenOnboarding();
             }}
           >
+            <span className="sidenav-onboarding-label" aria-hidden="true">{t("onboarding.eyebrow")}</span>
             <span className="sidenav-onboarding-count" aria-hidden="true">{onboarding.done}/{onboarding.total}</span>
             <span className="sr-only">{t("onboarding.chip", onboarding)}</span>
           </Button>

@@ -2018,7 +2018,7 @@
     "model_no_match": "无匹配项，将按输入使用“{{model}}”。",
     "model_reset": "使用运行时默认",
     "model_browse": "显示模型",
-    "model_custom_placeholder": "运行时默认 · 例如 provider/model-name",
+    "model_custom_placeholder": "默认 · 例如 provider/model",
     "model_save": "保存模型",
     "model_daemon_outdated": "这台电脑的 Relay 客户端版本过旧，此处的智能体将使用运行时默认模型。更新后即可选择模型。",
     "model_daemon_outdated_pinned": "这台电脑的 Relay 客户端无法应用所选模型，运行将会失败。请更新客户端或恢复为运行时默认。",

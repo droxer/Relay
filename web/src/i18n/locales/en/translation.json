@@ -2062,7 +2062,7 @@
     "model_no_match": "No match. “{{model}}” will be used as entered.",
     "model_reset": "Use runtime default",
     "model_browse": "Show models",
-    "model_custom_placeholder": "Runtime default · e.g. provider/model-name",
+    "model_custom_placeholder": "Default · e.g. provider/model",
     "model_save": "Save model",
     "model_daemon_outdated": "This computer's Relay client is out of date, so agents here use the runtime default. Update it to choose a model.",
     "model_daemon_outdated_pinned": "This computer's Relay client can't apply the chosen model, so runs will fail. Update it or reset to the runtime default.",
