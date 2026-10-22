@@ -49,3 +49,49 @@ if (gql 'mutation Probe { create }') > "$WORK/result" 2> "$WORK/error"; then
 fi
 [ "$(cat "$WORK/count")" = 1 ]
 echo 'ok    mutation is not automatically replayed'
+
+# Cloudflare: the same transport rules, and a lost connection is never
+# reported as a missing zone.
+. "$TESTS_DIR/../lib/cloudflare.sh"
+CLOUDFLARE_API_URL=https://example.invalid/client/v4
+CLOUDFLARE_API_TOKEN=test-token
+CLOUDFLARE_ZONE=example.com
+curl() {
+  local count
+  count=$(cat "$WORK/count")
+  count=$((count + 1))
+  printf '%s' "$count" > "$WORK/count"
+  if [ "$MODE" = persistent ] || [ "$count" -eq 1 ]; then
+    printf 'curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL\n' >&2
+    return 35
+  fi
+  printf '{"success":true,"result":[{"id":"zone-1","account":{"id":"acct-1"}}]}'
+}
+
+printf 0 > "$WORK/count"
+MODE=transient
+[ "$(cf_zone_id)" = zone-1 ]
+[ "$(cat "$WORK/count")" = 2 ]
+echo 'ok    Cloudflare TLS read failure retries'
+
+printf 0 > "$WORK/count"
+MODE=persistent
+if zone=$(cf_zone_id 2> "$WORK/error"); then
+  echo "FAIL persistent Cloudflare failure returned zone '$zone'" >&2
+  exit 1
+fi
+[ "$(cat "$WORK/count")" = 3 ]
+grep -q 'Cloudflare API unreachable' "$WORK/error"
+if grep -q 'not found' "$WORK/error"; then
+  echo 'FAIL a lost connection was reported as a missing zone' >&2
+  exit 1
+fi
+echo 'ok    persistent Cloudflare failure is not reported as a missing zone'
+
+printf 0 > "$WORK/count"
+if (cf POST /zones/zone-1/dns_records '{}') > "$WORK/result" 2> "$WORK/error"; then
+  echo 'FAIL failed Cloudflare write succeeded' >&2
+  exit 1
+fi
+[ "$(cat "$WORK/count")" = 1 ]
+echo 'ok    Cloudflare write is not automatically replayed'
