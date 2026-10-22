@@ -135,10 +135,13 @@
      "act" or "chosen". */
   --action: #ff8a3d;
   --action-hover: #ffa060;
-  /* Soft-accent callout tint, selection wash, active nav. 10% in both
-     registers: at 15% the selected rail row was a saturated block on the
+  /* Soft-accent callout tint, selection wash, active nav. Mixed from the
+     link-strong peach (#ffc49e, the action's hue at lower chroma), not the
+     fill: a low-alpha orange over near-black darkens into a muddy brown,
+     while 9% of the peach reads as a warm grey that still belongs to the
+     brand. At 15% the selected rail row was a saturated block on the
      neutral charcoal, louder than the accent bar that already marks it. */
-  --action-soft: color-mix(in srgb, #ff8a3d 10%, transparent);
+  --action-soft: color-mix(in srgb, #ffc49e 9%, transparent);
   --on-action: #0a0a0a; /* the canvas ink — white measures 2.3:1 here */
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL

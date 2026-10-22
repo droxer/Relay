@@ -29,8 +29,10 @@ vi.mock("@/components/ui/button", () => ({
   // link-button (a download anchor) stays an anchor under test.
   // A string tooltip names the button, as the real primitive's aria-label
   // does — an explicit `aria-label` still wins.
-  Button: ({ children, tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, nativeButton: _native, render, ...rest }: any) => {
-    const props = { "aria-label": typeof tooltip === "string" ? tooltip : undefined, ...rest };
+  // `data-variant` mirrors the real Button, so a test can tell a filled
+  // primary from one that stepped down.
+  Button: ({ children, tooltip, variant = "default", size: _size, loading: _loading, loadingLabel: _loadingLabel, nativeButton: _native, render, ...rest }: any) => {
+    const props = { "aria-label": typeof tooltip === "string" ? tooltip : undefined, "data-variant": variant, ...rest };
     return render ? cloneElement(render, props, children) : createElement("button", props, children);
   },
   // Real variants are class strings; tests only need a stable stand-in so

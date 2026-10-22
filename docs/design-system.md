@@ -206,7 +206,7 @@ Dark register / light register:
 | `--action` | `#ff8a3d` | `#ad4800` | primary action + selection — bright orange on dark, deep burnt orange on light |
 | `--action-hover` | `#ffa060` | `#8f3b00` | pressed fill — moves away from the canvas |
 | `--on-action` | `#0a0a0a` | `#ffffff` | ink on the action fill |
-| `--action-soft` | 10% accent wash | 10% accent wash | selection wash, active nav |
+| `--action-soft` | 9% peach wash (`#ffc49e`) | 10% accent wash | selection wash, active nav |
 | `--link` / `--link-hover` | `#ffaa75` / `#ffc49e` | `#a14300` / `#823600` | anchors in prose, focus ring |
 | `--ok` | `#4ac16a` | `#12752f` | ready, passed, done |
 | `--warn` | `#e8b923` | `#7a5c00` | attention, degraded — muted gold, clear of the orange action and the highlighter yellow |
@@ -250,8 +250,10 @@ status tone still reads as **its hue** (green leads in `--ok`, red in `--err`,
 gold's channels descend r > g > b) — the deepening AA forced on the light
 register must not turn a green into a grey.
 
-`--action-soft` is not a hex: it is a `color-mix` of the action orange into
-transparency, so the selection wash always tracks the action colour.
+`--action-soft` is not a hex: it is a `color-mix` into transparency of the
+action's hue, so the selection wash always tracks the action colour. In dark
+it mixes the lighter peach (`#ffc49e`) rather than the fill, because a
+low-alpha orange over near-black turns brown.
 
 A **pinned group** (`--dark-canvas`, `--dark-surface`, `--dark-ink`,
 `--dark-line`, plus `--light-canvas`, and `--paper` `#ffffff` for document
@@ -633,7 +635,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 ### Don't
 - Don't use a status colour as an action, or orange as a status or a link.
 - Don't put a second filled orange button in a view, or make a selected row a
-  solid orange fill — selection is the bar plus the 10% `--action-soft` wash.
+  solid orange fill — selection is the bar plus the soft `--action-soft` wash.
 - Don't introduce a third accent. Orange is the action and selection, purple
   is liveness, link ink is wayfinding; everywhere else the ink ramp is the
   only signal.

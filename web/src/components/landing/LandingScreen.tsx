@@ -152,7 +152,9 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 {t(ctas.secondary.labelKey)}
               </PublicLink>
             ) : null}
-            <CtaLink cta={ctas.primary} tone="primary" />
+            {/* Outline, not the plate: the hero's door is the one filled
+                primary in view. */}
+            <CtaLink cta={ctas.primary} tone="secondary" />
           </div>
         </div>
       </header>
