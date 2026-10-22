@@ -70,10 +70,24 @@ describe("one brand orange", () => {
     }
   });
 
-  it("keeps the brand orange clear of the --live purple", () => {
+  it("keeps the brand orange clear of the --live blue", () => {
     for (const [label, register] of Object.entries(registers)) {
       const gap = hueGap(tokenIn(register, "--action"), tokenIn(register, "--live"));
       assert.ok(gap >= 40, `${label} --action is only ${gap.toFixed(1)}° from --live; "act" would read as "working"`);
+    }
+  });
+
+  it("declares no purple anywhere in the palette", () => {
+    // Purple reads as generic AI-product styling, so Relay retired it:
+    // liveness is signal blue, tags and syntax take other tones. Any token
+    // with real chroma in the violet arc (oklch 280–340) fails here.
+    for (const [label, register] of Object.entries(registers)) {
+      for (const [, name, hex] of register.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{6});/g)) {
+        const hue = oklchHue(hex);
+        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+        const chromatic = Math.max(r, g, b) - Math.min(r, g, b) > 24;
+        assert.ok(!(chromatic && hue >= 280 && hue <= 340), `${label} ${name} ${hex} is purple (hue ${hue.toFixed(0)})`);
+      }
     }
   });
 

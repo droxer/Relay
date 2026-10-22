@@ -145,25 +145,18 @@ describe("Relay palette tokens", () => {
     assert.equal(declared(darkRegister, "--light-action"), declared(lightRegister, "--action"));
   });
 
-  it("marks live work in the Oculus purple, legible as small text in both registers", () => {
-    // The source system sanctions exactly two accents beyond the neutrals: accent and
-    // Oculus purple. The accent is spoken for by the primary action, so liveness
-    // takes the purple and can never be mistaken for "press this". Assert the
-    // hue family (blue and red lead, green trails), not an exact hex — and the
-    // AA floor, because an elapsed timer set in --live is legible, not
-    // decorative.
+  it("marks live work in signal blue, legible as small text in both registers", () => {
+    // Two accents beyond the neutrals: the orange action and its complement,
+    // a signal blue for liveness, so "working" can never be mistaken for
+    // "press this". Assert the hue family (blue leads, red trails), not an
+    // exact hex — and the AA floor, because an elapsed timer set in --live is
+    // legible, not decorative.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
       const live = tokenIn(register, "--live");
       const [r, g, b] = channels(live);
-      assert.ok(b > g && r > g, `${label} --live ${live} left the purple family (b > g and r > g required)`);
+      assert.ok(b > g && g > r, `${label} --live ${live} left the blue family (b > g > r required)`);
       const ratio = contrast(live, tokenIn(register, "--surface-0"));
       assert.ok(ratio >= 4.5, `${label} --live on --surface-0 is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
-    }
-    // And it must not collapse into the action: one hue would put "working"
-    // and "click me" in the same channel.
-    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
-      const live = channels(tokenIn(register, "--live"));
-      assert.ok(live[0] > 96, `${label} --live has no red left in it — it has drifted into the accent action`);
     }
   });
 

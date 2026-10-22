@@ -112,12 +112,14 @@
 
   /* Accent — baton orange, tuned PER REGISTER, and Relay's one brand hue:
      --link, the focus ring, and the app icon's lead chevron all come from
-     this hue (oklch ~50 here, ~46 in the light register), so the product
+     this hue (oklch ~50 here, ~42 in the light register), so the product
      never shows two unrelated accents. It is the relay baton: the thing a
      person hands over. Orange is rare among developer tools, which mostly
-     sit on blue, so the plate is ownable at a glance. It holds ~90° of
-     clearance from --live (purple, "working") and ~25° from --err (hue 22) —
-     the warning moved to gold to make room (see Status below).
+     sit on blue, so the plate is ownable at a glance. Its complement is the
+     signal-blue --live ("working"), ~150° away, so "you act" and "an agent
+     works" sit as far apart as two hues can. The crimson --err (hue ~9) keeps
+     ~40° here and ~30° in light; the warning moved to gold to make room on
+     the other side (see Status below).
 
      Tuned PER REGISTER. It has two jobs, both fills: the
      button to press (shadcn's --primary, the page-header create action) and
@@ -158,36 +160,40 @@
        amber (hue 65); once the action took the baton orange (hue ~50), an
        amber count beside an orange button read as the same colour. So the
        warning moved to a muted gold at hue ~89 — 39° from the action and
-       67° from the red. Not the published highlighter #f7b928 either: it was
+       80° from the crimson. Not the published highlighter #f7b928 either: it was
        the loudest token in the palette and out-shouted the error beside it;
        this gold sits at L 0.81 and stays a caution.
 
-       The critical red keeps its saturation. Pulling a red toward the ink
+       Crimson, not tomato. The published red sat at hue 22, only ~29° from
+       the orange action, so Reject beside Approve and a failed dot beside a
+       selection bar were the closest pair in the palette. Hue ~9 opens that
+       gap to ~40°. It keeps its saturation: pulling a red toward the ink
        ramp to buy contrast is what makes a destructive control read bland;
-       this one holds chroma 0.19 at hue 22 and spends LIGHTNESS, not chroma,
-       on the AA floor.
+       this one holds chroma 0.2 and spends LIGHTNESS, not chroma, on the AA
+       floor.
 
-     Worst-plane ratios: ok 6.6 · warn 8.2 · err 5.2. */
+     Worst-plane ratios: ok 6.6 · warn 8.2 · err 5.1. */
   --ok: #4ac16a;   /* success — the source system's #31a24c, lifted for the dark canvas */
   --warn: #e8b923; /* warning — a muted gold, off the action's orange and the highlighter */
-  --err: #ff6367;  /* critical — the source system's #e41e3f, lifted for the dark canvas */
+  --err: #ff5c84;  /* critical — crimson, lifted for the dark canvas */
   /* Text on an --err FILL (destructive hover inversion). The lifted red is
-     bright enough here that the on-fill text is the canvas ink (6.8:1). */
+     bright enough here that the on-fill text is the canvas ink (6.7:1). */
   --on-err: #0a0a0a;
 
   /* Live — work an agent is doing RIGHT NOW. Relay has exactly two accents
-     beyond the neutrals: the baton-orange action and this purple, so liveness
+     beyond the neutrals: the baton-orange action and this signal blue, its
+     complement, so liveness
      can never be confused with "this is the button to press".
      It labels running things (status icon, row accent, Busy badge, running
      composer) and a live DOT always moves (live-ring); --t-pulse-calm
-     surfaces stay neutral. 5.7:1 on --surface-3, so an elapsed timer set in --live is
+     surfaces stay neutral. 6.1:1 on --surface-3, so an elapsed timer set in --live is
      legible, not decorative.
      Deliberately no --live-wash companion: a wash is a fill, and this colour
      is never a fill. Tint a ring (see live-ring) or an ink, nothing else.
      One static exception: the logo. The app icons and RelayMark's `brand`
      tone draw the handoff — an --action lead chevron and a --live trailing
      one — so the two accents read as one story in the mark itself. */
-  --live: #cf7ef0; /* the source system's oculus-purple #a121ce, lifted for the dark canvas */
+  --live: #6aa6ff; /* signal blue — never purple, which reads as generic AI styling */
 
   /* Link ink — wayfinding only: anchors in prose and the focus ring. Never
      a fill, never a status, never an action. Same hue as --action, a softer
@@ -210,7 +216,7 @@
   --code-string: #a9c47c;       /* strings, regexps, quotes */
   --code-number: #e3bf7a;       /* numbers, literals, symbols */
   --code-declaration: #8fb8de;  /* function/class titles, sections */
-  --code-attribute: #c9b3d9;    /* attributes, properties, tags, variables */
+  --code-attribute: #7fc8d1;    /* attributes, properties, tags, variables */
 
   /* Tag tones — the second place hue carries identity rather than meaning.
      A Tag (CONTEXT.md) is filed under one of eight tones, picked by hashing
@@ -218,15 +224,15 @@
      colour on every surface. A tone is only ever a 6px DOT inside a hairline
      tag badge: never a fill, never a text ink, never a border — so a tag can
      never be mistaken for a status, the action, or a live run. Each tone sits
-     off the status hues (ok 145 · warn 65 · err 22 · live 300) and clears
+     off the status hues (ok 148 · warn 89 · err 9 · live 258) and clears
      3:1 as a graphic against --surface-3, the brightest dark plane. */
-  --tag-1: #8fa8d8; /* steel */
+  --tag-1: #9aa6b8; /* slate — a cool grey; the old steel blue sat on --live */
   --tag-2: #5fc2b2; /* teal */
   --tag-3: #a9c47c; /* moss */
   --tag-4: #d9b56c; /* sand */
   --tag-5: #df8e6c; /* clay */
   --tag-6: #e389a8; /* rose */
-  --tag-7: #b49ae0; /* iris */
+  --tag-7: #b5aa9b; /* stone — a warm grey; no purple tone */
   --tag-8: #74bcdd; /* sky */
 
   /* "Two hues" is a claim about MEANING, not pigment, and the distinction
@@ -260,7 +266,7 @@
   --dark-action: #ff8a3d;
 
   --light-canvas: #fafafa;
-  --light-action: #ad4800;
+  --light-action: #b84400;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's
@@ -869,18 +875,18 @@ html[data-theme="light"] {
   --line-1: #d4d4d4; /* hairline */
   --line-2: #e5e5e5; /* hairline-soft */
 
-  /* Deep burnt orange with white ink: 5.67:1, 7.52:1 on the pressed #8f3b00,
-     and 4.76:1 as an ink on --surface-2 (see the :root note). Held at hue
-     ~46, not the brighter #c2410c family (hue 38), which sat only 17° from
-     the light --err and blurred with it on a small control. The soft
+  /* Burnt orange with white ink: 5.43:1, 7.10:1 on the pressed #9a3900,
+     and 4.56:1 as an ink on --surface-2 (see the :root note). Hue ~42: the
+     crimson --err (hue ~12 here) leaves ~30° of room, so the plate can be
+     brighter and less brown than the #ad4800 it replaced. The soft
      selection tint follows the fill. 10%, not 15%: at 15% every selected
      row, active nav item and section-rail entry was a saturated block, and
      beside the leading accent bar that already marks the selection it read
      as a second, louder indicator. The flat register lets the bar lead and
      the wash only confirm it. */
-  --action: #ad4800;
-  --action-hover: #8f3b00;
-  --action-soft: color-mix(in srgb, #ad4800 10%, transparent);
+  --action: #b84400;
+  --action-hover: #9a3900;
+  --action-soft: color-mix(in srgb, #b84400 10%, transparent);
   --on-action: #ffffff;
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
@@ -888,43 +894,42 @@ html[data-theme="light"] {
      measure 3.1 (success), 1.8 (warning), and 4.0 (critical) on white; they
      are badge-fill colours, not text colours.
      The warning follows the dark register onto the gold at hue ~86, clear
-     of the action's orange; the critical red already sits at the saturated
-     hue 22 the dark register moves to, so it is unchanged.
-     Ratios against --surface-2: ok 4.9 · warn 5.3 · err 4.9. */
+     of the action's orange; the critical red follows it onto crimson.
+     Ratios against --surface-2: ok 4.9 · warn 5.3 · err 5.0. */
   --ok: #12752f;   /* success #31a24c, deepened */
   --warn: #7a5c00; /* warning, deepened on the gold hue */
-  --err: #c81232;  /* critical #e41e3f, deepened */
+  --err: #c40f4a;  /* critical — crimson, deepened */
   /* Text on an --err fill — white, as the source system's badge-critical prints it
-     (5.9:1 on this red). */
+     (6.0:1 on this crimson). */
   --on-err: #ffffff;
 
-  /* Live — Oculus purple at its published value: 4.9:1 on --surface-2 and
-     5.5:1 on the canvas, so an elapsed timer set in it is legible. */
-  --live: #a121ce;
+  /* Live — signal blue, deepened: 5.4:1 on --surface-2 and 6.2:1 on the
+     canvas, so an elapsed timer set in it is legible. */
+  --live: #2457c5;
 
-  /* The action's hue, a step deeper: 5.31:1 on --surface-2. */
-  --link-ink: #a14300;
-  --link-ink-strong: #823600; /* deeper on hover, like the action */
+  /* The action's hue, a step deeper: 5.32:1 on --surface-2. */
+  --link-ink: #a63e00;
+  --link-ink-strong: #863200; /* deeper on hover, like the action */
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on
      --surface-2/--surface-0: keyword 5.48/6.26 · string 6.04/6.90 ·
-     number 4.80/5.49 · declaration 7.05/8.05 · attribute 7.64/8.72. */
+     number 4.80/5.49 · declaration 7.05/8.05 · attribute 5.54/6.32. */
   --code-keyword: #9c4221;
   --code-string: #41601f;
   --code-number: #895e05;
   --code-declaration: #1f4f82;
-  --code-attribute: #5b3a75;
+  --code-attribute: #1b6670;
 
   /* Light tag tones — the same eight hues deepened until each dot clears 3:1
      as a graphic on --surface-2, the darkest light plane. */
-  --tag-1: #46629e;
+  --tag-1: #556274;
   --tag-2: #1d7a6b;
   --tag-3: #557226;
   --tag-4: #8d6412;
   --tag-5: #a64b2b;
   --tag-6: #b13f6b;
-  --tag-7: #6a4fa3;
+  --tag-7: #6f655a;
   --tag-8: #26709a;
 
   --scrim: rgba(23, 23, 23, 0.24); /* --ink-1's neutral, never a slate */

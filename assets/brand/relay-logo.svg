@@ -8,20 +8,20 @@
     :root {
       color-scheme: light dark;
       --relay-logo-ink: #171717;
-      --relay-logo-lead: #ad4800;
-      --relay-logo-trail: #a121ce;
+      --relay-logo-lead: #b84400;
+      --relay-logo-trail: #2457c5;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --relay-logo-ink: #ededed;
         --relay-logo-lead: #ff8a3d;
-        --relay-logo-trail: #cf7ef0;
+        --relay-logo-trail: #6aa6ff;
       }
     }
   </style>
   <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #ad4800)"/>
-    <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-trail, #a121ce)"/>
+    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #b84400)"/>
+    <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-trail, #2457c5)"/>
   </g>
   <text x="74" y="44"
         font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"

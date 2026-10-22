@@ -354,7 +354,7 @@
 }
 
 /* Running state — a quiet --live hairline outside the edge at the one
-   accent-edge strength (--tone-line): purple means an agent is working, and
+   accent-edge strength (--tone-line): blue means an agent is working, and
    the action orange would read as "act". Send→stop carries the state change. */
 .composer-input-wrap[data-running] {
   --tone: var(--live);

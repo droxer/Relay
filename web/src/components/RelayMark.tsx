@@ -13,7 +13,7 @@ export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMark
   // The brand tone is the logo's one sanctioned static use of --live, the
   // same carve-out the app icons take: the lead chevron is what a person
   // does (--action), the trailing chevron an agent carrying it on (--live).
-  // Everywhere else purple still means work in progress and always moves.
+  // Everywhere else blue still means work in progress and always moves.
   const isBrand = tone === "brand";
   return (
     <svg
