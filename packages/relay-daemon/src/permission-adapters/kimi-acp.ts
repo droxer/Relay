@@ -15,9 +15,10 @@ import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { PermissionQuestionItem } from "relay-core";
-import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
+import { askBroker, questionId, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
 
-export type AskBroker = (question: PermissionQuestion) => Promise<PermissionAnswer>;
+/** Asks about one request; `signal` fires once the prompt is over and nobody can act on the answer. */
+export type AskBroker = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
 
 /**
  * ACP mode id of Kimi's "Ask When Needed" permission mode. The descriptions
@@ -196,12 +197,14 @@ export async function answerPermissionRequest(
   const toolName = typeof toolCall.title === "string" && toolCall.title ? toolCall.title : known?.name ?? "tool";
   // A question (AskUserQuestion) offers its answers as the permission
   // options; the person's pick selects the option carrying that label. One
-  // ACP reply names one option, so only the first question's first pick can
-  // be carried; a pick with no matching option skips the question, which
-  // Kimi treats as "dismissed".
+  // ACP reply names one option, so only the first question with a single pick
+  // can be carried — the person is asked just that, never questions whose
+  // answers would be dropped. A pick with no matching option skips the
+  // question, which Kimi treats as "dismissed".
   if (isQuestion(toolName, options)) {
-    const questions = askUserQuestions(toolCall.rawInput ?? known?.rawInput);
-    if (!questions) return selected(options, "reject_once");
+    const asked = askUserQuestions(toolCall.rawInput ?? known?.rawInput)?.[0];
+    if (!asked) return selected(options, "reject_once");
+    const questions = [{ id: asked.id, text: asked.text, options: asked.options }];
     let answer: PermissionAnswer;
     try {
       answer = await ask({ kind: "question", toolName, input: toolCall.rawInput ?? known?.rawInput ?? {}, ...(toolCallId ? { toolUseId: toolCallId } : {}), questions });
@@ -209,7 +212,7 @@ export async function answerPermissionRequest(
       answer = { behavior: "deny" };
     }
     const pick = answer.behavior === "allow" ? answer.answers?.[questions[0].id]?.[0] : undefined;
-    const option = pick === undefined ? undefined : options.find((candidate) => candidate.name === pick);
+    const option = pick === undefined ? undefined : options.find((candidate) => candidate.name?.trim() === pick.trim());
     return option ? { outcome: { outcome: "selected", optionId: option.optionId } } : selected(options, "reject_once");
   }
   let answer: PermissionAnswer;
@@ -236,7 +239,7 @@ export function askUserQuestions(input: unknown): PermissionQuestionItem[] | und
         ? [{ label: label.trim(), ...(typeof description === "string" && description.trim() ? { description: description.trim() } : {}) }]
         : [];
     });
-    return [{ id: text, text, options, ...(question.multiSelect === true ? { multiSelect: true } : {}) }];
+    return [{ id: questionId(text), text, options, ...(question.multiSelect === true ? { multiSelect: true } : {}) }];
   });
   return questions.length ? questions : undefined;
 }
@@ -375,6 +378,10 @@ function rpcError(error: unknown): Record<string, unknown> {
 export async function runKimiAcp(options: KimiAcpOptions, io: KimiAcpIo): Promise<number> {
   const writer = new StreamJsonWriter(io.stdout);
   const translator = new SessionUpdateTranslator(writer);
+  // A question still open when the prompt ends hangs up, so the broker
+  // withdraws its prompt and no open socket keeps this process alive.
+  const asks = new AbortController();
+  const ask: AskBroker = (question) => io.ask(question, asks.signal);
   const child = spawn(options.kimiCommand, ["acp"], {
     cwd: options.cwd,
     env: runtimeEnv(io.env ?? process.env),
@@ -387,7 +394,7 @@ export async function runKimiAcp(options: KimiAcpOptions, io: KimiAcpIo): Promis
     child,
     async (message) => {
       if (message.method === "session/request_permission") {
-        return await answerPermissionRequest(message.params ?? {}, translator, io.ask);
+        return await answerPermissionRequest(message.params ?? {}, translator, ask);
       }
       throw new MethodNotFound(`Method not found: ${String(message.method)}`);
     },
@@ -427,6 +434,7 @@ export async function runKimiAcp(options: KimiAcpOptions, io: KimiAcpIo): Promis
     return io.signal?.aborted ? 130 : 1;
   } finally {
     io.signal?.removeEventListener("abort", onAbort);
+    asks.abort();
     child.stdin.end();
     stop();
     await exited;
@@ -527,7 +535,7 @@ async function main(): Promise<void> {
   const code = await runKimiAcp(options, {
     stdout: process.stdout,
     stderr: process.stderr,
-    ask: (question) => askBroker(question),
+    ask: (question, signal) => askBroker(question, process.env, signal),
     signal: abort.signal,
   });
   process.exitCode = code;

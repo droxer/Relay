@@ -43,6 +43,17 @@ export interface BrokerAddress {
 
 export const BROKER_UNAVAILABLE = "Relay could not ask a person for permission";
 export const BROKER_FILE_ENV = "RELAY_PERMISSION_FILE";
+/** Mirrors relay-core's PERMISSION_TEXT_LIMIT, which the broker cuts question ids to; adapters load without relay-core values. */
+export const QUESTION_TEXT_LIMIT = 500;
+
+/**
+ * The id a question keeps through the broker, which trims and caps it. A
+ * runtime that keys answers by a question's own text maps them back through
+ * this, so a long or padded question still finds its answer.
+ */
+export function questionId(text: string): string {
+  return text.trim().slice(0, QUESTION_TEXT_LIMIT).trimEnd();
+}
 
 /**
  * The environment for the runtime an adapter launches: the adapter's own,
@@ -72,19 +83,26 @@ export function brokerAddress(env: NodeJS.ProcessEnv = process.env): BrokerAddre
 /**
  * Asks the broker named by RELAY_PERMISSION_FILE.
  * Never rejects: anything that keeps the question from a person is a denial.
+ * `signal` hangs up when nobody is left to act on the answer — the runtime
+ * exited — so the broker withdraws the prompt and the adapter can exit.
  */
-export async function askBroker(question: PermissionQuestion, env: NodeJS.ProcessEnv = process.env): Promise<PermissionAnswer> {
+export async function askBroker(
+  question: PermissionQuestion,
+  env: NodeJS.ProcessEnv = process.env,
+  signal?: AbortSignal,
+): Promise<PermissionAnswer> {
   const address = brokerAddress(env);
   if (!address) return deny(`${BROKER_UNAVAILABLE}: the permission broker is not configured.`);
   try {
-    return await exchange(address.socket, `${JSON.stringify({ secret: address.secret, ...question })}\n`);
+    return await exchange(address.socket, `${JSON.stringify({ secret: address.secret, ...question })}\n`, signal);
   } catch (error) {
     return deny(`${BROKER_UNAVAILABLE}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function exchange(socketPath: string, request: string): Promise<PermissionAnswer> {
+function exchange(socketPath: string, request: string, signal?: AbortSignal): Promise<PermissionAnswer> {
   return new Promise<PermissionAnswer>((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("the runtime stopped waiting for an answer"));
     const socket = connect(socketPath);
     let buffer = "";
     let settled = false;
@@ -94,13 +112,23 @@ function exchange(socketPath: string, request: string): Promise<PermissionAnswer
       socket.destroy();
       outcome();
     };
+    const onAbort = (): void => finish(() => reject(new Error("the runtime stopped waiting for an answer")));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    socket.once("close", () => signal?.removeEventListener("abort", onAbort));
     socket.setEncoding("utf8");
     socket.on("connect", () => socket.write(request));
     socket.on("data", (chunk: string) => {
       buffer += chunk;
       const newline = buffer.indexOf("\n");
       if (newline < 0) return;
-      finish(() => resolve(parseAnswer(buffer.slice(0, newline))));
+      // A garbled reply is a denial, never an exception thrown out of this handler.
+      finish(() => {
+        try {
+          resolve(parseAnswer(buffer.slice(0, newline)));
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
     socket.on("error", (error) => finish(() => reject(error)));
     socket.on("close", () => finish(() => reject(new Error("the broker closed the connection without answering"))));

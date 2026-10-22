@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -76,6 +77,54 @@ const withdrawn = (posted: DaemonNodeEvent[]) =>
   posted.filter((event): event is Extract<DaemonNodeEvent, { type: "run.permission_withdrawn" }> => event.type === "run.permission_withdrawn");
 
 describe("permission broker", () => {
+  it("asks once per connection, however many lines arrive on it", async () => {
+    const h = harness([json({ status: "allow" })]);
+    const broker = await startPermissionBroker(h.options);
+    try {
+      const { socket, secret } = brokerAddress(broker.env)!;
+      const line = `${JSON.stringify({ secret, kind: "tool", toolName: "Write", input: {} })}\n`;
+      const reply = await new Promise<string>((resolve, reject) => {
+        const client = connect(socket, () => {
+          client.write(line);
+          setTimeout(() => client.write(line), 10);
+        });
+        let text = "";
+        client.setEncoding("utf8").on("data", (chunk: string) => { text += chunk; }).on("close", () => resolve(text)).on("error", reject);
+      });
+      assert.deepEqual(JSON.parse(reply), { behavior: "allow" });
+      assert.equal(h.posted.filter((event) => event.type === "run.permission_requested").length, 1);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it("hangs up and withdraws the prompt when the adapter stops waiting", async () => {
+    const h = harness([json({ status: "pending" })]);
+    const broker = await startPermissionBroker(h.options);
+    try {
+      const stop = new AbortController();
+      setTimeout(() => stop.abort(), 50);
+      const decision = await askBroker({ kind: "command", toolName: "Bash", input: {} }, broker.env, stop.signal);
+      assert.equal(decision.behavior, "deny");
+      for (let tries = 0; tries < 100 && withdrawn(h.posted).length === 0; tries++) await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(withdrawn(h.posted).length, 1);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it("treats a garbled broker reply as a denial instead of throwing", async () => {
+    const socket = join(scratch, "garbled.sock");
+    const server = createServer((client) => client.end("not json\n", () => client.destroy()));
+    await new Promise<void>((resolve) => server.listen(socket, resolve));
+    try {
+      const decision = await askBroker({ kind: "tool", toolName: "Write", input: {} }, { RELAY_PERMISSION_FILE: addressFile(socket, "s") });
+      assert.equal(decision.behavior, "deny");
+    } finally {
+      server.close();
+    }
+  });
+
   it("posts the request, then polls until a person allows it", async () => {
     const h = harness([json({ status: "pending" }), json({ status: "pending" }), json({ status: "allow" })]);
     const decision = await ask(h.options, { toolName: "Write", input: { file_path: "a.txt" }, toolUseId: "toolu_1" });

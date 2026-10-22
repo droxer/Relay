@@ -17,7 +17,8 @@ import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
 import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
 
 type Json = Record<string, unknown>;
-type Ask = (question: PermissionQuestion) => Promise<PermissionAnswer>;
+/** Asks about one request; `signal` fires once the turn is over and nobody can act on the answer. */
+type Ask = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
 
 export interface CodexAdapterOptions {
   config: string[];
@@ -126,7 +127,10 @@ export async function runCodexTurn(
   options: CodexAdapterOptions,
   io: { codexBin?: string; emit(event: ExecEvent): void; ask?: Ask; signal?: AbortSignal },
 ): Promise<number> {
-  const ask = io.ask ?? ((question: PermissionQuestion) => askBroker(question));
+  const ask = io.ask ?? ((question: PermissionQuestion, signal?: AbortSignal) => askBroker(question, process.env, signal));
+  // A question still open when the turn ends hangs up, so the broker
+  // withdraws its prompt and no open socket keeps this process alive.
+  const asks = new AbortController();
   const translator = new CodexExecEventTranslator();
   const fileChanges = new Map<string, Json>();
   const emitAll = (events: ExecEvent[]): void => events.forEach(io.emit);
@@ -134,7 +138,8 @@ export async function runCodexTurn(
   // arguments itself, so each one is quoted for it there.
   const shell = process.platform === "win32";
   const argv = ["app-server", ...options.config.flatMap((entry) => ["-c", entry])];
-  const child = spawn(io.codexBin ?? "codex", shell ? argv.map(cmdQuote) : argv, {
+  const codexBin = io.codexBin ?? "codex";
+  const child = spawn(shell ? cmdQuote(codexBin) : codexBin, shell ? argv.map(cmdQuote) : argv, {
     cwd: options.cwd,
     env: runtimeEnv(),
     stdio: ["pipe", "pipe", "pipe"],
@@ -163,7 +168,7 @@ export async function runCodexTurn(
         settle(record(params.turn).status === "completed" ? 0 : 1);
       }
     },
-    request: (method, params) => answerServerRequest(method, params, ask, fileChanges),
+    request: (method, params) => answerServerRequest(method, params, (question) => ask(question, asks.signal), fileChanges),
   });
   const stop = (): void => {
     child.stdin.end();
@@ -217,6 +222,7 @@ export async function runCodexTurn(
     return await done;
   } finally {
     io.signal?.removeEventListener("abort", onAbort);
+    asks.abort();
     child.removeAllListeners("exit");
     stop();
   }
@@ -289,9 +295,18 @@ export async function answerServerRequest(
       });
       return { answers: userInputAnswers(answer) };
     }
-    // Relay has no channel for MCP forms mid-run.
-    case "mcpServer/elicitation/request":
-      return { action: "decline", content: null, _meta: null };
+    // Codex asks before an MCP tool call through an elicitation tagged
+    // `codex_approval_kind: "mcp_tool_call"` with an empty form: accepting
+    // runs the call once (no `persist`), anything else declines it. Relay has
+    // no channel for any other MCP form mid-run, so those are declined.
+    case "mcpServer/elicitation/request": {
+      const meta = record(params._meta);
+      if (meta.codex_approval_kind !== MCP_TOOL_APPROVAL) return { action: "decline", content: null, _meta: null };
+      const answer = await ask(mcpToolQuestion(params, meta));
+      return answer.behavior === "allow"
+        ? { action: "accept", content: {}, _meta: null }
+        : { action: "decline", content: null, _meta: null };
+    }
     case "item/tool/call":
       return { contentItems: [], success: false };
     default:
@@ -311,6 +326,24 @@ function commandQuestion(params: Json): PermissionQuestion {
     },
     toolUseId: str(params.approvalId) || str(params.itemId) || undefined,
     ...(str(params.reason) ? { reason: str(params.reason) } : {}),
+  };
+}
+
+const MCP_TOOL_APPROVAL = "mcp_tool_call";
+
+function mcpToolQuestion(params: Json, meta: Json): PermissionQuestion {
+  const server = str(params.serverName);
+  const tool = str(meta.tool_name) || str(meta.tool_title);
+  return {
+    kind: "tool",
+    toolName: tool ? `mcp__${server}__${tool}` : `mcp__${server}`,
+    input: {
+      server,
+      ...(tool ? { tool } : {}),
+      ...(str(meta.connector_name) ? { connector: str(meta.connector_name) } : {}),
+      arguments: meta.tool_params ?? null,
+    },
+    ...(str(params.message) ? { reason: str(params.message) } : {}),
   };
 }
 

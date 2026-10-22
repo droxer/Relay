@@ -11,7 +11,7 @@ import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
-import { BROKER_UNAVAILABLE, askBroker, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
+import { BROKER_UNAVAILABLE, askBroker, questionId, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
 
 /** Asks the broker about one tool use; injectable for tests. */
 export type AskBroker = (question: PermissionQuestion) => Promise<PermissionAnswer>;
@@ -118,15 +118,23 @@ function askUserQuestions(input: unknown): PermissionQuestionItem[] | undefined 
         ? [{ label: label.trim(), ...(typeof description === "string" && description.trim() ? { description: description.trim() } : {}) }]
         : [];
     });
-    return [{ id: text, text, options, ...(question.multiSelect === true ? { multiSelect: true } : {}) }];
+    return [{ id: questionId(text), text, options, ...(question.multiSelect === true ? { multiSelect: true } : {}) }];
   });
   return questions.length ? questions : undefined;
 }
 
-/** Claude reads a question's answer from `answers[question]`; several picks join with ", ". */
+/**
+ * Claude reads a question's answer from `answers[question]`, keyed by the
+ * question exactly as it asked it; several picks join with ", ".
+ */
 function withAnswers(toolName: string, input: unknown, answers: PermissionAnswers | undefined): unknown {
   if (toolName !== ASK_USER_QUESTION || !answers) return input;
-  const joined = Object.fromEntries(Object.entries(answers).map(([question, picks]) => [question, picks.join(", ")]));
+  const asked = Array.isArray(record(input).questions) ? record(input).questions as unknown[] : [];
+  const joined = Object.fromEntries(asked.flatMap((item) => {
+    const question = record(item).question;
+    const picks = typeof question === "string" ? answers[questionId(question)] : undefined;
+    return typeof question === "string" && picks?.length ? [[question, picks.join(", ")]] : [];
+  }));
   return { ...record(input), answers: joined };
 }
 

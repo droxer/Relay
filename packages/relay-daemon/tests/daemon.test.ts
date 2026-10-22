@@ -976,6 +976,66 @@ test("a native local Claude run asks a person through the daemon's permission br
   assert.ok(events.some((event) => event.type === "run.completed"));
 });
 
+test("a native local run fails rather than run without asking when its permission broker cannot start", async () => {
+  const previous = captureEnv(["RELAY_AGENT_HOME", "RELAY_RUN_AS_CURRENT_USER", "RELAY_AGENT_WORKSPACE", "RELAY_LOCAL_PERMISSION_POLICY", "TMPDIR"]);
+  delete process.env.RELAY_LOCAL_PERMISSION_POLICY;
+  // The broker's private directory goes under the temp dir; a missing one stops it starting.
+  process.env.TMPDIR = join(tmpdir(), `relay-missing-${process.pid}-${Date.now()}`, "nested");
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  const agentCommands: string[] = [];
+  let commandServed = false;
+  // Pi's headless command asks no one, so running it here would fail open.
+  const command = { ...runCommand("cmd_no_broker"), agent: "pi" as const };
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_no_broker",
+      userId: "alice",
+      workspacePath: process.cwd(),
+      sandbox: "none",
+      token: "node_token",
+      pollIntervalMs: 5,
+      shutdownGraceMs: 50,
+      logger: testLogger(),
+      signal: stop.signal,
+      environment: fakeEnvironment({
+        exec: async (_cmd, args) => {
+          if (!isInventoryProbe(args)) agentCommands.push(args?.[1] ?? "");
+          return { exit_code: 0, stdout: "done\n", stderr: "" };
+        },
+      }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!commandServed) {
+            commandServed = true;
+            return jsonResponse({ commands: [command] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.completed" || event.type === "run.failed") stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+  } finally {
+    restoreCapturedEnv(previous);
+  }
+
+  const failed = events.find((event) => event.type === "run.failed");
+  assert.ok(failed && failed.type === "run.failed", `expected run.failed, saw ${events.map((event) => event.type).join(", ")}`);
+  assert.match(failed.error, /could not start the permission prompt/);
+  assert.ok(!events.some((event) => event.type === "run.completed"));
+  assert.deepEqual(agentCommands.filter((script) => /\bpi\b/.test(script)), []);
+});
+
 test("relay daemon advertises active delivery leases while polling", async () => {
   const stop = new AbortController();
   const command = { ...runCommand("cmd_active_poll"), leaseId: "lease_1", leaseExpiresAt: new Date(Date.now() + 60_000).toISOString() };

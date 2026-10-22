@@ -7,6 +7,10 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
+import { PERMISSION_TEXT_LIMIT } from "relay-core";
+import { handleMessage } from "../src/permission-adapters/claude-mcp.js";
+import { QUESTION_TEXT_LIMIT, questionId } from "../src/permission-adapters/protocol.js";
+import { parseQuestions } from "../src/permission-broker.js";
 
 const SERVER = fileURLToPath(new URL("../src/permission-adapters/claude-mcp.js", import.meta.url));
 const SECRET = "broker-secret";
@@ -159,6 +163,24 @@ describe("Claude permission adapter (MCP server)", () => {
     } finally {
       rpc.close();
     }
+  });
+
+  it("keys answers by Claude's own question text, even one the broker trims or cuts", async () => {
+    const long = `${"Why ".repeat(200)}?`;
+    const input = { questions: [{ question: "Which database?\n", options: [{ label: "Postgres" }] }, { question: long, options: [{ label: "Because" }] }] };
+    const response = await handleMessage(
+      { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "approve", arguments: { tool_name: "AskUserQuestion", input } } },
+      async (question) => {
+        // Use the real broker parser so answer ids include its normalization.
+        const stored = parseQuestions(question.questions)!;
+        return { behavior: "allow", answers: { [stored[0].id]: ["Postgres"], [stored[1].id]: ["Because"] } };
+      },
+    );
+    const text = (response?.result as { content: Array<{ text: string }> }).content[0].text;
+    assert.deepEqual(JSON.parse(text).updatedInput.answers, { "Which database?\n": "Postgres", [long]: "Because" });
+    assert.equal(questionId(long).length, QUESTION_TEXT_LIMIT - 1);
+    assert.equal(questionId("x".repeat(QUESTION_TEXT_LIMIT + 1)).length, QUESTION_TEXT_LIMIT);
+    assert.equal(QUESTION_TEXT_LIMIT, PERMISSION_TEXT_LIMIT);
   });
 
   it("denies when the broker cannot be reached", async () => {
