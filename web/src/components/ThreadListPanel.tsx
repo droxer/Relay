@@ -32,6 +32,7 @@ import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 
 // The logged-in user's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current user's
@@ -324,18 +325,6 @@ export function ThreadListPanel({
       />
     </aside>
   );
-}
-
-const MINUTE_MS = 60_000;
-
-/** Date.now(), refreshed once a minute — the only clock the rail's stamps read. */
-function useMinuteClock(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
 }
 
 /**

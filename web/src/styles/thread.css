@@ -498,16 +498,15 @@
    table lives in ThreadRow. */
 
 /* The live pip breathes in place instead of wearing the shared halo, which
-   rides 5px proud of the dot and has no room on a title line. Pulsing the
-   dot's own opacity says "working" in its own 8px box. Reduced motion is
-   settled by a11y.css — the one-shot animation ends back at full opacity. */
+   rides 5px proud of the dot and has no room on a title line. Drawing in and
+   filling back out says "working" in its own 8px box, calmly. Reduced motion
+   is settled by a11y.css — the one-shot animation ends back at full size. */
 .conversation-row .state-mark[data-shape="live"]::after {
   content: none;
 }
 
 .conversation-row .state-mark[data-shape="live"] {
-  --blink-from: 0.45;
-  animation: blink var(--t-pulse) var(--ease) infinite;
+  animation: breathe var(--t-pulse) var(--ease-breathe) infinite;
 }
 
 .conversation-row-actions {
@@ -606,9 +605,11 @@
 /* Coarse-pointer sizing is owned by a11y.css, which pins these buttons to
    the documented 32px WCAG 2.5.8 tier — and loads last, so it wins. */
 
+/* Stamps sit one tier back so the titles and the state pips carry the rail;
+   the calm pass quiets chrome that talks on every row. */
 .conversation-stamp {
   flex-shrink: 0;
-  color: var(--ink-3);
+  color: var(--ink-4);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
 }

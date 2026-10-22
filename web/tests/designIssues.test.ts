@@ -140,8 +140,12 @@ describe("reviewed design regressions", () => {
     }
     assert.doesNotMatch(styles, /relay-bleed-mark|relay-plate|marginalia|--et-tick/);
     assert.doesNotMatch(styles, /\.relay-empty(-avatar)?::(before|after)/);
-    // The hero renders settled like every other empty state.
-    assert.doesNotMatch(styles, /animation:\s*rise/);
+    // Empty states render settled. The one exception is the new-thread
+    // landing, whose pieces rise in once as the welcome (the calm pass,
+    // 2026-10-22) — so a rise may only ever be scoped to .transcript-empty.
+    for (const rule of styles.matchAll(/([^{}]+)\{[^}]*animation:\s*rise/g)) {
+      assert.match(rule[1], /^\s*\.transcript-empty\b/, `rise outside the landing: ${rule[1].trim()}`);
+    }
   });
 
   it("associates reviewed select triggers with their visible labels", () => {
