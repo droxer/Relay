@@ -193,7 +193,7 @@
   width: min(40vmin, 360px);
   height: min(40vmin, 360px);
   /* The brand handoff as a watermark, the same wash the sign-in cover uses. */
-  --chevron-lead: color-mix(in srgb, var(--action) 10%, transparent);
+  --chevron-lead: var(--action-soft);
   --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
   --chevron-trail-opacity: 1;
   pointer-events: none;

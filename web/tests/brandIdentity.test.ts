@@ -202,10 +202,20 @@ describe("the brand where Relay introduces itself", () => {
     assert.match(primary, /color: var\(--on-action\);/);
   });
 
+  it("fills only the hero's door above the fold; the nav's sign-in is the outline tier", () => {
+    // One filled primary per view: a second orange plate in the header beside
+    // the hero's own made the page shout the same click twice.
+    const screen = read("web", "src", "components", "landing", "LandingScreen.tsx");
+    const nav = screen.indexOf(`<header className="landing-nav">`);
+    const header = screen.slice(nav, screen.indexOf("</header>", nav));
+    assert.doesNotMatch(header, /tone="primary"/);
+    assert.match(header, /<CtaLink cta=\{ctas\.primary\} tone="secondary" \/>/);
+  });
+
   it("draws both watermarks as the handoff in the two accents", () => {
     for (const [file, selector] of [["landing.css", ".landing-bleed"], ["login.css", ".login-bleed"]] as const) {
       const body = readStyle(file).match(new RegExp(`\\${selector} \\{([^}]*)\\}`))?.[1] ?? "";
-      assert.match(body, /--chevron-lead: color-mix\(in srgb, var\(--action\)/, `${file} watermark lead`);
+      assert.match(body, /--chevron-lead: var\(--action-soft\);/, `${file} watermark lead`);
       assert.match(body, /--chevron-trail: color-mix\(in srgb, var\(--live\)/, `${file} watermark trail`);
     }
   });

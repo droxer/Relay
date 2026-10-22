@@ -101,6 +101,14 @@ it("accepts a reviewed task in one click, and asks for changes through the compo
   expect(onReply).toHaveBeenCalledOnce();
 });
 
+it("steps Accept down to outline while a turn decision holds the view's primary", () => {
+  const { rerender } = render(<TaskActionBar task={task("review")} busy={null} onAccept={() => {}} onUnblock={() => {}} onReply={() => {}} />);
+  const accept = () => screen.getByRole("button", { name: "thread.lifecycle.accept" });
+  expect(accept().getAttribute("data-variant")).toBe("default");
+  rerender(<TaskActionBar task={task("review")} busy={null} deferPrimary onAccept={() => {}} onUnblock={() => {}} onReply={() => {}} />);
+  expect(accept().getAttribute("data-variant")).toBe("outline");
+});
+
 it("offers to lift a block, and holds its controls while a move is in flight", () => {
   const onUnblock = vi.fn();
   const { rerender } = render(<TaskActionBar task={task("blocked", () => {}, { blockerReason: "No disk" })} busy={null} onAccept={() => {}} onUnblock={onUnblock} onReply={() => {}} />);
