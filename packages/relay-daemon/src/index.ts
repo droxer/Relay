@@ -1361,14 +1361,14 @@ async function executeCommand(
         logger,
       });
     } catch (error) {
-      // Without a broker the run keeps its runtime's usual headless command,
-      // which asks no one: Claude denies, Codex stays inside its sandbox, and
-      // Kimi and Pi decide on their own.
-      logger.warn("permission broker unavailable; the run will not ask a person", {
+      // Never fall back to the runtime's headless command: Pi and Kimi there
+      // run every tool without asking anyone, which a native policy forbids.
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn("permission broker unavailable; the run cannot ask a person", {
         ...commandLogFields(sandboxId, command),
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
-      return await run(runState);
+      throw new Error(`Relay could not start the permission prompt for this run: ${message}`);
     }
     try {
       return await run({ ...runState, permission_prompt: permissionAdapterLaunch(support.adapter, broker) });

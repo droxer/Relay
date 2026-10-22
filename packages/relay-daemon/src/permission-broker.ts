@@ -154,6 +154,7 @@ function serveConnection(socket: Socket, secret: string, options: PermissionBrok
   const hungUp = new AbortController();
   const signal = AbortSignal.any([brokerSignal, hungUp.signal]);
   let buffer = "";
+  let asked = false;
   let answered = false;
   const reply = (decision: PermissionAnswer): void => {
     if (answered) return;
@@ -164,11 +165,13 @@ function serveConnection(socket: Socket, secret: string, options: PermissionBrok
   socket.on("error", () => hungUp.abort(HUNG_UP));
   socket.on("close", () => hungUp.abort(HUNG_UP));
   socket.on("data", (chunk: string) => {
-    if (answered) return;
+    // One question per connection: bytes after its first line never ask again.
+    if (answered || asked) return;
     buffer += chunk;
     if (buffer.length > MAX_REQUEST_BYTES) return reply(deny("The permission request was too large."));
     const newline = buffer.indexOf("\n");
     if (newline < 0) return;
+    asked = true;
     const request = parseRequest(buffer.slice(0, newline), secret);
     if (!request) return reply(deny("The permission request was not from this run."));
     void askPerson(request, options, signal).then(reply, (error: unknown) => {

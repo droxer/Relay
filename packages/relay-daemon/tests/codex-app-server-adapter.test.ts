@@ -9,6 +9,7 @@ import { after, before, describe, it } from "node:test";
 
 import { answerServerRequest, cmdQuote, parseCodexAdapterArgs, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
 import { CodexExecEventTranslator } from "../src/permission-adapters/codex-exec-events.js";
+import type { PermissionQuestion } from "../src/permission-adapters/protocol.js";
 
 const ADAPTER = fileURLToPath(new URL("../src/permission-adapters/codex-app-server.js", import.meta.url));
 const SECRET = "codex-secret";
@@ -32,6 +33,12 @@ process.on("SIGTERM", () => { log({ signal: "SIGTERM" }); process.exit(0); });
 async function playTurn() {
   note("turn/started", { threadId: thread, turn: { id: turn, status: "inProgress", items: [] } });
   if (mode === "hang") return;
+  if (mode === "crash") {
+    // The runtime dies while a person has not answered yet.
+    send({ id: "srv_crash", method: "item/commandExecution/requestApproval", params: { ...T, itemId: "c9", kind: "command", command: "make", cwd: "/w" } });
+    setTimeout(() => process.exit(1), 200);
+    return;
+  }
   note("item/started", { ...T, item: { type: "userMessage", id: "u1", content: [] } });
   note("item/completed", { ...T, item: { type: "agentMessage", id: "m1", text: "Working." } });
   const command = { type: "commandExecution", id: "c1", command: "touch /outside", cwd: "/w", status: "inProgress", aggregatedOutput: null, exitCode: null, commandActions: [] };
@@ -193,6 +200,26 @@ describe("Codex app-server adapter", () => {
     assert.ok(result.log.some((entry) => entry.signal === "SIGTERM"));
   });
 
+  it("hangs up an open question and exits when the app-server dies before the person answers", async () => {
+    // A broker that takes the question and never answers, like a person away.
+    const silentSocket = join(directory, "silent.sock");
+    const silentFile = join(directory, "silent.json");
+    writeFileSync(silentFile, JSON.stringify({ socket: silentSocket, secret: SECRET }));
+    let hungUp = false;
+    const silent = createServer((socket) => socket.resume().on("close", () => { hungUp = true; }));
+    await new Promise<void>((resolve) => silent.listen(silentSocket, resolve));
+    try {
+      const started = Date.now();
+      const result = await run(["--cwd", directory, "--", "go"], { FAKE_MODE: "crash", RELAY_PERMISSION_FILE: silentFile });
+      assert.equal(result.code, 1);
+      assert.ok(Date.now() - started < 5_000, "the adapter must not wait on a question nobody can act on");
+      for (let tries = 0; tries < 100 && !hungUp; tries++) await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.ok(hungUp, "the broker sees the hang-up, so it withdraws the prompt");
+    } finally {
+      silent.close();
+    }
+  });
+
   it("parses exec-style options and requires a prompt", () => {
     assert.deepEqual(parseCodexAdapterArgs(["-c", "a=1", "--cwd", "/w", "--resume", "r", "--", "hello", "there"]),
       { config: ["a=1"], cwd: "/w", resume: "r", prompt: "hello there" });
@@ -243,6 +270,37 @@ describe("Codex app-server adapter", () => {
     assert.deepEqual(await answerServerRequest("item/permissions/requestApproval", { itemId: "p", permissions: {} }, deny), { permissions: {}, scope: "turn" });
     assert.deepEqual(await answerServerRequest("mcpServer/elicitation/request", {}, allow), { action: "decline", content: null, _meta: null });
     assert.equal(await answerServerRequest("account/chatgptAuthTokens/refresh", {}, allow), undefined);
+  });
+
+  it("asks a person before an MCP tool call and runs it once on allow", async () => {
+    const params = {
+      serverName: "linear",
+      threadId: "thr",
+      mode: "form",
+      message: "Allow the linear MCP server to run tool \"create_issue\"?",
+      requestedSchema: { type: "object", properties: {} },
+      _meta: { codex_approval_kind: "mcp_tool_call", tool_name: "create_issue", connector_name: "Linear", tool_params: { title: "Bug" } },
+    };
+    const asked: PermissionQuestion[] = [];
+    const answer = (behavior: "allow" | "deny") => async (question: PermissionQuestion) => {
+      asked.push(question);
+      return behavior === "allow" ? { behavior } : { behavior, message: "no" };
+    };
+    assert.deepEqual(await answerServerRequest("mcpServer/elicitation/request", params, answer("allow")), { action: "accept", content: {}, _meta: null });
+    assert.deepEqual(await answerServerRequest("mcpServer/elicitation/request", params, answer("deny")), { action: "decline", content: null, _meta: null });
+    assert.deepEqual(asked[0], {
+      kind: "tool",
+      toolName: "mcp__linear__create_issue",
+      input: { server: "linear", tool: "create_issue", connector: "Linear", arguments: { title: "Bug" } },
+      reason: "Allow the linear MCP server to run tool \"create_issue\"?",
+    });
+    // Any other MCP form still declines without asking.
+    const before = asked.length;
+    assert.deepEqual(
+      await answerServerRequest("mcpServer/elicitation/request", { ...params, _meta: { codex_approval_kind: "other" } }, answer("allow")),
+      { action: "decline", content: null, _meta: null },
+    );
+    assert.equal(asked.length, before);
   });
 });
 

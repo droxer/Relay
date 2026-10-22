@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
-import { runKimiAcp, type AskBroker } from "../src/permission-adapters/kimi-acp.js";
+import { answerPermissionRequest, runKimiAcp, SessionUpdateTranslator, StreamJsonWriter, type AskBroker } from "../src/permission-adapters/kimi-acp.js";
 import { permissionAdapterScript } from "../src/permission-adapters/index.js";
 import type { PermissionQuestion } from "../src/permission-adapters/protocol.js";
 
@@ -32,6 +32,12 @@ async function prompt(id, params) {
   const sid = params.sessionId;
   log({ prompt: params.prompt });
   if (process.env.FAKE_KIMI_HANG === "1") { log({ hanging: true }); return; }
+  if (process.env.FAKE_KIMI_CRASH === "1") {
+    // Kimi dies while a person has not answered yet.
+    send({ id: "perm-crash", method: "session/request_permission", params: { sessionId: sid, options, toolCall: { toolCallId: "c9", title: "Bash", rawInput: { command: "make" } } } });
+    setTimeout(() => process.exit(1), 200);
+    return;
+  }
   update(sid, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking" } });
   update(sid, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Let me " } });
   update(sid, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "check." } });
@@ -192,6 +198,46 @@ describe("Kimi ACP adapter", () => {
     const bare = await run("allow", { env: { FAKE_KIMI_BARE_QUESTION: "1" } });
     assert.equal(bare.questions.length, 1);
     assert.deepEqual(bare.log.find((entry) => "question" in entry)?.question, { outcome: { outcome: "selected", optionId: "q0_skip" } });
+  });
+
+  it("asks only the first question, single-pick, since one ACP reply carries one option", async () => {
+    const asked: PermissionQuestion[] = [];
+    const translator = new SessionUpdateTranslator(new StreamJsonWriter({ write: () => undefined }));
+    const outcome = await answerPermissionRequest({
+      options: [{ optionId: "q0_opt_0", name: " Postgres ", kind: "allow_once" }, { optionId: "q0_skip", name: "Skip", kind: "reject_once" }],
+      toolCall: { toolCallId: "ask", title: "AskUserQuestion", rawInput: { questions: [
+        { question: "Which database? ", options: [{ label: "Postgres" }], multiSelect: true },
+        { question: "Which region?", options: [{ label: "EU" }] },
+      ] } },
+    }, translator, async (question) => {
+      asked.push(question);
+      return { behavior: "allow", answers: { "Which database?": ["Postgres"] } };
+    });
+    assert.deepEqual(asked[0].questions, [{ id: "Which database?", text: "Which database?", options: [{ label: "Postgres" }] }]);
+    assert.deepEqual(outcome, { outcome: { outcome: "selected", optionId: "q0_opt_0" } });
+  });
+
+  it("hangs up an open question and returns when Kimi dies before the person answers", async () => {
+    let hungUp = false;
+    const ask: AskBroker = (_question, signal) => new Promise((resolve) => {
+      signal?.addEventListener("abort", () => {
+        hungUp = true;
+        resolve({ behavior: "deny", message: "hung up" });
+      }, { once: true });
+    });
+    const started = Date.now();
+    const code = await runKimiAcp(
+      { kimiCommand: fakeKimi, cwd: root, prompt: "go" },
+      {
+        stdout: { write: () => undefined },
+        stderr: { write: () => undefined },
+        ask,
+        env: { ...process.env, FAKE_KIMI_LOG: newLog(), FAKE_KIMI_CRASH: "1" },
+      },
+    );
+    assert.equal(code, 1);
+    assert.ok(Date.now() - started < 5_000);
+    assert.ok(hungUp, "the open question is hung up so the broker withdraws it");
   });
 
   it("fails the run when Kimi stops the turn for anything but end_turn", async () => {
