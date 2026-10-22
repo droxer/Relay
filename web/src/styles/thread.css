@@ -647,7 +647,7 @@
 }
 
 /* No pip on the group label: every row beneath it already carries its own,
-   and a second amber dot one line above the first said the same thing twice.
+   and a second warn dot one line above the first said the same thing twice.
    The label stays muted so status hue reads only as a row pip. */
 .conversation-group[data-tone="attn"] .conversation-group-label {
   color: var(--ink-3);

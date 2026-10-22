@@ -374,7 +374,7 @@
   color: var(--ink-1);
   background: var(--surface-3);
   border: 0.5px solid var(--ink-4);
-  /* Agents are squares; the human is a circle. Yellow is reserved for action
+  /* Agents are squares; the human is a circle. Accent hues are reserved for action
      and live work, so the human-vs-machine tell is the silhouette, not a
      fill. Agent identity is the profile image inside — so every variant below
      sets its own radius and this base deliberately declares none. */

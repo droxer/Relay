@@ -11,20 +11,24 @@ specifies Relay's current dense workspace UI. The [source-system appendix](#appe
 is historical design reference, not a component specification: Relay adapts its
 colors and typography but uses compact corners and flat elevation.
 
-> **A neutral canvas carries the content; the ultramarine accent carries the
+> **A neutral canvas carries the content; the baton-orange accent carries the
 > one action to take and marks what is selected; purple means an agent is
-> working.** The logo draws both as a handoff: an ultramarine lead chevron
+> working.** The logo draws both as a handoff: a baton-orange lead chevron
 > (what a person does) and a purple trailing one (an agent carrying it on).
 
-**One brand blue.** `--action`, `--link`, the focus ring, and the app icons'
-lead chevron all sit on one hue (oklch 268, ultramarine): 10° toward violet
-from stock SaaS cobalt so the product owns its blue, and still 47° clear of
-`--live` so "act" never reads as "working". `paletteTokens.test.ts` asserts
-the shared hue and that every icon matches its register's tokens.
+**One brand orange.** `--action`, `--link`, the focus ring, and the app
+icons' lead chevron all sit on one hue (baton orange, oklch ~50 dark / ~46
+light): the relay baton, the thing a person hands over. Most developer tools
+lead with blue, so the orange is ownable at a glance; it sits ~90° from
+`--live` so "act" never reads as "working". Orange sits between two status
+hues, so the warning moved from amber to gold (hue ~89) and the action keeps
+at least 30° from `--warn` and 20° from `--err`. `brandIdentity.test.ts`
+asserts the shared hue, those gaps, and that every icon matches its
+register's tokens.
 
 Near-black and near-white canvases (`#0a0a0a` / `#fafafa`), achromatic grey
 elevation and hairlines, a neutral ink ramp, the source system's semantic
-status hues, and blue held back for the primary action, selection, and
+status hues, and orange held back for the primary action, selection, and
 links. The surfaces follow Vercel Geist's neutrals (PR #324); the primary
 action follows Linear's convention of a console that leads with its accent.
 It supersedes the cloud-canvas commerce register, which superseded Fieldnotes
@@ -32,7 +36,7 @@ and Phosphor.
 
 - **The primary action wears the accent — one per view.** shadcn's
   `--primary` points at `--action` (`shadcn-bridge.css`), so every default
-  `Button` and the page's create action fill with ultramarine in both registers,
+  `Button` and the page's create action fill with baton orange in both registers,
   the way Linear leads with its accent. It is a scarce mark: one filled
   primary per view, and anything beside it steps down to `outline` or
   `ghost` (the page-header "+" is neutral `--surface-2`). There is no
@@ -43,9 +47,9 @@ and Phosphor.
   picker's hover disc; the login screen repaints its CTA (`.login-submit`)
   as the theme's neutral ink plate.
 - **The accent also marks selection.** `--action` is **tuned per register** — light
-  `#7194fe` with dark `--on-action` (6.95:1) on the dark canvas, deep `#2a44d3`
-  with white (7.3:1) on the light one; `--action-hover` moves away from the
-  canvas (`#90aefe` / `#2237af`). Beyond the primary fill it says *this one*:
+  `#ff8a3d` with dark `--on-action` (8.4:1) on the dark canvas, deep burnt
+  orange `#ad4800` with white (5.7:1) on the light one; `--action-hover` moves
+  away from the canvas (`#ffa060` / `#8f3b00`). Beyond the primary fill it says *this one*:
   the selected-row accent bar, the active nav marker, checked checkboxes,
   radios and switches, the current pager page, `::selection`, and the skip
   link. Selection stays calm — a 10% wash plus the bar, never a solid fill —
@@ -70,11 +74,11 @@ and Phosphor.
   canvas `#0a0a0a` lifts through `#171717` cards to `#262626` drawers, and the
   light canvas `#fafafa` carries white cards and white floating chrome,
   separated by hairlines rather than a grey wash.
-- **Two accents, two jobs.** Cobalt and Oculus purple, and nothing else.
-  Cobalt is selection; the purple is `--live`, work an agent is doing *right
-  now*. Splitting them across hues rather than across channels is deliberate:
-  a pulsing blue dot beside a selected blue row would put "working" and
-  "chosen" in the same colour.
+- **Two accents, two jobs.** Baton orange and Oculus purple, and nothing
+  else. Orange is the action and selection; the purple is `--live`, work an
+  agent is doing *right now*. Splitting them across hues rather than across
+  channels is deliberate: a pulsing orange dot beside a selected orange row
+  would put "working" and "chosen" in the same colour.
 - **One sans, every job.** Relay sets everything in the **platform UI face**
   (San Francisco, Segoe UI, Roboto, Noto Sans) — no sans web font is loaded,
   and English and Chinese share one stack.
@@ -165,7 +169,7 @@ Tailwind `@theme` machinery:
 
 **Naming rule:** component CSS only ever references a palette token
 (`--surface-*`, `--ink-*`, `--line-*`, `--action*`,
-`--ok/--warn/--err/--info`, `--live`, `--link-blue*`, `--code-*`, `--r-*`,
+`--ok/--warn/--err/--info`, `--live`, `--link-ink*`, `--code-*`, `--r-*`,
 `--opacity-*`, `--sp-*`, `--control-h*`, `--card-h-*`, `--icon-*`,
 `--avatar-*`, `--dot*`, `--measure*`, `--fs-*`, `--leading-*`, `--track-*`,
 `--font-*`, `--z-*`, `--t-*`, `--rise*`, `--ease`, the shell widths) or a role
@@ -199,13 +203,13 @@ Dark register / light register:
 | `--line-2` | `#292929` | `#e5e5e5` | soft hairline |
 | `--cta-fill` / `--cta-hover` | `#ededed` / `#d4d4d4` | `#171717` / `#383838` | neutral inverted fill (composer send, landing CTA, profile-image hover disc) — not the default Button |
 | `--cta-ink` | `#0a0a0a` | `#ffffff` | text on the neutral inverted fill |
-| `--action` | `#7194fe` | `#2a44d3` | primary action + selection — periwinkle on dark, deep ultramarine on light |
-| `--action-hover` | `#90aefe` | `#2237af` | pressed fill — moves away from the canvas |
+| `--action` | `#ff8a3d` | `#ad4800` | primary action + selection — bright orange on dark, deep burnt orange on light |
+| `--action-hover` | `#ffa060` | `#8f3b00` | pressed fill — moves away from the canvas |
 | `--on-action` | `#0a0a0a` | `#ffffff` | ink on the action fill |
 | `--action-soft` | 10% accent wash | 10% accent wash | selection wash, active nav |
-| `--link` / `--link-hover` | `#a2bcff` / `#c3d4fd` | `#3e57a6` / `#2239a1` | anchors in prose, focus ring |
+| `--link` / `--link-hover` | `#ffaa75` / `#ffc49e` | `#a14300` / `#823600` | anchors in prose, focus ring |
 | `--ok` | `#4ac16a` | `#12752f` | ready, passed, done |
-| `--warn` | `#fc9f30` | `#8f560f` | attention, degraded — amber, not the highlighter yellow |
+| `--warn` | `#e8b923` | `#7a5c00` | attention, degraded — muted gold, clear of the orange action and the highlighter yellow |
 | `--err` | `#ff6367` | `#c81232` | failed, destructive |
 | `--on-err` | `#0a0a0a` | `#ffffff` | text on the critical fill |
 | `--info` | = `--ink-3` | = `--ink-3` | neutral notice |
@@ -243,10 +247,10 @@ can land on**, not against the canvas. Ratios against that plane:
 pinning the hexes themselves, so a future palette move is checked for
 *legibility* rather than for matching a list. The same test asserts each
 status tone still reads as **its hue** (green leads in `--ok`, red in `--err`,
-amber's channels descend r > g > b) — the deepening AA forced on the light
+gold's channels descend r > g > b) — the deepening AA forced on the light
 register must not turn a green into a grey.
 
-`--action-soft` is not a hex: it is a `color-mix` of the ultramarine into
+`--action-soft` is not a hex: it is a `color-mix` of the action orange into
 transparency, so the selection wash always tracks the action colour.
 
 A **pinned group** (`--dark-canvas`, `--dark-surface`, `--dark-ink`,
@@ -266,7 +270,7 @@ kind label, not by hue.
 
 Two accents, two jobs, and they never trade places:
 
-| ultramarine (`--action`) | purple (`--live`) |
+| orange (`--action`) | purple (`--live`) |
 |---|---|
 | the primary action fill (default `Button`, one per view) | composer running indicator |
 | the selected-row accent bar, active nav marker | |
@@ -299,7 +303,7 @@ same `--t-pulse`. Larger live objects (the transcript rail node) keep
 "Two accents" is a claim about **meaning**, not pigment. The carve-outs, all
 deliberate — a reader who takes the rule literally will file them as bugs:
 
-- **Link blue is wayfinding, not decoration**: anchors in prose (`--link`)
+- **Link ink is wayfinding, not decoration**: anchors in prose (`--link`)
   and the focus ring (`--focus-outline`). It is never a fill, a status, or an
   action.
 - **The brand mark carries both accents.** `favicon.svg` (dark register),
@@ -320,7 +324,7 @@ deliberate — a reader who takes the rule literally will file them as bugs:
   theme script sets `data-theme` before first paint; `login.css` aliases the
   live register as `--lg-*`). Its primary CTA (`.login-submit`) repaints the
   default Button as the neutral ink plate (`--ink-1` fill, canvas ink) rather
-  than ultramarine. The screen sets its field labels, error line, and footer meta
+  than orange. The screen sets its field labels, error line, and footer meta
   in the mono face — a deliberate skin; everywhere else mono is technical
   text only.
 - **Empty states remain still.** They share type, spacing, and an optional
@@ -508,17 +512,17 @@ stacks.
   hairlines and selection marks (`--accent-bar` is one); an offset or blurred
   shadow is not. The landing page's sticky nav is the one `backdrop-filter`
   — a marketing surface, like the login cover.
-- **Focus:** `--focus-outline` — a 2px solid **link-blue** ring at a 2px
+- **Focus:** `--focus-outline` — a 2px solid **link-ink** ring at a 2px
   offset (WCAG 1.4.11), drawn with `outline`, **not** `box-shadow`, so no
   ancestor's `overflow: hidden` can clip it and forced-colors mode preserves
-  it. The ring is not the ultramarine action, so a focused primary button never
+  it. The ring is not the orange action, so a focused primary button never
   rings in more of its own fill. Destructive controls take
   `--focus-outline-danger`, which differs by **both** colour (`--err`) and
   shape (dashed) — the stroke style is the half that survives forced-colors
   mode, where the hue is dropped. A field inside a composite control (search
   box with a clear button, the composer well) suppresses its own ring and the
   wrapper draws the same outline on `:focus-within` — one ring per control,
-  never two, and never a ultramarine border inside it. The composer well is the one
+  never two, and never an orange border inside it. The composer well is the one
   exception: its caret is the focus cue, so the well darkens its own border to
   `--ink-4` instead of ringing (a 2px ring on its 20px corner read as an
   error); its footer pickers still ring normally.
@@ -594,11 +598,11 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 ## Do's and Don'ts
 
 ### Do
-- Use the default `Button` (ultramarine `--action` via `--primary`) for the
+- Use the default `Button` (orange `--action` via `--primary`) for the
   primary action, one per view; step every other button beside it down to
   `outline` or `ghost`.
 - Use `--action` otherwise for selection — accent bars, checked controls, the
-  current page — and pair a ultramarine fill with `--on-action`.
+  current page — and pair an orange fill with `--on-action`.
 - Use `--action-soft` for selected rows and active navigation.
 - Give buttons, tab chips, and badges `--r-2`; reserve `--r-full` for
   actual circles and capsules.
@@ -627,11 +631,11 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   in JS) and add a registry row in the same change as any new query.
 
 ### Don't
-- Don't use a status colour as an action, or ultramarine as a status or a link.
-- Don't put a second filled ultramarine button in a view, or make a selected row a
-  solid ultramarine fill — selection is the bar plus the 10% `--action-soft` wash.
-- Don't introduce a third accent. Cobalt is the action and selection, purple
-  is liveness, link blue is wayfinding; everywhere else the ink ramp is the
+- Don't use a status colour as an action, or orange as a status or a link.
+- Don't put a second filled orange button in a view, or make a selected row a
+  solid orange fill — selection is the bar plus the 10% `--action-soft` wash.
+- Don't introduce a third accent. Orange is the action and selection, purple
+  is liveness, link ink is wayfinding; everywhere else the ink ramp is the
   only signal.
 - Don't give controls pill corners (`--r-full` / `rounded-full`) or introduce
   radii beyond the 4/6/8px ladder.
@@ -722,7 +726,7 @@ token-usage chart stacks a three-step ink ramp of fresh tokens, dimmest at the
 base: output = `--ink-2` (brightest — it is the product of the work), input =
 `--ink-3`, cache writes = `--ink-4`. Cache reads are not charted, matching the
 fresh-token headline. **No series may take
-`--action`**: a ultramarine chart fill reads as "click me". Because the ramp
+`--action`**: an orange chart fill reads as "click me". Because the ramp
 deliberately uses neighbouring ink steps, each segment carries a
 `--surface-1` hairline stroke — adjacent steps of a monochrome ramp merge
 into one flat band without it.
@@ -832,7 +836,7 @@ explains it is in parentheses.
 1. **Colour source.** No hex, `rgb()`, or `hsl()` outside `palette.css`;
    derived colours are `color-mix()` over tokens. (Token architecture)
 2. **One primary per view.** At most one filled default `Button`
-   (ultramarine `--primary`); its siblings are `outline` / `ghost` /
+   (orange `--primary`); its siblings are `outline` / `ghost` /
    `destructive`. `--cta-fill` appears only on the composer send, landing CTA,
    and profile-image hover disc. (Overview)
 3. **Accent scope.** `--action` only for the primary fill and selection (bar,
@@ -947,12 +951,12 @@ Key characteristics:
 
 | Source token | Relay token | What changed and why |
 |---|---|---|
-| `primary` / `primary-deep` / `on-primary` | `--action` / `--action-hover` / `--on-action` | Retuned per register and moved 10° toward violet (ultramarine, oklch 268): `#7194fe` / `#90aefe` with dark ink on the dark canvas, `#2a44d3` / `#2237af` with white on the light one. Relay is entirely in-product, so the accent is *the* action rather than a commerce-only variant. The published `#0064e0` no longer appears anywhere. |
+| `primary` / `primary-deep` / `on-primary` | `--action` / `--action-hover` / `--on-action` | Replaced by baton orange, retuned per register: `#ff8a3d` / `#ffa060` with dark ink on the dark canvas, `#ad4800` / `#8f3b00` with white on the light one. Relay is entirely in-product, so the accent is *the* action rather than a commerce-only variant. The published `#0064e0` no longer appears anywhere. |
 | `ink-button` / `on-ink-button` | `--cta-fill` / `--cta-ink` | Kept as a neutral inverted fill (`#ededed` on dark, `#171717` on light) for the composer send and profile-image hover disc — not the default Button. |
 | `primary-soft` | `--action-soft` | Carried as a `color-mix` wash rather than a flat hex, so the selection tint tracks the action colour. |
-| `meta-link` | `--link-blue` (light) | Verbatim. Dark lifts it to `#8ab4f8` for AA on the ink-deep canvas. |
-| `oculus-purple` | `--live` | Verbatim in light, lifted in dark. Relay spends the second sanctioned accent on liveness because cobalt is already the action. |
-| `success` / `warning` / `critical` | `--ok` / `--warn` / `--err` | Hue family kept; lightness retuned per register so each clears 4.5:1 as *small text* — the published values are badge-fill colours. The warning additionally walks from the published golden yellow (hue 82) to an amber at hue 65, so a caution stops out-shouting the critical red beside it and keeps 43° of clearance from it. |
+| `meta-link` | `--link-ink` | Replaced: links take a softer shade of the action's orange in both registers, so the product has one accent hue. |
+| `oculus-purple` | `--live` | Verbatim in light, lifted in dark. Relay spends the second sanctioned accent on liveness because orange is already the action. |
+| `success` / `warning` / `critical` | `--ok` / `--warn` / `--err` | Hue family kept; lightness retuned per register so each clears 4.5:1 as *small text* — the published values are badge-fill colours. The warning moves to a muted gold (hue ~89, lower lightness than the published highlighter #f7b928), so it stays clear of the orange action and stops out-shouting the critical red. |
 | `canvas` / `surface-soft` | `--surface-1`, `--surface-3` / `--surface-2` | White carries cards and floating chrome in light; the page is Geist's `#fafafa` (`--surface-0`) and the recessed fill is an achromatic `#ebebeb`. The cool `#f1f4f7` grey is not used. |
 | `ink-deep` / `ink` / `charcoal` | `--ink-1` / `--ink-2` / `--ink-3` | Replaced by Geist's achromatic ramp (`#171717` / `#262626` / `#525252` in light). |
 | `steel` | `--ink-4` | Replaced by `#666666` in light, the lightest grey that still clears AA on the recessed fill. |
@@ -1159,7 +1163,7 @@ treatment, a spec table takes the tech-specs treatment.
 
 - Reserve cobalt for buy-now CTAs; its weight is meaningful precisely because
   it does not appear on marketing pages. *(Relay reads this as: keep the action
-  colour scarce — one filled cobalt button per view.)*
+  colour scarce — one filled action button per view.)*
 - Use the black pill for marketing-surface primaries, paired with the outlined
   secondary.
 - Apply the full radius to every button, category pill, badge, and chip.
@@ -1189,7 +1193,7 @@ to look before "fixing" something that looks unspecified:
 
 1. **Selected/checked states for non-button form controls** were not visible on
    the captured surfaces. Relay follows the `radio-option-selected` pattern —
-   cobalt on white — for `Checkbox` and `Switch` (`data-checked` takes the
+   the action fill on white — for `Checkbox` and `Switch` (`data-checked` takes the
    `--action` fill).
 2. **No animation or transition timings** were extracted; the analysis
    recommended 150–250ms ease-out for surface transitions and 300ms for
@@ -1199,7 +1203,7 @@ to look before "fixing" something that looks unspecified:
    `--t-stagger`) which the source has no equivalent for.
 3. **No dark-mode tokens** are published. Relay's dark register is derived —
    a near-black `#0a0a0a` canvas, an achromatic grey elevation ladder above
-   it, and a lighter ultramarine (`#7194fe`) carrying dark ink. Every
+   it, and a brighter orange (`#ff8a3d`) carrying dark ink. Every
    derived value is documented at its token in `palette.css`.
 4. **Pastel decorative tints** behind accessory cutouts are photographic
    content, not system colours. Relay has no equivalent surface and does not

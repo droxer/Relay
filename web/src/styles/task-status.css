@@ -106,7 +106,7 @@
 }
 
 /* The bars alone, for a control that names its rank in its label. Rank is
-   told by how many bars fill and how bright they are, never by hue: amber
+   told by how many bars fill and how bright they are, never by hue: gold
    (--warn) means "waiting on a person", and a high-priority task that nobody
    is blocking must not read as one. `high` takes the loudest ink instead. */
 .priority-glyph { --prio-accent: var(--ink-4); display: inline-flex; }

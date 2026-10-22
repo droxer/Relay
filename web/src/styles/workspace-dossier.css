@@ -224,9 +224,9 @@
   border: 0;
   background: transparent;
   /* Color and hover come from the primitive: these are Button
-     variant="ghost", and forcing --action text onto them painted action
-     yellow onto a non-action control (and failed AA on the light register,
-     where the raw yellow is fill-only). */
+     variant="ghost", and forcing --action text onto them painted the
+     action accent onto a non-action control (and failed AA on the light
+     register, where that era's raw accent was fill-only). */
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   text-transform: none;

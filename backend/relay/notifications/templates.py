@@ -5,7 +5,7 @@ minimal so it renders the same in every client. Anything a person typed (their
 name) is escaped before it reaches the HTML part.
 
 The HTML wears Relay's mark: a text wordmark whose two chevrons are the brand
-handoff (the action blue leading, the live purple trailing) and the one link
+handoff (the action orange leading, the live purple trailing) and the one link
 drawn as the action button. Mail clients ignore CSS variables and many drop
 SVG, so the light register's palette values are inlined here;
 tests/unit/test_email_brand_parity.py keeps them equal to palette.css.
@@ -64,7 +64,7 @@ _COPY = {
 
 # The light register of web/src/styles/tokens/palette.css (--action,
 # --on-action, --live, --ink-1, --ink-3): mail is read on white.
-BRAND_ACTION = "#2a44d3"
+BRAND_ACTION = "#ad4800"
 BRAND_ON_ACTION = "#ffffff"
 BRAND_LIVE = "#a121ce"
 BRAND_INK = "#171717"

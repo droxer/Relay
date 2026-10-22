@@ -192,7 +192,7 @@
      elevation: separation comes from --shadow-2's hairline ring, never a blur. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
-  /* The primary action wears the ultramarine accent — a Linear-style console
+  /* The primary action wears the baton-orange accent — a Linear-style console
      leads with its accent. Fill-only: see the --action proof in palette.css. */
   --primary: var(--action);
   --primary-foreground: var(--on-action);
@@ -215,7 +215,7 @@
   --destructive-foreground: var(--on-err);
   --border: var(--line-1);
   --input: var(--control-border);
-  --ring: var(--link); /* focus rings are link-blue, never the accent action:
+  --ring: var(--link); /* focus rings are link ink, never the accent action:
                           a focused primary button must not ring in more of
                           its own fill */
 }

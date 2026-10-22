@@ -321,7 +321,7 @@
 /* A quiet neutral fill — one step up the surface ladder with a hairline —
    not accent. The accent is the selection colour (the rail's active row, a checked
    box); a filled accent square on every list header made create the loudest
-   thing on the page and blurred what blue means. The fill still separates it
+   thing on the page and blurred what the accent means. The fill still separates it
    from the ghost refresh beside it, and `c` is the primary path anyway. */
 .page-header-icon-action--primary {
   color: var(--ink-1);

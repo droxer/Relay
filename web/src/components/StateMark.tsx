@@ -5,7 +5,7 @@ import type { Tone } from "../types";
  * The shape half of Relay's state vocabulary.
  *
  * Five or six states cannot be separated by colour alone even now that the
- * status tones carry hue: at a 10px mark, a green and an amber dot are two
+ * status tones carry hue: at a 10px mark, a green and a gold dot are two
  * dots. Colour therefore carries the *tone* (good → bad) and shape carries
  * the *class*:
  *

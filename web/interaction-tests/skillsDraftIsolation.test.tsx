@@ -103,7 +103,7 @@ it("marks the editor's required fields and gates Save on them", async () => {
   expect(field("Revision note").textContent).not.toContain("*");
 
   const save = () => screen.getByRole("button", { name: "Save details" }) as HTMLButtonElement;
-  // Nothing to save at rest: an enabled Save here was a live cobalt button
+  // Nothing to save at rest: an enabled Save here was a live action button
   // beside "Share" with no work to do.
   expect(save().disabled).toBe(true);
   // A required field emptied cannot be saved either.

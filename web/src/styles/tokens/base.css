@@ -81,7 +81,7 @@ body {
   z-index: var(--z-dialog);
   /* Parked a step past the top edge, not flush with it: at exactly -100% -
      top its bottom edge sat on y=0 and a fractional height let one row of
-     the action fill paint as a blue sliver over every page. */
+     the action fill paint as an orange sliver over every page. */
   transform: translateY(calc(-100% - var(--sp-4) - var(--sp-2)));
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
@@ -193,7 +193,7 @@ summary:focus-visible,
 
 /* The danger ring. The contract above is in @layer relay, AFTER Tailwind's
    utilities, so the destructive Button's own `focus-visible:[outline:…danger]`
-   utility always lost to it and a focused Delete showed the plain blue ring.
+   utility always lost to it and a focused Delete showed the plain link-ink ring.
    Destructive and invalid controls take the dashed red ring here, beside the
    contract, so the primitives no longer need to restate either ring. */
 button[data-variant="destructive"]:focus-visible,

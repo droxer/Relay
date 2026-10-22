@@ -6,13 +6,13 @@
   /* Info is not a color — neutral notice text. */
   --info: var(--ink-3);
 
-  /* Links take the source system's meta-link blue — wayfinding only, never a fill
+  /* Links take a softer shade of the action's orange — wayfinding only, never a fill
      and never an action. The role names stay separate from --action, and
      here that separation is load-bearing rather than decorative: the action
-     is accent and an anchor is a quieter blue, so "the colour of the primary
+     is accent and an anchor is a quieter orange, so "the colour of the primary
      button" and "the colour of a link" must never be spelled the same way. */
-  --link: var(--link-blue);
-  --link-hover: var(--link-blue-strong);
+  --link: var(--link-ink);
+  --link-hover: var(--link-ink-strong);
 
   /* Elevation — flat. Every plane separates by a surface step plus a hairline;
      floating chrome (drawers, dialogs, menus, sticky summaries) adds only the
@@ -145,7 +145,7 @@
      container. `outline` is never clipped by an ancestor's overflow, and it is
      the one ring property forced-colors mode preserves.
 
-     The ring is LINK BLUE rather than the accent action, so a focused
+     The ring is LINK INK rather than the accent action, so a focused
      primary button shows a ring that is visibly not more of its own fill;
      --link clears 4.8:1 on every solid plane in both registers (and on the
      selected-row wash), well past the 3:1 indicator floor. The danger ring differs by BOTH colour (--err, the

@@ -134,7 +134,7 @@
    register-varying --surface-0. They read the pinned --dark-* / --light-*
    register tokens in palette.css instead, which resolve to the same values
    both registers use and stay in sync with them by definition. The action
-   dot is pinned the same way: the accent is tuned per register (light blue
+   dot is pinned the same way: the accent is tuned per register (bright orange
    on dark, deep on light), so --action would paint the live register's
    accent on both canvases. */
 .pref-theme-swatch[data-tone="light"] {
