@@ -8892,9 +8892,36 @@ def test_draining_heartbeat_stops_dispatch_but_keeps_the_node_online() -> None:
         other = DaemonNodeRegistry(make_session_store(root), daemon_store)
         assert other.is_dispatchable("sbx_poll") is False
 
-        # Restarting the daemon (a fresh poll) puts the node back to work.
-        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+        # The long poll the daemon hung up on may still reach the registry:
+        # it must neither lease work into the void nor lift the drain.
+        registry.enqueue("sbx_poll", {"id": "cmd_drained", "type": "runtime.refresh"})
+        assert registry.take_commands("sbx_poll", "node_token", renew_known_active=False) == []
+        assert registry.monitor_nodes()[0]["dispatchable"] is False
+        assert daemon_store.queued_command_count("sbx_poll") == 1
+
+        # Restarting the daemon (a fresh registration) puts the node back to work.
+        _register_listening_node(registry)
+        assert registry.sandboxes["sbx_poll"].get("lastPollAt") is None
+        assert daemon_store.get_node("sbx_poll").get("lastPollAt") is None
         assert registry.monitor_nodes()[0]["dispatchable"] is True
+        assert len(registry.take_commands("sbx_poll", "node_token", renew_known_active=False)) == 1
+
+
+def test_poll_observation_reaches_the_store_despite_the_seen_throttle() -> None:
+    """The long poll renews leases (a plain observation) right before it takes
+    commands (the poll observation). The plain write must not starve the
+    poll write, or another replica never sees the node listening."""
+    with TemporaryDirectory() as root:
+        daemon_store = make_daemon_store(root)
+        registry = DaemonNodeRegistry(make_session_store(root), daemon_store)
+        _register_listening_node(registry)
+
+        registry.renew_active_command_leases("sbx_poll", "node_token", [])
+        registry.take_commands("sbx_poll", "node_token", renew_known_active=False)
+
+        # The row is what another replica reads.
+        persisted = daemon_store.get_node("sbx_poll")
+        assert persisted.get("lastPollAt") == registry.sandboxes["sbx_poll"]["lastPollAt"]
 
 
 def test_stopped_heartbeat_takes_the_node_offline() -> None:

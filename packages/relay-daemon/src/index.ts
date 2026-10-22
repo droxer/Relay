@@ -690,8 +690,32 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         error: error instanceof Error ? error.message : String(error),
       });
     });
+    // A terminal event sent while stopping gets the same bound as the stop
+    // notice: one slow round trip, inside the service manager's exit deadline.
+    // What does not land in time waits in the outbox for the next start.
     const cancellationTerminalEventSignal = (): AbortSignal | undefined =>
-      stopping ? AbortSignal.timeout(SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS) : undefined;
+      stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : undefined;
+    // A start this daemon refuses is failed in place. The post is never allowed
+    // to throw into the poll loop: an event the backend refuses (409, or a 401
+    // from a stale lease) is about that run, not this daemon's credential, so
+    // it must not stop the daemon.
+    const postRejectedStart = async (command: DaemonNodeRunCommand, detail: string): Promise<void> => {
+      await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+        type: "run.failed",
+        commandId: command.id,
+        ...commandLeaseEventFields(command),
+        sessionId: command.sessionId,
+        runId: command.runId,
+        agent: command.agent,
+        error: detail,
+        exitCode: 1,
+      } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+        logger.error("rejected start report failed", {
+          ...commandLogFields(sandboxId, command),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    };
     while (!stopping) {
       if (acknowledgeUpdatePause(stateDir)) {
         await delay(100, runtimeSignal);
@@ -791,16 +815,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           if (!canStartCommand(activeRuns, maxConcurrentRuns, terminalCommands)) {
             const detail = "Daemon node has no available execution slot for this run.";
             logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), error: detail });
-            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
-              type: "run.failed",
-              commandId: command.id,
-              ...commandLeaseEventFields(command),
-              sessionId: command.sessionId,
-              runId: command.runId,
-              agent: command.agent,
-              error: detail,
-              exitCode: 1,
-            } satisfies DaemonNodeEvent, token, runtimeSignal);
+            await postRejectedStart(command, detail);
             continue;
           }
           // A malformed or escaping workspaceSubpath throws out of resolveSubpath;
@@ -817,16 +832,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
             logger.warn("command rejected for invalid workspace subpath", { ...commandLogFields(sandboxId, command), error: detail });
-            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
-              type: "run.failed",
-              commandId: command.id,
-              ...commandLeaseEventFields(command),
-              sessionId: command.sessionId,
-              runId: command.runId,
-              agent: command.agent,
-              error: detail,
-              exitCode: 1,
-            } satisfies DaemonNodeEvent, token, runtimeSignal);
+            await postRejectedStart(command, detail);
             continue;
           }
           logger.info("command received", commandLogFields(sandboxId, command));
@@ -2062,7 +2068,6 @@ function normalizeWorkspacePath(value?: string): string | undefined {
 const REQUEST_TIMEOUT_MS = 30_000;
 /** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
-const SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS = 500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 6_000;

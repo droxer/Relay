@@ -51,7 +51,20 @@ replica can read as fresh, and is written to the durable row at once. The
 daemon sends it as the first act of shutdown, before aborting its runs, so
 nothing is dispatched into the drain and lost; it ends with a `stopped`
 heartbeat where the backend understands `state`, else the `stopped`
-registration.
+registration. The drain is sticky: a command poll that still reaches the
+backend from a drained node (the long poll the daemon hung up on keeps
+running server-side until its deadline) leases nothing and does not count as
+a poll, and the poll handler stops early once it sees the client is gone.
+Only a registration lifts the drain, because a registering daemon is a new
+incarnation that is about to poll; it starts with no poll observation, like
+a brand-new node.
+
+Poll observations are persisted on their own clock, separate from the
+throttle on plain liveness writes. The long poll renews leases (a plain
+observation) just before it takes commands (the poll observation), so one
+shared clock let the plain write win every time and `lastPollAt` never
+reached the row for an idle daemon — invisible on one replica, which reads
+its memory, and a false "not listening" on any other.
 
 ## Local and managed nodes
 
@@ -80,4 +93,7 @@ the owner that has authority to act.
 - A graceful shutdown drains, then reports `stopped`; an ungraceful exit is
   detected by lease expiry.
 - A beat refused with any other 4xx is logged and tried again next tick; only
-  401/410 stop the daemon.
+  401/410 stop the daemon — and only from registration, the heartbeat, and
+  the command poll. An event the backend refuses because it names a command,
+  lease, or run the node does not hold answers `409`, never `401`: the
+  credential is fine, and a daemon must not stop over one run's report.

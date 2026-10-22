@@ -1229,7 +1229,9 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
             },
             headers={"Authorization": "Bearer node_token"},
         )
-        assert stale_output.status_code == 401
+        # The credential is good and only the lease is wrong: 409, because a
+        # 401 would make the daemon stop and ask its owner to run setup again.
+        assert stale_output.status_code == 409
 
         current_output = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -4324,6 +4326,34 @@ def test_deleting_a_node_survives_the_running_daemon_reregistering(monkeypatch) 
 
         assert again.status_code == 410
         assert client.get("/api/v1/admin/daemon-nodes").json()["nodes"] == []
+
+
+def test_deleted_node_daemon_without_a_session_still_learns_it_was_deleted(
+    monkeypatch,
+) -> None:
+    # A real daemon carries no admin cookie. It must still get the terminal
+    # 410 ("deleted in the console"), not the enrollment gate's 401, which
+    # tells its owner the credential was rejected and to run setup again.
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _login_admin(client)
+        app.state.registry.register(_user_device_registration())
+        assert client.delete("/api/v1/admin/daemon-nodes/sbx_device").status_code == 204
+
+        daemon = TestClient(app)
+        again = daemon.post(
+            "/api/v1/daemon-node-registrations", json=_user_device_registration()
+        )
+        restarted = daemon.post(
+            "/api/v1/daemon-node-registrations",
+            json=_user_device_registration("sbx_device_restarted"),
+        )
+
+        assert again.status_code == 410
+        assert restarted.status_code == 410
 
 
 def test_deleted_node_registration_is_rejected_after_a_daemon_restart(

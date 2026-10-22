@@ -3071,6 +3071,70 @@ test("relay daemon rejects a second distinct run while busy", async () => {
   assert.equal(events.some((event) => event.type === "run.completed" && event.commandId === "cmd_busy_1"), true);
 });
 
+test("a refused report of a rejected start does not stop the daemon", async () => {
+  // The backend answers 409 (or a stale-lease 401) about one event, not about
+  // this daemon's credential. The first run must still complete and report.
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let commandServed = false;
+  let refusals = 0;
+  const first = runCommand("cmd_refused_1");
+  const second = { ...runCommand("cmd_refused_2"), runId: "run_2", sessionId: "ses_2" } satisfies DaemonNodeCommand;
+  const daemon = runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_test",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 100,
+    maxConcurrentRuns: 1,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      exec: async (_cmd, args, options) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        while (refusals === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        options?.sink?.("done\n");
+        return { exit_code: 0, stdout: "done\n", stderr: "" };
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+      if (path.endsWith("/commands")) {
+        if (!commandServed) {
+          commandServed = true;
+          return jsonResponse({ commands: [first, second] });
+        }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        if (event.type === "run.failed" && event.commandId === "cmd_refused_2") {
+          refusals += 1;
+          return jsonResponse({ detail: "command lease does not match" }, refusals === 1 ? 409 : 401);
+        }
+        events.push(event);
+        if (event.type === "run.completed" && event.commandId === "cmd_refused_1") stop.abort();
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  await Promise.race([
+    daemon,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("daemon stopped on an event refusal")), 5_000)),
+  ]);
+
+  assert.equal(refusals, 1);
+  assert.equal(events.some((event) => event.type === "run.completed" && event.commandId === "cmd_refused_1"), true);
+});
+
 test("relay daemon runs concurrent commands within capacity", async () => {
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];

@@ -14,7 +14,10 @@ from ...core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ...persistence.daemon.rules import EXECUTION_INTERRUPTED_STATE_KEY
+from ...persistence.daemon.rules import (
+    EXECUTION_INTERRUPTED_STATE_KEY,
+    NODE_POLL_DRAINED_AT,
+)
 from ...core.daemon_capabilities import (
     DAEMON_NODE_CAPABILITIES,
 )
@@ -192,8 +195,15 @@ def registered_node_record(
         "updatedAt": now,
         "lastSeenAt": now,
         # A registration says nothing about polling; see preserve_node_poll.
-        **_present("lastPollAt", prior.get("lastPollAt")),
+        # A drain pin is the exception: the daemon that drained is gone, and
+        # the one registering now will poll, so it gets the benefit of the
+        # doubt a never-polled node has.
+        **_present("lastPollAt", _poll_after_registration(prior.get("lastPollAt"))),
     }
+
+
+def _poll_after_registration(last_poll_at: Any) -> Any:
+    return None if last_poll_at == NODE_POLL_DRAINED_AT else last_poll_at
 
 
 
@@ -261,18 +271,7 @@ class NodeRegistrationMixin(RegistryState):
         # an admin deletes it, and the node reappears in the Admin Console.
         # Re-enrolling the same machine is still possible: the admin provisions
         # a fresh record first, and registration then finds a live `existing`.
-        if not self._live_node(payload["sandboxId"]):
-            tombstone = self._deleted_tombstone(payload)
-            if tombstone:
-                logger.warning(
-                    "Rejected registration for a deleted daemon node",
-                    sandbox_id=payload["sandboxId"],
-                    tombstone_id=tombstone["id"],
-                )
-                raise DeletedDaemonNodeError(
-                    f"Daemon node {payload['sandboxId']} was deleted in the Admin Console. "
-                    "Stop this daemon, or re-enroll the machine from the Admin Console."
-                )
+        self.assert_not_deleted(payload)
         if (
             existing and existing.get("nodeTokenHash")
         ) and not daemon_node_token_matches(existing, payload["token"]):
@@ -341,6 +340,23 @@ class NodeRegistrationMixin(RegistryState):
                         )
                 acknowledged.append(command_id)
         return acknowledged
+
+    def assert_not_deleted(self, payload: dict[str, Any]) -> None:
+        """Refuse a registration from a Computer an admin deleted."""
+        if self._live_node(payload["sandboxId"]):
+            return
+        tombstone = self._deleted_tombstone(payload)
+        if not tombstone:
+            return
+        logger.warning(
+            "Rejected registration for a deleted daemon node",
+            sandbox_id=payload["sandboxId"],
+            tombstone_id=tombstone["id"],
+        )
+        raise DeletedDaemonNodeError(
+            f"Daemon node {payload['sandboxId']} was deleted in the Admin Console. "
+            "Stop this daemon, or re-enroll the machine from the Admin Console."
+        )
 
     def _live_node(self, sandbox_id: str) -> dict[str, Any] | None:
         """The node row for `sandbox_id`, unless it is a deletion tombstone."""

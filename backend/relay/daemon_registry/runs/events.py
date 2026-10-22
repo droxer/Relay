@@ -15,6 +15,7 @@ from ...persistence.task.execution import request_execution_owner
 from ...persistence.events import relay_event
 from ...persistence.events import relay_task_event
 from .. import config
+from ..records import CommandEventMismatchError
 from ..state import RegistryState
 
 
@@ -75,7 +76,9 @@ class EventIngestMixin(RegistryState):
             and record.get("status") in {"completed", "failed", "cancelled"}
         )
         if late_output and (not event.get("leaseId") or event["leaseId"] != record.get("leaseId")):
-            raise PermissionError("Replayed output must match the completed command lease.")
+            raise CommandEventMismatchError(
+                "Replayed output must match the completed command lease."
+            )
         if record.get("status") != "dispatched" and not late_output:
             self._handle_undispatched_command_event(sandbox_id, event, record)
             return
@@ -155,7 +158,7 @@ class EventIngestMixin(RegistryState):
             command_id=event["commandId"],
             run_id=event["runId"],
         )
-        raise PermissionError(error)
+        raise CommandEventMismatchError(error)
 
     def _assert_event_matches_active(
         self, sandbox_id: str, event: dict[str, Any], active: dict[str, Any]

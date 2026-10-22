@@ -270,17 +270,31 @@ class NodeLivenessMixin(RegistryState):
                 f"Daemon node {sandbox_id} was deleted in the Admin Console."
             )
 
-    def _should_persist_seen(self, sandbox_id: str) -> bool:
-        """Rate-limit durable heartbeat writes under the node dispatch scope."""
+    @staticmethod
+    def _persist_due(stamps: dict[str, float], sandbox_id: str) -> bool:
         monotonic_now = time.monotonic()
-        last = self._last_seen_persisted_at.get(sandbox_id)
+        last = stamps.get(sandbox_id)
         if (
             last is not None
             and monotonic_now - last < config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
         ):
             return False
-        self._last_seen_persisted_at[sandbox_id] = monotonic_now
+        stamps[sandbox_id] = monotonic_now
         return True
+
+    def _should_persist_seen(self, sandbox_id: str, *, polled: bool = False) -> bool:
+        """Rate-limit durable heartbeat writes under the node dispatch scope.
+
+        A poll observation keeps its own clock. The long poll renews leases
+        (a plain observation) right before it takes commands (the poll
+        observation), so on one shared clock the plain write always won and
+        ``lastPollAt`` never reached the row — and another replica, which
+        reads only the row, saw a listening node as not dispatchable.
+        """
+        due = self._persist_due(self._last_seen_persisted_at, sandbox_id)
+        if polled and self._persist_due(self._last_poll_persisted_at, sandbox_id):
+            due = True
+        return due
 
     def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
         """Record an observation of the daemon.
@@ -321,7 +335,11 @@ class NodeLivenessMixin(RegistryState):
             # checks; the durable write is throttled well inside the liveness
             # timeout so other replicas still see the node as online. A drain
             # is written at once: dispatch on every replica must stop now.
-            if revived or polled is False or self._should_persist_seen(sandbox_id):
+            if (
+                revived
+                or polled is False
+                or self._should_persist_seen(sandbox_id, polled=bool(polled))
+            ):
                 self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
             if revived:
                 logger.info(
