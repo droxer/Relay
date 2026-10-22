@@ -139,10 +139,188 @@
   margin-bottom: var(--sp-3);
 }
 
+/* The new-thread landing is the calm room: more air above and between, a
+   longer breath per line, and each piece rising in after the last. */
 .relay-empty.transcript-empty {
   gap: var(--sp-4);
-  max-width: 680px;
+  max-width: 600px;
   padding-block: var(--sp-8);
+}
+
+.transcript-empty > * {
+  animation: rise var(--t-slow) var(--ease) both;
+  --rise-from: var(--rise-sm);
+}
+
+.transcript-empty > :nth-child(2) { animation-delay: calc(var(--t-stagger) * 2); }
+.transcript-empty > :nth-child(3) { animation-delay: calc(var(--t-stagger) * 4); }
+.transcript-empty > :nth-child(4) { animation-delay: calc(var(--t-stagger) * 6); }
+.transcript-empty > :nth-child(n + 5) { animation-delay: calc(var(--t-stagger) * 8); }
+
+/* The handoff drawn as a path: a solid leg already walked, a dotted leg
+   ahead that drifts forward, the brand mark on the crest between them. The
+   walked leg draws itself once; the dots keep a slow walk on --t-pulse-calm. */
+.handoff-scene {
+  position: relative;
+  display: block;
+  width: 240px;
+  height: 88px;
+}
+
+.handoff-scene-path {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke-linecap: round;
+}
+
+.handoff-scene-ground { stroke: var(--line-1); stroke-width: 1.5; }
+
+.handoff-scene-walked,
+.handoff-scene-ahead {
+  stroke: var(--ink-4);
+  stroke-width: 1.5;
+}
+
+.handoff-scene-walked {
+  stroke-dasharray: 1;
+  animation: handoff-draw var(--t-draw) var(--ease-breathe) both;
+}
+
+.handoff-scene-ahead {
+  stroke-dasharray: 3 5;
+  animation: handoff-walk var(--t-pulse-calm) linear infinite;
+}
+
+.handoff-scene-start { fill: var(--ink-3); }
+.handoff-scene-end { fill: var(--surface-0); stroke: var(--ink-3); stroke-width: 1.5; }
+
+.handoff-scene-mark {
+  position: absolute;
+  left: 50%;
+  top: calc(30 / 88 * 100%);
+  display: grid;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes handoff-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes handoff-walk {
+  to { stroke-dashoffset: -16; }
+}
+
+/* Where things stand: three kinds of row at most two deep, read as plain
+   sentences. Only the thread that needs the person carries an action word. */
+.welcome-recap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.welcome-row:hover { background: var(--row-hover); }
+
+.welcome-row-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--sp-3);
+}
+
+.welcome-row-text {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.welcome-row-title {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-row-phrase {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.welcome-row-stamp {
+  flex: none;
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.welcome-row-go {
+  flex: none;
+  color: var(--link-ink);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.welcome-row:hover .welcome-row-go { color: var(--link-ink-strong); }
+
+/* A done thing settles: the check draws itself once and stays. */
+.welcome-row-check {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.welcome-row-check path {
+  stroke-dasharray: 1;
+  animation: handoff-draw var(--t-draw) var(--ease-breathe) calc(var(--t-stagger) * 10) both;
+}
+
+/* The week in one line: progress made visible, quietly. */
+.welcome-week {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1) var(--sp-4);
+  width: 100%;
+  margin: var(--sp-3) 0 0;
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.welcome-week > span + span::before {
+  content: "·";
+  margin-inline-end: var(--sp-4);
+  color: var(--ink-4);
 }
 
 .transcript-empty .relay-empty-actions { order: 5; width: 100%; }
@@ -157,6 +335,7 @@
   max-width: 440px;
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
+  line-height: var(--leading-loose);
 }
 
 .transcript-empty-suggestions {

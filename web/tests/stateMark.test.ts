@@ -145,7 +145,8 @@ describe("thread rail state pips", () => {
     // The shared halo rides 5px proud of the dot; the subline is overflow:
     // hidden, so in the rail it rendered as a sliced crescent beside the text.
     assert.match(thread(), /\.conversation-row\s+\.state-mark\[data-shape="live"\]::after\s*\{[^}]*content:\s*none/);
-    assert.match(thread(), /\.conversation-row\s+\.state-mark\[data-shape="live"\]\s*\{[^}]*animation:\s*blink/);
+    // It breathes in its own box (scale + opacity) — the calm pass, 2026-10-22.
+    assert.match(thread(), /\.conversation-row\s+\.state-mark\[data-shape="live"\]\s*\{[^}]*animation:\s*breathe var\(--t-pulse\)/);
   });
 
   it("does not repeat the needs-you pip on the group header", () => {

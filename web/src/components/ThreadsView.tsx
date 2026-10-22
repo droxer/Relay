@@ -28,6 +28,7 @@ import { awaitingInput } from "../lib/awaitingInput";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
+import { greetingName } from "../lib/welcomeRecap";
 import { useTaskThreadLifecycle, type OpenTaskRecord } from "../hooks/useTaskThreadLifecycle";
 import { useTaskStatusActions } from "../hooks/useTaskStatusActions";
 import { TaskStatusTimeline } from "./TaskStatusTimeline";
@@ -287,6 +288,14 @@ export function ThreadsView({
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentImages = useMemo(() => buildLogicalAgentImageMap(logicalAgents), [logicalAgents]);
+  // The new-thread landing names who is doing what by the agent's name.
+  const welcomeAgentName = useCallback((item: ThreadItem) => {
+    if (item.runningAgentName) return item.runningAgentName;
+    const run = item.session.agentRuns?.at(-1);
+    return run
+      ? labelForAgentRun({ agent: run.agent, agentId: run.logicalAgentId }, logicalAgentNames, agentDisplayNames)
+      : undefined;
+  }, [logicalAgentNames, agentDisplayNames]);
   const activeLogicalAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === activeLogicalAgentId && !agent.deletedAt),
     [activeLogicalAgentId, logicalAgents],
@@ -580,6 +589,11 @@ export function ThreadsView({
                   composerRef.current?.setText(text);
                   composerRef.current?.focus();
                 }}
+                greetingName={greetingName(currentUser)}
+                threads={filteredThreads}
+                tasks={tasks}
+                agentNameFor={welcomeAgentName}
+                onOpenThread={onSelectThread}
               />
             )}
           </div>

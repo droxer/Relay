@@ -822,9 +822,14 @@
      liveness reads at the same tempo on every surface.
      --t-pulse: active work (streaming agent, running task, busy header).
      --t-pulse-calm: passive presence (online dot, idle node) — slow enough
-     to sit in peripheral vision without pulling focus. */
-  --t-pulse: 1.6s;
-  --t-pulse-calm: 2.6s;
+     to sit in peripheral vision without pulling focus.
+     Both breathe at about a resting breath, not a heartbeat (2026-10-22, the
+     calm pass): work in flight should read as steady, never urgent.
+     --ease-breathe: the symmetric in-out a breath follows; the ease-out of
+     --ease suits arrivals, not loops that come back. */
+  --t-pulse: 2.4s;
+  --t-pulse-calm: 3.6s;
+  --ease-breathe: cubic-bezier(0.45, 0, 0.55, 1);
 
   /* --t-tick: the mechanical loop — a spinner rotating, a caret blinking. Not
      a pulse (those breathe to say "an agent is working"); this is a metronome

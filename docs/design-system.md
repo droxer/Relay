@@ -554,10 +554,11 @@ stacks.
   A theme switch is not a transition: `applyTheme` holds
   `html.theme-switching` for two frames, which turns transitions off so the
   page switches instead of cross-fading.
-- **Ambient loops:** `--t-pulse` 1.6s for active work (streaming agent,
-  running task, busy header) and `--t-pulse-calm` 2.6s for passive presence
+- **Ambient loops:** `--t-pulse` 2.4s for active work (streaming agent,
+  running task, busy header) and `--t-pulse-calm` 3.6s for passive presence
   (online dot, idle node) — the same liveness reads at the same tempo
-  everywhere. `--t-tick` 1s is the mechanical cadence: a spinner rotating, a
+  everywhere, at about a resting breath rather than a heartbeat. Loops that
+  come back use `--ease-breathe` (symmetric in-out), not the ease-out `--ease`. `--t-tick` 1s is the mechanical cadence: a spinner rotating, a
   caret blinking. Never hand-pick a loop duration.
 - **Other durations:** `--t-draw` 1.1s for content that renders itself over
   real time; `--t-stagger` 40ms as the base step for reveal ladders,
@@ -569,7 +570,10 @@ stacks.
   views.
 - **Keyframes:** `live-ring` (every live dot), `pulse-ring` (larger live
   objects and passive presence, tinted via `--pulse-color`), `blink` (glyphs
-  that breathe in place), and `rise` live once in `base.css`;
+  that fade in place), `breathe` (a live pip with no room for a ring — the
+  thread rail — draws in and fills back out), and `rise` live once in
+  `base.css`; `rise` on an empty state is reserved for the new-thread
+  welcome, whose pieces arrive once;
   `spin` (`pills.css`, the `.spin` class) and the `overlay-*` fade/panel set
   (`overlay.css`) are the other shared sets, and the anchored tooltip/menu
   entrances in `base.css` are the one local carve-out. Do not hand-roll a

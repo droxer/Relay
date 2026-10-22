@@ -448,6 +448,16 @@ tr[data-selected="true"],
   50%      { opacity: 1; }
 }
 
+/* Breathe — a live pip that cannot wear live-ring (no room for a halo)
+   breathes in its own box: it draws in and dims, then fills back out. Scale
+   plus opacity reads as breathing where an opacity blink reads as a warning
+   light. Run it on --t-pulse with --ease-breathe. Reduced motion rests it at
+   full size and opacity (a11y.css cuts it to one instant iteration). */
+@keyframes breathe {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.72); }
+}
+
 /* Fade-and-rise entrance — the one pattern behind every view, pane, card,
    and row reveal. Travel is read from --rise-from so a caller can pick the
    row tier (--rise-sm) or the pane tier (--rise) without a new keyframe;
