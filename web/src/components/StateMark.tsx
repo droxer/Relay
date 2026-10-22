@@ -53,9 +53,9 @@ const SHAPE_FOR_TONE: Record<StateTone, StateShape> = {
  * The shape a filter row should draw for `count` records.
  *
  * `live` is the one shape that makes a claim about the present moment, and it
- * is the only place `--live` is allowed — a purple mark means an agent is
+ * is the only place `--live` is allowed — a blue mark means an agent is
  * working right now, and it pulses to say so. On a section rail the mark sits
- * beside a count, so "Running 0" was drawing a static purple dot next to a
+ * beside a count, so "Running 0" was drawing a static blue dot next to a
  * zero: a liveness surface asserting liveness that is not there. An empty
  * bucket rests instead.
  */

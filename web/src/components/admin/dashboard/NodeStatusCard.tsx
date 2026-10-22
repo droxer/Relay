@@ -27,7 +27,7 @@ interface NodeStatusCardProps {
 // tone is double-encoded by brightness and texture (see
 // admin-v2-dashboard.css). "running" takes --live: a node running an agent is
 // the one thing in Relay that is working right now, which is exactly what the
-// live purple is reserved for. There is no "info" tone left; running used to
+// live blue is reserved for. There is no "info" tone left; running used to
 // carry it and nothing else did.
 type Tone = "live" | "good" | "bad" | "warn" | "neutral";
 type Slot = { key: string; tone: Tone; count: number; share: number };

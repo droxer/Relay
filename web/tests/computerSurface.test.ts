@@ -204,9 +204,9 @@ describe("My Computer record card", () => {
   it("spends the --live accent only on work that is running right now", async () => {
     // --live means "an agent is working right now", and it is legal exactly
     // where --t-pulse is (docs/design-system.md, the accent scope rule): a
-    // static purple surface never means running. So the pulsing run mark
+    // static blue surface never means running. So the pulsing run mark
     // carries it and the elapsed timer beside it stays ink — the timer is the
-    // text channel that accompanies the pulse, not a second purple surface.
+    // text channel that accompanies the pulse, not a second blue surface.
     // An idle computer carries none of it: the idle branch may not reach for a
     // live mark or the elapsed counter.
     const [card, styles] = await Promise.all([

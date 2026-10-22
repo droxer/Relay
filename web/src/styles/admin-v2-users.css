@@ -52,7 +52,7 @@
 .adm-emp-col-running { min-width: 5.5rem; }
 .adm-emp-col-actions { min-width: 4.5rem; }
 /* A one-shot 'recently updated' marker, not live work — ink, drawn once on
-   the --t-draw cadence (--live purple + the pulse cadences are reserved for
+   the --t-draw cadence (--live blue + the pulse cadences are reserved for
    live work). Rows are <tr> now, and a <tr> is not a reliable positioning
    context, so the marker is a pseudo on the leading cell. */
 tr.is-pulse > td:first-child {
@@ -548,7 +548,7 @@ tr.is-pulse > td:first-child::after {
 
 .adm-node-card.is-pulse::after {
   /* Same one-shot 'recently updated' marker as .adm-emp-row.is-pulse — ink on
-     the --t-draw cadence, never the --action accent or --live purple. */
+     the --t-draw cadence, never the --action accent or --live blue. */
   content: "";
   position: absolute;
   inset: 0;

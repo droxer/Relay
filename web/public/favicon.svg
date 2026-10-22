@@ -2,13 +2,13 @@
   <title>Relay</title>
   <!-- App icon (dark default): the charcoal canvas (palette surface-0) and the
        handoff. The lead chevron is the baton-orange action (palette action), what a
-       person does; the trailing chevron is the palette live purple, an agent
+       person does; the trailing chevron is the palette live blue, an agent
        carrying the work on. The two accents tell one story, and at 16px a
        neutral chevron on a neutral square would vanish in a tab strip.
        Values are the dark register's tokens, keep them in step. -->
   <rect x="4" y="4" width="56" height="56" rx="15" fill="#0a0a0a"/>
   <g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M22 20 L36 32 L22 44" stroke="#ff8a3d"/>
-    <path d="M36 20 L50 32 L36 44" stroke="#cf7ef0"/>
+    <path d="M36 20 L50 32 L36 44" stroke="#6aa6ff"/>
   </g>
 </svg>

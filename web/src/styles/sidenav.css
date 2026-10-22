@@ -176,6 +176,10 @@
    expanded-only layout; collapsed keeps the column, just at the dense tier. */
 .sidenav-panel[data-expanded="true"] .sidenav-bottom {
   flex-direction: row;
+  /* Wrap, never clip: seven 28px squares need 220px and the open rail
+     leaves ~196px inside its padding — less once dragged toward its floor. */
+  flex-wrap: wrap;
+  row-gap: var(--sp-1);
   align-items: center;
   padding: var(--sp-2) var(--sp-2) 0;
 }

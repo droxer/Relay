@@ -315,3 +315,38 @@ describe("UI primitive contracts", () => {
     assert.match(source, /aria-atomic=\{announce \|\| undefined\}/);
   });
 });
+
+describe("segmented controls", () => {
+  // A two-way choice reads by its selected segment standing off its track.
+  // The track was --surface-1 and the pick --surface-0: #ffffff vs #fafafa in
+  // light, 1.04:1, so "Organization" looked like a hover, not a choice.
+  const controls = [
+    ["admin-v2-provision.css", ".adm-profile-segment", `.adm-profile-segment-btn[data-active="true"]`],
+    ["view-toggle.css", ".view-toggle", `.view-toggle-btn[data-active="true"]`],
+  ] as const;
+
+  it("raises the selected segment off a recessed track in both registers", async () => {
+    const palette = await readFile(resolve("web/src/styles/tokens/palette.css"), "utf8");
+    const dark = palette.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const light = palette.match(/html\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    for (const [file, track, active] of controls) {
+      const css = stripComments(await readFile(resolve("web/src/styles", file), "utf8"));
+      const fill = (selector: string) => {
+        const at = css.indexOf(`${selector} {`);
+        assert.ok(at >= 0, `${file}: missing ${selector}`);
+        const token = css.slice(at, css.indexOf("}", at)).match(/background:\s*var\(--([a-z0-9-]+)\)/)?.[1];
+        assert.ok(token, `${file}: ${selector} has no token background`);
+        return token;
+      };
+      const [trackToken, activeToken] = [fill(track), fill(active)];
+      for (const [label, register] of [["dark", dark], ["light", light]] as const) {
+        const ratio = contrast(cssHex(register, trackToken), cssHex(register, activeToken));
+        assert.ok(ratio >= 1.06, `${label} ${file}: selected segment is ${ratio.toFixed(2)}:1 off its track`);
+      }
+      assert.ok(
+        luminance(cssHex(light, activeToken)) > luminance(cssHex(light, trackToken)),
+        `${file}: the light selected segment must sit above its track, not sink into it`,
+      );
+    }
+  });
+});

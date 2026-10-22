@@ -494,7 +494,7 @@
   margin-left: 3px;
   vertical-align: -2px;
   /* A caret blink is mechanical, not liveness, so it paints in ink — the
-     purple --live fill is reserved for pulsing (--t-pulse) surfaces. */
+     blue --live fill is reserved for pulsing (--t-pulse) surfaces. */
   background: var(--ink-1);
   animation: blink var(--t-tick) steps(1, end) infinite reverse;
 }

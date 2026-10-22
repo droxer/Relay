@@ -626,6 +626,7 @@ export function ThreadsView({
             <TaskActionBar
               task={actionTask}
               busy={taskStatusActions.busy}
+              deferPrimary={awaitingDecision}
               onAccept={() => void taskStatusActions.accept()}
               onUnblock={() => void taskStatusActions.unblock()}
               onReply={() => composerRef.current?.focus()}

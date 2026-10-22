@@ -3,7 +3,7 @@
 
    The control room, read as one instrument. The system's rules apply in
    full: the page is neutral ink until something is working, and the live
-   purple (--live) marks nodes that are running an agent RIGHT NOW —
+   blue (--live) marks nodes that are running an agent RIGHT NOW —
    nowhere else. Ready is calm, completed is calm; only "in flight" glows.
 
    Composition is a 2:1 editorial split rather than a uniform card grid:
@@ -348,7 +348,7 @@
    --err. So each state is double-encoded, exactly as StatusPill encodes
    "bad" by shape as well as brightness:
 
-     running  --live      the live purple, the only hue allowed here
+     running  --live      the live blue, the only hue allowed here
      failed   --err       loudest ink, solid
      stale    --warn      distinguished from failed by hatch texture
      ready    --ok        calm mid tier
