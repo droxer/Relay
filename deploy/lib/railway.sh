@@ -309,18 +309,22 @@ railway_failure_logs() {
 # Connect on first release, then explicitly deploy RELEASE_COMMIT.
 # Return the deployment ID so an implicit connect build cannot satisfy the wait.
 railway_deploy_service() {
-  local name=$1 service_id=$2 data
+  local name=$1 service_id=$2 data deployment_id
   local repo
-  repo=$(railway_service_repo "$service_id")
+  repo=$(railway_service_repo "$service_id") || return 1
   [ -z "$repo" ] || [ "$repo" = "$GITHUB_REPO" ] || die "$name is connected to $repo, expected $GITHUB_REPO"
   if [ -z "$repo" ]; then
     gql 'mutation Connect($id: String!, $input: ServiceConnectInput!) { serviceConnect(id: $id, input: $input) { id } }' \
-      "$(jq -nc --arg id "$service_id" --arg r "$GITHUB_REPO" --arg b "$GITHUB_BRANCH" '{id: $id, input: {repo: $r, branch: $b}}')" >/dev/null
+      "$(jq -nc --arg id "$service_id" --arg r "$GITHUB_REPO" --arg b "$GITHUB_BRANCH" '{id: $id, input: {repo: $r, branch: $b}}')" >/dev/null || return 1
     info "connected $name to $GITHUB_REPO@$GITHUB_BRANCH"
   fi
+  # Callers run this in a command substitution, which does not inherit errexit:
+  # every failure must return explicitly or the caller gets an empty ID.
   data=$(gql 'mutation Deploy($s: String!, $e: String!, $commitSha: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e, commitSha: $commitSha) }' \
-    "$(jq -nc --arg s "$service_id" --arg e "$ENVIRONMENT_ID" --arg sha "$RELEASE_COMMIT" '{s: $s, e: $e, commitSha: $sha}')")
-  jq -r '.serviceInstanceDeployV2 // empty' <<<"$data"
+    "$(jq -nc --arg s "$service_id" --arg e "$ENVIRONMENT_ID" --arg sha "$RELEASE_COMMIT" '{s: $s, e: $e, commitSha: $sha}')") || return 1
+  deployment_id=$(jq -r '.serviceInstanceDeployV2 // empty' <<<"$data")
+  [ -n "$deployment_id" ] || die "Railway returned no deployment ID for $name"
+  printf '%s' "$deployment_id"
 }
 
 railway_deployments() {

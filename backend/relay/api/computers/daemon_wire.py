@@ -10,7 +10,11 @@ from starlette.concurrency import run_in_threadpool
 
 from ...computer.node_agents import sync_node_agents
 from ...core.models import DaemonNodeRegistration
-from ...daemon_registry.records import DeletedDaemonNodeError, UnknownDaemonNodeError
+from ...daemon_registry.records import (
+    CommandEventMismatchError,
+    DeletedDaemonNodeError,
+    UnknownDaemonNodeError,
+)
 from ...daemon_registry import config as registry_config
 from ...daemon_registry.dispatch.commands import HEARTBEAT_STATES
 from ...realtime.event_notifier import daemon_command_key
@@ -148,6 +152,10 @@ def register_daemon_node(
         body["token"] = bearer_token(request)
     try:
         registration = DaemonNodeRegistration.model_validate(body).relay_dump()
+        # A deleted computer's daemon carries no admin session, so it must
+        # learn it was deleted (410, terminal) before the enrollment gate
+        # could tell it to run setup again (401).
+        ctx.registry.assert_not_deleted(registration)
         prior = ctx.registry.get(registration["sandboxId"])
         actor = request_actor_or_none(request, ctx.auth_store)
         admin_authorized_ownership = bool(
@@ -326,6 +334,12 @@ async def daemon_commands(
                     observed_version,
                     timeout=min(COMMAND_NOTIFICATION_RECOVERY_SECONDS, remaining),
                 )
+            # A daemon that hung up (it is shutting down, or its request timed
+            # out) reads nothing we return. Taking a command now would lease
+            # it into the void, and marking the node polled would undo a drain.
+            if await request.is_disconnected():
+                logger.debug("Daemon node command poll abandoned", sandbox_id=sandbox_id)
+                break
             await run_in_threadpool(
                 ctx.registry.renew_active_command_leases,
                 sandbox_id,
@@ -459,6 +473,16 @@ async def daemon_events(
         return {"ok": True}
     except DeletedDaemonNodeError as error:
         raise HTTPException(410, str(error)) from error
+    except CommandEventMismatchError as error:
+        # The credential is good; the event is not. 401 would stop the daemon.
+        logger.warning(
+            "Daemon node event rejected",
+            sandbox_id=sandbox_id,
+            event_type=event.get("type"),
+            run_id=event.get("runId"),
+            error=str(error),
+        )
+        raise HTTPException(409, str(error)) from error
     except PermissionError as error:
         logger.warning(
             "Daemon node event unauthorized", sandbox_id=sandbox_id, error=str(error)

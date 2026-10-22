@@ -1,17 +1,42 @@
 # Cloudflare v4 REST API. Records and rules are converged in place: rules this
 # script owns carry a `relay_` ref, and every rule without one is left as is.
 
-# cf <method> <path> [json-body] — prints the response's `result`.
+# cf_curl <method> <path> [json-body] [curl-args...] — prints the raw response.
+# A GET is safe to replay after an interrupted connection. A write may already
+# have taken effect, so leave its recovery to the next converging run. The
+# token header is rebuilt per attempt: a process substitution reads only once.
+cf_curl() {
+  local method=$1 path=$2 body=${3:-} resp attempt=1 attempts=1 status
+  shift 2
+  [ $# -eq 0 ] || shift
+  [ "$method" != GET ] || attempts=3
+  while :; do
+    if [ -n "$body" ]; then
+      resp=$(curl -sS --connect-timeout 10 --max-time 60 -X "$method" "$CLOUDFLARE_API_URL$path" "$@" \
+        -H @<(bearer_header "$CLOUDFLARE_API_TOKEN") -H 'Content-Type: application/json' \
+        --data-binary @- <<<"$body") && break
+    else
+      resp=$(curl -sS --connect-timeout 10 --max-time 60 -X "$method" "$CLOUDFLARE_API_URL$path" "$@" \
+        -H @<(bearer_header "$CLOUDFLARE_API_TOKEN")) && break
+    fi
+    status=$?
+    case $status in
+      5 | 6 | 7 | 18 | 28 | 35 | 52 | 55 | 56) ;;
+      *) die "Cloudflare API unreachable at $CLOUDFLARE_API_URL (curl $status)" ;;
+    esac
+    [ "$attempt" -lt "$attempts" ] || die "Cloudflare API unreachable at $CLOUDFLARE_API_URL after $attempt attempt(s) (curl $status); re-run the interrupted phase"
+    warn "Cloudflare connection failed (curl $status); retrying read request ($((attempt + 1))/$attempts)"
+    sleep "$attempt"
+    attempt=$((attempt + 1))
+  done
+  printf '%s' "$resp"
+}
+
+# cf <method> <path> [json-body] — prints the response's `result`. Callers
+# capture it with $(...), which does not inherit errexit: check `|| return 1`.
 cf() {
   local method=$1 path=$2 body=${3:-} resp
-  if [ -n "$body" ]; then
-    resp=$(curl -sS --max-time 60 -X "$method" "$CLOUDFLARE_API_URL$path" \
-      -H @<(bearer_header "$CLOUDFLARE_API_TOKEN") -H 'Content-Type: application/json' \
-      --data-binary @- <<<"$body") || die "Cloudflare API unreachable at $CLOUDFLARE_API_URL"
-  else
-    resp=$(curl -sS --max-time 60 -X "$method" "$CLOUDFLARE_API_URL$path" \
-      -H @<(bearer_header "$CLOUDFLARE_API_TOKEN")) || die "Cloudflare API unreachable at $CLOUDFLARE_API_URL"
-  fi
+  resp=$(cf_curl "$method" "$path" "$body") || return 1
   jq -e . >/dev/null 2>&1 <<<"$resp" || die "Cloudflare API returned non-JSON for $method $path"
   if ! jq -e '.success == true' >/dev/null <<<"$resp"; then
     die "Cloudflare API $method $path: $(jq -r '[.errors[]? | "\(.code): \(.message)"] | join("; ")' <<<"$resp")"
@@ -20,16 +45,18 @@ cf() {
 }
 
 cf_zone_id() {
-  local id
-  id=$(cf GET "/zones?name=$CLOUDFLARE_ZONE" | jq -r '.[0].id // empty')
+  local zones id
+  zones=$(cf GET "/zones?name=$CLOUDFLARE_ZONE") || return 1
+  id=$(jq -r '.[0].id // empty' <<<"$zones")
   [ -n "$id" ] || die "Cloudflare zone $CLOUDFLARE_ZONE not found — add the domain to Cloudflare first, or check the token's zone access"
   printf '%s' "$id"
 }
 
 # The account that owns the zone, where the web UI's Worker lives.
 cf_zone_account_id() {
-  local id
-  id=$(cf GET "/zones?name=$CLOUDFLARE_ZONE" | jq -r '.[0].account.id // empty')
+  local zones id
+  zones=$(cf GET "/zones?name=$CLOUDFLARE_ZONE") || return 1
+  id=$(jq -r '.[0].account.id // empty' <<<"$zones")
   [ -n "$id" ] || die "cannot read the account of zone $CLOUDFLARE_ZONE; check the token's zone access"
   printf '%s' "$id"
 }
@@ -46,7 +73,7 @@ cf_ensure_record() {
   name=$(jq -r .name <<<"$record")
   content=$(jq -r .content <<<"$record")
   proxied=$(jq -r .proxied <<<"$record")
-  existing=$(cf GET "/zones/$zone/dns_records?name=$name&per_page=100")
+  existing=$(cf GET "/zones/$zone/dns_records?name=$name&per_page=100") || return 1
 
   if [ "$type" = TXT ]; then
     same=$(jq -r --arg want "$(cf_normalize "$content")" \
@@ -91,7 +118,8 @@ cf_zone_setting() {
 # /settings, such as Smart Tiered Cache.
 cf_zone_value() {
   local label=$1 path=$2 value=$3 current
-  current=$(cf GET "$path" | jq -r '.value')
+  current=$(cf GET "$path") || return 1
+  current=$(jq -r '.value' <<<"$current")
   if [ "$current" = "$value" ]; then
     info "$label is already $value"
     return
@@ -115,8 +143,7 @@ cf_performance_settings() {
 # Rules of a phase entrypoint, or [] when the zone has none yet (404).
 cf_phase_rules() {
   local zone=$1 phase=$2 resp status
-  resp=$(curl -sS --max-time 60 -w '\n%{http_code}' "$CLOUDFLARE_API_URL/zones/$zone/rulesets/phases/$phase/entrypoint" \
-    -H @<(bearer_header "$CLOUDFLARE_API_TOKEN")) || die "Cloudflare API unreachable at $CLOUDFLARE_API_URL"
+  resp=$(cf_curl GET "/zones/$zone/rulesets/phases/$phase/entrypoint" '' -w '\n%{http_code}') || return 1
   status=$(tail -n 1 <<<"$resp")
   case $status in
     200) sed '$d' <<<"$resp" | jq -c '.result.rules // []' ;;
@@ -129,7 +156,7 @@ cf_phase_rules() {
 # whose ref this script owns and keeps every other rule in its place.
 cf_upsert_phase_rules() {
   local zone=$1 phase=$2 desired=$3 existing merged
-  existing=$(cf_phase_rules "$zone" "$phase")
+  existing=$(cf_phase_rules "$zone" "$phase") || return 1
   if jq -e --argjson want "$desired" '
       def shape: {ref, description, expression, action, action_parameters, enabled};
       ([.[] | select(.ref as $r | $want | map(.ref) | index($r)) | shape] | sort_by(.ref))
@@ -187,7 +214,7 @@ cf_cache_rules() {
 # makes the switch zero-downtime and deleting the route a rollback.
 cf_ensure_worker_host() {
   local zone=$1 name=$2 existing routing unproxied
-  existing=$(cf GET "/zones/$zone/dns_records?name=$name&per_page=100")
+  existing=$(cf GET "/zones/$zone/dns_records?name=$name&per_page=100") || return 1
   routing=$(jq '[.[] | select(.type == "A" or .type == "AAAA" or .type == "CNAME")]' <<<"$existing")
   if [ "$(jq length <<<"$routing")" -eq 0 ]; then
     # 100:: is the discard prefix Cloudflare documents for Worker-only hosts.
@@ -205,7 +232,8 @@ cf_ensure_worker_host() {
 # route that serves another Worker.
 cf_ensure_worker_route() {
   local zone=$1 pattern=$2 script=$3 route current body
-  route=$(cf GET "/zones/$zone/workers/routes" | jq -c --arg p "$pattern" '[.[] | select(.pattern == $p)][0] // empty')
+  route=$(cf GET "/zones/$zone/workers/routes") || return 1
+  route=$(jq -c --arg p "$pattern" '[.[] | select(.pattern == $p)][0] // empty' <<<"$route")
   current=$(jq -r '.script // empty' <<<"${route:-null}")
   if [ -n "$route" ] && [ "$current" = "$script" ]; then
     info "route $pattern -> $script is up to date"

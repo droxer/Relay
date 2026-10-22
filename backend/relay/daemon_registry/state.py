@@ -50,6 +50,7 @@ class RegistryState:
     _last_reap_at: float
     _last_prune_at: float
     _last_seen_persisted_at: dict[str, float]
+    _last_poll_persisted_at: dict[str, float]
     _last_fleet_liveness_refresh_at: float
     _last_progress_persisted_at: dict[str, float]
 

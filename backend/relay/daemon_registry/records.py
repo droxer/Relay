@@ -123,6 +123,12 @@ class DeletedDaemonNodeError(Exception):
     """Raised when a daemon tries to register a node that was deleted."""
 
 
+class CommandEventMismatchError(PermissionError):
+    """An authenticated daemon's event names a command, lease, or run that
+    is not the one it holds. The node's credential is fine, so the wire
+    answers 409, never the 401 a daemon reads as revocation."""
+
+
 def public_sandbox_record(sandbox: dict[str, Any]) -> dict[str, Any]:
     return {
         k: v

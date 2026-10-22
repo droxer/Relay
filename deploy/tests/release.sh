@@ -44,3 +44,22 @@ gql() { printf '{"deployments":{"edges":[{"node":{"id":"backend-dep","status":"B
 if (railway_wait_deployment backend backend-service backend-dep) > "$WORK/out" 2> "$WORK/error"; then exit 1; fi
 grep -q 'still BUILDING after 0s' "$WORK/error"
 echo 'ok    timeout reports the exact deployment and returns failure'
+
+# A refused deploy mutation (e.g. Railway pausing deploys) must fail the call;
+# a command substitution does not inherit errexit, so an empty ID used to
+# slip through and the release waited on whatever deployment was newest.
+GITHUB_REPO=droxer/Relay
+railway_service_repo() { printf '%s' "$GITHUB_REPO"; }
+gql() { die 'Railway API: Deploys have been paused due to an upstream issue'; }
+if id=$(railway_deploy_service backend backend-service 2> "$WORK/error"); then
+  echo "FAIL refused deploy returned success with ID '$id'" >&2
+  exit 1
+fi
+grep -q 'Deploys have been paused' "$WORK/error"
+gql() { printf '{"serviceInstanceDeployV2":null}'; }
+if id=$(railway_deploy_service backend backend-service 2> "$WORK/error"); then
+  echo "FAIL deploy without an ID returned success with ID '$id'" >&2
+  exit 1
+fi
+grep -q 'returned no deployment ID' "$WORK/error"
+echo 'ok    a refused deploy stops the release instead of waiting on another deployment'

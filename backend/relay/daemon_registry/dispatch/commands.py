@@ -15,7 +15,10 @@ from ...core.permission_requests import (
 )
 from ...core.ids import now_iso
 from ...notifications.rules import permission_request_rows
-from ...persistence.daemon.rules import EXIT_UNCONFIRMED_STATE_KEY
+from ...persistence.daemon.rules import (
+    EXIT_UNCONFIRMED_STATE_KEY,
+    NODE_POLL_DRAINED_AT,
+)
 from ...persistence.events import relay_event
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_PROJECT_LINKS,
@@ -423,9 +426,15 @@ class CommandQueueMixin(RegistryState):
         renew_known_active: bool,
     ) -> list[dict[str, Any]]:
         self._assert_authorized(sandbox_id, token)
-        self._mark_seen(sandbox_id, polled=True)
         sandbox = self.sandboxes.get(sandbox_id)
-        if sandbox and sandbox.get("retiredAt"):
+        # The daemon said it is draining: a poll that still reaches us is a
+        # long poll it already hung up on. Leasing into it loses the command,
+        # and counting it as a poll would make the node dispatchable again.
+        # Its runs stay leased through the heartbeat; registration lifts the drain.
+        drained = bool(sandbox and sandbox.get("lastPollAt") == NODE_POLL_DRAINED_AT)
+        if not drained:
+            self._mark_seen(sandbox_id, polled=True)
+        if sandbox and (sandbox.get("retiredAt") or drained):
             if renew_known_active:
                 self._renew_known_active_command_leases(
                     sandbox_id, lease_seconds=lease_seconds

@@ -282,6 +282,7 @@ class NodeAdministrationMixin(RegistryState):
         self.sandboxes.pop(sandbox_id, None)
         self.plain_node_tokens.pop(sandbox_id, None)
         self._last_seen_persisted_at.pop(sandbox_id, None)
+        self._last_poll_persisted_at.pop(sandbox_id, None)
         for command_id, command in list(self.active_commands.items()):
             if (
                 command.get("sandboxId") == sandbox_id
@@ -334,6 +335,7 @@ class NodeAdministrationMixin(RegistryState):
         self.daemon_store.register_node(updated)
         self.plain_node_tokens.pop(sandbox_id, None)
         self._last_seen_persisted_at.pop(sandbox_id, None)
+        self._last_poll_persisted_at.pop(sandbox_id, None)
         for command_id, command in list(self.active_commands.items()):
             if (
                 command.get("sandboxId") == sandbox_id

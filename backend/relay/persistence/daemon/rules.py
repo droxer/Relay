@@ -165,6 +165,10 @@ def preserve_node_poll(
     """
     if not previous or not previous.get("lastPollAt") or node.get("lastPollAt"):
         return node
+    # A drain pin belongs to the daemon that drained; the one registering now
+    # starts with no poll observation, like a brand-new node.
+    if previous["lastPollAt"] == NODE_POLL_DRAINED_AT:
+        return node
     return {**node, "lastPollAt": previous["lastPollAt"]}
 
 
