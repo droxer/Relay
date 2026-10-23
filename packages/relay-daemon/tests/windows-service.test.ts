@@ -132,6 +132,15 @@ describe('Windows service control', () => {
     assert.throws(() => registerWindowsTask(stuck, 'n', 'f'), /relay restart/);
   });
 
+  it('follows UTF-8 logs and waits for a missing service log', () => {
+    const { deps, calls, cleanup } = windowsFixture();
+    try {
+      assert.equal(runControl(['logs', '-f'], deps), 0);
+      assert.match(calls[0]!, /while \(!\(Test-Path -LiteralPath/);
+      assert.match(calls[0]!, /Get-Content -LiteralPath .* -Encoding UTF8 -Tail 100 -Wait$/);
+    } finally { cleanup(); }
+  });
+
   it('removing a superseded computer deletes its task and its definition', () => {
     const { home, run, calls, cleanup } = windowsFixture((command) =>
       command === 'powershell.exe' ? { status: 0, stdout: 'Disabled' } : { status: 0, stdout: '' });

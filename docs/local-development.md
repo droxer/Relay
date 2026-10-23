@@ -534,8 +534,22 @@ holds tokens and logs:
 
 ```text
 ~/.relay/daemon-nodes/<sandbox-id>/credentials/<user>.token  # daemon auth token
-~/.relay/daemon-nodes/<sandbox-id>/logs/*.jsonl                  # daemon structured logs
+~/.relay/daemon-nodes/<sandbox-id>/logs/service.log          # service output (macOS/Windows)
+~/.relay/daemon-nodes/<sandbox-id>/logs/<sandbox-id>.log     # daemon events and agent output
+~/.relay/daemon-nodes/<sandbox-id>/logs/<run-id>.log         # one run's events and output
 ```
+
+Use `relay logs` for the last 100 lines of service output, or `relay logs -f`
+(`--follow`) to stream until Ctrl+C. Add `--computer <id>` when several computers
+are installed; use `relay-dev` for a computer connected to a local backend.
+Follow mode waits for the first log file to appear. Linux reads the systemd user
+journal; macOS and Windows read `service.log`. Lifecycle messages, warnings, and
+errors appear there alongside rendered agent output. Supervisors can disable
+agent output echo with `RELAY_DAEMON_ECHO_AGENT_OUTPUT=0`.
+
+Daemon and per-run `.log` files contain plain text with UTC timestamps, levels,
+run context, and readable details. Existing `.jsonl` files are left in place as
+historical logs; new entries go to `.log` files.
 
 Accounts live in the configured database like every other store;
 `RELAY_STORAGE` and `RELAY_AUTH_STORE` are retired and only log a warning when
