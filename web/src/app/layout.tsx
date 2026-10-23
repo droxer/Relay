@@ -8,6 +8,8 @@ import { InlineScript } from "../components/InlineScript";
 import en from "../i18n/locales/en/translation.json";
 import { SITE_NAME, SITE_SHARE_IMAGE, jsonLdScript, siteUrl, softwareJsonLd } from "../lib/site";
 import { SIGNED_IN_HINT_KEY } from "../lib/appStorage";
+import { apiOrigin, relayApiEndpoint } from "../lib/apiOrigin";
+import { earlyAuthProbeScript } from "../lib/earlyAuthProbe";
 import { LANDING_HERO_SHOT, LANDING_HERO_SIZES, landingShotSrc, landingShotSrcSet } from "../lib/landing";
 import { Providers } from "./providers";
 
@@ -121,7 +123,13 @@ const themeScript = `(function(){try{
     return true;
   };
   if(!sync())document.addEventListener("DOMContentLoaded",sync,{once:true});
+  ${earlyAuthProbeScript(relayApiEndpoint("/auth/me"), SIGNED_IN_HINT_KEY)}
 }catch(e){}})();`;
+
+// A UI hosted apart from its API (NEXT_PUBLIC_RELAY_API_ORIGIN) reaches a
+// second host: open that connection while the page's own code downloads. The
+// requests are credentialed, which is the pool a plain preconnect warms.
+const apiPreconnect = apiOrigin();
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   // The default language is English; the client App updates both
@@ -136,6 +144,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         {/* Resolve the saved language and theme before first paint, then derive
             browser chrome from the same canvas token as the rendered page. */}
+        {apiPreconnect ? <link rel="preconnect" href={apiPreconnect} /> : null}
         <InlineScript html={themeScript} />
         {jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} /> : null}
       </head>

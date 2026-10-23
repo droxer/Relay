@@ -72,6 +72,17 @@ export async function apiJson<T>(
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
+  return readApiResponse(response, `${options.method ?? "GET"} ${path}`, options.guard);
+}
+
+/** Parses a Relay JSON response — or turns it into a `RelayApiError` — the way
+    `apiJson` does, for a request that was started elsewhere (the bootstrap
+    script's early `/auth/me` probe). `endpoint` names it in shape errors. */
+export async function readApiResponse<T>(
+  response: Response,
+  endpoint: string,
+  guard?: ResponseGuard<T>,
+): Promise<T> {
   const text = await response.text();
   let parsed: unknown;
   try {
@@ -97,12 +108,11 @@ export async function apiJson<T>(
     const code = apiErrorCode(detail) ?? apiErrorCode(error);
     throw new RelayApiError(message, response.status, code, detail);
   }
-  if (!options.guard) return parsed as T;
+  if (!guard) return parsed as T;
   try {
-    return options.guard(parsed);
+    return guard(parsed);
   } catch (issue) {
     if (!(issue instanceof ResponseShapeIssue)) throw issue;
-    const endpoint = `${options.method ?? "GET"} ${path}`;
     throw new RelayApiShapeError(endpoint, issue.field, issue.message, response.status);
   }
 }

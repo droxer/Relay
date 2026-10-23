@@ -1,7 +1,8 @@
 import type { Language, Theme } from "../lib/appStorage.ts";
 import type { OnboardingPatch } from "../lib/onboarding.ts";
 import type { CurrentUser } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { takeEarlyAuthProbe } from "../lib/earlyAuthProbe.ts";
+import { apiJson, readApiResponse } from "./client.ts";
 
 /** What a signed-out visitor may do. A flag absent on an older backend reads
     as off. `passwordResetEnabled` is true only while the server can email. */
@@ -26,8 +27,13 @@ export interface SessionCapabilities {
   automationTriggers?: boolean;
 }
 
-export function getMe(signal?: AbortSignal): Promise<{ authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities }> {
-  return apiJson<{ authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities }>("/auth/me", { signal });
+type MeResponse = { authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities };
+
+export async function getMe(signal?: AbortSignal): Promise<MeResponse> {
+  // The first probe of a page load reuses the request the HTML already started.
+  const early = takeEarlyAuthProbe();
+  if (early) return readApiResponse<MeResponse>(await early, "GET /auth/me");
+  return apiJson<MeResponse>("/auth/me", { signal });
 }
 
 export function updateUserPreferences(input: { theme?: Theme; language?: Language; onboarding?: OnboardingPatch }): Promise<{ user: CurrentUser }> {
