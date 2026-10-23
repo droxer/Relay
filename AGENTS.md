@@ -152,6 +152,14 @@ newer and `uv` are required for the backend.
   (default `1800000`, 30 minutes; `0` waits forever) — a prompt nobody
   answers in time is withdrawn and the tool use denied, so a run never
   blocks a computer indefinitely.
+- Daemon output drain deadline: `RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS`
+  (default `30000`) — how long a finished run waits for its streamed output
+  to reach the backend before it reports its outcome anyway (flagged
+  `outputTruncated`); undelivered output stays in the durable outbox and is
+  replayed late. An event post the backend keeps failing logs
+  `event post failed; retrying` with its status and attempt count, at most
+  every 30 s. The backend answers a transient database fault 503 and any
+  other ingest failure 500; the daemon retries both.
 - Stop backend, daemon, and BoxLite processes: `make stop`.
 - Deploy to Railway behind Cloudflare, with the web UI as a Cloudflare Worker:
   `deploy/deploy.sh up` (config in git-ignored `deploy/.env`; see

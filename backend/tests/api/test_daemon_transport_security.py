@@ -23,19 +23,46 @@ def test_local_credentials_are_hash_only(monkeypatch):
         assert token
 
 
-@pytest.mark.parametrize('failure', [RuntimeError, ValueError, KeyError])
-def test_event_store_failures_are_retryable(monkeypatch, failure):
+def _transient_db_errors():
+    from sqlalchemy.exc import InterfaceError, OperationalError
+    from sqlalchemy.exc import TimeoutError as PoolTimeoutError
+    return [
+        OperationalError('SELECT 1', {}, Exception('private database detail')),
+        InterfaceError('SELECT 1', {}, Exception('private database detail')),
+        PoolTimeoutError('private database detail'),
+    ]
+
+
+def _post_failing_event(monkeypatch, root, error):
+    app = create_app(root)
+    def fail(*args):
+        raise error
+    monkeypatch.setattr(app.state.registry, 'handle_event', fail)
+    return TestClient(app, raise_server_exceptions=False).post('/api/v1/daemon-nodes/test/events', json={
+        'type': 'run.output.batch', 'commandId': 'cmd', 'sessionId': 'ses', 'runId': 'run',
+        'agent': 'codex', 'entries': [{'stream': 'stdout', 'text': 'hello', 'sequence': 0}],
+    })
+
+
+@pytest.mark.parametrize('error', _transient_db_errors())
+def test_transient_store_faults_answer_503(monkeypatch, error):
+    # The daemon keeps the event durable and retries; a database blip loses nothing.
     monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        def fail(*args):
-            raise failure('private database detail')
-        monkeypatch.setattr(app.state.registry, 'handle_event', fail)
-        response = TestClient(app).post('/api/v1/daemon-nodes/test/events', json={
-            'type': 'run.output', 'commandId': 'cmd', 'sessionId': 'ses',
-            'runId': 'run', 'agent': 'codex', 'stream': 'stdout', 'text': 'hello', 'sequence': 0,
-        })
+        response = _post_failing_event(monkeypatch, root, error)
         assert response.status_code == 503
+        assert 'private database detail' not in response.text
+
+
+@pytest.mark.parametrize('failure', [RuntimeError, ValueError, KeyError])
+def test_unexpected_event_failures_answer_500_and_stay_retryable(monkeypatch, failure):
+    # A bug is not "temporarily unavailable": it answers 500 so the daemon's
+    # retry warnings name it, yet stays 5xx so the durable event is replayed
+    # once the fix ships rather than dropped.
+    monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
+    with TemporaryDirectory() as root:
+        response = _post_failing_event(monkeypatch, root, failure('private database detail'))
+        assert response.status_code == 500
         assert 'private database detail' not in response.text
 
 

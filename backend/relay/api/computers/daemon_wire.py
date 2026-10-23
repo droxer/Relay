@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
+from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.concurrency import run_in_threadpool
 
 from ...computer.node_agents import sync_node_agents
@@ -494,11 +496,26 @@ async def daemon_events(
         raise HTTPException(401, str(error)) from error
     except UnknownDaemonNodeError as error:
         raise HTTPException(404, "Daemon node not found.") from error
-    except Exception as error:  # noqa: BLE001 - the daemon retries a 503, so a transient store fault never loses an event
+    except Exception as error:  # noqa: BLE001 - any 5xx is retried from the daemon's durable outbox, so no event is lost
+        transient = is_transient_store_fault(error)
         logger.exception(
             "Daemon node event failed",
             sandbox_id=sandbox_id,
             event_type=event.get("type"),
             run_id=event.get("runId"),
+            transient=transient,
         )
-        raise HTTPException(503, "Event processing is temporarily unavailable.") from error
+        # 503 says "try again soon"; 500 says the backend has a bug. Both stay
+        # retryable, so an event a fixed backend can take is replayed, not lost.
+        if transient:
+            raise HTTPException(503, "Event processing is temporarily unavailable.") from error
+        raise HTTPException(500, "Event processing failed.") from error
+
+
+def is_transient_store_fault(error: BaseException) -> bool:
+    """A database fault that a retry can outlast: a lost connection, an
+    exhausted pool, a lock or serialization conflict. Anything else (a bad
+    query, a bug) answers the same way every time."""
+    if isinstance(error, (OperationalError, InterfaceError, PoolTimeoutError)):
+        return True
+    return isinstance(error, DBAPIError) and bool(error.connection_invalidated)

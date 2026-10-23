@@ -1900,6 +1900,83 @@ test("relay daemon completes a successful run whose output batch the backend rej
   assert.equal(existsSync(controlPath), false);
 });
 
+test("relay daemon completes a run whose output the backend keeps failing, and says so", async (t) => {
+  // Incident 2026-10-23: the backend answered a run's first output batch with
+  // 503 forever. The daemon retried silently and held the terminal event
+  // behind it, so the thread read "Working…" for good.
+  const previousDrain = process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
+  process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS = "300";
+  t.after(() => restoreEnv("RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS", previousDrain));
+  const root = mkdtempSync(join(tmpdir(), "relay-output-stuck-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const command = { ...runCommand("cmd_output_stuck"), leaseId: "lease_stuck", workspacePath: root };
+  const events: DaemonNodeEvent[] = [];
+  const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+  let commandServed = false;
+  const daemon = runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_output_stuck",
+    userId: "alice",
+    workspacePath: root,
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 50,
+    logger: {
+      ...testLogger(),
+      warn: (message: string, fields?: Record<string, unknown>) => { warnings.push({ message, fields }); },
+    },
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      exec: async (_cmd, args, options) => {
+        if (!isInventoryProbe(args)) options?.stdoutRenderer?.("  working\n\n");
+        return { exit_code: 0, stdout: "  working\n\n", stderr: "" };
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+      if (path.endsWith("/commands")) {
+        if (!commandServed) {
+          commandServed = true;
+          return jsonResponse({ commands: [command] });
+        }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        events.push(event);
+        if (event.type === "run.output.batch") return jsonResponse({ detail: "Event processing is temporarily unavailable." }, 503);
+        if (event.type === "run.failed" || event.type === "run.completed") setTimeout(() => stop.abort(), 0);
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  await Promise.race([
+    daemon,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("a stuck output post held the terminal event")), 3000)),
+  ]);
+
+  // The agent's own outcome stands; the undelivered output stays in the
+  // durable outbox for replay, and the run is flagged as gappy meanwhile.
+  const completed = events.find((event) => event.type === "run.completed");
+  if (!completed || completed.type !== "run.completed") throw new Error("missing run.completed event");
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.outputTruncated, true);
+  assert.equal(events.some((event) => event.type === "run.failed"), false);
+  // Every failing attempt is not silent: the status and attempt count show.
+  const retry = warnings.find((warning) => /event post failed; retrying/.test(warning.message));
+  assert.ok(retry, `expected a retry warning, got ${JSON.stringify(warnings.map((warning) => warning.message))}`);
+  assert.equal(retry.fields?.status, 503);
+  assert.equal(retry.fields?.eventType, "run.output.batch");
+  assert.equal(typeof retry.fields?.attempt, "number");
+  assert.ok(warnings.some((warning) => /output delivery stalled/.test(warning.message)));
+});
+
 test("relay daemon batches large alternating output without losing order", async () => {
   const stop = new AbortController();
   const command = runCommand("cmd_output_backlog");
