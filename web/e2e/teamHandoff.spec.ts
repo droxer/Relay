@@ -78,7 +78,7 @@ test("a staged handoff turn says whose work it picks up", async ({ page }) => {
   await page.goto("/threads/handoff");
   await expect(page.locator(".team-handoff")).toHaveCount(0);
   const turn = page.locator(".msg-agent").filter({ hasText: "Rex" });
-  await expect(turn.locator(".agent-stream-activity")).toHaveText("Picking up from Ada…");
+  await expect(turn.locator(".agent-stream-activity")).toHaveText("Continuing from Ada…");
   expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: "/tmp/relay-team-handoff-staged.png" });
 });

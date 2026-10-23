@@ -277,8 +277,11 @@ test("an open file gets one chrome row, level with the conversation beside it", 
   /* The panel used to spend a full header naming itself and then open the file
      under a second bar — two rows of chrome in a column that can be 288px wide,
      with the panel's content sitting a whole header below the transcript's. The
-     file's own header is now the panel's only chrome row: back and close at the
-     two ends, the filename and its actions in between. */
+     file's own header is now the panel's only chrome: back and close at the two
+     ends of its first line, level with the conversation's header. In a pane
+     under 640px (this one is ~384px) the file's actions take a second line
+     (artifact.css, the artifact-preview container query): kept in one row they
+     squeezed the filename to nothing and clipped Download off the edge. */
   const page = await openPage(browser, "/threads/review-thread", false, { "relay-web.sidenavExpanded": "true" }, {
     artifacts: [{
       id: "art-1", sessionId: "review-thread", kind: "plan", title: "AI-NEWS-2026-09-19.md",
@@ -302,10 +305,12 @@ test("an open file gets one chrome row, level with the conversation beside it", 
     header.boundingBox(), page.locator(".chat-header").boundingBox(),
   ]);
   expect(backBox!.x).toBeLessThan(closeBox!.x);
-  // One row, and the file's first line starts level with the transcript's.
-  expect(Math.round(headerBox!.height)).toBe(Math.round(chatHeaderBox!.height));
-  expect(Math.round(headerBox!.y + headerBox!.height))
-    .toBe(Math.round(chatHeaderBox!.y + chatHeaderBox!.height));
+  // Back and close share the first line, which starts level with the chat
+  // header; the actions line, when the pane is narrow, only ever adds below.
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+  expect(Math.abs(middle(backBox!) - middle(closeBox!))).toBeLessThanOrEqual(2);
+  expect(Math.round(headerBox!.y)).toBe(Math.round(chatHeaderBox!.y));
+  expect(Math.round(headerBox!.height)).toBeGreaterThanOrEqual(Math.round(chatHeaderBox!.height));
   await page.context().close();
 });
 

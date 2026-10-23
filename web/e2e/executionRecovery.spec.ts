@@ -76,7 +76,7 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
     } else {
       await expect(panel.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);
       await panel.getByRole("link", { name: "Open Computers" }).click();
-      await expect(page).toHaveURL(/\/settings\/computers$/);
+      await expect(page).toHaveURL(/\/computers$/);
       expect(writes).toEqual([]);
     }
   });
@@ -99,7 +99,7 @@ test("reporting an agent gone asks first, then calls reconcile", async ({ page }
 
   await panel.getByRole("button", { name: "Report the agent as gone" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Report the agent as gone" }).click();
-  await expect(panel).toContainText("The execution is released");
+  await expect(panel).toContainText("Reported. You can delete the thread now.");
   expect(writes).toEqual(["/api/v1/threads/recovery-thread/execution/reconcile"]);
 });
 
@@ -123,11 +123,11 @@ test("online computer with pending deletion keeps exit recovery visible", async 
   await page.goto("/threads/recovery-thread");
   const panel = page.getByRole("region", { name: "Next steps" });
   await expect(panel).toContainText("Computer online, agent stop unconfirmed");
-  await expect(panel).toContainText("Deletion is pending");
+  await expect(panel).toContainText("Deletion pending");
   await expect(panel).not.toContainText("Computer is not responding");
   await expect(panel.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);
   await panel.getByRole("link", { name: "Open Computers" }).click();
-  await expect(page).toHaveURL(/\/settings\/computers$/);
+  await expect(page).toHaveURL(/\/computers$/);
   expect(writes).toEqual([]);
 });
 
@@ -180,5 +180,5 @@ test("a completed turn whose live output had gaps says so", async ({ page }) => 
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/threads/recovery-thread");
-  await expect(page.getByRole("note")).toContainText("Part of this run's live output was not saved");
+  await expect(page.getByRole("note")).toContainText("Some live output from this run wasn't saved");
 });

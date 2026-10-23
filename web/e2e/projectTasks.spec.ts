@@ -87,16 +87,20 @@ for (const mobile of [false, true]) {
     await expect(board.locator(".sec-rail")).toHaveCount(0);
     await expect(board.getByRole("link", { name: "Write the release brief", exact: true })).toBeVisible();
     await expect(board.getByText("Another project's task")).toHaveCount(0);
-    await board.getByRole("button", { name: "Board view", exact: true }).click();
+    // On a phone the view toggle rides the one top bar (MobileTopbarSlot), not
+    // the board header; the page holds exactly one either way.
+    await page.getByRole("button", { name: "Board view", exact: true }).click();
     // The board header is controls only: no metrics, and the lanes name each status.
     await expect(board.locator(".backlog-stats")).toHaveCount(0);
     await expect(board.locator(".backlog-project-status")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-tasks-board-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await board.getByRole("button", { name: "List view", exact: true }).click();
+    await page.getByRole("button", { name: "List view", exact: true }).click();
 
     // A new task is created into this project without choosing one.
-    await board.getByRole("button", { name: "New task", exact: true }).first().click();
+    // Page actions sit in the phone's top bar, in the board header otherwise.
+    const actions = mobile ? page.locator(".mobile-topbar") : board;
+    await actions.getByRole("button", { name: "New task", exact: true }).first().click();
     const form = page.getByRole("dialog", { name: "New task", exact: true });
     await form.getByRole("textbox", { name: "Title", exact: true }).fill("Prepare release notes");
     await form.getByRole("button", { name: "Create task", exact: true }).click();
@@ -148,6 +152,9 @@ test("creating the first project preserves a global task draft", async ({ page }
   await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
   await taskForm.getByRole("button", { name: "Create project", exact: true }).click();
   const projectForm = page.getByRole("dialog", { name: "Create project", exact: true });
+  // The drawer opens on the agent-drafted setup (ADR-022); this test names
+  // the project itself, so it takes the manual path.
+  await projectForm.getByRole("button", { name: "Set up manually", exact: true }).click();
   await projectForm.getByRole("textbox", { name: "Project name", exact: true }).fill("First project");
   await projectForm.getByRole("combobox", { name: "Computer", exact: true }).click();
   await page.getByRole("option", { name: "Work computer", exact: true }).click();

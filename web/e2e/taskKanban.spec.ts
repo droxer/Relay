@@ -164,7 +164,7 @@ test("the due date is picked from a calendar and kept as a day key", async ({ pa
   await mockQueuedTask(page);
   await page.goto("/tasks");
   await page.getByRole("button", { name: "New task" }).first().click();
-  const due = page.getByRole("button", { name: /^Due Pick a date$/ });
+  const due = page.getByRole("button", { name: /^Due Select a date$/ });
   await due.click();
   await page.getByRole("grid").getByRole("button", { name: /14/ }).first().click();
   await expect(page.getByRole("grid")).toHaveCount(0);

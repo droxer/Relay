@@ -222,9 +222,10 @@
   border-bottom: 0.5px solid var(--line-1);
 }
 
-/* A file's header IS the panel's header row, so it stands at the shared header
-   height — the same 64px as the chat header beside it, so the file's first line
-   and the transcript's first line start level. The panel used to spend a full
+/* A file's header IS the panel's header row, so it stands at least the shared
+   --header-h — the chat header's height beside it — so the file's first line
+   and the transcript's first line start level. In a narrow pane the file's
+   actions wrap to a second line under it (artifact.css). The panel used to spend a full
    --header-h on a row naming itself and then open the file under a second bar,
    which is what put its content a whole header out of line with the
    conversation. */
