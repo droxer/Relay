@@ -126,20 +126,25 @@ function piAssistantText(event: Record<string, unknown>): string {
   return textFromContent(message);
 }
 
+// The assistant-message event a `message_update` carries, or an empty record
+// for anything else. Pi only streams assistant messages, and newer Pi builds
+// (the BoxLite guest's, for one) leave the accumulated `message` snapshot off
+// every update — so a missing snapshot still means the assistant is speaking;
+// only a snapshot that names another role rules the frame out.
+function piAssistantUpdate(event: Record<string, unknown>): Record<string, unknown> {
+  if (event.type !== "message_update") return {};
+  if (event.message !== undefined && asRecord(event.message).role !== "assistant") return {};
+  return asRecord(event.assistantMessageEvent);
+}
+
 function piAssistantDelta(event: Record<string, unknown>, type: "text_delta" | "thinking_delta"): string {
-  if (event.type !== "message_update") return "";
-  const message = asRecord(event.message);
-  if (message.role !== "assistant") return "";
-  const assistantEvent = asRecord(event.assistantMessageEvent);
+  const assistantEvent = piAssistantUpdate(event);
   if (assistantEvent.type !== type) return "";
   return typeof assistantEvent.delta === "string" ? assistantEvent.delta : "";
 }
 
 function piAssistantEndedContent(event: Record<string, unknown>, type: "text_end" | "thinking_end"): string {
-  if (event.type !== "message_update") return "";
-  const message = asRecord(event.message);
-  if (message.role !== "assistant") return "";
-  const assistantEvent = asRecord(event.assistantMessageEvent);
+  const assistantEvent = piAssistantUpdate(event);
   if (assistantEvent.type === type && typeof assistantEvent.content === "string") return assistantEvent.content;
   if (assistantEvent.type === "done" && type === "text_end") {
     return textFromContent(asRecord(assistantEvent.message));
@@ -155,10 +160,7 @@ function piTool(event: Record<string, unknown>): { id?: string; name: string; ta
       target: toolTarget(toolInput(event.args)),
     };
   }
-  if (event.type !== "message_update") return null;
-  const message = asRecord(event.message);
-  if (message.role !== "assistant") return null;
-  const assistantEvent = asRecord(event.assistantMessageEvent);
+  const assistantEvent = piAssistantUpdate(event);
   if (assistantEvent.type !== "toolcall_end") return null;
   const toolCall = asRecord(assistantEvent.toolCall);
   if (typeof toolCall.name !== "string") return null;
