@@ -77,8 +77,23 @@ def _copy(locale: str | None) -> dict[str, str]:
     return _COPY.get(locale or "en", _COPY["en"])
 
 
+def _handoff_bar() -> str:
+    """The mark's two chevrons as a stripe: the action hands to the live.
+
+    A two-cell table rather than a gradient, which Outlook and Gmail drop.
+    """
+    cell = "height:3px;line-height:3px;font-size:0;background:{}"
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="border-collapse:collapse;margin:0 0 24px"><tr>'
+        f'<td style="{cell.format(BRAND_ACTION)}">&nbsp;</td>'
+        f'<td style="{cell.format(BRAND_LIVE)}">&nbsp;</td>'
+        "</tr></table>"
+    )
+
+
 def _frame(body_html: str) -> str:
-    """Wrap a message body in the wordmark header and the brand ink."""
+    """Wrap a message body in the handoff bar, the wordmark, and the brand ink."""
     mark = (
         f'<p style="margin:0 0 24px;font-weight:700;font-size:18px;color:{BRAND_INK}">'
         f'<span style="color:{BRAND_ACTION}">&rsaquo;</span>'
@@ -86,7 +101,7 @@ def _frame(body_html: str) -> str:
     )
     return (
         f'<div style="font-family:{_FONT};font-size:15px;line-height:1.5;color:{BRAND_INK}">'
-        f"{mark}{body_html}</div>"
+        f"{_handoff_bar()}{mark}{body_html}</div>"
     )
 
 

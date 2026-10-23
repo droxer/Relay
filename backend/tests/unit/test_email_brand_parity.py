@@ -45,3 +45,18 @@ def test_every_email_wears_the_wordmark_and_link_mails_the_action_button() -> No
         assert f'color:{templates.BRAND_LIVE}">&rsaquo;' in message.html
     assert f"background:{templates.BRAND_ACTION}" in invite.html
     assert "<a " not in changed.html
+
+
+def test_every_email_opens_with_the_handoff_bar() -> None:
+    """A two-cell stripe — action then live — sits above the wordmark.
+
+    It is a table, not a gradient: Outlook and Gmail drop CSS gradients.
+    """
+    changed = templates.password_changed_email(
+        to="ada@example.com", username="ada", changed_at="10:00", locale="en"
+    )
+    bar = changed.html[: changed.html.index("&rsaquo;")]
+    action_cell = bar.index(f"background:{templates.BRAND_ACTION}")
+    live_cell = bar.index(f"background:{templates.BRAND_LIVE}")
+    assert action_cell < live_cell
+    assert 'role="presentation"' in bar
