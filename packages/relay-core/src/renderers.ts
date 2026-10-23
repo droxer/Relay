@@ -83,8 +83,8 @@ export class PlainTextStreamRenderer extends BlockStreamRenderer {
 }
 
 export class PiStreamRenderer {
-  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.yellow);
-  private readonly plain = new PlainTextStreamRenderer("Pi", ansi.yellow);
+  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
+  private readonly plain = new PlainTextStreamRenderer("Pi", ansi.live);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
   private sawAssistantTextInTurn = false;
 
@@ -221,12 +221,13 @@ export class JsonLineRenderer {
   }
 }
 
-function toolLine(accent: string, label: string, target: string): string {
-  return `\n${color(TOOL_MARK, accent)} ${color(label, ansi.dim)} ${color(target, accent)}\n`;
+// A tool call is supporting detail beside the agent's words, so it reads dim.
+function toolLine(label: string, target: string): string {
+  return `\n${color(TOOL_MARK, ansi.dim)} ${color(label, ansi.dim)} ${color(target, ansi.dim)}\n`;
 }
 
 export class ClaudeStreamRenderer {
-  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.brand);
+  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
   private readonly thinking = new BlockStreamRenderer(THINK_MARK, ansi.dim, [ansi.dim, ansi.italic]);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
 
@@ -249,7 +250,7 @@ export class ClaudeStreamRenderer {
         if (contentBlock.type === "tool_use") {
           this.text.resetBlock();
           this.thinking.resetBlock();
-          return toolLine(ansi.brand, "tool", String(contentBlock.name ?? "unknown"));
+          return toolLine("tool", String(contentBlock.name ?? "unknown"));
         }
         if (contentBlock.type === "thinking") this.thinking.resetBlock();
         else this.text.resetBlock();
@@ -278,7 +279,7 @@ export class ClaudeStreamRenderer {
             output.push(this.text.feed(`${text}\n`));
           }
         } else if (block.type === "tool_use") {
-          output.push(toolLine(ansi.brand, "tool", String(block.name ?? "unknown")));
+          output.push(toolLine("tool", String(block.name ?? "unknown")));
         }
       }
       return output.join("");
@@ -297,7 +298,7 @@ export class ClaudeStreamRenderer {
 }
 
 export class CodexStreamRenderer {
-  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.blue);
+  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
   private readonly reasoning = new BlockStreamRenderer(THINK_MARK, ansi.dim, [ansi.dim, ansi.italic]);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
 
@@ -332,7 +333,7 @@ export class CodexStreamRenderer {
         return `\n${this.reasoning.feed(`${text}\n`)}`;
       }
       if (item.type === "command_execution" && event.type === "item.started") {
-        return toolLine(ansi.blue, "command", String(item.command ?? "command"));
+        return toolLine("command", String(item.command ?? "command"));
       }
       if (item.type === "file_change" && event.type === "item.completed") {
         return `\n${status("info", "Codex changed files.")}\n`;
@@ -357,8 +358,8 @@ export class CodexStreamRenderer {
  * that fail to parse (e.g. text-mode leakage) fall back to sanitized plain text.
  */
 export class KimiStreamRenderer {
-  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.magenta);
-  private readonly plain = new PlainTextStreamRenderer("Kimi", ansi.magenta);
+  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
+  private readonly plain = new PlainTextStreamRenderer("Kimi", ansi.live);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
 
   feed(chunk: string): string {
@@ -394,7 +395,7 @@ export class KimiStreamRenderer {
       const record = asRecord(call);
       const fn = asRecord(record.function);
       const name = String(fn.name ?? record.name ?? "tool");
-      output.push(toolLine(ansi.magenta, "tool", name));
+      output.push(toolLine("tool", name));
     }
 
     return output.join("");

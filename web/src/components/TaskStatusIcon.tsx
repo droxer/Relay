@@ -9,13 +9,15 @@ import type { TaskStatus } from "../types";
  * A dot could not tell Ready from Review from "awaiting your input" — three
  * grey solids — so the glyph carries progress in its fill instead: a dashed
  * ring for work nobody has picked up, an empty ring when it is ready, a ring
- * filling as it moves (running half, review three quarters), a slashed ring
- * when it is stuck, and a filled check when it is done. The hue comes from
- * task-status.css, keyed off `data-status`, so the glyph never picks its own.
+ * filling as it moves (running half, review three quarters), a ring holding a
+ * still centre dot while it waits on a person, a slashed ring when it is
+ * stuck, and a filled check when it is done. Running and waiting used to
+ * share the half fill and differ by hue alone. The hue comes from
+ * task-status.css, keyed off `data-status`, so the glyph never picks its own;
+ * that sheet also breathes the running fill.
  */
 const PROGRESS: Partial<Record<TaskStatus, number>> = {
   running: 0.5,
-  waiting_for_human: 0.5,
   review: 0.75,
 };
 
@@ -47,8 +49,14 @@ export function TaskStatusIcon({ status, className }: { status: TaskStatus; clas
           strokeDasharray={status === "backlog" ? "1.9 1.9" : undefined} />
       )}
       {progress ? (
-        <circle cx="7" cy="7" r={PIE_RADIUS} fill="none" stroke="currentColor" strokeWidth={PIE_RADIUS * 2}
-          strokeDasharray={`${progress * PIE_CIRCUMFERENCE} ${PIE_CIRCUMFERENCE}`} transform="rotate(-90 7 7)" />
+        // Grouped so the breathing scale does not replace the circle's rotate.
+        <g className="task-status-fill">
+          <circle cx="7" cy="7" r={PIE_RADIUS} fill="none" stroke="currentColor" strokeWidth={PIE_RADIUS * 2}
+            strokeDasharray={`${progress * PIE_CIRCUMFERENCE} ${PIE_CIRCUMFERENCE}`} transform="rotate(-90 7 7)" />
+        </g>
+      ) : null}
+      {status === "waiting_for_human" ? (
+        <circle className="task-status-wait" cx="7" cy="7" r="2.25" fill="currentColor" />
       ) : null}
       {status === "blocked" ? (
         <path d="M3.2 10.8 10.8 3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

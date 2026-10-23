@@ -491,16 +491,21 @@ describe("formatRelativeTime", () => {
   const DAY = 24 * HOUR;
 
   it("keeps hours for anything under a day", () => {
-    assert.equal(formatRelativeTime(ago(5 * HOUR), t), "5 hours ago");
+    assert.equal(formatRelativeTime(ago(5 * HOUR), t), "5h ago");
   });
 
   // An agent created three months ago read "Created 2160 hours ago": the
   // formatter had no unit above the hour.
   it("rolls up to days, weeks, months and years", () => {
-    assert.equal(formatRelativeTime(ago(3 * DAY), t), "3 days ago");
-    assert.equal(formatRelativeTime(ago(14 * DAY), t), "2 weeks ago");
-    assert.equal(formatRelativeTime(ago(90 * DAY), t), "3 months ago");
-    assert.equal(formatRelativeTime(ago(800 * DAY), t), "2 years ago");
+    assert.equal(formatRelativeTime(ago(3 * DAY), t), "3d ago");
+    assert.equal(formatRelativeTime(ago(14 * DAY), t), "2w ago");
+    assert.equal(formatRelativeTime(ago(90 * DAY), t), "3mo ago");
+    assert.equal(formatRelativeTime(ago(800 * DAY), t), "2y ago");
+  });
+
+  // One relative-time voice: the rail's short form, in admin sentences too.
+  it("speaks the thread rail's short form", () => {
+    assert.equal(formatRelativeTime(ago(DAY + HOUR), t), "yesterday");
   });
 });
 

@@ -11,8 +11,9 @@ import { RELAY_GITHUB_URL } from "./landing.ts";
 
 export const SITE_NAME = "Relay";
 
-/** The social preview image: the hero screenshot, already 1600×1000 WebP. */
-export const SITE_SHARE_IMAGE = { url: "/landing/threads.webp", width: 1600, height: 1000 } as const;
+/** The social preview image: the paper card rendered by
+    script/og-card/render.mjs at the 1200×630 size unfurlers crop to. */
+export const SITE_SHARE_IMAGE = { url: "/og.png", width: 1200, height: 630 } as const;
 
 /** Client routes behind sign-in. They serve the same app shell as "/", so a
     crawler would only find a login form there; keep them out of the index. */

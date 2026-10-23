@@ -70,9 +70,9 @@ describe("Relay palette tokens", () => {
     }
   });
 
-  it("tunes --action per register: bright orange on the dark canvas, deep burnt orange on the light one", () => {
-    // One mid-tone accent sank into the charcoal and never quite led on white,
-    // so each register declares its own fill, pressed state and ink.
+  it("tunes --action per register: a near-white ink plate on black, a near-black one on paper", () => {
+    // eveland alignment (2026-10-23): the action is the ink, so each register
+    // declares its own plate, hover and ink.
     for (const name of ["--action", "--action-hover", "--on-action"]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `dark register is missing ${name}`);
       assert.match(lightRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `light register is missing ${name}`);
@@ -82,12 +82,13 @@ describe("Relay palette tokens", () => {
     const darkFill = brightness(tokenIn(darkRegister, "--action"));
     const lightFill = brightness(tokenIn(lightRegister, "--action"));
     assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter orange");
-    // Hover moves away from the canvas: lighter on dark, deeper on light.
+    // Hover lifts: brighter on dark; on paper a near-black plate can only
+    // lift toward grey, as eveland's button does.
     assert.ok(brightness(tokenIn(darkRegister, "--action-hover")) > darkFill);
-    assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) < lightFill);
+    assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) > lightFill);
     for (const register of [darkRegister, lightRegister]) {
       const [r, g, b] = channels(tokenIn(register, "--action"));
-      assert.ok(r > g && g > b, "--action stays the baton orange");
+      assert.ok(r === g && g === b, "--action is ink, never a hue");
     }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
   });
@@ -477,12 +478,14 @@ describe("ink ramp legibility", () => {
 });
 
 describe("surface ladder", () => {
-  it("keeps both themes' large surfaces achromatic", () => {
+  it("keeps both themes' large surfaces neutral, allowing only eveland's warm paper", () => {
+    // The one cast is eveland's #f7f7f5 recessed fill: a 2-step warm lean
+    // (blue lowest). Anything cooler, or any visible tint, fails.
     for (const register of [darkRegister, lightRegister]) {
       for (const name of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--line-1", "--line-2"]) {
         const [r, g, b] = channels(tokenIn(register, name));
-        assert.equal(r, g, `${name} must not tint the neutral workspace`);
-        assert.equal(g, b, `${name} must not tint the neutral workspace`);
+        assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 2, `${name} must not tint the workspace`);
+        assert.ok(b <= g && g <= r, `${name} may only lean warm, never cool`);
       }
     }
   });
@@ -684,7 +687,7 @@ function componentSources(): string[] {
 
 
 describe("accent primary and neutral CTA palette", () => {
-  it("routes shared primary buttons through the baton-orange accent", () => {
+  it("routes shared primary buttons through the --action ink plate", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
     assert.match(bridge, /--primary:\s*var\(--action\)/);
     assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);

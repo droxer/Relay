@@ -21,15 +21,23 @@ describe("terminal style", () => {
     }
   });
 
+  it("speaks the web palette: blue for live, orange for what needs you, crimson for failure", () => {
+    const style = terminalStyle(true, "linux", {});
+    assert.match(style.warn("Sign in"), /^\x1b\[1m\x1b\[38;5;208m! Sign in/);
+    assert.match(style.step("Polling"), /^\x1b\[38;5;75m›/);
+    assert.equal(style.link("x"), `${ESC}38;5;75m${ESC}4mx${ESC}0m`);
+  });
+
   it("colors the headline and highlights a notice's commands without touching their text", () => {
     const style = terminalStyle(true, "linux", {});
-    assert.equal(style.success("Done"), `${ESC}1m${ESC}32m✓${ESC}0m ${ESC}1mDone${ESC}0m`);
-    assert.match(style.error("Failed\ndetail"), /^\x1b\[1m\x1b\[31m✗ Failed\x1b\[0m\ndetail$/);
+    assert.equal(style.success("Done"), `${ESC}1m${ESC}38;5;75m✓${ESC}0m ${ESC}1mDone${ESC}0m`);
+    assert.match(style.error("Failed\ndetail"), /^\x1b\[1m\x1b\[38;5;204m✗ Failed\x1b\[0m\ndetail$/);
     const notice = style.notice("Not on PATH.\n  echo 'x' >> ~/.zshrc\nThen open a new terminal.");
     assert.equal(notice.replace(/\x1b\[[0-9;]*m/g, ""), "! Not on PATH.\n  echo 'x' >> ~/.zshrc\nThen open a new terminal.");
-    assert.match(notice, /\n  \x1b\[36mecho 'x' >> ~\/\.zshrc\x1b\[0m\n/);
-    assert.equal(style.verdict("OK", true), `${ESC}1m${ESC}32mOK${ESC}0m`);
-    assert.equal(style.verdict("FAIL", false), `${ESC}1m${ESC}31mFAIL${ESC}0m`);
+    assert.match(notice, /^\x1b\[1m\x1b\[38;5;208m! Not on PATH\./);
+    assert.match(notice, /\n  \x1b\[38;5;75mecho 'x' >> ~\/\.zshrc\x1b\[0m\n/);
+    assert.equal(style.verdict("OK", true), `${ESC}1m${ESC}38;5;75mOK${ESC}0m`);
+    assert.equal(style.verdict("FAIL", false), `${ESC}1m${ESC}38;5;204mFAIL${ESC}0m`);
     assert.equal(terminalStyle(false).verdict("FAIL", false), "FAIL");
   });
 

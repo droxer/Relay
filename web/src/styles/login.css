@@ -67,7 +67,7 @@
   height: min(34vmin, 300px);
   /* The brand handoff as a watermark: each accent at a wash strong enough
      to read as colour, quiet enough to stay behind the proof lines. */
-  --chevron-lead: var(--action-soft);
+  --chevron-lead: color-mix(in srgb, var(--brand-lead) 10%, transparent);
   --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
   --chevron-trail-opacity: 1;
   pointer-events: none;

@@ -192,8 +192,8 @@
      elevation: separation comes from --shadow-2's hairline ring, never a blur. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
-  /* The primary action wears the baton-orange accent — a Linear-style console
-     leads with its accent. Fill-only: see the --action proof in palette.css. */
+  /* The primary action is the ink plate (--action), as eveland.ai and a
+     Linear-style console lead. Fill-only: see the --action proof in palette.css. */
   --primary: var(--action);
   --primary-foreground: var(--on-action);
   /* Secondary and muted fills are the plane-independent control wash, not

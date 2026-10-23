@@ -57,6 +57,7 @@ describe("formatRunDuration", () => {
   it("keeps the column scannable across scales", () => {
     assert.equal(formatRunDuration(4_000), "4s");
     assert.equal(formatRunDuration(12 * 60 * 1000), "12m");
-    assert.equal(formatRunDuration(63 * 60 * 1000), "1h 3m");
+    assert.equal(formatRunDuration(192_000), "3m 12s");
+    assert.equal(formatRunDuration(63 * 60 * 1000), "1h 03m");
   });
 });

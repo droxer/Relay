@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { backendPublicOrigin } from "./apiOrigin.ts";
 import { byNumber, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
+import { formatThreadStamp } from "./threadStamp.ts";
 
 export const ADMIN_AGENTS_KEY = ["admin", "agents"] as const;
 
@@ -192,21 +193,11 @@ export function formatRelativeTime(value: string | undefined, t: TFunction): str
   if (!Number.isFinite(deltaMs)) return t("admin.time.unknown");
   if (deltaMs < 1_000) return t("admin.time.now");
 
-  const seconds = Math.floor(deltaMs / 1_000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  const locale = typeof document !== "undefined" ? document.documentElement.lang || undefined : undefined;
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  if (seconds < 60) return rtf.format(-seconds, "second");
-  if (minutes < 60) return rtf.format(-minutes, "minute");
-  if (hours < 24) return rtf.format(-hours, "hour");
-  // Without these a three-month-old agent read "Created 2160 hours ago".
-  if (days < 7) return rtf.format(-days, "day");
-  if (days < 30) return rtf.format(-Math.floor(days / 7), "week");
-  if (days < 365) return rtf.format(-Math.floor(days / 30), "month");
-  return rtf.format(-Math.floor(days / 365), "year");
+  // One relative-time voice: the thread rail's short form ("5m ago",
+  // "yesterday", "2w ago"), rolling up past hours so a three-month-old agent
+  // never reads "Created 2160 hours ago".
+  const locale = (typeof document !== "undefined" ? document.documentElement.lang : "") || "en";
+  return formatThreadStamp(value, locale, Date.now());
 }
 
 export interface UserNodeSummary {

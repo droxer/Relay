@@ -220,7 +220,7 @@ export async function startOrchestratorSession(
   }
   resetAgentReadiness(executionManager);
   if (!sink) {
-    console.log(section("Relay", ansi.cyan));
+    console.log(section("Relay"));
     console.log(keyValue("image", DEVBOX_IMAGE));
     console.log(keyValue("mount", GUEST_WORKSPACE));
   } else {

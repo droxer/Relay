@@ -22,6 +22,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 import { FiltersBar, type FilterBarField } from "./FiltersBar";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
+import { ListSkeleton } from "./ListSkeleton";
 
 interface AgentsPageProps {
   currentUser: CurrentUser;
@@ -272,9 +273,7 @@ function AgentsPageView({
         />
 
         {loading ? (
-          <div className="route-loading" role="status" aria-live="polite">
-            {t("admin.loading")}
-          </div>
+          <ListSkeleton label={t("admin.loading")} />
         ) : error && agents.length === 0 ? (
           <RelayEmptyState feature="agents"
             title={t("workspace.load_failed")}

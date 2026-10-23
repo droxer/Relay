@@ -34,7 +34,8 @@ const appMono = localFont({
 const site = siteUrl();
 const pageTitle = en.landing.page_title;
 const pageDescription = en.landing.lede;
-const shareImage = { ...SITE_SHARE_IMAGE, alt: en.landing.hero_alt };
+// The card states the landing headline, so its alt text is that headline.
+const shareImage = { ...SITE_SHARE_IMAGE, alt: `${SITE_NAME}: ${en.landing.headline}` };
 
 export const metadata: Metadata = {
   ...(site ? { metadataBase: site } : {}),

@@ -1,8 +1,9 @@
 /**
  * Semantic styling for what the daemon package prints to a person: the installer, the control
- * CLI, `--doctor`, and the daemon's own lifecycle lines. Color only reaches a terminal; a
- * service log, a pipe, or `NO_COLOR` gets the exact plain text, with no marks added, so nothing
- * machine-read changes.
+ * CLI, `--doctor`, and the daemon's own lifecycle lines. It speaks the web palette's roles: blue
+ * for what is live or done, orange for what needs the person, crimson for a failure. Color only
+ * reaches a terminal; a service log, a pipe, or `NO_COLOR` gets the exact plain text, with no
+ * marks added, so nothing machine-read changes.
  */
 import { ansi } from 'relay-core';
 
@@ -53,20 +54,20 @@ export function terminalStyle(enabled: boolean, platform: string = process.platf
     return [paint(marked(glyph, first), ansi.bold, ...codes), ...rest].join('\n');
   };
   return {
-    success: text => enabled ? `${paint(mark.ok, ansi.bold, ansi.green)} ${paint(text, ansi.bold)}` : text,
-    step: text => enabled ? `${paint(mark.step, ansi.cyan)} ${text}` : text,
-    warn: text => headline(text, mark.warn, ansi.yellow),
-    error: text => headline(text, mark.error, ansi.red),
+    success: text => enabled ? `${paint(mark.ok, ansi.bold, ansi.live)} ${paint(text, ansi.bold)}` : text,
+    step: text => enabled ? `${paint(mark.step, ansi.live)} ${text}` : text,
+    warn: text => headline(text, mark.warn, ansi.action),
+    error: text => headline(text, mark.error, ansi.err),
     heading: text => paint(text, ansi.bold),
-    command: text => paint(text, ansi.cyan),
-    link: text => paint(text, ansi.cyan, '\x1b[4m'),
+    command: text => paint(text, ansi.live),
+    link: text => paint(text, ansi.live, '\x1b[4m'),
     muted: text => paint(text, ansi.dim),
     notice: text => {
       const [first = '', ...rest] = text.split('\n');
-      const body = rest.map(line => line.startsWith('  ') ? `  ${paint(line.slice(2), ansi.cyan)}` : line);
-      return [paint(marked(mark.warn, first), ansi.bold, ansi.yellow), ...body].join('\n');
+      const body = rest.map(line => line.startsWith('  ') ? `  ${paint(line.slice(2), ansi.live)}` : line);
+      return [paint(marked(mark.warn, first), ansi.bold, ansi.action), ...body].join('\n');
     },
-    verdict: (text, ok) => paint(text, ansi.bold, ok ? ansi.green : ansi.red),
+    verdict: (text, ok) => paint(text, ansi.bold, ok ? ansi.live : ansi.err),
   };
 }
 

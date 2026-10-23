@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { ListSkeleton } from "./ListSkeleton";
 
 /** Stable empty list for the rail window when the projects rail is showing. */
 const NO_THREADS: ThreadItem[] = [];
@@ -275,9 +276,7 @@ export function ThreadListPanel({
           // pane beside it — an unfinished or failed fetch is not an empty
           // account, and offering "Create project" for one is a lie.
           directoryState === "loading" ? (
-            <div className="route-loading" role="status" aria-live="polite">
-              {t("project.loading")}
-            </div>
+            <ListSkeleton label={t("project.loading")} />
           ) : directoryState === "error" ? (
             <RelayEmptyState feature="threads"
               className="conversation-empty"

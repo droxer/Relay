@@ -371,14 +371,11 @@
 
 .workspace-skeleton {
   border-radius: var(--r-2);
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--line-2) 82%, transparent),
-    color-mix(in srgb, var(--surface-1) 70%, transparent),
-    color-mix(in srgb, var(--line-2) 82%, transparent)
-  );
-  background-size: 220% 100%;
-  animation: workspace-skeleton var(--t-draw) var(--ease) infinite;
+  /* Breathes like the list skeleton (list-skeleton.css) rather than
+     sweeping a shimmer across: one loading motion everywhere. */
+  --blink-from: 0.45;
+  background: var(--surface-2);
+  animation: blink var(--t-pulse) var(--ease-breathe) infinite;
 }
 
 .workspace-skeleton-pane {
@@ -415,11 +412,6 @@
   color: var(--ink-2);
 }
 
-
-@keyframes workspace-skeleton {
-  0% { background-position: 120% 0; }
-  100% { background-position: -120% 0; }
-}
 
 /* ---- responsive ----------------------------------------------------- */
 

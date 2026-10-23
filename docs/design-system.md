@@ -11,53 +11,56 @@ specifies Relay's current dense workspace UI. The [source-system appendix](#appe
 is historical design reference, not a component specification: Relay adapts its
 colors and typography but uses compact corners and flat elevation.
 
-> **A neutral canvas carries the content; the baton-orange accent carries the
-> one action to take and marks what is selected; signal blue means an agent
-> is working.** The logo draws both as a handoff: a baton-orange lead chevron
-> (what a person does) and a blue trailing one (an agent carrying it on).
+> **A neutral canvas carries the content; ink carries the controls; hue
+> carries meaning only.** The one baton orange left is the brand mark's lead
+> chevron (`--brand-lead`, what a person hands on); its blue trailing chevron
+> is an agent carrying it on.
 
-**One brand orange.** `--action`, `--link`, the focus ring, and the app
-icons' lead chevron all sit on one hue (baton orange, oklch ~50 dark / ~42
-light): the relay baton, the thing a person hands over. Most developer tools
-lead with blue, so the orange is ownable at a glance. Liveness takes its
-complement, signal blue (`--live`, ~150° away), so "act" and "working" are as
-far apart as two hues can be. Orange sits between two status hues, so the
-warning moved from amber to gold (hue ~89) and the error from tomato to
-crimson (hue ~9); the action keeps at least 30° from `--warn` and 20° from
-`--err`. **No purple anywhere**: it reads as generic AI styling.
-`brandIdentity.test.ts` asserts the shared hue, those gaps, that no token is
+**Ink controls, hue for meaning.** `--action`, `--link`, the focus ring, and
+selection are all **ink** — near-white on black, near-black on white — as
+eveland.ai and Linear's chrome draw them. Hue is left to say something:
+`--live` signal blue (an agent is working), `--warn` gold (a person is
+needed), `--err` crimson (it failed), `--ok` green. Baton orange survives
+**only** as `--brand-lead` (`#ff8a3d` dark / `#b84400` light): the logo, the
+favicon, `RelayMark`'s `brand` tone, the login and landing watermarks, and the
+email's handoff bar. It is never a control, link, or status colour. **No
+purple anywhere**: it reads as generic AI styling. `brandIdentity.test.ts`
+asserts that `--action`, its hover, and the link inks are achromatic, that the
+mark's orange keeps clear of `--live`, `--warn`, and `--err`, that no token is
 purple, and that every icon matches its register's tokens.
 
-Near-black and near-white canvases (`#0a0a0a` / `#fafafa`), achromatic grey
-elevation and hairlines, a neutral ink ramp, the source system's semantic
-status hues, and orange held back for the primary action, selection, and
-links. The surfaces follow Vercel Geist's neutrals (PR #324); the primary
-action follows Linear's convention of a console that leads with its accent.
-It supersedes the cloud-canvas commerce register, which superseded Fieldnotes
+A pure-black and a white canvas (`#000000` / `#ffffff`), achromatic grey
+elevation and hairlines, a neutral ink ramp, and the source system's semantic
+status hues. The surfaces follow eveland.ai's docs ramp (2026-10-23), which
+replaced the Geist neutrals of PR #324; light's recessed fill and rail take
+eveland's warm paper `#f7f7f5`, the one permitted warm cast. It supersedes the
+baton-orange accent register, the cloud-canvas commerce register, Fieldnotes,
 and Phosphor.
 
-- **The primary action wears the accent — one per view.** shadcn's
+- **The primary action is the ink plate — one per view.** shadcn's
   `--primary` points at `--action` (`shadcn-bridge.css`), so every default
-  `Button` and the page's create action fill with baton orange in both registers,
-  the way Linear leads with its accent. It is a scarce mark: one filled
-  primary per view, and anything beside it steps down to `outline` or
-  `ghost` (the page-header "+" is neutral `--surface-2`). There is no
+  `Button` and the page's create action fill with a near-white plate and black
+  ink in dark, a near-black plate and white ink in light. It is a scarce mark:
+  one filled primary per view, and anything beside it steps down to `outline`
+  or `ghost` (the page-header "+" is neutral `--surface-2`). There is no
   disabled hex — disabled is opacity, or the Button's explicit disabled
-  surface for filled variants. The neutral inverted `--cta-fill` survives
-  only for the few fills that read it directly — the composer's circular
-  send button, the landing page's primary plate, and the profile-image
-  picker's hover disc; the login screen repaints its CTA (`.login-submit`)
-  as the theme's neutral ink plate.
-- **The accent also marks selection.** `--action` is **tuned per register** — light
-  `#ff8a3d` with dark `--on-action` (8.4:1) on the dark canvas, deep burnt
-  orange `#b84400` with white (5.4:1) on the light one; `--action-hover` moves
-  away from the canvas (`#ffa060` / `#9a3900`). Beyond the primary fill it says *this one*:
-  the selected-row accent bar, the active nav marker, checked checkboxes,
-  radios and switches, the current pager page, `::selection`, and the skip
-  link. Selection stays calm — a 10% wash plus the bar, never a solid fill —
-  so a selected row never reads as a button. The token keeps its historical name.
-  Links are **not** `--action`: they take `--link`, reserved for wayfinding —
-  anchors in prose and the focus ring.
+  surface for filled variants. The sign-in submit (`.login-submit`) and the
+  landing page's `.landing-button` wear the same `--action` plate, unrepainted.
+  The neutral inverted `--cta-fill` survives only for the two fills that read
+  it directly — the composer's circular send button and the profile-image
+  picker's hover disc.
+- **The same ink marks selection.** `--action` is `#fafafa` with `--on-action`
+  `#000000` on the dark canvas and `#080808` with white on the light one;
+  `--action-hover` lifts in both registers (`#ffffff` / `#2a2a2a`). Beyond the
+  primary fill it says *this one*: the selected-row accent bar, the active nav
+  marker, checked checkboxes, radios and switches, the current pager page,
+  `::selection`, and the skip link. Selection stays calm — an `--action-soft`
+  wash (white 8% / ink 6%) plus the bar, never a solid fill — so a selected
+  row never reads as a button. The token keeps its historical name.
+  Links take `--link` (`--link-ink`, `#ededed` / `#080808`; hover
+  `--link-ink-strong`, `#ffffff` / `#000000`), reserved for wayfinding —
+  anchors in prose and the focus ring. A link is told apart by its underline,
+  never by a hue.
 - **Status is chromatic, and still dot / border / text — never fills.**
   `--ok` `--warn` `--err` carry the source system's success / warning / critical
   hues. The published values are *badge fill* colours (white text on a
@@ -72,15 +75,14 @@ and Phosphor.
   and meta text on the recessed fill drops under AA. Disabled is opacity, so
   no lighter "disabled label" tier exists.
 - **Dual-first registers.** Dark is the default register (`:root`);
-  `html[data-theme="light"]` overrides it. Both are achromatic: the dark
-  canvas `#0a0a0a` lifts through `#171717` cards to `#262626` drawers, and the
-  light canvas `#fafafa` carries white cards and white floating chrome,
+  `html[data-theme="light"]` overrides it. Both are neutral: the dark
+  canvas `#000000` lifts through `#0f0f0f` cards to `#262626` drawers, and the
+  white light canvas carries white cards and white floating chrome,
   separated by hairlines rather than a grey wash.
-- **Two accents, two jobs.** Baton orange and signal blue, and nothing
-  else. Orange is the action and selection; the blue is `--live`, work an
-  agent is doing *right now*. Splitting them across hues rather than across
-  channels is deliberate: a pulsing orange dot beside a selected orange row
-  would put "working" and "chosen" in the same colour.
+- **Ink chooses, hue reports.** Controls and selection are ink; the only
+  chromatic marks are meanings — `--live` for work an agent is doing *right
+  now*, and the status tones. Because "chosen" never takes a hue, a pulsing
+  blue dot beside a selected row can only mean "working".
 - **One sans, every job.** Relay sets everything in the **platform UI face**
   (San Francisco, Segoe UI, Roboto, Noto Sans) — no sans web font is loaded,
   and English and Chinese share one stack.
@@ -94,7 +96,8 @@ and Phosphor.
 - **Compact geometry, flat surfaces.** Micro details use `--r-1` (4px),
   controls/tabs/badges use `--r-2` (6px), and containers use `--r-3` (8px).
   `--r-full` is reserved for true circles and capsules, including status dots
-  and switch tracks. Floating surfaces use a hairline ring, without blur.
+  and switch tracks; `--r-pill` is the marketing CTA capsule only. Floating
+  surfaces use a hairline ring, without blur.
 - **One ease, two speeds.** `--ease` `cubic-bezier(0, 0, 0.2, 1)` (ease-out),
   `--t-fast` 150ms, `--t-slow` 250ms — the source system's recommended band.
   Nothing
@@ -192,27 +195,28 @@ Dark register / light register:
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--surface-0` | `#0a0a0a` | `#fafafa` | canvas |
-| `--surface-1` | `#171717` | `#ffffff` | cards, panels |
-| `--surface-2` | `#1f1f1f` | `#ebebeb` | fills, search, hover |
+| `--surface-0` | `#000000` | `#ffffff` | canvas |
+| `--surface-1` | `#0f0f0f` | `#ffffff` | cards, panels |
+| `--surface-2` | `#1a1a1a` | `#f7f7f5` | fills, search, hover — light is eveland's warm paper |
 | `--surface-3` | `#262626` | `#ffffff` | drawers, modals, popovers |
-| `--surface-rail` / `--surface-list` | `#1f1f1f` / `#171717` | `#f0f0f0` / `#f5f5f5` | shell zones |
-| `--ink-1` | `#ededed` | `#171717` | headings, emphasis |
+| `--surface-rail` / `--surface-list` | `#1a1a1a` / `#0f0f0f` | `#f7f7f5` / `#ffffff` | shell zones |
+| `--ink-1` | `#ededed` | `#080808` | headings, emphasis |
 | `--ink-2` | `#d4d4d4` | `#262626` | body |
-| `--ink-3` | `#b3b3b3` | `#525252` | secondary labels |
-| `--ink-4` | `#a1a1a1` | `#666666` | timestamps, meta |
-| `--line-1` | `#333333` | `#d4d4d4` | structural hairline |
-| `--line-2` | `#292929` | `#e5e5e5` | soft hairline |
-| `--cta-fill` / `--cta-hover` | `#ededed` / `#d4d4d4` | `#171717` / `#383838` | neutral inverted fill (composer send, landing CTA, profile-image hover disc) — not the default Button |
-| `--cta-ink` | `#0a0a0a` | `#ffffff` | text on the neutral inverted fill |
-| `--action` | `#ff8a3d` | `#b84400` | primary action + selection — bright orange on dark, deep burnt orange on light |
-| `--action-hover` | `#ffa060` | `#9a3900` | pressed fill — moves away from the canvas |
-| `--on-action` | `#0a0a0a` | `#ffffff` | ink on the action fill |
-| `--action-soft` | 9% peach wash (`#ffc49e`) | 10% accent wash | selection wash, active nav |
-| `--link` / `--link-hover` | `#ffaa75` / `#ffc49e` | `#a63e00` / `#863200` | anchors in prose, focus ring |
+| `--ink-3` | `#a0a0a0` | `#525252` | secondary labels |
+| `--ink-4` | `#8f8f8f` | `#666666` | timestamps, meta |
+| `--line-1` | `#242424` | `#d9d9d9` | structural hairline — dark is eveland's white 14% composited on black; light deepens eveland's 12% ink so it clears 1.4:1 on white |
+| `--line-2` | `#171717` | `#eeeeee` | soft hairline — dark is white 9% on black |
+| `--cta-fill` / `--cta-hover` | `#fafafa` / `#d4d4d4` | `#080808` / `#2a2a2a` | neutral inverted fill (composer send, profile-image hover disc) — not the default Button |
+| `--cta-ink` | `#000000` | `#ffffff` | text on the neutral inverted fill |
+| `--action` | `#fafafa` | `#080808` | primary action + selection — the ink plate |
+| `--action-hover` | `#ffffff` | `#2a2a2a` | pressed fill — lifts in both registers |
+| `--on-action` | `#000000` | `#ffffff` | ink on the action fill |
+| `--action-soft` | white 8% wash | `#080808` 6% wash | selection wash, active nav |
+| `--link-ink` / `--link-ink-strong` | `#ededed` / `#ffffff` | `#080808` / `#000000` | `--link` / `--link-hover`: anchors in prose, focus ring — set apart by underline, never hue |
+| `--brand-lead` | `#ff8a3d` | `#b84400` | the brand mark's lead chevron only — never a control, link, or status |
 | `--ok` | `#4ac16a` | `#12752f` | ready, passed, done |
-| `--warn` | `#e8b923` | `#7a5c00` | attention, degraded — muted gold, clear of the orange action and the highlighter yellow |
-| `--err` | `#ff5c84` | `#c40f4a` | failed, destructive — crimson, clear of the orange action |
+| `--warn` | `#e8b923` | `#7a5c00` | a person is needed, degraded — muted gold, clear of the mark's orange and the highlighter yellow |
+| `--err` | `#ff5c84` | `#c40f4a` | failed, destructive — crimson, clear of the mark's orange |
 | `--on-err` | `#0a0a0a` | `#ffffff` | text on the critical fill |
 | `--info` | = `--ink-3` | = `--ink-3` | neutral notice |
 | `--live` | `#6aa6ff` | `#2457c5` | an agent is working *right now* |
@@ -229,10 +233,9 @@ by hairline and the `--shadow-2` ring, with `--surface-2` deliberately
 
 The **zone** surfaces run the other way from dark. Dark builds the shell up
 from the canvas (lift means lighter there); in light the shell recedes —
-`--surface-rail` `#f0f0f0` < `--surface-list` `#f5f5f5` < canvas `#fafafa` —
-so lightness order becomes rail < list < canvas < card, the same order the eye
-should travel. A search field or hover well recedes from white and emerges
-from black; that inversion is correct, and only `--surface-2` does it. Do not
+`--surface-rail` `#f7f7f5` sits below the white list, canvas, and cards, so
+everything the eye reads sits on one white sheet. A search field or hover
+well recedes from white and emerges from black; that inversion is correct, and only `--surface-2` does it. Do not
 paint shaded section bands over the canvas.
 
 ### Contrast floors
@@ -242,8 +245,8 @@ can land on**, not against the canvas. Ratios against that plane:
 
 | | ink-1 | ink-2 | ink-3 | ink-4 | ok | warn | err |
 |---|---|---|---|---|---|---|---|
-| dark (vs `--surface-3`) | 12.93 | 10.21 | 7.22 | 5.86 | 6.58 | 7.31 | 5.21 |
-| light (vs `--surface-2`) | 15.04 | 12.69 | 6.55 | 4.82 | 4.88 | 5.02 | 4.91 |
+| dark (vs `--surface-3`) | 12.93 | 10.21 | 5.79 | 4.68 | 6.58 | 8.21 | 5.13 |
+| light (vs `--surface-2`) | 18.67 | 14.11 | 7.28 | 5.35 | 5.42 | 5.83 | 5.57 |
 
 `paletteTokens.test.ts` computes these from the declared hexes rather than
 pinning the hexes themselves, so a future palette move is checked for
@@ -252,13 +255,13 @@ status tone still reads as **its hue** (green leads in `--ok`, red in `--err`,
 gold's channels descend r > g > b) — the deepening AA forced on the light
 register must not turn a green into a grey.
 
-`--action-soft` is not a hex: it is a `color-mix` into transparency of the
-action's hue, so the selection wash always tracks the action colour. In dark
-it mixes the lighter peach (`#ffc49e`) rather than the fill, because a
-low-alpha orange over near-black turns brown.
+`--action-soft` is not a hex: it is a `color-mix` into transparency — white
+8% in dark, `#080808` 6% in light — so the selection wash is the same ink as
+the action, only quieter.
 
-A **pinned group** (`--dark-canvas`, `--dark-surface`, `--dark-ink`,
-`--dark-line`, plus `--light-canvas`, and `--paper` `#ffffff` for document
+A **pinned group** (`--dark-canvas` `#000000`, `--dark-surface` `#0f0f0f`,
+`--dark-ink`, `--dark-line`, `--dark-action` `#fafafa`, plus `--light-canvas`
+`#ffffff`, `--light-action` `#080808`, and `--paper` `#ffffff` for document
 previews) mirrors the registers for chrome that must *not* follow the active
 theme: the theme-picker swatches that show both registers at once
 (`preferences.css`), the diff viewer (`workspace-files.css`), ink-fill chrome
@@ -272,17 +275,21 @@ kind label, not by hue.
 
 ### The accent scope rule
 
-Two accents, two jobs, and they never trade places:
+Ink chooses, hue reports, and the two never trade places:
 
-| orange (`--action`) | blue (`--live`) |
+| ink (`--action`) | blue (`--live`) |
 |---|---|
 | the primary action fill (default `Button`, one per view) | composer running indicator |
 | the selected-row accent bar, active nav marker | |
 | selection wash (`--action-soft`) | task + backlog running rows |
 | checked checkbox / radio / switch, current pager page | agent stream activity, busy header |
-| lead chevron of the brand mark | thread pulse, streaming rail node, trailing chevron of the brand mark |
+| | thread pulse, streaming rail node, trailing chevron of the brand mark |
 | | status pill on a running agent/node (TonePill `live`), the running status icon, running row accents |
 
+The other hues are meanings too: `--warn` gold is a person needed (a question,
+a check, a stopped gate), `--err` crimson a failure, `--ok` green done. The
+task status icon keeps those states apart by shape as well as hue: running is
+a half fill that breathes, waiting on a person is a still centre dot.
 
 **`--live` means "an agent is working on this right now", and nothing else.**
 It is an ink, a mark, a hairline, or a ring — never a fill or a wash. It may
@@ -304,19 +311,21 @@ not colour alone. The thread-rail pip is the one exception: its subline is
 same `--t-pulse`. Larger live objects (the transcript rail node) keep
 `pulse-ring` / `agent-rail-pulse`.
 
-"Two accents" is a claim about **meaning**, not pigment. The carve-outs, all
+"Hue for meaning" is a claim about **meaning**, not pigment. The carve-outs, all
 deliberate — a reader who takes the rule literally will file them as bugs:
 
 - **Link ink is wayfinding, not decoration**: anchors in prose (`--link`)
-  and the focus ring (`--focus-outline`). It is never a fill, a status, or an
-  action.
-- **The brand mark carries both accents.** `favicon.svg` (dark register),
+  and the focus ring (`--focus-outline`). It is ink, told apart by its
+  underline (the ring by its offset) — never a fill, a status, or a hue.
+- **The brand mark is the one orange.** `favicon.svg` (dark register),
   `relay-mark.svg` (light register, source of `apple-touch-icon.png`), the
   wordmark `relay-logo.svg` (follows the viewer's scheme), and `RelayMark`'s
-  `tone="brand"` (side nav, sign-in, landing, empty transcript) draw an
-  `--action` lead chevron and a `--live` trailing chevron. It is the one
-  static use of the live blue: the mark depicts the handoff, it does not report a
-  run. `RelayMark` inside working UI (transcript phase separators, generic
+  `tone="brand"` (side nav, sign-in, landing, empty transcript) draw a
+  `--brand-lead` lead chevron and a `--live` trailing chevron; the login and
+  landing watermarks wash the same pair at 10%, and the email carries it as
+  its handoff bar. It is the only place baton orange appears and the one
+  static use of the live blue: the mark depicts the handoff, it does not
+  report a run. `RelayMark` inside working UI (transcript phase separators, generic
   empty states) keeps the default ink tone.
 - **Identity marks are neutral.** Agents and teams render as neutral class
   glyphs (`IdentityMark.tsx`) — no procedural per-name hues. Identity is
@@ -326,9 +335,9 @@ deliberate — a reader who takes the rule literally will file them as bugs:
   outside a `code.hljs` block.
 - **Login is a marketing surface.** It follows the saved theme (the layout's
   theme script sets `data-theme` before first paint; `login.css` aliases the
-  live register as `--lg-*`). Its primary CTA (`.login-submit`) repaints the
-  default Button as the neutral ink plate (`--ink-1` fill, canvas ink) rather
-  than orange. The screen sets its field labels, error line, and footer meta
+  live register as `--lg-*`). Its primary CTA (`.login-submit`) is the
+  default Button, unrepainted — the same `--action` plate as the app. The
+  screen sets its field labels, error line, and footer meta
   in the mono face — a deliberate skin; everywhere else mono is technical
   text only.
 - **Empty states remain still.** They share type, spacing, and an optional
@@ -362,11 +371,11 @@ introduces visual rest.
 
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
-| `--type-display` | 500 28/1.17 | `--track-display` (−0.02em) | hero headline (login), admin metric values |
-| `--type-page` | 500 22/1.25 | `--track-display` (−0.02em) | page h1 — one rung above the 17px h2 |
-| `--type-title` | 500 17/1.25 | `--track-display` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
+| `--type-display` | 500 28/1.17 | `--track-display` (−0.05em) | hero headline (login), admin metric values |
+| `--type-page` | 500 22/1.25 | `--track-display` (−0.05em) | page h1 — one rung above the 17px h2 |
+| `--type-title` | 500 17/1.25 | `--track-display` (−0.05em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
 | `--type-heading` | 700 15/1.44 | `--track-0` | section heads, list labels |
-| `--type-title-content` | 400 16/1.25 | `--track-display` (−0.02em) | titles whose text comes from a user or agent |
+| `--type-title-content` | 400 16/1.25 | `--track-display` (−0.05em) | titles whose text comes from a user or agent |
 | `--type-body` | 400 14/1.5 | `--track-body` (0) | prose, message bodies, inputs |
 | `--type-name` | 500 14/1.5 | `--track-body` (0) | the identity of the thing a row or card is about — leads by `--ink-1` against `--ink-3` meta, not by weight |
 | `--type-body-sm` | 400 12/1.43 | `--track-body-sm` (0) | supporting text, captions |
@@ -374,7 +383,7 @@ introduces visual rest.
 | `--type-label-strong` | 700 12/1.43 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
 | `--type-micro` | 500 12/1.33 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
 | `--type-meta` | 500 12/1.33 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
-| `--type-number` | 500 22/1.28 | `--track-display` (−0.02em) | metrics |
+| `--type-number` | 500 22/1.28 | `--track-display` (−0.05em) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
 
 **Heading ladders.** Chrome headings map one size per level: page h1 =
@@ -391,15 +400,16 @@ cannot carry `letter-spacing`, so a role applied as `font: var(--type-title)`
 silently loses its tracking unless the call site remembers a second
 declaration — pairing the tokens by name makes the omission greppable. Every
 call site pairs them, even where the track is 0, so a role nested in a
-display-tier parent never inherits −0.02em; `typographyTokens.test.ts` enforces
+display-tier parent never inherits −0.05em; `typographyTokens.test.ts` enforces
 the pairing on display-tier rules. A role may take a different
 `--leading-*` token at its call site (looser prose in a caption-sized box);
 it may not take a different size or weight — that is a different role.
 
-**Reading text sets solid; display tightens half a step.** The platform UI
+**Reading text sets solid; display tightens.** The platform UI
 faces carry per-size tracking of their own, so the reading tracks
 (`--track-body`, `--track-body-sm`) are 0. The display tier takes
-`--track-display` −0.02em (~0.5px at 28px) so titles and numerals settle.
+`--track-display` −0.05em (~1.4px at 28px), eveland's display tracking, so
+titles and numerals settle.
 `--track-caps` 0.03em is read only by short codes that are not translated
 copy — the login skin's mono labels and the language badge's locale codes
 (`.pref-lang-badge`); group labels went sentence case (2026-10-09), and `.eyebrow` /
@@ -465,7 +475,10 @@ stacks.
 
 - **Radii:** `--r-1` 4px for micro details; `--r-2` 6px for controls,
   tabs, and badges; `--r-3` 8px for cards, drawers, dialogs, and panels.
-  `--r-full` is 9999px for actual circles/capsules. Tailwind's larger radius
+  `--r-full` is 9999px for actual circles/capsules. `--r-pill` (also
+  9999px) is the marketing CTA capsule — the landing page's
+  `.landing-button`, as eveland.ai draws it — and never an app control; a
+  `Button` keeps `--r-2`. Tailwind's larger radius
   names clamp to `--r-3`, and the bare `rounded` is pinned to `--r-1`; they
   do not introduce additional geometry. One documented exception: the
   composer's input well (`--composer-radius`, 2.5 × `--r-3`, reused as the
@@ -519,14 +532,15 @@ stacks.
 - **Focus:** `--focus-outline` — a 2px solid **link-ink** ring at a 2px
   offset (WCAG 1.4.11), drawn with `outline`, **not** `box-shadow`, so no
   ancestor's `overflow: hidden` can clip it and forced-colors mode preserves
-  it. The ring is not the orange action, so a focused primary button never
-  rings in more of its own fill. Destructive controls take
+  it. The ring is link ink beside the action's ink plate, so `--focus-offset`
+  — the gap of canvas between plate and ring — is what tells a focused
+  primary button apart. Destructive controls take
   `--focus-outline-danger`, which differs by **both** colour (`--err`) and
   shape (dashed) — the stroke style is the half that survives forced-colors
   mode, where the hue is dropped. A field inside a composite control (search
   box with a clear button, the composer well) suppresses its own ring and the
   wrapper draws the same outline on `:focus-within` — one ring per control,
-  never two, and never an orange border inside it. The composer well is the one
+  never two, and never an accent border inside it. The composer well is the one
   exception: its caret is the focus cue, so the well darkens its own border to
   `--ink-4` instead of ringing (a 2px ring on its 20px corner read as an
   error); its footer pickers still ring normally.
@@ -562,7 +576,7 @@ stacks.
   caret blinking. Never hand-pick a loop duration.
 - **Other durations:** `--t-draw` 1.1s for content that renders itself over
   real time; `--t-stagger` 40ms as the base step for reveal ladders,
-  multiplied at the call site. Delays are expressed against `--t-stagger`,
+  multiplied at the call site (the list skeleton staggers its rows by it). Delays are expressed against `--t-stagger`,
   never as literals — `designGrid.test.ts` enforces it.
 - **Entrances:** one shared `rise` keyframe (`tokens/base.css`) — fade plus
   a translateY read from `--rise-from`. Two travel tiers: `--rise-sm` 4px
@@ -570,7 +584,7 @@ stacks.
   views.
 - **Keyframes:** `live-ring` (every live dot), `pulse-ring` (larger live
   objects and passive presence, tinted via `--pulse-color`), `blink` (glyphs
-  that fade in place), `breathe` (a live pip with no room for a ring — the
+  that fade in place, and every loading skeleton), `breathe` (a live pip with no room for a ring — the
   thread rail — draws in and fills back out), and `rise` live once in
   `base.css`; `rise` on an empty state is reserved for the new-thread
   welcome, whose pieces arrive once;
@@ -578,6 +592,11 @@ stacks.
   (`overlay.css`) are the other shared sets, and the anchored tooltip/menu
   entrances in `base.css` are the one local carve-out. Do not hand-roll a
   second ring, fade, or entrance keyframe.
+- **Loading:** a list loads as its own shape — `ListSkeleton.tsx`
+  (`styles/list-skeleton.css`) draws a pip, a title bar, and a meta bar per
+  row on the real row grid, breathing on the opacity `blink` keyframe at
+  `--t-pulse` and staggered down the list by `--t-stagger`.
+  `.workspace-skeleton` breathes the same way; nothing shimmers.
 
 ## Marginalia
 
@@ -587,8 +606,9 @@ fixed position — shipped as the inline `Chevrons` SVG in
 `web/src/components/AuthCanvas.tsx` with the `.login-bleed` rule in
 `login.css`. The rules:
 
-- **Ink only.** The mark never takes an accent (action or live), never takes
-  a status tone, never fills — strokes alone.
+- **The handoff wash only.** The mark's chevrons take `--brand-lead` and
+  `--live` at a 10% wash — the brand mark, faded — and nothing else: never a
+  status tone, never a fill — strokes alone.
 - **Never animate it.** It is set dressing in an operator tool;
   `prefers-reduced-motion` is trivially satisfied because there is no motion.
 - **Absolutely positioned**, so it never perturbs the layout it decorates.
@@ -606,21 +626,21 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 ## Do's and Don'ts
 
 ### Do
-- Use the default `Button` (orange `--action` via `--primary`) for the
+- Use the default `Button` (the ink `--action` plate via `--primary`) for the
   primary action, one per view; step every other button beside it down to
   `outline` or `ghost`.
 - Use `--action` otherwise for selection — accent bars, checked controls, the
-  current page — and pair an orange fill with `--on-action`.
+  current page — and pair an action fill with `--on-action`.
 - Use `--action-soft` for selected rows and active navigation.
 - Give buttons, tab chips, and badges `--r-2`; reserve `--r-full` for
-  actual circles and capsules.
+  actual circles and capsules, and `--r-pill` for marketing CTAs.
 - Carry status as dots/borders/text on the semantic tones; use `--info` for
   status without alarm.
 - Use `--live` only for work happening right now, and only where `--t-pulse`
   is used — see the scope rule under Colors.
 - Pair `--live` with motion and text, never colour alone.
-- Use `--link` for anchors and the focus ring; `--measure*` for reading
-  columns.
+- Use `--link` for anchors and the focus ring, and underline the anchor;
+  `--measure*` for reading columns.
 - Set type with a role — `font: var(--type-*)` plus its paired
   `letter-spacing: var(--type-*-track)` — at every site, even where the
   paired track is 0; the declaration is the contract. A one-off size reads a
@@ -639,14 +659,15 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   in JS) and add a registry row in the same change as any new query.
 
 ### Don't
-- Don't use a status colour as an action, or orange as a status or a link.
-- Don't put a second filled orange button in a view, or make a selected row a
-  solid orange fill — selection is the bar plus the soft `--action-soft` wash.
-- Don't introduce a third accent. Orange is the action and selection, blue
-  is liveness, link ink is wayfinding; everywhere else the ink ramp is the
-  only signal.
-- Don't give controls pill corners (`--r-full` / `rounded-full`) or introduce
-  radii beyond the 4/6/8px ladder.
+- Don't use a status colour as an action, or give a control, link, or status
+  a hue to look branded — `--brand-lead` belongs to the mark alone.
+- Don't put a second filled primary button in a view, or make a selected row
+  a solid fill — selection is the bar plus the soft `--action-soft` wash.
+- Don't introduce a hue without a meaning. Ink is the action, selection, and
+  wayfinding; blue is liveness, gold a person needed, crimson a failure, green
+  done; the orange is the mark.
+- Don't give app controls pill corners (`--r-full` / `--r-pill` /
+  `rounded-full`) or introduce radii beyond the 4/6/8px ladder.
 - Don't set text or dots in a status tone taken straight from the source
   system's badge palette — those are *fill* values (success `#31a24c` measures 3.1:1
   on white, warning `#f7b928` 1.8:1). The tokens here are already the
@@ -734,7 +755,7 @@ token-usage chart stacks a three-step ink ramp of fresh tokens, dimmest at the
 base: output = `--ink-2` (brightest — it is the product of the work), input =
 `--ink-3`, cache writes = `--ink-4`. Cache reads are not charted, matching the
 fresh-token headline. **No series may take
-`--action`**: an orange chart fill reads as "click me". Because the ramp
+`--action` or `--link-ink`**: an action-ink chart fill reads as "click me". Because the ramp
 deliberately uses neighbouring ink steps, each segment carries a
 `--surface-1` hairline stroke — adjacent steps of a monochrome ramp merge
 into one flat band without it.
@@ -810,6 +831,11 @@ and command lines fold into one activity group.
   from then on.
 - Body lines stay verbatim: one line per paragraph, `pre-wrap`, never reflowed
   as Markdown — the model's own line breaks carry the structure.
+- Every finished turn closes with a **run receipt** (`RunReceipt.tsx`,
+  `styles/run-receipt.css`): an ink ledger — outcome on a head line, then
+  duration, fresh tokens with cached beside them, files, and runtime as
+  label/value rows in tabular figures. It stays in ink; only a failed
+  outcome turns its head `--err`.
 - Disclosure headers and expanders are inline **text** affordances, not
   controls: bare `<button>`s that sit in their tier's ink and take the focus
   ring from base.css. A control-height `Button` in this position puts half a row
@@ -844,13 +870,14 @@ explains it is in parentheses.
 1. **Colour source.** No hex, `rgb()`, or `hsl()` outside `palette.css`;
    derived colours are `color-mix()` over tokens. (Token architecture)
 2. **One primary per view.** At most one filled default `Button`
-   (orange `--primary`); its siblings are `outline` / `ghost` /
-   `destructive`. `--cta-fill` appears only on the composer send, landing CTA,
-   and profile-image hover disc. (Overview)
+   (the ink `--primary` plate); its siblings are `outline` / `ghost` /
+   `destructive`. `--cta-fill` appears only on the composer send and the
+   profile-image hover disc. (Overview)
 3. **Accent scope.** `--action` only for the primary fill and selection (bar,
    checked control, current page, `::selection`, skip link); selected rows use
    `--action-soft`, never a solid fill. `--live` only beside `--t-pulse`.
-   `--link` only for prose anchors and the focus ring. (Accent scope rule)
+   `--link` only for prose anchors (underlined) and the focus ring.
+   `--brand-lead` only in the brand mark and its watermarks. (Accent scope rule)
 4. **Status.** Status tones as text, dots, and borders; fills only in the
    documented exceptions. `--info` for neutral notices. (Colors)
 5. **Type.** Text set with a `--type-*` role and its paired `-track`, or a
@@ -858,7 +885,8 @@ explains it is in parentheses.
    (Typography)
 6. **Case.** No `text-transform: uppercase` on translated copy. (Typography)
 7. **Radius.** `--r-1` micro, `--r-2` controls, `--r-3` containers;
-   `--r-full` only on true circles and capsules. (Geometry)
+   `--r-full` only on true circles and capsules; `--r-pill` only on marketing
+   CTAs. (Geometry)
 8. **Control heights.** Every control height is a `--control-h*` rung or a
    `Button` / `SelectTrigger` size; touch reaches 44px via `a11y.css`.
    (Shared component contracts)
@@ -959,17 +987,17 @@ Key characteristics:
 
 | Source token | Relay token | What changed and why |
 |---|---|---|
-| `primary` / `primary-deep` / `on-primary` | `--action` / `--action-hover` / `--on-action` | Replaced by baton orange, retuned per register: `#ff8a3d` / `#ffa060` with dark ink on the dark canvas, `#ad4800` / `#8f3b00` with white on the light one. Relay is entirely in-product, so the accent is *the* action rather than a commerce-only variant. The published `#0064e0` no longer appears anywhere. |
-| `ink-button` / `on-ink-button` | `--cta-fill` / `--cta-ink` | Kept as a neutral inverted fill (`#ededed` on dark, `#171717` on light) for the composer send and profile-image hover disc — not the default Button. |
-| `primary-soft` | `--action-soft` | Carried as a `color-mix` wash rather than a flat hex, so the selection tint tracks the action colour. |
-| `meta-link` | `--link-ink` | Replaced: links take a softer shade of the action's orange in both registers, so the product has one accent hue. |
-| `oculus-purple` | `--live` | Not used. Relay retired purple (it reads as generic AI styling); liveness is signal blue, the orange action's complement. |
-| `success` / `warning` / `critical` | `--ok` / `--warn` / `--err` | Hue family kept; lightness retuned per register so each clears 4.5:1 as *small text* — the published values are badge-fill colours. The warning moves to a muted gold (hue ~89, lower lightness than the published highlighter #f7b928), so it stays clear of the orange action and stops out-shouting the critical red. |
-| `canvas` / `surface-soft` | `--surface-1`, `--surface-3` / `--surface-2` | White carries cards and floating chrome in light; the page is Geist's `#fafafa` (`--surface-0`) and the recessed fill is an achromatic `#ebebeb`. The cool `#f1f4f7` grey is not used. |
-| `ink-deep` / `ink` / `charcoal` | `--ink-1` / `--ink-2` / `--ink-3` | Replaced by Geist's achromatic ramp (`#171717` / `#262626` / `#525252` in light). |
+| `primary` / `primary-deep` / `on-primary` | `--action` / `--action-hover` / `--on-action` | Replaced by ink, per register: `#fafafa` / `#ffffff` with black ink on the dark canvas, `#080808` / `#2a2a2a` with white on the light one, as eveland.ai and Linear draw controls. The published `#0064e0` no longer appears anywhere. |
+| `ink-button` / `on-ink-button` | `--cta-fill` / `--cta-ink` | Kept as a neutral inverted fill (`#fafafa` on dark, `#080808` on light) for the composer send and profile-image hover disc — not the default Button. |
+| `primary-soft` | `--action-soft` | Carried as a `color-mix` ink wash (white 8% dark, ink 6% light) rather than a flat hex. |
+| `meta-link` | `--link-ink` | Replaced by ink (`#ededed` / `#080808`); a link is told apart by its underline, not a hue. |
+| `oculus-purple` | `--live` | Not used. Relay retired purple (it reads as generic AI styling); liveness is signal blue. |
+| `success` / `warning` / `critical` | `--ok` / `--warn` / `--err` | Hue family kept; lightness retuned per register so each clears 4.5:1 as *small text* — the published values are badge-fill colours. The warning moves to a muted gold (hue ~89, lower lightness than the published highlighter #f7b928), so it stays clear of the mark's orange and stops out-shouting the critical red. |
+| `canvas` / `surface-soft` | `--surface-0`, `--surface-1`, `--surface-3` / `--surface-2` | White carries the page, cards, and floating chrome in light; the recessed fill and rail are eveland's warm paper `#f7f7f5`. The cool `#f1f4f7` grey is not used. |
+| `ink-deep` / `ink` / `charcoal` | `--ink-1` / `--ink-2` / `--ink-3` | Replaced by an achromatic ramp led by eveland's ink (`#080808` / `#262626` / `#525252` in light). |
 | `steel` | `--ink-4` | Replaced by `#666666` in light, the lightest grey that still clears AA on the recessed fill. |
 | `stone` / `disabled-text` | — | Not adopted. Disabled is opacity in Relay, so a dedicated disabled ink has no consumer. |
-| `hairline` / `hairline-soft` | `--line-1` / `--line-2` | Achromatic in both registers (`#d4d4d4` / `#e5e5e5` light, `#333333` / `#292929` dark). |
+| `hairline` / `hairline-soft` | `--line-1` / `--line-2` | Achromatic in both registers (`#d9d9d9` / `#eeeeee` light, `#242424` / `#171717` dark — eveland's white 14% / 9% composited on black). |
 | `fb-blue` | — | Not adopted; the focus ring and form activation both run on `--link`, which clears AA as text as well as being an indicator. |
 | `success-bg` / `warning-bg` / `attention` / `critical-strong` | — | Not adopted. Relay renders status as ink, not as saturated fills, so the fill-only tiers have no job. |
 
@@ -1210,8 +1238,8 @@ to look before "fixing" something that looks unspecified:
    cadences (`--t-pulse`, `--t-pulse-calm`, `--t-tick`, `--t-draw`,
    `--t-stagger`) which the source has no equivalent for.
 3. **No dark-mode tokens** are published. Relay's dark register is derived —
-   a near-black `#0a0a0a` canvas, an achromatic grey elevation ladder above
-   it, and a brighter orange (`#ff8a3d`) carrying dark ink. Every
+   a pure-black `#000000` canvas, an achromatic grey elevation ladder above
+   it, and a near-white ink plate (`#fafafa`) carrying black ink. Every
    derived value is documented at its token in `palette.css`.
 4. **Pastel decorative tints** behind accessory cutouts are photographic
    content, not system colours. Relay has no equivalent surface and does not
@@ -1220,7 +1248,7 @@ to look before "fixing" something that looks unspecified:
 One further gap is Relay's own: the source system has no vocabulary for *work
 in progress* — no "an agent is running right now" state — because a commerce
 page has nothing that runs. `--live`, the pulse cadences, and the `StateMark`
-shape vocabulary are Relay additions built on the one accent the source leaves
+shape vocabulary are Relay additions built on the one hue the source leaves
 unspent.
 
 A second addition covers *status proportions*, which the source system's

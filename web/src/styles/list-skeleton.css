@@ -1,0 +1,55 @@
+/* ── List skeleton — a list's loading state in the list's own shape ─────────
+   See ListSkeleton.tsx. Each row is a pip, a title bar, and a meta bar on the
+   row grid the real lists use, so nothing jumps when the rows arrive. The
+   bars breathe on the opacity blink (base.css), staggered down the list so
+   the wait reads as one slow wave rather than a strobe; titles vary in
+   length so the column does not read as a ruled grid. Rows are counted with
+   :nth-of-type because the screen-reader label is the first child. Reduced
+   motion is settled by a11y.css, leaving the bars at rest. */
+.list-skeleton {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-2) 0;
+}
+
+.list-skeleton-row {
+  display: grid;
+  grid-template-columns: var(--dot-sm) minmax(0, 1fr) 4.5rem;
+  gap: var(--sp-3);
+  align-items: center;
+  height: var(--control-h-lg);
+  padding-inline: var(--sp-4);
+}
+
+.list-skeleton-pip,
+.list-skeleton-bar {
+  --blink-from: 0.45;
+  background: var(--surface-2);
+  animation: blink var(--t-pulse) var(--ease-breathe) infinite;
+}
+
+.list-skeleton-pip {
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+}
+
+.list-skeleton-bar {
+  height: 0.625rem;
+  border-radius: var(--r-1);
+}
+
+.list-skeleton-row:nth-of-type(3n + 1) .list-skeleton-bar:not(.list-skeleton-meta) { width: 62%; }
+.list-skeleton-row:nth-of-type(3n + 2) .list-skeleton-bar:not(.list-skeleton-meta) { width: 48%; }
+.list-skeleton-row:nth-of-type(3n + 3) .list-skeleton-bar:not(.list-skeleton-meta) { width: 74%; }
+
+.list-skeleton-meta {
+  justify-self: end;
+  width: 70%;
+}
+
+.list-skeleton-row:nth-of-type(2) > * { animation-delay: calc(var(--t-stagger) * 1); }
+.list-skeleton-row:nth-of-type(3) > * { animation-delay: calc(var(--t-stagger) * 2); }
+.list-skeleton-row:nth-of-type(4) > * { animation-delay: calc(var(--t-stagger) * 3); }
+.list-skeleton-row:nth-of-type(5) > * { animation-delay: calc(var(--t-stagger) * 4); }
+.list-skeleton-row:nth-of-type(n + 6) > * { animation-delay: calc(var(--t-stagger) * 5); }
