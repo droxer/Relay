@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { applySessionEvent } from "../src/lib/sessionEvents.js";
+import { applySessionEvent, shareSessions } from "../src/lib/sessionEvents.js";
 import type { RelaySession } from "../src/types.js";
 import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
@@ -294,4 +294,30 @@ it("new execution events invalidate a previous terminal lifecycle snapshot", () 
     timestamp: "2026-09-16T00:00:00Z", status: "running", phase: "action" });
   assert.equal(next.execution, undefined);
   assert.equal(original.execution?.phase, "terminal");
+});
+
+describe("shareSessions", () => {
+  it("keeps the previous array when nothing changed", () => {
+    const previous = [session({ id: "a" }), session({ id: "b" })];
+    const next = previous.map((item) => ({ ...item, events: [...item.events] }));
+    assert.equal(shareSessions(previous, next), previous);
+  });
+
+  it("keeps each unchanged session object and takes the changed one as is", () => {
+    const a = session({ id: "a" });
+    const b = session({ id: "b" });
+    const b2 = { ...b, updatedAt: "2026-10-10T00:00:01.000Z", events: [...b.events, { id: "evt_x" } as RelaySession["events"][number]] };
+    const shared = shareSessions([a, b], [{ ...a }, b2]);
+    assert.equal(shared[0], a);
+    assert.equal(shared[1], b2);
+  });
+
+  it("returns the new list for a first fill or a reordering", () => {
+    const a = session({ id: "a" });
+    const b = session({ id: "b" });
+    assert.deepEqual(shareSessions(undefined, [a]), [a]);
+    const reordered = shareSessions([a, b], [{ ...b }, { ...a }]);
+    assert.equal(reordered[0], b);
+    assert.equal(reordered[1], a);
+  });
 });

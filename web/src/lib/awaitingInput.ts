@@ -56,7 +56,7 @@ export type AwaitingInput = {
  */
 export function awaitingInput(
   session: RelaySession | undefined,
-  tasks: readonly RelayTaskListItem[],
+  tasks: ThreadWaitSource,
 ): AwaitingInput | null {
   if (!session || session.status !== "completed") return null;
   // A rejected turn already has its own controls (the decision bar).
@@ -85,7 +85,7 @@ export function awaitingInput(
  */
 export function threadAwaitsHuman(
   session: RelaySession | undefined,
-  tasks: readonly RelayTaskListItem[],
+  tasks: ThreadWaitSource,
 ): boolean {
   if (!session) return false;
   if (session.status === "waiting_for_human") return true;
@@ -98,6 +98,61 @@ type ThreadWait =
   | { task: RelayTaskListItem; awaiting: TaskAwaiting }
   | { task?: undefined };
 
+type TaskWait = { task: RelayTaskListItem; awaiting: TaskAwaiting };
+
+/**
+ * The task list, inverted for the questions `threadWait` asks: which task's
+ * wait names a session, and which task has an id. The rail asks both for
+ * every thread on every streamed frame, so answering them by scanning the
+ * list made grouping O(threads × tasks); built once per task list it is
+ * O(threads + tasks).
+ */
+export type ThreadWaitIndex = {
+  /** sessionId → the first listed task whose resumable wait names it. */
+  readonly waitsBySession: ReadonlyMap<string, TaskWait>;
+  /** taskId → the first listed task with that id. */
+  readonly tasksById: ReadonlyMap<string, RelayTaskListItem>;
+};
+
+/** Either the raw task list or its index. Callers that render per frame
+ *  build the index once (`buildThreadWaitIndex`) and pass it; a plain list
+ *  is indexed on first use and remembered by identity. */
+export type ThreadWaitSource = readonly RelayTaskListItem[] | ThreadWaitIndex;
+
+export function buildThreadWaitIndex(tasks: readonly RelayTaskListItem[]): ThreadWaitIndex {
+  const waitsBySession = new Map<string, TaskWait>();
+  const tasksById = new Map<string, RelayTaskListItem>();
+  for (const task of tasks) {
+    if (!tasksById.has(task.id)) tasksById.set(task.id, task);
+    const awaiting = resumableWait(task);
+    if (awaiting?.sessionId && !waitsBySession.has(awaiting.sessionId)) {
+      waitsBySession.set(awaiting.sessionId, { task, awaiting });
+    }
+  }
+  return { waitsBySession, tasksById };
+}
+
+const EMPTY_WAIT_INDEX: ThreadWaitIndex = { waitsBySession: new Map(), tasksById: new Map() };
+/** Index per task-list identity. The list is a query result that keeps its
+ *  identity until the poll changes it, so a frame that re-reads the same
+ *  list never re-indexes it. */
+const waitIndexByList = new WeakMap<readonly RelayTaskListItem[], ThreadWaitIndex>();
+
+function isThreadWaitIndex(source: ThreadWaitSource): source is ThreadWaitIndex {
+  return "waitsBySession" in source;
+}
+
+/** The index for a source, building and remembering one for a plain list. */
+export function threadWaitIndex(source: ThreadWaitSource): ThreadWaitIndex {
+  if (isThreadWaitIndex(source)) return source;
+  if (source.length === 0) return EMPTY_WAIT_INDEX;
+  const cached = waitIndexByList.get(source);
+  if (cached) return cached;
+  const built = buildThreadWaitIndex(source);
+  waitIndexByList.set(source, built);
+  return built;
+}
+
 /**
  * What a settled thread waits on, or null when it does not. A task whose wait
  * names this thread is the answer — the backend's `_awaiting_task` rule. A
@@ -107,13 +162,12 @@ type ThreadWait =
  * (not loaded yet, or not the viewer's) proves nothing, and a thread with no
  * task speaks for itself.
  */
-function threadWait(session: RelaySession, tasks: readonly RelayTaskListItem[]): ThreadWait | null {
-  for (const task of tasks) {
-    const awaiting = resumableWait(task);
-    if (awaiting?.sessionId === session.id) return { task, awaiting };
-  }
+function threadWait(session: RelaySession, tasks: ThreadWaitSource): ThreadWait | null {
+  const index = threadWaitIndex(tasks);
+  const named = index.waitsBySession.get(session.id);
+  if (named) return named;
   const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
-  const scoped = scope?.kind === "task" ? tasks.find((item) => item.id === scope.taskId) : undefined;
+  const scoped = scope?.kind === "task" ? index.tasksById.get(scope.taskId) : undefined;
   if (!scoped) return session.workOutcome === "blocked" ? {} : null;
   const legacy = resumableWait(scoped);
   return legacy && !legacy.sessionId ? { task: scoped, awaiting: legacy } : null;

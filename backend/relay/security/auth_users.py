@@ -12,6 +12,7 @@ from sqlalchemy import (
     update,
 )
 
+from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import row_to_department, row_to_user, user_to_row, user_with_department
 from .auth_state import AuthStoreState
 from .entity_ids import USER_ENTITY_KIND, database_id_for_reference, normalize_database_id
@@ -139,6 +140,7 @@ class AuthUsers(AuthStoreState):
                 .first()
             )
         logger.info("User updated", user_id=user_id)
+        SESSION_ACCOUNTS.invalidate_all()
         return row_to_user(updated)
 
     def list_users(self) -> list[dict[str, Any]]:
@@ -183,6 +185,7 @@ class AuthUsers(AuthStoreState):
                 .values(deleted_at=now, updated_at=now)
             )
         logger.info("User soft-deleted", user_id=user_id)
+        SESSION_ACCOUNTS.invalidate_all()
         return {"id": user_id, "deletedAt": format_db_time(now)}
 
     def _ensure_user(

@@ -30,7 +30,7 @@ test("agent prompts name the project workspace itself as the deliverable locatio
   assert.doesNotMatch(prompt, /Write generated deliverables to/);
 });
 
-test("workspace records isolate threads and share artifacts within their durable scope", () => {
+test("workspace records isolate threads and share artifacts within their durable scope", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-records-"));
   try {
     const manager = new ThreadWorkspaceManager(root, "none");
@@ -43,11 +43,11 @@ test("workspace records isolate threads and share artifacts within their durable
       assert.ok(existsSync(join(workspace.hostPath, "artifacts")));
       writeFileSync(join(workspace.hostPath, "artifacts/report.md"), "result");
       writeFileSync(join(workspace.hostPath, "threads/ses_one/HANDOFF.json"), "{}");
-      for (const file of diffGeneratedFiles(workspace.hostPath, {})) {
+      for (const file of await diffGeneratedFiles(workspace.hostPath, {})) {
         assert.ok(file.contentBase64, file.relativePath);
       }
       writeFileSync(join(workspace.hostPath, "threads/ses_two/HANDOFF.json"), "{}");
-      const ownFiles = diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
+      const ownFiles = await diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
       assert.ok(ownFiles.some(file => file.relativePath === "artifacts/report.md"));
       assert.ok(ownFiles.some(file => file.relativePath === "threads/ses_one/HANDOFF.json"));
       assert.ok(ownFiles.every(file => !file.relativePath.startsWith("threads/ses_two/")));
@@ -65,7 +65,7 @@ test("a backend that names no artifacts directory still gets artifacts/", () => 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("automation runs share one directory and keep their artifacts apart", () => {
+test("automation runs share one directory and keep their artifacts apart", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-records-"));
   try {
     const manager = new ThreadWorkspaceManager(root, "none");
@@ -77,7 +77,7 @@ test("automation runs share one directory and keep their artifacts apart", () =>
     assert.ok(existsSync(join(workspace.hostPath, "threads/ses_one")));
     assert.ok(existsSync(join(workspace.hostPath, "threads/ses_two")));
     writeFileSync(join(workspace.hostPath, "artifacts/run_one/report.md"), "result");
-    const files = diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
+    const files = await diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
     assert.ok(files.some(file => file.relativePath === "artifacts/run_one/report.md" && file.contentBase64));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

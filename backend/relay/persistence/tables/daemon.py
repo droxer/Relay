@@ -150,6 +150,9 @@ commands = Table(
     # Derived from command._runRequestId (text: legacy ids are not uuids).
     Column("run_request_id", Text, nullable=True),
     Index("ix_daemon_commands_node_status", "node_id", "status"),
+    # ``queued_command_counts`` filters on status across every node and groups
+    # by node; the (node_id, status) index cannot lead with status.
+    Index("ix_daemon_commands_status_node", "status", "node_id"),
     Index("ix_daemon_commands_created_at", "created_at"),
     Index("ix_daemon_commands_lease_expires_at", "lease_expires_at"),
     Index(
@@ -188,6 +191,15 @@ runs = Table(
     Column("started_at", DateTime(timezone=True), nullable=False),
     Column("completed_at", DateTime(timezone=True), nullable=True),
     Index("ix_daemon_runs_node_status", "node_id", "status"),
+    # ``list_active_runs`` without a node reads every running run; the
+    # partial index keeps only those rows, so it stays tiny on a busy fleet.
+    Index(
+        "ix_daemon_runs_running",
+        "node_id",
+        "id",
+        postgresql_where=text("status = 'running'"),
+        sqlite_where=text("status = 'running'"),
+    ),
     Index("ix_daemon_runs_session_id", "session_id"),
     # Backs the ON DELETE SET NULL from daemon_commands (retention deletes
     # commands in bulk) and the run lookups by command.

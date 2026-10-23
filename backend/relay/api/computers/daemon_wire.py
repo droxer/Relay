@@ -45,7 +45,11 @@ MAX_COMMAND_POLL_WAIT_SECONDS = registry_config.COMMAND_POLL_MAX_WAIT_SECONDS
 MAX_COMMAND_POLL_LIMIT = 50
 MAX_COMMAND_LEASE_SECONDS = 60 * 60.0
 MAX_ACTIVE_COMMAND_IDS = 50
-COMMAND_NOTIFICATION_RECOVERY_SECONDS = 5.0
+# How long a command poll waits before re-reading the queue on its own when no
+# wake arrives. A publish can be missed (several SQLite processes, a dropped
+# notification), so this is the dispatch latency floor for that case; the
+# recovery read is one indexed query per waiting daemon per interval.
+COMMAND_NOTIFICATION_RECOVERY_SECONDS = 1.0
 
 
 def bounded_float(

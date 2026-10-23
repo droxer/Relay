@@ -115,13 +115,13 @@ def test_handoff_rolls_back_all_writes_and_can_be_retried(
     before = store.get_session(session_id)
     append_event = store.append_event
 
-    def fail_status(session_id, event):
+    def fail_status(session_id, event, **kwargs):
         if (
             event.get("type") == "session.status"
             and event.get("phase") == failure_phase
         ):
             raise RuntimeError("injected handoff persistence failure")
-        return append_event(session_id, event)
+        return append_event(session_id, event, **kwargs)
 
     with monkeypatch.context() as patch:
         patch.setattr(store, "append_event", fail_status)

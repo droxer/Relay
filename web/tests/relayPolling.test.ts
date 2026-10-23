@@ -16,10 +16,10 @@ import {
 
 describe("relay polling budget", () => {
   it("keeps freshness-critical reads fast without hot-polling stable resources", () => {
-    assert.equal(RELAY_POLL_INTERVALS_MS.nodes, 3_000);
-    assert.equal(RELAY_POLL_INTERVALS_MS.sessions, 3_000);
-    assert.equal(RELAY_POLL_INTERVALS_MS.tasks, 3_000);
-    assert.ok(RELAY_POLL_INTERVALS_MS.sandboxes >= 15_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.sessions, 5_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.nodes, 10_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.tasks, 10_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.sandboxes, 30_000);
   });
 
   it("gives projects and rosters their own slower cadence", () => {
@@ -30,7 +30,8 @@ describe("relay polling budget", () => {
 
   it("backs the sessions poll off only while the SSE tail is connected", () => {
     assert.equal(sessionsPollIntervalMs(false), RELAY_POLL_INTERVALS_MS.sessions);
-    assert.equal(sessionsPollIntervalMs(true), 10_000);
+    assert.equal(sessionsPollIntervalMs(true), 15_000);
+    assert.ok(sessionsPollIntervalMs(true) > sessionsPollIntervalMs(false));
   });
 
   it("stops polling a task record once it settles", () => {

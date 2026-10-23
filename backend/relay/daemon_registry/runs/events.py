@@ -7,7 +7,7 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ...core.ids import now_iso
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
@@ -17,20 +17,85 @@ from ...persistence.events import relay_task_event
 from .. import config
 from ..records import CommandEventMismatchError
 from ..state import RegistryState
+from .finalization import session_already_terminal
 
 
 class EventIngestMixin(RegistryState):
+    if TYPE_CHECKING:
+        # Provided by RunCompletionMixin; declared so this mixin type-checks alone.
+        def _record_generated_workspace_artifacts(
+            self,
+            sandbox: dict[str, Any],
+            run_request: dict[str, Any],
+            event: dict[str, Any],
+            artifact_snapshot: dict[str, Any] | None,
+            assignment: dict[str, Any] | None = None,
+        ) -> None:
+            ...
+
     def handle_event(
         self, sandbox_id: str, event: dict[str, Any], token: str | None
     ) -> None:
         self._hydrate_node(sandbox_id)
-        lock = (
-            self.dispatch_scope([sandbox_id])
-            if event.get("type") in self._STREAMED_EVENT_TYPES
-            else self.dispatch_lock
-        )
-        with lock:
+        if event.get("type") in self._STREAMED_EVENT_TYPES:
+            with self.dispatch_scope([sandbox_id]):
+                self._handle_event_unlocked(sandbox_id, event, token)
+            return
+        if isinstance(event.get("generatedFiles"), list):
+            # A run's files (hundreds of rows, with inline content) are
+            # uploaded under the node's own scope first, so the transition
+            # below holds the global lock for the state change alone.
+            with self.dispatch_scope([sandbox_id]):
+                self._index_generated_files_before_finalization(sandbox_id, event, token)
+        with self.dispatch_lock:
             self._handle_event_unlocked(sandbox_id, event, token)
+
+    def _index_generated_files_before_finalization(
+        self, sandbox_id: str, event: dict[str, Any], token: str | None
+    ) -> None:
+        """Index a terminal event's reported files ahead of its finalization.
+
+        Only an event the finalization would index is taken here — a
+        dispatched command's own completion with exit code 0, or its failure
+        report — and only while its thread is still open. Anything else is
+        left to the finalization, which applies the same per-run dedupe, so a
+        file is indexed exactly once whichever side gets to it. A failure
+        here fails the post: the daemon retries the event, and the retry
+        indexes only what is still missing.
+        """
+        self._assert_authorized(sandbox_id, token)
+        indexable = event["type"] == "run.failed" or (
+            event["type"] == "run.completed" and event.get("exitCode") == 0
+        )
+        record = self.daemon_store.get_command(event["commandId"])
+        if not indexable or not record or record.get("status") != "dispatched":
+            return
+        self._assert_event_matches_active(
+            sandbox_id, event, self._active_command_entry(record)
+        )
+        run_request = self.daemon_store.get_run_request(
+            record["command"].get("_runRequestId")
+        )
+        sandbox = self.sandboxes.get(sandbox_id)
+        if (
+            not run_request
+            or run_request.get("status") not in ACTIVE_RUN_REQUEST_STATUSES
+            or run_request.get("currentCommandId") != event["commandId"]
+            or not sandbox
+        ):
+            return
+        try:
+            session = self.store.get_session_header(run_request["sessionId"])
+        except KeyError:
+            return
+        if session_already_terminal(session):
+            return
+        assignments = run_request.get("assignments") or []
+        index = run_request.get("currentIndex", 0)
+        self._record_generated_workspace_artifacts(
+            sandbox, run_request, event, None,
+            assignments[index] if 0 <= index < len(assignments) else None,
+        )
 
     # Event types that carry streamed output. They take only the node lock and
     # may arrive replayed after their command reached a terminal status.
@@ -239,8 +304,8 @@ class EventIngestMixin(RegistryState):
 
     def _blocker_shares_workspace(self, blocker: str, session_id: str) -> bool:
         try:
-            blocking_session = self.store.get_session(blocker)
-            current_session = self.store.get_session(session_id)
+            blocking_session = self.store.get_session_header(blocker)
+            current_session = self.store.get_session_header(session_id)
         except (KeyError, FileNotFoundError):
             blocking_session = None
         if not blocking_session:
@@ -464,8 +529,9 @@ class EventIngestMixin(RegistryState):
         return seen
 
     def _session_output_sequences(self, session_id: str, run_id: str) -> dict[str, int]:
+        """What the log already holds for this run, aggregated by the store."""
         try:
-            session = self.store.get_session(session_id)
+            return self.store.run_output_sequences(session_id, run_id)
         except KeyError:
             logger.warning(
                 "Failed to read session when checking output sequence",
@@ -473,32 +539,3 @@ class EventIngestMixin(RegistryState):
                 run_id=run_id,
             )
             return {}
-        seen: dict[str, int] = {}
-        for event in session.get("events", []):
-            if (
-                event.get("type") == "agent.output.batch"
-                and event.get("runId") == run_id
-            ):
-                for entry in event.get("entries", []):
-                    stream = entry.get("stream") if isinstance(entry, dict) else None
-                    sequence = (
-                        entry.get("sequence") if isinstance(entry, dict) else None
-                    )
-                    if isinstance(stream, str) and isinstance(sequence, int):
-                        seen[stream] = max(seen.get(stream, -1), sequence)
-                continue
-            if (
-                event.get("type") not in ("agent.output", "agent.collaboration")
-                or event.get("runId") != run_id
-                or not isinstance(event.get("sequence"), int)
-            ):
-                continue
-            stream = (
-                event.get("stream")
-                if event.get("type") == "agent.output"
-                else "collaboration"
-            )
-            if not isinstance(stream, str):
-                continue
-            seen[stream] = max(seen.get(stream, -1), event["sequence"])
-        return seen

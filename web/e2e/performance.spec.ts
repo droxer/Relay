@@ -7,10 +7,10 @@ import { expect, test, type Page } from "@playwright/test";
    to a page that never renders markdown. None of it shows in a screenshot,
    which is why it needs a test rather than a review. */
 
-const USER = "perf-user";
+const USER_ID = "perf-user";
 const T0 = Date.parse("2026-09-17T09:00:00Z");
 const hoursAgo = (hours: number) => new Date(T0 - hours * 3_600_000).toISOString();
-const USER = { id: USER, userId: USER, username: "perf", role: "user", theme: "light", language: "en" };
+const USER = { id: USER_ID, userId: USER_ID, username: "perf", role: "user", theme: "light", language: "en" };
 
 function session(id: string, index: number, turns = 0) {
   const events: unknown[] = [];
@@ -18,7 +18,7 @@ function session(id: string, index: number, turns = 0) {
   for (let turn = 0; turn < turns; turn++) {
     const runId = `${id}-run-${turn}`;
     agentRuns.push({ id: runId, agent: "claude", status: "completed", mode: "action", startedAt: hoursAgo(2), completedAt: hoursAgo(2) });
-    if (turn > 0) events.push({ id: `${runId}-user`, type: "user.message", sessionId: id, timestamp: hoursAgo(2), text: `Follow-up ${turn}`, actorUserId: USER });
+    if (turn > 0) events.push({ id: `${runId}-user`, type: "user.message", sessionId: id, timestamp: hoursAgo(2), text: `Follow-up ${turn}`, actorUserId: USER_ID });
     events.push({ id: `${runId}-start`, type: "agent.started", sessionId: id, timestamp: hoursAgo(2), runId, agent: "claude", mode: "action" });
     const text = `Turn ${turn} changed \`verify${turn}.ts\`.\n\n\`\`\`ts\nexport const turn${turn} = ${turn};\n\`\`\``;
     events.push({ id: `${runId}-out`, type: "agent.output", sessionId: id, timestamp: hoursAgo(2), runId, agent: "claude", stream: "stdout",
@@ -27,7 +27,7 @@ function session(id: string, index: number, turns = 0) {
   }
   return {
     id, title: `Thread number ${index}`, taskGoal: `Thread number ${index}`, status: ["completed", "failed"][index % 2],
-    ownerUserId: USER, workspacePath: "/w", phase: "created", participants: ["human"],
+    ownerUserId: USER_ID, workspacePath: "/w", phase: "created", participants: ["human"],
     createdAt: hoursAgo(index + 10), updatedAt: hoursAgo(index + 1),
     events, agentRuns, artifacts: [], decisions: [], collaborationRounds: [],
     eventCount: events.length, runCount: agentRuns.length, artifactCount: 0,
@@ -84,7 +84,10 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
   await mockApi(page);
   await page.goto("/threads");
   await expect(page.locator(".conversation-name").first()).toBeVisible();
-  // Let first-load commits settle, then watch three full 3s poll cycles.
+  // Let first-load commits settle, then watch 10s of identical polls: two
+  // sessions polls (5s) plus a nodes and a tasks poll (10s) — see
+  // RELAY_POLL_INTERVALS_MS. The sessions query shares unchanged records
+  // across polls (shareSessions), so even the first refetch moves no row.
   await page.waitForTimeout(4_000);
   await page.evaluate(() => Object.assign((window as unknown as { __commits: object }).__commits, { commits: 0, rowRenders: 0 }));
   await page.waitForTimeout(10_000);
@@ -150,7 +153,11 @@ test("the eager bundle ships no markdown pipeline, syntax grammars or unused loc
     KaTeX: "KaTeX parse error",
     "highlight.js": "highlightAuto",
     remark: "micromark",
-    "zh-CN catalogue": "进行中议题上限",
+    "zh-CN catalogue": "每位用户的进行中任务上限",
+    // The app's English rides the app chunk; only the public subset
+    // (landing, sign-in, waitlist, password reset) is eager.
+    "app English catalogue": "Manage users, computers, and organization settings.",
+    "artifact viewer": "artifact-viewer-body",
   }).filter(([, signature]) => eager.includes(signature)).map(([name]) => name);
   expect(leaked, "modules found in the eager bundle").toEqual([]);
 
@@ -169,5 +176,5 @@ test("a Chinese-language user still gets the lazily loaded catalogue", async ({ 
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/tasks");
-  await expect(page.getByRole("heading", { name: "没有未完成的议题" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "没有未完成的任务" })).toBeVisible();
 });

@@ -1,8 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { RelayArtifact } from "relay-core";
-import { ArtifactsDrawer } from "./artifact/ArtifactsDrawer";
+
+/* The drawer (and the code, PDF, and markdown viewers behind it) is fetched
+   the first time an artifact is opened, never with the app: most sessions
+   open none. Once mounted it stays, so closing keeps its exit animation. */
+const ArtifactsDrawer = lazy(() => import("./artifact/ArtifactsDrawer").then((m) => ({ default: m.ArtifactsDrawer })));
 
 interface ArtifactTarget {
   artifact: RelayArtifact;
@@ -20,9 +24,11 @@ const ArtifactViewerContext = createContext<ArtifactViewerContextValue | null>(n
 
 export function ArtifactViewerProvider({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<ArtifactTarget | null>(null);
+  const [drawerMounted, setDrawerMounted] = useState(false);
 
   const open = useCallback(
     (artifact: RelayArtifact, sessionId: string, allArtifacts?: RelayArtifact[], layer?: number) => {
+      setDrawerMounted(true);
       setTarget({ artifact, sessionId, allArtifacts: allArtifacts ?? [artifact], layer });
     },
     [],
@@ -34,14 +40,18 @@ export function ArtifactViewerProvider({ children }: { children: ReactNode }) {
   return (
     <ArtifactViewerContext.Provider value={value}>
       {children}
-      <ArtifactsDrawer
-        open={target !== null}
-        onClose={close}
-        artifacts={target?.allArtifacts ?? []}
-        sessionId={target?.sessionId ?? ""}
-        initialArtifactId={target?.artifact.id}
-        layer={target?.layer ?? 0}
-      />
+      {drawerMounted ? (
+        <Suspense fallback={null}>
+          <ArtifactsDrawer
+            open={target !== null}
+            onClose={close}
+            artifacts={target?.allArtifacts ?? []}
+            sessionId={target?.sessionId ?? ""}
+            initialArtifactId={target?.artifact.id}
+            layer={target?.layer ?? 0}
+          />
+        </Suspense>
+      ) : null}
     </ArtifactViewerContext.Provider>
   );
 }

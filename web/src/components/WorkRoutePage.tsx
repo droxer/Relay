@@ -1,10 +1,10 @@
 "use client";
 
-import { lazy } from "react";
+import { lazy, memo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { RelayEmptyState } from "./RelayEmptyState";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, UserAgent } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskSummary, UserAgent } from "../types";
 import type { Language, Theme } from "../lib/appStorage";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import type { AdminSection, AppRoute, MobileView, SettingsSection } from "../lib/viewTypes";
@@ -63,7 +63,6 @@ interface WorkRoutePageProps {
   projects: ProjectRecord[];
   projectsStatus: ProjectCollectionStatus;
   tasks: RelayTaskSummary[];
-  sessions: RelaySession[];
   visibleNodes: DaemonNodeMonitorRecord[];
   runtimeNodes: DaemonNodeMonitorRecord[];
   isRefreshing: boolean;
@@ -90,10 +89,18 @@ interface WorkRoutePageProps {
 
 /** Every signed-in page that is not the threads surface, plus not-found.
     Each page is its own lazy chunk; the caller provides the Suspense and
-    error boundaries. */
-export function WorkRoutePage(props: WorkRoutePageProps) {
+    error boundaries. Memoized: the shell re-renders on every streamed frame
+    of a run, and none of these pages shows that run — so every prop the
+    caller passes must keep its identity between frames. */
+export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePageProps) {
   const { t } = useTranslation();
-  const { route, user, onOpenThread } = props;
+  const { route, user, onOpenThread, onOpenAgent } = props;
+  const openTaskThread = useCallback(
+    (sessionId: string, taskId?: string) => onOpenThread(sessionId, false, taskId),
+    [onOpenThread],
+  );
+  const openAgent = useCallback((agent: UserAgent) => onOpenAgent(agent.id), [onOpenAgent]);
+  const backToAgents = useCallback(() => onOpenAgent(null), [onOpenAgent]);
   if (props.notFound) {
     return (
       // Fills the content tracks (not the rail column it used to fall
@@ -128,12 +135,11 @@ export function WorkRoutePage(props: WorkRoutePageProps) {
       recordTaskId={props.recordTaskId}
       onOpenRecord={props.onOpenTaskRecord}
       tasks={props.tasks}
-      sessions={props.sessions}
       nodes={props.visibleNodes}
       currentUser={user}
       isRefreshing={props.isRefreshing}
       onRefresh={props.onRefresh}
-      onOpenThread={(sessionId, taskId) => onOpenThread(sessionId, false, taskId)}
+      onOpenThread={openTaskThread}
     />
   ) : route === "routine" ? (
     <RoutinesPage
@@ -159,8 +165,8 @@ export function WorkRoutePage(props: WorkRoutePageProps) {
     <AgentsPage
       currentUser={user}
       detailAgent={props.detailAgent}
-      onOpenAgent={(agent) => props.onOpenAgent(agent.id)}
-      onBackToAgents={() => props.onOpenAgent(null)}
+      onOpenAgent={openAgent}
+      onBackToAgents={backToAgents}
       onOpenThread={onOpenThread}
     />
   ) : route === "computers" ? (
@@ -177,4 +183,4 @@ export function WorkRoutePage(props: WorkRoutePageProps) {
       onLanguageChange={props.onLanguageChange}
     />
   ) : null;
-}
+});

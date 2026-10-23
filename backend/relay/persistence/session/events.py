@@ -10,10 +10,14 @@ import time
 from typing import Any
 from loguru import logger
 from sqlalchemy import (
+    bindparam,
     delete,
+    func,
     insert,
+    literal_column,
     or_,
     select,
+    text,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +33,15 @@ from .rows import (
     session_to_row,
 )
 from .state import SessionStoreState
+
+
+def _payload_field(pg: bool, key: str) -> str:
+    """SQL text reading one scalar field of the event payload in either dialect."""
+    return (
+        f"session_events.payload->>'{key}'"
+        if pg
+        else f"json_extract(session_events.payload, '$.{key}')"
+    )
 
 
 class SessionEventRows(SessionStoreState):
@@ -231,6 +244,65 @@ class SessionEventRows(SessionStoreState):
                 "version": int(session["version"] or 0),
                 "status": session["status"],
             }
+
+    def run_output_sequences(self, session_id: str, run_id: str) -> dict[str, int]:
+        """The highest streamed sequence per stream one run has already logged.
+
+        ``agent.output`` and ``agent.collaboration`` carry one sequence each
+        (the latter on the ``collaboration`` stream); ``agent.output.batch``
+        carries one per entry. Aggregated in SQL so a run's dedupe cursor is
+        one query over its own rows, never a replay of the whole thread.
+        """
+        pg = self.engine.dialect.name == "postgresql"
+        seen: dict[str, int] = {}
+
+        def note(stream: Any, sequence: Any) -> None:
+            if isinstance(stream, str) and sequence is not None:
+                seen[stream] = max(seen.get(stream, -1), int(sequence))
+
+        with store_transaction(self.engine) as conn:
+            for stream_expr, cursor_expr, event_type in (
+                (_payload_field(pg, "stream"), _payload_field(pg, "sequence"), "agent.output"),
+                ("'collaboration'", _payload_field(pg, "sequence"), "agent.collaboration"),
+            ):
+                for stream, sequence in conn.execute(
+                    select(
+                        literal_column(stream_expr),
+                        func.max(literal_column(f"CAST({cursor_expr} AS BIGINT)")),
+                    )
+                    .where(
+                        self.events.c.session_id == session_id,
+                        self.events.c.type == event_type,
+                        literal_column(_payload_field(pg, "runId")) == run_id,
+                    )
+                    .group_by(literal_column(stream_expr))
+                ):
+                    note(stream, sequence)
+            entries = (
+                "jsonb_array_elements(session_events.payload->'entries')"
+                if pg
+                else "json_each(json_extract(session_events.payload, '$.entries'))"
+            )
+            entry_field = (
+                "e.value->>'{0}'" if pg else "json_extract(e.value, '$.{0}')"
+            )
+            batch_rows = conn.execute(
+                text(
+                    f"SELECT {entry_field.format('stream')} AS stream, "
+                    f"MAX(CAST({entry_field.format('sequence')} AS BIGINT)) AS sequence "
+                    f"FROM session_events, {entries} AS e "
+                    "WHERE session_events.session_id = :session_id "
+                    "AND session_events.type = 'agent.output.batch' "
+                    f"AND {_payload_field(pg, 'runId')} = :run_id "
+                    f"GROUP BY {entry_field.format('stream')}"
+                ).bindparams(
+                    bindparam("session_id", session_id, type_=self.events.c.session_id.type),
+                    bindparam("run_id", run_id),
+                )
+            )
+            for stream, sequence in batch_rows:
+                note(stream, sequence)
+        return seen
 
     def has_agent_run(self, logical_agent_id: str, placement_ids: set[str]) -> bool:
         """Use indexed run projections rather than scanning session snapshots."""

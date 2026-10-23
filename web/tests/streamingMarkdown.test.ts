@@ -14,7 +14,9 @@ describe("streaming prose continuity", () => {
     // the growing tail; splitMarkdownBlocks never cuts a list, fence, or math
     // block (web/tests/markdownBlocks.test.ts). Once settled, the whole text is
     // parsed once, so the final tree and heading ids match a single document.
-    assert.match(source, /live \? <StreamingMarkdown text=\{visibleText\} live \/> : <MarkdownContent text=\{visibleText\} \/>/);
+    assert.match(source, /live \? <LiveTextSegment text=\{text\} \/> : <SettledTextSegment text=\{text\} \/>/);
+    assert.match(source, /<StreamingMarkdown text=\{visibleText\} live \/>/);
+    assert.match(source, /<MarkdownContent text=\{text\} \/>/);
     assert.doesNotMatch(source, /splitStreamingMarkdown/);
   });
 

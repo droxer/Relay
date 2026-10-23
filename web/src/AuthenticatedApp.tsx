@@ -59,6 +59,7 @@ import { useNotifications } from "./hooks/useNotifications";
 import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
 import { hrefForSettingsSection } from "./lib/appRoute";
 import type { NotificationBellBinding } from "./components/notifications/NotificationBell";
+import type { MobileView } from "./lib/viewTypes";
 
 type UserPreferences = ReturnType<typeof useUserPreferences>;
 
@@ -340,10 +341,16 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     [agentId, logicalAgents],
   );
 
+  // Whether the content area is a thread surface — the threads view, a
+  // project room, or a task's thread. `pickActiveThreadSession` falls back to
+  // the newest thread, so without this gate a run in that thread would stream
+  // frames, and re-render everything here, under the Issues or Admin page.
+  const threadSurfaceVisible = !showsWorkRoutePage(route, notFound, isTaskThread);
+
   // Live SSE tail of the open thread; merges new events into the
   // sessions cache so the active thread updates at push latency.
   useSessionDetail(activeSession?.id, true);
-  useSessionEvents(activeSession?.id, shouldTailSessionEvents(activeSession?.status));
+  useSessionEvents(activeSession?.id, threadSurfaceVisible && shouldTailSessionEvents(activeSession?.status));
 
   const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
   const {
@@ -538,7 +545,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     rememberPick();
   });
 
-  async function handleLogout() {
+  const handleLogout = useStableEvent(async () => {
     preferences.invalidate(null);
     try {
       await logout();
@@ -547,7 +554,31 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     }
     setUser(null);
     navigateToLogin(true);
-  }
+  });
+  // Identity-stable handlers and values for the shell's memoized leaves and
+  // the memoized work page: a new function per render would make every
+  // streamed frame re-render the nav, the palette, and whichever page is open.
+  const onLogout = useStableEvent(() => { void handleLogout(); });
+  const onMobileViewChange = useStableEvent((view: MobileView) => {
+    if (view === "threads" && showProjectOverview) navigateToProject(null);
+    else navigateToMobileView(view);
+  });
+  const onNewTask = useStableEvent(() => {
+    taskCreateIntent()?.queue();
+    // The queued intent is picked up by the tasks board, which is no
+    // longer the project's default tab — ask for it by name.
+    if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}?tab=tasks`);
+    else if (route !== "backlog") navigateToRoute("backlog");
+  });
+  const onRefresh = useStableEvent(() => refresh());
+  // useThreadNavigation hands back plain closures; the memoized work page
+  // needs one identity for the life of the shell.
+  const onOpenThread = useStableEvent(openThread);
+  const onGoHome = useStableEvent(() => navigateToRoute("main"));
+  const onboardingBadge = useMemo(
+    () => (onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null),
+    [onboarding.progress.completedCount, onboarding.progress.visible],
+  );
 
   return (
     <AppShell
@@ -557,10 +588,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}
-      onMobileViewChange={(view) => {
-        if (view === "threads" && showProjectOverview) navigateToProject(null);
-        else navigateToMobileView(view);
-      }}
+      onMobileViewChange={onMobileViewChange}
       sidenavExpanded={panels.sidenavExpanded}
       setSidenavExpanded={panels.setSidenavExpanded}
       sidenavWidth={panels.sidenavWidth}
@@ -583,18 +611,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
         onToggleSpace: space.toggleSpace,
       } : null}
       user={user}
-      onLogout={() => void handleLogout()}
+      onLogout={onLogout}
       onNewThread={startNewThread}
-      onboarding={onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null}
+      onboarding={onboardingBadge}
       onOpenOnboarding={openOnboarding}
       notifications={notificationBell}
-      onNewTask={() => {
-        taskCreateIntent()?.queue();
-        // The queued intent is picked up by the tasks board, which is no
-        // longer the project's default tab — ask for it by name.
-        if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}?tab=tasks`);
-        else if (route !== "backlog") navigateToRoute("backlog");
-      }}
+      onNewTask={onNewTask}
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
     >
@@ -608,13 +630,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             projects={projects}
             projectsStatus={projectsStatus}
             tasks={tasks}
-            sessions={sessions}
             visibleNodes={visibleNodes}
             runtimeNodes={runtimeNodes}
             isRefreshing={isRefreshing}
-            onRefresh={() => refresh()}
-            onOpenThread={openThread}
-            onGoHome={() => navigateToRoute("main")}
+            onRefresh={onRefresh}
+            onOpenThread={onOpenThread}
+            onGoHome={onGoHome}
             adminSection={adminSection}
             onSelectAdminSection={navigateToAdminSection}
             recordTaskId={recordTaskId}

@@ -112,7 +112,9 @@ class SessionLifecycleMixin(SessionControllerState):
         snapshot = self.store.get_session(session_id)
         if snapshot.get("archived"):
             return snapshot
-        self._append(session_id, relay_event("session.archived", session_id, {}))
+        self._append(
+            session_id, relay_event("session.archived", session_id, {}), hydrate=False
+        )
         logger.info("Session archived", session_id=session_id)
         return self.store.get_session(session_id)
 

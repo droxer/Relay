@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { MobileTopbarSlotContext } from "./MobileTopbarSlot";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,10 +9,10 @@ import {
   NavBack,
 } from "./icons";
 import type { Theme } from "@/lib/appStorage";
-import { SideNav } from "./SideNav";
+import { SideNav as SideNavView } from "./SideNav";
 import { ArtifactNavButton } from "./ArtifactNavButton";
-import { CommandMenu } from "./CommandMenu";
-import { ShortcutsHelp } from "./ShortcutsHelp";
+import { CommandMenu as CommandMenuView } from "./CommandMenu";
+import { ShortcutsHelp as ShortcutsHelpView } from "./ShortcutsHelp";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { buildCommands, type CommandId } from "@/lib/commandMenu";
 import { taskCreateIntent } from "@/lib/taskCreateIntent";
@@ -83,6 +83,13 @@ type AppShellProps = {
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
 };
+
+// The shell re-renders on every streamed frame of the open run (its title and
+// chrome read the active thread). These leaves read none of that, so they are
+// memoized here and every handler they receive keeps its identity.
+const SideNav = memo(SideNavView);
+const CommandMenu = memo(CommandMenuView);
+const ShortcutsHelp = memo(ShortcutsHelpView);
 
 export function AppShell({
   taskWorkspace = false,
@@ -180,6 +187,10 @@ export function AppShell({
         break;
     }
   }, [onNavigateRoute, onNewThread, queueNewTask]);
+
+  const openCommandMenu = useCallback(() => setCommandOpen(true), []);
+  const closeCommandMenu = useCallback(() => setCommandOpen(false), []);
+  const closeShortcutsHelp = useCallback(() => setShortcutsOpen(false), []);
 
   useGlobalShortcuts({
     isAdmin,
@@ -297,7 +308,7 @@ export function AppShell({
         hrefForRoute={hrefForRoute}
         isAdmin={isAdmin}
         onLogout={onLogout}
-        onOpenCommandMenu={() => setCommandOpen(true)}
+        onOpenCommandMenu={openCommandMenu}
         onboarding={onboarding}
         onOpenOnboarding={onOpenOnboarding}
         notifications={notifications}
@@ -314,12 +325,12 @@ export function AppShell({
         open={commandOpen}
         commands={commands}
         onRun={runCommand}
-        onClose={() => setCommandOpen(false)}
+        onClose={closeCommandMenu}
       />
       <ShortcutsHelp
         open={shortcutsOpen}
         isAdmin={isAdmin}
-        onClose={() => setShortcutsOpen(false)}
+        onClose={closeShortcutsHelp}
       />
     </div>
     </MobileTopbarSlotContext.Provider>

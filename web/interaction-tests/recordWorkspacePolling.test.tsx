@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { RecordWorkspace } from "../src/components/task-record/RecordWorkspace";
 import { taskWorkspaceStatus } from "../src/api";
+import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 
 vi.mock("../src/api", () => ({
   listTaskWorkspaceFiles: vi.fn(async () => ({ entries: [], path: "" })),
@@ -17,7 +18,8 @@ async function pollsFor(status: string, waiting = false): Promise<number> {
   client.setQueryData(["task-record", "t1"], { id: "t1", status });
   const view = render(<QueryClientProvider client={client}><RecordWorkspace taskId="t1" /></QueryClientProvider>);
   await act(async () => {});
-  await act(() => vi.advanceTimersByTimeAsync(9_500));
+  // Three poll ticks past the initial read.
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks * 3 + 500));
   const calls = vi.mocked(taskWorkspaceStatus).mock.calls.length;
   view.unmount(); client.clear(); vi.useRealTimers();
   return calls;

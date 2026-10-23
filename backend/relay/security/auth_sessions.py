@@ -11,6 +11,7 @@ from sqlalchemy import (
     select,
 )
 
+from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import database_session_to_row, row_to_database_session
 from .auth_state import AuthStoreState
 from .credentials import hash_session_token, new_session_token
@@ -70,12 +71,12 @@ class AuthLoginSessions(AuthStoreState):
         return session
 
     def delete_session(self, token: str) -> bool:
+        token_hash = hash_session_token(token)
         with store_transaction(self.engine) as conn:
             result = conn.execute(
-                delete(self.sessions).where(
-                    self.sessions.c.token_hash == hash_session_token(token)
-                )
+                delete(self.sessions).where(self.sessions.c.token_hash == token_hash)
             )
+        SESSION_ACCOUNTS.invalidate_token(token_hash)
         return result.rowcount > 0
 
     def cleanup_expired_sessions(self) -> int:
@@ -85,4 +86,5 @@ class AuthLoginSessions(AuthStoreState):
                     self.sessions.c.expires_at <= datetime.now(UTC)
                 )
             )
+        SESSION_ACCOUNTS.invalidate_all()
         return result.rowcount

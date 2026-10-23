@@ -28,7 +28,7 @@ COMPUTER_BUNDLE := backend/relay/computer/daemon.tar.gz
 COMPUTER_BUNDLE_SOURCES := $(shell find packages/relay-core/src packages/relay-daemon/src -name '*.ts') \
 	packages/relay-core/package.json packages/relay-daemon/package.json tools/build-computer.mjs
 
-.PHONY: cloud-computer-image devbox-image devbox-check devbox-oci build-packages test test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
+.PHONY: cloud-computer-image devbox-image devbox-check devbox-oci build-packages test test-e2e test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
 
 devbox-image:
 	docker build --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t $(DEVBOX_IMAGE) -f $(DOCKERFILE) .
@@ -57,6 +57,11 @@ build-packages:
 
 test:
 	npm test
+
+# The web e2e suite (Playwright against the production export). `pretest:e2e`
+# builds the export first; there is no CI, so run this before handing off web work.
+test-e2e:
+	npm run test:e2e -w web
 
 test-python: backend-test
 

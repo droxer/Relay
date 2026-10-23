@@ -203,3 +203,44 @@ export function highlightToHtml(
   }
   return value;
 }
+
+/** How many settled-prefix highlights a live reply may keep. One per open
+ *  fence is plenty; a reply rarely streams more than a few at once. */
+const LIVE_HEAD_CACHE_MAX = 8;
+const liveHeadCache = new Map<string, string>();
+
+/**
+ * The HTML of a fence that is still streaming, in two parts: every complete
+ * line highlighted, and the unfinished last line as plain text.
+ *
+ * A token arrives every frame, and highlighting the whole fence each time
+ * made the work per reply quadratic in its length. The complete lines only
+ * change when a newline lands, so their highlight is remembered by prefix
+ * and a frame that extends the last line costs nothing but a slice. The
+ * fence is highlighted whole once it settles (`highlightToHtml`), which also
+ * repairs any construct — a block comment, a template string — that the
+ * line-wise highlight could not see across the cut.
+ *
+ * `tail` is unescaped: it is meant for a text node, which escapes itself.
+ */
+export function highlightLiveToHtml(
+  code: string,
+  language?: string | null,
+): { settled: string; tail: string } {
+  ensureRegistered();
+  const cut = code.lastIndexOf("\n") + 1;
+  const head = code.slice(0, cut);
+  const tail = code.slice(cut);
+  if (head === "") return { settled: "", tail };
+  const resolved = isPlainLanguage(language) ? null : resolveLanguage(language);
+  if (!resolved) return { settled: escapeHtml(head), tail };
+  const key = `${resolved}\u0000${head}`;
+  const cached = liveHeadCache.get(key);
+  if (cached !== undefined) return { settled: cached, tail };
+  const settled = hljs.highlight(head, { language: resolved, ignoreIllegals: true }).value;
+  liveHeadCache.set(key, settled);
+  if (liveHeadCache.size > LIVE_HEAD_CACHE_MAX) {
+    liveHeadCache.delete(liveHeadCache.keys().next().value!);
+  }
+  return { settled, tail };
+}

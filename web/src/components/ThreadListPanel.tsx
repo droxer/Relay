@@ -11,6 +11,7 @@ import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { ThreadRow, type ThreadItem } from "./ThreadRow";
 import { groupThreads } from "../lib/threadGroups";
+import { buildThreadWaitIndex } from "../lib/awaitingInput";
 import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads";
 import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
@@ -33,6 +34,9 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+
+/** Stable empty list for the rail window when the projects rail is showing. */
+const NO_THREADS: ThreadItem[] = [];
 
 // The logged-in user's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current user's
@@ -108,14 +112,20 @@ export function ThreadListPanel({
     if (width > max) onResize(max, false);
   }, [onResize, width]));
 
-  const hierarchy = projectThreadBuckets(threads, projects);
+  // The folder hierarchy sorts every project; only the projects rail reads
+  // it, and the threads rail renders on every streamed frame.
+  const hierarchy = useMemo(
+    () => (directoryMode === "projects" ? projectThreadBuckets(threads, projects) : null),
+    [directoryMode, projects, threads],
+  );
+  const projectCount = hierarchy?.projects.length ?? 0;
   const directoryState = projectDirectoryState({
-    projectCount: hierarchy.projects.length,
+    projectCount,
     collectionStatus: projectsStatus,
     hasQuery: query.trim().length > 0,
   });
 
-  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, tasks, selectedSessionId, query);
+  const railWindow = useRailWindow(directoryMode === "threads" ? threads : NO_THREADS, tasks, selectedSessionId, query);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;
@@ -163,7 +173,7 @@ export function ThreadListPanel({
           .list-filter-bar band, each carrying its own hairline. */}
       <PageHeader
         title={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
-        count={directoryMode === "projects" ? hierarchy.projects.length : threads.length}
+        count={directoryMode === "projects" ? projectCount : threads.length}
         titleAs="h2"
         titleVariant="title"
         // No "Workspace" kicker over Projects: the sidebar group already
@@ -204,7 +214,7 @@ export function ThreadListPanel({
         // mode the list must keep conversation-list's tight single-line gap.
         className={directoryMode === "projects" ? "conversation-list project-directory" : "conversation-list"}
       >
-        {directoryMode === "projects" ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
+        {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
           const computerLabel = computers.find((computer) => computer.id === project.computerId)?.displayName
             || project.computerId.replace(/^device:[^:]+:/, "");
           const selection = projectFolderSelection({
@@ -339,7 +349,10 @@ function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[],
   const [pages, setPages] = useState(1);
   useKeyChange(resetKey, () => setPages(1));
 
-  const groups = useMemo(() => groupThreads(items, tasks), [items, tasks]);
+  // The wait index is the tasks inverted once per task poll; grouping then
+  // costs one map lookup per thread per frame instead of a scan of every task.
+  const waits = useMemo(() => buildThreadWaitIndex(tasks), [tasks]);
+  const groups = useMemo(() => groupThreads(items, waits), [items, waits]);
   const selectedIndex = useMemo(() => {
     if (!selectedSessionId) return -1;
     return [...groups.needsYou, ...groups.running, ...groups.idle]

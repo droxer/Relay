@@ -9,6 +9,7 @@ from typing import ClassVar
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from ..core import deploy_config
@@ -16,6 +17,21 @@ from ..security.request_auth import USER_COOKIE_NAME
 
 
 CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
+# Bodies under this stay uncompressed: the gzip header costs more than it
+# saves, and most JSON answers to a poll are a few hundred bytes.
+GZIP_MINIMUM_SIZE_BYTES = 1024
+
+
+def compressed(app: ASGIApp) -> ASGIApp:
+    """Gzip a response the client accepts compressed and that is worth it.
+
+    Starlette's middleware already leaves a ``text/event-stream`` response
+    alone (``DEFAULT_EXCLUDED_CONTENT_TYPES``), so the SSE thread stream is
+    never buffered inside a gzip member; ``test_sse_responses_are_never_gzipped``
+    pins that. A response that already carries ``Content-Encoding`` is passed
+    through as well.
+    """
+    return GZipMiddleware(app, minimum_size=GZIP_MINIMUM_SIZE_BYTES)
 
 
 class ServerTimingMiddleware:
@@ -92,10 +108,16 @@ def _request_origin_allowed(scope: Scope, headers: dict[str, str], origin: str) 
 
 
 class SecurityHeadersMiddleware:
-    """Apply one browser hardening policy to API and backend-served UI."""
+    """Apply one browser hardening policy to API and backend-served UI.
+
+    Compression sits directly inside this layer (``compressed``): the security
+    headers are added to the compressed response, and the Server-Timing and
+    conditional-GET layers below it see the uncompressed body, so an ETag is
+    computed over the bytes the route produced.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
-        self.app = app
+        self.app = compressed(app)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":

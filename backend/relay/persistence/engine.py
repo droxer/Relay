@@ -69,11 +69,14 @@ def database_engine_options(database_url: str) -> dict[str, Any]:
     url = make_url(database_url)
     if url.get_backend_name() == "sqlite":
         return {}
+    # Check pooled connections before use: recycling only handles their age,
+    # not database restarts or proxy disconnects. A failed transaction is not
+    # automatically replayed. Keep the pool sized for the worker threadpool.
     pre_ping = os.environ.get("RELAY_DB_POOL_PRE_PING", "true").strip().lower()
     if pre_ping not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
         raise ValueError("RELAY_DB_POOL_PRE_PING must be a boolean.")
     options: dict[str, Any] = {
-        "pool_size": _positive_env_number("RELAY_DB_POOL_SIZE", "10", int),
+        "pool_size": _positive_env_number("RELAY_DB_POOL_SIZE", "20", int),
         "max_overflow": _positive_env_number("RELAY_DB_MAX_OVERFLOW", "20", int),
         "pool_timeout": _positive_env_number(
             "RELAY_DB_POOL_TIMEOUT_SECONDS", "5", float
@@ -111,6 +114,11 @@ def shared_engine(database_url: str) -> Any:
 
 
 SQLITE_BUSY_TIMEOUT_MS = 30_000
+# WAL lets readers proceed while a writer holds the lock, and NORMAL sync
+# under WAL still survives a process crash (only an OS crash can lose the
+# last transactions), which is the right trade for a local-first dev store.
+# A memory database ignores the journal mode, so both are safe everywhere.
+SQLITE_CONNECT_PRAGMAS = ("PRAGMA journal_mode = WAL", "PRAGMA synchronous = NORMAL")
 
 
 def _serialize_sqlite_writers(engine: Any) -> None:
@@ -127,6 +135,8 @@ def _serialize_sqlite_writers(engine: Any) -> None:
     def _connect(dbapi_connection: Any, _record: Any) -> None:
         dbapi_connection.isolation_level = None  # let SQLAlchemy emit BEGIN
         dbapi_connection.execute(f"PRAGMA busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
+        for pragma in SQLITE_CONNECT_PRAGMAS:
+            dbapi_connection.execute(pragma)
 
     @sa_event.listens_for(engine, "begin")
     def _begin(connection: Any) -> None:

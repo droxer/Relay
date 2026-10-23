@@ -65,6 +65,16 @@ class SessionReadRows(SessionStoreState):
             "eventCount": int(row["version"] or 0),
         }
 
+    def session_version(self, session_id: str) -> int:
+        """The thread's event count alone: one primary-key read, no payload."""
+        with store_transaction(self.engine) as conn:
+            version = conn.scalar(
+                select(self.sessions.c.version).where(self.sessions.c.id == session_id)
+            )
+        if version is None:
+            raise KeyError(session_id)
+        return int(version)
+
     def list_sessions(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = (

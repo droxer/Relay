@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -44,6 +44,7 @@ test("output survives restart and is replayed in sequence before the terminal re
     outbox.retain(output(1));
     outbox.retain(output(0));
     outbox.retain({ type: "run.completed", commandId: "cmd", leaseId: "lease", runId: "run" });
+    await outbox.flush();
     const restarted = new TerminalOutbox(root);
     const received: unknown[] = [];
     await restarted.replay(async (_url, init) => {
@@ -106,12 +107,13 @@ test("output quota preserves existing evidence and still allows terminal results
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("re-retaining live output does not read the record back from disk", () => {
+test("re-retaining live output does not read the record back from disk", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));
   try {
     const outbox = new TerminalOutbox(root);
     const event = { type: "run.output.batch", commandId: "cmd", leaseId: "lease", entries: [{ stream: "stdout", text: "x", sequence: 3 }] };
     outbox.retain(event);
+    await outbox.flush();
     const [name] = readdirSync(root).filter((file) => file.endsWith(".json"));
     // Output identity covers its sequence, so the stored copy is this event;
     // a read-back would only cost a parse on every live post.
@@ -135,10 +137,88 @@ for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
         const retryable = [408, 429, 503].includes(status);
         assert.equal(outbox.pending().length, retryable ? 1 : 0);
         if (!retryable) {
+          await outbox.flush();
           assert.equal(new TerminalOutbox(root).pending().length, 0);
           assert.doesNotThrow(() => outbox.retain({ ...event, sequence: 1 }));
         }
+        await outbox.flush();
       } finally { rmSync(root, { recursive: true, force: true }); }
     });
   }
 }
+
+test("output batches are retained write-behind while terminal events stay synchronous", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-write-behind-"));
+  try {
+    const outbox = new TerminalOutbox(root);
+    const output = (sequence: number) => ({ type: "run.output.batch", commandId: "cmd", leaseId: "lease",
+      entries: [{ stream: "stdout", text: `chunk-${sequence}`, sequence }] });
+    // The record is accounted for at once (quota, ordering, pending) and
+    // lands on disk later.
+    outbox.retain(output(0));
+    assert.equal(outbox.pending().length, 1);
+    assert.deepEqual(outbox.retain(output(0)).event, output(0));
+    await outbox.flush();
+    assert.equal(readdirSync(root).filter((name) => name.endsWith(".json")).length, 1);
+    assert.equal(outbox.pending().length, 1);
+    // A terminal event is on disk before retain returns: it is the only
+    // evidence the run ended.
+    outbox.retain({ type: "run.completed", commandId: "cmd", leaseId: "lease" });
+    assert.equal(outbox.pending().length, 2);
+    // Output acknowledged while its write is still landing leaves nothing
+    // behind for replay once the write completes.
+    const send = outbox.wrapFetch(async () => new Response("{}", { status: 200 }));
+    await send("http://backend/events", { method: "POST", body: JSON.stringify({ ...output(0), commandId: "other" }) });
+    await outbox.flush();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(outbox.pending().map((record) => record.event.type), ["run.output.batch", "run.completed"]);
+    assert.equal(readdirSync(root).filter((name) => name.endsWith(".tmp")).length, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a failed write-behind output record is reported, not thrown on the hot path", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-write-behind-error-"));
+  try {
+    const errors: string[] = [];
+    const outbox = new TerminalOutbox(root, undefined, undefined, (error) => errors.push(error.message));
+    rmSync(root, { recursive: true, force: true });
+    outbox.retain({ type: "run.output.batch", commandId: "cmd", leaseId: "lease", entries: [{ stream: "stdout", text: "x", sequence: 0 }] });
+    await outbox.flush();
+    assert.equal(errors.length, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("failed output writes remain replayable and do not block subsequent live output", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-write-recovery-"));
+  const errors: Error[] = [];
+  const output = (sequence: number) => ({ type: "run.output", commandId: "cmd", leaseId: "lease", sequence, text: "chunk" });
+  const outbox = new TerminalOutbox(root, undefined, Buffer.byteLength(JSON.stringify(output(0))), error => errors.push(error));
+  try {
+    rmSync(root, { recursive: true });
+    const offline = outbox.wrapFetch(async () => { throw new Error("offline"); });
+    await assert.rejects(offline("http://backend/events", { method: "POST", body: JSON.stringify(output(0)) }));
+    await outbox.flush();
+    assert.equal(errors.length, 1);
+    mkdirSync(root);
+    assert.deepEqual(outbox.pending().map(record => record.event.sequence), [0]);
+    assert.throws(() => outbox.retain(output(1)), /limit exceeded/);
+    await outbox.replay(async () => new Response("offline", { status: 503 }), "http://backend/events", "token");
+    assert.deepEqual(outbox.pending().map(record => record.event.sequence), [0]);
+    const received: number[] = [];
+    const backend: typeof fetch = async (_url, init) => {
+      received.push(JSON.parse(String(init?.body)).sequence);
+      return new Response("{}");
+    };
+    await outbox.replay(backend, "http://backend/events", "token");
+    assert.deepEqual(received, [0]);
+    const result = await outbox.wrapFetch(backend)("http://backend/events", { method: "POST", body: JSON.stringify(output(1)) });
+    assert.equal(result.status, 200);
+    await outbox.flush();
+    assert.deepEqual(received, [0, 1]);
+    assert.equal(outbox.pending().length, 0);
+  } finally {
+    await outbox.flush();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

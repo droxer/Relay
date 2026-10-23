@@ -68,16 +68,23 @@ def select_orphaned_runs(
 
 
 def prepared_round_is_durable(request: dict[str, Any], session: dict[str, Any]) -> bool:
-    """Whether a prepared request's collaboration round reached the session log."""
+    """Whether a prepared request's collaboration round reached the session log.
+
+    The snapshot's ``collaborationRounds`` is the reduced form of every
+    ``collaboration.round.started`` event, so a header read answers this
+    without replaying the log; a hydrated session answers the same way.
+    """
     manifest = (request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY)
     round_id = manifest.get("roundId") if isinstance(manifest, dict) else None
-    return bool(
-        round_id
-        and any(
-            event.get("type") == "collaboration.round.started"
-            and (event.get("manifest") or {}).get("roundId") == round_id
-            for event in session.get("events", [])
-        )
+    if not round_id:
+        return False
+    return any(
+        item.get("roundId") == round_id
+        for item in session.get("collaborationRounds") or []
+    ) or any(
+        event.get("type") == "collaboration.round.started"
+        and (event.get("manifest") or {}).get("roundId") == round_id
+        for event in session.get("events") or []
     )
 
 
@@ -283,7 +290,9 @@ class RunReaperMixin(RegistryState):
             self.cancel_active_run(
                 request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
             )
-        session = self.store.get_session(request["sessionId"])
+        # Recovery decides on snapshot fields alone; the header is one row
+        # read, where the full session replays every event on every pass.
+        session = self.store.get_session_header(request["sessionId"])
         if session.get("status") in TERMINAL_SESSION_STATUSES:
             self._settle_request_for_terminal_session(request, session)
             return
@@ -313,7 +322,7 @@ class RunReaperMixin(RegistryState):
 
     def _recover_prepared_request(self, request: dict[str, Any]) -> None:
         try:
-            session = self.store.get_session(request["sessionId"])
+            session = self.store.get_session_header(request["sessionId"])
         except KeyError:
             self.daemon_store.update_run_request(
                 request["id"],
@@ -468,7 +477,7 @@ class RunReaperMixin(RegistryState):
 
     def _redeliver_staged_command(self, request: dict[str, Any], staged: dict[str, Any]) -> None:
         command = staged["command"]
-        session = self.store.get_session(request["sessionId"])
+        session = self.store.get_session_header(request["sessionId"])
         has_started = any(
             agent_run.get("id") == command["runId"]
             for agent_run in session.get("agentRuns", [])

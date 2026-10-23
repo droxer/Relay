@@ -18,6 +18,9 @@ vi.mock("react-i18next", () => ({
     i18n: { language: "en", t: (key: string) => key, changeLanguage: vi.fn(async () => undefined) },
   }),
 }));
+// The entry warms the stored language beside the app chunk; the real
+// i18next instance is not needed to prove the gate's behaviour.
+vi.mock("../src/i18n", () => ({ default: { language: "en", changeLanguage: vi.fn(async () => undefined) } }));
 vi.mock("../src/api", () => ({ getMe, RelayApiError: ApiError }));
 vi.mock("../src/App", () => ({ App: () => <p>relay app</p> }));
 vi.mock("../src/components/landing/LandingScreen", () => ({ LandingScreen: () => <p>landing page</p> }));

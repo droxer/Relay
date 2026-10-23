@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { groupAgentsByComputer } from "../lib/agentGroups";
@@ -178,7 +178,7 @@ function RosterRow({
   );
 }
 
-export function AgentsPage({
+function AgentsPageView({
   currentUser,
   detailAgent,
   onOpenAgent,
@@ -369,3 +369,7 @@ export function AgentsPage({
     </section>
   );
 }
+
+// Memoized: the shell re-renders on every streamed frame of a run that may
+// be on another route; the roster reads nothing from it but the user.
+export const AgentsPage = memo(AgentsPageView);

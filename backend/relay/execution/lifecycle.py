@@ -147,6 +147,20 @@ def _stop_grace_elapsed(session: dict[str, Any], state: dict[str, Any], now: dat
         return True  # An unreadable mark must not hold the thread hostage.
 
 
+def _nodes_by_id(store: Any, node_ids: set[str]) -> dict[str, dict[str, Any]]:
+    """Only the nodes the annotated sessions run on, never the whole fleet.
+
+    A thread list is polled every few seconds, and the sessions on it rarely
+    reference more than a handful of computers.
+    """
+    nodes: dict[str, dict[str, Any]] = {}
+    for node_id in sorted(node_ids):
+        node = store.get_node(node_id)
+        if node:
+            nodes[node_id] = node
+    return nodes
+
+
 class ExecutionLifecycleService:
     def __init__(self, registry: Any, chat_store: Any, *, interval_seconds: float = 5.0):
         self.registry = registry
@@ -194,7 +208,7 @@ class ExecutionLifecycleService:
         )
         commands = store.get_commands(command_ids)
         node_ids = {r.get("nodeId") for r in [*requests.values(), *legacy.values()] if r.get("nodeId")}
-        nodes = {n["id"]: n for n in store.list_nodes() if n["id"] in node_ids} if node_ids else {}
+        nodes = _nodes_by_id(store, node_ids)
         result = []
         now = self.clock()
         for session in sessions:
@@ -204,7 +218,7 @@ class ExecutionLifecycleService:
             if not request and command and command.get("status") not in TERMINAL:
                 request = {"status": "running", "state": {}}
             node_id = (request or {}).get("nodeId") or (legacy.get(session["id"]) or {}).get("nodeId")
-            node = nodes.get(node_id)
+            node = nodes.get(node_id) if node_id else None
             online = self.registry._liveness(node)["online"] if node else None
             result.append({**session, "execution": execution_status(session, request, command, now=now, computer_online=online)})
         return result

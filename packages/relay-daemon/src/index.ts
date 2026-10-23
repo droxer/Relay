@@ -265,6 +265,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     executionJournal.confirmExit(id);
     terminalCommands.add(id);
     executionWatchdog.forget(id);
+  }, undefined, (error) => {
+    // Output records land off the event loop; failed writes remain in
+    // memory for replay until the backend acknowledges them.
+    logger.warn("durable output record write failed", { sandboxId, error: error.message });
   });
   // A crash may land between durable terminal storage and journal removal.
   for (const record of terminalOutbox.pending()) {
@@ -601,13 +605,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     };
     sendDrainingHeartbeat = shutdownBeat("draining");
     sendStoppedHeartbeat = shutdownBeat("stopped");
-    // A busy computer still re-checks the runtimes no run is using, in the
-    // background so the command poll (and any cancel it carries) is not held
-    // up. Runtimes in use keep their last report: probing them would touch
-    // the credentials the running agent is using. A BoxLite node probes
-    // inside a guest that is already up and skips the round while none is.
-    let busyRuntimeRefresh: Promise<void> | undefined;
-    const refreshIdleRuntimesWhileBusy = async (): Promise<void> => {
+    // The periodic runtime re-check runs beside the command poll, never in
+    // front of it, so a command arriving during the probes (seconds on a
+    // local computer) is not held up. Runtimes in use keep their last report:
+    // probing them would touch the credentials the running agent is using. A
+    // BoxLite node probes inside a guest that is already up and, while busy,
+    // skips the round while none is.
+    let backgroundRuntimeRefresh: Promise<void> | undefined;
+    const refreshIdleRuntimesInBackground = async (): Promise<void> => {
       const inUse = new Set([...activeRuns.values()].map(({ command }) => command.agent));
       const idle = AGENT_NAMES.filter((agent) => !inUse.has(agent));
       const keepInUse = <T>(fresh: Partial<Record<AgentName, T>>, prior: Partial<Record<AgentName, T>>) => ({
@@ -722,6 +727,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         continue;
       }
       let completedEmptyLongPoll = false;
+      let pollDeliveredCommands = false;
       let commandPollStartedAt = performance.now();
       let leaseObservationStartedAt = commandPollStartedAt;
       let pollHeartbeat: DaemonNodeHeartbeatSettings | undefined;
@@ -730,10 +736,18 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         // Capability re-registration refreshes agent inventory independently
         // of the lightweight liveness heartbeat.
         const runtimeRefreshDue = runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs;
-        if (runtimeRefreshDue && activeRuns.size > 0 && !busyRuntimeRefresh && (environment.canProbeWithoutBooting?.() ?? true)) {
-          busyRuntimeRefresh = refreshIdleRuntimesWhileBusy().finally(() => { busyRuntimeRefresh = undefined; });
+        // An explicit refresh on an idle computer is the one round that runs
+        // before the poll: the person asked for it and its acknowledgement
+        // rides on the registration that answers. Everything else runs beside
+        // the poll. An idle BoxLite node with no guest up still boots one
+        // first, as it always has, rather than racing a run for the pool.
+        const explicitIdleRefresh = runtimeRefreshCommands.size > 0 && activeRuns.size === 0;
+        const canProbeNow = environment.canProbeWithoutBooting?.() ?? true;
+        const refreshInBackground = runtimeRefreshDue && !explicitIdleRefresh && canProbeNow;
+        if (refreshInBackground && !backgroundRuntimeRefresh) {
+          backgroundRuntimeRefresh = refreshIdleRuntimesInBackground().finally(() => { backgroundRuntimeRefresh = undefined; });
         }
-        if (activeRuns.size === 0 && !busyRuntimeRefresh && runtimeRefreshDue) {
+        if (runtimeRefreshDue && !refreshInBackground && activeRuns.size === 0 && !backgroundRuntimeRefresh) {
           agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, AGENT_NAMES, agentHealth);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
           agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists);
@@ -786,8 +800,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         pollHeartbeat = parsed.heartbeat;
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         backendUnreachable = false;
+        pollDeliveredCommands = (parsed.commands?.length ?? 0) > 0;
         completedEmptyLongPoll = commandPollWaitMs > 0
-          && (parsed.commands?.length ?? 0) === 0
+          && !pollDeliveredCommands
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
         return parsed;
       }, logger, { sandboxId, what: "command poll" }, reconnectControl);
@@ -1059,9 +1074,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           });
         }
       }
-      // A successful long-poll already supplied the idle wait. Preserve an
-      // explicit caller delay and the default throttle for rejected polls.
-      if (!completedEmptyLongPoll || options.pollIntervalMs !== undefined) {
+      // A successful long-poll already supplied the idle wait, and a poll that
+      // delivered commands is followed at once so the next command in a burst
+      // (a second thread, a cancel, a refresh) is not held back a second.
+      // Preserve an explicit caller delay and the default throttle for
+      // rejected or failed polls.
+      if (options.pollIntervalMs !== undefined || !(completedEmptyLongPoll || pollDeliveredCommands)) {
         await delay(pollIntervalMs, runtimeSignal);
       }
     }
@@ -1579,7 +1597,7 @@ async function executeCommand(
       : skillState;
     // Snapshot document-type workspace files so a successful run can report
     // exactly what it created or changed (see generated-files.ts).
-    const workspaceSnapshot = snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
+    const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
     let patch;
     try {
       if (command.reportExecutionStarted) {
@@ -1597,6 +1615,7 @@ async function executeCommand(
       }
       patch = await runWithPermissionPrompts(runState, (promptState) => runAgentNode(command.agent, promptState, options));
     } catch (error) {
+      execution.forgetAgentReady?.(command.agent);
       consumeRoundResult(threadWorkspace.hostPath);
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
@@ -1605,6 +1624,9 @@ async function executeCommand(
       await waitForOutputPosts();
     }
     const next = mergeAgentState(state, patch);
+    // A failed exit may mean the runtime itself stopped working (signed out,
+    // provider down); its next run checks before trusting the cached answer.
+    if (next.last_exit_code !== 0) execution.forgetAgentReady?.(command.agent);
     const agentLog = next.agent_logs.slice(-1)[0] ?? "";
     // Consume on every terminal path, including cancellation and delivery failure.
     const roundOutcome = readRoundResult(threadWorkspace.hostPath, command.runId);
@@ -1628,7 +1650,7 @@ async function executeCommand(
     // its deliverables. Preserve those files on the terminal failure event so
     // the backend can still index them for the thread Space.
     const generatedFiles = next.last_exit_code === 0
-      ? diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
+      ? await diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
       : [];
     if (outputPostFailure) {
       return {
@@ -1701,6 +1723,8 @@ function commandLeaseEventFields(command: DaemonNodeRunCommand): { leaseId?: str
 export interface WorkspaceExecution {
   ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
   execStream: typeof localProcessExecStream;
+  /** A run of this agent failed: its next run re-checks readiness. */
+  forgetAgentReady?(agent: AgentName): void;
   release(): void;
 }
 

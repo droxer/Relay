@@ -305,7 +305,8 @@ def test_task_list_summary_view_is_compact_and_keeps_default_contract(
         assert len(detail.json()["events"]) == summary["eventCount"]
 
 
-def test_task_summary_view_without_limit_preserves_complete_list(monkeypatch) -> None:
+def test_task_summary_view_without_limit_preserves_completeness(monkeypatch) -> None:
+    # Summary projection must preserve the complete task collection.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)

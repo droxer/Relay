@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { shouldRenderDiagram } from "../../lib/markdown";
-import { highlightToHtml } from "../../lib/syntax";
+import { highlightLiveToHtml, highlightToHtml } from "../../lib/syntax";
 import {
   ActionCopy,
   CheckIcon,
@@ -53,6 +53,16 @@ function CopyFenceButton({ text }: { text: string }) {
   );
 }
 
+function LiveFenceBody({ code, language }: { code: string; language: string | null }) {
+  const { settled, tail } = highlightLiveToHtml(code, language);
+  return (
+    <>
+      <span dangerouslySetInnerHTML={{ __html: settled }} />
+      {tail}
+    </>
+  );
+}
+
 /**
  * A fenced code block: language caption, syntax highlighting, and a copy
  * control — or, for a diagram dialect, the rendered diagram.
@@ -64,9 +74,19 @@ function CopyFenceButton({ text }: { text: string }) {
 export function MarkdownFence({ code, language }: { code: string; language: string | null }) {
   const { live } = useMarkdownMode();
 
-  const fence = (
+  // A live fence grows by a token per frame. Its complete lines are
+  // highlighted once each and sit in a span whose markup does not change
+  // between frames, so React leaves it alone; only the text node holding the
+  // unfinished last line is rewritten. Settled, the fence is one highlight.
+  const fence = live ? (
     <pre className="agent-code code">
-      <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightToHtml(code, language, { live }) }} />
+      <code className="hljs">
+        <LiveFenceBody code={code} language={language} />
+      </code>
+    </pre>
+  ) : (
+    <pre className="agent-code code">
+      <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightToHtml(code, language) }} />
     </pre>
   );
 

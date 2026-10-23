@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { memo, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardView } from "./admin/dashboard/DashboardView";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
@@ -104,7 +104,7 @@ async function probeAuth(signal?: AbortSignal): Promise<AuthProbe> {
   }
 }
 
-export function AdminPage({ currentUser, section, onSelectSection }: AdminPageProps) {
+function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps) {
   const { t } = useTranslation();
   const { prompt } = useDialogs();
   const { reportMutationError } = useMutationError();
@@ -737,3 +737,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     </section>
   );
 }
+
+// Memoized: the shell re-renders on every streamed frame of a run that may
+// be on another route; the console polls its own data.
+export const AdminPage = memo(AdminPageView);

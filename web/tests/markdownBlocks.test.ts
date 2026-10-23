@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { splitMarkdownBlocks } from "../src/lib/markdownBlocks.ts";
+import { createMarkdownBlockSplitter, splitMarkdownBlocks } from "../src/lib/markdownBlocks.ts";
 
 function roundTrips(text: string): string[] {
   const blocks = splitMarkdownBlocks(text);
@@ -134,5 +134,68 @@ describe("splitMarkdownBlocks", () => {
       // Every block but the last is final: it matches the fully streamed split.
       blocks.slice(0, -1).forEach((block, index) => assert.equal(block, settled[index]));
     }
+  });
+});
+
+describe("createMarkdownBlockSplitter", () => {
+  const reply = [
+    "# Plan\n\n",
+    "First we look.\n\n",
+    "- one\n- two\n\n",
+    "```ts\nconst a = 1;\n\nconst b = 2;\n```\n\n",
+    "$$\nx = 1\n\ny = 2\n$$\n\n",
+    "Closing words.",
+  ].join("");
+
+  it("splits every streamed prefix exactly as a fresh scan would", () => {
+    const splitter = createMarkdownBlockSplitter();
+    for (let length = 1; length <= reply.length; length += 1) {
+      const prefix = reply.slice(0, length);
+      assert.deepEqual(splitter.split(prefix), splitMarkdownBlocks(prefix), `prefix of ${length}`);
+    }
+  });
+
+  it("resumes at the open line instead of rescanning the reply", () => {
+    const splitter = createMarkdownBlockSplitter();
+    const settled = "# Plan\n\nFirst we look.\n\nSecond, we";
+    splitter.split(settled);
+    const before = splitter.scannedChars;
+    splitter.split(`${settled} act.`);
+    // Only the line that had not ended ("Second, we act.") is read again.
+    assert.equal(splitter.scannedChars - before, "Second, we act.".length);
+  });
+
+  it("rescans from the start when the text is not an extension of the last", () => {
+    const splitter = createMarkdownBlockSplitter();
+    splitter.split("one\n\ntwo\n\nthr");
+    const rewritten = "alpha\n\nbeta";
+    const before = splitter.scannedChars;
+    assert.deepEqual(splitter.split(rewritten), splitMarkdownBlocks(rewritten));
+    assert.equal(splitter.scannedChars - before, rewritten.length);
+  });
+
+  it("forgets everything on empty text and starts again", () => {
+    const splitter = createMarkdownBlockSplitter();
+    splitter.split("one\n\ntwo");
+    assert.deepEqual(splitter.split(""), []);
+    assert.deepEqual(splitter.split("- a\n\n- b"), ["- a\n\n- b"]);
+  });
+
+  it("merges a boundary back when the open line turns out to continue the list", () => {
+    const splitter = createMarkdownBlockSplitter();
+    assert.deepEqual(splitter.split("- a\n\n2"), ["- a\n\n", "2"]);
+    assert.deepEqual(splitter.split("- a\n\n2. b"), ["- a\n\n2. b"]);
+  });
+
+  it("collapses to one block once a definition settles, and stays there", () => {
+    const splitter = createMarkdownBlockSplitter();
+    assert.deepEqual(splitter.split("para\n\nnext"), ["para\n\n", "next"]);
+    assert.deepEqual(splitter.split("para\n\nnext\n\n[x]: http://e"), ["para\n\nnext\n\n[x]: http://e"]);
+    // The definition's line ends here, so it settles; after that the answer
+    // needs no scan at all.
+    assert.deepEqual(splitter.split("para\n\nnext\n\n[x]: http://e\n\nmore"), ["para\n\nnext\n\n[x]: http://e\n\nmore"]);
+    const before = splitter.scannedChars;
+    assert.deepEqual(splitter.split("para\n\nnext\n\n[x]: http://e\n\nmore words"), ["para\n\nnext\n\n[x]: http://e\n\nmore words"]);
+    assert.equal(splitter.scannedChars, before, "a settled definition answers without scanning");
   });
 });

@@ -86,6 +86,17 @@ tasks = Table(
     Index("ix_tasks_project_id", "project_id"),
     Index("ix_tasks_owner_updated_at", "owner_user_id", "updated_at"),
     Index("ix_tasks_assignee_updated_at", "assignee_user_id", "updated_at"),
+    # The admin task list and summary read live tasks newest first with an
+    # id tiebreaker; this serves that order without a sort over the table.
+    # The user-scoped list ORs owner and assignee, which the two composite
+    # indexes above cover through a bitmap union.
+    Index(
+        "ix_tasks_live_recency",
+        text("updated_at DESC"),
+        text("id DESC"),
+        postgresql_where=text("deleted_at IS NULL"),
+        sqlite_where=text("deleted_at IS NULL"),
+    ),
     Index(
         "ix_tasks_dispatch_queue",
         "due_date",

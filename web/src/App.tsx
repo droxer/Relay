@@ -3,9 +3,15 @@
 // The app surfaces' styles ride this chunk; the global sheet holds only what
 // the landing page and the auth gate paint before it (src/styles.css).
 import "./styles/app.css";
+// The rest of the English catalogue rides this chunk; registered before any
+// signed-in surface renders (src/i18n/app.ts).
+import "./i18n/app";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { DialogProvider } from "./components/ui/DialogProvider";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { ArtifactViewerProvider } from "./components/ArtifactViewerProvider";
 import { LoginScreen } from "./components/LoginScreen";
 import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
 import { JoinScreen } from "./components/waitlist/JoinScreen";
@@ -36,12 +42,42 @@ function deviceApprovalCode(): string | null {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 /**
- * The auth gate. Renders the landing, sign-in, waitlist, and invite screens
- * itself and hands a signed-in user to AuthenticatedApp. RelayEntry already
- * loads this module as its own chunk, so the signed-in tree rides it rather
- * than paying a second lazy hop (and Suspense's reveal throttle).
+ * The providers only a signed-in surface uses: dialogs and toasts, tooltips,
+ * and the artifact viewer. They ride the app chunk, not the page's own code,
+ * so a visitor on the landing page or the sign-in screen never loads them.
+ */
+export function SignedInProviders({ children }: { children: ReactNode }) {
+  return (
+    // One tooltip provider for the app, so the delay before the FIRST
+    // tooltip opens is paid once and moving between neighbouring icon
+    // buttons swaps the popup instead of re-waiting per control.
+    <TooltipProvider>
+      <DialogProvider>
+        <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
+      </DialogProvider>
+    </TooltipProvider>
+  );
+}
+
+/**
+ * The app: the auth gate under the providers every signed-in surface (and
+ * the gate's own toasts) use. RelayEntry loads this module as its own chunk,
+ * so the signed-in tree rides it rather than paying a second lazy hop (and
+ * Suspense's reveal throttle).
  */
 export function App() {
+  return (
+    <SignedInProviders>
+      <AuthGate />
+    </SignedInProviders>
+  );
+}
+
+/**
+ * The auth gate. Renders the landing, sign-in, waitlist, and invite screens
+ * itself and hands a signed-in user to AuthenticatedApp.
+ */
+function AuthGate() {
   const { t, i18n } = useTranslation();
   const { reportMutationError } = useMutationError();
   const setSelectedUser = useRelayStore((s) => s.setSelectedUser);

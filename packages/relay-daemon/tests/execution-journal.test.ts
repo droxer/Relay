@@ -20,6 +20,8 @@ test("restart retains unresolved execution identity; only durable exit evidence 
   assert.equal(restarted.has("command"),true);
   outbox.retain({type:"run.cancelled",commandId:"command",leaseId:"lease",runId:"run"});
   assert.equal(new ExecutionJournal(dir).has("command"),false);
+  // Output records land write-behind; a restart reads what is on disk.
+  await outbox.flush();
   const replayed: string[]=[];
   await new TerminalOutbox(join(root,"terminal")).replay(async(_url,init)=>{replayed.push(JSON.parse(String(init?.body)).type);return new Response("{}")},"http://backend/events","token");
   assert.deepEqual(replayed,["run.output","run.cancelled"]);
