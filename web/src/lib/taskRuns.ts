@@ -32,8 +32,13 @@ export function runDurationMs(run: TaskRun): number | null {
   return ended - started;
 }
 
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
 /**
- * A duration a person reads at a glance: `4s`, `12m`, `1h 3m`.
+ * Relay's one duration voice: `47s`, `3m 12s`, `1h 02m` — every receipt,
+ * ledger row, and live elapsed counter writes a duration through here.
+ * Seconds stay under an hour (a 3-minute run and a 3m 50s one are different
+ * runs); past it the minutes are padded so a column of times aligns.
  *
  * Deliberately unlocalized digits with unit suffixes — the ledger's rows are
  * scanned vertically, and a spelled-out duration breaks the column.
@@ -42,7 +47,6 @@ export function formatRunDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+  if (minutes < 60) return seconds % 60 ? `${minutes}m ${pad2(seconds % 60)}s` : `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${pad2(minutes % 60)}m`;
 }

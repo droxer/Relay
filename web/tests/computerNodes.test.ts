@@ -126,10 +126,10 @@ describe("formatRunElapsed", () => {
     assert.equal(formatRunElapsed(start, at(48_000)), "48s");
   });
 
-  it("switches to whole minutes under an hour", () => {
+  it("keeps the seconds under an hour, padded so the column stays aligned", () => {
     assert.equal(formatRunElapsed(start, at(60_000)), "1m");
-    assert.equal(formatRunElapsed(start, at(12 * 60_000)), "12m");
-    assert.equal(formatRunElapsed(start, at(59 * 60_000 + 59_000)), "59m");
+    assert.equal(formatRunElapsed(start, at(12 * 60_000 + 5_000)), "12m 05s");
+    assert.equal(formatRunElapsed(start, at(59 * 60_000 + 59_000)), "59m 59s");
   });
 
   it("pads the minute part past an hour so the column stays aligned", () => {

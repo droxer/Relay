@@ -1,6 +1,7 @@
 import type { DaemonNodeMonitorRecord } from "../types.js";
 import { computerId } from "./createAgent.ts";
 import { preferDaemonNode } from "./daemonNodes.ts";
+import { formatRunDuration } from "./taskRuns.ts";
 
 /** Nodes assigned to one user — what a user sees on their own computer page. */
 export function nodesAssignedToUser(
@@ -36,12 +37,8 @@ export function countUserDeviceComputers(
 export function formatRunElapsed(startedAt: string, now: number = Date.now()): string {
   const deltaMs = now - new Date(startedAt).getTime();
   if (!Number.isFinite(deltaMs)) return "—";
-  const seconds = Math.max(0, Math.floor(deltaMs / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
+  // Floored to whole seconds so a counter never rounds ahead of the clock.
+  return formatRunDuration(Math.floor(Math.max(0, deltaMs) / 1000) * 1000);
 }
 
 /**
