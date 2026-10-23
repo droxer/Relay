@@ -83,7 +83,7 @@
     "no_bootstrap": "Setup is already complete. Sign in.",
     "go_bootstrap": "Create the first admin account",
     "go_login": "Back to sign in",
-    "error_generic": "Something went wrong. Try again.",
+    "error_generic": "Couldn't sign you in just now. Check your connection and try again.",
     "do_assign": "Hand agents threads, tasks, and automations.",
     "do_watch": "Watch every command as it runs.",
     "do_control": "Nothing ships without your review.",
