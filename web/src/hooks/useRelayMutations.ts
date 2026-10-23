@@ -422,10 +422,15 @@ export function useRelayMutations() {
       // the current one so the next attempt can succeed.
       if (error instanceof RelayApiError && error.code === "project_version_conflict") void invalidateProjects();
       const sessions = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY) ?? [];
-      const message = projectDeleteErrorMessage(error, (sessionId) => {
-        const session = sessions.find((candidate) => candidate.id === sessionId);
-        return session ? threadLabel(session) : undefined;
-      });
+      const tasks = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY) ?? [];
+      const message = projectDeleteErrorMessage(
+        error,
+        (sessionId) => {
+          const session = sessions.find((candidate) => candidate.id === sessionId);
+          return session ? threadLabel(session) : undefined;
+        },
+        (taskId) => tasks.find((candidate) => candidate.id === taskId)?.title || undefined,
+      );
       reportMutationError("Failed to delete project", error, t(message.key, message.values));
     },
   });

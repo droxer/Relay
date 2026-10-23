@@ -465,6 +465,14 @@ additionally refuses delivery if the project still exists after a rollback.
 The daemon removes only `projects/{projectId}` and refuses symlink or escaping
 roots. Older daemons must be updated before pending files can be removed.
 
+Execution checks include the project's threads and threads linked to its
+non-deleted tasks, even when those threads are outside the project. Already-deleted
+tasks do not block removal through their retained links. A refusal names blocking
+`sessionIds` and `taskIds`; the web UI shows loaded thread names, falling back to
+task titles. Deletion also records the owner's assertion for linked executions
+that Relay already allows them to report gone, using the normal thread-deletion
+reconciliation path. Threads outside the project survive this reconciliation.
+
 Deleting a linked project keeps the existing directory and returns
 `workspaceCleanup: "kept", cleanupCommandId: null`. It queues no file deletion
 and does not require the Computer to be registered or online. The same active

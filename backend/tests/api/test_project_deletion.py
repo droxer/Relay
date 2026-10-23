@@ -251,8 +251,53 @@ def test_refused_delete_settles_nothing(project_env, monkeypatch):
     before = app.state.session_store.get_session(session["id"])
     response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
     assert response.status_code == 409, response.text
-    assert response.json()["detail"]["taskIds"] == [task["id"]]
+    detail = response.json()["detail"]
+    assert detail["taskIds"] == [task["id"]]
+    # The blocking thread sits outside the project; the refusal still names it.
+    assert detail["sessionIds"] == [elsewhere["id"]]
     assert app.state.session_store.get_session(session["id"]) == before
+
+
+def test_deleted_task_does_not_hold_the_project(project_env, monkeypatch):
+    app, client, node, agent, project, task, routine, session = project_env
+    # Deleting a task keeps a thread another task still uses; the deleted task
+    # stays linked to it, and that thread's run is not this project's.
+    elsewhere = app.state.session_store.create_session({"taskGoal": "Elsewhere", "ownerUserId": ALICE, "workspacePath": "/workspace"})
+    app.state.task_store.link_session(task["id"], elsewhere["id"])
+    app.state.task_store.delete_task(task["id"], deleted_by=ALICE)
+    _hold_live(monkeypatch, app, elsewhere["id"])
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 200, response.text
+    assert app.state.project_store.get_project(project["id"]) is None
+    assert app.state.session_store.get_session(elsewhere["id"])
+
+
+def test_delete_project_settles_a_task_thread_outside_the_project(project_env):
+    app, client, node, agent, project, task, routine, session = project_env
+    # A project task's thread outside the project holds a run Relay gave up
+    # on. Both liveness checks must judge it alike, or every retry refuses.
+    elsewhere = app.state.session_store.create_session({"taskGoal": "Elsewhere", "ownerUserId": ALICE, "workspacePath": "/workspace"})
+    app.state.task_store.link_session(task["id"], elsewhere["id"])
+    app.state.session_store.append_event(elsewhere["id"], relay_event("agent.started", elsewhere["id"], {"agent": "codex", "runId": "lost-run"}))
+    lifecycle = app.state.execution_lifecycle
+    assert lifecycle.status(app.state.session_store.get_session(elsewhere["id"]))["canReportGone"]
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 200, response.text
+    assert app.state.project_store.get_project(project["id"]) is None
+    # The thread is not the project's, so it survives, settled.
+    assert lifecycle.status(app.state.session_store.get_session(elsewhere["id"]))["canDelete"]
+
+
+def test_task_claimed_mid_delete_is_a_conflict(project_env, monkeypatch):
+    from relay.persistence.task.rules import TaskExecutionActiveError
+    app, client, node, agent, project, task, routine, session = project_env
+    def claimed(*args, **kwargs):
+        raise TaskExecutionActiveError("task_execution_active")
+    monkeypatch.setattr(app.state.task_store, "delete_task", claimed)
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "project_execution_active"
+    assert app.state.project_store.get_project(project["id"])
 
 
 def test_delete_project_forgets_automation_state(project_env):

@@ -143,6 +143,8 @@
     "delete_active": "请先停止此项目中所有正在运行的工作，再删除项目。",
     "cleanup_waiting_for_computer": "其电脑已从 Relay 移除。工作区文件将在该电脑重新注册后删除。",
     "cleanup_orphaned": "Relay 已无法识别其电脑，工作区文件已保留。",
+    "delete_active_tasks": "请先停止任务 {{tasks}} 正在运行的工作，再删除项目。",
+    "delete_active_tasks_more": "请先停止任务 {{tasks}} 及另外 {{count}} 个任务正在运行的工作，再删除项目。",
     "delete_active_threads": "请先停止 {{threads}} 中正在运行的工作，再删除项目。",
     "delete_active_threads_more": "请先停止 {{threads}} 及另外 {{count}} 个对话中正在运行的工作，再删除项目。",
     "delete_conflict": "项目在你打开后已被修改。请查看后重试。",
