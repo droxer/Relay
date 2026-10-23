@@ -280,7 +280,7 @@ export const MessageBlock = memo(function MessageBlock({
           {receipt ? (
             <RunReceipt
               receipt={receipt}
-              runtime={labelForExecutor(message.agent, agentDisplayNames)}
+              runtime={labelForExecutor(message.agent)}
               usage={message.tokenUsage}
             />
           ) : null}
