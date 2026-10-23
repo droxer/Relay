@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session
 from ...teams.computer import resolve_team_computer
-from .agents import _agent_with_placements, _user_exists
+from .agents import _agent_views, _user_exists
 from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep, string_field
@@ -81,23 +81,58 @@ def _team_patch(
     return {**patch, **computer}
 
 
-def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
+def _member_views(
+    ctx: AppContextDep, teams: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Agent views for every live member across ``teams``, computed once.
+
+    One agent read per distinct member, then one placement read and one node
+    read for the whole batch, instead of the full placement chain per member
+    per team.
+    """
+    member_ids: dict[str, None] = {}
+    for team in teams:
+        for agent_id in team.get("memberAgentIds", []):
+            member_ids.setdefault(agent_id, None)
+    agents = [
+        agent
+        for agent in (ctx.agent_store.get_agent(agent_id) for agent_id in member_ids)
+        if agent and not agent.get("deletedAt")
+    ]
+    return {
+        view["id"]: view
+        for view in _agent_views(ctx, agents)
+    }
+
+
+def _team_views(ctx: AppContextDep, teams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    views = _member_views(ctx, teams)
+    return [_team_view(ctx, team, member_views=views) for team in teams]
+
+
+def _team_view(
+    ctx: AppContextDep,
+    team: dict[str, Any],
+    *,
+    member_views: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    views = _member_views(ctx, [team]) if member_views is None else member_views
     members = []
     for agent_id in team.get("memberAgentIds", []):
-        agent = ctx.agent_store.get_agent(agent_id)
-        if agent and not agent.get("deletedAt"):
-            view = _agent_with_placements(ctx, agent)
-            members.append(
-                {
-                    "id": view["id"],
-                    "displayName": view["displayName"],
-                    "profileImageUrl": view.get("profileImageUrl"),
-                    "executorKind": view["executorKind"],
-                    "defaultRole": agent.get("defaultRole"),
-                    "enabled": view.get("enabled", True),
-                    "availability": view.get("availability", "offline"),
-                }
-            )
+        view = views.get(agent_id)
+        if view is None:
+            continue
+        members.append(
+            {
+                "id": view["id"],
+                "displayName": view["displayName"],
+                "profileImageUrl": view.get("profileImageUrl"),
+                "executorKind": view["executorKind"],
+                "defaultRole": view.get("defaultRole"),
+                "enabled": view.get("enabled", True),
+                "availability": view.get("availability", "offline"),
+            }
+        )
     lead = next(
         (member for member in members if member["id"] == team.get("leadAgentId")),
         None,
@@ -108,12 +143,7 @@ def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
 @router.get("/teams")
 def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return {
-        "teams": [
-            _team_view(ctx, team)
-            for team in ctx.team_store.list_teams(actor["userId"])
-        ]
-    }
+    return {"teams": _team_views(ctx, ctx.team_store.list_teams(actor["userId"]))}
 
 
 @router.post("/teams", status_code=201)
@@ -165,12 +195,7 @@ def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 def list_control_panel_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     owner_user_id = request.query_params.get("ownerUserId") or None
-    return {
-        "teams": [
-            _team_view(ctx, team)
-            for team in ctx.team_store.list_teams(owner_user_id)
-        ]
-    }
+    return {"teams": _team_views(ctx, ctx.team_store.list_teams(owner_user_id))}
 
 
 @router.post("/admin/teams", status_code=201)

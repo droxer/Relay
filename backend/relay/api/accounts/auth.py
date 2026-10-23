@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from ...automations.service import automation_triggers_enabled
 from ...core import deploy_config
 from ...security.auth_rows import public_account
+from ...security.auth_cache import has_accounts_cached
 from ...security.request_auth import (
     USER_COOKIE_NAME,
     require_admin_session,
@@ -40,7 +41,9 @@ def _consume_auth_attempt(request: Request, key: str) -> None:
 @router.get("/auth/status")
 def auth_status(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return {
-        "requiresBootstrap": not ctx.auth_store.has_accounts(),
+        # Asked of the store once per process: accounts are never all
+        # deleted, so a seen ``True`` holds (``security/auth_cache.py``).
+        "requiresBootstrap": not has_accounts_cached(ctx.auth_store),
         # Public, so the sign-in screen can offer "Request access" only when
         # the waitlist routes are mounted.
         "waitlistEnabled": ctx.settings.waitlist_enabled,

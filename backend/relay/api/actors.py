@@ -175,10 +175,13 @@ def actor_can_access_sandbox(actor: Actor, sandbox: dict[str, Any]) -> bool:
 def get_session_for_actor(
     store: SessionStore, session_id: str, actor: Actor
 ) -> dict[str, Any]:
-    session = get_session_or_404(store, session_id)
-    if not actor_can_access_record(actor, session):
-        raise HTTPException(403, "Session access denied.")
-    return session
+    """The full thread, after its header settled that the caller may see it.
+
+    Access is decided on the one-row header so a refused or missing thread
+    never pays for loading and decoding its event log.
+    """
+    get_session_header_for_actor(store, session_id, actor)
+    return get_session_or_404(store, session_id)
 
 
 def get_session_header_for_actor(

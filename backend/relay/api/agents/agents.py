@@ -44,19 +44,20 @@ AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy"})
 @router.get("/agents")
 def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    agents = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
-    nodes = ctx.registry.monitor_nodes()
+    agents = [
+        agent
+        for agent in ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
+        if agent.get("enabled", True)
+    ]
+    nodes = _node_map(ctx)
+    fleet = list(nodes.values())
     # An agent a user explicitly created always stays on the roster.
     # If its computer or runtime is gone, flag it — let the user decide
     # whether to delete it. The system doesn't make that call for them.
     return {
         "agents": [
-            {
-                **_agent_with_placements(ctx, agent),
-                "bindingStatus": binding_status(agent, nodes),
-            }
-            for agent in agents
-            if agent.get("enabled", True)
+            {**view, "bindingStatus": binding_status(agent, fleet)}
+            for agent, view in zip(agents, _agent_views(ctx, agents, nodes=nodes), strict=True)
         ]
     }
 
@@ -113,12 +114,12 @@ def list_control_panel_agents(request: Request, ctx: AppContextDep) -> dict[str,
         or None
     )
     return {
-        "agents": [
-            _agent_with_placements(ctx, agent)
-            for agent in ctx.agent_store.list_agents(
+        "agents": _agent_views(
+            ctx,
+            ctx.agent_store.list_agents(
                 supervisor_user_id=user_id, include_deleted=True
-            )
-        ]
+            ),
+        )
     }
 
 
@@ -150,10 +151,11 @@ def get_control_panel_agent(
     agent = ctx.agent_store.get_agent(agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found.")
+    nodes = _node_map(ctx)
     return {
         "agent": {
-            **_agent_with_placements(ctx, agent),
-            "bindingStatus": binding_status(agent, ctx.registry.monitor_nodes()),
+            **_agent_with_placements(ctx, agent, nodes=nodes),
+            "bindingStatus": binding_status(agent, list(nodes.values())),
         }
     }
 
@@ -213,7 +215,20 @@ def list_agent_placements(request: Request, ctx: AppContextDep) -> dict[str, Any
         daemon_node_id=daemon_node_id,
         include_removed=True,
     )
-    return {"placements": [_placement_view(ctx, placement) for placement in placements]}
+    nodes = _node_map(ctx)
+    agents: dict[str, dict[str, Any] | None] = {}
+    for placement in placements:
+        agents.setdefault(
+            placement["agentId"], ctx.agent_store.get_agent(placement["agentId"])
+        )
+    return {
+        "placements": [
+            _placement_view(
+                ctx, placement, nodes=nodes, agent=agents[placement["agentId"]]
+            )
+            for placement in placements
+        ]
+    }
 
 
 @router.post("/admin/agents/{agent_id}/placements", status_code=201)
@@ -247,7 +262,7 @@ def create_agent_placement(
         raise HTTPException(
             409 if "already has" in str(error) else 400, str(error)
         ) from error
-    return {"placement": _placement_view(ctx, placement)}
+    return {"placement": _placement_view(ctx, placement, agent=agent)}
 
 
 @router.patch("/admin/agent-placements/{placement_id}")
@@ -377,32 +392,104 @@ def _agent_has_active_run(ctx: AppContextDep, agent_id: str) -> bool:
     )
 
 
-def _agent_with_placements(ctx: AppContextDep, agent: dict[str, Any]) -> dict[str, Any]:
-    placements = [
-        _placement_view(ctx, placement)
-        for placement in ctx.agent_placement_store.list_placements(agent_id=agent["id"])
+NodeMap = dict[str, dict[str, Any]]
+
+
+def _node_map(ctx: AppContextDep) -> NodeMap:
+    """The fleet by node id, read once per request and threaded down.
+
+    ``monitor_nodes`` derives liveness for every node, so every helper that
+    needs a node takes this map instead of asking the registry again.
+    """
+    return {node["id"]: node for node in ctx.registry.monitor_nodes()}
+
+
+def _placements_by_agent(
+    ctx: AppContextDep, agent_ids: list[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """Live placements grouped by agent, loaded in one query for a batch."""
+    if not agent_ids:
+        return {}
+    wanted = set(agent_ids)
+    if len(wanted) == 1:
+        rows = ctx.agent_placement_store.list_placements(agent_id=agent_ids[0])
+    else:
+        rows = ctx.agent_placement_store.list_placements()
+    grouped: dict[str, list[dict[str, Any]]] = {agent_id: [] for agent_id in wanted}
+    for placement in rows:
+        if placement["agentId"] in grouped:
+            grouped[placement["agentId"]].append(placement)
+    return grouped
+
+
+def _agent_views(
+    ctx: AppContextDep,
+    agents: list[dict[str, Any]],
+    *,
+    nodes: NodeMap | None = None,
+) -> list[dict[str, Any]]:
+    """``_agent_with_placements`` for a batch: one node read, one placement read."""
+    node_map = _node_map(ctx) if nodes is None else nodes
+    placements = _placements_by_agent(ctx, [agent["id"] for agent in agents])
+    return [
+        _agent_with_placements(
+            ctx, agent, nodes=node_map, placements=placements.get(agent["id"], [])
+        )
+        for agent in agents
+    ]
+
+
+def _agent_with_placements(
+    ctx: AppContextDep,
+    agent: dict[str, Any],
+    *,
+    nodes: NodeMap | None = None,
+    placements: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    node_map = _node_map(ctx) if nodes is None else nodes
+    raw_placements = (
+        ctx.agent_placement_store.list_placements(agent_id=agent["id"])
+        if placements is None
+        else placements
+    )
+    placement_views = [
+        _placement_view(ctx, placement, nodes=node_map, agent=agent)
+        for placement in raw_placements
     ]
     availability = "offline"
-    if any(placement["status"] == "ready" for placement in placements):
+    if any(placement["status"] == "ready" for placement in placement_views):
         availability = "ready"
-    elif any(placement["status"] == "busy" for placement in placements):
+    elif any(placement["status"] == "busy" for placement in placement_views):
         availability = "busy"
-    elif any(placement["status"] == "pending" for placement in placements):
+    elif any(placement["status"] == "pending" for placement in placement_views):
         availability = "pending"
+    runtime_nodes = _runtime_nodes(node_map, placement_views)
     # The role shapes what a team member is told to contribute, so the people
     # who own the agent need to see it.
     return {
         **agent,
         "availability": availability,
-        "placements": placements,
-        "skills": _agent_skills(ctx, agent, placements),
-        "canSelectModel": _can_select_model(ctx, placements),
-        "customModelEndpoint": _custom_model_endpoint(ctx, agent, placements),
-        "availableModels": _available_models(ctx, agent, placements),
+        "placements": placement_views,
+        "skills": _agent_skills(ctx, agent, runtime_nodes),
+        "canSelectModel": _can_select_model(runtime_nodes),
+        "customModelEndpoint": _custom_model_endpoint(agent, runtime_nodes),
+        "availableModels": _available_models(agent, runtime_nodes),
     }
 
 
-def _can_select_model(ctx: AppContextDep, placements: list[dict[str, Any]]) -> bool:
+def _runtime_nodes(
+    nodes: NodeMap, placements: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The live nodes the agent's placements resolved to, in fleet order."""
+    node_ids = {
+        placement["runtimeNodeId"]
+        for placement in placements
+        if placement.get("runtimeNodeId")
+    }
+    return [node for node_id, node in nodes.items() if node_id in node_ids]
+
+
+def _can_select_model(runtime_nodes: list[dict[str, Any]]) -> bool:
     """Whether the daemon this agent runs on can pass a pinned model on.
 
     False only when a runtime node is known and lacks the capability — the
@@ -410,22 +497,13 @@ def _can_select_model(ctx: AppContextDep, placements: list[dict[str, Any]]) -> b
     model every run would fail on. With no known node it stays True: the
     dispatch gate in the registry still refuses an outdated daemon.
     """
-    node_ids = {
-        placement["runtimeNodeId"]
-        for placement in placements
-        if placement.get("runtimeNodeId")
-    }
-    if not node_ids:
-        return True
     return all(
-        has_capability(node, DAEMON_CAPABILITY_AGENT_MODEL)
-        for node in ctx.registry.monitor_nodes()
-        if node["id"] in node_ids
+        has_capability(node, DAEMON_CAPABILITY_AGENT_MODEL) for node in runtime_nodes
     )
 
 
 def _custom_model_endpoint(
-    ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
+    agent: dict[str, Any], runtime_nodes: list[dict[str, Any]]
 ) -> bool:
     """Whether this agent's runtime calls a custom model endpoint on its node.
 
@@ -435,21 +513,15 @@ def _custom_model_endpoint(
     its options need no suppression.
     """
     executor_kind = agent.get("executorKind")
-    node_ids = {
-        placement["runtimeNodeId"]
-        for placement in placements
-        if placement.get("runtimeNodeId")
-    }
     return any(
         executor_kind in (node.get("customModelEndpoints") or [])
         and not has_capability(node, DAEMON_CAPABILITY_ENDPOINT_MODELS)
-        for node in ctx.registry.monitor_nodes()
-        if node["id"] in node_ids
+        for node in runtime_nodes
     )
 
 
 def _available_models(
-    ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
+    agent: dict[str, Any], runtime_nodes: list[dict[str, Any]]
 ) -> list[str]:
     """The model ids this agent's runtime reports on the computers it runs on.
 
@@ -459,21 +531,15 @@ def _available_models(
     executor_kind = agent.get("executorKind")
     if not executor_kind:
         return []
-    node_ids = {
-        placement["runtimeNodeId"]
-        for placement in placements
-        if placement.get("runtimeNodeId")
-    }
     models: dict[str, None] = {}
-    for node in ctx.registry.monitor_nodes():
-        if node["id"] in node_ids:
-            for model in (node.get("agentModels") or {}).get(executor_kind) or []:
-                models.setdefault(model, None)
+    for node in runtime_nodes:
+        for model in (node.get("agentModels") or {}).get(executor_kind) or []:
+            models.setdefault(model, None)
     return list(models)
 
 
 def _agent_skills(
-    ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
+    ctx: AppContextDep, agent: dict[str, Any], runtime_nodes: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """The skills this agent's runtime actually has on the computers it runs on.
 
@@ -484,16 +550,9 @@ def _agent_skills(
     executor_kind = agent.get("executorKind")
     if not executor_kind:
         return []
-    node_ids = {
-        placement["runtimeNodeId"]
-        for placement in placements
-        if placement.get("runtimeNodeId")
-    }
     skills: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for node in ctx.registry.monitor_nodes():
-        if node["id"] not in node_ids:
-            continue
+    for node in runtime_nodes:
         inventory = node.get("agentInventory") or {}
         entry = inventory.get(executor_kind) or {}
         for skill in entry.get("skills") or []:
@@ -525,10 +584,17 @@ def _agent_skills(
     return sorted(skills, key=lambda skill: (skill.get("namespace") or "", skill["name"]))
 
 
-def _placement_view(ctx: AppContextDep, placement: dict[str, Any]) -> dict[str, Any]:
-    nodes = {item["id"]: item for item in ctx.registry.monitor_nodes()}
-    node = placement_node(placement, nodes)
-    agent = ctx.agent_store.get_agent(placement["agentId"])
+def _placement_view(
+    ctx: AppContextDep,
+    placement: dict[str, Any],
+    *,
+    nodes: NodeMap | None = None,
+    agent: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    node_map = _node_map(ctx) if nodes is None else nodes
+    node = placement_node(placement, node_map)
+    if agent is None:
+        agent = ctx.agent_store.get_agent(placement["agentId"])
     view = placement_status(
         placement, agent, node
     )

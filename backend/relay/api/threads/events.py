@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
@@ -32,6 +33,10 @@ _STREAM_FALLBACK_SECONDS = _STREAM_SETTINGS.fallback_seconds
 _STREAM_EVENT_PAGE_LIMIT = _STREAM_SETTINGS.event_page_limit
 _STREAM_HEARTBEAT_SECONDS = 15.0
 _STREAM_MAX_SECONDS = _STREAM_SETTINGS.max_seconds
+# A wake is followed by this pause before the page read, so a burst of output
+# batches committed in quick succession is read as one page instead of one
+# read per commit.
+_STREAM_COALESCE_SECONDS = 0.03
 
 
 def _sse_frame(data: dict[str, Any], *, event: str | None = None) -> str:
@@ -49,6 +54,11 @@ class _EventTail:
     start: float
     last_heartbeat: float
     next_sequence: int | None = None
+    status: Any = None
+    # Whether the last wait ended because a publish arrived. A wait that
+    # timed out instead is the missed-notification fallback, which only has
+    # to confirm the thread's version before it is worth reading a page.
+    woken: bool = True
 
 
 def _open_event_tail(request: Request) -> _EventTail:
@@ -76,7 +86,24 @@ async def _read_tail_page(
     except KeyError:
         return None
     tail.next_sequence = page["nextSequence"]
+    tail.status = page["status"]
     return page
+
+
+async def _tail_has_news(ctx: AppContext, session_id: str, tail: _EventTail) -> bool | None:
+    """Whether a page read is worth it; None once the thread is gone.
+
+    After a wake it always is. After a fallback timeout, compare the thread's
+    version — one primary-key read — with the cursor, and read a page only
+    when events were appended that no notification announced.
+    """
+    if tail.woken or tail.next_sequence is None:
+        return True
+    try:
+        version = await run_in_threadpool(ctx.session_store.session_version, session_id)
+    except KeyError:
+        return None
+    return version > tail.next_sequence
 
 
 def _finished_frame(page: dict[str, Any]) -> str | None:
@@ -130,29 +157,37 @@ async def session_events(
         notifier = ctx.control_plane_notifier
         while not await request.is_disconnected():
             with notifier.observe(notification_key) as observed_version:
-                page = await _read_tail_page(ctx, session_id, tail)
-                if page is None:
+                has_news = await _tail_has_news(ctx, session_id, tail)
+                if has_news is None:
                     return
-                events = page["events"]
-                for event in events:
-                    yield _sse_frame(event)
-                if events:
-                    tail.last_heartbeat = time.monotonic()
-                finished = _finished_frame(page)
-                if finished is not None:
-                    yield finished
-                    return
+                events: list[dict[str, Any]] = []
+                if has_news:
+                    page = await _read_tail_page(ctx, session_id, tail)
+                    if page is None:
+                        return
+                    events = page["events"]
+                    for event in events:
+                        yield _sse_frame(event)
+                    if events:
+                        tail.last_heartbeat = time.monotonic()
+                    finished = _finished_frame(page)
+                    if finished is not None:
+                        yield finished
+                        return
                 now = time.monotonic()
-                frames, timed_out = _timer_frames(tail, page.get("status"), now)
+                frames, timed_out = _timer_frames(tail, tail.status, now)
                 for frame in frames:
                     yield frame
                 if timed_out:
                     return
                 if events:
+                    tail.woken = True
                     continue
-                await notifier.wait(
+                tail.woken = await notifier.wait(
                     notification_key, observed_version, timeout=_tail_wait_seconds(tail, now)
                 )
+            if tail.woken:
+                await asyncio.sleep(_STREAM_COALESCE_SECONDS)
 
     return StreamingResponse(
         event_stream(),

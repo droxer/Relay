@@ -109,7 +109,10 @@ class RunProgressionMixin(RegistryState):
             payload["tokenUsage"] = event["tokenUsage"]
         if event.get("runtimeSessionId"):
             payload["runtimeSessionId"] = event["runtimeSessionId"]
-        self.store.append_event(session["id"], relay_event("agent.completed", session["id"], payload))
+        self.store.append_event(
+            session["id"], relay_event("agent.completed", session["id"], payload),
+            hydrate_events=False,
+        )
 
     def _advance_run_request(
         self, run_request: dict[str, Any], event: dict[str, Any]

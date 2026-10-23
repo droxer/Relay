@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy import (
-    Index,
     inspect,
     select,
     text,
@@ -18,7 +17,6 @@ from ..tables import sessions as sessions_tables
 from .rows import (
     _canonical_database_session_id,
     _shared_affinity_lock,
-    session_event_cursor_expression,
 )
 from .lifecycle import SessionLifecycleRows
 from .events import SessionEventRows
@@ -193,9 +191,3 @@ class DatabaseSessionStore(
         if not session_pk:
             raise KeyError(session_id)
         return session_pk
-
-
-
-
-Index("ix_session_events_cursor", DatabaseSessionStore.events.c.session_id,
-      session_event_cursor_expression(DatabaseSessionStore.events))

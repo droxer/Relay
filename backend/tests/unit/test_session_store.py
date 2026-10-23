@@ -918,3 +918,57 @@ def test_deleted_session_stays_deleted_and_retains_token_usage() -> None:
                 assert tombstone["id"] == session["id"]
                 assert tombstone["taskGoal"] == "ship the release"
                 assert tombstone["deletedBy"] == "alice"
+
+
+def test_run_output_sequences_aggregates_each_stream_in_sql() -> None:
+    with TemporaryDirectory() as root:
+        store = make_session_store(root)
+        session = store.create_session({"workspacePath": "/workspace", "taskGoal": "stream"})
+        sid = session["id"]
+        other = store.create_session({"workspacePath": "/workspace", "taskGoal": "other"})
+
+        def output(run_id: str, stream: str, sequence: int) -> None:
+            store.append_event(sid, relay_event("agent.output", sid, {
+                "runId": run_id, "agent": "codex", "stream": stream,
+                "text": "x", "sequence": sequence,
+            }), hydrate_events=False)
+
+        output("run_a", "stdout", 0)
+        output("run_a", "stdout", 3)
+        output("run_a", "stderr", 1)
+        output("run_b", "stdout", 9)
+        store.append_event(sid, relay_event("agent.output.batch", sid, {
+            "runId": "run_a", "agent": "codex",
+            "entries": [
+                {"stream": "stdout", "text": "y", "sequence": 5},
+                {"stream": "stderr", "text": "z", "sequence": 0},
+            ],
+        }), hydrate_events=False)
+        store.append_event(sid, relay_event("agent.collaboration", sid, {
+            "runId": "run_a", "agent": "codex", "sequence": 2, "collaboration": {},
+        }), hydrate_events=False)
+        store.append_event(other["id"], relay_event("agent.output", other["id"], {
+            "runId": "run_a", "agent": "codex", "stream": "stdout",
+            "text": "x", "sequence": 40,
+        }), hydrate_events=False)
+
+        assert store.run_output_sequences(sid, "run_a") == {
+            "stdout": 5, "stderr": 1, "collaboration": 2,
+        }
+        assert store.run_output_sequences(sid, "run_b") == {"stdout": 9}
+        assert store.run_output_sequences(sid, "run_none") == {}
+
+
+def test_session_version_reads_the_event_count_without_the_log() -> None:
+    with TemporaryDirectory() as root:
+        store = make_session_store(root)
+        session = store.create_session({"workspacePath": "/workspace", "taskGoal": "count"})
+        sid = session["id"]
+        assert store.session_version(sid) == 1
+        store.append_event(sid, relay_event("agent.output", sid, {
+            "runId": "run", "agent": "codex", "stream": "stdout", "text": "x", "sequence": 0,
+        }), hydrate_events=False)
+        assert store.session_version(sid) == 2
+        assert store.session_version(sid) == store.read_event_page(sid)["version"]
+        with pytest.raises(KeyError):
+            store.session_version("00000000-0000-0000-0000-000000000000")

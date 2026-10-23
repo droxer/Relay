@@ -22,6 +22,7 @@ from sqlalchemy import delete, func, insert, or_, select, update
 from ..core.ids import new_database_id
 from ..persistence.engine import store_transaction
 from .auth import DatabaseAccountAuthStore
+from .auth_cache import SESSION_ACCOUNTS
 from .credentials import hash_password
 from .passwords import validate_password
 
@@ -238,6 +239,7 @@ class DatabasePasswordResetStore:
                 .values(used_at=now)
             )
             conn.execute(delete(self.sessions).where(self.sessions.c.account_id == account_id))
+        SESSION_ACCOUNTS.invalidate_all()
         return self._reset_account(row)
 
     def _account_query(self, *extra: Any) -> Any:

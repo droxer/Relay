@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import threading
+import time
+import weakref
 from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -21,6 +25,50 @@ router = APIRouter()
 _DAY_WINDOW = 14
 _SUMMARY_DAYS = 7
 _TOKEN_KEYS = ("input", "output", "cacheRead", "cacheWrite")
+# The dashboard is admin-only and its windows span days, so an answer a few
+# seconds old is as good as a fresh one; both endpoints walk their whole
+# window, which this keeps off the hot path while the page polls.
+DASHBOARD_CACHE_TTL_SECONDS = 30.0
+
+
+class DashboardCache:
+    """Per-store, per-(endpoint, zone, window) answers with a short TTL.
+
+    Keyed weakly on the session store so each app (every test builds its own)
+    has its own entries and a discarded store takes them with it.
+    """
+
+    def __init__(
+        self,
+        *,
+        ttl_seconds: float = DASHBOARD_CACHE_TTL_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.ttl_seconds = ttl_seconds
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._entries: weakref.WeakKeyDictionary[Any, dict[tuple[Any, ...], tuple[float, Any]]]
+        self._entries = weakref.WeakKeyDictionary()
+
+    def get_or_build(
+        self, store: Any, key: tuple[Any, ...], build: Callable[[], dict[str, Any]]
+    ) -> dict[str, Any]:
+        now = self._clock()
+        with self._lock:
+            entry = self._entries.get(store, {}).get(key)
+            if entry is not None and entry[0] > now:
+                return entry[1]
+        value = build()
+        with self._lock:
+            self._entries.setdefault(store, {})[key] = (now + self.ttl_seconds, value)
+        return value
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+
+DASHBOARD_CACHE = DashboardCache()
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
@@ -39,9 +87,17 @@ def _parse_timestamp(value: Any) -> datetime | None:
 @router.get("/admin/dashboard/sessions")
 def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if hasattr(ctx.session_store, "dashboard_session_metrics"):
-        return ctx.session_store.dashboard_session_metrics(day_window=_DAY_WINDOW)
-    sessions = ctx.session_store.list_sessions()
+    return DASHBOARD_CACHE.get_or_build(
+        ctx.session_store,
+        ("sessions", _DAY_WINDOW),
+        lambda: _session_metrics(ctx.session_store),
+    )
+
+
+def _session_metrics(session_store: Any) -> dict[str, Any]:
+    if hasattr(session_store, "dashboard_session_metrics"):
+        return session_store.dashboard_session_metrics(day_window=_DAY_WINDOW)
+    sessions = session_store.list_sessions()
     now = datetime.now(UTC)
     window_start = (now - timedelta(days=_DAY_WINDOW - 1)).date()
 
@@ -109,14 +165,22 @@ def dashboard_tokens(
     """
     require_admin_session(request, ctx.auth_store)
     zone = _dashboard_zone(tz)
+    return DASHBOARD_CACHE.get_or_build(
+        ctx.session_store,
+        ("tokens", str(zone), _DAY_WINDOW, _SUMMARY_DAYS),
+        lambda: _token_metrics(ctx.session_store, zone),
+    )
+
+
+def _token_metrics(session_store: Any, zone: tzinfo) -> dict[str, Any]:
     today = datetime.now(zone).date()
     window_start = today - timedelta(days=_DAY_WINDOW - 1)
     summary_start = today - timedelta(days=_SUMMARY_DAYS - 1)
     usage_since = datetime.combine(window_start, datetime.min.time(), tzinfo=zone)
     usage_rows = (
-        ctx.session_store.list_dashboard_token_usage(since=usage_since)
-        if hasattr(ctx.session_store, "list_dashboard_token_usage")
-        else ctx.session_store.list_token_usage()
+        session_store.list_dashboard_token_usage(since=usage_since)
+        if hasattr(session_store, "list_dashboard_token_usage")
+        else session_store.list_token_usage()
     )
     buckets = {
         (window_start + timedelta(days=offset)).isoformat(): _empty_token_counts()

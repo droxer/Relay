@@ -106,7 +106,9 @@ class TaskReadRows(TaskStoreState):
                 self.tasks.c.version,
             )
             .where(self.tasks.c.deleted_at.is_(None))
-            .order_by(self.tasks.c.updated_at.desc())
+            # The id tiebreaker keeps a page stable when two tasks share an
+            # instant; ``ix_tasks_live_recency`` serves this order directly.
+            .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
         if user_id is not None:
             statement = statement.where(

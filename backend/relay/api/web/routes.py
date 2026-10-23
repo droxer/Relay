@@ -32,7 +32,11 @@ def web_asset(request: Request, asset_path: str = "") -> Response:
     if web_origin and _is_client_route(asset_path):
         query = f"?{request.url.query}" if request.url.query else ""
         return RedirectResponse(f"{web_origin}/{asset_path}{query}", status_code=307)
-    return web_ui_asset_response(asset_path, app_context(request).settings.web_ui_dist_dir)
+    return web_ui_asset_response(
+        asset_path,
+        app_context(request).settings.web_ui_dist_dir,
+        if_none_match=request.headers.get("if-none-match"),
+    )
 
 
 def _is_client_route(asset_path: str) -> bool:

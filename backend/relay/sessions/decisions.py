@@ -153,6 +153,7 @@ class SessionDecisionMixin(SessionControllerState):
         self._append(
             session_id,
             relay_event("human.decision", session_id, {"decision": decision}),
+            hydrate=False,
         )
         if kind == "approve":
             current = self.store.get_session(session_id)

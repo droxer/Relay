@@ -356,3 +356,52 @@ def test_session_events_accept_chat_service_actor(monkeypatch) -> None:
             headers={"Authorization": "Bearer chat_token"},
         )
         assert missing_user.status_code == 401
+
+
+def test_notification_recovery_floors_are_one_second() -> None:
+    # A missed publish (SQLite across processes, a dropped notification) is
+    # recovered by the fallback read; it bounds dispatch and stream latency
+    # for that case, and one indexed read per waiter per second is cheap.
+    from relay.api.computers.daemon_wire import COMMAND_NOTIFICATION_RECOVERY_SECONDS
+    from relay.core.settings import StreamSettings
+
+    assert COMMAND_NOTIFICATION_RECOVERY_SECONDS == 1.0
+    assert StreamSettings.from_env({}).fallback_seconds == 1.0
+    assert StreamSettings.from_env({"RELAY_STREAM_FALLBACK_SECONDS": "3"}).fallback_seconds == 3.0
+
+
+def test_fallback_tick_skips_the_page_read_when_the_version_is_unchanged() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from relay.api.threads.events import _EventTail, _tail_has_news
+
+    reads: list[str] = []
+
+    class Store:
+        version = 4
+
+        def session_version(self, session_id: str) -> int:
+            reads.append("version")
+            if session_id == "gone":
+                raise KeyError(session_id)
+            return self.version
+
+    ctx = SimpleNamespace(session_store=Store())
+    caught_up = _EventTail(after_event_id=None, start=0.0, last_heartbeat=0.0,
+                           next_sequence=4, woken=False)
+    assert asyncio.run(_tail_has_news(ctx, "s", caught_up)) is False
+    assert reads == ["version"]
+
+    Store.version = 6
+    assert asyncio.run(_tail_has_news(ctx, "s", caught_up)) is True
+
+    woken = _EventTail(after_event_id=None, start=0.0, last_heartbeat=0.0,
+                       next_sequence=4, woken=True)
+    reads.clear()
+    assert asyncio.run(_tail_has_news(ctx, "s", woken)) is True
+    assert reads == [], "a publish already says there is news"
+
+    first = _EventTail(after_event_id=None, start=0.0, last_heartbeat=0.0, woken=False)
+    assert asyncio.run(_tail_has_news(ctx, "s", first)) is True
+    assert asyncio.run(_tail_has_news(ctx, "gone", caught_up)) is None

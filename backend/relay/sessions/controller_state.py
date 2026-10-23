@@ -52,8 +52,12 @@ class SessionControllerState:
         ) -> dict[str, Any]:
             ...
 
-    def _append(self, session_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self.store.append_event(session_id, event)
+    def _append(
+        self, session_id: str, event: dict[str, Any], *, hydrate: bool = True
+    ) -> dict[str, Any]:
+        """Append one event. Pass ``hydrate=False`` when the result is not
+        read: hydrating replays the whole event log for the return value."""
+        return self.store.append_event(session_id, event, hydrate_events=hydrate)
 
     def _link_task_session(self, session_id: str) -> None:
         if not self.task_store or not self.task_id:

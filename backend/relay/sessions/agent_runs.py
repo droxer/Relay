@@ -160,6 +160,7 @@ class SessionAgentRunMixin(SessionControllerState):
                     "text": text,
                 },
             ),
+            hydrate=False,
         )
 
     def record_agent_completed(
@@ -200,7 +201,9 @@ class SessionAgentRunMixin(SessionControllerState):
         if step_result.get("runtimeSessionId"):
             completed_payload["runtimeSessionId"] = step_result["runtimeSessionId"]
         self._append(
-            session_id, relay_event("agent.completed", session_id, completed_payload)
+            session_id,
+            relay_event("agent.completed", session_id, completed_payload),
+            hydrate=False,
         )
         # A handled human question may have a failed CLI exit. Keep the run's
         # exit evidence without triggering task failure automations.

@@ -302,7 +302,8 @@ class RegistrySettings:
 class StreamSettings:
     """The thread event stream (SSE) a browser holds open."""
 
-    # Tail-poll interval when no change notification arrives.
+    # Tail-poll interval when no change notification arrives: the latency
+    # floor for a missed publish. One version read per subscriber per tick.
     fallback_seconds: float
     event_page_limit: int
     # Upper bound on one connection. The client reconnects with Last-Event-ID,
@@ -316,7 +317,7 @@ class StreamSettings:
             load_backend_env()
         env = EnvReader(environ)
         settings = cls(
-            fallback_seconds=env.number("RELAY_STREAM_FALLBACK_SECONDS", 5.0, minimum=1.0),
+            fallback_seconds=env.number("RELAY_STREAM_FALLBACK_SECONDS", 1.0, minimum=1.0),
             event_page_limit=env.integer("RELAY_STREAM_EVENT_PAGE_LIMIT", 256, minimum=1, maximum=1000),
             max_seconds=env.number("RELAY_STREAM_MAX_SECONDS", 30 * 60.0, minimum=5.0),
         )

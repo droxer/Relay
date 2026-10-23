@@ -72,8 +72,17 @@ class RunCompletionMixin(RegistryState):
         artifact_snapshot: dict[str, Any] | None,
         assignment: dict[str, Any] | None = None,
     ) -> None:
+        """Index the files a run reported, each once per run.
+
+        The per-run dedupe below makes this safe to call twice for one event:
+        the terminal handler indexes before it takes the global dispatch lock
+        (``_index_generated_files_before_finalization``), and the finalization
+        under that lock finds nothing left to upload. A retried finalization
+        fills in only what an earlier attempt did not index.
+        """
         session_id = run_request["sessionId"]
-        session = self.store.get_session(session_id)
+        # Layout and the per-run dedupe read snapshot fields only.
+        session = self.store.get_session_header(session_id)
         workspace_path = sandbox.get("workspacePath")
         artifact_workspace_path = workspace_path
         if (
@@ -154,6 +163,7 @@ class RunCompletionMixin(RegistryState):
                 self.store.append_event(
                     session_id,
                     relay_event("artifact.created", session_id, {"artifact": artifact}),
+                    hydrate_events=False,
                 )
             logger.info(
                 "Generated workspace artifact indexed",

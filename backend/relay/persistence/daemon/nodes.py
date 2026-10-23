@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 from sqlalchemy import (
     delete,
+    func,
     insert,
     select,
     update,
@@ -480,14 +481,23 @@ class NodeRows(DaemonStoreState):
     def historical_managed_node_id(self, runtime_id: str) -> str | None:
         return self.historical_managed_node_ids({runtime_id}).get(runtime_id)
 
+    # Registration events only ever accumulate, so the identity map built from
+    # them is stale only when a new registration landed. Remember the map with
+    # the count it was built from; every poll of a legacy session then pays one
+    # count query instead of decoding every registration payload again.
+    _historical_identities: tuple[int, dict[str, str]] | None = None
+
     def historical_managed_node_ids(self, runtime_ids: set[str]) -> dict[str, str]:
+        registered = self.events.c.type == "daemon.node.registered"
         with store_transaction(self.engine) as conn:
-            payloads = conn.scalars(
-                select(self.events.c.payload).where(
-                    self.events.c.type == "daemon.node.registered"
-                )
-            ).all()
-        identities = _managed_runtime_identity_map(payloads)
+            count = int(conn.scalar(select(func.count()).select_from(self.events).where(registered)) or 0)
+            cached = self._historical_identities
+            if cached is not None and cached[0] == count:
+                identities = cached[1]
+            else:
+                payloads = conn.scalars(select(self.events.c.payload).where(registered)).all()
+                identities = _managed_runtime_identity_map(payloads)
+                self._historical_identities = (count, identities)
         return {
             current_runtime_id: managed_node_id
             for current_runtime_id, managed_node_id in identities.items()

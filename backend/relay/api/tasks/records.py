@@ -53,19 +53,25 @@ from .payloads import (
 
 router = APIRouter()
 
+# Explicit limits remain bounded; an omitted limit preserves the complete list.
+TASK_LIST_MAX_LIMIT = 500
+
+
+def task_list_limit(raw_limit: str | None) -> int | None:
+    if raw_limit is None:
+        return None
+    try:
+        requested_limit = int(raw_limit)
+    except ValueError as error:
+        raise HTTPException(400, "limit must be an integer.") from error
+    return min(max(1, requested_limit), TASK_LIST_MAX_LIMIT)
+
 
 @router.get("/tasks")
 def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     summary_view = request.query_params.get("view") == "summary"
-    raw_limit = request.query_params.get("limit")
-    limit: int | None = None
-    if raw_limit is not None:
-        try:
-            requested_limit = int(raw_limit)
-        except ValueError as error:
-            raise HTTPException(400, "limit must be an integer.") from error
-        limit = min(max(1, requested_limit), 500)
+    limit = task_list_limit(request.query_params.get("limit"))
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         tasks = ctx.task_store.list_task_summaries(
             user_id=None if actor["isAdmin"] else actor["userId"],

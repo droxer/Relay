@@ -77,6 +77,11 @@ events = Table(
     UniqueConstraint(
         "session_id", "sequence", name="uq_session_events_session_sequence"
     ),
+    # A stream reconnect resumes from an event id (``Last-Event-ID``), which
+    # lives in the payload; migration 0077 built this on Postgres and the
+    # declaration here keeps SQLite (3.38+ has ``->>``) and the drift test on
+    # the same schema.
+    Index("ix_session_events_cursor", "session_id", text("(payload ->> 'id')")),
 )
 
 artifacts = Table(

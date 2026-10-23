@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from .admin_token import admin_token_configured, verify_admin_token
+from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import database_account_to_row, public_account, row_to_database_account
 from .auth_state import AuthStoreState
 from .credentials import hash_password, verify_password
@@ -153,6 +154,7 @@ class AuthAccounts(AuthStoreState):
                 .mappings()
                 .one()
             )
+        SESSION_ACCOUNTS.invalidate_all()
         return public_account(row_to_database_account(row))
 
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None:

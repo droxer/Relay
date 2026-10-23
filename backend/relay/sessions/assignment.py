@@ -74,6 +74,7 @@ class SessionAssignmentMixin(SessionControllerState):
                     }
                 },
             ),
+            hydrate=False,
         )
         self.assign_session(session_id, assignments)
         logger.info("Session handoff", session_id=session_id, target_agent=target_agent)
@@ -145,6 +146,7 @@ class SessionAssignmentMixin(SessionControllerState):
         self._append(
             session_id,
             relay_event("artifact.created", session_id, {"artifact": artifact}),
+            hydrate=False,
         )
         logger.debug(
             "Artifact created",

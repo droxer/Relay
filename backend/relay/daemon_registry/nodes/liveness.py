@@ -401,15 +401,16 @@ class NodeLivenessMixin(RegistryState):
         in between, and every list route calls this, so an unthrottled read
         would scan ``daemon_nodes`` under the global lock on each request.
         """
+        # The throttle is read before taking the global lock so a request that
+        # has nothing to refresh never queues behind dispatch; the check is
+        # repeated under the lock because two requests can pass it together.
+        if sandbox_id is None and not self._fleet_liveness_refresh_due():
+            return
         with self.dispatch_lock:
             if sandbox_id is None:
-                monotonic_now = time.monotonic()
-                if (
-                    monotonic_now - self._last_fleet_liveness_refresh_at
-                    < config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
-                ):
+                if not self._fleet_liveness_refresh_due():
                     return
-                self._last_fleet_liveness_refresh_at = monotonic_now
+                self._last_fleet_liveness_refresh_at = time.monotonic()
             persisted_nodes = (
                 [self.daemon_store.get_node(sandbox_id)]
                 if sandbox_id
@@ -449,6 +450,12 @@ class NodeLivenessMixin(RegistryState):
                     else:
                         refreshed.pop("lastError", None)
                 self.sandboxes[persisted["id"]] = refreshed
+
+    def _fleet_liveness_refresh_due(self) -> bool:
+        return (
+            time.monotonic() - self._last_fleet_liveness_refresh_at
+            >= config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
+        )
 
     def _liveness(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         if sandbox.get("status") == "stopped" or not sandbox.get("lastSeenAt"):

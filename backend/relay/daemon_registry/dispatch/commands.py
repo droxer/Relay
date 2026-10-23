@@ -147,11 +147,13 @@ class CommandQueueMixin(RegistryState):
         # A retried post reopens nothing (the reducer dedupes), so it must
         # not notify twice either: only a prompt this write opens does.
         known = permission_request_status(self.store.get_session(event["sessionId"]), request["id"])
+        # Only snapshot fields are read below; the event log is not needed.
         session = self.store.append_event(
             event["sessionId"],
             relay_event(
                 "agent.permission_requested", event["sessionId"], {"request": request}
             ),
+            hydrate_events=False,
         )
         opened = open_permission_request(session, request["id"])
         if self.notification_store is None or known is not None or not opened:
@@ -181,6 +183,7 @@ class CommandQueueMixin(RegistryState):
                 event["sessionId"],
                 {"requestId": request_id, "decision": "expired", "note": event["reason"]},
             ),
+            hydrate_events=False,
         )
 
     def permission_request_status(
@@ -220,7 +223,7 @@ class CommandQueueMixin(RegistryState):
             },
         )
         event["id"] = event_id
-        self.store.append_event(session_id, event)
+        self.store.append_event(session_id, event, hydrate_events=False)
 
     def _record_skipped_skills(
         self, command: dict[str, Any], daemon_skips: Any
@@ -277,7 +280,7 @@ class CommandQueueMixin(RegistryState):
             },
         )
         notice["id"] = event_id
-        self.store.append_event(command["sessionId"], notice)
+        self.store.append_event(command["sessionId"], notice, hydrate_events=False)
 
     def _track_active_command(self, sandbox_id: str, command: dict[str, Any]) -> None:
         self._record_handoff_delivery(command, "queued")

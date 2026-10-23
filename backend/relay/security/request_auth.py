@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from .admin_token import verify_admin_token
+from .auth_cache import SESSION_ACCOUNTS
+from .credentials import hash_session_token
 from ..core import deploy_config
 from ..persistence.protocols import AuthStore
 
@@ -31,14 +33,30 @@ def require_user_session(request: Request, auth_store: AuthStore) -> dict[str, A
     token = user_session_token_from_request(request)
     if not token:
         raise HTTPException(401, "Authentication required.")
+    account = _resolve_session_account(token, auth_store)
+    if state is not None:
+        setattr(state, _REQUEST_ACCOUNT_STATE, account)
+    return account
+
+
+def _resolve_session_account(token: str, auth_store: AuthStore) -> dict[str, Any]:
+    """The account behind a session token, from the short-lived cache when fresh.
+
+    Only a token that resolved is cached, so an invalid cookie still costs one
+    store read per request and never occupies a slot; the store's mutations
+    drop entries (``security/auth_cache.py``).
+    """
+    token_hash = hash_session_token(token)
+    cached = SESSION_ACCOUNTS.get(token_hash)
+    if cached is not None:
+        return cached
     session = auth_store.get_session_by_token(token)
     if not session:
         raise HTTPException(401, "Session expired or invalid.")
     account = auth_store.get_account_by_id(session["accountId"])
     if not account:
         raise HTTPException(401, "User not found.")
-    if state is not None:
-        setattr(state, _REQUEST_ACCOUNT_STATE, account)
+    SESSION_ACCOUNTS.put(token_hash, account)
     return account
 
 
