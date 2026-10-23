@@ -156,6 +156,8 @@ export function deleteWindowsTask(runner: TaskRunner, name: string): void {
 }
 
 export function windowsLogTail(runner: TaskRunner, file: string, lines: string, follow: boolean): boolean {
-  const command = `Get-Content -LiteralPath ${powershellLiteral(file)} -Tail ${lines}${follow ? ' -Wait' : ''}`;
+  const path = powershellLiteral(file);
+  const wait = follow ? `while (!(Test-Path -LiteralPath ${path})) { Start-Sleep -Milliseconds 250 }; ` : '';
+  const command = `${wait}Get-Content -LiteralPath ${path} -Encoding UTF8 -Tail ${lines}${follow ? ' -Wait' : ''}`;
   return runner.run('powershell.exe', [...POWERSHELL_FLAGS, '-Command', command], { inherit: true }).status === 0;
 }

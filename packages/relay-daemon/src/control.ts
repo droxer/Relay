@@ -58,7 +58,7 @@ Commands:
 
 Options:
   --computer <id>   Act on one connected computer when several are installed.
-  --follow          With "logs", stream new output until Ctrl+C.
+  -f, --follow      With "logs", stream new output until Ctrl+C.
   --force           With "update", restart even while runs are in progress.
   --help            Show this help message.
 `;
@@ -186,9 +186,9 @@ function stop(deps: ControlDeps, service: InstalledService): boolean {
 function logs(deps: ControlDeps, service: InstalledService, follow: boolean): boolean {
   if (deps.platform === 'darwin' || deps.platform === 'win32') {
     const file = join(deps.home, '.relay', 'daemon-nodes', service.id, 'logs', 'service.log');
-    if (!existsSync(file)) { deps.log((deps.style ?? PLAIN).muted(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`)); return true; }
+    if (!follow && !existsSync(file)) { deps.log((deps.style ?? PLAIN).muted(`No ${(deps.brand ?? RELAY_BRAND).product} logs yet.`)); return true; }
     if (deps.platform === 'win32') return windowsLogTail(deps, file, LOG_LINES, follow);
-    return deps.run('tail', ['-n', LOG_LINES, ...(follow ? ['-f'] : []), file], { inherit: true }).status === 0;
+    return deps.run('tail', ['-n', LOG_LINES, ...(follow ? ['-F'] : []), file], { inherit: true }).status === 0;
   }
   return deps.run('journalctl', ['--user', '-u', `${service.name}.service`, '-n', LOG_LINES, '--no-pager', ...(follow ? ['-f'] : [])], { inherit: true }).status === 0;
 }

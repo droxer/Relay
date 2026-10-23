@@ -123,6 +123,23 @@ describe('relay control CLI', () => {
     } finally { cleanup(); }
   });
 
+  it('follows a macOS log even before the first service start', () => {
+    const { deps, calls, cleanup } = fixture('darwin', ['node-1']);
+    try {
+      assert.equal(runControl(['logs', '-f'], deps), 0);
+      assert.equal(calls.length, 1);
+      assert.match(calls[0]!, /^tail -n 100 -F .*service\.log$/);
+    } finally { cleanup(); }
+  });
+
+  it('reads recent Linux journal output and follows with the short flag', () => {
+    const { deps, calls, cleanup } = fixture('linux', ['node-1']);
+    try {
+      assert.equal(runControl(['logs', '-f'], deps), 0);
+      assert.equal(calls[0], 'journalctl --user -u build.relay.computer.node-1.service -n 100 --no-pager -f');
+    } finally { cleanup(); }
+  });
+
   it('explains when nothing is installed', () => {
     const { deps, cleanup } = fixture('darwin', []);
     try {

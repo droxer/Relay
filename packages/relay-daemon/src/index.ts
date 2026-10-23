@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import type { StreamRenderer } from "relay-core";
+import { formatDaemonLog } from "./daemon-log-format.js";
 import { err, out } from "./terminal-style.js";
 import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
@@ -1586,7 +1588,7 @@ async function executeCommand(
       workspacePath: threadWorkspace.executionPath,
       // A no-op sink keeps rendered agent text off the daemon's own stdout and
       // stderr; live output still flows through eventSink to the backend and the
-      // JSONL run log. Supervisors set this so their logs stay lifecycle-only.
+      // text run log. Supervisors set this so their logs stay lifecycle-only.
       ...(echoAgentOutput ? {} : { sink: () => undefined }),
     };
     const skillState = command.skills === undefined
@@ -2000,11 +2002,12 @@ export function createDaemonLogger(input: {
     ?? join(homedir(), ".relay", "daemon-nodes", safeLogFileName(input.sandboxId), "logs");
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
   chmodSync(logDir, 0o700);
-  const logPath = join(logDir, `${safeLogFileName(input.sandboxId)}.jsonl`);
-  return new JsonlDaemonLogger(logDir, logPath);
+  const logPath = join(logDir, `${safeLogFileName(input.sandboxId)}.log`);
+  return new TextDaemonLogger(logDir, logPath);
 }
 
-class JsonlDaemonLogger implements DaemonLogger {
+class TextDaemonLogger implements DaemonLogger {
+  private readonly renderers = new Map<string, StreamRenderer>();
   private pendingWrite: Promise<void> = Promise.resolve();
 
   constructor(
@@ -2025,20 +2028,30 @@ class JsonlDaemonLogger implements DaemonLogger {
   }
 
   output(fields: DaemonLogFields & { text: string; stream: "stdout" | "stderr" }): void {
-    this.write("output", "agent output", fields);
+    let text = fields.text;
+    if (fields.agent && fields.stream === "stdout") {
+      const key = fields.runId ?? fields.agent;
+      let renderer = this.renderers.get(key);
+      if (!renderer) {
+        renderer = getAgent(fields.agent).createRenderer();
+        this.renderers.set(key, renderer);
+      }
+      text = renderer.feed(text);
+    }
+    if (text) this.write("output", "agent output", { ...fields, text });
   }
 
   private write(level: string, message: string, fields: DaemonLogFields): void {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...fields,
-    };
-    const line = `${JSON.stringify(entry)}\n`;
+    if (fields.runId && ["run completed", "run cancelled", "command failed before completion"].includes(message)) {
+      this.renderers.delete(fields.runId);
+    }
+    const line = formatDaemonLog(new Date().toISOString(), level, message, fields);
+    // Service managers capture stdout. Agent output already reaches it through
+    // the runtime renderer (unless a supervisor explicitly disables that echo).
+    if (level !== "output") process.stdout.write(line);
     const paths = [this.logPath];
     if (typeof fields.runId === "string" && fields.runId) {
-      paths.push(join(this.logDir, `${safeLogFileName(fields.runId)}.jsonl`));
+      paths.push(join(this.logDir, `${safeLogFileName(fields.runId)}.log`));
     }
     this.pendingWrite = this.pendingWrite
       .then(async () => {
@@ -2055,6 +2068,7 @@ class JsonlDaemonLogger implements DaemonLogger {
 
   async close(): Promise<void> {
     await this.flush();
+    this.renderers.clear();
   }
 }
 

@@ -2174,13 +2174,32 @@ test("daemon logger flushes non-blocking node and run logs", async (t) => {
   const logDir = join(root, "private-daemon-state", "logs");
   const logger = createDaemonLogger({ workspacePath: root, sandboxId: "sbx_test", logDir });
 
+  const consoleLines: string[] = [];
+  t.mock.method(process.stdout, "write", (line: string) => { consoleLines.push(line); return true; });
+  logger.warn("backend unavailable; retrying", { error: "Connection refused", runId: "run_test" });
   logger.output({ runId: "run_test", stream: "stdout", text: "hello", sequence: 0 });
   assert.equal(typeof logger.flush, "function");
   await logger.flush?.();
 
-  assert.match(readFileSync(join(logDir, "sbx_test.jsonl"), "utf8"), /"text":"hello"/);
-  assert.match(readFileSync(join(logDir, "run_test.jsonl"), "utf8"), /"text":"hello"/);
+  assert.match(readFileSync(join(logDir, "sbx_test.log"), "utf8"), /OUTPUT.*hello/);
+  assert.match(readFileSync(join(logDir, "run_test.log"), "utf8"), /OUTPUT.*hello/);
+  assert.match(consoleLines.join(""), /WARN.*backend unavailable; retrying/);
+  assert.match(consoleLines.join(""), /Connection refused/);
+  assert.doesNotMatch(consoleLines.join(""), /hello/); // Agent renderer already echoes output.
   assert.equal(existsSync(join(root, ".relay")), false);
+});
+
+test("daemon logs render split agent JSON events as readable output", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-rendered-logs-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const logger = createDaemonLogger({ workspacePath: root, sandboxId: "computer", logDir: root });
+  const event = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Readable answer" } }) + "\n";
+  logger.output({ agent: "codex", runId: "run", stream: "stdout", text: event.slice(0, 30) });
+  logger.output({ agent: "codex", runId: "run", stream: "stdout", text: event.slice(30) });
+  await logger.close?.();
+  const text = readFileSync(join(root, "run.log"), "utf8");
+  assert.match(text, /Readable answer/);
+  assert.doesNotMatch(text, /item.completed|agent_message|\x1b/);
 });
 
 test("relay daemon exits startup preflight after external stop", async () => {
