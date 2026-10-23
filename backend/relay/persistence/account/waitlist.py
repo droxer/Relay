@@ -26,7 +26,7 @@ from ...core.ids import new_database_id
 from ..resource_lock import resource_transaction
 from ..db_time import format_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
-from ..sql import metadata as shared_metadata
+from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import waitlist as waitlist_tables
 
 WAITLIST_STATUSES = ("waiting", "invited", "joined", "declined")
@@ -296,6 +296,8 @@ class DatabaseWaitlistStore:
         )
 
     def _conditional_update(self, entry_id: str, condition: Any, **values: Any) -> dict[str, Any]:
+        if names_no_uuid_row(self.engine, entry_id):
+            raise KeyError(entry_id)
         where = [self.entries.c.id == entry_id]
         if condition is not None:
             where.append(condition)

@@ -19,6 +19,7 @@ from ..db_time import require_db_time
 from ..events import daemon_event
 from ...core.ids import now_iso
 from ..engine import store_transaction
+from ..sql import names_no_uuid_row
 from .rules import (
     _NODE_LIVENESS_COLUMNS,
     _comparable_node_value,
@@ -443,6 +444,8 @@ class NodeRows(DaemonStoreState):
         return grouped
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, node_id):
+            return None
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(select(self.nodes).where(self.nodes.c.id == node_id))

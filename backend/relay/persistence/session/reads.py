@@ -48,11 +48,14 @@ class SessionReadRows(SessionStoreState):
 
     def get_session_header(self, session_id: str) -> dict[str, Any]:
         """Read authorization and list fields without loading the event log."""
+        # A thread id that is not a UUID names no thread; on Postgres the
+        # uuid column would otherwise reject the bind with a DataError (500).
+        session_pk = _canonical_database_session_id(session_id)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
                     select(self.sessions.c.snapshot, self.sessions.c.version).where(
-                        self.sessions.c.id == session_id
+                        self.sessions.c.id == session_pk
                     )
                 )
                 .mappings()
@@ -67,9 +70,10 @@ class SessionReadRows(SessionStoreState):
 
     def session_version(self, session_id: str) -> int:
         """The thread's event count alone: one primary-key read, no payload."""
+        session_pk = _canonical_database_session_id(session_id)
         with store_transaction(self.engine) as conn:
             version = conn.scalar(
-                select(self.sessions.c.version).where(self.sessions.c.id == session_id)
+                select(self.sessions.c.version).where(self.sessions.c.id == session_pk)
             )
         if version is None:
             raise KeyError(session_id)

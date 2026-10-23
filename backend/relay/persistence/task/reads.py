@@ -14,6 +14,7 @@ from sqlalchemy import (
 )
 from .reducer import materialize_task_events
 from ..engine import store_transaction
+from ..sql import names_no_uuid_row
 from .rows import (
     compact_task_summary,
 )
@@ -22,6 +23,8 @@ from .state import TaskStoreState
 
 class TaskReadRows(TaskStoreState):
     def get_task(self, task_id: str) -> dict[str, Any]:
+        if names_no_uuid_row(self.engine, task_id):
+            raise KeyError(task_id)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(

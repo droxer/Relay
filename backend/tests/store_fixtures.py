@@ -21,14 +21,17 @@ from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.task.store import DatabaseTaskStore
 from relay.persistence.team.store import DatabaseTeamStore
 from relay.security.auth import DatabaseAccountAuthStore
+from postgres_backend import database_url_for
 
 DATABASE_FILE = "relay.db"
 
 
 def sqlite_url(root: str | Path) -> str:
+    """The test database for ``root``: a sqlite file, or its Postgres stand-in
+    when ``RELAY_TEST_STORE_BACKEND=postgres`` (see ``tests/postgres_backend.py``)."""
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
-    return f"sqlite:///{directory / DATABASE_FILE}"
+    return database_url_for(f"sqlite:///{directory / DATABASE_FILE}")
 
 
 def make_session_store(root: str | Path) -> DatabaseSessionStore:
