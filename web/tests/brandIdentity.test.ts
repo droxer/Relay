@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -238,6 +238,37 @@ describe("the brand where Relay introduces itself", () => {
     for (const locale of ["en", "zh-CN"]) {
       const copy = JSON.parse(read("web", "src", "i18n", "locales", locale, "translation.json"));
       assert.equal(copy.login.cover_headline, copy.landing.headline, `${locale}: sign-in and landing must lead with one pitch`);
+    }
+  });
+});
+
+describe("the chart colour rule", () => {
+  // Data never wears the action colour: an orange bar beside an orange button
+  // reads as clickable. Categories ride the ink ramp, --live marks only what is
+  // running, --err only what failed.
+  const DATA_MARK = /chart|token-seg|dash-bar|spark|meter|histogram/;
+  const ACTION_INK = /var\(--(action|action-hover|link-ink|link-ink-strong)\)/;
+
+  it("keeps --action and --link-ink off every chart mark", () => {
+    const dir = path.join(repoRoot, "web", "src", "styles");
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const file of readdirSync(dir).filter((name) => name.endsWith(".css"))) {
+      const css = readStyle(file).replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!DATA_MARK.test(selector)) continue;
+        checked += 1;
+        if (ACTION_INK.test(body)) offenders.push(`${file}: ${selector.trim()}`);
+      }
+    }
+    assert.ok(checked >= 10, `only ${checked} chart rules found; the selector pattern has gone stale`);
+    assert.deepEqual(offenders, []);
+  });
+
+  it("paints chart components from the ink ramp, not the action colour", () => {
+    const dir = path.join(repoRoot, "web", "src", "components", "admin", "dashboard");
+    for (const file of readdirSync(dir).filter((name) => /Chart\.tsx$/.test(name))) {
+      assert.ok(!ACTION_INK.test(read("web", "src", "components", "admin", "dashboard", file)), `${file} paints data with the action colour`);
     }
   });
 });
