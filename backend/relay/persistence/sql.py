@@ -8,6 +8,7 @@ cycle.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import JSON, Column, MetaData, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
@@ -30,6 +31,24 @@ metadata = MetaData()
 def entity_uuid_type() -> Any:
     """Native UUID in PostgreSQL, with TEXT retained for SQLite test stores."""
     return Uuid(as_uuid=False).with_variant(Text(), "sqlite")
+
+
+def names_no_uuid_row(engine: Any, value: Any) -> bool:
+    """Whether ``value`` cannot match any row of a ``uuid`` key column here.
+
+    PostgreSQL rejects a non-UUID bound to a native ``uuid`` column with a
+    DataError (a 500 at the API) where SQLite, which stores these keys as
+    text, just finds no row. A lookup by an id from a URL, a daemon, or a
+    request body checks this first so both dialects answer "not found".
+    SQLite is unaffected: there any string can be a key.
+    """
+    if engine.dialect.name == "sqlite":
+        return False
+    try:
+        UUID(str(value))
+    except (TypeError, ValueError):
+        return True
+    return False
 
 
 def json_type() -> Any:
