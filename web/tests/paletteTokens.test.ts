@@ -687,7 +687,7 @@ function componentSources(): string[] {
 
 
 describe("accent primary and neutral CTA palette", () => {
-  it("routes shared primary buttons through the baton-orange accent", () => {
+  it("routes shared primary buttons through the --action ink plate", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
     assert.match(bridge, /--primary:\s*var\(--action\)/);
     assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);

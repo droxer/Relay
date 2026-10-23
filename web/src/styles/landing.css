@@ -140,9 +140,8 @@
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
-/* The product's primary plate: the same --action fill and ink every default
-   Button wears inside the app, so the first click a visitor makes is the
-   brand orange. */
+/* The product's primary plate: the same --action ink plate every default
+   Button wears inside the app, in eveland's capsule shape. */
 .landing-button-primary {
   background: var(--action);
   color: var(--on-action);

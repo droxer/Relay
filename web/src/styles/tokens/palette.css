@@ -1,8 +1,9 @@
-/* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
-   Near-black and near-white canvases, achromatic grey elevation and borders,
-   and accessible neutral text keep the workspace quiet. The primary action
-   wears the baton-orange accent (Linear-style, one per view), which also marks
-   selection; links take a softer shade of it; semantic hues identify status, liveness, and syntax.
+/* Relay palette — aligned with eveland.ai (2026-10-23): a black canvas and
+   paper white, quiet grey elevation, and translucent-weight hairlines. The
+   primary action, selection, links, and focus are the ink itself (Linear-
+   style, one filled plate per view); hue is reserved for meaning — live blue,
+   waiting gold, crimson, and syntax. The baton orange is only the brand
+   mark's lead chevron (--brand-lead).
    This is the only file allowed to originate a color.
    Reference: https://vercel.com/geist/colors
 
@@ -106,11 +107,9 @@
 
   /* Neutral inverted fill — near-white on the charcoal canvas, near-black on
      the light one, with the canvas ink on top (16.9:1 dark / 17.9:1 light).
-     No longer the primary action: shadcn's --primary now points at --action
-     (shadcn-bridge.css), so the default Button leads with the accent. These
-     remain for the few fills that read them directly (the composer's send
-     button, the landing page's primary plate, the profile image picker's
-     hover disc). No disabled hex: disabled is
+     shadcn's --primary points at --action (shadcn-bridge.css), which is ink
+     too now; these remain for the fills that read them directly (the
+     composer's send button and the profile image picker's hover disc). No disabled hex: disabled is
      --opacity-disabled or the Button's explicit disabled surface. */
   --cta-fill: #fafafa;
   --cta-hover: #d4d4d4;
@@ -146,11 +145,11 @@
      come from the three status hues sharing one screen — a row can carry a
      green dot, a gold count, and a red label at once:
 
-       Gold, because orange is the action. The warning used to sit on
-       amber (hue 65); once the action took the baton orange (hue ~50), an
-       amber count beside an orange button read as the same colour. So the
-       warning moved to a muted gold at hue ~89 — 39° from the action and
-       80° from the crimson. Not the published highlighter #f7b928 either: it was
+       Gold, clear of the mark's orange. The warning used to sit on amber
+       (hue 65), next to the baton orange (hue ~50) the brand mark still
+       draws; an amber dot beside the logo's chevron read as the same colour.
+       So the warning sits on a muted gold at hue ~89 — 39° from the orange
+       and 80° from the crimson. Not the published highlighter #f7b928 either: it was
        the loudest token in the palette and out-shouted the error beside it;
        this gold sits at L 0.81 and stays a caution.
 
@@ -170,10 +169,9 @@
      bright enough here that the on-fill text is the canvas ink (6.7:1). */
   --on-err: #0a0a0a;
 
-  /* Live — work an agent is doing RIGHT NOW. Relay has exactly two accents
-     beyond the neutrals: the baton-orange action and this signal blue, its
-     complement, so liveness
-     can never be confused with "this is the button to press".
+  /* Live — work an agent is doing RIGHT NOW. Controls are ink, so this
+     signal blue is the one hue that says "an agent is working", and it can
+     never be confused with "this is the button to press".
      It labels running things (status icon, row accent, Busy badge, running
      composer) and a live DOT always moves (live-ring); --t-pulse-calm
      surfaces stay neutral. 6.1:1 on --surface-3, so an elapsed timer set in --live is
@@ -181,7 +179,7 @@
      Deliberately no --live-wash companion: a wash is a fill, and this colour
      is never a fill. Tint a ring (see live-ring) or an ink, nothing else.
      One static exception: the logo. The app icons and RelayMark's `brand`
-     tone draw the handoff — an --action lead chevron and a --live trailing
+     tone draw the handoff — a --brand-lead chevron and a --live trailing
      one — so the two accents read as one story in the mark itself. */
   --live: #6aa6ff; /* signal blue — never purple, which reads as generic AI styling */
 
