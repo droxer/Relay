@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   PRIVATE_PATHS,
@@ -60,5 +63,19 @@ describe("softwareJsonLd", () => {
     const script = jsonLdScript({ description: "</script><script>alert(1)</script>" });
     assert.ok(!script.includes("<"));
     assert.deepEqual(JSON.parse(script), { description: "</script><script>alert(1)</script>" });
+  });
+});
+
+describe("the social card", () => {
+  it("is a 1200×630 PNG that exists at the size it declares", () => {
+    assert.equal(SITE_SHARE_IMAGE.url, "/og.png");
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    while (!existsSync(path.join(dir, "web", "public"))) dir = path.dirname(dir);
+    const png = readFileSync(path.join(dir, "web", "public", "og.png"));
+    // PNG signature, then the IHDR chunk's width and height (big-endian).
+    assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+    assert.equal(png.readUInt32BE(16), SITE_SHARE_IMAGE.width);
+    assert.equal(png.readUInt32BE(20), SITE_SHARE_IMAGE.height);
+    assert.deepEqual([SITE_SHARE_IMAGE.width, SITE_SHARE_IMAGE.height], [1200, 630]);
   });
 });
