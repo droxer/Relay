@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from relay.persistence.session.store import DatabaseSessionStore
@@ -13,7 +14,8 @@ from relay.persistence.events import relay_event
 from relay.persistence.task.store import DatabaseTaskStore
 from relay.sessions.controller import SessionController
 from relay.sessions.errors import SessionRunInFlightError
-from sqlalchemy import select, text
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.engine import make_url
 
 from store_fixtures import make_session_store
 
@@ -922,41 +924,69 @@ def test_deleted_session_stays_deleted_and_retains_token_usage() -> None:
 
 def test_run_output_sequences_aggregates_each_stream_in_sql() -> None:
     with TemporaryDirectory() as root:
-        store = make_session_store(root)
-        session = store.create_session({"workspacePath": "/workspace", "taskGoal": "stream"})
-        sid = session["id"]
-        other = store.create_session({"workspacePath": "/workspace", "taskGoal": "other"})
+        _assert_run_output_sequences(make_session_store(root))
 
-        def output(run_id: str, stream: str, sequence: int) -> None:
-            store.append_event(sid, relay_event("agent.output", sid, {
-                "runId": run_id, "agent": "codex", "stream": stream,
-                "text": "x", "sequence": sequence,
-            }), hydrate_events=False)
 
-        output("run_a", "stdout", 0)
-        output("run_a", "stdout", 3)
-        output("run_a", "stderr", 1)
-        output("run_b", "stdout", 9)
-        store.append_event(sid, relay_event("agent.output.batch", sid, {
-            "runId": "run_a", "agent": "codex",
-            "entries": [
-                {"stream": "stdout", "text": "y", "sequence": 5},
-                {"stream": "stderr", "text": "z", "sequence": 0},
-            ],
-        }), hydrate_events=False)
-        store.append_event(sid, relay_event("agent.collaboration", sid, {
-            "runId": "run_a", "agent": "codex", "sequence": 2, "collaboration": {},
-        }), hydrate_events=False)
-        store.append_event(other["id"], relay_event("agent.output", other["id"], {
-            "runId": "run_a", "agent": "codex", "stream": "stdout",
-            "text": "x", "sequence": 40,
+@pytest.mark.postgres
+def test_run_output_sequences_aggregates_each_stream_on_postgres() -> None:
+    # The aggregate is hand-written SQL per dialect; SQLite accepted a
+    # constant GROUP BY that PostgreSQL refuses, which failed every first
+    # output event of a run in production.
+    url = os.environ.get("RELAY_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("requires RELAY_TEST_DATABASE_URL")
+    schema = "run_output_" + uuid4().hex
+    admin = create_engine(url)
+    with admin.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    scoped_url = make_url(url).update_query_dict({"options": f"-c search_path={schema}"})
+    store = None
+    try:
+        store = DatabaseSessionStore(scoped_url.render_as_string(hide_password=False), create_schema=True)
+        _assert_run_output_sequences(store)
+    finally:
+        if store is not None:
+            store.engine.dispose()
+        with admin.begin() as conn:
+            conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin.dispose()
+
+
+def _assert_run_output_sequences(store: DatabaseSessionStore) -> None:
+    session = store.create_session({"workspacePath": "/workspace", "taskGoal": "stream"})
+    sid = session["id"]
+    other = store.create_session({"workspacePath": "/workspace", "taskGoal": "other"})
+
+    def output(run_id: str, stream: str, sequence: int) -> None:
+        store.append_event(sid, relay_event("agent.output", sid, {
+            "runId": run_id, "agent": "codex", "stream": stream,
+            "text": "x", "sequence": sequence,
         }), hydrate_events=False)
 
-        assert store.run_output_sequences(sid, "run_a") == {
-            "stdout": 5, "stderr": 1, "collaboration": 2,
-        }
-        assert store.run_output_sequences(sid, "run_b") == {"stdout": 9}
-        assert store.run_output_sequences(sid, "run_none") == {}
+    output("run_a", "stdout", 0)
+    output("run_a", "stdout", 3)
+    output("run_a", "stderr", 1)
+    output("run_b", "stdout", 9)
+    store.append_event(sid, relay_event("agent.output.batch", sid, {
+        "runId": "run_a", "agent": "codex",
+        "entries": [
+            {"stream": "stdout", "text": "y", "sequence": 5},
+            {"stream": "stderr", "text": "z", "sequence": 0},
+        ],
+    }), hydrate_events=False)
+    store.append_event(sid, relay_event("agent.collaboration", sid, {
+        "runId": "run_a", "agent": "codex", "sequence": 2, "collaboration": {},
+    }), hydrate_events=False)
+    store.append_event(other["id"], relay_event("agent.output", other["id"], {
+        "runId": "run_a", "agent": "codex", "stream": "stdout",
+        "text": "x", "sequence": 40,
+    }), hydrate_events=False)
+
+    assert store.run_output_sequences(sid, "run_a") == {
+        "stdout": 5, "stderr": 1, "collaboration": 2,
+    }
+    assert store.run_output_sequences(sid, "run_b") == {"stdout": 9}
+    assert store.run_output_sequences(sid, "run_none") == {}
 
 
 def test_session_version_reads_the_event_count_without_the_log() -> None:
