@@ -421,6 +421,16 @@
 .task-status-icon[data-status="done"] { color: var(--ok); }
 .task-status-icon[data-status="blocked"] { color: var(--err); }
 
+/* The running fill breathes in place, like the rail's live pip: the ring
+   holds still and the progress inside draws in and fills back out. Waiting
+   on a person stays still on purpose; it is a wait, not work. Reduced motion
+   is settled by a11y.css. */
+.task-status-icon[data-status="running"] .task-status-fill {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: breathe var(--t-pulse) var(--ease-breathe) infinite;
+}
+
 /* ── Hold-up line — what a blocked or waiting task is stuck on ─────────────
    One line, shared by the board tile and every list row. The status glyph
    and word carry the tone; the reason itself stays in secondary ink, so a
