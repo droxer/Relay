@@ -17,7 +17,7 @@ export type FaviconState = "idle" | "running" | "waiting";
  *  canvas, quieter than any ink tier. faviconState.test.ts pins canvas,
  *  action, and live to the shipped favicon. */
 export const FAVICON_INK = {
-  canvas: "#0a0a0a",
+  canvas: "#000000",
   action: "#ff8a3d",
   live: "#6aa6ff",
   unlit: "#525252",

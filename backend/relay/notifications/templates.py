@@ -63,11 +63,13 @@ _COPY = {
 
 
 # The light register of web/src/styles/tokens/palette.css (--action,
-# --on-action, --live, --ink-1, --ink-3): mail is read on white.
-BRAND_ACTION = "#b84400"
+# --on-action, --brand-lead, --live, --ink-1, --ink-3): mail is read on white.
+# The button is the ink plate; the orange is only the mark's lead chevron.
+BRAND_ACTION = "#080808"
 BRAND_ON_ACTION = "#ffffff"
+BRAND_LEAD = "#b84400"
 BRAND_LIVE = "#2457c5"
-BRAND_INK = "#171717"
+BRAND_INK = "#080808"
 BRAND_MUTED = "#525252"
 
 _FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -78,7 +80,7 @@ def _copy(locale: str | None) -> dict[str, str]:
 
 
 def _handoff_bar() -> str:
-    """The mark's two chevrons as a stripe: the action hands to the live.
+    """The mark's two chevrons as a stripe: a person hands to an agent.
 
     A two-cell table rather than a gradient, which Outlook and Gmail drop.
     """
@@ -86,7 +88,7 @@ def _handoff_bar() -> str:
     return (
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         'style="border-collapse:collapse;margin:0 0 24px"><tr>'
-        f'<td style="{cell.format(BRAND_ACTION)}">&nbsp;</td>'
+        f'<td style="{cell.format(BRAND_LEAD)}">&nbsp;</td>'
         f'<td style="{cell.format(BRAND_LIVE)}">&nbsp;</td>'
         "</tr></table>"
     )
@@ -96,7 +98,7 @@ def _frame(body_html: str) -> str:
     """Wrap a message body in the handoff bar, the wordmark, and the brand ink."""
     mark = (
         f'<p style="margin:0 0 24px;font-weight:700;font-size:18px;color:{BRAND_INK}">'
-        f'<span style="color:{BRAND_ACTION}">&rsaquo;</span>'
+        f'<span style="color:{BRAND_LEAD}">&rsaquo;</span>'
         f'<span style="color:{BRAND_LIVE}">&rsaquo;</span> Relay</p>'
     )
     return (

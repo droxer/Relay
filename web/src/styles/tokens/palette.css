@@ -68,10 +68,13 @@
      a card from the page, and only floating commerce chrome (drawers,
      dialogs, sticky summaries) earns the hairline ring (--shadow-2) — never a
      drop shadow. */
-  --surface-0: #0a0a0a; /* neutral charcoal canvas */
-  --surface-1: #171717; /* cards, panels */
-  --surface-2: #1f1f1f; /* fills, search, hover */
-  --surface-3: #262626; /* drawers, modals */
+  /* eveland.ai's docs ramp (2026-10-23): a pure-black canvas and its
+     gray-100/200 steps, so the dark register reads as one ink-on-black
+     material with the elevation carried by hairlines, not grey washes. */
+  --surface-0: #000000; /* black canvas */
+  --surface-1: #0f0f0f; /* cards, panels — the least step a card can lift (1.07:1) */
+  --surface-2: #1a1a1a; /* fills, search, hover */
+  --surface-3: #262626; /* drawers, modals, a selected segment — near gray-300 */
 
   /* Zone surfaces — the three-pane shell (rail → list → canvas) reads as a
      monotonic elevation ladder in BOTH registers. The generic --surface-N
@@ -82,8 +85,8 @@
   /* Literal hexes, equal to surface-2/surface-1 here but not in the light
      register: paletteTokens.test.ts computes contrast from each register's
      literals, so a role that differs by register stays a literal. */
-  --surface-rail: #1f1f1f;
-  --surface-list: #171717;
+  --surface-rail: #1a1a1a;
+  --surface-list: #0f0f0f;
 
   /* Ink — every tier that can carry TEXT clears WCAG 1.4.3 (4.5:1) against
      the worst plane it can land on, which is --surface-3, not the canvas.
@@ -92,11 +95,14 @@
      Each tier is checked against every surface by paletteTokens.test.ts. */
   --ink-1: #ededed; /* headings, emphasis */
   --ink-2: #d4d4d4; /* body */
-  --ink-3: #b3b3b3; /* secondary labels */
-  --ink-4: #a1a1a1; /* timestamps, meta, disabled */
+  --ink-3: #a0a0a0; /* secondary labels */
+  --ink-4: #8f8f8f; /* timestamps, meta, disabled */
 
-  --line-1: #333333; /* structural hairline */
-  --line-2: #292929; /* soft hairline */
+  /* eveland's translucent hairlines (white 14% / 9%) composited on the black
+     canvas: literal hexes, because paletteTokens.test.ts measures every line
+     against every plane. */
+  --line-1: #242424; /* structural hairline */
+  --line-2: #171717; /* soft hairline */
 
   /* Neutral inverted fill — near-white on the charcoal canvas, near-black on
      the light one, with the canvas ink on top (16.9:1 dark / 17.9:1 light).
@@ -106,45 +112,29 @@
      button, the landing page's primary plate, the profile image picker's
      hover disc). No disabled hex: disabled is
      --opacity-disabled or the Button's explicit disabled surface. */
-  --cta-fill: #ededed;
+  --cta-fill: #fafafa;
   --cta-hover: #d4d4d4;
-  --cta-ink: #0a0a0a;
+  --cta-ink: #000000;
 
-  /* Accent — baton orange, tuned PER REGISTER, and Relay's one brand hue:
-     --link, the focus ring, and the app icon's lead chevron all come from
-     this hue (oklch ~50 here, ~42 in the light register), so the product
-     never shows two unrelated accents. It is the relay baton: the thing a
-     person hands over. Orange is rare among developer tools, which mostly
-     sit on blue, so the plate is ownable at a glance. Its complement is the
-     signal-blue --live ("working"), ~150° away, so "you act" and "an agent
-     works" sit as far apart as two hues can. The crimson --err (hue ~9) keeps
-     ~40° here and ~30° in light; the warning moved to gold to make room on
-     the other side (see Status below).
+  /* Accent — ink, as eveland.ai and Linear's chrome do it (2026-10-23).
+     The control colour is the ink itself: the primary button is a solid
+     near-white plate with black ink here (and a near-black plate with white
+     ink in the light register), and WHAT IS CHOSEN — the selected-row bar,
+     the active nav marker, checked boxes, the current page, ::selection —
+     takes the same ink. Hue is left to mean something: --live (an agent is
+     working), --warn (a person is needed), --err (it failed). The baton
+     orange survives only as the brand mark's lead chevron (--brand-lead).
+     Selection stays calm — an 8% wash plus the bar, never a solid fill.
+     Hover moves AWAY from the canvas: brighter here, lifted grey in light. */
+  --action: #fafafa;
+  --action-hover: #ffffff;
+  --action-soft: color-mix(in srgb, #ffffff 8%, transparent);
+  --on-action: #000000;
 
-     Tuned PER REGISTER. It has two jobs, both fills: the
-     button to press (shadcn's --primary, the page-header create action) and
-     WHAT IS CHOSEN (the selected-row accent bar, the active nav marker,
-     checked checkboxes / radios / switches, the current pager page,
-     ::selection, the skip link). Selection stays calm — a 10% wash plus the
-     bar, never a solid fill — so a selected row never reads as a button.
-
-     Each register gets its own weight: a bright orange here, carrying the
-     dark canvas ink, and a deep burnt orange with white ink in the light
-     register. Hover moves AWAY from the canvas — lighter here, deeper
-     there. Ratios, ink on fill: 8.44:1 (#ff8a3d) and 9.85:1 on hover
-     (#ffa060). As an ink on the planes it clears 4.5:1 too (8.44 / 7.64 /
-     7.03 on --surface-0/1/2), but prose links take --link: --action means
-     "act" or "chosen". */
-  --action: #ff8a3d;
-  --action-hover: #ffa060;
-  /* Soft-accent callout tint, selection wash, active nav. Mixed from the
-     link-strong peach (#ffc49e, the action's hue at lower chroma), not the
-     fill: a low-alpha orange over near-black darkens into a muddy brown,
-     while 9% of the peach reads as a warm grey that still belongs to the
-     brand. At 15% the selected rail row was a saturated block on the
-     neutral charcoal, louder than the accent bar that already marks it. */
-  --action-soft: color-mix(in srgb, #ffc49e 9%, transparent);
-  --on-action: #0a0a0a; /* the canvas ink — white measures 2.3:1 here */
+  /* The brand mark's lead chevron — a person handing work on. Only the
+     logo, the favicon, and the email's handoff bar draw with it; it is
+     never a control, link, or status colour. */
+  --brand-lead: #ff8a3d;
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL
      colors (white text on a saturated pill), and Relay renders status as ink
@@ -195,13 +185,10 @@
      one — so the two accents read as one story in the mark itself. */
   --live: #6aa6ff; /* signal blue — never purple, which reads as generic AI styling */
 
-  /* Link ink — wayfinding only: anchors in prose and the focus ring. Never
-     a fill, never a status, never an action. Same hue as --action, a softer
-     shade of it: lighter and less saturated here, so a focused primary
-     button rings in a visibly different orange than its own fill.
-     8.11:1 on --surface-3, the worst dark plane. */
-  --link-ink: #ffaa75;
-  --link-ink-strong: #ffc49e;
+  /* Link ink — wayfinding: anchors in prose and the focus ring. Ink, set
+     apart by its underline (and the ring by its offset), never a hue. */
+  --link-ink: #ededed;
+  --link-ink-strong: #ffffff;
 
   /* Code tokens — the ONE place hue is allowed to carry structure rather
      than meaning. Syntax highlighting is a reading aid, not a status: these
@@ -259,14 +246,14 @@
      a hex that nothing proves still matches the register it mirrors, which is
      the exact drift these tokens exist to prevent. Add a tier when something
      paints it. */
-  --dark-canvas: #0a0a0a;
-  --dark-surface: #171717;
+  --dark-canvas: #000000;
+  --dark-surface: #0f0f0f;
   --dark-ink: #ededed;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
-  --dark-action: #ff8a3d;
+  --dark-action: #fafafa;
 
-  --light-canvas: #fafafa;
-  --light-action: #b84400;
+  --light-canvas: #ffffff;
+  --light-action: #080808;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's
@@ -314,6 +301,7 @@
   --r-2: 6px;   /* controls: buttons, inputs, chips, badges, tabs, segments */
   --r-3: 8px;   /* containers: cards, drawers, modals, panels, popovers */
   --r-full: 9999px; /* true circles and capsules only: dots, pips, avatars, bars */
+  --r-pill: 9999px; /* marketing CTAs only (eveland's capsule button); never an app control */
 
   /* Opacity — the STATE scale. Three strengths, and the rule that governs all
      of them is on the last one.
@@ -775,7 +763,7 @@
      28px KPI numeral or page title from reading loose. The app takes half a
      step: -0.02em is ~0.5px at the 28px rung — visible settle, not the
      marketing crunch. Reading tiers stay at 0. */
-  --track-display: -0.02em;
+  --track-display: -0.05em; /* eveland's display tracking */
   --track-body: 0;
   --track-body-sm: 0;
   --track-0: 0;
@@ -859,40 +847,38 @@
    blue tint. Floating surfaces use the shared shadow/ring tokens. */
 html[data-theme="light"] {
   --field-border-strength: 50%;
-  --cta-fill: #171717;
-  --cta-hover: #383838;
+  --cta-fill: #080808;
+  --cta-hover: #2a2a2a;
   --cta-ink: #ffffff;
-  --surface-0: #fafafa;
+  /* eveland.ai's paper (2026-10-23): white planes, and its warm
+     surface #f7f7f5 for the recessed fill and the rail. */
+  --surface-0: #ffffff;
   --surface-1: #ffffff;
-  --surface-2: #ebebeb; /* recessed fill — see the note above */
+  --surface-2: #f7f7f5; /* recessed fill — see the note above */
   --surface-3: #ffffff; /* top plane: the source system's canvas white */
 
   /* Navigation recedes through two subtle neutral-grey steps. */
-  --surface-rail: #f0f0f0;
-  --surface-list: #f5f5f5;
+  --surface-rail: #f7f7f5;
+  --surface-list: #ffffff;
 
   /* Neutral text; every tier clears AA on the recessed fill. */
-  --ink-1: #171717; /* ink-deep */
+  --ink-1: #080808; /* eveland's ink */
   --ink-2: #262626; /* ink */
   --ink-3: #525252; /* charcoal */
   --ink-4: #666666; /* steel, deepened for AA */
 
-  --line-1: #d4d4d4; /* hairline */
-  --line-2: #e5e5e5; /* hairline-soft */
+  /* eveland's ink hairlines composited on paper: 7% for the soft line; the
+     structural one deepens to ~15% so it clears 1.4:1 on white. */
+  --line-1: #d9d9d9; /* hairline */
+  --line-2: #eeeeee; /* hairline-soft */
 
-  /* Burnt orange with white ink: 5.43:1, 7.10:1 on the pressed #9a3900,
-     and 4.56:1 as an ink on --surface-2 (see the :root note). Hue ~42: the
-     crimson --err (hue ~12 here) leaves ~30° of room, so the plate can be
-     brighter and less brown than the #ad4800 it replaced. The soft
-     selection tint follows the fill. 10%, not 15%: at 15% every selected
-     row, active nav item and section-rail entry was a saturated block, and
-     beside the leading accent bar that already marks the selection it read
-     as a second, louder indicator. The flat register lets the bar lead and
-     the wash only confirm it. */
-  --action: #b84400;
-  --action-hover: #9a3900;
-  --action-soft: color-mix(in srgb, #b84400 10%, transparent);
+  /* Ink plate with white ink (eveland's #080808 button); hover lifts toward
+     the canvas. The selection wash is ink at 6%. */
+  --action: #080808;
+  --action-hover: #2a2a2a;
+  --action-soft: color-mix(in srgb, #080808 6%, transparent);
   --on-action: #ffffff;
+  --brand-lead: #b84400; /* the mark's lead chevron, deepened for paper */
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
      small text on the worst plane here (--surface-2). The source system's own values
@@ -912,9 +898,9 @@ html[data-theme="light"] {
      canvas, so an elapsed timer set in it is legible. */
   --live: #2457c5;
 
-  /* The action's hue, a step deeper: 5.32:1 on --surface-2. */
-  --link-ink: #a63e00;
-  --link-ink-strong: #863200; /* deeper on hover, like the action */
+  /* Link ink is the ink; the underline marks it. */
+  --link-ink: #080808;
+  --link-ink-strong: #000000;
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on

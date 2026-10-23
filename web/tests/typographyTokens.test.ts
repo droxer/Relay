@@ -204,7 +204,7 @@ describe("application typography roles", () => {
     // display sizes (eveland.ai runs -0.03 to -0.075em), well past what the
     // platform faces apply on their own. -0.02em is the conservative
     // half-step — about 0.5px at the 28px rung.
-    assert.match(palette, /--track-display:\s*-0\.02em;/);
+    assert.match(palette, /--track-display:\s*-0\.05em;/);
     // Caps tracking is NOT solid any more. The source system sets its uppercase
     // captions solid because it sets them at 700, where stroke weight holds the
     // caps apart; --type-micro runs 500 here, so the track has to do that work

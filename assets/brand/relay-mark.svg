@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
   <!-- Standalone app-icon badge (light register): canvas, hairline, and the
-       handoff, baton orange lead chevron (palette action, what a person does),
+       handoff, baton orange lead chevron (palette brand-lead, what a person does),
        blue trailing chevron (palette live, an agent carrying it on). Source for
        apple-touch-icon.png. Values are the light register's tokens. -->
-  <rect x="4" y="4" width="56" height="56" rx="15" fill="#fafafa"/>
-  <rect x="4" y="4" width="56" height="56" rx="15" fill="none" stroke="#d4d4d4" stroke-width="1"/>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="#ffffff"/>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="none" stroke="#d9d9d9" stroke-width="1"/>
   <g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M22 20 L36 32 L22 44" stroke="#b84400"/>
     <path d="M36 20 L50 32 L36 44" stroke="#2457c5"/>

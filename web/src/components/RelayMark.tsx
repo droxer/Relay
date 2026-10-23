@@ -32,7 +32,7 @@ export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMark
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M12 14 L32 32 L12 50" stroke={isBrand ? "var(--action)" : "var(--ink-1)"} />
+        <path d="M12 14 L32 32 L12 50" stroke={isBrand ? "var(--brand-lead)" : "var(--ink-1)"} />
         <path
           d="M32 14 L52 32 L32 50"
           stroke={isBrand ? "var(--live)" : "currentColor"}

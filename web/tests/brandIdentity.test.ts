@@ -4,9 +4,10 @@ import { describe, it } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The brand contract: one baton-orange hue for action, link and focus; a mark that
-// draws the handoff in its register's own --action and --live; and one motion
-// for every live dot. Property checks, not hex pins, wherever a relationship
+// The brand contract (eveland alignment, 2026-10-23): controls, links and focus
+// are ink; hue means something — --live working, --warn waiting, --err failed;
+// the baton orange lives only in the mark's lead chevron (--brand-lead), which
+// draws the handoff with --live; and one motion for every live dot. Property checks, not hex pins, wherever a relationship
 // is what matters.
 
 const MARKER = path.join("web", "src", "styles", "tokens", "palette.css");
@@ -59,21 +60,26 @@ const hueGap = (x: string, y: string) => {
   return Math.min(d, 360 - d);
 };
 
-describe("one brand orange", () => {
-  it("puts --action, its hover, and the link inks on one hue", () => {
+/** Max minus min channel: 0 for a true grey. */
+const channelSpread = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return Math.max(r, g, b) - Math.min(r, g, b);
+};
+
+describe("ink controls, one brand orange in the mark", () => {
+  it("draws --action, its hover, and the link inks in achromatic ink", () => {
     for (const [label, register] of Object.entries(registers)) {
-      const action = tokenIn(register, "--action");
-      for (const name of ["--action-hover", "--link-ink", "--link-ink-strong"]) {
-        const gap = hueGap(action, tokenIn(register, name));
-        assert.ok(gap <= 4, `${label} ${name} sits ${gap.toFixed(1)}° off the --action hue`);
+      for (const name of ["--action", "--action-hover", "--on-action", "--link-ink", "--link-ink-strong"]) {
+        const hex = tokenIn(register, name);
+        assert.ok(channelSpread(hex) <= 2, `${label} ${name} ${hex} carries a hue; controls and links are ink`);
       }
     }
   });
 
-  it("keeps the brand orange clear of the --live blue", () => {
+  it("keeps the mark's orange clear of the --live blue", () => {
     for (const [label, register] of Object.entries(registers)) {
-      const gap = hueGap(tokenIn(register, "--action"), tokenIn(register, "--live"));
-      assert.ok(gap >= 40, `${label} --action is only ${gap.toFixed(1)}° from --live; "act" would read as "working"`);
+      const gap = hueGap(tokenIn(register, "--brand-lead"), tokenIn(register, "--live"));
+      assert.ok(gap >= 40, `${label} --brand-lead is only ${gap.toFixed(1)}° from --live; the handoff's two halves would merge`);
     }
   });
 
@@ -91,16 +97,15 @@ describe("one brand orange", () => {
     }
   });
 
-  it("keeps the brand orange clear of the warning gold and the critical red", () => {
-    // Orange sits between two status hues. The warning moved from amber to
-    // gold to make room; a gap under these floors makes a 6px status dot
-    // and the action read as one colour.
+  it("keeps the mark's orange clear of the warning gold and the critical red", () => {
+    // The orange sits between two status hues; a gap under these floors makes
+    // a 6px status dot and the logo's lead chevron read as one colour.
     for (const [label, register] of Object.entries(registers)) {
-      const action = tokenIn(register, "--action");
-      const warnGap = hueGap(action, tokenIn(register, "--warn"));
-      assert.ok(warnGap >= 30, `${label} --action is only ${warnGap.toFixed(1)}° from --warn`);
-      const errGap = hueGap(action, tokenIn(register, "--err"));
-      assert.ok(errGap >= 20, `${label} --action is only ${errGap.toFixed(1)}° from --err`);
+      const lead = tokenIn(register, "--brand-lead");
+      const warnGap = hueGap(lead, tokenIn(register, "--warn"));
+      assert.ok(warnGap >= 30, `${label} --brand-lead is only ${warnGap.toFixed(1)}° from --warn`);
+      const errGap = hueGap(lead, tokenIn(register, "--err"));
+      assert.ok(errGap >= 20, `${label} --brand-lead is only ${errGap.toFixed(1)}° from --err`);
     }
   });
 });
@@ -113,18 +118,18 @@ describe("the handoff mark", () => {
   ] as const;
 
   for (const { file, register } of icons) {
-    it(`${file.at(-1)} draws its register's canvas, --action lead and --live trail`, () => {
+    it(`${file.at(-1)} draws its register's canvas, --brand-lead lead and --live trail`, () => {
       const svg = read(...file);
       const tokens = registers[register];
       assert.match(svg, new RegExp(`<rect [^>]*fill="${tokenIn(tokens, "--surface-0")}"`));
-      assert.deepEqual(strokes(svg), [tokenIn(tokens, "--action"), tokenIn(tokens, "--live")]);
+      assert.deepEqual(strokes(svg), [tokenIn(tokens, "--brand-lead"), tokenIn(tokens, "--live")]);
     });
   }
 
   it("colours the wordmark's chevrons from both registers", () => {
     const svg = read("web", "public", "brand", "relay-logo.svg");
     for (const register of Object.values(registers)) {
-      for (const name of ["--action", "--live"]) {
+      for (const name of ["--brand-lead", "--live"]) {
         assert.ok(svg.includes(tokenIn(register, name)), `relay-logo.svg is missing ${name} ${tokenIn(register, name)}`);
       }
     }
@@ -141,10 +146,10 @@ describe("the handoff mark", () => {
     }
   });
 
-  it("gives RelayMark a brand tone of --action and --live, used where Relay introduces itself", () => {
+  it("gives RelayMark a brand tone of --brand-lead and --live, used where Relay introduces itself", () => {
     const mark = read("web", "src", "components", "RelayMark.tsx");
     assert.match(mark, /tone\?: "ink" \| "brand"/);
-    assert.match(mark, /var\(--action\)/);
+    assert.match(mark, /var\(--brand-lead\)/);
     assert.match(mark, /var\(--live\)/);
     for (const surface of ["SideNav.tsx", "AuthCanvas.tsx", "landing/LandingScreen.tsx"]) {
       assert.match(read("web", "src", "components", surface), /<RelayMark [^>]*tone="brand"/, `${surface} must show the brand mark`);
@@ -229,7 +234,7 @@ describe("the brand where Relay introduces itself", () => {
   it("draws both watermarks as the handoff in the two accents", () => {
     for (const [file, selector] of [["landing.css", ".landing-bleed"], ["login.css", ".login-bleed"]] as const) {
       const body = readStyle(file).match(new RegExp(`\\${selector} \\{([^}]*)\\}`))?.[1] ?? "";
-      assert.match(body, /--chevron-lead: var\(--action-soft\);/, `${file} watermark lead`);
+      assert.match(body, /--chevron-lead: color-mix\(in srgb, var\(--brand-lead\)/, `${file} watermark lead`);
       assert.match(body, /--chevron-trail: color-mix\(in srgb, var\(--live\)/, `${file} watermark trail`);
     }
   });

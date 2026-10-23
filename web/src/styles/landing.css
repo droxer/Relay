@@ -130,7 +130,9 @@
   height: var(--control-h-lg);
   padding-inline: var(--sp-5);
   border: 0.5px solid transparent;
-  border-radius: var(--r-2);
+  /* The public CTA is a capsule, as eveland.ai draws it; app controls keep
+     the 6px control radius. */
+  border-radius: var(--r-pill);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   text-decoration: none;
@@ -193,7 +195,7 @@
   width: min(40vmin, 360px);
   height: min(40vmin, 360px);
   /* The brand handoff as a watermark, the same wash the sign-in cover uses. */
-  --chevron-lead: var(--action-soft);
+  --chevron-lead: color-mix(in srgb, var(--brand-lead) 10%, transparent);
   --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
   --chevron-trail-opacity: 1;
   pointer-events: none;
