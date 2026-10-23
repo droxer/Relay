@@ -7,13 +7,16 @@ import { projectCleanupNotice, projectDeleteErrorMessage } from "../src/lib/proj
 const names: Record<string, string> = { s1: "Plan launch", s2: "Draft notes", s3: "Review", s4: "Ship" };
 const threadName = (id: string) => names[id];
 
-function activeError(sessionIds: string[]) {
+function activeError(sessionIds: string[], taskIds: string[] = []) {
   return new RelayApiError("project_execution_active", 409, "project_execution_active", {
     code: "project_execution_active",
     sessionIds,
-    taskIds: [],
+    taskIds,
   });
 }
+
+const tasks: Record<string, string> = { t1: "Research", t2: "Write up" };
+const taskName = (id: string) => tasks[id];
 
 describe("projectCleanupNotice", () => {
   it("warns when cleanup waits on a computer or cannot happen", () => {
@@ -44,6 +47,20 @@ describe("projectDeleteErrorMessage", () => {
     assert.deepEqual(projectDeleteErrorMessage(activeError(["missing"]), threadName), {
       key: "project.delete_active",
     });
+  });
+
+  it("names the blocking tasks when their threads are not loaded", () => {
+    assert.deepEqual(projectDeleteErrorMessage(activeError(["elsewhere"], ["t1", "t2"]), threadName, taskName), {
+      key: "project.delete_active_tasks",
+      values: { tasks: "Research, Write up" },
+    });
+  });
+
+  it("prefers naming threads over tasks", () => {
+    assert.equal(
+      projectDeleteErrorMessage(activeError(["s1"], ["t1"]), threadName, taskName).key,
+      "project.delete_active_threads",
+    );
   });
 
   it("explains a stale version and a full command queue", () => {

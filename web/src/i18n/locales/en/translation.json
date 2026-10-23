@@ -143,6 +143,8 @@
     "delete_active": "Stop all running work in this project before deleting it.",
     "cleanup_waiting_for_computer": "Its computer was removed from Relay. Workspace files will be deleted when that computer is enrolled again.",
     "cleanup_orphaned": "Relay no longer recognizes its computer, so the workspace files were kept.",
+    "delete_active_tasks": "Stop running work for {{tasks}} before deleting the project.",
+    "delete_active_tasks_more": "Stop running work for {{tasks}} and {{count}} more before deleting the project.",
     "delete_active_threads": "Stop running work in {{threads}} before deleting the project.",
     "delete_active_threads_more": "Stop running work in {{threads}} and {{count}} more before deleting the project.",
     "delete_conflict": "This project changed since you opened it. Review it and try again.",

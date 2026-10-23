@@ -1,10 +1,11 @@
 """Atomic project removal and durable execution-plane workspace cleanup."""
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, NamedTuple
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from ..core.ids import new_database_id
 from ..daemon_registry.records import WORKSPACE_DELETE_COMMAND
@@ -16,10 +17,10 @@ from ..persistence.project.store import ProjectVersionConflict
 from ..core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from ..persistence.resource_lock import resource_transaction
 from ..persistence.engine import store_transaction
-from ..persistence.task.rules import dispatch_claim_active
+from ..persistence.task.rules import TaskExecutionActiveError, dispatch_claim_active
 from ..sessions.controller import SessionController
 from ..sessions.errors import SessionRunInFlightError
-from ..tasks.deletion import TASK_DELETION_LOCK, task_has_active_linked_session
+from ..tasks.deletion import TASK_DELETION_LOCK
 
 # What happens to the project's files once its records are gone.
 CLEANUP_KEPT = "kept"  # a linked directory belongs to the user
@@ -131,15 +132,67 @@ def _cleanup_target(registry: Any, computer: str) -> tuple[dict[str, Any] | None
     return None, CLEANUP_ORPHANED
 
 
-def _project_sessions(
-    conn: Any, sessions: Any, project_id: str, *, lock: bool
-) -> list[dict[str, Any]]:
-    statement = (
-        select(sessions.sessions.c.snapshot)
-        .where(sessions.sessions.c.project_id == project_id)
-        .order_by(sessions.sessions.c.id)
+class _Scope(NamedTuple):
+    """Everything one project deletion must judge, read in one pass.
+
+    `tasks` holds every project task row (the purge removes them all), `live`
+    only those not already deleted: a deleted task has no execution left to
+    protect, and the threads it kept are another task's business. `threads`
+    are the project's own threads, `linked` the threads its live tasks ran in
+    outside the project. Both liveness checks and the settling read this one
+    shape, so they can never disagree about which threads count.
+    """
+
+    tasks: list[dict[str, Any]]
+    live: list[dict[str, Any]]
+    threads: list[dict[str, Any]]
+    linked: list[dict[str, Any]]
+
+
+def _scope(conn: Any, ctx: Any, project_id: str, *, lock: bool) -> _Scope:
+    tasks, sessions = ctx.task_store, ctx.session_store
+    task_query = (
+        select(tasks.tasks.c.snapshot)
+        .where(tasks.tasks.c.project_id == project_id)
+        .order_by(tasks.tasks.c.id)
     )
-    return list(conn.execute(statement.with_for_update() if lock else statement).scalars())
+    rows = list(conn.execute(task_query.with_for_update() if lock else task_query).scalars())
+    live = [task for task in rows if not task.get("deletedAt")]
+    linked_ids = (
+        select(tasks.task_sessions.c.session_id)
+        .where(tasks.task_sessions.c.task_id.in_([task["id"] for task in live]))
+    )
+    table = sessions.sessions
+    # NO KEY UPDATE excludes execution admission and session writers, while
+    # allowing a linker's KEY SHARE lock: linking locks the thread before the
+    # task, whereas this cascade already holds the task rows. Outside threads
+    # survive, so their locks never need upgrading for deletion.
+    session_query = (
+        select(table.c.snapshot, table.c.project_id)
+        .where(or_(table.c.project_id == project_id, table.c.id.in_(linked_ids)))
+        .order_by(table.c.id)
+    )
+    found = conn.execute(
+        session_query.with_for_update(key_share=True) if lock else session_query
+    ).all()
+    threads = [row.snapshot for row in found if str(row.project_id) == project_id]
+    linked = [row.snapshot for row in found if str(row.project_id) != project_id]
+    return _Scope(rows, live, threads, linked)
+
+
+def _busy(
+    scope: _Scope, blocked: Callable[[dict[str, Any]], bool]
+) -> tuple[list[str], list[str]]:
+    """The threads `blocked` refuses and the live tasks that hold one or a claim."""
+    busy_sessions = [
+        session["id"] for session in (*scope.threads, *scope.linked) if blocked(session)
+    ]
+    held = set(busy_sessions)
+    busy_tasks = [
+        task["id"] for task in scope.live
+        if dispatch_claim_active(task) or held.intersection(task.get("linkedSessionIds", []))
+    ]
+    return sorted(busy_sessions), busy_tasks
 
 
 def _settle_threads(
@@ -148,30 +201,22 @@ def _settle_threads(
     """Apply what deleting each thread on its own would, before the cascade.
 
     Deleting the project is the person's assertion that a run Relay already
-    gave up on is gone, exactly as deleting that one thread would be. Live
-    runs are never stopped here, and every refusal that can be known now is
-    raised before anything is asserted, so a refused delete leaves every
-    thread as it was. Only a full cleanup queue is discovered later.
+    gave up on is gone, exactly as deleting that one thread would be. That
+    covers the threads its live tasks ran in outside the project too: those
+    tasks are being deleted, and a given-up run there would otherwise block
+    the locked check below on every retry. Live runs are never stopped here,
+    and every refusal that can be known now is raised before anything is
+    asserted, so a refused delete leaves every thread as it was. Only work
+    that starts between this read and the locked one is discovered later.
     """
-    tasks = ctx.task_store
     with store_transaction(engine) as conn:
-        sessions = _project_sessions(conn, ctx.session_store, project_id, lock=False)
-        project_tasks = conn.execute(
-            select(tasks.tasks.c.snapshot).where(tasks.tasks.c.project_id == project_id)
-        ).scalars().all()
-    live_sessions = [session["id"] for session in sessions if _live(lifecycle, session)]
-    live_tasks = [
-        task["id"] for task in project_tasks
-        if dispatch_claim_active(task) or any(
-            _live(lifecycle, linked)
-            for linked in _linked_sessions(ctx.session_store, task)
-        )
-    ]
-    if live_sessions or live_tasks:
+        scope = _scope(conn, ctx, project_id, lock=False)
+    busy_sessions, busy_tasks = _busy(scope, lambda session: _live(lifecycle, session))
+    if busy_sessions or busy_tasks:
         raise ProjectDeletionError(
-            "project_execution_active", session_ids=live_sessions, task_ids=live_tasks
+            "project_execution_active", session_ids=busy_sessions, task_ids=busy_tasks
         )
-    for session in sessions:
+    for session in (*scope.threads, *scope.linked):
         lifecycle.settle_for_deletion(session, user_id)
 
 
@@ -179,16 +224,6 @@ def _live(lifecycle: Any, session: dict[str, Any]) -> bool:
     """Blocks deletion even after settling: neither finished nor given up on."""
     status = lifecycle.status(session)
     return not status["canDelete"] and not status["canReportGone"]
-
-
-def _linked_sessions(sessions: Any, task: dict[str, Any]) -> list[dict[str, Any]]:
-    linked = []
-    for session_id in task.get("linkedSessionIds", []):
-        try:
-            linked.append(sessions.get_session(session_id))
-        except (KeyError, FileNotFoundError):
-            continue
-    return linked
 
 
 def _lock_project(
@@ -206,18 +241,10 @@ def _lock_project(
     return project
 
 
-def _assert_idle(
-    ctx: Any, tasks: list[dict[str, Any]], sessions: list[dict[str, Any]], lifecycle: Any
-) -> None:
-    busy_sessions = [
-        session["id"] for session in sessions if not lifecycle.status(session)["canDelete"]
-    ]
-    busy_tasks = [
-        task["id"] for task in tasks
-        if dispatch_claim_active(task) or task_has_active_linked_session(
-            ctx.session_store, task, execution_lifecycle=lifecycle
-        )
-    ]
+def _assert_idle(scope: _Scope, lifecycle: Any) -> None:
+    busy_sessions, busy_tasks = _busy(
+        scope, lambda session: not lifecycle.status(session)["canDelete"]
+    )
     if busy_sessions or busy_tasks:
         raise ProjectDeletionError(
             "project_execution_active", session_ids=busy_sessions, task_ids=busy_tasks
@@ -254,13 +281,9 @@ def _delete_records(
     conn: Any, ctx: Any, project_id: str, user_id: str, lifecycle: Any
 ) -> dict[str, Any]:
     projects, sessions, tasks = ctx.project_store, ctx.session_store, ctx.task_store
-    project_tasks = conn.execute(
-        select(tasks.tasks.c.snapshot)
-        .where(tasks.tasks.c.project_id == project_id)
-        .order_by(tasks.tasks.c.id).with_for_update()
-    ).scalars().all()
-    project_sessions = _project_sessions(conn, sessions, project_id, lock=True)
-    _assert_idle(ctx, project_tasks, project_sessions, lifecycle)
+    scope = _scope(conn, ctx, project_id, lock=True)
+    _assert_idle(scope, lifecycle)
+    project_tasks, project_sessions = scope.tasks, scope.threads
     task_ids = [task["id"] for task in project_tasks]
     session_ids = [session["id"] for session in project_sessions]
     detached = _detach_outside_tasks(conn, tasks, session_ids, set(task_ids), user_id)
@@ -273,8 +296,13 @@ def _delete_records(
                 "project_execution_active", session_ids=[session["id"]]
             ) from error
     # Apply the authoritative deletion event before purging task history.
-    for task in project_tasks:
-        tasks.delete_task(task["id"], deleted_by=user_id, reject_active_claim=True)
+    for task in scope.live:
+        try:
+            tasks.delete_task(task["id"], deleted_by=user_id, reject_active_claim=True)
+        except TaskExecutionActiveError as error:
+            raise ProjectDeletionError(
+                "project_execution_active", task_ids=[task["id"]]
+            ) from error
     for table in (tasks.task_sessions, tasks.events):
         conn.execute(delete(table).where(table.c.task_id.in_(task_ids)))
     conn.execute(delete(tasks.tasks).where(tasks.tasks.c.id.in_(task_ids)))
