@@ -5,8 +5,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const stamp = "2026-09-01T00:00:00.000Z";
 const user = { id: "u", userId: "u", username: "review", role: "user", theme: "light", language: "en" };
-function task(id: string, priority: string) {
-  return { id, title: id, description: "", priority, status: "backlog", workflowStage: "backlog", ownerUserId: "u",
+// Real tasks carry an id and a per-scope number; the row's ref link reads
+// "#1", so its name never collides with the title link beside it.
+function task(number: number, title: string, priority: string) {
+  return { id: `task_${number}`, number, title, description: "", priority, status: "backlog", workflowStage: "backlog", ownerUserId: "u",
     acceptancePolicy: "human", isRoutine: false, linkedSessionIds: [], createdAt: stamp,
     updatedAt: stamp, eventCount: 1, activityCount: 0 };
 }
@@ -15,7 +17,7 @@ async function mockApi(page: Page, extra: Record<string, unknown> = {}) {
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith("/auth/me") ? { authenticated: true, user } : {
-      tasks: [task("Urgent fix", "high"), task("Tidy docs", "low")],
+      tasks: [task(1, "Urgent fix", "high"), task(2, "Tidy docs", "low")],
       sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], ...extra,
     };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -59,7 +61,7 @@ test("routines filter by their own fields", async ({ page }) => {
   await mockApi(page);
   await page.goto("/automations");
   await page.getByRole("button", { name: "Add filter" }).click();
-  await expect(page.getByRole("option")).toHaveText([/^Type/, /^Cadence/, /^Agent/, /^Assignee/]);
+  await expect(page.getByRole("option")).toHaveText([/^Trigger/, /^Agent/, /^Assignee/]);
 });
 
 test("the agent roster rail filters availability with a chip", async ({ page }) => {

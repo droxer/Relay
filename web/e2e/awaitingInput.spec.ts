@@ -144,7 +144,7 @@ test("asking for status is a question, not a task round", async ({ page }) => {
   });
   await page.goto(`/threads/${session.id}`);
   const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
-  await expect(prompt).toContainText("Asking for status leaves it waiting for you.");
+  await expect(prompt).toContainText("Asking for status keeps it waiting on you.");
   await prompt.getByRole("button", { name: "Tell me what's done and what's left" }).click();
   await expect.poll(() => bodies.map((body) => body.intent)).toEqual(["discuss"]);
 });

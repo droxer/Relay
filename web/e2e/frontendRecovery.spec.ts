@@ -61,7 +61,8 @@ test("mobile Back asks once before discarding an agent draft", async ({ page }) 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /Edit profile/ }).click();
   await page.locator('input[name="agent-profile-name"]').fill("Mobile draft");
-  await page.locator(".agents-mobile-back").click();
+  // On a phone, Back is the top bar's "← Agents" control (MobileTopbarBack).
+  await page.locator(".mobile-topbar").getByRole("button", { name: "Agents", exact: true }).click();
   const confirmation = page.getByRole("alertdialog");
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Discard/ }).click();

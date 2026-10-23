@@ -63,7 +63,7 @@ for (const mobile of [false, true]) {
     await page.goto("/teams/delivery");
     await expect(page.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
     await page.getByRole("button", { name: "Edit members" }).click();
-    const styles = page.getByRole("radiogroup", { name: "How this team works" });
+    const styles = page.getByRole("radiogroup", { name: "Collaboration style" });
     await expect(styles.getByRole("radio")).toHaveCount(3);
     await expect(styles.getByRole("radio", { name: "Solo", exact: true })).toHaveCount(0);
     await styles.getByRole("radio", { name: "Pipeline", exact: true }).click();
@@ -104,7 +104,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/teams/delivery");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await page.getByRole("button", { name: "Edit members" }).click();
-    const styles = page.getByRole("radiogroup", { name: "How this team works" });
+    const styles = page.getByRole("radiogroup", { name: "Collaboration style" });
     const current = styles.getByRole("radio", { name: "Build → Review", exact: true });
     await current.focus();
     await expect(current).toBeChecked();
@@ -127,7 +127,7 @@ for (const theme of ["light", "dark"] as const) {
 test("composer sends a one-message override then returns to team default", async ({ page }) => {
   const { sends } = await fixture(page);
   await page.goto("/threads/style-thread");
-  const select = page.getByRole("combobox", { name: "Style for this message" });
+  const select = page.getByRole("combobox", { name: "Message collaboration style" });
   await select.click();
   await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Lead-led", exact: true }).click();
@@ -142,7 +142,7 @@ test("composer sends a one-message override then returns to team default", async
 test("failed sends retain the override and member mentions hide it", async ({ page }) => {
   const { sends } = await fixture(page, true);
   await page.goto("/threads/style-thread");
-  const select = page.getByRole("combobox", { name: "Style for this message" });
+  const select = page.getByRole("combobox", { name: "Message collaboration style" });
   await select.click();
   await page.getByRole("option", { name: "Pipeline", exact: true }).click();
   const text = page.locator('textarea[name="message"]');

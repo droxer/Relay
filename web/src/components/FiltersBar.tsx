@@ -146,7 +146,14 @@ export function FiltersBar({
       id: field.id,
       label: field.label,
       type: field.kind,
-      options: field.options?.map((option) => ({ value: option.value, label: option.label, icon: option.icon })),
+      // An option's text already names it; an icon that labels itself (an
+      // agent or team mark) would repeat that name to a screen reader, so the
+      // icon is decorative here. `contents` keeps the wrapper out of layout.
+      options: field.options?.map((option) => ({
+        value: option.value,
+        label: option.label,
+        icon: option.icon ? <span aria-hidden="true" className="contents">{option.icon}</span> : undefined,
+      })),
       operators: [{ value: operator, label: t(`filters.operator_${operator}`) }],
       defaultOperator: operator,
     };

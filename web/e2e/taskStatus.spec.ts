@@ -83,8 +83,9 @@ for (const theme of ["dark", "light"] as const) {
     await expect(status.locator(".task-status-now")).toHaveText("Completed");
     await expect(status.getByRole("listitem")).toHaveText([
       /Ready to start.*by you/,
-      /Work started\s*\d/,
-      /Sent to review\s*\d/,
+      // Each move carries its time ("Oct 18, 04:54 PM"); only that one follows.
+      /Work started.*\d{2}:\d{2}/,
+      /Sent to review.*\d{2}:\d{2}/,
       /Accepted.*by you/,
     ]);
     await expect(status.getByRole("link", { name: "#3" })).toBeVisible();

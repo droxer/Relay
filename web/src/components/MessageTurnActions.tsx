@@ -118,6 +118,9 @@ export function MessageTurnActions({
           onClick={handleResume}
           disabled={retryDisabled}
           tooltip={t("message.resume_title")}
+          // Named by its visible label (WCAG 2.5.3 Label in Name), so "click
+          // Resume" reaches it by voice; the tooltip stays the explanation.
+          aria-label={t("message.resume")}
         >
           <ActionStart size={ICON.sm} />
           <span className="msg-turn-action-label">{t("message.resume")}</span>
