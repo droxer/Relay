@@ -4,8 +4,10 @@ import { createElement, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useClientMounted } from "../hooks/useClientMounted";
-import { APP_NAVIGATION_EVENT, isLandingPath } from "../lib/appRoute";
+import i18n from "../i18n";
+import { APP_NAVIGATION_EVENT, isLandingPath, parseAppPath } from "../lib/appRoute";
 import { applyTheme, readLanguage, readSignedInHint, writeTheme, type Theme } from "../lib/appStorage";
+import { preloadRouteChunk } from "../lib/routeChunks";
 import { AuthChecking } from "./AuthChecking";
 import { LandingScreen } from "./landing/LandingScreen";
 
@@ -56,9 +58,23 @@ function opensOnLanding(): boolean {
   return isLandingPath(window.location.pathname) && !readSignedInHint();
 }
 
+/** Everything a returning user's first screen needs, requested together with
+    the page's own code rather than one after another: the app chunk, the
+    chunk of the route they are opening, and the catalogue of the language
+    they last used. The app re-applies the account's language after
+    `/auth/me`; when it matches (nearly always) that is a no-op, and when the
+    catalogue is still arriving i18next joins the pending load. */
+function warmSignedInStart(): void {
+  void loadApp().catch(() => undefined);
+  const { route, notFound, publicPage } = parseAppPath(window.location.pathname);
+  if (!notFound && !publicPage) preloadRouteChunk(route);
+  const language = readLanguage();
+  if (i18n.language !== language) void i18n.changeLanguage(language).catch(() => undefined);
+}
+
 // Fetch the app with the page's own code whenever it will be needed, instead
 // of after hydration.
-if (typeof window !== "undefined" && !opensOnLanding()) void loadApp().catch(() => undefined);
+if (typeof window !== "undefined" && !opensOnLanding()) warmSignedInStart();
 
 function changeTheme(theme: Theme) {
   applyTheme(theme);

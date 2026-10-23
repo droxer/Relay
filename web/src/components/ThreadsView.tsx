@@ -280,8 +280,11 @@ export function ThreadsView({
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
   // A thread is about to render markdown: start the pipeline download now so
-  // the first turn rarely shows its plain-text fallback.
-  const hasTranscript = Boolean(activeSession);
+  // the first turn rarely shows its plain-text fallback. A brand-new empty
+  // thread renders none, so it waits for its first turn (or the run that
+  // will produce it) before fetching the pipeline.
+  const hasTranscript = Boolean(activeSession) && (running || displayMessages.length > 0
+    || (activeSession?.events.length ?? 0) > 0 || (activeSession?.agentRuns.length ?? 0) > 0);
   useEffect(() => {
     if (hasTranscript) preloadMarkdown();
   }, [hasTranscript]);

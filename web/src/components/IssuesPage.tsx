@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
@@ -97,7 +97,7 @@ const ISSUE_PAGE_SIZE = 50;
  * team and never runs (the server refuses both) until triage moves it into a
  * project. See lib/issueQueues and backend/relay/tasks/issue_triage.py.
  */
-export function IssuesPage({
+function IssuesPageView({
   projects,
   projectNotice,
   onCreateProject,
@@ -498,3 +498,7 @@ export function IssuesPage({
     </section>
   );
 }
+
+// Memoized: the shell re-renders on every streamed frame of a run that may
+// be on another route; the board only reads tasks, projects, and nodes.
+export const IssuesPage = memo(IssuesPageView);

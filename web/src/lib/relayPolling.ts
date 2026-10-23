@@ -3,13 +3,17 @@ import type { TaskStatus } from "relay-core";
 /* Poll budgets. Every interval here is a React Query refetchInterval, so none
    of them run in a hidden tab (refetchIntervalInBackground stays false). */
 export const RELAY_POLL_INTERVALS_MS = {
-  sandboxes: 15_000,
-  nodes: 3_000,
-  sessions: 3_000,
+  sandboxes: 30_000,
+  /** Computers change through registration and liveness, which the web
+      reads as `online` with a 30 s timeout; nothing on screen needs them
+      faster than this. */
+  nodes: 10_000,
+  sessions: 5_000,
   /** The open thread's SSE tail pushes its events, so the list only has to
       catch the other threads' status changes. */
-  sessionsWhileStreaming: 10_000,
-  tasks: 3_000,
+  sessionsWhileStreaming: 15_000,
+  /** Task status moves on a round's closeout, not at stream rate. */
+  tasks: 10_000,
   /** Projects change through the owner's own edits (which write the cache)
       far more than in the background. */
   projects: 30_000,

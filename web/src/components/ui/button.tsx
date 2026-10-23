@@ -1,10 +1,15 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
-import type { ReactNode } from "react"
+import { lazy, Suspense, type ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
 import { NavRefresh } from "@/components/icons"
-import { Tooltip } from "@/components/ui/tooltip"
+
+/* The tooltip brings base-ui's Tooltip and floating-ui with it. Only a button
+   that carries a `tooltip` needs them, and none of the signed-out screens do,
+   so the landing entry must not pay for them: load the wrapper on first use
+   and show the bare button until it lands. */
+const Tooltip = lazy(() => import("@/components/ui/tooltip").then((module) => ({ default: module.Tooltip })))
 
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -159,7 +164,11 @@ function Button({
     </ButtonPrimitive>
   )
   if (!tooltip) return button
-  return <Tooltip content={tooltip}>{button}</Tooltip>
+  return (
+    <Suspense fallback={button}>
+      <Tooltip content={tooltip}>{button}</Tooltip>
+    </Suspense>
+  )
 }
 
 export { Button, buttonVariants, type ButtonProps }

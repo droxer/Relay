@@ -6,6 +6,7 @@ import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSum
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { mergeSessionSummaries } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
+import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
@@ -124,6 +125,10 @@ export function useRelayData(
         queryKey: SESSIONS_KEY,
         enabled,
         refetchInterval: sessionsPollIntervalMs(streamConnected),
+        // Keep an unchanged session's identity across polls without walking
+        // its events, so an identical poll re-renders no row.
+        structuralSharing: (previous: unknown, next: unknown) =>
+          shareSessions(previous as RelaySession[] | undefined, next as RelaySession[]),
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
           const summaries = (await listSessionSummaries(signal)).sessions ?? [];
           return mergeSessionSummaries(

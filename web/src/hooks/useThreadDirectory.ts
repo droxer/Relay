@@ -61,35 +61,53 @@ export function useThreadDirectory({
 }: ThreadDirectoryInput): ThreadDirectory {
   const origins = useMemo(() => threadOriginIndex(tasks), [tasks]);
 
+  // Everything an item reads besides its own session, indexed once per
+  // change of the fleet, roster, projects, or task list — a poll every few
+  // seconds, never a streamed frame.
+  const world = useMemo(() => ({
+    logicalAgents,
+    runtimeNodes,
+    origins,
+    runningBy: new Map(
+      visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run] as const)),
+    ),
+    projectNames: new Map(projects.map((project) => [project.id, project.name])),
+    agentsById: new Map(logicalAgents.map((agent) => [agent.id, agent])),
+    agentNames: new Map(logicalAgents.map((agent) => [agent.id, agent.displayName])),
+    // The item built for each session object, remembered while the world
+    // stands still. A streamed frame replaces one session object in the
+    // list; every other thread's item — its node-offline resolution walks the
+    // fleet and the agent placements — comes straight back from here.
+    // Reading the cache in render is safe: a session object is immutable, so
+    // the same key always maps to the same answer.
+    items: new WeakMap<ThreadItem["session"], ThreadItem>(),
+  }), [visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
+
   // Items are rebuilt whenever any input moves — a node or task poll — but a
   // row is memoized on its item, so each unchanged item keeps its previous
   // object. Without this every row re-rendered on every poll.
-  const candidates = useMemo<ThreadItem[]>(() => {
-    const runningBy = new Map(
-      visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run] as const)),
-    );
-    const projectNames = new Map(projects.map(project => [project.id, project.name]));
-    const agentsById = new Map(logicalAgents.map((agent) => [agent.id, agent]));
-    const agentNames = new Map(logicalAgents.map((agent) => [agent.id, agent.displayName]));
-    return myThreads.map((session) => {
-      const activeRun = runningBy.get(session.id);
-      const running = Boolean(activeRun) || session.status === "running";
-      return {
-        session,
-        runningAgent: activeRun?.agent,
-        runningAgentName: running ? runningAgentName(session, activeRun, agentNames) : undefined,
-        nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
-        origin: origins.get(session.id),
-        projectName: session.projectId ? projectNames.get(session.projectId) ?? session.projectId : undefined,
-        // Resolved against the logical agent list, not stored on the session:
-        // a renamed or re-imaged agent must not need a session rewrite for the
-        // rail to draw its current face.
-        participants: (session.participantAgentIds ?? [])
-          .map((agentId) => agentsById.get(agentId))
-          .filter((agent): agent is DirectoryAgent => Boolean(agent)),
-      };
-    });
-  }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
+  const candidates = useMemo<ThreadItem[]>(() => myThreads.map((session) => {
+    const cached = world.items.get(session);
+    if (cached) return cached;
+    const activeRun = world.runningBy.get(session.id);
+    const running = Boolean(activeRun) || session.status === "running";
+    const item: ThreadItem = {
+      session,
+      runningAgent: activeRun?.agent,
+      runningAgentName: running ? runningAgentName(session, activeRun, world.agentNames) : undefined,
+      nodeOffline: threadNodeOffline(session, world.logicalAgents, world.runtimeNodes),
+      origin: world.origins.get(session.id),
+      projectName: session.projectId ? world.projectNames.get(session.projectId) ?? session.projectId : undefined,
+      // Resolved against the logical agent list, not stored on the session:
+      // a renamed or re-imaged agent must not need a session rewrite for the
+      // rail to draw its current face.
+      participants: (session.participantAgentIds ?? [])
+        .map((agentId) => world.agentsById.get(agentId))
+        .filter((agent): agent is DirectoryAgent => Boolean(agent)),
+    };
+    world.items.set(session, item);
+    return item;
+  }), [myThreads, world]);
 
   const [held, setHeld] = useState(() => ({ candidates, items: candidates }));
   const threadItems = held.candidates === candidates

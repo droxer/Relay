@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { LANGUAGE_BY_EXTENSION } from "../src/lib/fileKinds.js";
-import { highlightToHtml, isPlainLanguage, resolveLanguage } from "../src/lib/syntax.js";
+import { highlightLiveToHtml, highlightToHtml, isPlainLanguage, resolveLanguage } from "../src/lib/syntax.js";
 
 describe("resolveLanguage", () => {
   it("resolves a registered grammar name directly", () => {
@@ -127,5 +127,30 @@ describe("highlightToHtml on a live fence", () => {
 
   it("escapes live fence text", () => {
     assert.equal(highlightToHtml("<b>&</b>", null, { live: true }), "&lt;b&gt;&amp;&lt;/b&gt;");
+  });
+});
+
+describe("highlightLiveToHtml", () => {
+  it("highlights the complete lines and leaves the unfinished line as text", () => {
+    const { settled, tail } = highlightLiveToHtml("const a = 1;\nconst b", "ts");
+    assert.equal(settled, highlightToHtml("const a = 1;\n", "ts"), "settled lines match the full highlight of that prefix");
+    assert.match(settled, /hljs-keyword/);
+    assert.equal(tail, "const b");
+  });
+
+  it("keeps a fence with no newline yet entirely in the tail", () => {
+    assert.deepEqual(highlightLiveToHtml("const a", "ts"), { settled: "", tail: "const a" });
+  });
+
+  it("escapes rather than highlights a plain or unknown language", () => {
+    assert.deepEqual(highlightLiveToHtml("<b>\nx", "text"), { settled: "&lt;b&gt;\n", tail: "x" });
+    assert.deepEqual(highlightLiveToHtml("<b>\nx", "no-such-grammar"), { settled: "&lt;b&gt;\n", tail: "x" });
+  });
+
+  it("returns the same settled markup while only the tail grows", () => {
+    const first = highlightLiveToHtml("let x = 1;\nlet y", "js");
+    const second = highlightLiveToHtml("let x = 1;\nlet y = 2", "js");
+    assert.equal(second.settled, first.settled);
+    assert.equal(second.tail, "let y = 2");
   });
 });

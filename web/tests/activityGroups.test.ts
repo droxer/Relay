@@ -42,3 +42,31 @@ describe("activityCounts", () => {
     assert.deepEqual(counts, { tools: 2, commands: 3 });
   });
 });
+
+describe("groupActivity identity", () => {
+  it("keeps a group object whose entries are unchanged, given the previous items", () => {
+    const read = tool("Read");
+    const grep = tool("Grep");
+    const segments = [text("a"), read, grep, text("b")];
+    const keys = ["t0", "r1", "g2", "t3"];
+    const first = groupActivity(segments, keys);
+    const second = groupActivity([...segments, text("c")], [...keys, "t4"], first);
+    assert.equal(second[1], first[1], "the settled group is the same object");
+    assert.deepEqual(second.map((item) => item.type), ["segment", "activity", "segment", "segment"]);
+  });
+
+  it("replaces a group when a call is appended to it", () => {
+    const segments = [text("a"), tool("Read"), tool("Grep")];
+    const keys = ["t0", "r1", "g2"];
+    const first = groupActivity(segments, keys);
+    const second = groupActivity([...segments, command("ls")], [...keys, "c3"], first);
+    assert.notEqual(second[1], first[1]);
+    assert.equal(second[1]!.type === "activity" && second[1]!.entries.length, 3);
+  });
+
+  it("does not hand out a group whose segment objects were replaced", () => {
+    const first = groupActivity([tool("Read"), tool("Grep")], ["r0", "g1"]);
+    const second = groupActivity([tool("Read"), tool("Grep")], ["r0", "g1"], first);
+    assert.notEqual(second[0], first[0]);
+  });
+});

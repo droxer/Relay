@@ -242,8 +242,10 @@ export function displayAgentStreamSegments(
 ): { segments: AgentSegment[]; liveTextIndex: number } {
   const segments = displayAgentSegments([...stdoutSegments, ...stderrSegments], streaming);
   if (!streaming) return { segments, liveTextIndex: -1 };
-  const visibleStdout = displayAgentSegments(stdoutSegments, true);
-  const stdoutTail = visibleStdout[visibleStdout.length - 1];
+  // A streaming display only merges adjacent reasoning, which neither moves
+  // nor replaces a text segment, so stdout's own tail is the live text when
+  // it is text — no second pass over stdout needed to find it.
+  const stdoutTail = stdoutSegments[stdoutSegments.length - 1];
   if (stdoutTail?.kind !== "text") return { segments, liveTextIndex: -1 };
   return { segments, liveTextIndex: segments.indexOf(stdoutTail) };
 }

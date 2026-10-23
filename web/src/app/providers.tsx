@@ -2,9 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DialogProvider } from "@/components/ui/DialogProvider";
-import { ArtifactViewerProvider } from "@/components/ArtifactViewerProvider";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import "../i18n";
 import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 
@@ -25,20 +22,17 @@ function makeQueryClient(): QueryClient {
   });
 }
 
+/**
+ * What every page needs: the query client and the error boundary. The
+ * dialog, toast, tooltip, and artifact-viewer providers belong to the
+ * signed-in surfaces alone (`SignedInProviders` in App.tsx), so the landing
+ * page and the sign-in screens never download that stack.
+ */
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
   return (
     <ScreenErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      {/* One tooltip provider for the app, so the delay before the FIRST
-          tooltip opens is paid once and moving between neighbouring icon
-          buttons swaps the popup instead of re-waiting per control. */}
-      <TooltipProvider>
-        <DialogProvider>
-          <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
-        </DialogProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </ScreenErrorBoundary>
   );
 }

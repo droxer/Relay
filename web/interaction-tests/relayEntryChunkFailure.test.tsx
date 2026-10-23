@@ -4,6 +4,7 @@ import { Component, type ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import { RelayEntry } from "../src/components/RelayEntry";
 
+vi.mock("../src/i18n", () => ({ default: { language: "en", changeLanguage: vi.fn(async () => undefined) } }));
 vi.mock("../src/api", () => ({ getMe: vi.fn(), RelayApiError: class extends Error {} }));
 // A chunk that fails to load, as after a deploy removed it.
 vi.mock("../src/App", () => {

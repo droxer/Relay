@@ -1,6 +1,5 @@
-import type { RelayTaskListItem } from "../types.js";
 import type { ThreadItem } from "./threads.js";
-import { threadAwaitsHuman } from "./awaitingInput.ts";
+import { threadAwaitsHuman, threadWaitIndex, type ThreadWaitSource } from "./awaitingInput.ts";
 
 export type ThreadGroups = {
   needsYou: ThreadItem[];
@@ -16,15 +15,17 @@ export type ThreadGroups = {
 // thread whose task moved on is not waiting, one a waiting task names is.
 export function groupThreads(
   items: readonly ThreadItem[],
-  tasks: readonly RelayTaskListItem[] = [],
+  tasks: ThreadWaitSource = [],
 ): ThreadGroups {
+  // Indexed once here, not per thread: the rail regroups on every streamed frame.
+  const waits = threadWaitIndex(tasks);
   const needsYou: ThreadItem[] = [];
   const running: ThreadItem[] = [];
   const idle: ThreadItem[] = [];
   for (const item of items) {
     if (item.session.execution && item.session.execution.phase !== "terminal") {
       running.push(item);
-    } else if (threadAwaitsHuman(item.session, tasks)) {
+    } else if (threadAwaitsHuman(item.session, waits)) {
       needsYou.push(item);
     } else if (!item.session.execution && (item.session.status === "running" || item.runningAgent)) {
       running.push(item);

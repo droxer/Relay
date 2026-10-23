@@ -21,6 +21,24 @@ interface AdminNodes {
 const NO_NODES: ControlPanelDaemonNodeRecord[] = [];
 const NO_USERS: UserRecord[] = [];
 
+type AdminNodeResults = [
+  { data?: ControlPanelDaemonNodeRecord[]; error: unknown; dataUpdatedAt: number },
+  { data?: UserRecord[]; error: unknown; dataUpdatedAt: number },
+];
+
+// Module scope so its identity never changes: useQueries only structurally
+// shares a combined result across renders when the combine function itself
+// is stable, and without that every observer notification — a poll, another
+// screen's fetch — handed this hook a new object and re-rendered its page.
+function combineAdminNodes([nodesQuery, usersQuery]: AdminNodeResults) {
+  return {
+    nodes: nodesQuery.data ?? NO_NODES,
+    users: usersQuery.data ?? NO_USERS,
+    pollError: nodesQuery.error ?? usersQuery.error,
+    dataUpdatedAt: Math.max(nodesQuery.dataUpdatedAt, usersQuery.dataUpdatedAt),
+  };
+}
+
 // Admin page node snapshot (daemon nodes + users). Node polling shares
 // CONTROL_PANEL_NODES_KEY with useLocalDaemonNodes so localhost chat + admin
 // reuse one /api/v1/admin/daemon-nodes poll instead of two timers. When `live` is false the
@@ -35,7 +53,7 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
 } {
   const queryClient = useQueryClient();
 
-  const [nodesQuery, usersQuery] = useQueries({
+  const { nodes, users, pollError, dataUpdatedAt } = useQueries({
     queries: [
       {
         queryKey: CONTROL_PANEL_NODES_KEY,
@@ -51,12 +69,8 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
         refetchInterval: live ? ADMIN_ROSTER_POLL_MS : false,
       },
     ],
+    combine: combineAdminNodes,
   });
-
-  const nodes = nodesQuery.data ?? NO_NODES;
-  const users = usersQuery.data ?? NO_USERS;
-  const pollError = nodesQuery.error ?? usersQuery.error;
-  const dataUpdatedAt = Math.max(nodesQuery.dataUpdatedAt, usersQuery.dataUpdatedAt);
 
   const mergeNodes = useCallback(
     (updater: (prev: AdminNodes) => AdminNodes) => {

@@ -24,12 +24,12 @@ import {
 } from "../lib/agentStream";
 import { useHighlightedHtml } from "../hooks/useHighlightedHtml";
 import { MarkdownContent } from "./LazyMarkdown";
-import { splitMarkdownBlocks } from "../lib/markdownBlocks";
+import { createMarkdownBlockSplitter } from "../lib/markdownBlocks";
 import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
 import { useKeyChange } from "../hooks/useKeyChange";
-import { activityCounts, groupActivity, type ActivityEntry } from "../lib/activityGroups";
+import { activityCounts, groupActivity, type ActivityEntry, type ActivityItem } from "../lib/activityGroups";
 
 // "Working…" as a shimmer across the words themselves — the live tell Claude
 // and Codex both use — rather than a pulsing dot beside them. The text stays
@@ -41,6 +41,9 @@ function StreamActivity({ label }: { label: string }) {
     </div>
   );
 }
+
+/** Last frame's grouped items per live stream; see `items` in AgentStream. */
+const previousItemsByStream = new WeakMap<AgentStreamAccumulator, ActivityItem[]>();
 
 type AgentStreamProps = {
   agent: AgentName;
@@ -77,6 +80,16 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
     () => buildCollaborationTree(collaborations, { settled: !streaming }),
     [collaborations, streaming],
   );
+  // Grouped against last frame's items so a group whose calls have not
+  // changed keeps its object, and the memoized ActivityGroup above it skips.
+  // The previous items are remembered per stream (the accumulator is
+  // replaced exactly when the stream restarts); they only choose which equal
+  // object to hand back, so this is a cache, not state.
+  const items = useMemo(() => {
+    const next = groupActivity(segments, segmentKeys(segments), previousItemsByStream.get(accumulator) ?? []);
+    previousItemsByStream.set(accumulator, next);
+    return next;
+  }, [accumulator, segments]);
 
   if (segments.length === 0) {
     if (streaming) {
@@ -103,7 +116,7 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
       {/* Keys come from lib/agentStream so the identity rule — the CLI's own
           id where there is one, the per-kind ordinal otherwise — is testable
           and lives next to the segments it keys. */}
-      {groupActivity(segments, segmentKeys(segments)).map((item) => item.type === "activity" ? (
+      {items.map((item) => item.type === "activity" ? (
         <ActivityGroup
           key={item.key}
           entries={item.entries}
@@ -123,7 +136,9 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
   );
 }
 
-function SegmentView({
+// Every segment component is memoized: a streamed frame changes one segment
+// — the live text or the open reasoning — and the rest must not re-render.
+const SegmentView = memo(function SegmentView({
   segment,
   live = false,
   streaming = false,
@@ -172,14 +187,14 @@ function SegmentView({
     );
   }
   return <RawSegment text={segment.text} streaming={streaming && last} />;
-}
+});
 
 // A run of tool calls and commands, folded behind a one-line summary ("Used 2
 // tools, ran 3 commands") so the log stops burying the answer it was working
 // towards. Same null-until-touched override as ThinkingSegment: a live group
 // is open — it is where the turn's visible progress is — and closes itself
 // when the next text arrives, unless the reader already chose.
-function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: boolean }) {
+const ActivityGroup = memo(function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: boolean }) {
   const { t } = useTranslation();
   const [override, setOverride] = useState<boolean | null>(null);
   const open = override ?? live;
@@ -211,7 +226,7 @@ function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: bool
       ) : null}
     </div>
   );
-}
+});
 
 // Reasoning renders as one disclosure per block: a header row naming the step,
 // and — open — the steps themselves under a hairline rule (design-system.md
@@ -230,7 +245,7 @@ function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: bool
 // a reader who opens a settled block keeps it open, one who closes a live block
 // keeps it closed, and one who has touched neither still gets the automatic
 // close when the run settles.
-function ThinkingSegment({ text, live }: { text: string; live: boolean }) {
+const ThinkingSegment = memo(function ThinkingSegment({ text, live }: { text: string; live: boolean }) {
   const { t } = useTranslation();
   const [override, setOverride] = useState<boolean | null>(null);
   const sections = useMemo(() => reasoningOutline(text), [text]);
@@ -271,7 +286,7 @@ function ThinkingSegment({ text, live }: { text: string; live: boolean }) {
       ) : null}
     </div>
   );
-}
+});
 
 // CLI output the parser could not classify. It is still the agent talking —
 // usually its Markdown answer arriving in a shape this parser does not know —
@@ -311,7 +326,11 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, live }: { text: string
 // gets the same `-1` suffixes as before; only mid-stream `#` links can land on
 // the first of two equal headings.
 function StreamingMarkdown({ text, live }: { text: string; live: boolean }) {
-  const blocks = useMemo(() => splitMarkdownBlocks(text), [text]);
+  // One splitter per stream: a frame that appends to the text resumes the
+  // scan at the line that was still open, instead of reading the whole
+  // reply again. Any other text (a reset, a rewrite) starts the scan over.
+  const [splitter] = useState(createMarkdownBlockSplitter);
+  const blocks = useMemo(() => splitter.split(text), [splitter, text]);
   // Index keys are the right identity: a streamed prefix only grows, so block
   // N stays block N and keeps its memoized parse.
   return blocks.map((block, index) => (
@@ -355,23 +374,39 @@ function CommandSegment({ command }: { command: string }) {
   );
 }
 
+// Split by liveness rather than branching inside one component: the smoothing
+// and announcement hooks are only for the text still being written, and a
+// settled segment — every earlier one in a long turn — must not pay for them
+// or re-render when they tick.
 function TextSegment({ text, live }: { text: string; live: boolean }) {
-  const visibleText = useSmoothStreamingText(text, live);
-  const announcement = useDebouncedStreamingAnnouncement(text, live);
+  return live ? <LiveTextSegment text={text} /> : <SettledTextSegment text={text} />;
+}
+
+const SettledTextSegment = memo(function SettledTextSegment({ text }: { text: string }) {
   return (
-    <div className={`agent-text ${live ? "is-live" : ""}`}>
+    <div className="agent-text">
       {/* `md-body` is not optional decoration: every markdown element rule
           (headings, paragraphs, lists, blockquotes, inline code) in
           styles/markdown.css is scoped to it. Without it the transcript
           renders unstyled — headings collapse to body-sized plain text. */}
-      <div className="md-body agent-prose" aria-hidden={live || undefined}>
-        {live ? <StreamingMarkdown text={visibleText} live /> : <MarkdownContent text={visibleText} />}
+      <div className="md-body agent-prose">
+        <MarkdownContent text={text} />
       </div>
-      {live ? (
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {announcement}
-        </span>
-      ) : null}
+    </div>
+  );
+});
+
+function LiveTextSegment({ text }: { text: string }) {
+  const visibleText = useSmoothStreamingText(text, true);
+  const announcement = useDebouncedStreamingAnnouncement(text, true);
+  return (
+    <div className="agent-text is-live">
+      <div className="md-body agent-prose" aria-hidden>
+        <StreamingMarkdown text={visibleText} live />
+      </div>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </span>
     </div>
   );
 }

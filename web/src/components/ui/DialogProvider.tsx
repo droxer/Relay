@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -166,8 +167,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isDangerConfirm = request?.kind === "confirm" && request.opts.tone === "danger";
+  // One context value for the life of the three handlers: every consumer of
+  // useDialogs re-rendered each time a dialog opened or a toast fired.
+  const dialogs = useMemo(() => ({ confirm, prompt, announce }), [announce, confirm, prompt]);
   return (
-    <DialogContext.Provider value={{ confirm, prompt, announce }}>
+    <DialogContext.Provider value={dialogs}>
       {children}
       <Toaster timeout={TOAST_VISIBLE_MS} />
       <Dialog

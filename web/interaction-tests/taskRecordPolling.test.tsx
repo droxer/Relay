@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import { useTaskRecord } from "../src/hooks/useTaskRecord";
 import { getTask } from "../src/api";
+import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 
 vi.mock("../src/api", () => ({ getTask: vi.fn(), RelayApiError: class extends Error {} }));
 
@@ -23,13 +24,13 @@ it("polls a live record and stops once it settles", async () => {
   const { client, view } = setup(task("running"));
   await act(async () => {});
   expect(getTask).toHaveBeenCalledTimes(1);
-  await act(() => vi.advanceTimersByTimeAsync(3_000));
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks));
   expect(getTask).toHaveBeenCalledTimes(2);
 
   vi.mocked(getTask).mockResolvedValue(task("done"));
-  await act(() => vi.advanceTimersByTimeAsync(3_000));
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks));
   expect(getTask).toHaveBeenCalledTimes(3);
-  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.settledTaskRecord));
   expect(getTask).toHaveBeenCalledTimes(3);
   view.unmount(); client.clear(); vi.useRealTimers();
 });

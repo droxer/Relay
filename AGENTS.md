@@ -454,6 +454,8 @@ to the host owner so file ownership stays sane.
 ## Verification
 
 For behavior changes, add or update focused tests and run `npm test`.
+For web changes also run `make test-e2e` (builds the export, then the Playwright
+suite incl. the load/render budgets in `web/e2e/performance.spec.ts`); there is no CI.
 
 Before handing off, check:
 

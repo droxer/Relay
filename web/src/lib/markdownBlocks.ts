@@ -20,17 +20,76 @@
  * next frame and only costs that one block a re-parse.
  */
 export function splitMarkdownBlocks(text: string): string[] {
-  if (text === "") return [];
-  const scan = scanBoundaries(text);
-  if (scan.hasDefinitions) return [text];
-  const blocks: string[] = [];
-  let start = 0;
-  for (const boundary of scan.boundaries) {
-    blocks.push(text.slice(start, boundary));
-    start = boundary;
-  }
-  blocks.push(text.slice(start));
-  return blocks;
+  return createMarkdownBlockSplitter().split(text);
+}
+
+/**
+ * A splitter that remembers where it left off. A streamed reply grows by a
+ * few characters per frame; rescanning every line of it each frame made the
+ * scan itself quadratic in the reply's length, the same way re-parsing was.
+ * When the new text extends the last, scanning resumes at the first line
+ * that had not ended yet — every boundary before it depends only on the
+ * complete lines above, which have not changed. Any other text is scanned
+ * from the start.
+ */
+export type MarkdownBlockSplitter = {
+  split(text: string): string[];
+  /** Characters the scanner has read in total; what the resume saves. */
+  readonly scannedChars: number;
+};
+
+export function createMarkdownBlockSplitter(): MarkdownBlockSplitter {
+  let previous = "";
+  /** Boundaries found in complete lines, which no later frame can move. */
+  let settledBoundaries: number[] = [];
+  /** The scanner's state after the last complete line, and where that line ended. */
+  let settledState = freshState();
+  let settledAt = 0;
+  let settledDefinitions = false;
+  let scannedChars = 0;
+
+  const reset = () => {
+    previous = "";
+    settledBoundaries = [];
+    settledState = freshState();
+    settledAt = 0;
+    settledDefinitions = false;
+  };
+
+  return {
+    get scannedChars() {
+      return scannedChars;
+    },
+    split(text: string): string[] {
+      if (text === "") {
+        reset();
+        return [];
+      }
+      if (!text.startsWith(previous)) reset();
+      previous = text;
+      // A definition resolves across the whole document, and the text only
+      // ever grows past it, so once one has settled the answer stays one block.
+      if (settledDefinitions) return [text];
+      const scan = scanBoundaries(text, settledAt, cloneState(settledState));
+      scannedChars += scan.scannedChars;
+      if (scan.settledAt > settledAt) {
+        settledBoundaries = settledBoundaries.concat(scan.boundaries.slice(0, scan.settledBoundaryCount));
+        settledState = scan.settledState;
+        settledAt = scan.settledAt;
+        settledDefinitions = scan.settledDefinitions;
+      }
+      if (scan.hasDefinitions) return [text];
+      const boundaries = settledBoundaries.concat(scan.boundaries.slice(scan.settledBoundaryCount));
+      const blocks: string[] = [];
+      let start = 0;
+      for (const boundary of boundaries) {
+        blocks.push(text.slice(start, boundary));
+        start = boundary;
+      }
+      blocks.push(text.slice(start));
+      return blocks;
+    },
+  };
 }
 
 type Fence = { char: "`" | "~"; length: number; indent: number };
@@ -53,19 +112,72 @@ const LIST_MARKER = /^(?:[-+*]|\d{1,9}[.)])(?:\s|$)/;
 // items. Over-matching only costs the split, never correctness.
 const DEFINITION = /^\s*(?:>\s*)*(?:(?:[-+*]|\d{1,9}[.)])\s+)?\[[^\]\n]+\]:/;
 
-function scanBoundaries(text: string): { boundaries: number[]; hasDefinitions: boolean } {
+function freshState(): ScanState {
+  return { fence: null, inMath: false, htmlCloser: null, inList: false, sawBlank: false };
+}
+
+function cloneState(state: ScanState): ScanState {
+  return { ...state, fence: state.fence ? { ...state.fence } : null };
+}
+
+type BoundaryScan = {
+  /** Boundaries found from `start` on, in order. */
+  boundaries: number[];
+  /** The text defines a link reference or footnote somewhere. */
+  hasDefinitions: boolean;
+  /** Where the last complete line ended; the scan is final up to here. */
+  settledAt: number;
+  /** How many of `boundaries` lie in complete lines. */
+  settledBoundaryCount: number;
+  settledState: ScanState;
+  /** The definition sits in a complete line, so it stays. */
+  settledDefinitions: boolean;
+  scannedChars: number;
+};
+
+/** Scans `text` from `start` in `state`, which it advances. */
+function scanBoundaries(text: string, start: number, state: ScanState): BoundaryScan {
   const boundaries: number[] = [];
-  const state: ScanState = { fence: null, inMath: false, htmlCloser: null, inList: false, sawBlank: false };
-  let offset = 0;
+  let offset = start;
+  let settledAt = start;
+  let settledBoundaryCount = 0;
+  let settledState = cloneState(state);
   while (offset < text.length) {
     const newline = text.indexOf("\n", offset);
     const end = newline < 0 ? text.length : newline + 1;
     const line = text.slice(offset, end).replace(/\r?\n$/, "");
     if (startsNewBlock(line, state)) boundaries.push(offset);
-    if (scanLine(line, state)) return { boundaries: [], hasDefinitions: true };
+    const definition = scanLine(line, state);
+    if (definition) {
+      // A definition in a complete line settles with that line, so the next
+      // frame answers without a scan; in an open line it is re-read.
+      const settled = newline >= 0;
+      return {
+        boundaries: [],
+        hasDefinitions: true,
+        settledAt: settled ? end : settledAt,
+        settledBoundaryCount: settled ? boundaries.length : settledBoundaryCount,
+        settledState: settled ? cloneState(state) : settledState,
+        settledDefinitions: settled,
+        scannedChars: end - start,
+      };
+    }
     offset = end;
+    if (newline >= 0) {
+      settledAt = end;
+      settledBoundaryCount = boundaries.length;
+      settledState = cloneState(state);
+    }
   }
-  return { boundaries, hasDefinitions: false };
+  return {
+    boundaries,
+    hasDefinitions: false,
+    settledAt,
+    settledBoundaryCount,
+    settledState,
+    settledDefinitions: false,
+    scannedChars: offset - start,
+  };
 }
 
 function isOpaque(state: ScanState): boolean {

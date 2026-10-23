@@ -219,3 +219,48 @@ function clearInputRequest(session: RelaySession): void {
   delete session.inputOptions;
   delete session.inputNotes;
 }
+
+/**
+ * Structural sharing for the sessions query, without the deep walk.
+ *
+ * TanStack's default `replaceEqualDeep` compares every field of every
+ * session — and every event of the open one — on each `setQueryData`, which
+ * the SSE tail calls once per streamed frame. A session that did not change
+ * keeps its object (so memoized rows and derivations hold), and one that did
+ * is taken as is: the merge that produced it already reused what it could.
+ * Meant for the query's `structuralSharing` option.
+ */
+export function shareSessions(
+  previous: RelaySession[] | undefined,
+  next: RelaySession[],
+): RelaySession[] {
+  if (!previous) return next;
+  if (previous === next) return previous;
+  const before = new Map(previous.map((session) => [session.id, session]));
+  let unchanged = previous.length === next.length;
+  const shared = next.map((session, index) => {
+    const prior = before.get(session.id);
+    const kept = prior && sameSessionShape(prior, session) ? prior : session;
+    if (kept !== previous[index]) unchanged = false;
+    return kept;
+  });
+  return unchanged ? previous : shared;
+}
+
+/** Whether two records of one session carry the same state: every write
+ *  stamps `updatedAt` and either appends an event or changes status. */
+function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
+  return a === b || (
+    a.updatedAt === b.updatedAt
+    && a.events.length === b.events.length
+    && a.status === b.status
+    && a.phase === b.phase
+    && a.title === b.title
+    && a.archived === b.archived
+    && a.deletionRequestedAt === b.deletionRequestedAt
+    && a.execution === b.execution
+    && a.agentRuns.length === b.agentRuns.length
+    && a.artifacts.length === b.artifacts.length
+    && a.decisions.length === b.decisions.length
+  );
+}
