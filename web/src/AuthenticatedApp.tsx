@@ -38,6 +38,8 @@ import { useThreadEditing } from "./hooks/useThreadEditing";
 import { useThreadNavigation } from "./hooks/useThreadNavigation";
 import { useThreadTranscript } from "./hooks/useThreadTranscript";
 import { myThreadSessions, pickActiveThreadSession } from "./lib/threads";
+import { faviconState } from "./lib/faviconState";
+import { useLiveFavicon } from "./hooks/useLiveFavicon";
 import { shouldTailSessionEvents } from "./lib/sessionEventStream";
 import { useUserProvisioning } from "./hooks/useUserProvisioning";
 import { useLocalNodeAdoption } from "./hooks/useLocalNodeAdoption";
@@ -385,7 +387,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     && space.open
     && Boolean(activeSession);
 
-  const { directoryProjects, directoryThreads } = useThreadDirectory({
+  const { directoryProjects, directoryThreads, threadItems } = useThreadDirectory({
     route,
     myThreads,
     projects,
@@ -396,6 +398,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     runtimeNodes,
     logicalAgents,
   });
+  // The tab's mark lights the half that is acting: blue while an agent
+  // works, orange when a thread needs you, dark at rest.
+  const tabState = useMemo(() => faviconState(threadItems, tasks), [threadItems, tasks]);
+  useLiveFavicon(tabState);
 
   const refreshWithToken = useCallback(async (tokenOverride?: string) => {
     await refresh(undefined, tokenOverride);
