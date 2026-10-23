@@ -1953,6 +1953,8 @@
     "agent_completed": "{{agent}} · {{status}}",
     "exit_code": "Exit {{exitCode}}",
     "skills_skipped": "Some managed skills were skipped",
+    "follow_up_report_reminder": "Relay asked {{agent}} to file its report",
+    "follow_up_repair": "Relay asked {{agent}} to try the step again",
     "permission_allow": "You allowed {{tool}}",
     "permission_deny": "You denied {{tool}}",
     "permission_expired": "{{tool}} prompt expired",

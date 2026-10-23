@@ -342,3 +342,19 @@ def _work_protocol_state(
             note for note in (next_state.get("repair_note"), REPORT_REMINDER_NOTE) if note
         )
     return next_state
+
+
+def run_follow_up(
+    request_state: dict[str, Any], assignment: dict[str, Any], state: dict[str, Any]
+) -> str | None:
+    """Why Relay itself started this turn, if it is a rerun of the same step.
+
+    The thread names it so the turn never reads as more of the answer the
+    agent already finished: ``report_reminder`` asks for the report the last
+    turn left out, ``repair`` retries a step that failed or was refused.
+    """
+    if request_state.get(REPORT_REMINDER_TARGET_STATE_KEY) == assignment["assignmentId"]:
+        return "report_reminder"
+    if state.get("repair_note"):
+        return "repair"
+    return None

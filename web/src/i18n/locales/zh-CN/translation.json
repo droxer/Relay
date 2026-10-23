@@ -1907,6 +1907,8 @@
     "cancelled": "请求已取消。",
     "agent_completed": "{{agent}} · {{status}}",
     "exit_code": "退出码 {{exitCode}}",
+    "follow_up_report_reminder": "Relay 请 {{agent}} 补交本轮报告",
+    "follow_up_repair": "Relay 请 {{agent}} 重做这一步",
     "permission_allow": "你允许了 {{tool}}",
     "permission_deny": "你拒绝了 {{tool}}",
     "permission_expired": "{{tool}} 请求已过期",

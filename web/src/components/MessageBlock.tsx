@@ -254,6 +254,11 @@ export const MessageBlock = memo(function MessageBlock({
         <MsgTime value={message.timestamp} />
         <div className="turn-body">
           {styleFallback ? <p className="collab-status">{t("collab_style.ran_solo")}</p> : null}
+          {/* Relay reran this step itself: say why, so the turn never reads
+              as more of the answer finished above it. */}
+          {message.followUp ? (
+            <p className="collab-status">{t(`message.follow_up_${message.followUp}`, { agent: agentName })}</p>
+          ) : null}
           <AgentStream
             agent={message.agent}
             stdout={message.stdout}

@@ -261,21 +261,23 @@ class SessionEventRows(SessionStoreState):
                 seen[stream] = max(seen.get(stream, -1), int(sequence))
 
         with store_transaction(self.engine) as conn:
-            for stream_expr, cursor_expr, event_type in (
-                (_payload_field(pg, "stream"), _payload_field(pg, "sequence"), "agent.output"),
-                ("'collaboration'", _payload_field(pg, "sequence"), "agent.collaboration"),
+            # PostgreSQL refuses a constant GROUP BY ("non-integer constant"),
+            # so the collaboration stream groups by its one event type instead.
+            for stream_expr, group_key, event_type in (
+                (_payload_field(pg, "stream"), literal_column(_payload_field(pg, "stream")), "agent.output"),
+                ("'collaboration'", self.events.c.type, "agent.collaboration"),
             ):
                 for stream, sequence in conn.execute(
                     select(
                         literal_column(stream_expr),
-                        func.max(literal_column(f"CAST({cursor_expr} AS BIGINT)")),
+                        func.max(literal_column(f"CAST({_payload_field(pg, 'sequence')} AS BIGINT)")),
                     )
                     .where(
                         self.events.c.session_id == session_id,
                         self.events.c.type == event_type,
                         literal_column(_payload_field(pg, "runId")) == run_id,
                     )
-                    .group_by(literal_column(stream_expr))
+                    .group_by(group_key)
                 ):
                     note(stream, sequence)
             entries = (

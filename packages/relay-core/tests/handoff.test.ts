@@ -797,6 +797,46 @@ describe("agent stream rendering", () => {
     assert.doesNotMatch(output, /"type":"message_update"/);
   });
 
+  it("names a Codex API error instead of printing its JSON envelope", () => {
+    const envelope = JSON.stringify({
+      type: "error",
+      status: 400,
+      error: { type: "invalid_request_error", message: "The 'gpt-5.1-codex' model is not supported." },
+    });
+    const renderer = new CodexStreamRenderer();
+    const output = [
+      { type: "error", message: envelope },
+      { type: "turn.failed", error: { message: envelope } },
+    ].map((event) => renderer.feed(`${JSON.stringify(event)}\n`)).join("");
+
+    assert.equal((output.match(/The 'gpt-5\.1-codex' model is not supported\./g) ?? []).length, 2);
+    assert.doesNotMatch(output, /invalid_request_error|"type"/);
+  });
+
+  it("streams Pi deltas whose message_update omits the message snapshot", () => {
+    // The BoxLite guest's Pi prints every `message_update` with the assistant
+    // event and usage only; the reply must still stream, once, never as JSON.
+    const renderer = new PiStreamRenderer();
+    const update = (assistantMessageEvent: Record<string, unknown>) =>
+      ({ type: "message_update", usage: { input: 0, output: 0, totalTokens: 3304 }, assistantMessageEvent });
+    const frames = [
+      { type: "turn_start" },
+      { type: "message_start", message: { role: "assistant", content: [] } },
+      update({ type: "thinking_delta", contentIndex: 0, delta: "Checking the workspace." }),
+      update({ type: "toolcall_end", contentIndex: 1, toolCall: { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } }),
+      update({ type: "text_delta", contentIndex: 2, delta: "Hi " }),
+      update({ type: "text_delta", contentIndex: 2, delta: "from Pi." }),
+      update({ type: "text_end", contentIndex: 2, content: "Hi from Pi." }),
+      { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Hi from Pi." }], stopReason: "stop" } },
+      { type: "turn_end", message: { role: "assistant", content: [{ type: "text", text: "Hi from Pi." }], stopReason: "stop" } },
+    ];
+    const chunks = frames.map((event) => renderer.feed(`${JSON.stringify(event)}\n`));
+
+    assert.match(chunks.slice(0, 6).join(""), /Hi from Pi\./, "the reply streams before message_end");
+    assert.equal((chunks.join("").match(/Hi from Pi\./g) ?? []).length, 1);
+    assert.doesNotMatch(chunks.join(""), /"type"|message_update|toolcall_end/);
+  });
+
   it("does not replay Pi final message content after streaming deltas", () => {
     const renderer = new PiStreamRenderer();
     const output = [

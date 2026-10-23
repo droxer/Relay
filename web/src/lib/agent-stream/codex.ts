@@ -1,5 +1,5 @@
 import { asRecord, textFromContent, toolInput, toolTarget, upsertSegmentById } from "./builders.ts";
-import { streamRecords, stripAnsi } from "./records.ts";
+import { safeParse, streamRecords, stripAnsi } from "./records.ts";
 import { type AgentSegment, narration, type ToolSegment } from "./segments.ts";
 
 function codexToolSegment(item: Record<string, unknown>): ToolSegment | null {
@@ -33,6 +33,17 @@ function codexToolSegment(item: Record<string, unknown>): ToolSegment | null {
   return null;
 }
 
+// Codex forwards an API failure's body verbatim as the message, so a turn on
+// an unsupported model fails with `{"type":"error","status":400,"error":{…}}`.
+// Name the error the body carries; keep any other message as written.
+function codexErrorMessage(value: unknown, fallback: string): string {
+  const message = typeof value === "string" && value ? value : fallback;
+  const body = safeParse(message.trim());
+  if (!body) return message;
+  const nested = asRecord(body.error).message ?? body.message;
+  return typeof nested === "string" && nested ? nested : message;
+}
+
 export function parseCodex(raw: string): AgentSegment[] {
   const out: AgentSegment[] = [];
   const toolSegmentById = new Map<string, number>();
@@ -57,11 +68,11 @@ export function parseCodex(raw: string): AgentSegment[] {
     }
     if (event.type === "turn.failed") {
       const error = asRecord(event.error);
-      out.push(narration("agent_stream.codex_failed", { message: String(error.message ?? "turn failed") }, "bad"));
+      out.push(narration("agent_stream.codex_failed", { message: codexErrorMessage(error.message, "turn failed") }, "bad"));
       continue;
     }
     if (event.type === "error") {
-      out.push(narration("agent_stream.codex_error", { message: String(event.message ?? "unknown") }, "bad"));
+      out.push(narration("agent_stream.codex_error", { message: codexErrorMessage(event.message, "unknown") }, "bad"));
       continue;
     }
     if (event.type === "agent_message") {

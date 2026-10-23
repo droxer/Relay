@@ -314,9 +314,9 @@ export class CodexStreamRenderer {
     if (event.type === "turn.completed") return `\n${status("ok", "Codex finished.")}\n`;
     if (event.type === "turn.failed") {
       const error = asRecord(event.error);
-      return `\n${status("error", `Codex failed: ${String(error.message ?? "turn failed")}`)}\n`;
+      return `\n${status("error", `Codex failed: ${codexErrorMessage(error.message, "turn failed")}`)}\n`;
     }
-    if (event.type === "error") return `\n${status("error", `Codex error: ${String(event.message ?? "unknown error")}`)}\n`;
+    if (event.type === "error") return `\n${status("error", `Codex error: ${codexErrorMessage(event.message, "unknown error")}`)}\n`;
 
     if (typeof event.type === "string" && event.type.startsWith("item.")) {
       const item = asRecord(event.item);
@@ -429,20 +429,23 @@ function piAssistantText(event: Record<string, unknown>): string {
   return textFromContentRecord(message);
 }
 
+// The assistant-message event a `message_update` carries. Pi only streams
+// assistant messages, and newer builds leave the `message` snapshot off every
+// update, so only a snapshot naming another role rules the frame out.
+function piAssistantUpdate(event: Record<string, unknown>): Record<string, unknown> {
+  if (event.type !== "message_update") return {};
+  if (event.message !== undefined && asRecord(event.message).role !== "assistant") return {};
+  return asRecord(event.assistantMessageEvent);
+}
+
 function piAssistantEndedText(event: Record<string, unknown>): string {
-  if (event.type !== "message_update") return "";
-  const message = asRecord(event.message);
-  if (message.role !== "assistant") return "";
-  const assistantEvent = asRecord(event.assistantMessageEvent);
+  const assistantEvent = piAssistantUpdate(event);
   if (assistantEvent.type !== "text_end") return "";
   return typeof assistantEvent.content === "string" ? assistantEvent.content : "";
 }
 
 function piAssistantTextDelta(event: Record<string, unknown>): string {
-  if (event.type !== "message_update") return "";
-  const message = asRecord(event.message);
-  if (message.role !== "assistant") return "";
-  const assistantEvent = asRecord(event.assistantMessageEvent);
+  const assistantEvent = piAssistantUpdate(event);
   if (assistantEvent.type !== "text_delta") return "";
   return typeof assistantEvent.delta === "string" ? assistantEvent.delta : "";
 }
@@ -465,6 +468,16 @@ function isPiAssistantTerminalEvent(event: Record<string, unknown>): boolean {
   if (event.type !== "message_end" && event.type !== "turn_end") return false;
   const message = asRecord(event.message ?? event);
   return message.role === "assistant";
+}
+
+// Codex forwards an API failure's body verbatim as the message; name the
+// error that body carries instead of printing the JSON envelope.
+function codexErrorMessage(value: unknown, fallback: string): string {
+  const message = typeof value === "string" && value ? value : fallback;
+  const body = parseJsonObject(message.trim());
+  if (!body) return message;
+  const nested = asRecord(body.error).message ?? body.message;
+  return typeof nested === "string" && nested ? nested : message;
 }
 
 export function formatClaudeJsonLine(line: string): string {

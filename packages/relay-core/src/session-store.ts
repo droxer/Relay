@@ -21,8 +21,13 @@ export interface CollaborationWorkResult {
   messages?: Array<{ kind: "question" | "answer" | "blocker" | "handoff" | "decision"; toWorkItemId?: string; text: string }>;
 }
 
+/** Why Relay itself started a turn that reruns the same step: to ask for the
+ * report the last turn left out, or to retry a step that failed. */
+export type RunFollowUp = "report_reminder" | "repair";
+
 export interface AgentRun {
   consultation?: boolean;
+  followUp?: RunFollowUp;
   workResult?: CollaborationWorkResult;
   id: string;
   assignmentId?: string;
@@ -397,6 +402,7 @@ export type RelayEvent =
       id: string;
       type: "agent.started";
       consultation?: boolean;
+      followUp?: RunFollowUp;
       sessionId: string;
       timestamp: string;
       runId: string;
@@ -682,6 +688,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.agentRuns.push({
         id: event.runId,
         ...(event.consultation ? { consultation: true } : {}),
+        ...(event.followUp ? { followUp: event.followUp } : {}),
         ...(event.assignmentId ? { assignmentId: event.assignmentId } : {}),
         ...(event.workItemId ? { workItemId: event.workItemId } : {}),
         ...(event.delegationAuthority ? { delegationAuthority: event.delegationAuthority } : {}),

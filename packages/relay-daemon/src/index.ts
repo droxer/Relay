@@ -922,7 +922,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             // outbox marks this command terminal before HTTP delivery begins,
             // so pending acknowledgements consume neither execution nor workspace slots.
             await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
-              event, token, controller.signal.aborted ? cancellationTerminalEventSignal() : controller.signal);
+              event, token, controller.signal.aborted ? cancellationTerminalEventSignal() : controller.signal,
+              eventPostRetryLogger(logger, { ...commandLogFields(sandboxId, command), eventType: event.type }));
           }).catch(async (error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             logger.error("command failed before completion", { ...commandLogFields(sandboxId, command), error: message });
@@ -1441,13 +1442,23 @@ async function executeCommand(
     let outputPostHead = 0;
     let outputPostBacklogBytes = 0;
     let outputPostDrain: Promise<void> | undefined;
+    // Output posts get their own abort so a finished run can stop waiting on
+    // a backend that keeps failing them without cancelling the run itself.
+    const outputAbort = new AbortController();
+    const outputSignal = signal ? AbortSignal.any([signal, outputAbort.signal]) : outputAbort.signal;
+    const outputDrainTimeoutMs = positiveIntEnv("RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS") ?? DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS;
+    // Set once the run stopped waiting for its output: what was not delivered
+    // stays durable in the outbox and is replayed late, never dropped here.
+    let outputDeliveryDeferred = false;
     const drainOutputPosts = async (): Promise<void> => {
-      while (outputPostHead < outputPostQueue.length && !outputPostFailure) {
+      while (outputPostHead < outputPostQueue.length && !outputPostFailure && !outputDeliveryDeferred) {
         const item = outputPostQueue[outputPostHead++];
         try {
           await item.post();
         } catch (error) {
-          if (isRejectedOutputBatch(error)) {
+          if (outputDeliveryDeferred) {
+            // Abandoned by the drain deadline; the outbox still holds it.
+          } else if (isRejectedOutputBatch(error)) {
             outputBatchesRejected += 1;
             logger.warn("output batch rejected; continuing without it", {
               ...commandLogFields(sandboxId, command),
@@ -1473,7 +1484,7 @@ async function executeCommand(
       outputPostHead = 0;
     };
     const startOutputDrain = (): void => {
-      if (outputPostDrain || outputPostFailure || outputPostQueue.length === 0) return;
+      if (outputPostDrain || outputPostFailure || outputDeliveryDeferred || outputPostQueue.length === 0) return;
       outputPostDrain = drainOutputPosts().finally(() => {
         outputPostDrain = undefined;
         startOutputDrain();
@@ -1498,6 +1509,26 @@ async function executeCommand(
     };
     const waitForOutputPosts = async (): Promise<void> => {
       while (outputPostDrain) await outputPostDrain;
+    };
+    // A finished run must not wait forever on a backend that keeps failing
+    // its output: the terminal event, not the transcript, releases the run.
+    const settleOutputPosts = async (): Promise<void> => {
+      if (!outputPostDrain) return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), outputDrainTimeoutMs);
+      });
+      const outcome = await Promise.race([waitForOutputPosts().then(() => "drained" as const), deadline]);
+      clearTimeout(timer);
+      if (outcome === "drained") return;
+      outputDeliveryDeferred = true;
+      logger.warn("output delivery stalled; reporting the run's outcome and leaving undelivered output for replay", {
+        ...commandLogFields(sandboxId, command),
+        pendingPosts: outputPostQueue.length - outputPostHead + 1,
+        timeoutMs: outputDrainTimeoutMs,
+      });
+      outputAbort.abort();
+      await waitForOutputPosts();
     };
     const emitOutputBatch = (agent: AgentName, buffered: BufferedOutput[]): void => {
       const entries = buffered.map(({ stream, text }) => {
@@ -1526,7 +1557,11 @@ async function executeCommand(
         return;
       }
       enqueueOutputPost(
-        () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
+        () => postJsonWithRetry(fetchFn, eventUrl, event, token, outputSignal, eventPostRetryLogger(logger, {
+          ...commandLogFields(sandboxId, command),
+          eventType: event.type,
+          sequence: entries[0]?.sequence,
+        })),
         { agent, sequence: entries[0]?.sequence },
         entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
       );
@@ -1563,7 +1598,11 @@ async function executeCommand(
           return;
         }
         enqueueOutputPost(
-          () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
+          () => postJsonWithRetry(fetchFn, eventUrl, event, token, outputSignal, eventPostRetryLogger(logger, {
+            ...commandLogFields(sandboxId, command),
+            eventType: event.type,
+            sequence,
+          })),
           { agent, sequence },
           Buffer.byteLength(JSON.stringify(collaboration)),
         );
@@ -1623,7 +1662,7 @@ async function executeCommand(
       throw error;
     } finally {
       outputBuffer.close();
-      await waitForOutputPosts();
+      await settleOutputPosts();
     }
     const next = mergeAgentState(state, patch);
     // A failed exit may mean the runtime itself stopped working (signed out,
@@ -1689,7 +1728,7 @@ async function executeCommand(
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
       ...(roundOutcome.kind === "rejected" ? { roundResultRejected: { reason: roundOutcome.reason } } : {}),
-      ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
+      ...(outputBatchesRejected > 0 || outputDeliveryDeferred ? { outputTruncated: true } : {}),
       ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       ...(projectSetup && state.project_setup ? { projectSetup } : {}),
     } satisfies DaemonNodeEvent;
@@ -2296,6 +2335,40 @@ function isRejectedOutputBatch(error: unknown): error is DaemonHttpError {
 
 const EVENT_POST_RETRY_INITIAL_DELAY_MS = 200;
 const EVENT_POST_RETRY_MAX_DELAY_MS = 10_000;
+/** How often a post that keeps failing repeats its warning after the first. */
+const EVENT_POST_RETRY_LOG_INTERVAL_MS = 30_000;
+/**
+ * How long a finished run waits for its streamed output to reach the backend
+ * before it reports its outcome anyway. Undelivered output stays in the
+ * durable outbox, whose replay delivers it late once the backend accepts it.
+ */
+const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 30_000;
+
+interface EventPostFailure {
+  attempt: number;
+  status?: number;
+  error: string;
+  backoffMs: number;
+}
+
+/**
+ * A retry reporter for one event post: warns on the first failure and then at
+ * most once per interval, with the status and attempt count, so a post the
+ * backend keeps refusing is never silent and never floods the log.
+ */
+function eventPostRetryLogger(
+  logger: DaemonLogger,
+  fields: DaemonLogFields,
+  intervalMs = EVENT_POST_RETRY_LOG_INTERVAL_MS,
+): (failure: EventPostFailure) => void {
+  let lastLoggedAt: number | undefined;
+  return (failure) => {
+    const now = Date.now();
+    if (lastLoggedAt !== undefined && now - lastLoggedAt < intervalMs) return;
+    lastLoggedAt = now;
+    logger.warn("event post failed; retrying", { ...fields, ...failure });
+  };
+}
 
 async function postJsonWithRetry(
   fetchFn: typeof fetch,
@@ -2303,6 +2376,7 @@ async function postJsonWithRetry(
   body: unknown,
   token: string,
   signal?: AbortSignal,
+  onRetry?: (failure: EventPostFailure) => void,
 ): Promise<void> {
   persistTerminalEvent(fetchFn, body);
   let attempt = 0;
@@ -2315,6 +2389,14 @@ async function postJsonWithRetry(
       if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
       const backoff = Math.min(EVENT_POST_RETRY_INITIAL_DELAY_MS * 2 ** Math.min(attempt, 5), EVENT_POST_RETRY_MAX_DELAY_MS);
       attempt += 1;
+      if (!signal?.aborted) {
+        onRetry?.({
+          attempt,
+          ...(error instanceof DaemonHttpError ? { status: error.status } : {}),
+          error: error instanceof Error ? error.message : String(error),
+          backoffMs: backoff,
+        });
+      }
       await delay(backoff, signal);
     }
   }
