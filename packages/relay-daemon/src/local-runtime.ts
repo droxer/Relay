@@ -10,14 +10,40 @@ import { AgentNotInstalledError, runBoundedPreflight } from "./agent-preflight.j
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
 export function createLocalRuntime(): DaemonExecutionEnvironment {
+  // Readiness is a property of this host's agent installs, so it holds for
+  // the daemon's lifetime: discovery (`ensureAgentReady` below, run at
+  // startup, every refresh interval, and on `runtime.refresh`) probes afresh
+  // and records the answer; a run trusts a recorded pass instead of spending
+  // seconds on `claude auth status` or `codex login status` for every
+  // message. A failed probe or a failed run forgets the agent again. This
+  // mirrors the per-guest cache a BoxLite computer keeps (sandbox-session.ts).
+  const readyAgents = new Set<AgentName>();
+  const probe = async (agent: AgentName, signal?: AbortSignal): Promise<void> => {
+    try {
+      await ensureLocalAgentReady(agent, signal);
+    } catch (error) {
+      readyAgents.delete(agent);
+      throw error;
+    }
+    readyAgents.add(agent);
+  };
   return {
     sandboxMode: "none",
-    ensureAgentReady: ensureLocalAgentReady,
+    ensureAgentReady: probe,
     execStream: localProcessExecStream,
     // Host processes share the machine; any number of runs can execute at once.
     acquireWorkspace: async () => ({
-      ensureAgentReady: ensureLocalAgentReady,
+      ensureAgentReady: async (agent, signal) => {
+        if (readyAgents.has(agent)) {
+          // Kimi's config check is a file read, so a run keeps it even when
+          // the CLI probe is skipped: a config removed since still fails fast.
+          assertKimiReady(agent);
+          return;
+        }
+        await probe(agent, signal);
+      },
       execStream: localProcessExecStream,
+      forgetAgentReady: (agent) => { readyAgents.delete(agent); },
       release: () => undefined,
     }),
     proveExited: async (records) => {
@@ -37,18 +63,22 @@ export const localProcessExecStream: typeof superviseLocalProcess = async (cmd, 
   return superviseLocalProcess(program, args, { ...options, env: { ...localAgentSubprocessEnv(), ...options.env } as Record<string, string> });
 };
 
+/** Kimi's config check; a no-op for every other agent. */
+function assertKimiReady(agent: AgentName): void {
+  if (agent !== "kimi") return;
+  const env = localRuntimeEnvironment();
+  assertKimiConfigured(env.KIMI_CODE_HOME || join(agentHomePath(), ".kimi-code"), { native: true });
+}
+
 async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
   const def = getAgent(agent);
   // A missing Kimi config only matters once Kimi is installed: run the check
   // regardless, so an absent CLI reads as unavailable rather than misconfigured.
   let configError: unknown;
-  if (agent === "kimi") {
-    const env = localRuntimeEnvironment();
-    try {
-      assertKimiConfigured(env.KIMI_CODE_HOME || join(agentHomePath(), ".kimi-code"), { native: true });
-    } catch (error) {
-      configError = error;
-    }
+  try {
+    assertKimiReady(agent);
+  } catch (error) {
+    configError = error;
   }
   try {
     await runBoundedPreflight(agent, signal, (bounded) => localProcessExecStream("bash", ["-c", def.preflight.command()], {

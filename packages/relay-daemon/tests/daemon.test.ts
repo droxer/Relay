@@ -47,7 +47,7 @@ import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/wor
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
-import type { AgentName, DaemonNodeCommand, DaemonNodeEvent, DaemonNodeRegistration, DaemonNodeRunCommand, StreamExecResult } from "relay-core";
+import { AGENT_NAMES, type AgentName, type DaemonNodeCommand, type DaemonNodeEvent, type DaemonNodeRegistration, type DaemonNodeRunCommand, type StreamExecResult } from "relay-core";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -3659,7 +3659,7 @@ test("generated-file diff reports every changed file and skips excluded director
   writeFile(joinPath(workspace, "data.csv"), "a,b\n");
   makeDir(joinPath(workspace, "node_modules"));
   writeFile(joinPath(workspace, "node_modules", "vendored.pdf"), "ignored");
-  const before = snapshotGeneratedFiles(workspace);
+  const before = await snapshotGeneratedFiles(workspace);
 
   makeDir(joinPath(workspace, "output"));
   makeDir(joinPath(workspace, "src"));
@@ -3673,7 +3673,7 @@ test("generated-file diff reports every changed file and skips excluded director
   writeFile(joinPath(workspace, "checkout", "README.md"), "someone else's repo\n");
   writeFile(joinPath(workspace, "package-lock.json"), "{}\n");
 
-  const changed = diffGeneratedFiles(workspace, before);
+  const changed = await diffGeneratedFiles(workspace, before);
   assert.deepEqual(changed.map((file) => file.relativePath).sort(), [
     "checkout/README.md",
     "data.csv",
@@ -3681,7 +3681,7 @@ test("generated-file diff reports every changed file and skips excluded director
     "report.html",
     "src/main.py",
   ]);
-  assert.deepEqual(diffGeneratedFiles(workspace, snapshotGeneratedFiles(workspace)), []);
+  assert.deepEqual(await diffGeneratedFiles(workspace, await snapshotGeneratedFiles(workspace)), []);
 });
 
 test("generated-file diff snapshots only allowlisted types and states why it skipped", async (t: TestContext) => {
@@ -3698,7 +3698,7 @@ test("generated-file diff snapshots only allowlisted types and states why it ski
   writeFile(joinPath(workspace, "bundle.zip"), "opaque archive");
 
   const byPath = new Map(
-    diffGeneratedFiles(workspace, {}).map((file) => [file.relativePath, file]),
+    (await diffGeneratedFiles(workspace, {})).map((file) => [file.relativePath, file]),
   );
   // A document beside the work is stored and readable offline.
   assert.equal(byPath.get("report.md")?.contentBase64, Buffer.from("# Report\n").toString("base64"));
@@ -3722,7 +3722,7 @@ test("generated-file scan excludes credential names and never stores secret cont
   writeFile(joinPath(workspace, "report.txt"), "OPENAI_API_KEY=sk-secret-value");
   writeFile(joinPath(workspace, "safe-report.txt"), "No secrets here.\n");
 
-  const changed = diffGeneratedFiles(workspace, {});
+  const changed = await diffGeneratedFiles(workspace, {});
   const byPath = new Map(changed.map((file) => [file.relativePath, file]));
   // A credential-named file is not even attributed: the name itself leaks.
   assert.equal(byPath.has("credentials.json"), false);
@@ -3747,7 +3747,7 @@ test("generated-file scan excludes private-key filenames outright", async (t: Te
   writeFile(joinPath(workspace, ".ssh", "id_rsa"), "not a real key");
   writeFile(joinPath(workspace, "report.md"), "# Report\n");
 
-  const changed = diffGeneratedFiles(workspace, {});
+  const changed = await diffGeneratedFiles(workspace, {});
   const byPath = new Map(changed.map((file) => [file.relativePath, file]));
   // A private-key filename earns no record at all, not even metadata-only.
   assert.equal(byPath.has("deploy/ca.key"), false);
@@ -3771,7 +3771,7 @@ test("generated-file scan reports text documents at an agent home root and outpu
   writeFile(joinPath(workspace, own, "scratch", "buffer.md"), "working notes\n");
 
   const byPath = new Map(
-    diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own }).map((f) => [f.relativePath, f]),
+    (await diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own })).map((f) => [f.relativePath, f]),
   );
   // All three are reported now; placement decides only whether bytes are kept.
   assert.deepEqual([...byPath.keys()].sort(), [
@@ -3798,7 +3798,7 @@ test("generated-file diff caps rows and stops storing once the budget is spent",
   for (let index = 0; index < 12; index += 1) {
     writeFile(joinPath(workspace, `doc-${index}.md`), body);
   }
-  const changed = diffGeneratedFiles(workspace, {});
+  const changed = await diffGeneratedFiles(workspace, {});
   assert.equal(changed.length, 12);
   const stored = changed.filter((file) => file.contentBase64 !== undefined);
   assert.equal(stored.length, 8);
@@ -3818,7 +3818,7 @@ test("generated-file diff reports far more than the old twenty-file ceiling", as
   for (let index = 0; index < 250; index += 1) {
     writeFile(joinPath(workspace, `module-${index}.py`), `# module ${index}\n`);
   }
-  const changed = diffGeneratedFiles(workspace, {});
+  const changed = await diffGeneratedFiles(workspace, {});
   assert.equal(changed.length, 200);
 });
 
@@ -3839,13 +3839,13 @@ test("generated-file scan skips sibling agent homes but keeps the running agent'
   writeFile(joinPath(workspace, sibling, "theirs.pdf"), "theirs");
   writeFile(joinPath(workspace, sibling, "nested", "deep.pdf"), "deep");
 
-  const changed = diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own });
+  const changed = await diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own });
   assert.deepEqual(
     changed.map((file) => file.relativePath).sort(),
     [`${own}/mine.pdf`, "shared.csv"],
   );
 
-  const unscoped = diffGeneratedFiles(workspace, {});
+  const unscoped = await diffGeneratedFiles(workspace, {});
   assert.equal(unscoped.length, 4);
 });
 
@@ -4805,6 +4805,75 @@ test("explicit runtime refresh re-registers before the periodic refresh is due",
   assert.ok(checks >= 8);
   assert.deepEqual((registrations[1] as unknown as { runtimeRefreshCommands: unknown }).runtimeRefreshCommands,
     [{ commandId: "refresh-1", leaseId: "lease-refresh" }]);
+});
+
+test("the periodic runtime refresh runs beside the command poll, not in front of it", async () => {
+  const stop = new AbortController();
+  let registrations = 0;
+  let checks = 0;
+  let refreshStarted = false;
+  let pollsDuringRefresh = 0;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_background_refresh", userId: "alice",
+    workspacePath: process.cwd(), sandbox: "none", token: "node_token", pollIntervalMs: 1,
+    heartbeatIntervalMs: 1, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment({ ensure: async () => {
+      // Startup checks every agent once; the first check after that is the
+      // periodic refresh, which a local computer spends seconds on.
+      if (++checks > AGENT_NAMES.length) {
+        refreshStarted = true;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+    } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({});
+      if (path.endsWith("/daemon-node-registrations")) {
+        const body = await jsonBody<DaemonNodeRegistration>(init);
+        if (body.status !== "stopped" && ++registrations === 2) stop.abort();
+        return jsonResponse({});
+      }
+      if (path.endsWith("/commands")) {
+        if (refreshStarted && registrations < 2) pollsDuringRefresh += 1;
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  assert.equal(registrations, 2);
+  assert.ok(pollsDuringRefresh > 0, "a command poll was issued while the runtimes were being re-checked");
+});
+
+test("a poll that delivered a command is followed at once, without the idle throttle", async () => {
+  const stop = new AbortController();
+  const pollsAt: number[] = [];
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_burst", userId: "alice",
+    workspacePath: process.cwd(), sandbox: "none", token: "node_token",
+    heartbeatIntervalMs: 60_000, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment(),
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({});
+      if (path.endsWith("/daemon-node-registrations")) return jsonResponse({});
+      if (path.endsWith("/commands")) {
+        pollsAt.push(performance.now());
+        if (pollsAt.length >= 3) { stop.abort(); return jsonResponse({ commands: [] }); }
+        // A cancel for a run this daemon never saw: cheap to handle, and a
+        // typical second command in a burst.
+        return jsonResponse({ commands: [{ id: `cancel-${pollsAt.length}`, type: "run.cancel", commandId: `cmd-${pollsAt.length}`,
+          sessionId: "ses_1", runId: "run_1", agent: "codex", reason: "stop" }] });
+      }
+      if (path.endsWith("/events")) return jsonResponse({});
+      if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  assert.equal(pollsAt.length, 3);
+  // No explicit pollIntervalMs: the default one-second throttle would have
+  // held each follow-up poll back.
+  assert.ok(pollsAt[2] - pollsAt[0] < 500, `follow-up polls took ${Math.round(pollsAt[2] - pollsAt[0])}ms`);
 });
 
 test("doctor authenticates without registering or persisting credentials", async () => {
