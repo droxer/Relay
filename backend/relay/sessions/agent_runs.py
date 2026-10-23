@@ -121,6 +121,7 @@ class SessionAgentRunMixin(SessionControllerState):
                         else {}
                     ),
                     **({"workKind": step["workKind"]} if step.get("workKind") else {}),
+                    **({"followUp": step["followUp"]} if step.get("followUp") else {}),
                     **(
                         {"coordinator": True} if step.get("coordinator") is True else {}
                     ),

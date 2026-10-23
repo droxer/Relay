@@ -42,6 +42,7 @@ from .run_state import (
     _project_state,
     _work_item_state,
     _work_protocol_state,
+    run_follow_up,
 )
 from .run_start import (
     _run_start_command,
@@ -278,7 +279,14 @@ class AssignmentDeliveryMixin(RegistryState):
             handoff_validation=handoff_validation,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
-        return {**command, **_delivery_command_fields(request_state, assignment, run_id)}
+        follow_up = run_follow_up(request_state, assignment, state)
+        return {
+            **command,
+            **_delivery_command_fields(request_state, assignment, run_id),
+            # Backend-only (underscore keys never reach the daemon): the thread
+            # records it on `agent.started`.
+            **({"_followUp": follow_up} if follow_up else {}),
+        }
 
     def _artifacts_dir(
         self,

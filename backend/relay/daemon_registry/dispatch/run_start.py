@@ -183,7 +183,7 @@ def _agent_started_payload(
         ),
         "daemonNodeId": command["_nodeId"],
         **_optional_fields(sandbox, (("managedNodeId", "managedNodeId"),)),
-        **_optional_fields(command, (("agentVersion", "agentVersion"),)),
+        **_optional_fields(command, (("agentVersion", "agentVersion"), ("_followUp", "followUp"))),
         **_optional_fields(
             assignment,
             (

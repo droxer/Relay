@@ -155,6 +155,7 @@ def _apply_agent_started(session: dict[str, Any], event: dict[str, Any]) -> None
         "dependsOnWorkItemIds",
         "workKind",
         "teamPhase",
+        "followUp",
     ):
         if event.get(key) is not None:
             run[key] = event[key]

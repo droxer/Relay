@@ -5534,6 +5534,16 @@ def _take_report_reminder(registry: Any, command: dict[str, Any]) -> dict[str, A
     assert reminder["assignmentId"] == command["assignmentId"]
     assert reminder["sessionId"] == command["sessionId"]
     assert "without writing the round result file" in reminder["state"]["repair_note"]
+    # The thread says why this turn exists, so it never reads as more of the
+    # answer the agent already finished.
+    registry.handle_event("sbx_alice", {
+        "type": "run.executing", "commandId": reminder["id"],
+        **({"leaseId": reminder["leaseId"]} if reminder.get("leaseId") else {}),
+        "sessionId": reminder["sessionId"], "runId": reminder["runId"], "agent": reminder["agent"],
+    }, "node_token")
+    runs ={run["id"]: run for run in registry.store.get_session(command["sessionId"])["agentRuns"]}
+    assert runs[reminder["runId"]]["followUp"] == "report_reminder"
+    assert "followUp" not in runs.get(command["runId"], {})
     return reminder
 
 

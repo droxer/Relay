@@ -88,6 +88,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           {
             id: event.runId,
             ...(event.consultation ? { consultation: true } : {}),
+            ...(event.followUp ? { followUp: event.followUp } : {}),
             ...(event.assignmentId ? { assignmentId: event.assignmentId } : {}),
             ...(event.workItemId ? { workItemId: event.workItemId } : {}),
             ...(event.delegationAuthority ? { delegationAuthority: event.delegationAuthority } : {}),

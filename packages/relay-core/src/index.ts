@@ -270,6 +270,7 @@ export {
   type RelayArtifactKind,
   type RelayEvent,
   type RelaySession,
+  type RunFollowUp,
   type ExecutionStatus,
   type WorkspaceLayout,
   type SessionStatus,

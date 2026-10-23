@@ -866,6 +866,26 @@ describe("logical agent identity in the transcript", () => {
     assert.equal(phaseDividerLabel(messages, zoeIndex, t), "Handoff");
   });
 
+  it("shows a follow-up Relay started as its own turn, not more of the finished answer", () => {
+    const messages = projectMessages(session([
+      {
+        id: "ev_run_a", type: "agent.started", sessionId: "ses_1", timestamp,
+        runId: "run_a", agent: "claude", logicalAgentId: "agt_ada",
+      },
+      {
+        id: "ev_run_b", type: "agent.started", sessionId: "ses_1", timestamp,
+        runId: "run_b", agent: "claude", logicalAgentId: "agt_ada", followUp: "report_reminder",
+      },
+    ]), t);
+
+    const reminderIndex = messages.findIndex((message) => message.kind === "agent" && message.runId === "run_b");
+    const reminder = messages[reminderIndex];
+    assert.equal(reminder.kind === "agent" && reminder.followUp, "report_reminder");
+    assert.equal(isGroupedContinuation(messages, reminderIndex), false);
+    const first = messages.find((message) => message.kind === "agent" && message.runId === "run_a");
+    assert.equal(first?.kind === "agent" && first.followUp, undefined);
+  });
+
   it("reruns the logical agent that produced the last turn", () => {
     const rerun = rerunAssignmentForSession(
       {

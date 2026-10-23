@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { CodexCollaborationEvent, RelayArtifact } from "relay-core";
+import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 
 export type DerivedMessage =
@@ -18,6 +18,10 @@ export type DerivedMessage =
        * executor kind, which several named agents can share. */
       agentId?: string;
       runId: string;
+      /** Relay started this turn to rerun the same step (asking for a missing
+       * report, or retrying a failure); it is its own turn, never more of the
+       * answer above it. */
+      followUp?: RunFollowUp;
       streaming: boolean;
       stdout: string;
       stderr: string;
@@ -64,7 +68,7 @@ function isSameAgentTurn(left: AgentTurn, right: AgentTurn): boolean {
 
 export function isGroupedContinuation(messages: DerivedMessage[], index: number): boolean {
   const message = messages[index];
-  if (message.kind !== "agent") return false;
+  if (message.kind !== "agent" || message.followUp) return false;
   for (let i = index - 1; i >= 0; i -= 1) {
     const prev = messages[i];
     if (prev.kind === "system") continue;
@@ -380,10 +384,11 @@ export class ProjectMessagesAccumulator {
       case "agent.started": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
         const block = this.out[ensured.index];
-        if (block.kind === "agent" && block.agentId !== event.logicalAgentId) {
+        if (block.kind === "agent" && (block.agentId !== event.logicalAgentId || block.followUp !== event.followUp)) {
           this.out[ensured.index] = {
             ...block,
             ...(event.logicalAgentId ? { agentId: event.logicalAgentId } : {}),
+            ...(event.followUp ? { followUp: event.followUp } : {}),
           };
           return true;
         }
