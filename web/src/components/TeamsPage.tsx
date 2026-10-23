@@ -25,6 +25,7 @@ import { TeamDrawer } from "./admin/TeamDrawer";
 import { TeamWorkspacePage } from "./TeamWorkspacePage";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+import { ListSkeleton } from "./ListSkeleton";
 
 const AVAILABILITY_PIP: Record<LogicalAgentAvailability, { tone: StateTone; shape?: StateShape }> = {
   ready: { tone: "good" },
@@ -130,7 +131,7 @@ export function TeamsPage({
 
         <div className="teams-page-body">
           {loading ? (
-            <div className="route-loading" role="status" aria-live="polite">{t("admin.loading")}</div>
+            <ListSkeleton label={t("admin.loading")} />
           ) : error && teams.length === 0 ? (
             <RelayEmptyState feature="teams"
               title={t("workspace.load_failed")}

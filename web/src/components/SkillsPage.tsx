@@ -29,6 +29,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import { useKeyChange } from "../hooks/useKeyChange";
+import { ListSkeleton } from "./ListSkeleton";
 
 type CreateMode = "upload" | "github";
 const SOURCE_LABELS: Record<CreateMode, string> = {
@@ -317,9 +318,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         {skillsQuery.isLoading ? (
-          <div className="route-loading" role="status" aria-live="polite">
-            {t("skills.loading")}
-          </div>
+          <ListSkeleton label={t("skills.loading")} />
         ) : skillsQuery.error ? (
           <RelayEmptyState feature="skills"
             title={t("skills.load_failed")}
