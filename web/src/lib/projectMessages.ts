@@ -33,6 +33,11 @@ export type DerivedMessage =
       outputTruncated?: boolean;
       /** The turn stopped before finishing and its runtime can pick it back up. */
       resumable?: boolean;
+      /** How the run ended, when, and with what exit code — set on completion
+       * and read by the turn's receipt (runReceipt.ts). */
+      outcome?: "completed" | "failed" | "cancelled";
+      finishedAt?: string;
+      exitCode?: number;
     }
   | {
       kind: "system";
@@ -496,6 +501,9 @@ export class ProjectMessagesAccumulator {
           ...(!event.tokenUsage ? { usageUnreported: true } : {}),
           ...(event.outputTruncated ? { outputTruncated: true } : {}),
           ...(event.status !== "completed" && event.runtimeSessionId ? { resumable: true } : {}),
+          outcome: event.status === "running" ? "completed" : event.status,
+          finishedAt: event.timestamp,
+          ...(typeof event.exitCode === "number" ? { exitCode: event.exitCode } : {}),
         };
         return true;
       }

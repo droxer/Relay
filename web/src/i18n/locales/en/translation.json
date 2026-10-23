@@ -394,9 +394,7 @@
     "remove": "Remove @{{id}}",
     "remove_confirm": "Remove @{{id}} from this browser?",
     "agent_running_aria": "Agent running",
-    "tokens_short": "tokens",
     "token_usage_title": "Input {{input}} · Output {{output}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}}",
-    "token_usage_unreported": "This agent doesn't report token usage",
     "output_truncated": "Some live output from this run wasn't saved. The final result is complete.",
     "no_sessions": "—",
     "rename": "Rename",
@@ -458,6 +456,21 @@
       "accept": "Accept",
       "unblock": "Unblock",
       "action_label": "Task needs you"
+    },
+    "receipt": {
+      "label": "Run summary",
+      "outcome_completed": "Done",
+      "outcome_failed": "Failed",
+      "outcome_failed_exit": "Failed · exit code {{code}}",
+      "outcome_cancelled": "Stopped",
+      "duration": "Duration",
+      "tokens": "Fresh tokens",
+      "tokens_cached": "{{cached}} cached",
+      "tokens_unreported": "Not reported by the runtime",
+      "files": "Files",
+      "files_count_one": "{{count}} file",
+      "files_count_other": "{{count}} files",
+      "runtime": "Runtime"
     }
   },
   "composer": {

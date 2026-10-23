@@ -13,6 +13,7 @@
 
 @import "./thread.css" layer(relay);
 @import "./chat.css" layer(relay);
+@import "./run-receipt.css" layer(relay);
 @import "./collab-style.css" layer(relay);
 @import "./agent-stream.css" layer(relay);
 /* KaTeX's own stylesheet, pulled into `relay` so markdown.css can override its

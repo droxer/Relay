@@ -391,9 +391,7 @@
     "remove": "移除 @{{id}}",
     "remove_confirm": "从此浏览器移除 @{{id}}？",
     "agent_running_aria": "智能体运行中",
-    "tokens_short": "Token",
     "token_usage_title": "输入 {{input}} · 输出 {{output}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}}",
-    "token_usage_unreported": "该智能体未上报 Token 用量",
     "output_truncated": "此运行的部分实时输出未保存，最终结果完整。",
     "no_sessions": "—",
     "rename": "重命名",
@@ -455,6 +453,20 @@
       "accept": "验收",
       "unblock": "解除阻塞",
       "action_label": "任务需要你处理"
+    },
+    "receipt": {
+      "label": "运行摘要",
+      "outcome_completed": "已完成",
+      "outcome_failed": "失败",
+      "outcome_failed_exit": "失败 · 退出码 {{code}}",
+      "outcome_cancelled": "已停止",
+      "duration": "用时",
+      "tokens": "新增 token",
+      "tokens_cached": "缓存 {{cached}}",
+      "tokens_unreported": "运行时未报告",
+      "files": "文件",
+      "files_count_other": "{{count}} 个文件",
+      "runtime": "运行时"
     }
   },
   "composer": {

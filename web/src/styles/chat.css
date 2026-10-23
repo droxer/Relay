@@ -783,28 +783,6 @@
   display: none;
 }
 
-/* Token usage reads like a CLI status line (Codex/Claude style) — flat,
-   muted, no pill chrome, trailing at the far edge behind the actions. */
-.msg-tokens {
-  margin-inline-start: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  /* The footer's dense control rung, so the usage line centres on the same
-     row as the icon actions beside it. */
-  height: var(--control-h-xs);
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-  font-feature-settings: var(--font-features), "tnum" 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  cursor: default;
-}
-
 .msg-turn-actions {
   display: flex;
   align-items: center;
