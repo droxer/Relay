@@ -46,7 +46,7 @@ for (const mobile of [false, true]) {
     await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
     // Members carries the crew's cards; Settings carries the edit form.
-    await page.getByRole("tab", { name: "Members", exact: true }).click();
+    await page.getByRole("tab", { name: "Agents", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=members$/);
     await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
