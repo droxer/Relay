@@ -194,14 +194,14 @@
   transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
 }
 
-.tag-badge-remove:hover {
+.tag-badge-remove:hover:not(:disabled) {
   background: var(--surface-3);
   color: var(--ink-1);
 }
 
+/* Already --ink-4 at rest; disabled only drops the hover and the pointer. */
 .tag-badge-remove:disabled {
   cursor: default;
-  opacity: var(--opacity-disabled);
 }
 
 @media (forced-colors: active) {

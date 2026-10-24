@@ -73,10 +73,16 @@
 }
 
 
-.profile-image-picker-trigger:disabled,
-.profile-image-picker-remove:disabled {
+/* Saving. The trigger IS the picture, so dimming the image is the only way
+   to quiet it; the remove control is an icon and takes the quiet ink. */
+.profile-image-picker-trigger:disabled {
   cursor: progress;
   opacity: var(--opacity-disabled);
+}
+
+.profile-image-picker-remove:disabled {
+  color: var(--ink-4);
+  cursor: progress;
 }
 
 /* Hairline ring only — flat elevation, no tinted ring, no drop shadow. */
@@ -154,7 +160,7 @@
   transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
-.profile-image-picker-remove:hover {
+.profile-image-picker-remove:hover:not(:disabled) {
   --tone: var(--err);
   border-color: var(--tone-line);
   color: var(--err);
@@ -330,7 +336,7 @@
 .profile-image-presets {
   display: grid;
   gap: var(--sp-3);
-  width: min(320px, calc(100vw - var(--sp-6)));
+  width: min(320px, var(--available-width, 320px));
   max-height: min(480px, var(--available-height, 480px));
   overflow-y: auto;
   overscroll-behavior: contain;

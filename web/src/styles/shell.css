@@ -41,10 +41,9 @@
   overflow: hidden;
   background: var(--surface-0);
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  /* The grid track owns the collapse motion — .sidenav-panel has no explicit
-     width (the track sizes it), so a width transition there would be a no-op
-     double-animation. */
-  transition: grid-template-columns var(--t-fast) var(--ease);
+  /* No transition on the track list: animating it re-laid out the whole app
+     (rail, transcript, composer) on every frame of a sidebar collapse. The
+     collapse is instant, like any other layout switch. */
 }
 
 /* display:contents keeps route panels as direct grid items while the <main>

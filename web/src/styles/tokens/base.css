@@ -47,7 +47,7 @@ html {
   font-size: 87.5%;
 }
 
-/* overflow-x: hidden is a last-resort clip — reflow regressions must be
+/* overflow-x: clip (below) is a last-resort clip — reflow regressions must be
    caught at the 320px floor (WCAG 1.4.10), not papered over here. */
 /* Body tracking is set ONCE, here, and inherited. It resolves to 0 — the
    system faces track themselves — but the global hook stays, because
@@ -61,7 +61,9 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
-  overflow-x: hidden;
+  /* clip, not hidden: hidden makes html/body scroll containers, which
+     breaks position: sticky inside them. */
+  overflow-x: clip;
   background: var(--surface-0);
   color: var(--ink-2);
   font-family: var(--font-sans);

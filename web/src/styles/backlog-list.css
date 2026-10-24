@@ -495,7 +495,8 @@ tr[data-selected="true"] > td:first-child {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  max-width: calc(100vw - var(--sp-8));
+  /* Fixed, so 100% is the viewport without its scrollbar; 100vw is not. */
+  max-width: calc(100% - var(--sp-8));
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);

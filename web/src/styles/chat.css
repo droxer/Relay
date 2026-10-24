@@ -119,7 +119,7 @@
 }
 
 .chat-agent-select-content {
-  min-width: min(280px, calc(100vw - var(--sp-6)));
+  min-width: min(280px, var(--available-width, 280px));
 }
 
 .chat-agent-select-unavailable {

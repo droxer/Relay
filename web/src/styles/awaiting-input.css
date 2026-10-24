@@ -211,7 +211,7 @@
 
 /* Once one is picked the rest step back; the pick stays lit while it sends. */
 .awaiting-input-choice:disabled { cursor: default; }
-.awaiting-input-choice:disabled:not([data-chosen]) { opacity: var(--opacity-disabled); }
+.awaiting-input-choice:disabled:not([data-chosen]) { color: var(--ink-4); }
 
 /* A gate stop's next steps are suggestions, not the agent's words: neutral
    until intent, with the caution tone kept for the rail alone. */

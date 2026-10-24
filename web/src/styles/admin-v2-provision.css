@@ -419,8 +419,10 @@
   color: var(--err);
 }
 
+/* In flight: the icon quiets to --ink-4 (no faded plate) and the cursor says
+   why it cannot be pressed again. */
 .adm-placement-remove:disabled {
-  opacity: var(--opacity-disabled);
+  color: var(--ink-4);
   cursor: progress;
 }
 

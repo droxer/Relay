@@ -43,7 +43,6 @@
   height: 48px;
   flex-shrink: 0;
   color: var(--ink-1);
-  transition: width var(--t-fast) var(--ease), padding var(--t-fast) var(--ease);
 }
 
 .sidenav-panel[data-expanded="true"] .sidenav-brand {
