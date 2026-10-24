@@ -211,6 +211,12 @@ it("reports a missing title in the drawer's own words", () => {
   expect(screen.getByText("backlog.title_required")).toBeTruthy();
 });
 
+it("offers No project with an automation hint", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), title: "Digest" }} />);
+  expect(screen.getByText("routine.project_hint")).toBeTruthy();
+  expect(screen.getAllByText("issues.no_project").length).toBeGreaterThan(0);
+});
+
 it("shows event filters and no schedule for task-event automations", () => {
   render(<Form initial={routine({ routineTriggers: [{ kind: "task_event", on: "status_changed" }] })} />);
   expect(screen.getByText("automation.trigger_kind")).toBeTruthy();

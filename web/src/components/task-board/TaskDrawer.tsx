@@ -68,9 +68,10 @@ type TaskDrawerProps = {
   /** Stacking order — 1 when the form opens above a record drawer. */
   layer?: number;
   /**
-   * How the project field behaves. `required` (the default for a new record)
-   * insists on one; `optional` also offers "No project" — an intake issue,
-   * which cannot take an agent or run until triage moves it into a project;
+   * How the project field behaves. `required` (the default for a new issue)
+   * insists on one; `optional` (the default for a new automation) also offers
+   * "No project" — for an issue that means intake, which cannot take an agent
+   * or run until triage moves it into a project;
    * `locked` (the default once saved) only names it, because a project is
    * where work runs and moving run work would strand its thread.
    */
@@ -216,7 +217,9 @@ export function TaskDrawer({
   onDelete,
   onClosed,
   layer,
-  projectChoice = form.id ? "locked" : "required",
+  // An automation need not belong to a project: without one, its runs share
+  // the automation's own workspace.
+  projectChoice = form.id ? "locked" : form.variant === "routine" ? "optional" : "required",
 }: TaskDrawerProps) {
   const { t } = useTranslation();
   const priorityLabelId = useId();
@@ -314,7 +317,9 @@ export function TaskDrawer({
             label={t("project.project")}
             labelId={projectLabelId}
             wrapper="div"
-            hint={projectChoice === "optional" ? t("issues.project_hint") : undefined}
+            hint={projectChoice === "optional"
+              ? t(form.variant === "routine" ? "routine.project_hint" : "issues.project_hint")
+              : undefined}
             error={projectError ? t("project.required") : undefined}
           >
             <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {

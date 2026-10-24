@@ -181,7 +181,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
+    if (!form || !form.title.trim()) return;
     if (form.routineTriggers.some((trigger) => triggerError(trigger))) return;
     setSaving(true);
     try {
@@ -196,7 +196,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else if (form.projectId) await createTaskMutation.mutateAsync({ ...payload, projectId: form.projectId });
+      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}) });
       dismissRoutineForm();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.
