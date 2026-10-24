@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { RelayApiError } from "../src/api-client/client.ts";
-import { projectCleanupNotice, projectDeleteErrorMessage } from "../src/lib/projectDeletion.ts";
+import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../src/lib/projectDeletion.ts";
 
 const names: Record<string, string> = { s1: "Plan launch", s2: "Draft notes", s3: "Review", s4: "Ship" };
 const threadName = (id: string) => names[id];
@@ -72,5 +72,20 @@ describe("projectDeleteErrorMessage", () => {
 
   it("uses the generic message for anything else", () => {
     assert.equal(projectDeleteErrorMessage(new Error("boom"), threadName).key, "errors.delete_project");
+  });
+});
+
+describe("projectDeleteBlockingThreadId", () => {
+  it("offers the first thread a refusal names", () => {
+    assert.equal(projectDeleteBlockingThreadId(activeError(["s2", "s1"])), "s2");
+  });
+
+  it("offers nothing when the refusal names only tasks or is another error", () => {
+    assert.equal(projectDeleteBlockingThreadId(activeError([], ["t1"])), undefined);
+    assert.equal(
+      projectDeleteBlockingThreadId(new RelayApiError("conflict", 409, "project_version_conflict")),
+      undefined,
+    );
+    assert.equal(projectDeleteBlockingThreadId(new Error("project_execution_active")), undefined);
   });
 });

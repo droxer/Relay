@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import {
   apiJson,
   archiveProject,
+  unarchiveProject,
   deleteProject,
   archiveSession,
   assignControlPanelDaemonNode,
@@ -631,6 +632,28 @@ describe("project mutations", () => {
 
     assert.deepEqual(calls, [{
       url: "/api/v1/projects/project%2F1/archive?expectedVersion=4",
+      method: "POST",
+    }]);
+  });
+
+  it("unarchives the exact project version", async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), method: String(init?.method) });
+      return new Response(JSON.stringify({ project: { id: "project/1" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await unarchiveProject("project/1", 5);
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    assert.deepEqual(calls, [{
+      url: "/api/v1/projects/project%2F1/unarchive?expectedVersion=5",
       method: "POST",
     }]);
   });

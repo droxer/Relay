@@ -4,13 +4,14 @@ import { RelayApiError } from "../src/api";
 import { ProjectSettingsPanel } from "../src/components/ProjectSettingsPanel";
 import type { ProjectRecord } from "../src/types";
 
-const { update, archive, remove, getProject, confirm, startSetup } = vi.hoisted(() => ({
-  update: vi.fn(), archive: vi.fn(), remove: vi.fn(), getProject: vi.fn(), confirm: vi.fn(), startSetup: vi.fn(),
+const { update, archive, unarchive, remove, getProject, confirm, startSetup } = vi.hoisted(() => ({
+  update: vi.fn(), archive: vi.fn(), unarchive: vi.fn(), remove: vi.fn(), getProject: vi.fn(), confirm: vi.fn(), startSetup: vi.fn(),
 }));
 vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProject }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   updateProjectMutation: { isPending: false, mutateAsync: update },
   archiveProjectMutation: { isPending: false, mutateAsync: archive },
+  unarchiveProjectMutation: { isPending: false, mutateAsync: unarchive },
   deleteProjectMutation: { isPending: false, mutateAsync: remove },
   startProjectSetupMutation: { isPending: false, mutateAsync: startSetup },
 }) }));
@@ -31,7 +32,7 @@ function renderPanel(record: ProjectRecord = project, onDeleted = vi.fn()) {
 
 beforeEach(() => {
   update.mockReset().mockResolvedValue({ project });
-  archive.mockReset(); remove.mockReset(); getProject.mockReset();
+  archive.mockReset(); unarchive.mockReset(); remove.mockReset(); getProject.mockReset();
   confirm.mockReset().mockResolvedValue(true);
 });
 
@@ -133,12 +134,22 @@ it("archives a project only after confirmation", async () => {
   await waitFor(() => expect(archive).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 1 }));
 });
 
-it("locks the details of an archived project but still allows deleting it", () => {
+it("locks the details of an archived project but still allows unarchiving and deleting it", () => {
   renderPanel({ ...project, archivedAt: "2026-09-01" });
   expect(screen.getByText("project.settings_archived")).toBeTruthy();
   expect(nameInput().matches(":disabled")).toBe(true);
-  expect(screen.getByRole("button", { name: "project.archive" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.queryByRole("button", { name: "project.archive" })).toBeNull();
+  expect(screen.getByRole("button", { name: "project.unarchive" }).hasAttribute("disabled")).toBe(false);
   expect(screen.getByRole("button", { name: "project.delete" }).hasAttribute("disabled")).toBe(false);
+});
+
+it("unarchives the current version and reopens the details for editing", async () => {
+  const archived = { ...project, archivedAt: "2026-09-01", enabled: false, version: 2 };
+  unarchive.mockResolvedValue({ project: { ...project, enabled: true, version: 3 } });
+  renderPanel(archived);
+  fireEvent.click(screen.getByRole("button", { name: "project.unarchive" }));
+  await waitFor(() => expect(unarchive).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 2 }));
+  expect(confirm).not.toHaveBeenCalled();
 });
 
 it("does not delete when the user cancels the destructive confirmation", async () => {
@@ -156,6 +167,14 @@ it("deletes the current version and leaves the project after confirmation", asyn
   fireEvent.click(screen.getByRole("button", { name: "project.delete" }));
   await waitFor(() => expect(onDeleted).toHaveBeenCalledOnce());
   expect(remove).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 3 });
+});
+
+it("hands the delete a way to open the thread that blocks it", async () => {
+  remove.mockResolvedValue({ deletedProjectId: "p", workspaceCleanup: "queued" });
+  const onOpenThread = vi.fn();
+  render(<ProjectSettingsPanel project={project} computer={computer} onDeleted={vi.fn()} onOpenThread={onOpenThread} />);
+  fireEvent.click(screen.getByRole("button", { name: "project.delete" }));
+  await waitFor(() => expect(remove).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 1, openThread: onOpenThread }));
 });
 
 it("stays on settings when deletion fails", async () => {

@@ -58,6 +58,15 @@ export function archiveProject(projectId: string, expectedVersion: number): Prom
   });
 }
 
+/** Reopen an archived project. A live project with the same name refuses it
+ *  with `project_name_taken`. */
+export function unarchiveProject(projectId: string, expectedVersion: number): Promise<{ project: ProjectRecord }> {
+  const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
+  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}/unarchive?${query.toString()}`, {
+    method: "POST",
+  });
+}
+
 export type ProjectWorkspaceCleanup = "queued" | "waiting_for_upgrade" | "waiting_for_computer" | "orphaned" | "kept";
 
 export interface ProjectDeletion {

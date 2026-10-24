@@ -403,6 +403,7 @@ POST /api/v1/projects
 GET    /api/v1/projects/{id}
 PATCH  /api/v1/projects/{id}     { expectedVersion, name?, description?, goal?, context?, leadAgentId?, members?, enabled?, setupResolution?, resolveContextSuggestions? }
 POST   /api/v1/projects/{id}/archive?expectedVersion={version}
+POST   /api/v1/projects/{id}/unarchive?expectedVersion={version}
 DELETE /api/v1/projects/{id}?expectedVersion={version}
 GET    /api/v1/projects/{id}/workspace/files?path={relativePath}
 GET    /api/v1/projects/{id}/workspace/file?path={relativePath}
@@ -442,7 +443,10 @@ Archiving is a soft delete. Archived and disabled projects reject new tasks,
 threads, user task mutations, starts, and routine promotion. Schedules do not
 advance while the project is closed. Historical tasks, threads, events, and
 workspace files remain readable; already admitted runs can finish and record
-results. Project settings can re-enable a disabled project; archival is final.
+results. Project settings can re-enable a disabled project or unarchive an
+archived project. Unarchiving requires the owner and current `expectedVersion`,
+preserves the project's fields and roster, and sets it enabled. A live project
+with the same owner and name causes a 409 `project_name_taken` response.
 Use `POST /projects/{id}/archive` to archive; `DELETE` now permanently deletes.
 Deletion requires the project owner and its current `expectedVersion`, including
 for an archived project. It removes the project, roster, tasks (including routines

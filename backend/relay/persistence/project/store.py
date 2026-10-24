@@ -247,6 +247,40 @@ class DatabaseProjectStore:
             mutate=mutate,
         )
 
+    def unarchive_project(
+        self, project_id: str, *, expected_version: int
+    ) -> dict[str, Any]:
+        """Reopen an archived project as it stood, enabled again.
+
+        Nothing about its roster or computer is re-checked here: dispatch
+        admits work against the current agents and nodes as it always does.
+        A live project with the same name refuses it (`project_name_taken`).
+        """
+
+        def mutate(
+            current: dict[str, Any],
+        ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+            if not current.get("archivedAt"):
+                return None
+            restored = {
+                key: value for key, value in current.items() if key != "archivedAt"
+            }
+            restored = {
+                **restored,
+                "enabled": True,
+                "updatedAt": now_iso(),
+                "version": int(current["version"]) + 1,
+            }
+            return restored, {"project": restored}
+
+        return self._mutate(
+            project_id,
+            "project.unarchived",
+            expected_version=expected_version,
+            mutate=mutate,
+            allow_archived=True,
+        )
+
     def events(self, project_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = (
@@ -283,6 +317,7 @@ class DatabaseProjectStore:
         *,
         expected_version: int,
         mutate: Callable[[dict[str, Any]], tuple[dict[str, Any], dict[str, Any]] | None],
+        allow_archived: bool = False,
     ) -> dict[str, Any]:
         for attempt in range(3):
             try:
@@ -302,7 +337,7 @@ class DatabaseProjectStore:
                     )
                     if not row:
                         raise KeyError(project_id)
-                    if row["snapshot"].get("archivedAt"):
+                    if row["snapshot"].get("archivedAt") and not allow_archived:
                         raise ProjectVersionConflict(project_id)
                     current = dict(row["snapshot"])
                     if int(current["version"]) != expected_version:

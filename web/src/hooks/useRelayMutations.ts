@@ -7,6 +7,7 @@ import {
   assignTask,
   answerPermissionRequest,
   archiveProject,
+  unarchiveProject,
   deleteProject,
   cancelRun,
   createTask,
@@ -40,7 +41,7 @@ import { applySessionEventUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects } from "../lib/projectDirectory";
-import { projectCleanupNotice, projectDeleteErrorMessage } from "../lib/projectDeletion";
+import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
 
 type TokenArg = { token?: string };
@@ -388,9 +389,35 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to archive project", "errors.archive_project"),
   });
 
-  const deleteProjectMutation = useMutation({
+  const unarchiveProjectMutation = useMutation({
     mutationFn: ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) =>
-      deleteProject(projectId, expectedVersion),
+      unarchiveProject(projectId, expectedVersion),
+    onSuccess: ({ project }) => {
+      cacheProject(project);
+      void invalidateProjects();
+      void invalidateSessions();
+      void invalidateTasks();
+      announce({ message: t("project.unarchived"), tone: "success" });
+    },
+    onError: (error: unknown) => {
+      if (error instanceof RelayApiError && error.code === "project_version_conflict") void invalidateProjects();
+      const nameTaken = error instanceof RelayApiError && error.code === "project_name_taken";
+      reportMutationError(
+        "Failed to unarchive project",
+        error,
+        t(nameTaken ? "errors.unarchive_project_name_taken" : "errors.unarchive_project"),
+      );
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    /* `openThread` lets a refusal offer the thread that blocks it; it rides
+       the variables because only the caller can navigate. */
+    mutationFn: ({ projectId, expectedVersion }: {
+      projectId: string;
+      expectedVersion: number;
+      openThread?: (sessionId: string) => void;
+    }) => deleteProject(projectId, expectedVersion),
     onSuccess: async ({ deletedProjectId, workspaceCleanup, detachedTaskIds }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY }),
@@ -417,7 +444,7 @@ export function useRelayMutations() {
         tone: cleanup.tone,
       });
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, { openThread }) => {
       // A stale version means the project changed underneath the dialog; load
       // the current one so the next attempt can succeed.
       if (error instanceof RelayApiError && error.code === "project_version_conflict") void invalidateProjects();
@@ -431,7 +458,11 @@ export function useRelayMutations() {
         },
         (taskId) => tasks.find((candidate) => candidate.id === taskId)?.title || undefined,
       );
-      reportMutationError("Failed to delete project", error, t(message.key, message.values));
+      const blockingThreadId = projectDeleteBlockingThreadId(error);
+      const action = blockingThreadId && openThread
+        ? { label: t("project.delete_open_blocking_thread"), onClick: () => openThread(blockingThreadId) }
+        : undefined;
+      reportMutationError("Failed to delete project", error, t(message.key, message.values), action);
     },
   });
 
@@ -475,6 +506,7 @@ export function useRelayMutations() {
     startProjectSetupMutation,
     updateProjectMutation,
     archiveProjectMutation,
+    unarchiveProjectMutation,
     deleteProjectMutation,
     updateTeamMutation,
     deleteTeamMutation,

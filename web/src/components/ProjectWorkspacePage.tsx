@@ -244,6 +244,7 @@ export function ProjectWorkspacePage({
             project={project}
             computer={computerSummary}
             onDeleted={onDeleted}
+            onOpenThread={onOpenThread}
             onSetupStarted={() => setPageTab("dashboard")}
           />
         </TabsContent>

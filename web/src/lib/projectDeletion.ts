@@ -67,3 +67,12 @@ export function projectDeleteErrorMessage(
   if (tasks.length > 0) return namedRefusal(tasks, "project.delete_active_tasks", "tasks");
   return { key: "project.delete_active" };
 }
+
+/** The first thread a refused delete names, so the refusal can open it — a
+ *  setup or task thread is easy to lose once its project is archived. */
+export function projectDeleteBlockingThreadId(error: unknown): string | undefined {
+  if (!(error instanceof RelayApiError)) return undefined;
+  const code = error.code ?? error.message;
+  if (!code.includes("project_execution_active")) return undefined;
+  return blockingIds(error.detail, "sessionIds")[0];
+}
