@@ -2,11 +2,22 @@
    The column-header sort affordance, shared by every full-page list table
    (backlog, routines, the admin user and node tables).
 
-   It deliberately owns no geometry. The head cell keeps its own class from
+   It deliberately owns no column widths. The head cell keeps its own class from
    its own stylesheet — `.backlog-rows-head-due` is where the 116px track is
    declared, and the row cell beside it reads the same rule — so this sheet
    styles only what sits INSIDE that cell. Adding a width here would
    reintroduce exactly the head/row drift backlog-list.css warns about. */
+
+/* The column header is a quiet caption, not a row of labels as loud as the
+   data — on every table, not only the task lists. The admin user, computer
+   and invitation tables used to keep the primitive's 14px ink header, so the
+   same console read with two header voices depending on the page. */
+th[data-slot="table-head"] {
+  height: var(--control-h-sm);
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
 
 .list-sort-button {
   /* The head cell already carries the micro-caps role; the button inherits
@@ -32,7 +43,13 @@
 
 .list-sort-button[data-align="start"] { justify-content: flex-start; }
 
-.list-sort-button[data-align="end"] { justify-content: flex-end; }
+/* A flush-right column puts its caret BEFORE the label, so the label's last
+   letter lands on the same edge as the numbers under it. Trailing, the
+   reserved caret box pushed every right-aligned header ~20px off its column. */
+.list-sort-button[data-align="end"] {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
 
 .list-sort-label {
   min-width: 0;

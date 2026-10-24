@@ -391,24 +391,26 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
              pagination stay outside it — the table receives the already
              ordered, already paged rows. */
           <>
-            <RoutineTable
-              rows={pagedTasks.items}
-              sort={sort}
-              onSort={toggleSort}
-              ariaLabel={sectionLabel}
-              selectAll={
-                <TaskSelectAllCheckbox
-                  state={selectionCheckState(visibleSelection, visibleIds)}
-                  label={t("routine.select_all_routines")}
-                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                />
-              }
-              selection={visibleSelection}
-              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-              stateFor={(task) => routineState(task, runningIds)}
-              assignmentFor={taskAssignmentDisplay}
-              handlersFor={routineHandlers}
-            />
+            <div className="backlog-rows" data-density="compact">
+              <RoutineTable
+                rows={pagedTasks.items}
+                sort={sort}
+                onSort={toggleSort}
+                ariaLabel={sectionLabel}
+                selectAll={
+                  <TaskSelectAllCheckbox
+                    state={selectionCheckState(visibleSelection, visibleIds)}
+                    label={t("routine.select_all_routines")}
+                    onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                  />
+                }
+                selection={visibleSelection}
+                onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+                stateFor={(task) => routineState(task, runningIds)}
+                assignmentFor={taskAssignmentDisplay}
+                handlersFor={routineHandlers}
+              />
+            </div>
             <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
           </>
         )}

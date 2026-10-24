@@ -15,11 +15,12 @@
 
 /* Column tracks for the per-band node tables. Lengths, not scale steps —
    the design grid bans arbitrary bracket values in component classes.
-   FLOORS (min-width), not fixed widths: a header that runs longer in zh-CN
-   or a longer English string widens its column instead of clipping. */
-.adm-node-col-identity { min-width: 200px; }
-.adm-node-col-user { min-width: 120px; }
-.adm-node-col-actions { min-width: 11rem; }
+   The grouped tables use fixed layout (list-group.css): identity takes the
+   largest share, actions a fixed track, and user and runtimes split the rest
+   — the same x in every band. */
+.adm-node-col-identity { width: 34%; }
+.adm-node-col-user { width: 24%; }
+.adm-node-col-actions { width: 7rem; }
 
 .adm-node-row-id {
   display: flex;
@@ -79,9 +80,13 @@
    so every card in a row keeps the same rhythm. The kind gives way first. */
 .adm-node-meta {
   display: flex;
+  /* Owner and kind wrap onto two lines before either one ellipsizes: a
+     291px card printed "Marcus L… @mar… Local comp…" rather than any one
+     fact in full. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-3);
+  gap: var(--sp-1) var(--sp-3);
   min-width: 0;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -342,12 +347,19 @@
   min-width: 0;
 }
 
-.adm-node-card-meta-col {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--sp-1);
+/* The card's one status readout, the identity column's last line. */
+.adm-node-card-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+/* Plain dot + word: without a fill the pill's inline padding only indented
+   the dot off the name's left edge. */
+.adm-node-card-state :is(.adm-status-plain, .adm-presence-pill) {
+  padding-inline: 0;
 }
 
 .adm-node-card-name {
@@ -575,6 +587,9 @@
 .adm-node-row-error {
   grid-column: 1 / -1;
   margin: 0;
+  /* The table cell is nowrap; a failure message wraps inside its track
+     rather than running across the runtimes column. */
+  white-space: normal;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--err);

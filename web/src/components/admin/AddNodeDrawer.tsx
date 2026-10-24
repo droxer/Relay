@@ -252,6 +252,14 @@ export function AddNodeDrawer({
               label={t("admin.user")}
               labelId={userLabelId}
               wrapper="div"
+              /* Guidance, not a pre-emptive error: this used to render the
+                 "User ID is required." error string as a resting hint, so the
+                 same sentence appeared twice once validation ran. It is the
+                 Field's own hint so it sits under the select, not a 24px
+                 section gap away from it. */
+              hint={!selectedUser && !fieldErrors.userId
+                ? t(isManaged ? "admin.v2.add_node_assign_managed" : "admin.v2.add_node_assign_later")
+                : undefined}
               error={fieldErrors.userId}
               errorId="add-node-user-error"
             >
@@ -265,7 +273,7 @@ export function AddNodeDrawer({
                 <SelectTrigger
                   ref={userTriggerRef}
                   {...(isManaged ? { "data-modal-initial-focus": true } : {})}
-                  className="w-full code"
+                  className="w-full"
                   aria-labelledby={userLabelId}
                   aria-invalid={Boolean(fieldErrors.userId) || undefined}
                   aria-describedby={fieldErrors.userId ? "add-node-user-error" : undefined}
@@ -297,16 +305,6 @@ export function AddNodeDrawer({
           ) : (
             <p className="adm-form-hint adm-form-hint--notice">{t("admin.v2.add_node_no_users")}</p>
           )}
-
-          {/* Guidance, not a pre-emptive error: this used to render the
-              "User ID is required." error string as a resting hint, so the
-              same sentence appeared twice — muted here and red below — once
-              validation ran. */}
-          {!selectedUser && hasUsers && !fieldErrors.userId ? (
-            <p className="adm-form-hint">
-              {t(isManaged ? "admin.v2.add_node_assign_managed" : "admin.v2.add_node_assign_later")}
-            </p>
-          ) : null}
 
           {localQuota ? (
             <p className="adm-form-hint">

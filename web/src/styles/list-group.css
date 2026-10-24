@@ -128,6 +128,26 @@
   min-height: 0;
 }
 
+/* Every band is its own <table>, so under auto layout each one sized its
+   columns to its own rows and "Computers" started at a different x in every
+   group. Fixed layout makes the tracks a property of the header classes, the
+   same in every band: fixed-width columns keep their declared width and the
+   flexible ones split what is left evenly. The floor keeps a narrow pane
+   scrolling instead of crushing the identity column; below 720px the tables
+   restack into cards anyway. */
+.adm-grouped-list table[data-slot="table"] {
+  table-layout: fixed;
+  min-width: 720px;
+}
+
+/* A fixed track cannot grow, so a long email or use case ellipsizes inside
+   its own column instead of painting over the next one. The trailing
+   actions cell is exempt: clipping it would clip its buttons' focus rings. */
+.adm-grouped-list td[data-slot="table-cell"]:not(:last-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* The band paints over the rows that scroll under it, so it cannot be
    translucent — --surface-0 is opaque. */
 .adm-grouped-list .list-group-band { z-index: 2; }

@@ -439,11 +439,20 @@ button.computer-run-open:hover {
   border-radius: var(--r-3);
 }
 
-.computer-install-intro h3,
-.computer-install-steps h3 {
+.computer-install-intro h3 {
   margin: 0;
   font: var(--type-heading);
   letter-spacing: var(--type-heading-track);
+  color: var(--ink-1);
+}
+
+/* Step titles are whole instructions ("Confirm the computer and directory in
+   the browser window that opens."), so they take the name role — sentences
+   in the 700 display heading read as shouting. */
+.computer-install-steps h3 {
+  margin: 0;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   color: var(--ink-1);
 }
 
@@ -590,15 +599,19 @@ button.computer-run-open:hover {
   color: var(--ink-3);
 }
 
+/* A ghost button's text sits a padding-width in from its box; pulling the
+   box into the gutter puts the label on the form's left edge with the hint
+   above it, instead of 16px indented under it. */
 .computer-manual-link {
   align-self: flex-start;
+  margin-inline-start: calc(-1 * var(--sp-4));
 }
 
 /* The step number sets in its step title's role, so the two align. */
 .computer-install-steps li::marker {
   color: var(--ink-3);
-  font: var(--type-heading);
-  letter-spacing: var(--type-heading-track);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
 }
 
 .computer-install-steps section {

@@ -145,14 +145,14 @@ export function UserGroupTable({
       {
         id: "computers",
         header: () => <UserCells.Read>{(s) => sortHead("computers", s.t("admin.v2.col_computers"), "start", "desc")}</UserCells.Read>,
-        cell: ({ row }) => <UserCells.Read>{(s) => <UserComputers nodes={row.original.nodes} t={s.t} />}</UserCells.Read>,
+        cell: ({ row }) => <UserCells.Read>{(s) => <div className="adm-emp-nodes"><UserComputers nodes={row.original.nodes} t={s.t} /></div>}</UserCells.Read>,
       },
       {
         id: "localLimit",
         /* The metric columns are flush right, so their carets are too — a
            left-aligned control under a right-aligned number reads as a
            different column. */
-        meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
+        meta: { headClass: "adm-emp-col-metric text-right", cellClass: "adm-emp-col-metric text-right" } satisfies ColumnChrome,
         header: () => <UserCells.Read>{(s) => sortHead("localLimit", s.t("admin.v2.col_local_limit"), "end", "desc")}</UserCells.Read>,
         cell: ({ row }) => <UserCells.Read>{(s) => {
           const member = row.original;
@@ -174,7 +174,7 @@ export function UserGroupTable({
       },
       {
         id: "running",
-        meta: { headClass: "adm-emp-col-running text-right", cellClass: "adm-emp-col-running text-right" } satisfies ColumnChrome,
+        meta: { headClass: "adm-emp-col-metric text-right", cellClass: "adm-emp-col-metric text-right" } satisfies ColumnChrome,
         header: () => <UserCells.Read>{(s) => sortHead("running", s.t("admin.v2.col_running"), "end", "desc")}</UserCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
@@ -189,7 +189,7 @@ export function UserGroupTable({
       },
       {
         id: "ready",
-        meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
+        meta: { headClass: "adm-emp-col-metric text-right", cellClass: "adm-emp-col-metric text-right" } satisfies ColumnChrome,
         header: () => <UserCells.Read>{(s) => sortHead("ready", s.t("admin.v2.col_ready"), "end", "desc")}</UserCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
@@ -252,7 +252,7 @@ export function UserGroupTable({
 
   return (
     <UserCells.Provider value={cellState}>
-      <Table data-density="compact" aria-label={label}>
+      <Table data-density="compact" aria-label={label} className="adm-emp-table">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent">

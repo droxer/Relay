@@ -29,6 +29,11 @@
 .adm-dash-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Every tile is eyebrow / value / foot on rows the tiles share (subgrid on
+     .adm-dash-tile), so a label that wraps to two lines — "Average cycle
+     time · 30 days" — moves every value in its row down with it instead of
+     leaving that one number a line lower than its neighbours. */
+  grid-auto-rows: auto auto 1fr;
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
@@ -69,9 +74,11 @@
    its foot wrapped to 159px and the delta line was sliced through the middle.
    The row still settles to one height because the tiles are grid siblings. */
 .adm-dash-tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
+  row-gap: var(--sp-2);
   min-height: var(--card-h-kpi);
   padding: var(--sp-5);
   border-right: 0.5px solid var(--line-1);

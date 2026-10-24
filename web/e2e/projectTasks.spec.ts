@@ -161,7 +161,7 @@ test("creating the first project preserves a global task draft", async ({ page }
   await projectForm.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(projectForm).toHaveCount(0);
   await expect(taskForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Keep this draft");
-  await expect(taskForm.getByRole("combobox", { name: "Projects", exact: true })).toContainText("First project");
+  await expect(taskForm.getByRole("combobox", { name: "Project", exact: true })).toContainText("First project");
   await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
   await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
 });

@@ -575,12 +575,7 @@ tr[data-selected="true"] > td:first-child {
   vertical-align: middle;
 }
 
-.task-table th[data-slot="table-head"] {
-  height: var(--control-h-sm);
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
+/* The column header caption is shared with every table — list-sort.css. */
 
 /* Touch at table widths (a tablet): a11y.css gives every link a 44px floor,
    and the title's text sat at the top of that box — every title rode ~12px
