@@ -7,7 +7,6 @@ import {
   ICON,
 } from "./icons";
 import { Markdown } from "./LazyMarkdown";
-import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -88,12 +87,13 @@ export function AgentProfileEditor({
         <div className="agent-personality-title-block">
           <div className="agent-personality-title-row">
             <h2 id={titleId}>{t("agents_page.personality_title")}</h2>
-            <TonePill
-              tone={hasCustomPersonality ? "good" : "neutral"}
-              label={hasCustomPersonality
+            {/* Where the personality comes from, not a state: plain words,
+                no badge and no tone dot. */}
+            <span className="agent-personality-source">
+              {hasCustomPersonality
                 ? t("agents_page.personality_defined")
                 : t("agents_page.personality_default")}
-            />
+            </span>
           </div>
           <span id={helpId} className="agent-personality-help">
             {t("agents_page.personality_help")}

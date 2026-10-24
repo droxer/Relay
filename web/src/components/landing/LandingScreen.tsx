@@ -20,7 +20,6 @@ import {
   type LandingCta,
   type LandingShot,
 } from "../../lib/landing";
-import { Chevrons } from "../AuthCanvas";
 import { RelayMark } from "../RelayMark";
 import { ICON, ThemeDark, ThemeLight } from "../icons";
 import { PublicLink } from "../waitlist/PublicLink";
@@ -95,10 +94,9 @@ function ThemeToggle({ onThemeChange }: { onThemeChange: (theme: Theme) => void 
   );
 }
 
-function SectionHead({ id, kicker, title }: { id: string; kicker: string; title: string }) {
+function SectionHead({ id, title }: { id: string; title: string }) {
   return (
     <header className="landing-section-head">
-      <p className="landing-kicker">{kicker}</p>
       <h2 className="landing-section-title" id={id}>{title}</h2>
     </header>
   );
@@ -161,15 +159,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
 
       <main>
         <section className="landing-hero" aria-labelledby="landing-headline">
-          <span className="landing-bleed" aria-hidden="true">
-            <Chevrons />
-          </span>
           <div className="landing-hero-copy">
-            <GithubLink className="landing-badge">
-              <GithubMark size={ICON.sm} />
-              <span>{t("landing.open_source_badge")}</span>
-              <span aria-hidden="true">→</span>
-            </GithubLink>
             <h1 className="landing-headline" id="landing-headline">{t("landing.headline")}</h1>
             <p className="landing-lede">{t("landing.lede")}</p>
             <div className="landing-ctas">
@@ -180,7 +170,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 <SectionLink id={HOW_ID} className="landing-button landing-button-secondary" label={t("landing.cta_secondary")} />
               )}
             </div>
-            <p className="landing-kicker landing-runtimes">{t("landing.eyebrow")}</p>
+            <p className="landing-runtimes">{t("landing.runtimes")}</p>
           </div>
           <div className="landing-hero-shot">
             <Shot shot={LANDING_HERO_SHOT} alt={t("landing.hero_alt")} priority />
@@ -188,11 +178,10 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
         </section>
 
         <section className="landing-section" id={HOW_ID} tabIndex={-1} aria-labelledby="landing-how-title">
-          <SectionHead id="landing-how-title" kicker={t("landing.how_kicker")} title={t("landing.how_title")} />
+          <SectionHead id="landing-how-title" title={t("landing.how_title")} />
           <ol className="landing-steps">
-            {LANDING_STEPS.map((step, index) => (
+            {LANDING_STEPS.map((step) => (
               <li className="landing-step" key={step.titleKey}>
-                <span className="landing-step-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                 <h3 className="landing-card-title">{t(step.titleKey)}</h3>
                 <p className="landing-card-body">{t(step.bodyKey)}</p>
               </li>
@@ -201,7 +190,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
         </section>
 
         <section className="landing-section" id={PRODUCT_ID} tabIndex={-1} aria-labelledby="landing-product-title">
-          <SectionHead id="landing-product-title" kicker={t("landing.product_kicker")} title={t("landing.product_title")} />
+          <SectionHead id="landing-product-title" title={t("landing.product_title")} />
           <div className="landing-tour">
             {LANDING_TOUR.map((item) => (
               <article className="landing-tour-row" key={item.shot}>
@@ -216,11 +205,10 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
         </section>
 
         <section className="landing-section" aria-labelledby="landing-principles-title">
-          <SectionHead id="landing-principles-title" kicker={t("landing.principles_kicker")} title={t("landing.principles_title")} />
+          <SectionHead id="landing-principles-title" title={t("landing.principles_title")} />
           <ul className="landing-principles">
             {LANDING_PRINCIPLES.map((item) => (
               <li className="landing-principle" key={item.titleKey}>
-                <Chevrons size={ICON.md} className="landing-principle-mark" />
                 <h3 className="landing-card-title">{t(item.titleKey)}</h3>
                 <p className="landing-card-body">{t(item.bodyKey)}</p>
               </li>
@@ -231,7 +219,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
         <section className="landing-section" aria-labelledby="landing-oss-title">
           <div className="landing-oss">
             <div className="landing-oss-copy">
-              <SectionHead id="landing-oss-title" kicker={t("landing.oss_kicker")} title={t("landing.oss_title")} />
+              <SectionHead id="landing-oss-title" title={t("landing.oss_title")} />
               <p className="landing-card-body">{t("landing.oss_body")}</p>
               <div className="landing-ctas landing-ctas-start">
                 <GithubLink className="landing-button landing-button-secondary landing-button-icon">
@@ -265,7 +253,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
           <GithubLink className="landing-foot-github" label={t("landing.github")}>
             <GithubMark size={ICON.md} />
           </GithubLink>
-          <span className="landing-foot-meta">Relay · {year}</span>
+          <span className="landing-foot-meta">© {year} Relay</span>
         </div>
       </footer>
     </div>

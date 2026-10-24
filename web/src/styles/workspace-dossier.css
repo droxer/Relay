@@ -68,8 +68,14 @@
 .agent-personality-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: var(--sp-3);
+}
+
+.agent-personality-source {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 /* Section title inside a tab panel. --type-title is the PAGE title role

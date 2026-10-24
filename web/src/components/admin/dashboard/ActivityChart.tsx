@@ -89,12 +89,6 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
         aria-label={t("admin.v2.dash_sessions_title")}
         preserveAspectRatio="none"
       >
-        <defs>
-          <linearGradient id="adm-dash-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--ink-3)" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="var(--ink-3)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
         {gridLines.map((y, i) => (
           <line
             key={i}
@@ -107,7 +101,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
             strokeDasharray={i === gridLines.length - 1 ? "0" : "2 3"}
           />
         ))}
-        <path d={areaPath} fill="url(#adm-dash-area)" className="adm-dash-chart-area" />
+        <path d={areaPath} fill="var(--ink-3)" fillOpacity={0.08} className="adm-dash-chart-area" />
         <path
           ref={lineRef}
           d={linePath}

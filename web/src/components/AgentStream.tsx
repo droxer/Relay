@@ -31,13 +31,12 @@ import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../ho
 import { useKeyChange } from "../hooks/useKeyChange";
 import { activityCounts, groupActivity, type ActivityEntry, type ActivityItem } from "../lib/activityGroups";
 
-// "Working…" as a shimmer across the words themselves — the live tell Claude
-// and Codex both use — rather than a pulsing dot beside them. The text stays
-// plain and legible; the sweep is decoration and stops under reduced motion.
+// "Working…" breathes on the shared live blink: plain words that dim and
+// return, not a gradient sweep across them.
 function StreamActivity({ label }: { label: string }) {
   return (
     <div className="agent-stream-activity" role="status">
-      <span className="agent-stream-shimmer">{label}</span>
+      <span className="agent-stream-live-label">{label}</span>
     </div>
   );
 }

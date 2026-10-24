@@ -261,7 +261,7 @@
   cursor: pointer;
 }
 
-.record-run-more:hover {
+.record-run-more:hover:not(:disabled) {
   background: var(--control-fill-hover);
 }
 
@@ -518,7 +518,7 @@
 }
 
 .record-run-more:disabled {
-  opacity: var(--opacity-disabled);
+  color: var(--ink-4);
   cursor: default;
 }
 

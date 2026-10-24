@@ -110,18 +110,13 @@ describe("shell grid tracks", () => {
     );
   });
 
-  it("keeps a collapsed track interpolable with the width it collapses from", () => {
-    // The shell animates grid-template-columns. A track list only interpolates
-    // when both endpoints use the same sizing function per track, so a closed
-    // track is minmax(0px, 0px) rather than a bare 0 — otherwise the rail
-    // snaps shut instead of sliding.
-    const closed = [...`${shell}\n${responsive}`.matchAll(/--shell-(?:rail|space)-track:\s*([^;]+);/g)]
-      .map((m) => m[1].trim())
-      .filter((value) => /^0|minmax\(\s*0/.test(value));
-    assert.ok(closed.length > 0, "some state must still close a track");
-    for (const value of closed) {
-      assert.equal(value, "minmax(0px, 0px)", "collapse to minmax(0px, 0px), not to a bare 0");
-    }
+  it("switches tracks instantly instead of animating the layout", () => {
+    // Transitioning the track list re-laid out the rail, transcript, and
+    // composer on every frame of a sidebar collapse. Layout properties never
+    // animate (transform and opacity only), so the shell carries no
+    // transition on its columns or the sidenav on its width.
+    assert.doesNotMatch(`${shell}\n${responsive}`, /transition:[^;]*grid-template-columns/);
+    assert.doesNotMatch(readStyle("sidenav.css"), /transition:[^;]*\bwidth\b/);
   });
 });
 

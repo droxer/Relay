@@ -6,10 +6,10 @@
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-4);
-  border: 0.5px solid var(--line-2);
-  /* The rail carries the tone: a blocked or failed execution warns, work that
-     is simply waiting on a person reads as information, not a fault. */
-  border-inline-start: var(--accent-bar-block-w) solid var(--recovery-rail, var(--warn));
+  /* The hairline carries the tone: a blocked or failed execution warns, work
+     that is simply waiting on a person reads as information, not a fault. One
+     even border, not a thick coloured stripe down the leading edge. */
+  border: 0.5px solid color-mix(in srgb, var(--recovery-rail, var(--warn)) 55%, var(--line-2));
   border-radius: var(--r-3);
   background: var(--surface-1);
   color: var(--ink-2);

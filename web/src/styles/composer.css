@@ -131,8 +131,10 @@
    mid-word; give the list its own comfortable measure instead. */
 .thread-runtime-content {
   width: auto;
-  min-width: min(304px, calc(100vw - var(--sp-8)));
-  max-width: min(420px, calc(100vw - var(--sp-6)));
+  /* --available-width is the room Base UI's positioner measured after its
+     collision padding; 100vw also counts a classic scrollbar and overflowed. */
+  min-width: min(304px, var(--available-width, 304px));
+  max-width: min(420px, var(--available-width, 420px));
 }
 
 /* Two-line option: name, then kind · id. The primitive keeps items on one

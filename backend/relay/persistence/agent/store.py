@@ -16,7 +16,7 @@ from ...core.computer_identity import is_provisional_computer_id
 from ...core.ids import new_database_id, now_iso
 from ...core.model_policy import normalize_model_policy, policy_model
 from ...core.models import AGENT_NAMES, AGENT_ROLES
-from ...core.preset_avatars import validate_profile_image_url
+from ...core.preset_avatars import current_preset_avatar_url, validate_profile_image_url
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
@@ -513,6 +513,9 @@ def _normalized_agent_snapshot(
         or agent.get("userId")
         or supervisor_user_id
     )
+    image = agent.get("profileImageUrl")
+    if current_preset_avatar_url(image) != image:
+        agent = {**agent, "profileImageUrl": current_preset_avatar_url(image)}
     return {**agent, "supervisorUserId": owner} if owner else agent
 
 

@@ -97,6 +97,36 @@ describe("ink controls, one brand orange in the mark", () => {
     }
   });
 
+  it("draws no purple in the preset avatars", () => {
+    // The palette check above cannot see the DiceBear presets, which once
+    // shipped lavender chips and violet robots. Same violet arc, same chroma
+    // floor; regenerate with web/scripts/generate-preset-avatars.mjs.
+    for (const kind of ["agents", "teams"]) {
+      const dir = path.join(repoRoot, "web", "public", "avatars", kind);
+      for (const file of readdirSync(dir).filter((name) => name.endsWith(".svg"))) {
+        const svg = readFileSync(path.join(dir, file), "utf8");
+        for (const [hex] of svg.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
+          const lower = hex.toLowerCase();
+          const hue = oklchHue(lower);
+          const chromatic = channelSpread(lower) > 24;
+          assert.ok(!(chromatic && hue >= 280 && hue <= 340), `${kind}/${file} draws ${hex}, which is purple (hue ${hue.toFixed(0)})`);
+        }
+      }
+    }
+  });
+
+  it("draws no robots and no sparkle stars in the preset avatars", () => {
+    // A robot face and a four-point sparkle are the stock pictures of "AI";
+    // Relay's agents are named colleagues. The generator drops Bottts and
+    // Shape Grid's star ("plus", whose path opens M4.06.78a1).
+    const agents = readdirSync(path.join(repoRoot, "web", "public", "avatars", "agents"));
+    assert.equal(agents.filter((name) => name.startsWith("bottts-")).length, 0);
+    const teamsDir = path.join(repoRoot, "web", "public", "avatars", "teams");
+    for (const file of readdirSync(teamsDir).filter((name) => name.endsWith(".svg"))) {
+      assert.doesNotMatch(readFileSync(path.join(teamsDir, file), "utf8"), /M4\.06\.78a1/, `teams/${file} draws a sparkle star`);
+    }
+  });
+
   it("keeps the mark's orange clear of the warning gold and the critical red", () => {
     // The orange sits between two status hues; a gap under these floors makes
     // a 6px status dot and the logo's lead chevron read as one colour.
@@ -231,11 +261,14 @@ describe("the brand where Relay introduces itself", () => {
     assert.match(header, /<CtaLink cta=\{ctas\.primary\} tone="secondary" \/>/);
   });
 
-  it("draws both watermarks as the handoff in the two accents", () => {
-    for (const [file, selector] of [["landing.css", ".landing-bleed"], ["login.css", ".login-bleed"]] as const) {
-      const body = readStyle(file).match(new RegExp(`\\${selector} \\{([^}]*)\\}`))?.[1] ?? "";
-      assert.match(body, /--chevron-lead: color-mix\(in srgb, var\(--brand-lead\)/, `${file} watermark lead`);
-      assert.match(body, /--chevron-trail: color-mix\(in srgb, var\(--live\)/, `${file} watermark trail`);
+  it("signs the public pages with the logo only, never a watermark or texture", () => {
+    // Signature chrome and texture are off (no bled mark, no dot grid): the
+    // handoff chevrons live in the logo and nowhere else.
+    for (const file of ["landing.css", "login.css"]) {
+      const css = readStyle(file);
+      assert.doesNotMatch(css, /-bleed\b/, `${file} draws no watermark`);
+      assert.doesNotMatch(css, /radial-gradient/, `${file} draws no dot grid`);
+      assert.doesNotMatch(css, /backdrop-filter/, `${file} uses no glass blur`);
     }
   });
 

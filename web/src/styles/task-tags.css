@@ -3,26 +3,7 @@
 
    A tag badge is an OUTLINE, not a tint: tinted badges are status (done,
    blocked, needs project), and a tag is a label that means nothing to Relay.
-   Its colour lives only in the leading dot (--tag-1…8, see palette.css). */
-
-/* ── The dot: tone → colour, the one place the tag palette is read ──── */
-
-.tag-dot {
-  flex: none;
-  width: var(--dot-sm);
-  height: var(--dot-sm);
-  border-radius: var(--r-full);
-  background: var(--tag-tone, var(--ink-4));
-}
-
-[data-tone="1"] { --tag-tone: var(--tag-1); }
-[data-tone="2"] { --tag-tone: var(--tag-2); }
-[data-tone="3"] { --tag-tone: var(--tag-3); }
-[data-tone="4"] { --tag-tone: var(--tag-4); }
-[data-tone="5"] { --tag-tone: var(--tag-5); }
-[data-tone="6"] { --tag-tone: var(--tag-6); }
-[data-tone="7"] { --tag-tone: var(--tag-7); }
-[data-tone="8"] { --tag-tone: var(--tag-8); }
+   It carries no colour: hue on a row is spent on status alone. */
 
 /* ── The badge ──────────────────────────────────────────────────────── */
 
@@ -213,21 +194,17 @@
   transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
 }
 
-.tag-badge-remove:hover {
+.tag-badge-remove:hover:not(:disabled) {
   background: var(--surface-3);
   color: var(--ink-1);
 }
 
+/* Already --ink-4 at rest; disabled only drops the hover and the pointer. */
 .tag-badge-remove:disabled {
   cursor: default;
-  opacity: var(--opacity-disabled);
 }
 
 @media (forced-colors: active) {
-  .tag-dot {
-    forced-color-adjust: none;
-  }
-
   .tag-field:focus-within {
     outline: 2px solid Highlight;
   }

@@ -215,7 +215,6 @@ function AttentionCard({
         </CardDescription>
         <Button variant="ghost" size="dense" onClick={onOpenBoard}>
           {t("project.dashboard_open_board")}
-          <span aria-hidden="true">→</span>
         </Button>
       </CardFooter>
     </Card>

@@ -2,29 +2,20 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { tagTone } from "../lib/taskTags";
 
 /**
- * A tag's colour, alone: the 6px dot every tag badge leads with, and the
- * mark beside a tag in the filter menu. Its tone comes from the tag's name
- * (`tagTone`), so one tag is one colour everywhere.
- */
-export function TagDot({ tag }: { tag: string }) {
-  return <span className="tag-dot" data-tone={tagTone(tag)} aria-hidden="true" />;
-}
-
-/**
- * The ONE tag mark: a hairline outline, the tag's dot, and its name.
+ * The ONE tag mark: a hairline outline and the tag's name, in ink.
  *
  * Deliberately not a toned Badge. Badges are tinted fills that carry status
  * (done, blocked, needs project); a tag is a label the person chose and means
- * nothing to Relay, so it takes the quieter outline and keeps its colour to
- * the dot. `children` is a trailing control — the editor's remove button.
+ * nothing to Relay, so it takes the quieter outline and no colour at all —
+ * a hashed dot per tag put five accents on a row beside the one hue that
+ * means something, its status. `children` is a trailing control — the
+ * editor's remove button.
  */
 export function TagBadge({ tag, className, children }: { tag: string; className?: string; children?: ReactNode }) {
   return (
-    <span className={cn("tag-badge", className)} data-tone={tagTone(tag)} title={tag}>
-      <TagDot tag={tag} />
+    <span className={cn("tag-badge", className)} title={tag}>
       <span className="tag-badge-text">{tag}</span>
       {children}
     </span>

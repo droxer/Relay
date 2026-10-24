@@ -33,28 +33,30 @@ describe("preset avatars", () => {
         .sort();
       assert.deepEqual([...PRESET_AVATARS[kind]].sort(), onDisk);
     }
-    assert.equal(PRESET_AVATARS.agents.length, 64);
+    assert.equal(PRESET_AVATARS.agents.length, 48);
     assert.equal(PRESET_AVATARS.teams.length, 12);
   });
 
   it("groups agent presets by style in picker order", () => {
     assert.deepEqual(
       PRESET_AVATAR_STYLES.agents.map(({ style, urls }) => [style, urls.length]),
-      [["bottts", 16], ["lorelei", 16], ["pixel-art", 16], ["personas", 16]],
+      [["lorelei", 16], ["pixel-art", 16], ["personas", 16]],
     );
     assert.deepEqual(PRESET_AVATAR_STYLES.agents.flatMap(({ urls }) => urls), [...PRESET_AVATARS.agents]);
     assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/personas-16.svg"), true);
   });
 
   it("recognises presets only for their own kind", () => {
-    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/bottts-01.svg"), true);
-    assert.equal(isPresetAvatarUrl("teams", "/avatars/agents/bottts-01.svg"), false);
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/lorelei-01.svg"), true);
+    assert.equal(isPresetAvatarUrl("teams", "/avatars/agents/lorelei-01.svg"), false);
+    // The retired robots are no longer offered; the backend upgrades them.
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/bottts-01.svg"), false);
     assert.equal(isPresetAvatarUrl("agents", "/profile-images/agents/a1?v=1"), false);
     assert.equal(isPresetAvatarUrl("agents", null), false);
   });
 
   it("picks a random preset of the requested kind", () => {
-    assert.equal(randomPresetAvatar("agents", () => 0), "/avatars/agents/bottts-01.svg");
+    assert.equal(randomPresetAvatar("agents", () => 0), "/avatars/agents/lorelei-01.svg");
     assert.equal(randomPresetAvatar("teams", () => 0.9999), "/avatars/teams/shape-grid-12.svg");
     assert.equal(isPresetAvatarUrl("agents", randomPresetAvatar("agents")), true);
   });

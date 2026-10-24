@@ -47,7 +47,7 @@ html {
   font-size: 87.5%;
 }
 
-/* overflow-x: hidden is a last-resort clip — reflow regressions must be
+/* overflow-x: clip (below) is a last-resort clip — reflow regressions must be
    caught at the 320px floor (WCAG 1.4.10), not papered over here. */
 /* Body tracking is set ONCE, here, and inherited. It resolves to 0 — the
    system faces track themselves — but the global hook stays, because
@@ -61,7 +61,9 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
-  overflow-x: hidden;
+  /* clip, not hidden: hidden makes html/body scroll containers, which
+     breaks position: sticky inside them. */
+  overflow-x: clip;
   background: var(--surface-0);
   color: var(--ink-2);
   font-family: var(--font-sans);
@@ -408,14 +410,6 @@ tr[data-selected="true"],
 @keyframes pulse-ring {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--info)) 40%, transparent); }
   100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pulse-color, var(--info)) 0%, transparent); }
-}
-
-/* The shared double-chevron (AuthCanvas `Chevrons`): each stroke reads its
-   own variable so a host can draw the brand handoff in place of ink. */
-.chevron-lead { stroke: var(--chevron-lead, currentColor); }
-.chevron-trail {
-  stroke: var(--chevron-trail, currentColor);
-  opacity: var(--chevron-trail-opacity, 0.45);
 }
 
 /* Live ring — Relay's signature "an agent is working" beat, and the ONE

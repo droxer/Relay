@@ -219,20 +219,18 @@
 
 /* Runtime reads as plain meta, not a boxed chip: the boxed treatment was
    heavier than the agent name it annotates, and its 19px inset divider
-   cramped the label. Icon + mono text matches the computer segments beside
-   it. */
+   cramped the label. */
 .agent-meta-runtime {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   color: var(--ink-3);
-  /* One size for the whole meta line — the runtime rides the same 12px
-     compact-metadata rung as the computer names beside it. Mono is kept
-     deliberately (a runtime is a technical identifier) with its paired
-     --type-code-track. */
+  /* One size and one face for the whole meta line: the runtime rides the
+     same 12px compact-metadata rung as the computer names beside it. "Claude"
+     and "Kimi" are product names, not identifiers, so they take the sans;
+     mono stays for code, ids, and measurements. */
   font: var(--type-meta);
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
+  letter-spacing: var(--type-meta-track);
 }
 
 .agent-meta-runtime-mark {

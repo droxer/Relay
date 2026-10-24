@@ -51,35 +51,6 @@
   font-family: var(--font-sans);
 }
 
-/* The bled double-chevron — the login signature, echoed from the empty-state
-   bleed mark. Fixed so it can leave the viewport without creating scrollable
-   overflow; a 10% wash of each accent keeps it a watermark, not a logo. It lands in the
-   cover column, which is why the gate is a positioned element below: the
-   panel's own plate has to paint over the watermark, and a fixed element
-   otherwise sits above a non-positioned sibling's background. */
-.login-bleed {
-  position: fixed;
-  left: calc(-1 * var(--sp-8));
-  bottom: calc(-1 * var(--sp-8));
-  /* Capped, not a bare vmin: at the narrow end of the split a 40vmin mark
-     stopped being a watermark and started competing with the proof lines. */
-  width: min(34vmin, 300px);
-  height: min(34vmin, 300px);
-  /* The brand handoff as a watermark: each accent at a wash strong enough
-     to read as colour, quiet enough to stay behind the proof lines. */
-  --chevron-lead: color-mix(in srgb, var(--brand-lead) 10%, transparent);
-  --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
-  --chevron-trail-opacity: 1;
-  pointer-events: none;
-  user-select: none;
-}
-
-.login-bleed > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 /* ---------- The cover ------------------------------------------------ */
 
 .login-cover {
@@ -88,8 +59,6 @@
   flex-direction: column;
   justify-content: center;
   gap: var(--sp-6);
-  background-image: radial-gradient(var(--lg-hairline-soft) 1px, transparent 1px);
-  background-size: var(--sp-6) var(--sp-6);
   /* The cover's text column stops well short of the split so the headline
      breaks on its own terms instead of against the hairline, and centres in
      its half rather than hugging the viewport edge — past ~1600px the edge
@@ -196,16 +165,9 @@
 }
 
 .login-point {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
-  /* Sized to hold each point on one line at the cover's measure. If a new
-     point needs more room than this, shorten the point. */
+  /* Plain lines, not boxed chips with a marker each: three short sentences
+     read as a list on their own. */
   max-width: 54ch;
-  padding: var(--sp-3) var(--sp-4);
-  border: var(--sp-hairline) solid var(--lg-hairline-soft);
-  border-radius: var(--r-3);
-  background: var(--lg-canvas);
   text-wrap: pretty;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -213,21 +175,10 @@
   color: var(--lg-muted);
 }
 
-.login-point-mark {
-  flex: none;
-  /* Nudged onto the first line's baseline box — a 14px square glyph sits
-     high against 14px text set at --leading-normal. */
-  translate: 0 2px;
-  /* Muted ink, not --lg-accent: the accent on this screen is the CTA and
-     nothing else, so a decorative marker must not spend it. */
-  color: var(--lg-muted);
-}
-
 /* ---------- The gate ------------------------------------------------- */
 
 .login-panel {
   grid-area: panel;
-  /* Positioned so its plate paints over the fixed watermark. */
   position: relative;
   display: grid;
   place-items: center;
@@ -478,9 +429,7 @@
 }
 
 .login-foot-meta {
-  font-family: var(--font-mono);
-  font-size: var(--fs-2);
-  letter-spacing: var(--track-caps);
+  font: var(--type-body-sm);
   color: var(--lg-muted);
 }
 
