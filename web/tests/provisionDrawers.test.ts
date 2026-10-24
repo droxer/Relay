@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import {
   userHandleOf,
   handleForUserId,
+  handleRestatesName,
   isValidUserHandle,
   normalizeUserHandle,
 } from "../src/lib/userHandle.js";
@@ -34,6 +35,25 @@ describe("user handle grammar", () => {
     for (const bad of ["a", "alice chen", "alice/bob", "-alice", ".x", "Alice"]) {
       assert.equal(isValidUserHandle(bad), false, bad);
     }
+  });
+});
+
+describe("owner handle beside the name", () => {
+  it("drops a handle that only restates the display name", () => {
+    assert.equal(handleRestatesName("alice", "alice"), true);
+    assert.equal(handleRestatesName("@Alice ", "alice"), true);
+  });
+
+  it("keeps a handle that adds to the name", () => {
+    assert.equal(handleRestatesName("Alice Chen", "alice"), false);
+    assert.equal(handleRestatesName(undefined, "alice"), false);
+    assert.equal(handleRestatesName("", "alice"), false);
+  });
+
+  it("renders the owner handle only when it adds information", () => {
+    const owner = readWeb("src/components/admin/NodeOwner.tsx");
+    assert.match(owner, /showHandle = !handleRestatesName\(user\.displayName, handle\)/);
+    assert.match(owner, /\{showHandle \? \([\s\S]*?adm-node-owner-handle/);
   });
 });
 

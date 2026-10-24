@@ -46,6 +46,14 @@ export function handleForUserId(
   return user ? userHandleOf(user) : userId;
 }
 
+/** True when a user's @handle only restates their display name — a user
+    whose name was never set beyond the handle would otherwise read
+    "alice @alice", one identity printed twice. */
+export function handleRestatesName(displayName: string | undefined, handle: string): boolean {
+  if (!displayName) return false;
+  return normalizeUserHandle(displayName) === normalizeUserHandle(handle);
+}
+
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
