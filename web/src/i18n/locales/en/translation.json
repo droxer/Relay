@@ -1037,6 +1037,7 @@
   "routine": {
     "schedule": "Trigger",
     "enabled_needs_target": "Choose a project, agent, or team before enabling this automation.",
+    "project_hint": "Optional. Without a project, every run shares the automation's own workspace.",
     "title": "Automations",
     "sub_one": "{{count}} automation",
     "sub_other": "{{count}} automations",

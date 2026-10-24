@@ -1018,6 +1018,7 @@
   "routine": {
     "schedule": "触发器",
     "enabled_needs_target": "启用此自动化前，请选择项目、智能体或团队。",
+    "project_hint": "可选。不选项目时，每次运行共用该自动化自己的工作区。",
     "title": "自动化",
     "sub_other": "{{count}} 个自动化",
     "filters": "自动化筛选",

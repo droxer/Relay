@@ -62,11 +62,11 @@ it("offers project creation without discarding the task draft", () => {
   expect(save).not.toHaveBeenCalled();
 });
 
-it("requires a project for routines as well", () => {
+it("lets a routine be created without a project", () => {
   const save = vi.fn(); render(<Form save={save} initial={{ ...emptyRoutineForm(user), title: "Weekly review" }} />);
   fireEvent.click(screen.getByRole("button", { name: "routine.create" }));
-  expect(save).not.toHaveBeenCalled();
-  expect(screen.getByText("project.required")).toBeTruthy();
+  expect(save).toHaveBeenCalled();
+  expect(screen.queryByText("project.required")).toBeNull();
 });
 
 it("offers every agent and team on the project's computer, not just its roster", () => {
