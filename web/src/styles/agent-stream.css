@@ -511,36 +511,14 @@
   letter-spacing: var(--type-label-track);
 }
 
-/* The live label shimmers: a lighter band sweeps across the words while the
-   text itself stays at --ink-3, so it is legible at every frame. Under
-   reduced motion or forced colours it is plain text. Live reasoning headers
-   do not shimmer — they blink (see .agent-thinking.is-live above). */
-.agent-stream-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--ink-3) 0%,
-    var(--ink-3) 35%,
-    var(--ink-1) 50%,
-    var(--ink-3) 65%,
-    var(--ink-3) 100%
-  );
-  background-size: 250% 100%;
-  background-clip: text;
-  color: transparent;
-  animation: agent-shimmer 2.2s linear infinite;
-}
-
-@keyframes agent-shimmer {
-  from { background-position: 100% 0; }
-  to   { background-position: -150% 0; }
-}
-
-@media (prefers-reduced-motion: reduce), (forced-colors: active) {
-  .agent-stream-shimmer {
-    background: none;
-    color: var(--ink-3);
-    animation: none;
-  }
+/* The live label breathes on the shared blink: the words dim and return on
+   the live cadence, legible at every frame. Gradient text swept across the
+   words was the stock "AI is thinking" tell; Relay's liveness is the blink
+   and the live ring, nothing else. Reduced motion rests it at full ink
+   (a11y.css cuts it to one instant iteration). */
+.agent-stream-live-label {
+  --blink-from: 0.45;
+  animation: blink var(--t-pulse) var(--ease-breathe, ease-in-out) infinite;
 }
 
 .attachment-list {

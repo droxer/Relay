@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from ...core.preset_avatars import is_preset_avatar_url
+from ...core.preset_avatars import current_preset_avatar_url, is_preset_avatar_url
 from ...persistence.account.profile_images import ProfileImageError
 from ..agents.agents import _agent_with_placements
 from ..deps import AppContextDep
@@ -101,6 +101,7 @@ def _apply_preset(
     ctx: AppContextDep, kind: str, entity_id: str, preset_url: object
 ) -> dict[str, Any]:
     """Point the profile at a bundled preset and drop any uploaded file it replaces."""
+    preset_url = current_preset_avatar_url(preset_url)
     if not is_preset_avatar_url(kind, preset_url):
         raise HTTPException(400, "profile_image_preset")
     try:

@@ -40,8 +40,7 @@
   top: 0;
   z-index: 1;
   border-bottom: 0.5px solid var(--ld-hairline-soft);
-  background: color-mix(in srgb, var(--ld-canvas) 88%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--ld-canvas);
 }
 
 .landing-nav-inner {
@@ -181,29 +180,6 @@
   align-items: center;
   gap: var(--sp-8);
   padding: calc(var(--sp-8) * 2) var(--ld-gutter) 0;
-  background-image: radial-gradient(var(--ld-hairline-soft) 1px, transparent 1px);
-  background-size: var(--sp-6) var(--sp-6);
-}
-
-/* The chevron signature from the sign-in canvas, bled off the hero's
-   corner as a watermark rather than a logo. */
-.landing-bleed {
-  position: absolute;
-  top: calc(-1 * var(--sp-8));
-  right: calc(-1 * var(--sp-8));
-  width: min(40vmin, 360px);
-  height: min(40vmin, 360px);
-  /* The brand handoff as a watermark, the same wash the sign-in cover uses. */
-  --chevron-lead: color-mix(in srgb, var(--brand-lead) 10%, transparent);
-  --chevron-trail: color-mix(in srgb, var(--live) 10%, transparent);
-  --chevron-trail-opacity: 1;
-  pointer-events: none;
-}
-
-.landing-bleed > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .landing-hero-copy {
@@ -216,38 +192,9 @@
   text-align: center;
 }
 
-/* "Open source on GitHub" — a capsule above the headline, the first thing a
-   developer visitor checks. A capsule is a pill shape, so --r-full is
-   legitimate here; the hairline and surface keep it quieter than the CTA. */
-.landing-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-1) var(--sp-3);
-  border: 0.5px solid var(--ld-hairline);
-  border-radius: var(--r-full);
-  background: var(--ld-surface);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ld-ink);
-  text-decoration: none;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
-}
-
-.landing-badge:hover {
-  border-color: color-mix(in srgb, var(--ld-ink) 40%, var(--ld-canvas));
-  background: var(--ld-elevated);
-}
-
 .landing-runtimes {
-  margin-top: var(--sp-2);
-}
-
-.landing-kicker {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--fs-1);
-  letter-spacing: var(--type-code-track);
+  margin: var(--sp-2) 0 0;
+  font: var(--type-body-sm);
   color: var(--ld-muted);
 }
 
@@ -371,14 +318,6 @@
   gap: var(--sp-2);
 }
 
-.landing-step-index {
-  margin-bottom: var(--sp-2);
-  font-family: var(--font-mono);
-  font-size: var(--fs-1);
-  letter-spacing: var(--type-code-track);
-  color: var(--ld-muted);
-}
-
 /* The tour: one surface per row, copy beside its screenshot, alternating
    sides so the eye zig-zags down the page instead of down one gutter. */
 .landing-tour {
@@ -480,10 +419,12 @@
 }
 
 /* Principles: four cards on a two-by-two grid. */
+/* Unboxed, like the steps: a hairline over each rule, not four identical
+   plates. Each rule is a heading and a sentence; a card adds nothing. */
 .landing-principles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-4);
+  gap: var(--sp-6) var(--sp-7);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -493,15 +434,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-6);
-  border: 0.5px solid var(--ld-hairline-soft);
-  border-radius: var(--r-3);
-  background: var(--ld-surface);
-}
-
-.landing-principle-mark {
-  margin-bottom: var(--sp-2);
-  color: var(--ld-muted);
+  padding-top: var(--sp-5);
+  border-top: 0.5px solid var(--ld-hairline-soft);
 }
 
 /* ---------- Closer & foot -------------------------------------------- */
@@ -550,9 +484,7 @@
 }
 
 .landing-foot-meta {
-  font-family: var(--font-mono);
-  font-size: var(--fs-1);
-  letter-spacing: var(--type-code-track);
+  font: var(--type-body-sm);
   color: var(--ld-muted);
 }
 

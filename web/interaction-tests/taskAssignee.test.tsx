@@ -57,7 +57,7 @@ for (const view of ["card", "row", "routine"] as const) {
       linkedSessionIds: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
     } as RelayTaskListItem;
     const props = { task, ready: true, agentDisplayName: "Atlas",
-      agentImageUrl: "/avatars/agents/bottts-01.svg", selected: false,
+      agentImageUrl: "/avatars/agents/lorelei-01.svg", selected: false,
       onToggleSelect: vi.fn(), onOpen: vi.fn(), onEdit: vi.fn(), onAssign: vi.fn(),
       onStart: vi.fn(), starting: false };
     const { container } = render(view === "card"

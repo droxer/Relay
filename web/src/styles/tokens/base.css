@@ -410,14 +410,6 @@ tr[data-selected="true"],
   100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pulse-color, var(--info)) 0%, transparent); }
 }
 
-/* The shared double-chevron (AuthCanvas `Chevrons`): each stroke reads its
-   own variable so a host can draw the brand handoff in place of ink. */
-.chevron-lead { stroke: var(--chevron-lead, currentColor); }
-.chevron-trail {
-  stroke: var(--chevron-trail, currentColor);
-  opacity: var(--chevron-trail-opacity, 0.45);
-}
-
 /* Live ring — Relay's signature "an agent is working" beat, and the ONE
    motion every live DOT shares (state marks on the board and records, avatar
    presence, the dashboard's running count). One exception: the thread-rail

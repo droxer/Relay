@@ -239,17 +239,6 @@
   border-radius: var(--r-2);
   border: 0.5px solid var(--line-2);
   background: var(--surface-1);
-  border-left: var(--accent-bar-w) solid var(--ink-4);
-}
-
-.adm-provision-outcome.is-managed {
-  /* Ownership is an ink tier, not the action hue: managed sits one step above
-     local's --info (= ink-3) so the accent bar keeps the hierarchy. */
-  border-left-color: var(--ink-2);
-}
-
-.adm-provision-outcome.is-local {
-  border-left-color: var(--info);
 }
 
 .adm-provision-outcome-label {

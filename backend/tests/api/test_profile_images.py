@@ -4,6 +4,7 @@ import base64
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
@@ -215,7 +216,7 @@ def test_choosing_a_preset_replaces_and_deletes_an_uploaded_image(monkeypatch) -
 
         agent_preset = client.put(
             f"/profile-images/agents/{agent['id']}",
-            json={"presetUrl": "/avatars/agents/bottts-07.svg"},
+            json={"presetUrl": "/avatars/agents/lorelei-07.svg"},
         )
         team_preset = client.put(
             f"/profile-images/teams/{team['id']}",
@@ -223,7 +224,7 @@ def test_choosing_a_preset_replaces_and_deletes_an_uploaded_image(monkeypatch) -
         )
 
         assert agent_preset.status_code == 200, agent_preset.text
-        assert agent_preset.json()["agent"]["profileImageUrl"] == "/avatars/agents/bottts-07.svg"
+        assert agent_preset.json()["agent"]["profileImageUrl"] == "/avatars/agents/lorelei-07.svg"
         assert team_preset.status_code == 200, team_preset.text
         assert team_preset.json()["team"]["profileImageUrl"] == "/avatars/teams/shape-grid-03.svg"
         assert client.get(uploaded).status_code == 404
@@ -278,12 +279,14 @@ def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
                 "executorKind": "codex",
                 "defaultRole": "implementer",
                 "computerId": computer_id(node),
+                # A retired robot, as an older client still offers: it is
+                # stored as its replacement rather than refused.
                 "profileImageUrl": "/avatars/agents/bottts-02.svg",
             },
         )
         assert created.status_code == 201, created.text
         agent = created.json()["agent"]
-        assert agent["profileImageUrl"] == "/avatars/agents/bottts-02.svg"
+        assert agent["profileImageUrl"] == "/avatars/agents/pixel-art-02.svg"
 
         team = client.post(
             "/api/v1/teams",
@@ -335,12 +338,55 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
                 "executorKind": "codex",
                 "defaultRole": "implementer",
                 "computerId": computer_id(node),
-                "profileImageUrl": "/avatars/agents/bottts-16.svg",
+                "profileImageUrl": "/avatars/agents/lorelei-16.svg",
             },
         )
         assert created.status_code == 201, created.text
         agent = created.json()["agent"]
-        assert agent["profileImageUrl"] == "/avatars/agents/bottts-16.svg"
+        assert agent["profileImageUrl"] == "/avatars/agents/lorelei-16.svg"
 
         team = _admin_team(client, agent, profileImageUrl="/avatars/teams/shape-grid-01.svg")
         assert team["profileImageUrl"] == "/avatars/teams/shape-grid-01.svg"
+
+
+def test_an_agent_stored_with_a_retired_robot_reads_as_its_replacement(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        user(client, "alice")
+        agent = _agent(client, "alice")
+        # A record written before the robots were retired: its snapshot still
+        # names a file that no longer ships.
+        store = client.app.state.context.agent_store
+        with store.engine.begin() as conn:
+            snapshot = conn.execute(
+                select(store.agents.c.snapshot).where(store.agents.c.id == agent["id"])
+            ).scalar_one()
+            conn.execute(
+                update(store.agents)
+                .where(store.agents.c.id == agent["id"])
+                .values(snapshot={**snapshot, "profileImageUrl": "/avatars/agents/bottts-05.svg"})
+            )
+
+        listed = client.get("/api/v1/admin/agents").json()["agents"][0]
+        assert listed["profileImageUrl"] == "/avatars/agents/pixel-art-05.svg"
+        assert store.get_agent(agent["id"])["profileImageUrl"] == "/avatars/agents/pixel-art-05.svg"
+
+
+def test_the_preset_endpoint_upgrades_a_retired_robot(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        user(client, "alice")
+        agent = _agent(client, "alice")
+        _login_as(client, "alice")
+
+        response = client.put(
+            f"/profile-images/agents/{agent['id']}",
+            json={"presetUrl": "/avatars/agents/bottts-07.svg"},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["agent"]["profileImageUrl"] == "/avatars/agents/pixel-art-07.svg"

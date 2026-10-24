@@ -30,7 +30,6 @@ function presetStyle(kind: PresetAvatarKind, style: string, count: number): Pres
 /** Presets grouped by style, in picker order. */
 export const PRESET_AVATAR_STYLES: Readonly<Record<PresetAvatarKind, readonly PresetAvatarStyle[]>> = {
   agents: [
-    presetStyle("agents", "bottts", 16),
     presetStyle("agents", "lorelei", 16),
     presetStyle("agents", "pixel-art", 16),
     presetStyle("agents", "personas", 16),

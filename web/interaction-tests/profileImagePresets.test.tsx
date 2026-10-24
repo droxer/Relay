@@ -27,7 +27,7 @@ function openPresets(onSelect: (url: string) => Promise<void>) {
   // a waitFor, which also pretty-prints all 64 tiles on each retry) from ever
   // settling, while the synchronous open renders the tiles immediately.
   fireEvent.click(screen.getByRole("button", { name: "profile_image.choose" }));
-  expect(document.querySelectorAll(".preset-avatar-option")).toHaveLength(64);
+  expect(document.querySelectorAll(".preset-avatar-option")).toHaveLength(48);
   return [...document.querySelectorAll<HTMLElement>(".preset-avatar-option")];
 }
 
@@ -35,8 +35,8 @@ it("saves the focused preset on Enter", () => {
   const onSelect = vi.fn(async () => undefined);
   const options = openPresets(onSelect);
 
-  options[16]!.focus();
-  fireEvent.keyDown(options[16]!, { key: "Enter" });
+  options[0]!.focus();
+  fireEvent.keyDown(options[0]!, { key: "Enter" });
 
   expect(onSelect).toHaveBeenCalledTimes(1);
   expect(onSelect).toHaveBeenCalledWith("/avatars/agents/lorelei-01.svg");
@@ -46,7 +46,7 @@ it("saves a preset on click", () => {
   const onSelect = vi.fn(async () => undefined);
   const options = openPresets(onSelect);
 
-  fireEvent.click(options[40]!);
+  fireEvent.click(options[24]!);
 
   expect(onSelect).toHaveBeenCalledTimes(1);
   expect(onSelect).toHaveBeenCalledWith("/avatars/agents/pixel-art-09.svg");
