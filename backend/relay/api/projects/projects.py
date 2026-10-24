@@ -422,13 +422,7 @@ def archive_project(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     project_for_owner(ctx, project_id, actor["userId"])
-    raw_version = request.query_params.get("expectedVersion")
-    try:
-        expected_version = int(raw_version) if raw_version is not None else None
-    except ValueError:
-        expected_version = None
-    if expected_version is None:
-        raise HTTPException(400, "project_expected_version_required")
+    expected_version = _required_expected_version(request)
     try:
         project = ctx.project_store.archive_project(
             project_id, expected_version=expected_version
@@ -438,6 +432,41 @@ def archive_project(
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     return {"project": project}
+
+
+@router.post("/projects/{project_id}/unarchive")
+def unarchive_project(
+    project_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    # The owner rule without the live-project filter: only an archived
+    # project can be reopened, and only by the person who owns it.
+    project = ctx.project_store.get_project(project_id)
+    if not project:
+        raise HTTPException(404, "Project not found.")
+    if project.get("ownerUserId") != actor["userId"]:
+        raise HTTPException(403, "Project belongs to another user.")
+    expected_version = _required_expected_version(request)
+    try:
+        project = ctx.project_store.unarchive_project(
+            project_id, expected_version=expected_version
+        )
+    except KeyError as error:
+        raise HTTPException(404, "Project not found.") from error
+    except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
+        raise _project_error(error) from error
+    return {"project": project}
+
+
+def _required_expected_version(request: Request) -> int:
+    raw_version = request.query_params.get("expectedVersion")
+    try:
+        expected_version = int(raw_version) if raw_version is not None else None
+    except ValueError:
+        expected_version = None
+    if expected_version is None:
+        raise HTTPException(400, "project_expected_version_required")
+    return expected_version
 
 
 PROJECT_DELETION_STATUS = {

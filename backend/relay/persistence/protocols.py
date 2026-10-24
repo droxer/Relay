@@ -290,6 +290,9 @@ class ProjectStore(Protocol):
     def archive_project(
         self, project_id: str, *, expected_version: int
     ) -> dict[str, Any]: ...
+    def unarchive_project(
+        self, project_id: str, *, expected_version: int
+    ) -> dict[str, Any]: ...
     def record_setup(
         self, project_id: str, setup: dict[str, Any]
     ) -> dict[str, Any]: ...

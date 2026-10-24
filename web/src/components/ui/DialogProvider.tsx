@@ -56,6 +56,8 @@ type AnnouncementTone = "info" | "success" | "warn" | "error";
 type AnnouncementOptions = {
   message: string;
   tone?: AnnouncementTone;
+  /** One follow-up the person can take from the toast itself. */
+  action?: { label: string; onClick: () => void };
 };
 
 type Request =
@@ -122,7 +124,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const announce = useCallback((opts: AnnouncementOptions | string) => {
     const next = typeof opts === "string" ? { message: opts } : opts;
     // The shadcn toast names the warn tone "warning".
-    toast.add({ title: next.message, type: next.tone === "warn" ? "warning" : (next.tone ?? "info") });
+    toast.add({
+      title: next.message,
+      type: next.tone === "warn" ? "warning" : (next.tone ?? "info"),
+      ...(next.action ? { actionProps: { children: next.action.label, onClick: next.action.onClick } } : {}),
+    });
   }, []);
 
   // Resolve the pending promise and tear down. `cancelled` carries the

@@ -48,16 +48,19 @@ export function ProjectSettingsPanel({
   computer,
   onDeleted,
   onSetupStarted,
+  onOpenThread,
 }: {
   project: ProjectRecord;
   computer: ProjectComputerSummary;
   onDeleted: () => void;
+  /** Opens a thread a refused delete names — the run blocking it. */
+  onOpenThread?: (sessionId: string) => void;
   /** A refine proposal was requested; its review lives on the Dashboard. */
   onSetupStarted?: () => void;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const { updateProjectMutation, archiveProjectMutation, deleteProjectMutation } = useRelayMutations();
+  const { updateProjectMutation, archiveProjectMutation, unarchiveProjectMutation, deleteProjectMutation } = useRelayMutations();
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
   const [base, setBase] = useState(project);
   const [draft, setDraft] = useState<Draft>(() => draftOf(project));
@@ -78,7 +81,8 @@ export function ProjectSettingsPanel({
   const pendingSuggestions = (project.contextSuggestions ?? [])
     .filter((suggestion) => !resolvedSuggestions.includes(suggestion.id));
 
-  const busy = projectSave.pending || archiveProjectMutation.isPending || deleteProjectMutation.isPending;
+  const busy = projectSave.pending || archiveProjectMutation.isPending
+    || unarchiveProjectMutation.isPending || deleteProjectMutation.isPending;
   const archived = Boolean(project.archivedAt);
   // A linked project works in a folder the owner chose; others in Relay's own.
   const workspaceLabel = project.workspaceHostPath ?? project.workspaceSubpath;
@@ -134,6 +138,16 @@ export function ProjectSettingsPanel({
     }
   }
 
+  async function unarchive() {
+    if (busy || !archived) return;
+    try {
+      const result = await unarchiveProjectMutation.mutateAsync({ projectId: project.id, expectedVersion: project.version });
+      if (result) adopt(result.project);
+    } catch {
+      // The shared mutation handler announces the error; the panel stays as it was.
+    }
+  }
+
   async function remove() {
     if (busy) return;
     const accepted = await confirm({
@@ -144,7 +158,11 @@ export function ProjectSettingsPanel({
     });
     if (!accepted) return;
     try {
-      await deleteProjectMutation.mutateAsync({ projectId: project.id, expectedVersion: project.version });
+      await deleteProjectMutation.mutateAsync({
+        projectId: project.id,
+        expectedVersion: project.version,
+        ...(onOpenThread ? { openThread: onOpenThread } : {}),
+      });
       onDeleted();
     } catch {
       // Stay on the panel so the user can retry after resolving the error.
@@ -256,22 +274,43 @@ export function ProjectSettingsPanel({
           </h2>
         </header>
         <div className="project-settings-danger-rows">
-          <div className="project-settings-danger-row">
-            <div className="project-settings-danger-copy">
-              <strong>{t("project.archive")}</strong>
-              <p>{t("project.archive_confirm_message")}</p>
+          {/* Archiving is reversible: an archived project offers the way back
+              in the row that took it there. */}
+          {archived ? (
+            <div className="project-settings-danger-row">
+              <div className="project-settings-danger-copy">
+                <strong>{t("project.unarchive")}</strong>
+                <p>{t("project.unarchive_hint")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void unarchive()}
+                loading={unarchiveProjectMutation.isPending}
+                loadingLabel={t("project.unarchiving")}
+                disabled={busy}
+              >
+                {t("project.unarchive")}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => void archive()}
-              loading={archiveProjectMutation.isPending}
-              loadingLabel={t("project.archiving")}
-              disabled={busy || archived}
-            >
-              {t("project.archive")}
-            </Button>
-          </div>
+          ) : (
+            <div className="project-settings-danger-row">
+              <div className="project-settings-danger-copy">
+                <strong>{t("project.archive")}</strong>
+                <p>{t("project.archive_confirm_message")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void archive()}
+                loading={archiveProjectMutation.isPending}
+                loadingLabel={t("project.archiving")}
+                disabled={busy}
+              >
+                {t("project.archive")}
+              </Button>
+            </div>
+          )}
           <div className="project-settings-danger-row">
             <div className="project-settings-danger-copy">
               <strong>{t("project.delete")}</strong>
