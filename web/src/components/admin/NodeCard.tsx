@@ -66,19 +66,24 @@ export function NodeCard({
           {showHandle ? (
             <span className="adm-node-card-handle code" translate="no">{node.id}</span>
           ) : null}
+          {/* The status rides under the name rather than beside it: beside
+              it, a card narrower than name + status wrapped the status onto
+              a line of its own, floated right next to the menu. */}
+          <span className="adm-node-card-state">
+            {showStatusPill ? (
+              <TonePill
+                className="adm-status-plain"
+                tone={statusTone(status)}
+                label={t(`status.${status}`, { defaultValue: status })}
+                live={status === "running" || status === "busy"}
+              />
+            ) : (
+              <NodePresence node={node} t={t} withLabel />
+            )}
+            <ClientOutdatedBadge node={node} t={t} />
+          </span>
         </div>
         <div className="adm-node-card-status">
-          {showStatusPill ? (
-            <TonePill
-              className="adm-status-plain"
-              tone={statusTone(status)}
-              label={t(`status.${status}`, { defaultValue: status })}
-              live={status === "running" || status === "busy"}
-            />
-          ) : (
-            <NodePresence node={node} t={t} withLabel />
-          )}
-          <ClientOutdatedBadge node={node} t={t} />
           <NodeActions
             node={node}
             onReveal={onReveal}

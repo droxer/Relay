@@ -23,8 +23,10 @@
 }
 
 /* A section's title sits tight on the fields it introduces: 12px, not the
-   24px field gap. Every section leads with its title or titled header. */
-.adm-provision-section > :first-child {
+   24px field gap. Keyed on the title itself, not on :first-child — an
+   untitled section (the invite form) leads with a field, and the pull-up
+   packed its first two fields 16px apart. */
+.adm-provision-section > :is(.adm-provision-section-head, .adm-provision-section-title):first-child {
   margin-bottom: calc(var(--sp-3) - var(--sp-6));
 }
 

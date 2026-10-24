@@ -31,8 +31,8 @@ export function ComputerDeviceSetup({ onManual }: { onManual: () => void }) {
           <OsInstallCommand os={os} unixCommand={command} windowsCommand={windowsCommand}
             loading={!command && !error} copied={copiedField === `device-setup-${os}`}
             onCopy={(value) => { void copy(`device-setup-${os}`, value); }} /></li>
-        <li>{t("computer.device_choose_directory")}</li>
-        <li>{t("computer.device_confirm_browser")}</li>
+        <li><h3>{t("computer.device_choose_directory")}</h3></li>
+        <li><h3>{t("computer.device_confirm_browser")}</h3></li>
       </ol>}
     </TargetOsTabs>
     <p className="adm-form-hint">{t("computer.connect_requirements")}</p>

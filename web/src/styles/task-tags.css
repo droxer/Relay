@@ -122,8 +122,12 @@
   align-items: center;
   gap: var(--sp-1);
   min-height: var(--control-h);
-  padding: var(--sp-1) var(--sp-1-5);
-  border: 1px solid var(--control-border);
+  /* 8px here + the input's 4px = the 12px text inset of every Input. */
+  padding: var(--sp-1) var(--sp-2);
+  /* A text field, so the text-field border (--field-border, held to 3:1),
+     not the button-chrome --control-border it used to draw — it read as the
+     one faint box in a form of firm ones. */
+  border: 1px solid var(--field-border);
   border-radius: var(--r-2);
   background: var(--surface-0);
   cursor: text;
@@ -131,7 +135,7 @@
 }
 
 .tag-field:hover {
-  border-color: var(--control-border-hover);
+  border-color: var(--field-border-hover);
 }
 
 /* The wrap draws the one ring, as .backlog-filter-search-wrap does: the
@@ -159,8 +163,11 @@
   border: 0;
   background: transparent;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  /* The Input primitive's text (text-sm → --fs-2), not a type role: a tag
+     typed here reads at the size of the title typed two fields up. */
+  font-family: var(--font-sans);
+  font-size: var(--fs-2);
+  line-height: var(--leading-snug);
 }
 
 /* Chrome draws a dropdown arrow on any input with a datalist; the

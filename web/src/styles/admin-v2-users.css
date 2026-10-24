@@ -46,11 +46,17 @@
 
 /* Column tracks for the per-band user tables. Lengths, not scale steps —
    the design grid bans arbitrary bracket values in component classes.
-   FLOORS (min-width), not fixed widths: a header that runs longer in zh-CN
-   or a longer English string widens its column instead of clipping. */
-.adm-emp-col-identity { min-width: 220px; }
-.adm-emp-col-running { min-width: 5.5rem; }
-.adm-emp-col-actions { min-width: 4.5rem; }
+   The grouped tables use fixed layout (list-group.css), so the narrow
+   tracks are WIDTHS — sized for the longest header, zh-CN included — and the
+   identity and computers columns share the rest. */
+.adm-emp-col-identity { width: 34%; }
+/* Label + the reserved sort caret + cell padding: "Local limit" is the
+   longest of the three metric headers. */
+.adm-emp-col-metric { width: 8rem; }
+.adm-emp-col-actions { width: 5rem; }
+/* The three metric tracks are fixed, so the users table needs a wider floor
+   than the shared 720px for its Computers column to keep room for a chip. */
+.adm-grouped-list table[data-slot="table"].adm-emp-table { min-width: 64rem; }
 /* A one-shot 'recently updated' marker, not live work — ink, drawn once on
    the --t-draw cadence (--live blue + the pulse cadences are reserved for
    live work). Rows are <tr> now, and a <tr> is not a reliable positioning
@@ -142,6 +148,15 @@ tr.is-pulse > td:first-child::after {
    them. Anatomy mirrors the node card: presence dot, ownership mark, name. */
 .adm-computer-chip {
   gap: var(--sp-2);
+  max-width: 100%;
+}
+
+/* A long computer name ellipsizes inside its chip; the chip's own clip cut
+   it mid-letter when a narrow column was the limit. */
+.adm-computer-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .adm-computer-chip .adm-node-chip-mark {

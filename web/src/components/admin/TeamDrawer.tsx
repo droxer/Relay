@@ -173,6 +173,7 @@ export function TeamDrawer({
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
+      kicker={t("teams.title")}
       title={team ? t("teams.edit") : t("teams.add")}
       subtitle={t("teams.drawer_subtitle")}
       width="form"

@@ -298,6 +298,7 @@ export function TaskDrawer({
       onClose={() => {
         if (!busy) onClose();
       }}
+      kicker={t(form.variant === "routine" ? "nav.routine" : "nav.backlog")}
       title={title}
       subtitle={subtitle}
       subtitleMono={Boolean(form.id)}
@@ -310,7 +311,7 @@ export function TaskDrawer({
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
         {projectChoice !== "locked" ? (
           <Field
-            label={t("project.projects")}
+            label={t("project.project")}
             labelId={projectLabelId}
             wrapper="div"
             hint={projectChoice === "optional" ? t("issues.project_hint") : undefined}
