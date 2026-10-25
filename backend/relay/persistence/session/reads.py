@@ -121,6 +121,7 @@ class SessionReadRows(SessionStoreState):
             "workspacePath",
             "ownerUserId",
             "ownerAgentId",
+            "participantAgentIds",
             "teamId",
             "projectId",
             "workspaceLayout",

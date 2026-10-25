@@ -53,6 +53,12 @@ describe("session poll merging", () => {
     assert.equal(mergeSessionSummaries([], [summary({ status: "completed", workOutcome: "unfinished" })])[0].workOutcome, "unfinished");
     assert.equal(mergeSessionSummaries([current], [summary({ eventCount: 2, status: "completed", workOutcome: "reported_done" })])[0].finalOutcome, undefined);
   });
+  it("carries each thread's room agents from the summary, not only the opened one", () => {
+    const [inflated] = mergeSessionSummaries([], [summary({ participantAgentIds: ["agent_a", "agent_b"] })]);
+    assert.deepEqual(inflated.participantAgentIds, ["agent_a", "agent_b"]);
+    const [merged] = mergeSessionSummaries([session()], [summary({ participantAgentIds: ["agent_c"] })]);
+    assert.deepEqual(merged.participantAgentIds, ["agent_c"]);
+  });
   it("updates summary fields without replacing streamed event history", () => {
     const output = {
       id: "evt_output",
