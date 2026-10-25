@@ -50,10 +50,10 @@ describe("owner handle beside the name", () => {
     assert.equal(handleRestatesName("", "alice"), false);
   });
 
-  it("renders the owner handle only when it adds information", () => {
+  it("names a computer's owner once, never name and handle side by side", () => {
     const owner = readWeb("src/components/admin/NodeOwner.tsx");
-    assert.match(owner, /showHandle = !handleRestatesName\(user\.displayName, handle\)/);
-    assert.match(owner, /\{showHandle \? \([\s\S]*?adm-node-owner-handle/);
+    assert.match(owner, /label = name && !handleRestatesName\(name, handle\) \? name : `@\$\{handle\}`/);
+    assert.doesNotMatch(owner, /adm-node-owner-handle/);
   });
 });
 
