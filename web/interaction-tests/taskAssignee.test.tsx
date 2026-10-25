@@ -83,3 +83,20 @@ it("shows the team's saved avatar alongside its name", async () => {
   expect(container.querySelector(".task-assignee img")?.getAttribute("src")).toBe("/avatars/teams/shape-grid-01.svg");
   expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Builders");
 });
+
+it.each([
+  ["normal", "proj-1", "Website"],
+  ["high", undefined, undefined],
+] as const)("shows a %s automation's priority and its project (%s)", (priority, projectId, projectName) => {
+  const task = {
+    id: "routine-1", title: "Nightly report", status: "backlog", priority, isRoutine: true, projectId,
+    linkedSessionIds: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
+  } as RelayTaskListItem;
+  const { container } = render(<RoutineTable rows={[task]} sort={null} onSort={vi.fn()} ariaLabel="Routines"
+    selectAll={null} selection={new Set()} onToggleSelect={vi.fn()} stateFor={() => "paused"}
+    assignmentFor={() => ({ ready: false })}
+    handlersFor={() => ({ starting: false, onOpen: vi.fn(), onAssign: vi.fn(), onStart: vi.fn() })}
+    projectNameFor={(row) => (row.projectId === "proj-1" ? "Website" : undefined)} />);
+  expect(container.querySelector(`.task-col-priority .priority-badge[data-priority="${priority}"]`)).not.toBeNull();
+  expect(container.querySelector(".task-project-label")?.textContent).toBe(projectName);
+});
