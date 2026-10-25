@@ -35,6 +35,9 @@ const LEGACY_INFRA_PATHS: Readonly<Record<string, "computers" | "skills">> = {
   "/settings/skills": "skills",
 };
 
+// A device-setup link's `?connect=` code, as the backend mints it.
+const DEVICE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
+
 /* A disabled feature has no address: /channels reads as not found rather than
    opening a page whose API the backend has not mounted. */
 const WORK_ROUTES = new Map(
@@ -450,7 +453,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   } else if (canonicalPathname(pathname.replace(/\/+$/, "")) === WORK_PATHS.computers) {
     // A device-setup link (`?connect=<code>`) opens the roster's connect flow.
     const code = source.get("connect");
-    if (code && /^[A-Za-z0-9_-]{32}$/.test(code)) target.set("connect", code);
+    if (code && DEVICE_CODE_PATTERN.test(code)) target.set("connect", code);
     copyPageParams("computers", source, target);
   } else if (
     (head === "backlog" && Boolean(entityId) && rest[0] === "threads" && Boolean(rest[1]) && rest.length === 2)
@@ -590,6 +593,15 @@ function canonicalPathname(pathname: string): string {
   const match = /^\/([^/]+)(\/.*)?$/.exec(pathname);
   const renamed = match ? RENAMED_PATH_HEADS[match[1]] : undefined;
   return renamed ? `/${renamed}${match?.[2] ?? ""}` : pathname;
+}
+
+/** The code a device-setup link (`/computers?connect=<code>`) asks the signed-in
+    person to approve. Read through `canonicalPathname`, so the backend's link
+    and every legacy Computers address resolve the same way. */
+export function deviceApprovalCode(pathname: string, search: string): string | null {
+  if (canonicalPathname(pathname.replace(/\/+$/, "")) !== WORK_PATHS.computers) return null;
+  const code = new URLSearchParams(search).get("connect");
+  return code && DEVICE_CODE_PATTERN.test(code) ? code : null;
 }
 
 export function canonicalBrowserUrl(pathname: string, search = ""): string {
