@@ -45,6 +45,7 @@ from .artifacts import (
 )
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from ..records import (
+    NEXT_STEPS_STATE_KEY,
     ROUND_RESULT_RELATIVE_PATH,
     _confined_workspace_path,
     is_human_started_round,
@@ -264,6 +265,7 @@ class RunCompletionMixin(RegistryState):
             controller.complete_session(
                 run_request["sessionId"], outcome, task_status=task_status,
                 work_outcome=work_outcome, input_request=input_request,
+                next_steps=(run_request.get("state") or {}).get(NEXT_STEPS_STATE_KEY),
             )
         else:
             # A retried finalization after a crash between the session write

@@ -78,6 +78,7 @@ export {
   type TokenUsage,
 } from "./token-usage.js";
 export { RESUMABLE_AGENTS, extractRuntimeSessionId, isResumableSessionId } from "./runtime-session.js";
+export { NEXT_STEPS_MAX, NEXT_STEPS_RELATIVE_PATH, NEXT_STEP_MAX_CHARS, sanitizeNextSteps } from "./next-steps.js";
 
 export {
   AGENT_NAMES,

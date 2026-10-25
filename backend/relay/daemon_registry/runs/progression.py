@@ -30,7 +30,9 @@ from ...persistence.events import relay_event
 from ...sessions.agent_state import merge_agent_state
 from .run_cursor import advanced_run_cursor
 from .. import config
+from ...core.next_steps import sanitize_next_steps
 from ..records import (
+    NEXT_STEPS_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
 from ..state import RegistryState
@@ -351,6 +353,7 @@ class RunProgressionMixin(RegistryState):
             )
         if decision.round_result:
             next_state = {**next_state, ROUND_RESULT_STATE_KEY: decision.round_result}
+        next_state = _with_next_steps(next_state, event, decision.succeeded)
         if decision.rejected_reason is not None:
             # The daemon found a verdict file and refused it; say why on the
             # task instead of reporting the verdict as simply missing.
@@ -433,3 +436,14 @@ class RunProgressionMixin(RegistryState):
         if not updated:
             return
         self._follow_up_run_request(updated)
+
+
+def _with_next_steps(
+    state: dict[str, Any], event: dict[str, Any], succeeded: bool
+) -> dict[str, Any]:
+    """Keep only the latest successful turn's suggestions: an earlier member's
+    next step is stale once a later one has spoken."""
+    steps = sanitize_next_steps(event.get("nextSteps")) if succeeded else []
+    if steps:
+        return {**state, NEXT_STEPS_STATE_KEY: steps}
+    return {key: value for key, value in state.items() if key != NEXT_STEPS_STATE_KEY}

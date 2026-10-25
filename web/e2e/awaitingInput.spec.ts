@@ -144,7 +144,7 @@ test("asking for status is a question, not a task round", async ({ page }) => {
   });
   await page.goto(`/threads/${session.id}`);
   const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
-  await expect(prompt).toContainText("Asking for status keeps it waiting on you.");
+  await expect(prompt).toContainText("Keeps it waiting on you");
   await prompt.getByRole("button", { name: "Tell me what’s done and what’s left" }).click();
   await expect.poll(() => bodies.map((body) => body.intent)).toEqual(["discuss"]);
 });
@@ -165,7 +165,7 @@ test("an unstructured list stays in the question with every item visible", async
   const prompt = page.getByRole("region", { name: "Reviewer needs your answer" });
   await expect(prompt.locator("blockquote")).toHaveText(question);
   await expect(prompt.getByRole("list", { name: "Answers" })).toHaveCount(0);
-  await expect(prompt.getByRole("button", { name: "Reply", exact: true })).toBeEnabled();
+  await expect(prompt.getByRole("button", { name: "Answer", exact: true })).toBeEnabled();
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -192,7 +192,7 @@ for (const theme of ["light", "dark"] as const) {
       expect(slip!.x + slip!.width).toBeLessThanOrEqual(mobile ? 390 : 1440);
       await page.screenshot({ path: testInfo.outputPath(`awaiting-thread-${theme}-${mobile ? "mobile" : "desktop"}.png`) });
 
-      await prompt.getByRole("button", { name: "Reply" }).click();
+      await prompt.getByRole("button", { name: "Answer", exact: true }).click();
       await expect(page.getByPlaceholder("Answer Reviewer…")).toBeFocused();
       await page.keyboard.type("Use the ops vault.");
       await page.getByRole("button", { name: "Send", exact: true }).click();
@@ -214,3 +214,20 @@ for (const theme of ["light", "dark"] as const) {
     await panel.screenshot({ path: testInfo.outputPath(`awaiting-task-${theme}.png`) });
   });
 }
+
+test("a finished turn offers its suggested next steps, one click each", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const steps = ["Rotate the production key the same way", "Add a runbook entry for this rotation"];
+  const sent = await serve(page, "light", true, {
+    finalOutcome: "Rotated the staging key.", workOutcome: "reported_done", nextSteps: steps,
+  }, { status: "done", waitingReason: undefined });
+  await page.goto(`/threads/${session.id}`);
+  await expect(page.getByRole("region", { name: "Reviewer needs your answer" })).toHaveCount(0);
+  const offers = page.getByRole("region", { name: "Suggested next" });
+  await expect(offers.getByRole("button")).toHaveText(steps);
+  await offers.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+  await offers.getByRole("button", { name: steps[1] }).hover();
+  await page.screenshot({ path: testInfo.outputPath("next-steps.png") });
+  await offers.getByRole("button", { name: steps[0] }).click();
+  await expect.poll(() => sent).toEqual([steps[0]]);
+});

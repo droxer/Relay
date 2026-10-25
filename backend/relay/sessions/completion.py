@@ -18,6 +18,7 @@ class SessionCompletionMixin(SessionControllerState):
         *, work_outcome: str = "unverified",
         input_request: dict[str, Any] | None = None,
         accepted_by_human: bool = False,
+        next_steps: list[str] | None = None,
     ) -> dict[str, Any]:
         """Close the thread and settle its task.
 
@@ -28,7 +29,7 @@ class SessionCompletionMixin(SessionControllerState):
         with self._transaction():
             return self._complete_session(
                 session_id, outcome, task_status, work_outcome, input_request,
-                accepted_by_human=accepted_by_human,
+                accepted_by_human=accepted_by_human, next_steps=next_steps,
             )
 
     def repair_completion(
@@ -71,6 +72,7 @@ class SessionCompletionMixin(SessionControllerState):
         work_outcome: str = "unverified",
         input_request: dict[str, Any] | None = None,
         *, accepted_by_human: bool = False,
+        next_steps: list[str] | None = None,
     ) -> dict[str, Any]:
         # The thread's completion quotes the question; the task keeps the
         # whole wait record (its id and kind too), including on a retry after
@@ -106,6 +108,9 @@ class SessionCompletionMixin(SessionControllerState):
             relay_event("session.completed", session_id, {
                 "outcome": outcome, "workOutcome": work_outcome,
                 **_session_input_fields(request),
+                # Offered only when nobody is being waited on: a question's
+                # own answers are the next step then.
+                **({"nextSteps": list(next_steps)} if next_steps and not request else {}),
             }),
         )
         self._update_task_status(

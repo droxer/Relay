@@ -79,6 +79,12 @@ export interface AgentState {
   /** Set by the daemon to reject a verdict belonging to another run. */
   round_result_run_id?: string;
   /**
+   * Workspace-relative control file where the run may suggest what its person
+   * is likely to ask next, e.g. ".relay/next-steps.json". The thread offers
+   * them as one-click replies once the turn ends.
+   */
+  next_steps_file?: string;
+  /**
    * Why the lead was handed the turn back: a teammate's run failed and this
    * run is the bounded chance to fix the cause before the pipeline resumes.
    */
