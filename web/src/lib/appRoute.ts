@@ -1,3 +1,4 @@
+import { shouldReloadOnNavigation } from "./buildFreshness.ts";
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
 import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TABS } from "./projectPage.ts";
@@ -653,6 +654,10 @@ export function syncAppStateToUrl(state: AppLocationState, replace = false, onCo
     return Promise.resolve();
   }
   return requestNavigation(() => {
+    if (shouldReloadOnNavigation(nextUrl, window.location.pathname, replace)) {
+      window.location.assign(nextUrl);
+      return;
+    }
     onCommit?.();
     window.history[replace ? "replaceState" : "pushState"]({ ...window.history.state, relayRoute: state }, "", nextUrl);
     window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
@@ -663,6 +668,10 @@ export function syncAppStateToUrl(state: AppLocationState, replace = false, onCo
 export function navigateToAppPath(path: string, options?: { replace?: boolean }): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   return requestNavigation(() => {
+    if (shouldReloadOnNavigation(path, window.location.pathname, options?.replace ?? false)) {
+      window.location.assign(path);
+      return;
+    }
     if (options?.replace) window.history.replaceState(window.history.state, "", path);
     else window.history.pushState(window.history.state, "", path);
     window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));

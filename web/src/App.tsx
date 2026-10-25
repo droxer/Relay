@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { DialogProvider } from "./components/ui/DialogProvider";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { ArtifactViewerProvider } from "./components/ArtifactViewerProvider";
+import { BuildUpdateNotice } from "./components/BuildUpdateNotice";
 import { LoginScreen } from "./components/LoginScreen";
 import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
 import { JoinScreen } from "./components/waitlist/JoinScreen";
@@ -53,6 +54,7 @@ export function SignedInProviders({ children }: { children: ReactNode }) {
     // buttons swaps the popup instead of re-waiting per control.
     <TooltipProvider>
       <DialogProvider>
+        <BuildUpdateNotice />
         <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
       </DialogProvider>
     </TooltipProvider>

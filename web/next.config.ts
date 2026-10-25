@@ -3,6 +3,12 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 const backendUrl = process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790";
 
+// One id per build, inlined into the client and written to /version.json, so
+// an open tab can tell a newer deploy happened (src/lib/buildFreshness.ts).
+// Set on process.env rather than `env`: the build's worker processes inherit
+// it, so every bundle and the version file agree. RELAY_BUILD_ID pins it.
+process.env.NEXT_PUBLIC_RELAY_BUILD_ID ??= process.env.RELAY_BUILD_ID || Date.now().toString(36);
+
 // The app is a client-routed SPA rendered from a single entry page, so every
 // deep link has to resolve back to it. Dev and the hosted build need the same
 // list; only their mechanism differs (dev `fallback` rewrites vs. a hosted

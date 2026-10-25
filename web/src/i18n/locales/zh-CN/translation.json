@@ -52,6 +52,11 @@
     "message": "关闭将放弃未保存的更改。",
     "confirm": "放弃更改"
   },
+  "app_update": {
+    "title": "Relay 有新版本",
+    "body": "重新加载即可使用；打开其他页面时也会自动加载。",
+    "reload": "重新加载"
+  },
   "errors": {
     "screen_failed": "此页面无法加载",
     "screen_failed_body": "请重试、重新加载应用，或打开其他页面。",

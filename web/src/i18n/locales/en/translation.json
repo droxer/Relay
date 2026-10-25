@@ -52,6 +52,11 @@
     "message": "Closing discards unsaved changes.",
     "confirm": "Discard changes"
   },
+  "app_update": {
+    "title": "A new version of Relay is available",
+    "body": "Reload to use it. Opening another page also loads it.",
+    "reload": "Reload"
+  },
   "errors": {
     "screen_failed": "This screen could not load",
     "screen_failed_body": "Try again, reload the app, or open another page.",

@@ -7,6 +7,11 @@ export function registerNavigationGuard(guard: NavigationGuard): () => void {
   return () => { guards.delete(guard); };
 }
 
+/** Whether something on screen would ask before it is left (unsaved work). */
+export function hasNavigationGuards(): boolean {
+  return guards.size > 0;
+}
+
 async function permitsNavigation(): Promise<boolean> {
   for (const guard of [...guards]) {
     if (guards.has(guard) && !await guard()) return false;
