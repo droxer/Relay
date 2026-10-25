@@ -2974,6 +2974,7 @@
     "mark_failed": "Could not mark notifications as read. Try again.",
     "task_review": "Ready for your review",
     "task_done": "Task finished",
+    "approval_requested": "Your approval is needed",
     "task_detail": "{{ref}} {{title}}",
     "task_detail_untitled": "{{ref}}",
     "computer_online": "Computer back online",
@@ -2992,6 +2993,8 @@
     "kind": {
       "task_completed": "Finished tasks",
       "task_completed_sub": "When agents finish a task, or it is ready for your review.",
+      "approval_requested": "Team approvals",
+      "approval_requested_sub": "When a team waits for your approval before its next step.",
       "computer_status": "Computer status",
       "computer_status_sub": "When one of your computers goes offline or comes back online.",
       "client_outdated": "Relay client updates",

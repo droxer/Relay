@@ -35,13 +35,25 @@ MAX_LIST_LIMIT = 100
 
 
 def insert_notification_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
-    """Insert ``{"user_id", "kind", "data"}`` rows on an open connection."""
+    """Insert notices; a dedupeKey identifies one notice per recipient/kind.
+
+    Replaying that notice preserves its original read state and creation time.
+    """
     now = datetime.now(UTC)
     for row in rows:
-        conn.execute(insert(notifications).values(
-            id=new_database_id(), user_id=row["user_id"], kind=row["kind"],
+        dedupe_key = row.get("dedupeKey")
+        notice_id = (
+            str(uuid.uuid5(uuid.NAMESPACE_URL, f"relay.notification/{row['user_id']}/{row['kind']}/{dedupe_key}"))
+            if dedupe_key else new_database_id()
+        )
+        dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
+        statement = dialect_insert(notifications).values(
+            id=notice_id, user_id=row["user_id"], kind=row["kind"],
             data=row["data"], created_at=now, read_at=None,
-        ))
+        )
+        if dedupe_key:
+            statement = statement.on_conflict_do_nothing(index_elements=[notifications.c.id])
+        conn.execute(statement)
 
 
 def _is_uuid(value: str) -> bool:

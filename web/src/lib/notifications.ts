@@ -92,6 +92,18 @@ function permissionRequested(data: Data): Body | null {
   };
 }
 
+function approvalRequested(data: Data): Body | null {
+  const sessionId = text(data.sessionId);
+  if (!sessionId) return null;
+  const title = text(data.title);
+  return {
+    tone: "info",
+    title: { key: "notifications.approval_requested", params: {} },
+    detail: title ? { key: "notifications.thread_detail", params: { title } } : { key: "notifications.thread_detail_untitled", params: {} },
+    target: { kind: "thread", sessionId, projectId: text(data.projectId) },
+  };
+}
+
 function computerName(data: Data, nodeId: string): string {
   return text(data.computerName) ?? nodeId;
 }
@@ -121,6 +133,7 @@ function clientOutdated(data: Data): Body | null {
 
 const READERS: Record<NotificationKind, (data: Data) => Body | null> = {
   task_completed: taskCompleted,
+  approval_requested: approvalRequested,
   permission_requested: permissionRequested,
   computer_status: computerStatus,
   client_outdated: clientOutdated,

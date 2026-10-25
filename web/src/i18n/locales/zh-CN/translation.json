@@ -2911,6 +2911,7 @@
     "mark_failed": "无法将通知标为已读。请重试。",
     "task_review": "等待你审阅",
     "task_done": "任务已完成",
+    "approval_requested": "等待你批准",
     "task_detail": "{{ref}} {{title}}",
     "task_detail_untitled": "{{ref}}",
     "computer_online": "电脑已恢复在线",
@@ -2929,6 +2930,8 @@
     "kind": {
       "task_completed": "已完成的任务",
       "task_completed_sub": "智能体完成任务，或任务等待你审阅时。",
+      "approval_requested": "团队批准请求",
+      "approval_requested_sub": "团队在下一步开始前等待你批准时。",
       "computer_status": "电脑状态",
       "computer_status_sub": "你的电脑离线或恢复在线时。",
       "client_outdated": "Relay 客户端更新",
