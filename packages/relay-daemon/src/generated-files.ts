@@ -3,6 +3,8 @@ import { join, relative, sep } from "node:path";
 
 import type { DaemonGeneratedFile } from "relay-core";
 
+import { LEGACY_THREAD_RECORDS_DIR, THREADS_DIR } from "./thread-workspace.js";
+
 /**
  * Workspace produced-file detection for daemon runs.
  *
@@ -173,7 +175,13 @@ function isTextDocumentFile(relativePath: string, extension: string): boolean {
       ? parts.slice(2)
       : parts;
   return scoped.length === 1 || scoped[0] === "output" || scoped[0] === "artifacts"
-    || (scoped.length === 3 && scoped[0] === "threads" && /^HANDOFF\.(md|json)$/.test(scoped[2]));
+    || (scoped.length === 3 && isThreadsDir(scoped[0]) && /^HANDOFF\.(md|json)$/.test(scoped[2]));
+}
+
+/** `.threads/` holds thread records (and, at a node root, thread workspaces);
+ * `threads/` is where records lived before it. */
+function isThreadsDir(name: string): boolean {
+  return name === THREADS_DIR || name === LEGACY_THREAD_RECORDS_DIR;
 }
 
 function isSiblingAgentHome(relativeDir: string, ownAgentHomeSubdir: string | undefined): boolean {
@@ -249,8 +257,9 @@ async function listCandidates(
         const relativeDir = relative(workspacePath, path).split(sep).join("/");
         if (GENERATED_FILE_EXCLUDED_DIRS.has(entry.name)) continue;
         if (isSiblingAgentHome(relativeDir, ownAgentHomeSubdir)) continue;
-        if (options.ownThreadId && /^threads\/[^/]+$/.test(relativeDir)
-          && relativeDir !== `threads/${options.ownThreadId}`) continue;
+        const [top, thread, ...nested] = relativeDir.split("/");
+        if (options.ownThreadId && isThreadsDir(top) && thread && nested.length === 0
+          && thread !== options.ownThreadId) continue;
         pending.push(path);
         continue;
       }

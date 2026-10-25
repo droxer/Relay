@@ -25,7 +25,7 @@ import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 
 /** The panel browses the project's files: the project directory is its
  *  deliverable location, so there is no `artifacts/` folder to scope to. The
- *  Activity switch (thread records under `threads/`) stays on the full project
+ *  Activity switch (thread records under `.threads/`) stays on the full project
  *  workspace page: in a few hundred pixels a second switch under the Project /
  *  This thread tabs was one level of chrome too many. */
 const PANEL_ROOT = PROJECT_WORKSPACE_FILE_ROOTS.artifacts;

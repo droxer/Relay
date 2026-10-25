@@ -23,6 +23,7 @@ from ...projects.context import (
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_AGENT_MODEL,
     DAEMON_CAPABILITY_AGENT_RESUME,
+    DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     DAEMON_CAPABILITY_HANDOFF_VALIDATION,
     DAEMON_CAPABILITY_PROJECT_SETUP,
     DAEMON_CAPABILITY_THREAD_WORKSPACES,
@@ -30,6 +31,7 @@ from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_WORK_RESULTS,
 )
 from ...core.workspace_capabilities import required_workspace_capabilities
+from ...core.workspace_layout import THREAD_RECORDS_DIR
 from ...sessions.handoff_receipt import render_handoff_receipt
 from ..records import (
     PERSISTED_AGENT_STATE_KEYS,
@@ -154,6 +156,12 @@ def _handoff_context_state(
     The accepted context is immutable across staging and delivery retries.
     """
     _check_handoff_context(context, assignment)
+    if context["progressFile"].startswith(f"{THREAD_RECORDS_DIR}/") and not has_capability(
+        sandbox, DAEMON_CAPABILITY_DOT_THREAD_RECORDS
+    ):
+        raise _DeliveryRefused(
+            "Handoff requires a daemon with dot-thread-records support. Upgrade the daemon before retrying."
+        )
     prior_conversation = context["priorContext"]
     if context.get("receipt") is not None:
         try:

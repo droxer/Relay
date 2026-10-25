@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { DaemonNodeRunCommand } from "relay-core";
+import { LEGACY_THREAD_RECORDS_DIR, THREADS_DIR } from "./thread-workspace.js";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const fail = (reason: string): never => { throw new Error(`handoff_validation_failed: ${reason}`); };
@@ -35,7 +36,7 @@ export function validateHandoffWorkspace(root: string, command: DaemonNodeRunCom
       continue;
     }
     try {
-      if (hashRegularFile(root, artifact.path) !== artifact.sha256) return fail("recorded file bytes changed.");
+      if (hashRecordedFile(root, artifact.path) !== artifact.sha256) return fail("recorded file bytes changed.");
     } catch {
       // Never expose host paths, file bytes, or OS error details to the thread.
       return fail(`artifact ${index + 1} changed, is missing, unsafe, or exceeds the read limit. Review the live workspace before requesting new work.`);
@@ -43,6 +44,20 @@ export function validateHandoffWorkspace(root: string, command: DaemonNodeRunCom
     matched += 1;
   }
   return `[Runtime handoff validation]\n${matched} recorded file hashes matched; ${unavailable} snapshots unavailable. Evidence coverage remains partial. Verify the live work and claims; this is not completion approval.`;
+}
+
+/** Receipts are immutable: a retry may still name records moved during preparation.
+ * Only a missing legacy record gets an alias; changed or unsafe files must fail. */
+function hashRecordedFile(root: string, path: string): string {
+  try {
+    return hashRegularFile(root, path);
+  } catch (error) {
+    const [directory, thread, file, ...rest] = path.split("/");
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT"
+      || directory !== LEGACY_THREAD_RECORDS_DIR || !thread || rest.length
+      || (file !== "HANDOFF.md" && file !== "HANDOFF.json")) throw error;
+    return hashRegularFile(root, `${THREADS_DIR}/${thread}/${file}`);
+  }
 }
 
 function hashRegularFile(root: string, path: string): string {

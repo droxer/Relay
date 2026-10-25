@@ -79,14 +79,14 @@ describe("task workspace state at a tab root", () => {
   it("keeps the tabs on screen for an empty tab root", () => {
     const data = { exists: true, entries: [] };
     assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts" }), "ready");
-    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads" }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: ".threads" }), "ready");
   });
 
   it("treats a missing tab root in an existing workspace as an empty area", () => {
     const data = { exists: false, entries: [] };
     const root = { isLoading: false, error: null, data: { exists: true } };
     assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "artifacts", root }), "ready");
-    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "threads", root }), "ready");
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: ".threads", root }), "ready");
   });
 
   it("reports a workspace that was never created, not an empty tab", () => {

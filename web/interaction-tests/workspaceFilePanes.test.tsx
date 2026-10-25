@@ -24,3 +24,19 @@ it("keeps the directory browser visible beside a selected file and lets the prev
   expect(onClosePreview).toHaveBeenCalledOnce();
   expect(document.querySelector(".workspace-pane-browse")).toBeTruthy();
 });
+
+
+it("keeps historical records in Activity and respects its scoped root", () => {
+  const openDirectory = vi.fn();
+  render(<WorkspaceFilePanes
+    path="threads" selectedPath="" scoped
+    files={{ data: { scope: "shared", source: "live", nodeId: "node", path: "threads", generatedAt: "2026-10-01T00:00:00Z", exists: true, entries: [{ name: "old", path: "threads/old", kind: "directory", bytes: null, updatedAt: "2026-10-01T00:00:00Z" }] }, error: null, isLoading: false }}
+    content={{ data: undefined, error: null, isLoading: false }}
+    view="source" setView={vi.fn()} openDirectory={openDirectory}
+    onSelectFile={vi.fn()} onRetry={vi.fn()} onClosePreview={vi.fn()}
+  />);
+  expect(screen.getByRole("button", { name: "workspace.tab_activity", pressed: true })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "workspace.parent_directory" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /old/ }));
+  expect(openDirectory).toHaveBeenCalledWith("threads/old");
+});

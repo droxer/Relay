@@ -216,12 +216,26 @@ def test_receipt_prefers_thread_directory_over_previous_root_checkpoint():
     session = source()
     session["artifacts"].append({
         "id": "new", "kind": "workspace_file", "agentRunId": "run",
-        "workspaceRelativePath": "threads/thread/HANDOFF.json",
+        "workspaceRelativePath": ".threads/thread/HANDOFF.json",
     })
     context = capture_handoff_context(session, TARGET, None, Snapshots({
         "checkpoint": b'{"assignmentId":"source","pending":["Old"]}',
         "new": b'{"assignmentId":"source","pending":["Current"]}',
     }))
-    assert context["progressFile"] == "threads/thread/HANDOFF.md"
-    assert context["receipt"]["checkpoint"]["path"] == "threads/thread/HANDOFF.json"
+    assert context["progressFile"] == ".threads/thread/HANDOFF.md"
+    assert context["receipt"]["checkpoint"]["path"] == ".threads/thread/HANDOFF.json"
     assert context["receipt"]["checkpoint"]["claims"]["pending"] == ["Current"]
+
+
+def test_receipt_reads_a_checkpoint_written_before_dot_threads():
+    session = source()
+    session["artifacts"].append({
+        "id": "older", "kind": "workspace_file", "agentRunId": "run",
+        "workspaceRelativePath": "threads/thread/HANDOFF.json",
+    })
+    context = capture_handoff_context(session, TARGET, None, Snapshots({
+        "older": b'{"assignmentId":"source","pending":["Before"]}',
+    }))
+    assert context["progressFile"] == ".threads/thread/HANDOFF.md"
+    assert context["receipt"]["checkpoint"]["path"] == "threads/thread/HANDOFF.json"
+    assert context["receipt"]["checkpoint"]["claims"]["pending"] == ["Before"]

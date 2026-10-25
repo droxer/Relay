@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -3613,7 +3613,7 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
     workspacePath: workspace,
     logicalAgentId: "agent_research",
   };
-  const threadWorkspace = joinPath(workspace, command.sessionId);
+  const threadWorkspace = joinPath(workspace, ".threads", command.sessionId);
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
@@ -3742,6 +3742,9 @@ test("upgraded daemon keeps legacy sessions on the existing node root", async (t
 
   assert.equal(events.some((event) => event.type === "run.completed"), true);
   assert.equal(existsSync(join(workspace, command.sessionId)), false);
+  // Only its records live under `.threads/`; no thread workspace was created.
+  assert.deepEqual(readdirSync(join(workspace, ".threads")), [command.sessionId]);
+  assert.equal(existsSync(join(workspace, "threads")), false);
 });
 
 test("generated-file diff reports every changed file and skips excluded directories", async (t: TestContext) => {

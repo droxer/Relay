@@ -10,6 +10,11 @@ LINKED_WORKSPACE_PREFIX = "links/"
 
 # Every backlog task and automation directory sits under this root.
 TASK_WORKSPACE_ROOT = "tasks"
+# Each thread's records (`HANDOFF.md`, `HANDOFF.json`) sit in `<dir>/<threadId>/`
+# inside its workspace; before `.threads/` they sat in `threads/`, where
+# older runs left them. The daemon mirrors both in `thread-workspace.ts`.
+THREAD_RECORDS_DIR = ".threads"
+LEGACY_THREAD_RECORDS_DIR = "threads"
 # The deliverables directory inside a thread or task workspace.
 ARTIFACTS_DIR = "artifacts"
 

@@ -59,7 +59,8 @@ export function WorkspaceFilePanes({
   const { t } = useTranslation();
   const selected = selectedPath ? { name: selectedPath.split("/").at(-1) || selectedPath } : null;
   const tab = workspaceFileTabForPath(path, roots);
-  const scopeRoot = scoped && tab ? roots[tab] : undefined;
+  const activityRoot = path === "threads" || path.startsWith("threads/") ? "threads" : roots.activities;
+  const scopeRoot = scoped && tab ? (tab === "activities" ? activityRoot : roots.artifacts) : undefined;
   return (
     <div className={`workspace-panes${selected ? "" : " is-browse-only"}`}>
       <section className="workspace-pane workspace-pane-browse" aria-label={t("workspace.tab_files")}>

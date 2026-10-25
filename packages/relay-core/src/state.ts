@@ -90,7 +90,7 @@ export interface AgentState {
    */
   repair_note?: string;
   /**
-   * Workspace-relative handoff notes, e.g. "threads/<threadId>/HANDOFF.md". The
+   * Workspace-relative handoff notes, e.g. ".threads/<threadId>/HANDOFF.md". The
    * transcript is capped, so this is what carries decisions past the point
    * where earlier turns are elided.
    */

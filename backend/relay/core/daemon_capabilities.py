@@ -45,6 +45,8 @@ DAEMON_CAPABILITY_PROJECT_LINKS = "project-links"
 # occurrences share one directory with per-run artifacts, and a project
 # workspace is its own deliverable location with no `artifacts/` directory.
 DAEMON_CAPABILITY_ARTIFACT_LAYOUT = "artifact-layout"
+# Hidden thread records, migration-aware handoff validation, and snapshots.
+DAEMON_CAPABILITY_DOT_THREAD_RECORDS = "dot-thread-records"
 
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
@@ -68,6 +70,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_PROJECT_SETUP,
         DAEMON_CAPABILITY_PROJECT_LINKS,
         DAEMON_CAPABILITY_ARTIFACT_LAYOUT,
+        DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     }
 )
 

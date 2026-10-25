@@ -5,6 +5,7 @@ import type {
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
   WorkspaceBriefResponse,
+  WorkspaceFileEntry,
 } from "../types.ts";
 import { apiJson } from "./client.ts";
 
@@ -37,10 +38,9 @@ export function listProjectWorkspaceFiles(
   input: { projectId: string; path?: string },
   signal?: AbortSignal,
 ): Promise<ProjectWorkspaceFilesResponse> {
-  const params = new URLSearchParams();
-  if (input.path) params.set("path", input.path);
-  const query = params.toString();
-  return apiJson<ProjectWorkspaceFilesResponse>(`/projects/${encodeURIComponent(input.projectId)}/workspace/files${query ? `?${query}` : ""}`, { signal });
+  return listWorkspaceFiles<ProjectWorkspaceFilesResponse>(
+    `/projects/${encodeURIComponent(input.projectId)}/workspace/files`, input.path, signal,
+  );
 }
 
 export function readProjectWorkspaceFile(
@@ -55,10 +55,32 @@ export function listTaskWorkspaceFiles(
   input: { taskId: string; path?: string },
   signal?: AbortSignal,
 ): Promise<TaskWorkspaceFilesResponse> {
-  const params = new URLSearchParams();
-  if (input.path) params.set("path", input.path);
-  const query = params.toString();
-  return apiJson<TaskWorkspaceFilesResponse>(`/tasks/${encodeURIComponent(input.taskId)}/workspace/files${query ? `?${query}` : ""}`, { signal });
+  return listWorkspaceFiles<TaskWorkspaceFilesResponse>(
+    `/tasks/${encodeURIComponent(input.taskId)}/workspace/files`, input.path, signal,
+  );
+}
+
+/** Activity spans both layouts until every historical thread has run again.
+ * Keep actual entry paths so previews and directory navigation use real files.
+ * Current records win duplicate names; errors still surface to the browser. */
+async function listWorkspaceFiles<T extends { path: string; exists: boolean; entries: WorkspaceFileEntry[] }>(
+  endpoint: string, path = "", signal?: AbortSignal,
+): Promise<T> {
+  const list = (folder: string): Promise<T> => {
+    const query = new URLSearchParams(folder ? { path: folder } : {}).toString();
+    return apiJson<T>(`${endpoint}${query ? `?${query}` : ""}`, { signal });
+  };
+  if (path !== ".threads" && !path.startsWith(".threads/")) return list(path);
+  const [current, legacy] = await Promise.all([list(path), list(path.slice(1))]);
+  const entries = new Map(legacy.entries.map(entry => [entry.name, entry]));
+  for (const entry of current.entries) entries.set(entry.name, entry);
+  return {
+    ...current,
+    exists: current.exists || legacy.exists,
+    entries: [...entries.values()].sort((left, right) => left.kind === right.kind
+      ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
+      : left.kind === "directory" ? -1 : 1),
+  };
 }
 
 export function readTaskWorkspaceFile(
