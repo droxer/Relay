@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from blob_fakes import MemoryBlobStore
-from relay.persistence.blob.migration import migrate_blobs
+from relay.ops.blob_migration import migrate_blobs
 from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.skill.objects import LocalSkillObjectStore
 from relay.persistence.skill.store import DatabaseSkillStore

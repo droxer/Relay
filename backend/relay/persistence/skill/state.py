@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.exc import IntegrityError
 
 from .objects import SkillObjectStore
-from .rules import SkillValidationError
+from ...skills.rules import SkillValidationError
 
 
 class _SkillWriteConflict(RuntimeError):

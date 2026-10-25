@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from ...persistence.task.execution import request_execution_owner
+from ...tasks.execution import request_execution_owner
 from ...sessions.agent_state import initial_agent_state
 from ...sessions.controller import SessionController
 from ..state import RegistryState

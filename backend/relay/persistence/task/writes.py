@@ -31,16 +31,11 @@ from .reducer import materialize_task_events
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_task_event
 from ..engine import store_transaction
-from .execution import prepare_execution_events
+from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
-from .lifecycle import flow_scope, needs_wip_admission, wip_limit
-from .rules import (
-    TaskExecutionActiveError,
-    _HYDRATE_TASK_WRITES,
-    _TaskWriteConflict,
-    apply_task_events,
-    dispatch_claim_active,
-)
+from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
+from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
+from ...tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from .events import (
     task_creation_events,
     task_update_events,

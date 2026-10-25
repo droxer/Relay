@@ -8,7 +8,10 @@ from loguru import logger
 
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ...execution.session_deletion import delete_thread
-from ...persistence.daemon.rules import TERMINAL_CLAIM_EXPIRES_STATE_KEY, TERMINAL_CLAIM_ID_STATE_KEY
+from ...core.daemon_records import (
+    TERMINAL_CLAIM_EXPIRES_STATE_KEY,
+    TERMINAL_CLAIM_ID_STATE_KEY,
+)
 from ...sessions.controller import SessionController
 from ...sessions.errors import SessionArchivedError, SessionRunInFlightError
 from ...sessions.task_scope import thread_task_scope

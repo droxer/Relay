@@ -16,7 +16,7 @@ from ...core.ids import now_iso
 from ...core.models import (
     AGENT_NAMES,
 )
-from ...persistence.daemon.rules import infer_node_location, NODE_POLL_DRAINED_AT
+from ...core.daemon_records import infer_node_location, NODE_POLL_DRAINED_AT
 from ...core.daemon_capabilities import (
     client_outdated,
 )

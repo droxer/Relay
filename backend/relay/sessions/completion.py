@@ -7,7 +7,7 @@ from typing import Any
 from loguru import logger
 
 from ..persistence.session.reducer import INPUT_REQUEST_FIELDS
-from ..persistence.task.lifecycle import acceptance_status
+from ..tasks.flow import acceptance_status
 from ..persistence.events import relay_event
 from .controller_state import SessionControllerState
 

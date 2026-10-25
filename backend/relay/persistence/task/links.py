@@ -20,12 +20,8 @@ from ...core.models import AgentName
 from ..db_time import parse_db_time
 from ...core.ids import new_database_id
 from ..events import relay_task_event
-from .rules import (
-    _HYDRATE_TASK_WRITES,
-    _TaskWriteConflict,
-    apply_task_events,
-    orphaned_by_thread_delete,
-)
+from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
+from ...tasks.claims import orphaned_by_thread_delete
 from .events import (
     _task_session_link_events,
     _task_session_unlink_events,

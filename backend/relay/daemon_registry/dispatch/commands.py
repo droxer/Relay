@@ -15,10 +15,7 @@ from ...core.permission_requests import (
 )
 from ...core.ids import now_iso
 from ...notifications.rules import permission_request_rows
-from ...persistence.daemon.rules import (
-    EXIT_UNCONFIRMED_STATE_KEY,
-    NODE_POLL_DRAINED_AT,
-)
+from ...core.daemon_records import EXIT_UNCONFIRMED_STATE_KEY, NODE_POLL_DRAINED_AT
 from ...persistence.events import relay_event
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_PROJECT_LINKS,

@@ -11,8 +11,8 @@ from ..collaboration.manifest import compile_assignment_work_graph, create_round
 from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
-from ..persistence.validation import valid_agent
-from ..persistence.task.rules import dispatch_claim_active
+from ..core.validation import valid_agent
+from .claims import dispatch_claim_active
 from .placement import ensure_managed_capacity_for_task, ready_node_for_task, task_goal_text
 from ..agents.routing import (
     AgentRoutingError,

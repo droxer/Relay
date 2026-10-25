@@ -22,7 +22,7 @@ from ..persistence.protocols import AgentPlacementStore, AgentStore
 from ..skills.bundle import resolve_bundle
 from .credentials import sandbox_node_auth_error, sandbox_ui_auth_error
 from .registry import DaemonNodeRegistry
-from ..persistence.task.execution import request_execution_owner
+from ..tasks.execution import request_execution_owner
 from ..persistence.events import relay_task_event
 from .intake.idempotency import RunIdempotencyMixin
 from .intake.intent import RunIntentMixin

@@ -12,7 +12,7 @@ from ...core.ids import new_database_id, now_iso
 from ..db_time import parse_db_time
 from ..engine import store_transaction
 from .rows import _skill_row
-from .rules import (
+from ...skills.rules import (
     SkillValidationError,
     _display_name,
     _identity_part,

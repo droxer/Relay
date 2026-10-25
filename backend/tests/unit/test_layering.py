@@ -52,6 +52,8 @@ LAYERS = {
     "notifications": 5,
     "migrations_runtime": 5,
     "api": 7,
+    # Operator tooling: only the CLI and migrations import it.
+    "ops": 8,
 }
 ROOT_LAYER = 9
 MODULE_LAYERS = {
@@ -80,6 +82,10 @@ POLICY_MODULES = frozenset(
         "relay.notifications.rules",
         "relay.projects.context",
         "relay.projects.setup_result",
+        "relay.skills.rules",
+        "relay.tasks.claims",
+        "relay.tasks.execution",
+        "relay.tasks.flow",
         "relay.tasks.issue_triage",
         "relay.tasks.workspace",
     }
@@ -104,6 +110,7 @@ EMPTY_PACKAGES = (
     "computer",
     "daemon_registry",
     "execution",
+    "ops",
     "persistence",
     "projects",
     "realtime",

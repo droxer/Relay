@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.models import AGENT_NAMES, AgentName, TaskPriority, TaskStatus
+from .models import AGENT_NAMES, AgentName, TaskPriority, TaskStatus
 
 
 def safe_name(value: str) -> str:

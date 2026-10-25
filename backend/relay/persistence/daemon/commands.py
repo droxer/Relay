@@ -19,12 +19,8 @@ from ..db_time import parse_db_time, require_db_time
 from ..events import daemon_event
 from ...core.ids import now_iso
 from ..engine import publish_database_notification, store_transaction
-from .rules import (
-    DISPATCH_CLAIM_ID_STATE_KEY,
-    TERMINAL_DAEMON_STATUSES,
-    completed_cancel_record,
-    daemon_command_queue_limit,
-)
+from .rules import completed_cancel_record, daemon_command_queue_limit
+from ...core.daemon_records import DISPATCH_CLAIM_ID_STATE_KEY, TERMINAL_DAEMON_STATUSES
 from .rows import (
     command_to_row,
     daemon_event_to_row,

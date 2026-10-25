@@ -11,7 +11,7 @@ from tempfile import NamedTemporaryFile
 from sqlalchemy import delete, insert, select, update
 from ..engine import shared_engine, create_all_tables, store_transaction
 from ..resource_lock import resource_transaction
-from ..validation import safe_name
+from ...core.validation import safe_name
 from ..tables import profile_images as profile_images_tables
 
 

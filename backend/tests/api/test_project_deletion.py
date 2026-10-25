@@ -289,7 +289,7 @@ def test_delete_project_settles_a_task_thread_outside_the_project(project_env):
 
 
 def test_task_claimed_mid_delete_is_a_conflict(project_env, monkeypatch):
-    from relay.persistence.task.rules import TaskExecutionActiveError
+    from relay.tasks.claims import TaskExecutionActiveError
     app, client, node, agent, project, task, routine, session = project_env
     def claimed(*args, **kwargs):
         raise TaskExecutionActiveError("task_execution_active")

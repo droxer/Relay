@@ -16,6 +16,7 @@ from sqlalchemy import update
 from relay.chat.integrations import DatabaseChatIntegrationStore
 from relay.persistence.agent.placements import DatabaseAgentPlacementStore
 from relay.persistence.agent.store import DatabaseAgentStore
+from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 from relay.persistence.daemon.store import DatabaseDaemonStore
 from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.task.store import DatabaseTaskStore
@@ -44,6 +45,10 @@ def make_task_store(root: str | Path) -> DatabaseTaskStore:
 
 def make_daemon_store(root: str | Path) -> DatabaseDaemonStore:
     return DatabaseDaemonStore(sqlite_url(root), create_schema=True)
+
+
+def make_managed_node_store(root: str | Path) -> DatabaseManagedNodeStore:
+    return DatabaseManagedNodeStore(sqlite_url(root), create_schema=True)
 
 
 def make_agent_store(root: str | Path) -> DatabaseAgentStore:

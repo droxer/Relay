@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
-from ...persistence.task.lifecycle import wip_limit
+from ...tasks.flow import wip_limit
 from ...security.actor import Actor
 from ...tasks.assignment import (
     logical_agent_for_assignment,

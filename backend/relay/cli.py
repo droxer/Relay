@@ -18,11 +18,11 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
-from .persistence.blob.migration import migrate_blobs
+from .ops.blob_migration import migrate_blobs
 from .persistence.blob.store import blob_store_from_env
-from .persistence.ops.backup import backup_database, backup_target_from_env
-from .persistence.account.handle_backfill import plan_handles, summarize
-from .persistence.ops.storage_report import storage_report
+from .ops.backup import backup_database, backup_target_from_env
+from .ops.handle_backfill import plan_handles, summarize
+from .ops.storage_report import storage_report
 
 load_backend_env()
 

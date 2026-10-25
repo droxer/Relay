@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Request
 
-from ...persistence.token_usage import split_cache_tokens
+from ...core.token_usage import split_cache_tokens
 from ...security.request_auth import require_admin_session
 from ..deps import AppContextDep
 

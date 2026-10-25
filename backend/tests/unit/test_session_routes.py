@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 from relay.api.threads.projections import session_awaits_human
-from relay.persistence.session.workspace_artifacts import (
+from relay.core.workspace_artifacts import (
     is_workspace_artifact,
     workspace_artifacts,
 )

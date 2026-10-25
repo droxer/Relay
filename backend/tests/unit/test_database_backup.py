@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 from relay.persistence.blob import store as blob_store_module
-from relay.persistence.ops.backup import (
+from relay.ops.backup import (
     backup_database,
     backup_keys,
     backup_target_from_env,

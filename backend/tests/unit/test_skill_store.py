@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 from relay.core.ids import now_iso
-from relay.persistence.skill.rules import (
+from relay.skills.rules import (
     MAX_FILE_BYTES,
     MAX_FILES,
     SkillValidationError,

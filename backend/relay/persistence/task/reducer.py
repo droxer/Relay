@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ...automations.model import LEGACY_FIELDS, STATES, upgrade_legacy
-from .lifecycle import apply_flow_status
+from ...tasks.flow import apply_flow_status
 from .numbering import NUMBERED_EVENT, apply_task_number
 
 

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from ..core.human_waits import ensure_wait_record
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.engine import store_transaction
-from ..persistence.task.lifecycle import acceptance_status
+from ..tasks.flow import acceptance_status
 from ..persistence.events import relay_task_event
 
 

@@ -83,7 +83,7 @@ from .security.password_resets import password_reset_store_for
 from .notifications.mailer import mailer_from_env
 from .computer.workspace_query import WorkspaceQueryBroker
 from .accounts.waitlist import WaitlistService
-from .persistence.task.lifecycle import wip_limit
+from .tasks.flow import wip_limit
 from .execution.lifecycle import ExecutionLifecycleService
 from .core.settings import AppSettings
 from .migrations_runtime.startup import (

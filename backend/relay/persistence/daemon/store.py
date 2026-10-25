@@ -10,7 +10,7 @@ from ..engine import create_all_tables, shared_engine
 from ..sql import metadata as shared_metadata
 from ..tables import daemon as daemon_tables
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
-from .rules import TERMINAL_DAEMON_STATUSES
+from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
 from .rows import terminal_time_expression
 from .nodes import NodeRows
 from .commands import CommandQueueRows

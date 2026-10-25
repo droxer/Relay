@@ -26,12 +26,8 @@ from ..db_time import parse_db_time
 from ...core.ids import now_iso
 from ..events import relay_task_event
 from ..engine import store_transaction
-from .rules import (
-    _HYDRATE_TASK_WRITES,
-    apply_task_events,
-    dispatch_claim_active,
-    new_dispatch_claim,
-)
+from .rules import _HYDRATE_TASK_WRITES, apply_task_events
+from ...tasks.claims import dispatch_claim_active, new_dispatch_claim
 from .events import (
     dispatch_outcome_event,
     dispatch_retry_cleared_event,

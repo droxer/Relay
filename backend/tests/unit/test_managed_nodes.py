@@ -8,17 +8,18 @@ from uuid import UUID
 import pytest
 import relay.core.managed_node_policy as managed_node_policy
 import relay.persistence.daemon.managed_nodes as managed_node_store_module
-from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
+from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore
+from store_fixtures import make_managed_node_store
 
 
 def test_managed_nodes_use_uuid_ids(tmp_path: Path) -> None:
-    node = LocalManagedNodeStore(tmp_path).create_node({"userId": "alice"})
+    node = make_managed_node_store(tmp_path).create_node({"userId": "alice"})
 
     assert str(UUID(node["id"])) == node["id"]
 
 
 def test_managed_node_enrollment_grant_replays_completed_runtime(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice", "provider": "local-process"})
     attempt, credential = store.create_attempt(node["id"])
 
@@ -34,7 +35,7 @@ def test_managed_node_enrollment_grant_replays_completed_runtime(tmp_path: Path)
 
 
 def test_purge_deleted_node_removes_its_history(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _credential = store.create_attempt(node["id"])
     store.update_attempt(attempt["id"], {"status": "cancelled"})
@@ -46,11 +47,11 @@ def test_purge_deleted_node_removes_its_history(tmp_path: Path) -> None:
     assert purged["id"] == node["id"]
     assert store.get_node(node["id"]) is None
     assert store.list_attempts(node["id"]) == []
-    assert list(store.grants_dir.glob("*.json")) == []
+    assert store._records("grants") == []
 
 
 def test_provider_change_increments_generation_and_invalidates_old_grant(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice", "provider": "local-process"})
     _attempt, credential = store.create_attempt(node["id"])
 
@@ -62,7 +63,7 @@ def test_provider_change_increments_generation_and_invalidates_old_grant(tmp_pat
 
 
 def test_user_can_have_multiple_dedicated_managed_nodes(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     first = store.create_node({"userId": "alice"})
     second = store.create_node({"userId": "alice", "profile": "large"})
 
@@ -72,7 +73,7 @@ def test_user_can_have_multiple_dedicated_managed_nodes(tmp_path: Path) -> None:
 def test_user_cannot_have_two_running_nodes_in_the_same_policy_slot(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     store.create_node({"userId": "alice"})
 
     with pytest.raises(ValueError, match="active managed node"):
@@ -82,7 +83,7 @@ def test_user_cannot_have_two_running_nodes_in_the_same_policy_slot(
 def test_stopped_node_cannot_restart_into_an_occupied_policy_slot(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     stopped = store.create_node({"userId": "alice"})
     store.update_node(stopped["id"], {"desiredState": "stopped"})
     store.create_node({"userId": "alice"})
@@ -92,7 +93,7 @@ def test_stopped_node_cannot_restart_into_an_occupied_policy_slot(
 
 
 def test_rejected_policy_slot_update_preserves_active_attempt(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     store.create_node({"userId": "alice"})
     large = store.create_node({"userId": "alice", "profile": "large"})
     attempt, _credential = store.create_attempt(large["id"])
@@ -112,10 +113,10 @@ def test_rejected_policy_slot_update_preserves_active_attempt(tmp_path: Path) ->
 def test_policy_slot_uniqueness_is_enforced_across_store_instances(
     tmp_path: Path,
 ) -> None:
-    stores = (LocalManagedNodeStore(tmp_path), LocalManagedNodeStore(tmp_path))
+    stores = (make_managed_node_store(tmp_path), make_managed_node_store(tmp_path))
     barrier = Barrier(2)
 
-    def create(store: LocalManagedNodeStore) -> str:
+    def create(store: DatabaseManagedNodeStore) -> str:
         barrier.wait()
         return store.create_node({"userId": "alice"})["id"]
 
@@ -132,10 +133,10 @@ def test_policy_slot_uniqueness_is_enforced_across_store_instances(
 def test_managed_capacity_ensure_is_idempotent_across_store_instances(
     tmp_path: Path,
 ) -> None:
-    stores = (LocalManagedNodeStore(tmp_path), LocalManagedNodeStore(tmp_path))
+    stores = (make_managed_node_store(tmp_path), make_managed_node_store(tmp_path))
     barrier = Barrier(2)
 
-    def ensure(store: LocalManagedNodeStore) -> tuple[str, bool]:
+    def ensure(store: DatabaseManagedNodeStore) -> tuple[str, bool]:
         barrier.wait()
         resolution = store.ensure_node_for_user("alice")
         return resolution.node["id"], resolution.provisioning_requested
@@ -147,60 +148,10 @@ def test_managed_capacity_ensure_is_idempotent_across_store_instances(
     assert sorted(requested for _node_id, requested in results) == [False, True]
 
 
-def test_store_startup_reconciles_legacy_duplicate_active_policy_slots(
-    tmp_path: Path,
-) -> None:
-    store = LocalManagedNodeStore(tmp_path)
-    original = store.create_node(
-        {"userId": "alice", "displayName": "Alice cloud computer"}
-    )
-    duplicate = {
-        **original,
-        "id": "00000000-0000-4000-8000-000000000002",
-        "createdAt": "9999-01-01T00:00:01Z",
-        "updatedAt": "9999-01-01T00:00:01Z",
-    }
-    store._write_node(duplicate)
-
-    restarted = LocalManagedNodeStore(tmp_path)
-
-    active = [
-        node
-        for node in restarted.list_nodes()
-        if node["userId"] == "alice" and node["desiredState"] == "running"
-    ]
-    assert [node["id"] for node in active] == [original["id"]]
-    reconciled = restarted.get_node(duplicate["id"])
-    assert reconciled is not None
-    assert reconciled["desiredState"] == "deleted"
-    assert reconciled["phase"] == "deleting"
-
-
-def test_store_startup_preserves_runtime_backed_duplicate_as_canonical(
-    tmp_path: Path,
-) -> None:
-    store = LocalManagedNodeStore(tmp_path)
-    pending = store.create_node({"userId": "alice"})
-    runtime_backed = {
-        **pending,
-        "id": "00000000-0000-4000-8000-000000000003",
-        "activeDaemonNodeId": "daemon-alice",
-        "phase": "ready",
-        "createdAt": "9999-01-01T00:00:01Z",
-        "updatedAt": "9999-01-01T00:00:01Z",
-    }
-    store._write_node(runtime_backed)
-
-    restarted = LocalManagedNodeStore(tmp_path)
-
-    assert restarted.get_node(runtime_backed["id"])["desiredState"] == "running"
-    assert restarted.get_node(pending["id"])["desiredState"] == "deleted"
-
-
 def test_managed_node_user_ids_are_normalized_before_slot_comparison(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": " alice "})
 
     assert node["userId"] == "alice"
@@ -209,14 +160,14 @@ def test_managed_node_user_ids_are_normalized_before_slot_comparison(
 
 
 def test_managed_nodes_require_boxlite(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
 
     with pytest.raises(ValueError, match="require sandboxMode boxlite"):
         store.create_node({"userId": "alice", "sandboxMode": "none"})
 
 
 def test_vm_isolated_provider_runs_without_boxlite(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
 
     node = store.create_node({"userId": "alice", "provider": "fly-machines"})
 
@@ -228,14 +179,14 @@ def test_vm_isolated_provider_runs_without_boxlite(tmp_path: Path) -> None:
 
 
 def test_malformed_provider_is_refused_before_choosing_a_sandbox(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
 
     with pytest.raises(ValueError, match="provider must be a non-empty string"):
         store.create_node({"userId": "alice", "provider": ["fly-machines"]})
 
 
 def test_deployment_default_provider_applies_to_every_new_node(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     store.default_provider = "fly-machines"
 
     created = store.create_node({"userId": "alice"})
@@ -250,7 +201,7 @@ def test_deployment_default_provider_applies_to_every_new_node(tmp_path: Path) -
 
 
 def test_managed_capacity_restart_is_reported_as_requested(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     stopped = store.update_node(node["id"], {"desiredState": "stopped"})
 
@@ -267,7 +218,7 @@ def test_managed_capacity_restart_is_reported_as_requested(tmp_path: Path) -> No
 def test_restart_cancels_an_attempt_from_the_previous_generation(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     old_attempt, _credential = store.create_attempt(node["id"])
 
@@ -287,7 +238,7 @@ def test_restart_cancels_an_attempt_from_the_previous_generation(
 
 
 def test_running_managed_capacity_is_not_requested_twice(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
 
     resolution = store.ensure_node_for_user("alice")
@@ -310,7 +261,7 @@ def test_running_managed_capacity_is_preferred_over_an_older_stopped_node(
         ]
     )
     monkeypatch.setattr(managed_node_store_module, "now_iso", lambda: next(timestamps))
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     stopped = store.create_node({"userId": "alice"})
     store.update_node(stopped["id"], {"desiredState": "stopped"})
     running = store.create_node({"userId": "alice"})
@@ -326,7 +277,7 @@ def test_running_managed_capacity_is_preferred_over_an_older_stopped_node(
 def test_managed_capacity_resolution_matches_the_requested_policy_slot(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     default = store.create_node({"userId": "alice"})
     store.update_node(default["id"], {"desiredState": "stopped"})
     large = store.create_node({"userId": "alice", "profile": "large"})
@@ -341,7 +292,7 @@ def test_managed_capacity_resolution_matches_the_requested_policy_slot(
 
 
 def test_successful_enrollment_links_observed_daemon(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, credential = store.create_attempt(node["id"])
     store.consume_enrollment_grant(credential)
@@ -358,7 +309,7 @@ def test_successful_enrollment_links_observed_daemon(tmp_path: Path) -> None:
 def test_repeated_failed_attempts_do_not_grow_history_without_bound(
     tmp_path: Path,
 ) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
 
     for _ in range(managed_node_policy.ATTEMPT_HISTORY_LIMIT + 10):
@@ -367,11 +318,11 @@ def test_repeated_failed_attempts_do_not_grow_history_without_bound(
 
     retained = store.list_attempts(node["id"])
     assert len(retained) <= managed_node_policy.ATTEMPT_HISTORY_LIMIT + 1
-    assert len(list(store.grants_dir.glob("*.json"))) <= len(retained)
+    assert len(store._records("grants")) <= len(retained)
 
 
 def test_failed_attempt_with_retry_is_projected_as_recovering(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _credential = store.create_attempt(node["id"])
 
@@ -395,7 +346,7 @@ def test_failed_attempt_with_retry_is_projected_as_recovering(tmp_path: Path) ->
 
 
 def test_failed_attempt_without_retry_remains_failed(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _credential = store.create_attempt(node["id"])
 
@@ -406,21 +357,20 @@ def test_failed_attempt_without_retry_remains_failed(tmp_path: Path) -> None:
     assert updated["conditions"][-1]["status"] == "False"
 
 
-def test_expired_grants_are_swept_when_new_attempts_are_created(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+def test_expired_grants_are_refused_at_use(tmp_path: Path) -> None:
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     expired, credential = store.create_attempt(node["id"], grant_ttl_seconds=-1)
     store.update_attempt(expired["id"], {"status": "failed"})
 
     store.create_attempt(node["id"])
 
-    assert len(list(store.grants_dir.glob("*.json"))) == 1
-    with pytest.raises(PermissionError, match="Invalid enrollment credential"):
+    with pytest.raises(PermissionError, match="expired"):
         store.consume_enrollment_grant(credential)
 
 
 def test_completed_grant_rejects_replay_after_attempt_is_cancelled(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, credential = store.create_attempt(node["id"])
     store.consume_enrollment_grant(credential)
@@ -434,7 +384,7 @@ def test_completed_grant_rejects_replay_after_attempt_is_cancelled(tmp_path: Pat
 
 
 def test_blank_provider_is_rejected(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
 
     with pytest.raises(ValueError, match="provider must be a non-empty string"):
         store.create_node({"userId": "alice", "provider": "   "})
@@ -445,7 +395,7 @@ def test_blank_provider_is_rejected(tmp_path: Path) -> None:
 
 
 def test_late_provider_registration_preserves_completed_enrollment(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _ = store.create_attempt(node["id"])
     store.complete_enrollment(node["id"], attempt["id"], "daemon")
@@ -461,7 +411,7 @@ def test_late_provider_registration_preserves_completed_enrollment(tmp_path: Pat
 
 
 def test_old_runtime_cannot_mark_new_generation_ready(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _ = store.create_attempt(node["id"])
     store.complete_enrollment(node["id"], attempt["id"], "daemon")
@@ -471,7 +421,7 @@ def test_old_runtime_cannot_mark_new_generation_ready(tmp_path: Path) -> None:
 
 
 def test_stopping_runtime_cannot_mark_ready(tmp_path: Path) -> None:
-    store = LocalManagedNodeStore(tmp_path)
+    store = make_managed_node_store(tmp_path)
     node = store.create_node({"userId": "alice"})
     attempt, _ = store.create_attempt(node["id"])
     store.complete_enrollment(node["id"], attempt["id"], "daemon")

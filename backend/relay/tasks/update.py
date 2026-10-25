@@ -17,9 +17,9 @@ from ..automations.model import has_webhook, state_of
 from ..core.models import TaskStatus
 from ..automations.service import lock_automation_state, prepare_resume
 from ..persistence.engine import store_transaction
-from ..persistence.validation import task_priority, task_status
-from ..persistence.task.lifecycle import validate_manual_transition
-from ..persistence.task.rules import dispatch_claim_active
+from ..core.validation import task_priority, task_status
+from .flow import validate_manual_transition
+from .claims import dispatch_claim_active
 from ..sessions.controller import SessionController
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (

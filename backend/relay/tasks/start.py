@@ -11,7 +11,7 @@ from typing import Any
 from starlette.concurrency import run_in_threadpool
 
 from ..automations.service import request_manual_occurrence
-from ..persistence.validation import valid_agent
+from ..core.validation import valid_agent
 from .dispatch import start_task_on_ready_node
 from .dispatch_outcome import DispatchResult
 from .implicit_assignments import implicit_group_assignments_for_task
