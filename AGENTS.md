@@ -377,6 +377,11 @@ migration.
   `ThreadsView`) is `lazy`-loaded. The entry renders the loaded app directly
   rather than through `Suspense`, whose ~300 ms reveal throttle would delay
   every load.
+  An open tab notices a newer deploy: each build's id (`NEXT_PUBLIC_RELAY_BUILD_ID`,
+  set once in `next.config.ts`; `RELAY_BUILD_ID` pins it) is inlined and
+  published at `/version.json`, and `lib/buildFreshness.ts` offers a reload and
+  turns the next move to another page into a full load; a chunk a deploy
+  removed reloads once (`lib/chunkReload.ts`, via `ScreenErrorBoundary`).
 
 ### Backend / daemon / client token contract
 

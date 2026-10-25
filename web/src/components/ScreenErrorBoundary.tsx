@@ -3,6 +3,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { reloadForChunkError } from "../lib/chunkReload";
 
 function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   const { t } = useTranslation();
@@ -36,6 +37,9 @@ export class ScreenErrorBoundary extends Component<{
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // A chunk a newer deploy removed: load the new build rather than show
+    // the error (once; a repeat within the cooldown falls through to it).
+    if (reloadForChunkError(error)) return;
     console.error("[relay] screen failed to render", error, info);
   }
 

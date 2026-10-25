@@ -39,3 +39,20 @@ it("retries the same screen in place before falling back to a full reload", asyn
 
   expect(screen.getByText("Recovered screen")).toBeTruthy();
 });
+
+it("reloads once onto the new build when a deploy removed the screen's chunk", async () => {
+  const { ScreenErrorBoundary } = await import("../src/components/ScreenErrorBoundary");
+  const { CHUNK_RELOAD_KEY } = await import("../src/lib/chunkReload");
+  window.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+  const report = vi.spyOn(console, "error").mockImplementation(() => {});
+  function MissingChunk(): never {
+    const error = new Error("Failed to load chunk /_next/static/chunks/gone.js from module 9");
+    error.name = "ChunkLoadError";
+    throw error;
+  }
+  render(<ScreenErrorBoundary resetKey="a"><MissingChunk /></ScreenErrorBoundary>);
+
+  expect(window.sessionStorage.getItem(CHUNK_RELOAD_KEY)).toMatch(/^\d+$/);
+  expect(report).not.toHaveBeenCalledWith("[relay] screen failed to render", expect.anything(), expect.anything());
+  window.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+});
