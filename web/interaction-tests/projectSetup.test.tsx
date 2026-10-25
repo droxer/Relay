@@ -101,9 +101,23 @@ function openManualForm(list: DaemonNodeMonitorRecord[]) {
 
 const folderBox = () => screen.getByRole("textbox", { name: /^project\.folder/ });
 
-it("offers a folder only on a computer that can link one", () => {
+it("shows the folder before a computer is chosen, and says to choose one", () => {
+  render(<ProjectDrawer open computers={linkingComputers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
+  expect((folderBox() as HTMLInputElement).disabled).toBe(true);
+  expect(screen.getByText("project.folder_choose_computer")).toBeTruthy();
+});
+
+it("keeps the folder visible but disabled on a computer that cannot link one", () => {
   openManualForm(computers);
-  expect(screen.queryByRole("textbox", { name: /^project\.folder/ })).toBeNull();
+  expect((folderBox() as HTMLInputElement).disabled).toBe(true);
+  expect(screen.getByText("project.folder_unsupported")).toBeTruthy();
+});
+
+it("enables the folder once a linking computer is chosen", () => {
+  openManualForm(linkingComputers);
+  expect((folderBox() as HTMLInputElement).disabled).toBe(false);
+  expect(screen.getByText("project.folder_hint")).toBeTruthy();
 });
 
 it("checks the folder with the computer and creates the project in it", async () => {

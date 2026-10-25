@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { RelayApiError } from "../src/api.js";
 import {
   computerLinksFolders,
+  folderFieldUnavailableKey,
   folderPathLooksValid,
   projectFolderErrorKey,
 } from "../src/lib/projectFolder.js";
@@ -14,6 +15,12 @@ describe("project folder linking", () => {
     assert.equal(computerLinksFolders({ capabilities: ["project-workspaces"] }), false);
     assert.equal(computerLinksFolders({}), false);
     assert.equal(computerLinksFolders(undefined), false);
+  });
+
+  it("names why the folder field cannot be used yet, so it is never silently hidden", () => {
+    assert.equal(folderFieldUnavailableKey(undefined), "project.folder_choose_computer");
+    assert.equal(folderFieldUnavailableKey({ capabilities: ["project-workspaces"] }), "project.folder_unsupported");
+    assert.equal(folderFieldUnavailableKey({ capabilities: ["project-workspaces", "project-links"] }), null);
   });
 
   it("accepts an empty field or an absolute path", () => {

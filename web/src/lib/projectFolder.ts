@@ -16,6 +16,16 @@ export function computerLinksFolders(computer: { capabilities?: string[] } | und
   return Boolean(computer?.capabilities?.includes(PROJECT_LINKS_CAPABILITY));
 }
 
+/**
+ * Why the folder field cannot be used for this computer, as a translation
+ * key, or null when it can. The field stays visible either way, so people
+ * learn a project can work in an existing folder before they pick a computer.
+ */
+export function folderFieldUnavailableKey(computer: { capabilities?: string[] } | undefined): string | null {
+  if (!computer) return "project.folder_choose_computer";
+  return computerLinksFolders(computer) ? null : "project.folder_unsupported";
+}
+
 /** True for an empty field (a new folder) or an absolute path worth asking about. */
 export function folderPathLooksValid(value: string): boolean {
   const path = value.trim();

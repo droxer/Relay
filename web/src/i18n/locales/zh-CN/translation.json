@@ -243,6 +243,7 @@
     "setup_computer_hint": "承载此项目共享工作区。",
     "folder": "项目文件夹",
     "folder_optional": "可选",
+    "folder_choose_computer": "请先选择电脑，再填写其上已有的文件夹；留空则新建。",
     "folder_hint": "此电脑上已有的文件夹。留空则新建。",
     "folder_placeholder": "/Users/you/code/app",
     "folder_checking": "正在检查文件夹…",

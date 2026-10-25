@@ -6,7 +6,7 @@ import { useUserAgents } from "../hooks/useUserAgents";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
-import { computerLinksFolders, folderPathLooksValid, projectFolderErrorKey } from "../lib/projectFolder";
+import { computerLinksFolders, folderFieldUnavailableKey, folderPathLooksValid, projectFolderErrorKey } from "../lib/projectFolder";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import { provisionalProjectName } from "../lib/projectSetup";
 import type { DaemonNodeMonitorRecord, UserAgent, ProjectRecord } from "../types";
@@ -84,6 +84,8 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   );
   const selectedComputer = projectComputers.find((computer) => computer.id === computerId);
   const linksFolders = computerLinksFolders(selectedComputer);
+  const folderUnavailableKey = folderFieldUnavailableKey(selectedComputer);
+  const folderUnavailable = folderUnavailableKey ? t(folderUnavailableKey) : null;
   // A folder typed for one computer means nothing on another one.
   const workspaceHostPath = linksFolders && folder.trim() ? folder.trim() : undefined;
   const setupAgents = useMemo(
@@ -230,15 +232,14 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 onChange={setSetupAgentId}
               />
             </div>
-            {linksFolders ? (
-              <ProjectFolderField
-                key={computerId}
-                daemonNodeId={computerId}
-                value={folder}
-                error={folderError}
-                onChange={(value) => { setFolder(value); setFolderError(null); }}
-              />
-            ) : null}
+            <ProjectFolderField
+              key={computerId}
+              daemonNodeId={computerId}
+              value={linksFolders ? folder : ""}
+              error={folderError}
+              unavailable={folderUnavailable}
+              onChange={(value) => { setFolder(value); setFolderError(null); }}
+            />
           </>
         ) : (
           <>
@@ -261,15 +262,14 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 onChange={chooseComputer}
               />
             </div>
-            {linksFolders ? (
-              <ProjectFolderField
-                key={computerId}
-                daemonNodeId={computerId}
-                value={folder}
-                error={folderError}
-                onChange={(value) => { setFolder(value); setFolderError(null); }}
-              />
-            ) : null}
+            <ProjectFolderField
+              key={computerId}
+              daemonNodeId={computerId}
+              value={linksFolders ? folder : ""}
+              error={folderError}
+              unavailable={folderUnavailable}
+              onChange={(value) => { setFolder(value); setFolderError(null); }}
+            />
             <ProjectDescriptionField value={description} onChange={setDescription} />
           </>
         )}
