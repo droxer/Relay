@@ -1,4 +1,6 @@
-import { accessSync, constants, lstatSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  accessSync, constants, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync,
+} from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 
 import { GUEST_WORKSPACE, type DaemonNodeSandboxMode } from "relay-core";
@@ -13,6 +15,16 @@ export interface ThreadWorkspace {
   executionPath: string;
 }
 
+/**
+ * Every thread workspace sits in this directory of the configured root, and
+ * every workspace keeps its threads' records (`HANDOFF.md`, `HANDOFF.json`) in
+ * one of its own, so neither crowds the files people and agents work on.
+ */
+export const THREADS_DIR = ".threads";
+/** Where thread records lived before `.threads/`; an older backend still names it. */
+export const LEGACY_THREAD_RECORDS_DIR = "threads";
+export type ThreadRecordsDir = typeof THREADS_DIR | typeof LEGACY_THREAD_RECORDS_DIR;
+const THREAD_RECORD_FILES = new Set(["HANDOFF.md", "HANDOFF.json"]);
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 /** What a run.start from a backend that names no `artifactsDir` expects. */
 export const DEFAULT_ARTIFACTS_DIR = "artifacts";
@@ -39,11 +51,16 @@ export class ThreadWorkspaceManager {
 
   resolve(sessionId: string): ThreadWorkspace {
     validateThreadId(sessionId);
-    const hostPath = resolve(this.rootPath, sessionId);
+    const legacyPath = resolve(this.rootPath, sessionId);
+    // A thread started before `.threads/` keeps its directory at the root.
+    const hostPath = pathExists(legacyPath)
+      ? legacyPath
+      : resolve(this.rootPath, THREADS_DIR, sessionId);
     if (!hostPath.startsWith(this.rootPath + sep)) {
       throw new Error(`Invalid thread id ${JSON.stringify(sessionId)}.`);
     }
 
+    if (hostPath !== legacyPath) rejectSymlinkComponents(this.rootPath, [THREADS_DIR]);
     rejectSymbolicLink(hostPath);
     const realRoot = realpathSync(this.rootPath);
     try {
@@ -101,10 +118,16 @@ export class ThreadWorkspaceManager {
    * to the workspace: `artifacts/` for a thread or task, `artifacts/<taskId>/`
    * for an automation occurrence sharing its automation's directory, and null
    * for a project, whose directory is the deliverable location itself.
+   * `recordsDir` follows the handoff path the backend named.
    */
-  ensureRecords(workspace: ThreadWorkspace, artifactsDir: string | null = DEFAULT_ARTIFACTS_DIR): void {
+  ensureRecords(
+    workspace: ThreadWorkspace,
+    artifactsDir: string | null = DEFAULT_ARTIFACTS_DIR,
+    recordsDir: ThreadRecordsDir = THREADS_DIR,
+  ): void {
     validateThreadId(workspace.sessionId);
-    const records = [["threads", workspace.sessionId]];
+    if (recordsDir === THREADS_DIR) moveLegacyRecords(workspace);
+    const records = [[recordsDir, workspace.sessionId]];
     if (artifactsDir !== null) records.push(validateWorkspaceSubpath(artifactsDir));
     for (const segments of records) {
       rejectSymlinkComponents(workspace.hostPath, segments);
@@ -189,6 +212,44 @@ function assertWorkspaceRoot(rootPath: string): void {
     throw new Error(`Configured workspace root is not a directory: ${rootPath}.`);
   }
   accessSync(rootPath, constants.R_OK | constants.W_OK);
+}
+
+/**
+ * Moves this thread's records from `threads/<id>/` into `.threads/<id>/`, then
+ * drops `threads/` once nothing is left in it. Only a directory holding nothing
+ * but record files moves: a linked project may keep its own `threads/` folder.
+ * Runs inside the workspace's run gate, so no other run of it is writing.
+ */
+function moveLegacyRecords(workspace: ThreadWorkspace): void {
+  const legacyRoot = resolve(workspace.hostPath, LEGACY_THREAD_RECORDS_DIR);
+  const legacy = resolve(legacyRoot, workspace.sessionId);
+  const target = resolve(workspace.hostPath, THREADS_DIR, workspace.sessionId);
+  if (!isPlainDirectory(legacyRoot) || !isPlainDirectory(legacy) || pathExists(target)) return;
+  const entries = readdirSync(legacy, { withFileTypes: true });
+  if (!entries.every((entry) => entry.isFile() && THREAD_RECORD_FILES.has(entry.name))) return;
+  rejectSymlinkComponents(workspace.hostPath, [THREADS_DIR]);
+  mkdirSync(resolve(workspace.hostPath, THREADS_DIR), { recursive: true });
+  renameSync(legacy, target);
+  if (readdirSync(legacyRoot).length === 0) rmdirSync(legacyRoot);
+}
+
+function isPlainDirectory(path: string): boolean {
+  try {
+    return lstatSync(path).isDirectory();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function rejectSymbolicLink(path: string): void {

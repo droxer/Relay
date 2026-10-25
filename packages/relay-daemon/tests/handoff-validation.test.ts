@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { ThreadWorkspaceManager } from "../src/thread-workspace.js";
 import type { DaemonNodeRunCommand } from "relay-core";
 import { validateHandoffWorkspace } from "../src/handoff-validation.js";
 
@@ -81,5 +82,46 @@ for (const patch of [
     // An empty patch retains a valid payload; test an absent assignment instead.
     if (patch && Object.keys(patch).length === 0) delete (input.handoffValidation as Partial<NonNullable<DaemonNodeRunCommand["handoffValidation"]>>).assignmentId;
     assert.throws(() => validateHandoffWorkspace("/unused", input), /handoff_validation_failed/);
+  });
+}
+
+test("accepted receipt remains valid after record migration and rejects changed migrated bytes", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-validate-migration-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensure("thread");
+    mkdirSync(join(workspace.hostPath, "threads/thread"), { recursive: true });
+    writeFileSync(join(workspace.hostPath, "threads/thread/HANDOFF.json"), "recorded");
+    const input = command();
+    input.handoffValidation!.artifacts[0].path = "threads/thread/HANDOFF.json";
+    assert.match(validateHandoffWorkspace(workspace.hostPath, input)!, /1 recorded file hashes matched/);
+    manager.ensureRecords(workspace);
+    assert.match(validateHandoffWorkspace(workspace.hostPath, input)!, /1 recorded file hashes matched/);
+    writeFileSync(join(workspace.hostPath, ".threads/thread/HANDOFF.json"), "changed");
+    assert.throws(() => validateHandoffWorkspace(workspace.hostPath, input), /handoff_validation_failed/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+for (const variant of ["changed-original", "linked-original", "linked-migrated", "unrelated-file"] as const) {
+  test(`migration alias rejects ${variant} evidence`, () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-validate-alias-"));
+    try {
+      mkdirSync(join(root, "threads/thread"), { recursive: true });
+      mkdirSync(join(root, ".threads/thread"), { recursive: true });
+      const input = command();
+      const filename = variant === "unrelated-file" ? "other.json" : "HANDOFF.json";
+      input.handoffValidation!.artifacts[0].path = `threads/thread/${filename}`;
+      const migrated = join(root, `.threads/thread/${filename}`);
+      writeFileSync(migrated, "recorded");
+      if (variant === "changed-original") writeFileSync(join(root, "threads/thread/HANDOFF.json"), "changed");
+      if (variant === "linked-original") symlinkSync(migrated, join(root, "threads/thread/HANDOFF.json"));
+      if (variant === "linked-migrated") {
+        rmSync(migrated);
+        writeFileSync(join(root, "real.json"), "recorded");
+        symlinkSync(join(root, "real.json"), migrated);
+      }
+      assert.throws(() => validateHandoffWorkspace(root, input), /handoff_validation_failed/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }

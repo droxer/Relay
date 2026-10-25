@@ -15,10 +15,10 @@ test("thread workspaces are persistent and isolated beneath the configured local
     const same = manager.ensure("ses_first");
     const second = manager.ensure("ses_second");
 
-    assert.equal(first.hostPath, join(root, "ses_first"));
+    assert.equal(first.hostPath, join(root, ".threads", "ses_first"));
     assert.equal(first.executionPath, first.hostPath);
     assert.deepEqual(same, first);
-    assert.equal(second.hostPath, join(root, "ses_second"));
+    assert.equal(second.hostPath, join(root, ".threads", "ses_second"));
     assert.notEqual(second.hostPath, first.hostPath);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -34,7 +34,7 @@ test("BoxLite mounts only the active thread at the guest workspace root", () => 
 
     assert.equal(
       workspace.hostPath,
-      join(root, "019fbff6-5fd8-71d1-8140-29fd1f767b39"),
+      join(root, ".threads", "019fbff6-5fd8-71d1-8140-29fd1f767b39"),
     );
     assert.equal(workspace.executionPath, "/workspace");
   } finally {
@@ -57,6 +57,31 @@ test("thread workspace ids cannot escape the configured root", () => {
 
     mkdirSync(join(root, "ses_valid"));
     assert.equal(manager.ensure("ses_valid").hostPath, join(root, "ses_valid"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("a thread started before .threads/ keeps its directory at the root", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-thread-workspace-legacy-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    mkdirSync(join(root, "ses_legacy"));
+
+    assert.equal(manager.ensure("ses_legacy").hostPath, join(root, "ses_legacy"));
+    assert.equal(manager.ensure("ses_new").hostPath, join(root, ".threads", "ses_new"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a symbolic link in place of .threads/ is refused", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-thread-workspace-dir-link-"));
+  const outside = mkdtempSync(join(tmpdir(), "relay-thread-workspace-dir-outside-"));
+  try {
+    symlinkSync(outside, join(root, ".threads"));
+    assert.throws(() => new ThreadWorkspaceManager(root, "none").ensure("ses_one"), /symbolic link/);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });

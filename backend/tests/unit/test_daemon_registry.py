@@ -5733,11 +5733,11 @@ def test_a_malformed_round_result_is_ignored_rather_than_steering_the_task() -> 
 
 def test_handoff_notes_are_named_per_thread_on_a_shared_node_workspace() -> None:
     # Records always name the thread, even inside its isolated workspace.
-    assert handoff_file("ses_alpha", "thread") == "threads/ses_alpha/HANDOFF.md"
+    assert handoff_file("ses_alpha", "thread") == ".threads/ses_alpha/HANDOFF.md"
     # A legacy node-root session shares its workspace with every other thread
     # that ran on the node; its records use the same thread directory convention.
-    assert handoff_file("ses_alpha", "node-root") == "threads/ses_alpha/HANDOFF.md"
-    assert handoff_file("ses_beta", "node-root") == "threads/ses_beta/HANDOFF.md"
+    assert handoff_file("ses_alpha", "node-root") == ".threads/ses_alpha/HANDOFF.md"
+    assert handoff_file("ses_beta", "node-root") == ".threads/ses_beta/HANDOFF.md"
 
 
 def test_handoff_checkpoint_sits_beside_its_notes() -> None:
@@ -5748,7 +5748,8 @@ def test_handoff_checkpoint_sits_beside_its_notes() -> None:
     assert handoff_checkpoint_file("PROGRESS-ses_alpha.md") == "PROGRESS-ses_alpha.md.handoff.json"
 
 
-def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
+@pytest.mark.parametrize("records_dir", ["threads", ".threads"])
+def test_task_and_chat_runs_have_a_shared_checkpoint_path(records_dir: str) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = make_session_store(root)
@@ -5763,7 +5764,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["thread-workspaces", *(["dot-thread-records"] if records_dir == ".threads" else [])],
                     "status": "ready",
                 },
                 "ui_token",
@@ -5777,7 +5778,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
                 },
             )
             [chat_command] = registry.take_commands("sbx_alice", "node_token")
-            assert chat_command["state"]["progress_file"] == f"threads/{chat_command['sessionId']}/HANDOFF.md"
+            assert chat_command["state"]["progress_file"] == f"{records_dir}/{chat_command['sessionId']}/HANDOFF.md"
             assert "round_result_file" not in chat_command["state"]
             registry.handle_event(
                 "sbx_alice",
@@ -5804,7 +5805,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
             [task_command] = registry.take_commands("sbx_alice", "node_token")
 
             assert task_command["workspaceLayout"] == "thread"
-            assert task_command["state"]["progress_file"] == f"threads/{task_command['sessionId']}/HANDOFF.md"
+            assert task_command["state"]["progress_file"] == f"{records_dir}/{task_command['sessionId']}/HANDOFF.md"
 
     asyncio.run(run_flow())
 

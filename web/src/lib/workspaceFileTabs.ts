@@ -7,11 +7,11 @@ export interface WorkspaceFileRoots {
    *  `artifacts/<taskId>` for one automation run, and "" for a project,
    *  whose directory is the deliverable location itself. */
   artifacts: string;
-  /** Per-thread records (`threads/<threadId>/HANDOFF.md`). */
+  /** Per-thread records (`.threads/<threadId>/HANDOFF.md`). */
   activities: string;
 }
 
-const THREAD_RECORDS_ROOT = "threads";
+const THREAD_RECORDS_ROOT = ".threads";
 const DEFAULT_ARTIFACTS_ROOT = "artifacts";
 
 /** A thread or backlog task: deliverables under `artifacts/`. */
@@ -50,7 +50,7 @@ export function workspaceFileTabForPath(
   path: string,
   roots: WorkspaceFileRoots = DEFAULT_WORKSPACE_FILE_ROOTS,
 ): WorkspaceFileTab | null {
-  if (under(path, roots.activities)) return "activities";
+  if (under(path, roots.activities) || under(path, "threads")) return "activities";
   if (under(path, roots.artifacts)) return "artifacts";
   return null;
 }
@@ -61,7 +61,7 @@ export function workspaceTabRootFor(
   roots: WorkspaceFileRoots = DEFAULT_WORKSPACE_FILE_ROOTS,
 ): WorkspaceFileTab | null {
   const tab = workspaceFileTabForPath(path, roots);
-  return tab && roots[tab] === path ? tab : null;
+  return tab && (roots[tab] === path || (tab === "activities" && path === "threads")) ? tab : null;
 }
 
 /* The workspace root is the empty path, and URL canonicalization drops an
@@ -89,8 +89,9 @@ export function serializeWorkspaceBrowsePath(
 }
 
 /* Relay's own bookkeeping inside a project directory: thread records (the
-   Activity tab), agents' private homes, and the daemon's control files. */
-const PROJECT_INTERNAL_ENTRIES = new Set([THREAD_RECORDS_ROOT, "agents", ".relay"]);
+   Activity tab, and `threads/` where older runs left them), agents' private
+   homes, and the daemon's control files. */
+const PROJECT_INTERNAL_ENTRIES = new Set([THREAD_RECORDS_ROOT, "threads", "agents", ".relay"]);
 
 /** Whether a listing entry at `path` is Relay's own, not the user's files.
  *  Only the project root hides anything: a thread or task browser never

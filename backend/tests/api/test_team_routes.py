@@ -273,7 +273,7 @@ def _agent(
             "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "agent-resume"],
+            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "dot-thread-records", "agent-resume"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -2861,7 +2861,7 @@ def test_task_recovery_preserves_round_verdict(
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "dot-thread-records"],
             "status": "ready",
         }
     )
@@ -2960,7 +2960,7 @@ def _waiting_task_thread(recovery_team_thread):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "work-results"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "dot-thread-records", "work-results"],
             "status": "ready",
         }
     )
@@ -3554,6 +3554,8 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
 
     def versioned(*args, **kwargs):
         context = capture(*args, **kwargs)
+        if variant in ("legacy", "v2"):
+            context["progressFile"] = f"threads/{session['id']}/HANDOFF.md"
         if variant == "legacy":
             context["contract"]["version"] = 1
             context.pop("receipt")
@@ -3684,10 +3686,15 @@ def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monk
 
 
 @pytest.mark.parametrize("capable", [False, True])
-def test_handoff_requires_runtime_validation(recovery_team_thread, capable):
+@pytest.mark.parametrize("required_capability", ["handoff-validation", "dot-thread-records"])
+def test_handoff_requires_runtime_validation(recovery_team_thread, capable, required_capability):
     client, _controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
-    registry.update_status("test_node_alice", {"capabilities": [PROJECT_CAPABILITY, "thread-workspaces", *(["handoff-validation"] if capable else [])]})
+    registry.update_status("test_node_alice", {"capabilities": [
+        PROJECT_CAPABILITY, "thread-workspaces",
+        *(capability for capability in ("handoff-validation", "dot-thread-records")
+          if capable or capability != required_capability),
+    ]})
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
         json={"kind": "handoff", "targetAgentId": reviewer["id"]},

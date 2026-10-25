@@ -161,12 +161,21 @@ and policy slot. This constraint is enforced in storage, not by list ordering.
 
 The provider resolves `workspacePolicy` to one node workspace root before it
 starts the daemon. In accordance with [ADR-013](adr/013-thread-scoped-workspaces.md),
-the daemon—not the provider or backend—creates `<root>/<thread-id>` and selects
-that child as the run working directory. User-owned nodes receive their
+the daemon—not the provider or backend—creates `<root>/.threads/<thread-id>` and
+selects that directory as the run working directory (a thread that already has
+a `<root>/<thread-id>` directory from before `.threads/` keeps it). User-owned nodes receive their
 root from user setup; cloud providers provision it, including persistence
 or recovery appropriate to the provider. Sessions created before the
 thread-layout event field continue at the legacy node root after an upgrade;
 Relay does not copy an ambiguous shared root into a thread automatically.
+
+The `dot-thread-records` capability identifies daemons that create and snapshot
+`.threads/<threadId>/HANDOFF.*` inside a workspace. Ordinary runs on an older
+daemon keep `threads/<threadId>/HANDOFF.*`; a handoff accepted with a `.threads/`
+path requires an upgraded daemon before delivery. The Activity browser combines
+both record roots, so historical records remain accessible without another run.
+When records move, receipt validation can resolve a missing legacy handoff file
+at its new path while still enforcing the recorded hash and rejecting symlinks.
 
 ### ProvisioningAttempt
 

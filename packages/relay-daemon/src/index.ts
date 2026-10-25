@@ -87,7 +87,9 @@ import {
 } from "relay-core";
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
 import { workspaceCommandEvent } from "./workspace-read.js";
-import { DEFAULT_ARTIFACTS_DIR, ThreadWorkspaceManager } from "./thread-workspace.js";
+import {
+  DEFAULT_ARTIFACTS_DIR, LEGACY_THREAD_RECORDS_DIR, THREADS_DIR, ThreadWorkspaceManager,
+} from "./thread-workspace.js";
 import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
@@ -1380,7 +1382,12 @@ async function executeCommand(
   // backend carries none and keeps `artifacts/`. Null is a project: its
   // directory is the deliverable location, so no `artifacts/` is created.
   const artifactsDir = command.artifactsDir === undefined ? DEFAULT_ARTIFACTS_DIR : command.artifactsDir;
-  threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir);
+  // Records follow the handoff path the backend named: an older one still
+  // names `threads/`, and moving its records away would hide them.
+  const recordsDir = state.progress_file?.startsWith(`${LEGACY_THREAD_RECORDS_DIR}/`)
+    ? LEGACY_THREAD_RECORDS_DIR
+    : THREADS_DIR;
+  threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir, recordsDir);
   if (artifactsDir === null) {
     delete state.artifacts_dir;
     state.deliverables_in_workspace = true;
@@ -1388,7 +1395,7 @@ async function executeCommand(
     state.artifacts_dir = artifactsDir;
     delete state.deliverables_in_workspace;
   }
-  if (state.progress_file === `threads/${command.sessionId}/HANDOFF.md`) {
+  if (state.progress_file === `${recordsDir}/${command.sessionId}/HANDOFF.md`) {
     state.legacy_progress_file = command.workspaceLayout === "thread"
       ? "HANDOFF.md"
       : `HANDOFF-${command.sessionId}.md`;

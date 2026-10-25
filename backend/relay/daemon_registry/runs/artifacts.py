@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ...core.environment import load_backend_env
+from ...core.workspace_layout import LEGACY_THREAD_RECORDS_DIR, THREAD_RECORDS_DIR
 
 load_backend_env()
 
@@ -109,7 +110,11 @@ def is_snapshotable_path(relative_path: str) -> bool:
         parts = parts[2:]
     return (
         len(parts) == 1 or parts[0] in ("output", "artifacts")
-        or (len(parts) == 3 and parts[0] == "threads" and parts[2] in ("HANDOFF.md", "HANDOFF.json"))
+        or (
+            len(parts) == 3
+            and parts[0] in (THREAD_RECORDS_DIR, LEGACY_THREAD_RECORDS_DIR)
+            and parts[2] in ("HANDOFF.md", "HANDOFF.json")
+        )
     )
 
 

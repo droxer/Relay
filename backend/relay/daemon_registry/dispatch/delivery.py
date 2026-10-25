@@ -17,6 +17,7 @@ from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.workspace_layout import workspace_artifacts_dir
 from ...tasks.execution import request_execution_owner
 from ...core.daemon_capabilities import (
+    DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     DAEMON_CAPABILITY_ROUND_RESULT,
     has_capability,
 )
@@ -243,7 +244,7 @@ class AssignmentDeliveryMixin(RegistryState):
             )
         else:
             state = self._conversation_prelude_state(
-                state, run_request, assignment, session_snapshot, workspace_layout
+                state, run_request, assignment, session_snapshot, workspace_layout, sandbox
             )
         request_state = run_request["state"] or {}
         state = _agent_identity_state(state, assignment, sandbox, session_snapshot)
@@ -325,11 +326,15 @@ class AssignmentDeliveryMixin(RegistryState):
         assignment: dict[str, Any],
         session_snapshot: dict[str, Any],
         workspace_layout: str,
+        sandbox: dict[str, Any],
     ) -> dict[str, Any]:
         """Progress file, agent bridge, conversation, and handoff note for a run without handoff context."""
         # Chat can grow into substantial work too. Provide a stable path on
         # every run; the prompt only asks to create a checkpoint for real work.
-        progress_file = handoff_file(run_request["sessionId"], workspace_layout)
+        progress_file = handoff_file(
+            run_request["sessionId"], workspace_layout,
+            dot_threads=has_capability(sandbox, DAEMON_CAPABILITY_DOT_THREAD_RECORDS),
+        )
         next_state = {**state, "progress_file": progress_file}
         bridge = compute_prior_agent_bridge(
             session_snapshot, assignment["executorKind"], self.store,

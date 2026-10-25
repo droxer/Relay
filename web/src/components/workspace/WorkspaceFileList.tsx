@@ -111,7 +111,7 @@ export function WorkspaceFileList({
   const entries = (data?.entries ?? []).filter((entry) => !isWorkspaceInternalEntry(entry.name, path, roots));
   const sharedUnavailable = isWorkspaceRetryableError(error);
   /* A tab root that is missing or empty is an area nothing has written to
-     yet, not an unselected workspace: `artifacts/` and `threads/` appear only
+     yet, not an unselected workspace: `artifacts/` and `.threads/` appear only
      once a run creates them. */
   const tabRoot = workspaceTabRootFor(path, roots);
   const emptyMessage = tabRoot === "artifacts" && roots.artifacts !== ""

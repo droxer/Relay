@@ -10,7 +10,12 @@ import hashlib
 import json
 from typing import Any
 
-from .handoff_files import handoff_checkpoint_file, legacy_handoff_checkpoint_file
+from .handoff_files import (
+    handoff_checkpoint_file,
+    handoff_file,
+    legacy_handoff_checkpoint_file,
+    legacy_records_handoff_file,
+)
 
 CONTRACT = {"name": "relay.handoff.receipt", "version": 1}
 REQUIREMENTS_LIMIT = 16000
@@ -102,7 +107,14 @@ def capture_handoff_receipt(
         for path in (legacy_handoff_checkpoint_file(context["progressFile"]), checkpoint_path)
         if path
     ]
-    if context["progressFile"] == f"threads/{session['id']}/HANDOFF.md":
+    records_notes = (
+        handoff_file(session["id"], context.get("workspaceLayout") or ""),
+        legacy_records_handoff_file(session["id"]),
+    )
+    if context["progressFile"] == records_notes[0]:
+        # A run dispatched before `.threads/` was told the `threads/` name.
+        checkpoint_paths = [handoff_checkpoint_file(records_notes[1]), *checkpoint_paths]
+    if context["progressFile"] in records_notes:
         old_notes = (
             "HANDOFF.md" if context.get("workspaceLayout") == "thread"
             else f"HANDOFF-{session['id']}.md"

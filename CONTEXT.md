@@ -100,7 +100,7 @@ survives or spans Threads.
 _Avoid_: Agent Workspace, shared Computer workspace
 
 **Thread Records**:
-The `threads/<threadId>/` directory inside a Thread's bound workspace.
+The `.threads/<threadId>/` directory inside a Thread's bound workspace.
 `HANDOFF.md` records status, progress, decisions, blockers, and next actions;
 `HANDOFF.json` is the structured handoff checkpoint. Each Thread has its own
 records even when several Threads share a Task or Project workspace.
@@ -129,7 +129,8 @@ Project uses the Project's workspace instead.
 _Avoid_: Thread Workspace (for task rounds), round directory
 
 **Node Workspace Root**:
-Storage configured on a Computer that contains Thread Workspaces. It is not a
+Storage configured on a Computer that contains Thread Workspaces, each under
+its `.threads/<threadId>/` directory. It is not a
 workspace, identity, or scheduling boundary by itself.
 _Avoid_: Workspace, Agent home
 
