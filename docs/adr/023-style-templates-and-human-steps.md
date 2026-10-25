@@ -72,8 +72,12 @@ edit. Retry keys include the template revision.
 
 Templates live on the team (`collaborationTemplate`, selected as "Custom"
 beside the built-ins). There is no shared template library until a User needs
-one. The web stops mirroring slot filling: previews come from a backend
-endpoint that runs the real compiler.
+one. The web keeps its synchronous preview (it re-renders on every edit of an
+unsaved team form), but cannot drift: the backend writes what dispatch really
+fills for a matrix of rosters to `backend/tests/unit/collaboration_style_previews.json`,
+and the web test checks `previewSlots` against it. Custom templates will need
+the preview to compile the template too; that is the point to move it behind a
+backend endpoint.
 
 ### A person can be a step: approve
 
@@ -113,8 +117,9 @@ needs no roster or placement change.
 ### Rollout
 
 1. Express Build → Review and Pipeline as templates through the one compiler,
-   with parity tests that the compiled manifests are identical to today's;
-   replace `previewSlots` with the backend preview. No visible change.
+   with parity tests that the compiled assignments are identical to today's,
+   and pin the web preview to dispatch. Done: `collaboration/templates.py`; the
+   pin found the preview ordering a lead after a same-stage member in Pipeline.
 2. Approve steps as toggles on the built-ins ("Approve the plan" in Lead-led,
    "Approve before review" in Build → Review), and fold human acceptance into
    the same rule.

@@ -74,6 +74,7 @@ POLICY_MODULES = frozenset(
         "relay.collaboration.models",
         "relay.collaboration.policy",
         "relay.collaboration.styles",
+        "relay.collaboration.templates",
         "relay.collaboration.work",
         "relay.notifications.rules",
         "relay.projects.context",

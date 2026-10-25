@@ -12,11 +12,6 @@ from typing import Any
 COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
-STYLE_POLICIES: dict[str, str] = {
-    "solo": "solo-v1",
-    "build_review": "build-review-v1",
-    "pipeline": "pipeline-v1",
-}
 BUILDER_ROLES = frozenset({"implementer", "fixer"})
 # Writes come before verification, and verification before review. Lead
 # planning, the lead-led member order and Pipeline all sort by this.

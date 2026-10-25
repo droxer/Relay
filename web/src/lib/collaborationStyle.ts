@@ -1,6 +1,8 @@
 import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySession } from "relay-core";
 
-// Mirrors backend/relay/collaboration/styles.py. Keep role precedence in sync.
+// Mirrors backend/relay/collaboration/styles.py and templates.py. Keep role
+// precedence in sync; web/tests/collaborationStylePreview.test.ts checks
+// previewSlots against what backend dispatch fills.
 export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
 const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
 const STAGE: Record<string, number> = { planner: 0, implementer: 1, fixer: 1, tester: 2, reviewer: 3 };
@@ -13,7 +15,8 @@ export function effectiveStyle(team?: { collaborationStyle?: CollaborationStyle 
 }
 
 export function previewSlots(all: SlotMember[], leadId: string | undefined, style: CollaborationStyle): { style: CollaborationStyle; fallbackFrom?: CollaborationStyle; slots: Slot[] } {
-  const members = all.filter((m) => !m.onRequest || m.id === leadId);
+  // Dispatch takes the roster lead first, so the lead wins a stage tie.
+  const members = [...all.filter((m) => m.id === leadId), ...all.filter((m) => m.id !== leadId && !m.onRequest)];
   if (!members.length) return { style, slots: [] };
   const ordered = [...members].sort((a, b) => (STAGE[a.role ?? ""] ?? 1) - (STAGE[b.role ?? ""] ?? 1));
   const lead = members.find((m) => m.id === leadId);

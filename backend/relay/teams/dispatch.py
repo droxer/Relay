@@ -4,11 +4,10 @@ from typing import Any
 
 from ..collaboration.styles import (
     LEAD_LED,
-    fill_build_review_slots,
-    pipeline_order,
     resolve_collaboration_style,
     role_stage,
 )
+from ..collaboration.templates import compile_style
 from ..agents.routing import resolve_agent_assignments
 
 TEAM_UNAVAILABLE_MESSAGE = "The agent team is not currently available."
@@ -241,21 +240,6 @@ def _configured_member_assignment(
     }
 
 
-_STYLE_BRIEFS = {
-    "solo": "Complete the shared goal yourself and report the delivered result to the user.",
-    "builder": (
-        "Implement the shared goal. A teammate reviews your work next; if it reports "
-        "findings you will be asked to repair them."
-    ),
-    "reviewer": (
-        "Review the builder's changes against the goal and acceptance criteria. Report "
-        "findings on the builder's work item to request changes. Report done with "
-        "evidence only when the result is acceptable, then summarize what was delivered "
-        "for the user."
-    ),
-}
-
-
 def _styled_assignments(
     agents: list[dict[str, Any]],
     *,
@@ -269,49 +253,27 @@ def _styled_assignments(
     No assignment is a coordinator: that role means lead planning plus runtime
     repair authority, which only Lead-led grants.
     """
-    fallback_from: str | None = None
-    slots = fill_build_review_slots(agents, team.get("leadAgentId"))
-    reviewer = slots.reviewer
-    if style == "build_review" and reviewer is None:
-        style, fallback_from = "solo", "build_review"
-    if style == "solo":
-        turns = [(slots.builder, "implementer", "action", True, _STYLE_BRIEFS["solo"])]
-    elif style == "build_review" and reviewer is not None:
-        turns = [
-            (slots.builder, "implementer", "action", False, _STYLE_BRIEFS["builder"]),
-            (reviewer, "reviewer", "review", True, _STYLE_BRIEFS["reviewer"]),
-        ]
-    else:
-        ordered = pipeline_order(agents)
-        last = len(ordered) - 1
-        turns = [
-            (
-                agent,
-                agent.get("defaultRole") or "implementer",
-                "action",
-                index == last,
-                _member_brief(agent.get("defaultRole"), False)
-                + (
-                    " After completing your own contribution, "
-                    "produce one coherent final result for the user, including "
-                    "delivered changes, validation results, and remaining limitations."
-                    if index == last else ""
-                ),
-            )
-            for index, agent in enumerate(ordered)
-        ]
+    compiled = compile_style(
+        style,
+        agents,
+        team.get("leadAgentId"),
+        role_brief=lambda role: _member_brief(role, False),
+    )
     base_snapshot = team_runtime_snapshot(
-        team, roster, style=style, style_fallback_from=fallback_from
+        team, roster, style=compiled.style, style_fallback_from=compiled.fallback_from
     )
     snapshot = (
-        {**base_snapshot, "workContractVersion": 1} if len(turns) > 1 else base_snapshot
+        {**base_snapshot, "workContractVersion": 1}
+        if len(compiled.turns) > 1
+        else base_snapshot
     )
     return [
         _styled_assignment(
-            agent, role, mode, synthesizer, brief, team, snapshot, configs,
-            optional_allowed=style == "pipeline",
+            turn.agent, turn.role, turn.mode, turn.synthesizer, turn.brief,
+            team, snapshot, configs,
+            optional_allowed=compiled.optional_steps,
         )
-        for agent, role, mode, synthesizer, brief in turns
+        for turn in compiled.turns
     ]
 
 

@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.ids import new_relay_id
-from .styles import LEAD_LED, STYLE_POLICIES
+from .styles import LEAD_LED
+from .templates import STYLE_POLICIES
 
 
 def create_round_manifest(
