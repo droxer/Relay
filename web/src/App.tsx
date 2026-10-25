@@ -23,7 +23,7 @@ import { AuthChecking } from "./components/AuthChecking";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { AuthenticatedApp } from "./AuthenticatedApp";
 import { applyTheme, normalizeLanguage, readTokens } from "./lib/appStorage";
-import { isLandingPath, parseAppPath } from "./lib/appRoute";
+import { deviceApprovalCode, isLandingPath, parseAppPath } from "./lib/appRoute";
 import { useRelayStore } from "./lib/store";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAuthSession } from "./hooks/useAuthSession";
@@ -31,14 +31,6 @@ import { useAuthRedirect } from "./hooks/useAuthRedirect";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useLocationPathname } from "./hooks/useLocationPathname";
 import { useUserPreferences } from "./hooks/useUserPreferences";
-
-const DEVICE_APPROVAL_PATHS = ["/computer", "/settings/computers"];
-const DEVICE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
-
-function deviceApprovalCode(): string | null {
-  const code = new URL(window.location.href).searchParams.get("connect");
-  return DEVICE_APPROVAL_PATHS.includes(window.location.pathname) && code && DEVICE_CODE_PATTERN.test(code) ? code : null;
-}
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
@@ -156,7 +148,7 @@ function AuthGate() {
     return <LoginScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
   }
 
-  const deviceCode = deviceApprovalCode();
+  const deviceCode = deviceApprovalCode(window.location.pathname, window.location.search);
   if (deviceCode) return <DeviceApproval code={deviceCode} />;
   return <AuthenticatedApp user={user} setUser={setUser} preferences={preferences} />;
 }

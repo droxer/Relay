@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   browserUrlForAppState,
   canonicalBrowserUrl,
+  deviceApprovalCode,
   hrefForRoute,
   hrefForAdminSection,
   hrefForSettingsSection,
@@ -444,6 +445,18 @@ it("preserves computer device approval through login redirects", () => {
   const code = "?connect=abcdefghijklmnopqrstuvwxyz123456";
   assert.equal(canonicalBrowserUrl("/computers", code), `/computers${code}`);
   assert.equal(canonicalBrowserUrl("/computer", code), `/computers${code}`);
+});
+
+it("opens device approval on /computers, where the backend's approval link points", () => {
+  const code = "abcdefghijklmnopqrstuvwxyz123456";
+  assert.equal(deviceApprovalCode("/computers", `?connect=${code}`), code);
+  assert.equal(deviceApprovalCode("/computers/", `?connect=${code}`), code);
+  // Links printed before the Computers page moved still approve.
+  assert.equal(deviceApprovalCode("/computer", `?connect=${code}`), code);
+  assert.equal(deviceApprovalCode("/settings/computers", `?connect=${code}`), code);
+  assert.equal(deviceApprovalCode("/computers", ""), null);
+  assert.equal(deviceApprovalCode("/computers", "?connect=short"), null);
+  assert.equal(deviceApprovalCode("/agents", `?connect=${code}`), null);
 });
 
 it("preserves approval when a legacy computer path redirects to /computers", () => {
