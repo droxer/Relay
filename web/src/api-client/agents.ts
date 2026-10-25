@@ -80,6 +80,12 @@ export function updateUserAgent(
   });
 }
 
+export function deleteOwnUserAgent(agentId: string): Promise<{ agent: UserAgent }> {
+  return apiJson<{ agent: UserAgent }>(`/agents/${encodeURIComponent(agentId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function deleteUserAgent(agentId: string): Promise<{ agent: UserAgent }> {
   return apiJson<{ agent: UserAgent }>(`/admin/agents/${encodeURIComponent(agentId)}`, {
     method: "DELETE",
