@@ -3,7 +3,7 @@
 
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useState, useEffectEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, useEffectEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
@@ -78,6 +78,7 @@ import {
 } from "../lib/taskSelection";
 import { useClientMounted } from "../hooks/useClientMounted";
 import { useKeyChange } from "../hooks/useKeyChange";
+import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 
 
@@ -165,6 +166,14 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
     ])) as Record<TaskStatus, number>;
   }, [backlogTasks, filters]);
   const { page, setPage } = usePagination();
+  /* A tag on a row, tile, or the record filters this list by that tag
+     (TagFilterContext): from the record it also closes the record. */
+  const applyTagFilter = useCallback((tag: string) => {
+    setFilters((current) => ({ ...current, tag }));
+    setPage(1);
+  }, [setFilters, setPage]);
+  const closeRecord = useCallback(() => onOpenRecord(null), [onOpenRecord]);
+  const tagFilters = useTagFilters(filters.tag, applyTagFilter, closeRecord);
   const listPage = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
   const visibleTasks = view === "list" ? listPage.items : TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items);
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks]);
@@ -275,176 +284,180 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const actionsInFilterBar = view === "board" && backlogTasks.length > 0;
 
   return (
-    <section
-      className="backlog-page backlog-page--project"
-      data-view={view}
-      aria-label={t("backlog.title")}
-    >
-      <div className="backlog-project-main">
-        {/* The header is controls only: the metrics live on the project's
-            Dashboard tab, and on the board the lanes already name each status. */}
-        {actionsInFilterBar ? null : (
-          <div className="backlog-project-toolbar">
-            {view === "list" ? (
-              <div className="backlog-project-status">
-                <TaskStatusNav value={filters.status} counts={sectionCounts}
-                  onChange={(status) => setFilters({ ...filters, status })} />
-              </div>
-            ) : null}
-            <div className="backlog-project-actions">{headerActions}</div>
-          </div>
-        )}
+    <TagFilterContext value={tagFilters.list}>
+      <section
+        className="backlog-page backlog-page--project"
+        data-view={view}
+        aria-label={t("backlog.title")}
+      >
+        <div className="backlog-project-main">
+          {/* The header is controls only: the metrics live on the project's
+              Dashboard tab, and on the board the lanes already name each status. */}
+          {actionsInFilterBar ? null : (
+            <div className="backlog-project-toolbar">
+              {view === "list" ? (
+                <div className="backlog-project-status">
+                  <TaskStatusNav value={filters.status} counts={sectionCounts}
+                    onChange={(status) => setFilters({ ...filters, status })} />
+                </div>
+              ) : null}
+              <div className="backlog-project-actions">{headerActions}</div>
+            </div>
+          )}
 
-      {backlogTasks.length > 0 ? (
-        <>
-          <BacklogFiltersBar
-            filters={filters}
-            agents={logicalAgents}
-            teams={teams}
-            tags={tagOptions}
-            onChange={setFilters}
-            sortMenu={
-              <>
-                <SortMenu
-                  /* Status belongs to the section navigation. */
-                  options={[
-                    { key: "title", label: t("backlog.col_task") },
-                    { key: "priority", label: t("backlog.priority") },
-                    { key: "assignee", label: t("backlog.assignee") },
-                    { key: "due", label: t("backlog.due") },
-                  ]}
-                  sort={sort}
-                  onSortChange={setSort}
-                  label={t("backlog.sort_label")}
-                />
-                {actionsInFilterBar ? <div className="backlog-project-actions">{headerActions}</div> : null}
-              </>
-            }
-          />
-        </>
-      ) : null}
-
-      {showEmptyBoard ? (
-        (() => {
-          const filtered = activeFilterCount({ ...filters, status: "all" }) > 0 || filters.query.trim().length > 0;
-          return (
-            <BoardEmpty
-              title={filtered ? t("backlog.no_match_title") : t("backlog.no_tasks_title")}
-              body={filtered ? t("backlog.no_match_body") : t("backlog.no_tasks_body")}
-              createLabel={filtered || !openCreate ? undefined : t("backlog.new_task")}
-              onCreate={filtered ? undefined : openCreate}
-              clearLabel={filtered ? t("backlog.clear_filters") : undefined}
-              onClear={filtered ? () => setFilters({ ...initialFilters, status: filters.status }) : undefined}
+        {backlogTasks.length > 0 ? (
+          <>
+            <BacklogFiltersBar
+              filters={filters}
+              agents={logicalAgents}
+              teams={teams}
+              tags={tagOptions}
+              onChange={setFilters}
+              sortMenu={
+                <>
+                  <SortMenu
+                    /* Status belongs to the section navigation. */
+                    options={[
+                      { key: "title", label: t("backlog.col_task") },
+                      { key: "priority", label: t("backlog.priority") },
+                      { key: "assignee", label: t("backlog.assignee") },
+                      { key: "due", label: t("backlog.due") },
+                    ]}
+                    sort={sort}
+                    onSortChange={setSort}
+                    label={t("backlog.sort_label")}
+                  />
+                  {actionsInFilterBar ? <div className="backlog-project-actions">{headerActions}</div> : null}
+                </>
+              }
             />
-          );
-        })()
-      ) : view === "list" ? (
-        /* The sidebar owns status; the content stays one flat, sorted list. */
-        <div className="backlog-rows" data-density="compact">
-          <BacklogTaskList
-            tasks={listPage.items}
-            sort={sort}
-            onSort={toggleSort}
-            selectAll={
-              <TaskSelectAllCheckbox
-                state={selectionCheckState(visibleSelection, visibleIds)}
-                label={t("backlog.select_all_tasks")}
-                onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+          </>
+        ) : null}
+
+        {showEmptyBoard ? (
+          (() => {
+            const filtered = activeFilterCount({ ...filters, status: "all" }) > 0 || filters.query.trim().length > 0;
+            return (
+              <BoardEmpty
+                title={filtered ? t("backlog.no_match_title") : t("backlog.no_tasks_title")}
+                body={filtered ? t("backlog.no_match_body") : t("backlog.no_tasks_body")}
+                createLabel={filtered || !openCreate ? undefined : t("backlog.new_task")}
+                onCreate={filtered ? undefined : openCreate}
+                clearLabel={filtered ? t("backlog.clear_filters") : undefined}
+                onClear={filtered ? () => setFilters({ ...initialFilters, status: filters.status }) : undefined}
               />
-            }
-            selectedIds={visibleSelection}
-            onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-            contextFor={(task) => {
+            );
+          })()
+        ) : view === "list" ? (
+          /* The sidebar owns status; the content stays one flat, sorted list. */
+          <div className="backlog-rows" data-density="compact">
+            <BacklogTaskList
+              tasks={listPage.items}
+              sort={sort}
+              onSort={toggleSort}
+              selectAll={
+                <TaskSelectAllCheckbox
+                  state={selectionCheckState(visibleSelection, visibleIds)}
+                  label={t("backlog.select_all_tasks")}
+                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                />
+              }
+              selectedIds={visibleSelection}
+              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+              contextFor={(task) => {
+                const assignment = taskAssignmentDisplay(task);
+                return {
+                  project: currentProject,
+                  ready: assignment.ready,
+                  agentDisplayName: assignment.name,
+                  agentImageUrl: assignment.imageUrl,
+                };
+              }}
+              onOpenTask={onOpenRecord}
+              edits={phone ? null : inlineEdits}
+              roster={{ agents: logicalAgents, teams }}
+            />
+            <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
+          </div>
+        ) : (
+          <BacklogBoard
+            lanes={pagedLanes}
+            laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, grouped[status].length])) as Record<TaskWorkflowStage, number>}
+            cardProps={(task) => {
               const assignment = taskAssignmentDisplay(task);
               return {
-                project: currentProject,
-                ready: assignment.ready,
+                task,
+                selected: visibleSelection.has(task.id),
+                onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
+                ready: assignment.ready,
+                onOpen: () => onOpenRecord(task.id),
               };
             }}
-            onOpenTask={onOpenRecord}
-            edits={phone ? null : inlineEdits}
-            roster={{ agents: logicalAgents, teams }}
+            onMoveTask={moveTaskToLane}
+            onCreateInLane={readOnly ? undefined : (status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
+            onLanePageChange={setLanePage}
           />
-          <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
+        )}
+
+        <TaskSelectionBar
+          count={selectedCount}
+          deleting={deletingSelection}
+          deleteLabel={t("backlog.delete_selected")}
+          onDelete={() => { void deleteSelectedTasks(); }}
+          onClear={() => setSelection(EMPTY_TASK_SELECTION)}
+        />
+
         </div>
-      ) : (
-        <BacklogBoard
-          lanes={pagedLanes}
-          laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, grouped[status].length])) as Record<TaskWorkflowStage, number>}
-          cardProps={(task) => {
-            const assignment = taskAssignmentDisplay(task);
-            return {
-              task,
-              selected: visibleSelection.has(task.id),
-              onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
-              agentDisplayName: assignment.name,
-              agentImageUrl: assignment.imageUrl,
-              ready: assignment.ready,
-              onOpen: () => onOpenRecord(task.id),
-            };
-          }}
-          onMoveTask={moveTaskToLane}
-          onCreateInLane={readOnly ? undefined : (status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
-          onLanePageChange={setLanePage}
-        />
-      )}
 
-      <TaskSelectionBar
-        count={selectedCount}
-        deleting={deletingSelection}
-        deleteLabel={t("backlog.delete_selected")}
-        onDelete={() => { void deleteSelectedTasks(); }}
-        onClear={() => setSelection(EMPTY_TASK_SELECTION)}
-      />
+        {/* Execution opens over the list; editing uses a second drawer layer. */}
+        {drawerRecordId ? (
+          <TagFilterContext value={tagFilters.record}>
+            <TaskRecordView
+              taskId={drawerRecordId}
+              /* Inside a project `?tab=` is the project's own tab strip. */
+              tabSearchKey="recordTab"
+              currentUser={currentUser}
+              tasks={tasks}
+              drawer={{
+                open: Boolean(recordTaskId),
+                onClose: () => onOpenRecord(null),
+                onClosed: recordMirror.release,
+              }}
+              onEdit={editTask}
+              onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}
+              onOpenRecord={(nextId) => onOpenRecord(nextId)}
+              onDeleted={() => onOpenRecord(null)}
+            />
+        </TagFilterContext>
+        ) : null}
 
-      </div>
-
-      {/* Execution opens over the list; editing uses a second drawer layer. */}
-      {drawerRecordId ? (
-        <TaskRecordView
-          taskId={drawerRecordId}
-          /* Inside a project `?tab=` is the project's own tab strip. */
-          tabSearchKey="recordTab"
-          currentUser={currentUser}
-          tasks={tasks}
-          drawer={{
-            open: Boolean(recordTaskId),
-            onClose: () => onOpenRecord(null),
-            onClosed: recordMirror.release,
-          }}
-          onEdit={editTask}
-          onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}
-          onOpenRecord={(nextId) => onOpenRecord(nextId)}
-          onDeleted={() => onOpenRecord(null)}
-        />
-      ) : null}
-
-      {form ? (
-        <TaskDrawer
-          open={drawerOpen}
-          form={form}
-          logicalAgents={logicalAgents}
-          projects={projects}
-          tagSuggestions={tagOptions}
-          onCreateProject={onCreateProject ? () => onCreateProject((id) => setForm((current) => current ? { ...current, projectId: id } : current)) : undefined}
-          teams={teams}
-          saving={saving}
-          deleting={deleting}
-          initialFocus={assignmentFocus ? "assignment" : "title"}
-          title={form.id ? t("backlog.edit_task") : t("backlog.new_task")}
-          subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
-          onClose={() => { void closeTaskForm(); }}
-          onClosed={releaseTaskForm}
-          onChange={(next) => {
-            if (next.variant === "backlog") setForm(next);
-          }}
-          onSubmit={(event) => void submitTask(event)}
-          onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
-          layer={drawerRecordId ? 1 : 0}
-        />
-      ) : null}
-    </section>
+        {form ? (
+          <TaskDrawer
+            open={drawerOpen}
+            form={form}
+            logicalAgents={logicalAgents}
+            projects={projects}
+            tagSuggestions={tagOptions}
+            onCreateProject={onCreateProject ? () => onCreateProject((id) => setForm((current) => current ? { ...current, projectId: id } : current)) : undefined}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            title={form.id ? t("backlog.edit_task") : t("backlog.new_task")}
+            subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
+            onClose={() => { void closeTaskForm(); }}
+            onClosed={releaseTaskForm}
+            onChange={(next) => {
+              if (next.variant === "backlog") setForm(next);
+            }}
+            onSubmit={(event) => void submitTask(event)}
+            onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
+            layer={drawerRecordId ? 1 : 0}
+          />
+        ) : null}
+      </section>
+    </TagFilterContext>
   );
 }

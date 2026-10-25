@@ -3048,6 +3048,8 @@
     "hint": "Press Enter or a comma to add a tag.",
     "placeholder": "Add a tag…",
     "remove": "Remove tag {{tag}}",
+    "filter_by": "Show only #{{tag}}",
+    "filter_clear": "Stop filtering by #{{tag}}",
     "more": "+{{count}}",
     "none": "None",
     "placeholder_more": "Add another…",
