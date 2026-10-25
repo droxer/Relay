@@ -12,6 +12,7 @@ import {
   deleteAgentPlacement,
   deleteAgentProfileImage,
   selectAgentProfilePreset,
+  deleteOwnUserAgent,
   deleteUserAgent,
   getControlPanelAgent,
   updateAgentProfileImage,
@@ -255,7 +256,7 @@ export function AgentProfilePanel({
     setSaving(true);
     setError(null);
     try {
-      await deleteUserAgent(agent.id);
+      await (canManage ? deleteUserAgent(agent.id) : deleteOwnUserAgent(agent.id));
       invalidateAgentLists();
       onAgentDeleted?.(agent.id);
     } catch (err) {

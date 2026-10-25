@@ -105,6 +105,17 @@ def update_agent(
     return {"agent": _agent_with_placements(ctx, updated)}
 
 
+@router.delete("/agents/{agent_id}", status_code=200)
+def delete_agent(agent_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    agent = ctx.agent_store.get_agent(agent_id)
+    if not agent or agent.get("deletedAt"):
+        raise HTTPException(404, "Agent not found.")
+    if agent.get("supervisorUserId") != actor["userId"]:
+        raise HTTPException(403, "Cannot delete another user's agent.")
+    return _delete_agent(ctx, agent)
+
+
 @router.get("/admin/agents")
 def list_control_panel_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -185,6 +196,11 @@ def delete_control_panel_agent(
     agent = ctx.agent_store.get_agent(agent_id)
     if not agent or agent.get("deletedAt"):
         raise HTTPException(404, "Agent not found.")
+    return _delete_agent(ctx, agent)
+
+
+def _delete_agent(ctx: AppContextDep, agent: dict[str, Any]) -> dict[str, Any]:
+    agent_id = agent["id"]
     if _agent_has_active_run(ctx, agent_id):
         raise HTTPException(
             409,
