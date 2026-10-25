@@ -20,11 +20,8 @@ from ...core.human_waits import QUESTION_ID_PREFIX
 from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ..tables.tasks import tasks
-from .rules import (
-    PRUNABLE_DAEMON_EVENT_PREFIXES,
-    PRUNABLE_DAEMON_EVENT_TYPES,
-    TERMINAL_DAEMON_STATUSES,
-)
+from .rules import PRUNABLE_DAEMON_EVENT_PREFIXES, PRUNABLE_DAEMON_EVENT_TYPES
+from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
 from .rows import (
     terminal_time_expression,
 )

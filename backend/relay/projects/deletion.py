@@ -17,7 +17,7 @@ from ..persistence.project.store import ProjectVersionConflict
 from ..core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from ..persistence.resource_lock import resource_transaction
 from ..persistence.engine import store_transaction
-from ..persistence.task.rules import TaskExecutionActiveError, dispatch_claim_active
+from ..tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from ..sessions.controller import SessionController
 from ..sessions.errors import SessionRunInFlightError
 from ..tasks.deletion import TASK_DELETION_LOCK

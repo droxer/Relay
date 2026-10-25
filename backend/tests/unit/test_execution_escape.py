@@ -14,7 +14,7 @@ from itertools import product
 
 import pytest
 
-from relay.persistence.daemon.rules import (
+from relay.core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
@@ -154,7 +154,7 @@ def test_invalid_stop_intent_timestamps_enter_recovery(mark: str, intent: str) -
 
 @pytest.mark.parametrize("source", ["request", "command"])
 def test_restored_evidence_overrides_a_stale_missing_evidence_flag(source: str) -> None:
-    from relay.persistence.daemon.rules import TERMINAL_EVENT_STATE_KEY
+    from relay.core.daemon_records import TERMINAL_EVENT_STATE_KEY
 
     state = {
         "_relay_recovery_required": True,

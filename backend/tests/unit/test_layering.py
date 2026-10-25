@@ -83,6 +83,7 @@ POLICY_MODULES = frozenset(
         "relay.projects.context",
         "relay.projects.setup_result",
         "relay.skills.rules",
+        "relay.tasks.claims",
         "relay.tasks.execution",
         "relay.tasks.flow",
         "relay.tasks.issue_triage",

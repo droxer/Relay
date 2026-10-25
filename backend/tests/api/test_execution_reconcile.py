@@ -164,7 +164,7 @@ def test_delete_starts_the_grace_when_no_stop_marker_could_be_recorded(monkeypat
 def test_delete_releases_a_finalization_whose_evidence_was_lost(monkeypatch) -> None:
     """Retrying a save with no exit evidence only re-marks it lost, so the
     retry must not be the only way out; the delete asserts the run gone."""
-    from relay.persistence.daemon.rules import TERMINAL_CLAIM_ID_STATE_KEY
+    from relay.core.daemon_records import TERMINAL_CLAIM_ID_STATE_KEY
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -194,7 +194,7 @@ def test_delete_releases_a_finalization_whose_evidence_was_lost(monkeypatch) -> 
 
 @pytest.mark.parametrize("request_deletion", [False, True])
 def test_late_terminal_evidence_is_protected_and_can_be_saved(monkeypatch, request_deletion) -> None:
-    from relay.persistence.daemon.rules import TERMINAL_CLAIM_ID_STATE_KEY
+    from relay.core.daemon_records import TERMINAL_CLAIM_ID_STATE_KEY
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

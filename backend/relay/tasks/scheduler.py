@@ -19,7 +19,8 @@ from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from ..persistence.task.rows import task_claim_sort_key
-from ..persistence.task.rules import compact_task_writes, dispatch_claim_active
+from ..persistence.task.rules import compact_task_writes
+from .claims import dispatch_claim_active
 from ..agents.routing import (
     AgentRoutingError,
     dispatch_failure_code,

@@ -13,7 +13,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..persistence.daemon.rules import (
+from ..core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,

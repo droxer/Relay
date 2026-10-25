@@ -17,7 +17,7 @@ from ..automations.model import TriggerError
 from ..automations.service import automation_triggers_enabled, routine_fields_v2
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.task_tags import normalize_tags
-from ..persistence.task.rules import TaskExecutionActiveError
+from .claims import TaskExecutionActiveError
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 
 ACCEPTANCE_POLICIES = ("human", "automatic")

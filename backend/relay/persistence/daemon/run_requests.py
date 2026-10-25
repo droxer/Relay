@@ -20,14 +20,14 @@ from ..events import daemon_event
 from ...core.ids import new_database_id, now_iso
 from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
-from .rules import (
+from .rules import _assert_node_run_request_capacity
+from ...core.daemon_records import (
     DISPATCH_CLAIM_EXPIRES_STATE_KEY,
     DISPATCH_CLAIM_ID_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
     TERMINAL_DAEMON_STATUSES,
     TERMINAL_EVENT_STATE_KEY,
-    _assert_node_run_request_capacity,
 )
 from .rows import (
     lease_expires_at,

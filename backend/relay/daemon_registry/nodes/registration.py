@@ -14,10 +14,7 @@ from ...core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ...persistence.daemon.rules import (
-    EXECUTION_INTERRUPTED_STATE_KEY,
-    NODE_POLL_DRAINED_AT,
-)
+from ...core.daemon_records import EXECUTION_INTERRUPTED_STATE_KEY, NODE_POLL_DRAINED_AT
 from ...core.daemon_capabilities import (
     DAEMON_NODE_CAPABILITIES,
 )

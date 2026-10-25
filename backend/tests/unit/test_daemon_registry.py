@@ -7971,7 +7971,7 @@ def test_failed_session_closes_agent_projection_only_after_execution_is_settled(
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_terminal_projection_recovery_survives_event_write_failure(store_factory, monkeypatch):
-    from relay.persistence.daemon.rules import TERMINAL_CLAIM_EXPIRES_STATE_KEY
+    from relay.core.daemon_records import TERMINAL_CLAIM_EXPIRES_STATE_KEY
 
     async def run_flow():
         with TemporaryDirectory() as root:

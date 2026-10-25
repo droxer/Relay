@@ -1,5 +1,6 @@
-"""Daemon registry record rules shared by the database store mixins:
-state keys, node registration changes, prunable events, queue limits.
+"""Daemon registry record rules shared by the database store mixins: node
+registration changes, prunable events, queue limits. The record vocabulary
+other layers read lives in ``core/daemon_records.py``.
 """
 
 from __future__ import annotations
@@ -9,10 +10,10 @@ from datetime import datetime
 from typing import Any
 from ..db_time import format_db_time
 from ..events import daemon_event
+from ...core.daemon_records import NODE_POLL_DRAINED_AT
 from ...core.ids import now_iso
 
 
-TERMINAL_DAEMON_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
 # Command-lifecycle events describe records that `prune_terminal_records`
@@ -43,30 +44,18 @@ def daemon_event_is_prunable(event_type: str) -> bool:
     )
 
 
-DISPATCH_CLAIM_ID_STATE_KEY = "_relay_dispatch_claim_id"
 
 
-DISPATCH_CLAIM_EXPIRES_STATE_KEY = "_relay_dispatch_claim_expires_at"
 
 
-TERMINAL_EVENT_STATE_KEY = "_relay_terminal_event"
 
 
-TERMINAL_CLAIM_ID_STATE_KEY = "_relay_terminal_claim_id"
 
 
-# Set when a restarted daemon reports it admitted this run and will not resume
-# it. Kept apart from _relay_recovery_required, which marks a stuck save and
-# makes finalization stand down; a late exit report must still finalize.
-EXECUTION_INTERRUPTED_STATE_KEY = "_relay_execution_interrupted_at"
 
 
-# Set when the daemon reports it cannot verify the process exited after a stop.
-# The run stays reserved; a person may now report it gone.
-EXIT_UNCONFIRMED_STATE_KEY = "_relay_exit_unconfirmed_at"
 
 
-TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 
 
 def daemon_command_queue_limit() -> int:
@@ -149,10 +138,6 @@ def node_registration_changed(
     } != {key: value for key, value in node.items() if key not in _NODE_LIVENESS_FIELDS}
 
 
-# What a draining daemon's `lastPollAt` becomes: a poll so old it can never
-# count as fresh. Distinct from "never polled", which gets the benefit of the
-# doubt, because the daemon told us it will not take work again.
-NODE_POLL_DRAINED_AT = "1970-01-01T00:00:00.000Z"
 
 
 def preserve_node_poll(
@@ -198,23 +183,8 @@ def preserve_node_retirement(
     }
 
 
-def infer_node_location(node: dict[str, Any]) -> str | None:
-    """Infer location only from explicit or managed control-plane state."""
-    explicit = node.get("nodeLocation")
-    if explicit:
-        return str(explicit)
-    if node.get("managedNodeId"):
-        return "managed"
-    return None
 
 
-def assigned_node_location(node: dict[str, Any]) -> str:
-    """Classify a node during an authorized control-plane assignment."""
-    if node.get("nodeLocation"):
-        return str(node["nodeLocation"])
-    if node.get("managedNodeId"):
-        return "managed"
-    return "user-device"
 
 
 NodeSettingValue = str | None | list[str] | dict[str, str]

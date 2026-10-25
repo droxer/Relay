@@ -9,7 +9,7 @@ import pytest
 from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.events import relay_task_event
 from relay.persistence.task.store import DatabaseTaskStore
-from relay.persistence.task.rules import TaskExecutionActiveError
+from relay.tasks.claims import TaskExecutionActiveError
 from sqlalchemy import event, text
 
 from automation_helpers import fire_now

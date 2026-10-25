@@ -26,13 +26,12 @@ from .rules import (
     _managed_runtime_identity_map,
     _node_for_event,
     _node_for_storage,
-    assigned_node_location,
     node_setting_update,
-    NODE_POLL_DRAINED_AT,
     _poll_observation,
     preserve_node_poll,
     preserve_node_retirement,
 )
+from ...core.daemon_records import assigned_node_location, NODE_POLL_DRAINED_AT
 from .rows import (
     _node_agent_identity,
     apply_node_agents,

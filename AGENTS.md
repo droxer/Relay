@@ -254,9 +254,9 @@ migration.
     `listeners.py`, `resource_lock.py`, and the store Protocols in
     `protocols.py`. Only code that reads or writes storage belongs here: a
     pure rule a store applies lives in its domain package as a layering-test
-    policy module (`tasks/flow.py`, `tasks/execution.py`, `skills/rules.py`)
-    or in `core/` (`validation.py`, `token_usage.py`,
-    `workspace_artifacts.py`), and operator tooling — backups, the storage
+    policy module (`tasks/flow.py`, `tasks/claims.py`, `tasks/execution.py`,
+    `skills/rules.py`) or in `core/` (`daemon_records.py`, `validation.py`,
+    `token_usage.py`, `workspace_artifacts.py`), and operator tooling — backups, the storage
     report, blob and handle backfills — lives in `backend/relay/ops/`, which
     only the CLI and migrations import. Reducers live with their aggregate
     (`session/reducer.py`, `task/reducer.py`). The three largest database

@@ -34,13 +34,8 @@ from ..engine import store_transaction
 from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
 from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
-from .rules import (
-    TaskExecutionActiveError,
-    _HYDRATE_TASK_WRITES,
-    _TaskWriteConflict,
-    apply_task_events,
-    dispatch_claim_active,
-)
+from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
+from ...tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from .events import (
     task_creation_events,
     task_update_events,

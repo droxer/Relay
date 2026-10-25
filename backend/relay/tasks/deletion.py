@@ -6,7 +6,7 @@ from typing import Any, Literal, Protocol, TypedDict
 from ..chat.integrations import DatabaseChatIntegrationStore
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.resource_lock import resource_transaction
-from ..persistence.task.rules import TaskExecutionActiveError, dispatch_claim_active
+from .claims import TaskExecutionActiveError, dispatch_claim_active
 from ..sessions.controller import SessionController
 from ..sessions.errors import SessionRunInFlightError
 from ..security.actor import Actor
