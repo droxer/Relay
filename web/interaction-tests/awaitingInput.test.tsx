@@ -154,12 +154,32 @@ it("sends keep-going as an ordinary reply that resumes the work", async () => {
   expect(onSend).toHaveBeenLastCalledWith(undefined, undefined, { literal: true });
 });
 
-it("shows what else held the work up under the question", () => {
+it("folds what else held the work up behind one line under the question", () => {
   setup(vi.fn(async () => true), ["Staging", "Production"], {
     kind: "question", text: "Which environment?", options: ["Staging", "Production"],
     notes: ["A required step failed to run."],
   });
-  expect(screen.getByRole("group", { name: "awaiting.notes_title" }).textContent).toContain("A required step failed to run.");
+  const summary = screen.getByText("awaiting.notes_summary");
+  const details = summary.closest("details");
+  expect(details?.open).toBe(false);
+  expect(details?.textContent).toContain("A required step failed to run.");
+});
+
+it("says what happens once a pick went through, in place of the answers", async () => {
+  setup(vi.fn(async () => true));
+  fireEvent.click(screen.getByRole("button", { name: "Staging" }));
+  await waitFor(() => expect(screen.getByText("awaiting.sent_resume")).toBeTruthy());
+  expect(screen.queryByRole("list", { name: "awaiting.choices" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "awaiting.write_own" })).toBeNull();
+});
+
+it("tells a gate stop's choices apart by what each does to the work", async () => {
+  const onSend = vi.fn(async () => true);
+  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
+  const status = screen.getByRole("button", { name: "awaiting.choice_status" });
+  expect(document.getElementById(status.getAttribute("aria-describedby") ?? "")?.textContent).toBe("awaiting.effect_stays");
+  fireEvent.click(status);
+  await waitFor(() => expect(screen.getByText("awaiting.sent_discuss")).toBeTruthy());
 });
 
 it("points an unreported stop at the agent's last message instead of quoting the gate", () => {
@@ -184,7 +204,7 @@ it("lets the person close a stopped task as done without sending the agent anyth
   fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_mark_done" }));
   await waitFor(() => expect(onMarkDone).toHaveBeenCalledOnce());
   expect(onSend).not.toHaveBeenCalled();
-  expect(screen.getByText("awaiting.hint_check_task_done")).toBeTruthy();
+  await waitFor(() => expect(screen.getByText("awaiting.sent_done")).toBeTruthy());
 });
 
 it("marks the task done by its number key and unlocks the prompt if that fails", async () => {

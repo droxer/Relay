@@ -2392,6 +2392,9 @@
     "save_member": "Save",
     "no_responsibility": "No responsibility set yet."
   },
+  "next_steps": {
+    "title": "Suggested next"
+  },
   "awaiting": {
     "question_title": "{{agent}} needs your answer",
     "check_title": "{{agent}} stopped before finishing",
@@ -2411,9 +2414,16 @@
     "choice_status_reply": "Before going further, tell me what is done, what is left, and anything you need from me.",
     "hint_choices_task": "Pick one to resume {{ref}}, or write your own answer.",
     "write_own": "Write my own",
-    "hint_check_task": "Keep going resumes {{ref}}. Asking for status keeps it waiting on you.",
-    "hint_check_task_done": "Keep going resumes {{ref}}. Asking for status keeps it waiting on you. Mark done closes it as is.",
     "choice_mark_done": "It’s finished. Mark {{ref}} done",
+    "effect_resume": "Resumes {{ref}}",
+    "effect_resume_thread": "Resumes the work",
+    "effect_stays": "Keeps it waiting on you",
+    "effect_close": "Closes {{ref}} as is",
+    "sent_resume": "Sent. {{agent}} picks it up next.",
+    "sent_discuss": "Sent. {{agent}} will answer; the work keeps waiting on you.",
+    "sent_done": "{{ref}} is marked done.",
+    "notes_summary_one": "{{count}} more thing is holding up the work",
+    "notes_summary_other": "{{count}} more things are holding up the work",
     "notes_title": "Also holding up the work:"
   },
   "recovery": {

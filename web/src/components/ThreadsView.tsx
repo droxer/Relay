@@ -24,7 +24,9 @@ import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
+import { NextSteps } from "./NextSteps";
 import { awaitingInput } from "../lib/awaitingInput";
+import { threadNextSteps } from "../lib/nextSteps";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
@@ -314,6 +316,14 @@ export function ThreadsView({
   // answers that question. Naming it lets the backend refuse a reply that a
   // newer question has overtaken instead of resuming the task with it.
   const waitingQuestionId = waiting?.questionId;
+  // A finished turn's suggested follow-ups, while nothing else claims the
+  // thread: no run, no question, no decision, no open permission prompt.
+  const nextSteps = useMemo(
+    () => threadNextSteps(activeSession, {
+      busy: running || waiting !== null || awaitingDecision || openPermissionRequests(activeSession).length > 0,
+    }),
+    [activeSession, running, waiting, awaitingDecision],
+  );
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
   const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
@@ -576,6 +586,11 @@ export function ThreadsView({
                   )}
                   onAnswer={onAnswerPermission}
                 />
+                <NextSteps
+                  key={activeSession?.id}
+                  steps={nextSteps}
+                  onSend={(text) => composerRef.current?.send(text) ?? Promise.resolve(false)}
+                />
                 {awaitingDecision ? (
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}
@@ -634,7 +649,6 @@ export function ThreadsView({
               key={activeSession?.id}
               waiting={waiting}
               agentName={waitingAgentName}
-              agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
               onMarkDone={() => sendDecision("mark_done")}

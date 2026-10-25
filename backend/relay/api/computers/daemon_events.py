@@ -367,6 +367,8 @@ def _run_completed(value: dict[str, Any], envelope: EventFields) -> EventFields:
         # Passed through raw; collaboration policy validates the aggregate
         # verdict before it can affect task state.
         **_if_instance(value, "roundResult", dict),
+        # Passed through raw; the registry bounds it (core/next_steps.py).
+        **_if_instance(value, "nextSteps", list),
         **({"outputTruncated": True} if value.get("outputTruncated") is True else {}),
         **_runtime_session_field(value),
         # Passed through raw; project_setup.normalize_setup_proposal holds it

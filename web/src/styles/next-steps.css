@@ -1,0 +1,71 @@
+/* ============================== next steps ============================== */
+/* What the agent suggests asking next, under its finished turn. Offers, not
+   the agent's words: a quiet caption and outline rows aligned with the turn
+   body, neutral ink at rest, the --action wash and send glyph only on intent —
+   the same grammar as an offered answer in the awaiting-input prompt. Rows,
+   not chips, because a suggestion is a sentence and a chip would cut it. */
+
+.next-steps {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  animation: rise var(--t-slow) var(--ease) both;
+}
+
+.next-steps-title {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.next-steps-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.next-steps-list > li { min-width: 0; max-width: 100%; }
+
+.next-steps-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: 100%;
+  min-height: var(--control-h-sm);
+  padding: var(--sp-1) var(--sp-3);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-2);
+  font: 400 var(--fs-transcript)/var(--leading-snug) var(--font-sans);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.next-steps-label { min-width: 0; overflow-wrap: anywhere; }
+
+.next-steps-send {
+  flex: 0 0 auto;
+  color: var(--action);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.next-steps-item:hover:not(:disabled),
+.next-steps-item:focus-visible,
+.next-steps-item[data-sending] {
+  background: var(--action-soft);
+  color: var(--ink-1);
+}
+
+.next-steps-item:hover:not(:disabled) .next-steps-send,
+.next-steps-item:focus-visible .next-steps-send,
+.next-steps-item[data-sending] .next-steps-send { opacity: 1; }
+
+.next-steps-item:disabled { cursor: default; }
+.next-steps-item:disabled:not([data-sending]) { color: var(--ink-4); }

@@ -330,6 +330,16 @@ describe("prompts", () => {
     assert.match(inProject, /The owner decides whether to adopt them/);
     assert.doesNotMatch(outside, /contextSuggestions/);
   });
+  it("asks for suggested next steps only when a file will be read back, and keeps them private", () => {
+    const asked = claudeTaskPrompt(state({ task_goal: "Ship it", next_steps_file: ".relay/next-steps.json" }));
+    const plain = claudeTaskPrompt(state({ task_goal: "Ship it" }));
+
+    assert.match(asked, /\[Next steps\]/);
+    assert.match(asked, /write `\.relay\/next-steps\.json` as JSON: \{"nextSteps"/);
+    assert.match(asked, /1–3 follow-up requests/);
+    assert.match(asked, /never mention it in your reply/);
+    assert.doesNotMatch(plain, /\[Next steps\]/);
+  });
   it("omits the project section outside a project", () => {
     const prompt = codexTaskPrompt(state({ task_goal: "Fix the build" }));
 

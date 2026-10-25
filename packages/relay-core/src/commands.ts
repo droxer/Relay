@@ -150,6 +150,9 @@ function claudeRelayPathArgv(state: AgentState, workspace: string): string[] {
     ...(state.round_result_file
       ? [`Edit(${claudeAbsoluteRulePath(`${workspace.replace(/[\\/]+$/, "")}/${state.round_result_file}`)})`]
       : []),
+    ...(state.next_steps_file
+      ? [`Edit(${claudeAbsoluteRulePath(`${workspace.replace(/[\\/]+$/, "")}/${state.next_steps_file}`)})`]
+      : []),
   ];
   // `--allowedTools` is variadic; the `--add-dir` after it ends its values.
   return rules.length ? ["--allowedTools", ...rules] : [];

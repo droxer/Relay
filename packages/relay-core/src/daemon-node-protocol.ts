@@ -577,6 +577,8 @@ export type DaemonNodeEvent =
       roundResult?: DaemonRoundResult;
       /** Set instead of `roundResult` when the run left a verdict file the daemon refused. */
       roundResultRejected?: DaemonRoundResultRejection;
+      /** Follow-up requests the run suggested for its person (`next-steps.ts`); bounded, untrusted. */
+      nextSteps?: string[];
       /** A setup round's proposal as the agent wrote it; the backend validates it. */
       projectSetup?: Record<string, unknown>;
       /** The backend rejected at least one output batch; the streamed log has gaps. */

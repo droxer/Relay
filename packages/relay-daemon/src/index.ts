@@ -44,6 +44,7 @@ import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js
 import { consumeRoundResult, readRoundResult } from "./round-result.js";
 import { syncProjectContext } from "./project-context.js";
 import { consumeProjectSetup } from "./project-setup.js";
+import { consumeNextSteps } from "./next-steps.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
@@ -1658,6 +1659,7 @@ async function executeCommand(
     } catch (error) {
       execution.forgetAgentReady?.(command.agent);
       consumeRoundResult(threadWorkspace.hostPath);
+      consumeNextSteps(threadWorkspace.hostPath);
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
     } finally {
@@ -1680,6 +1682,8 @@ async function executeCommand(
       });
     }
     const projectSetup = consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
+    // Only a clean finish offers its person a next step.
+    const nextSteps = consumeNextSteps(threadWorkspace.hostPath);
     if (signal?.aborted) {
       logger.info("run cancelled", {
         ...commandLogFields(sandboxId, command),
@@ -1728,6 +1732,7 @@ async function executeCommand(
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
       ...(roundOutcome.kind === "rejected" ? { roundResultRejected: { reason: roundOutcome.reason } } : {}),
+      ...(nextSteps.length > 0 && next.last_exit_code === 0 ? { nextSteps } : {}),
       ...(outputBatchesRejected > 0 || outputDeliveryDeferred ? { outputTruncated: true } : {}),
       ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       ...(projectSetup && state.project_setup ? { projectSetup } : {}),
