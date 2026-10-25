@@ -1,26 +1,57 @@
 /* Tags — the one tag mark (TagBadge in TaskTags.tsx), the lists of them on
    rows, cards and the record, and the drawer's token field (TaskTagsField).
 
-   A tag badge is an OUTLINE, not a tint: tinted badges are status (done,
-   blocked, needs project), and a tag is a label that means nothing to Relay.
-   It carries no colour: hue on a row is spent on status alone. */
+   A tag badge is "#name" on the neutral chip fill. Status badges are a toned
+   word on a toned fill (done, blocked, needs project); a tag is a label that
+   means nothing to Relay, so its name stays ink and its colour lives only in
+   the leading "#" (--tag-1…8, see palette.css) — enough to scan a list by
+   tag, never enough to read as a status. */
+
+/* ── The mark: tone → colour, the one place the tag palette is read ─── */
+
+/* A "#" in the mono face, so every tag's glyph is one width and the names
+   line up in the filter menu. Drawn as generated content so the tag's text —
+   what is selected, copied, and read aloud — stays its name alone. */
+.tag-mark {
+  flex: none;
+  color: var(--tag-tone, var(--ink-4));
+  font-family: var(--font-mono);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tag-mark::before {
+  content: "#";
+}
+
+.tag-mark[data-tone="1"] { --tag-tone: var(--tag-1); }
+.tag-mark[data-tone="2"] { --tag-tone: var(--tag-2); }
+.tag-mark[data-tone="3"] { --tag-tone: var(--tag-3); }
+.tag-mark[data-tone="4"] { --tag-tone: var(--tag-4); }
+.tag-mark[data-tone="5"] { --tag-tone: var(--tag-5); }
+.tag-mark[data-tone="6"] { --tag-tone: var(--tag-6); }
+.tag-mark[data-tone="7"] { --tag-tone: var(--tag-7); }
+.tag-mark[data-tone="8"] { --tag-tone: var(--tag-8); }
 
 /* ── The badge ──────────────────────────────────────────────────────── */
 
 /* 20px tall, on the micro radius the palette reserves for tags (--r-1), so a
-   row of tags beside a status badge (--r-2, tinted) reads as a different
-   kind of thing at a glance. */
+   row of tags beside a status badge (24px, --r-2, toned) reads as a
+   different kind of thing at a glance. The fill is --control-fill, the one
+   neutral chip plane: an ink tint, so it lifts on rows, tiles, the record,
+   and the --surface-3 menus alike. The "#" sits tight against the name, as
+   it would in text. */
 .tag-badge {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--sp-1-5);
+  gap: var(--sp-0-5);
   height: var(--avatar-xs);
   max-width: 18ch;
-  padding: 0 var(--sp-1-5);
-  border: 1px solid var(--line-1);
+  padding: 0 var(--sp-1-5) 0 var(--sp-1);
+  border: 0;
   border-radius: var(--r-1);
-  background: transparent;
+  background: var(--control-fill);
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -33,8 +64,9 @@
   text-overflow: ellipsis;
 }
 
-/* "+N" — the same box with no dot; its tooltip names the hidden tags. */
+/* "+N" — the same box with no mark; its tooltip names the hidden tags. */
 .tag-badge--more {
+  padding-inline: var(--sp-1-5);
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
   cursor: default;
@@ -132,10 +164,6 @@
   opacity: var(--opacity-disabled);
 }
 
-.tag-field .tag-badge {
-  background: var(--surface-1);
-}
-
 .tag-field-input {
   flex: 1 1 10ch;
   min-width: 10ch;
@@ -194,8 +222,10 @@
   transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
 }
 
+/* On the chip's ink-tint fill, the next ink-tint step: a fixed surface
+   step would vanish on the light theme's white --surface-3. */
 .tag-badge-remove:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--control-fill-hover);
   color: var(--ink-1);
 }
 
@@ -205,6 +235,12 @@
 }
 
 @media (forced-colors: active) {
+  /* Chips lose their fill under forced colours; an outline keeps each one
+     a shape. The "#" keeps the system text colour, and still reads. */
+  .tag-badge {
+    border: 1px solid CanvasText;
+  }
+
   .tag-field:focus-within {
     outline: 2px solid Highlight;
   }

@@ -203,6 +203,24 @@
   --code-declaration: #8fb8de;  /* function/class titles, sections */
   --code-attribute: #7fc8d1;    /* attributes, properties, tags, variables */
 
+  /* Tag tones — the second place hue carries identity rather than meaning.
+     A Tag (CONTEXT.md) is filed under one of eight tones, picked by hashing
+     its name (`tagTone` in lib/taskTags.ts), so the same tag wears the same
+     colour on every surface. A tone is only ever the "#" GLYPH that leads a
+     tag badge: never the chip's fill, never the tag's name, never a border —
+     so a tag can never be mistaken for a status (a toned word on a toned
+     fill), the action, or a live run. Each tone sits off the status hues
+     (ok 148 · warn 89 · err 9 · live 258) and clears 3:1 as a graphic
+     against --surface-3, the brightest dark plane. */
+  --tag-1: #9aa6b8; /* slate — a cool grey; the old steel blue sat on --live */
+  --tag-2: #5fc2b2; /* teal */
+  --tag-3: #a9c47c; /* moss */
+  --tag-4: #d9b56c; /* sand */
+  --tag-5: #df8e6c; /* clay */
+  --tag-6: #e389a8; /* rose */
+  --tag-7: #b5aa9b; /* stone — a warm grey; no purple tone */
+  --tag-8: #74bcdd; /* sky */
+
 
   /* "Two hues" is a claim about MEANING, not pigment, and the distinction
      matters because the codebase has one other source of hue and a reader
@@ -893,6 +911,17 @@ html[data-theme="light"] {
   --code-number: #895e05;
   --code-declaration: #1f4f82;
   --code-attribute: #1b6670;
+
+  /* Light tag tones — the same eight hues deepened until each glyph clears
+     3:1 as a graphic on --surface-2, the darkest light plane. */
+  --tag-1: #556274;
+  --tag-2: #1d7a6b;
+  --tag-3: #557226;
+  --tag-4: #8d6412;
+  --tag-5: #a64b2b;
+  --tag-6: #b13f6b;
+  --tag-7: #6f655a;
+  --tag-8: #26709a;
 
 
   --scrim: rgba(23, 23, 23, 0.24); /* --ink-1's neutral, never a slate */

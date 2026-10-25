@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { filterTasks, type BacklogFilters } from "../src/lib/backlog.js";
 import { filterRoutineTasks, type RoutineFilters } from "../src/lib/routine.js";
-import { MAX_TAGS, addTags, collectTags, matchesTagFilter, normalizeTag, removeTag, tagsEqual } from "../src/lib/taskTags.js";
+import { MAX_TAGS, TAG_TONES, addTags, collectTags, matchesTagFilter, normalizeTag, removeTag, tagTone, tagsEqual } from "../src/lib/taskTags.js";
 import type { RelayTask } from "../src/types.js";
 
 function task(id: string, tags: string[] | undefined, extra: Partial<RelayTask> = {}): RelayTask {
@@ -50,6 +50,14 @@ describe("task tags", () => {
     assert.equal(tagsEqual(["a", "b"], ["a", "b"]), true);
     assert.equal(tagsEqual(["a", "b"], ["b", "a"]), false);
     assert.equal(tagsEqual(undefined, []), true);
+  });
+
+  it("draws one tag in one tone whatever its case, always within the palette", () => {
+    assert.equal(tagTone("Bug"), tagTone("bug"));
+    const tones = ["bug", "api", "infra", "security", "reports", "ci", "docs", "billing", "design", "growth"].map(tagTone);
+    assert.ok(tones.every((tone) => Number.isInteger(tone) && tone >= 1 && tone <= TAG_TONES));
+    // A hash that collapsed everything onto one colour would defeat the toned "#".
+    assert.ok(new Set(tones).size >= 5);
   });
 
   it("collects each tag in use once, alphabetically, keeping the first spelling", () => {
