@@ -122,7 +122,11 @@ needs no roster or placement change.
    pin found the preview ordering a lead after a same-stage member in Pipeline.
 2. Approve steps as toggles on the built-ins ("Approve the plan" in Lead-led,
    "Approve before review" in Build → Review), and fold human acceptance into
-   the same rule.
+   the same rule. Done for Build → Review and Pipeline as one team setting,
+   `humanApproval`, holding the turn that closes the round. Lead-led (whose
+   plan recompiles the steps) and folding `acceptancePolicy: "human"` are not
+   done yet. A round with no task runs straight through: its Wait would have
+   nothing to resume.
 3. Custom per-team templates with an editor: ordered steps, who (role, member,
    or a person), mode, required, and repair target.
 

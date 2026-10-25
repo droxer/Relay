@@ -26,6 +26,7 @@ import { IdentityMark } from "./IdentityMark";
 import { TeamMemberPicker, type TeamMembership } from "./TeamMemberPicker";
 import { agentsForTeamComputer, membersOffComputer, teamComputerId } from "../lib/teamComputer";
 import { TeamMemberCard } from "./TeamMemberCard";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ProfileImage, ProfileImagePicker } from "./ProfileImagePicker";
 import { ActivitiesSkeleton, WorkspaceActivities, WorkspaceError } from "./workspace/WorkspacePrimitives";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -94,6 +95,7 @@ function TeamProfile({
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
   const [style, setStyle] = useState(effectiveStyle(team));
+  const [humanApproval, setHumanApproval] = useState(team.humanApproval === true);
   const [imageSaving, setImageSaving] = useState(false);
   // The one member card open for inline edit; the others lock until it closes.
   const [cardEditingId, setCardEditingId] = useState<string | null>(null);
@@ -115,6 +117,7 @@ function TeamProfile({
   )
     || leadId !== (team.leadAgentId ?? "")
     || style !== effectiveStyle(team)
+    || humanApproval !== (team.humanApproval === true)
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
   const confirmDiscardChanges = useUnsavedChangesGuard(
@@ -164,6 +167,7 @@ function TeamProfile({
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
     setStyle(effectiveStyle(team));
+    setHumanApproval(team.humanApproval === true);
     setMemberConfigs(team.memberConfigs ?? {});
     setAcceptanceCriteria(team.acceptanceCriteria ?? []);
     setValidationError(null);
@@ -242,6 +246,8 @@ function TeamProfile({
           memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
           collaborationStyle: style,
+          // Lead-led holds no approval step, so the setting is not offered there.
+          humanApproval: style !== "lead_led" && humanApproval,
           enabled: team.enabled,
         }),
       });
@@ -369,7 +375,21 @@ function TeamProfile({
                   <CollaborationSlotPreview members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
-                  }))} leadId={leadId} style={style} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
+                  }))} leadId={leadId} style={style} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
+                  <div className="team-work-flags">
+                    <label className="team-work-flag">
+                      <Checkbox
+                        checked={style !== "lead_led" && humanApproval}
+                        disabled={busy || style === "lead_led"}
+                        onCheckedChange={(value) => setHumanApproval(value === true)}
+                        aria-describedby="team-profile-approval-hint"
+                      />
+                      <span>{t("collab_style.approval_label")}</span>
+                    </label>
+                    <p id="team-profile-approval-hint" className="team-work-flag-hint">
+                      {t(style === "lead_led" ? "collab_style.approval_lead_led" : "collab_style.approval_hint")}
+                    </p>
+                  </div>
                 </section>
                 <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
                   <Textarea
@@ -397,7 +417,7 @@ function TeamProfile({
               <CollaborationSlotPreview members={team.members.map((member) => ({
                 id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
                 onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
-              }))} leadId={team.leadAgentId ?? undefined} style={effectiveStyle(team)} nameOf={(id) => team.members.find((m) => m.id === id)?.displayName ?? id} />
+              }))} leadId={team.leadAgentId ?? undefined} style={effectiveStyle(team)} approval={team.humanApproval === true} nameOf={(id) => team.members.find((m) => m.id === id)?.displayName ?? id} />
             </section>}
           </form>
         </div>

@@ -66,7 +66,7 @@ export interface TaskWorkspaceBinding {
 }
 
 /** What a task waiting on its human waits on (`core/human_waits.py`). */
-export type TaskWaitKind = "question" | "check" | "budget";
+export type TaskWaitKind = "question" | "check" | "budget" | "approval";
 
 /** A wait as recorded on its task. Every park since waits carried ids has one;
  *  older waits may hold only the question's words. */
@@ -81,6 +81,8 @@ export interface TaskWaitingRequest {
   inputNotes?: string[];
   /** A check whose agent ended without filing its report. */
   unreported?: boolean;
+  /** An approval's: the agent that takes the step it holds back. */
+  nextAgentId?: string;
 }
 
 /** What a waiting task asks, as every surface renders it. */
@@ -101,6 +103,8 @@ export interface TaskAwaiting {
   /** A check whose agent ended its turn without filing its report: its last
    *  message, not the gate reason, says what it needs. */
   unreported?: boolean;
+  /** An approval's: the agent that takes the step it holds back (ADR-023). */
+  nextAgentId?: string;
 }
 
 export interface RelayTask {

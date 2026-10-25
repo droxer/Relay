@@ -17,6 +17,8 @@ type Choice = {
   /** `discuss` asks without resuming: a status question must not hand the
    *  agent a task round whose verdict could continue or close the task. */
   intent?: "discuss";
+  /** Approves the step an approval wait holds back (ADR-023). */
+  approve?: true;
   /** Acts on the task instead of replying; resolves false when it did not. */
   act?: () => Promise<boolean>;
 };
@@ -25,6 +27,7 @@ const TITLE_KEYS = {
   question: "awaiting.question_title",
   check: "awaiting.check_title",
   budget: "awaiting.budget_title",
+  approval: "awaiting.approval_title",
 } as const satisfies Record<AwaitingInput["kind"], string>;
 
 /** Typing here is someone writing, not picking an answer. */
@@ -47,12 +50,14 @@ const ANNOUNCE_DELAY_MS = 150;
  * else has focus (or focus is on the prompt itself). Typing stays available
  * for anything else.
  */
-export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, onReply, onMarkDone }: {
+export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentImage, onChoose, onReply, onMarkDone }: {
   waiting: AwaitingInput;
   agentName: string;
+  /** An approval's: who takes the held step once it is approved. */
+  nextAgentName?: string;
   agentImage?: string;
   /** Send this answer as the reply. */
-  onChoose: (reply: string, options?: { intent?: "discuss" }) => Promise<boolean>;
+  onChoose: (reply: string, options?: { intent?: "discuss"; approve?: true }) => Promise<boolean>;
   /** Put the caret in the composer. */
   onReply: () => void;
   /** Accept the task as it stands — the person's own mark done. */
@@ -76,13 +81,21 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   // A gate stop and a spent budget both leave the next step to the person;
   // only an agent's question brings its own answers.
   const asked = waiting.kind === "question";
+  // An approval holds the team's next step for the person: approving is one
+  // pick, and anything written asks for changes instead (ADR-023).
+  const approval = waiting.kind === "approval";
   // The person may judge the work finished whatever the agent left unsaid;
   // beside an agent's own answers it would read as one of them, so a
   // question keeps only those.
   const markDone: Choice | null = !asked && ref && onMarkDone
     ? { label: t("awaiting.choice_mark_done", { ref }), reply: "mark_done", act: onMarkDone }
     : null;
-  const choices: Choice[] = !asked
+  const choices: Choice[] = approval
+    ? [
+      { label: t("awaiting.choice_approve"), reply: t("awaiting.choice_approve_reply"), approve: true },
+      ...(markDone ? [markDone] : []),
+    ]
+    : !asked
     ? [
       { label: t("awaiting.choice_continue"), reply: t("awaiting.choice_continue_reply") },
       { label: t("awaiting.choice_status"), reply: t("awaiting.choice_status_reply"), intent: "discuss" },
@@ -96,7 +109,10 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     try {
       const done = choice.act
         ? await choice.act()
-        : await onChoose(choice.reply, choice.intent ? { intent: choice.intent } : undefined);
+        : await onChoose(
+          choice.reply,
+          choice.intent ? { intent: choice.intent } : choice.approve ? { approve: true } : undefined,
+        );
       if (!done) setChosen(null);
     } catch {
       setChosen(null);
@@ -128,7 +144,9 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
   // The hint says only what the controls cannot: which task a reply resumes,
   // or that a bare reply box continues the work. "Pick one or write your
   // own" is already said by the answers and the button beside them.
-  const hint = !asked
+  const hint = approval
+    ? (ref ? t("awaiting.hint_approval_task", { ref, agent: agentName }) : null)
+    : !asked
     ? (ref ? t(markDone ? "awaiting.hint_check_task_done" : "awaiting.hint_check_task", { ref }) : null)
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : null)
@@ -162,7 +180,13 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
           >{ref}</a>
         ) : null}
       </div>
-      {unreported ? (
+      {approval ? (
+        <p className="awaiting-input-quote" data-empty="true">
+          {nextAgentName
+            ? t("awaiting.approval_text", { agent: agentName, next: nextAgentName })
+            : t("awaiting.approval_text_unnamed", { agent: agentName })}
+        </p>
+      ) : unreported ? (
         <p className="awaiting-input-quote" data-empty="true">{t("awaiting.unreported_text", { agent: agentName })}</p>
       ) : waiting.text ? (
         <blockquote className="awaiting-input-quote">{waiting.text}</blockquote>
@@ -194,7 +218,7 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
       <div className="awaiting-input-foot">
         {hint ? <p className="awaiting-input-hint">{hint}</p> : null}
         <Button type="button" variant="ghost" size="dense" disabled={chosen !== null} onClick={onReply}>
-          {t(choices.length ? "awaiting.write_own" : "awaiting.reply")}
+          {t(approval ? "awaiting.request_changes" : choices.length ? "awaiting.write_own" : "awaiting.reply")}
         </Button>
       </div>
     </section>

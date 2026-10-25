@@ -171,8 +171,9 @@ _Avoid_: Label, category
 **Wait**:
 A Task parked at `waiting_for_human` on a person, recorded as its
 `waitingRequest`: a `questionId`, a kind — `question` (the agent asked),
-`check` (a gate stopped the round), or `budget` (continuation rounds ran out) —
-and, for a question, the agent's words and offered answers. It names the
+`check` (a gate stopped the round), `budget` (continuation rounds ran out), or
+`approval` (the Team stopped before its round's final step for its person to
+approve) — and, for a question, the agent's words and offered answers. It names the
 Thread it is answered in. Every surface renders the API's `awaiting`
 projection of it rather than re-deriving one.
 _Avoid_: Block (a blocked Task is stuck on an impediment, not on a person),
@@ -182,7 +183,10 @@ pending decision (a rejected turn's own control)
 A message sent in the Thread a Wait names, carrying that Wait's `questionId`.
 It resumes the Task as its next round only while the Task still waits on that
 question; an Answer to a replaced question is refused (`question_superseded`).
-_Avoid_: Reply (any message), approval
+An Answer to an `approval` Wait approves the held step (`approve: true`) or,
+written, asks for changes; either resumes the same round rather than starting
+a new one.
+_Avoid_: Reply (any message)
 
 **Permission Prompt**:
 A live run paused before a tool call, asking a person to allow or deny it

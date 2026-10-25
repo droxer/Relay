@@ -61,7 +61,7 @@ export function resolveThreadMessageAddress({ text, candidates, defaultAgentId, 
 }
 
 /** Stable retry identity for one semantic continued-thread request. */
-export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style, questionId = null }: {
+export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style, questionId = null, approve = false }: {
   sessionId: string;
   text: string;
   intent: ThreadMessageInput["intent"];
@@ -71,6 +71,8 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
   style?: ThreadMessageInput["style"] | null;
   /** The same words answering a newer question are a new answer. */
   questionId?: string | null;
+  /** Approving a wait is a different request from asking for changes. */
+  approve?: boolean;
 }): string {
   return JSON.stringify([
     sessionId,
@@ -79,7 +81,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
     [...new Set(addressAgentIds)].sort(),
     ...(addressTeamId && addressAgentIds.length === 0 ? [addressTeamId] : []),
     ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? [{ style }] : []),
-    ...(questionId && intent === "accomplish" ? [{ questionId }] : []),
+    ...(questionId && intent === "accomplish" ? [{ questionId, ...(approve ? { approve } : {}) }] : []),
   ]);
 }
 
@@ -88,7 +90,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style, questionId = null }: {
+export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style, questionId = null, approve = false }: {
   text: string;
   /** `discuss` asks without handing out work; styles apply only to work. */
   intent?: ThreadMessageInput["intent"];
@@ -100,13 +102,15 @@ export function threadMessageInput({ text, intent = "accomplish", addressAgentId
   style?: ThreadMessageInput["style"] | null;
   /** The wait this message answers; an answer always resumes work. */
   questionId?: string | null;
+  /** With `questionId` naming an approval wait: approve its held step. */
+  approve?: boolean;
 }): ThreadMessageInput {
   return {
     text,
     intent,
     userMessageId,
     idempotencyKey: userMessageId,
-    ...(questionId && intent === "accomplish" ? { questionId } : {}),
+    ...(questionId && intent === "accomplish" ? { questionId, ...(approve ? { approve: true } : {}) } : {}),
     ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? { style } : {}),
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }

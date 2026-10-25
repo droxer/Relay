@@ -37,6 +37,16 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
   return { style, slots: [{ slot: "builder", memberId: builder.id }, { slot: "reviewer", memberId: reviewer.id }] };
 }
 
+/**
+ * Where the team's person approves the work, as a slot index: before the step
+ * that closes the round. Mirrors `_styled_assignments` in
+ * backend/relay/teams/dispatch.py — Lead-led and a one-step round hold nothing.
+ */
+export function approvalSlotIndex(preview: ReturnType<typeof previewSlots>, approval: boolean | undefined): number | null {
+  if (!approval || preview.style === "lead_led" || preview.slots.length < 2) return null;
+  return preview.slots.length - 1;
+}
+
 export function styleForRun(run: Pick<AgentRun, "assignmentId" | "teamSnapshot">, rounds: CollaborationRoundManifest[] = []): CollaborationStyle | undefined {
   if (run.teamSnapshot?.collaborationStyle) return run.teamSnapshot.collaborationStyle;
   const round = rounds.find((r) => r.assignments.some((a) => a.assignmentId === run.assignmentId));

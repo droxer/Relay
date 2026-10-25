@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import type { CollaborationStyle } from "relay-core";
-import { previewSlots, type SlotMember } from "../src/lib/collaborationStyle.js";
+import { approvalSlotIndex, previewSlots, type SlotMember } from "../src/lib/collaborationStyle.js";
 
 // Written by backend/tests/unit/test_collaboration_templates.py from what team
 // dispatch really fills, so the preview cannot drift from the backend alone.
@@ -32,5 +32,15 @@ describe("collaboration style preview", () => {
         `${item.style} lead=${item.leadId} ${JSON.stringify(item.members)}`,
       );
     }
+  });
+
+  it("holds the final step for approval, as dispatch does", () => {
+    const pair: SlotMember[] = [{ id: "b", role: "implementer" }, { id: "r", role: "reviewer" }];
+    assert.equal(approvalSlotIndex(previewSlots(pair, "b", "build_review"), true), 1);
+    assert.equal(approvalSlotIndex(previewSlots(pair, "b", "pipeline"), true), 1);
+    assert.equal(approvalSlotIndex(previewSlots(pair, "b", "build_review"), false), null);
+    // Lead-led and a one-step round hold nothing.
+    assert.equal(approvalSlotIndex(previewSlots(pair, "b", "lead_led"), true), null);
+    assert.equal(approvalSlotIndex(previewSlots([pair[0]], "b", "build_review"), true), null);
   });
 });

@@ -205,3 +205,17 @@ it("offers no mark done for a thread with no task", () => {
   setup(vi.fn(async () => true), [], { ...unreportedCheck, task: undefined }, vi.fn(async () => true));
   expect(screen.queryByRole("button", { name: "awaiting.choice_mark_done" })).toBeNull();
 });
+
+it("approves an approval wait in one pick and asks for changes by writing", async () => {
+  const onSend = vi.fn(async () => true);
+  const { onReply } = setup(onSend, [], { kind: "approval", text: null, options: [], notes: [], nextAgentId: "agt_r" });
+  expect(screen.getByRole("heading", { name: "awaiting.approval_title" })).toBeTruthy();
+  // Approval offers no status question: what it waits on is the person's call.
+  expect(screen.queryByRole("button", { name: /awaiting.choice_status/ })).toBeNull();
+  // Asking for changes is writing them: it opens the reply box.
+  fireEvent.click(screen.getByRole("button", { name: "awaiting.request_changes" }));
+  expect(onReply).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: /awaiting.choice_approve$/ }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  expect(onSend).toHaveBeenLastCalledWith(undefined, undefined, { literal: true, approve: true });
+});

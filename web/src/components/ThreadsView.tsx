@@ -628,12 +628,13 @@ export function ThreadsView({
           running={running}
           onSend={sendAnswering}
           onCancelRun={onCancelRun}
-          placeholder={waiting ? t("awaiting.placeholder", { agent: waitingAgentName }) : undefined}
+          placeholder={waiting ? t(waiting.kind === "approval" ? "awaiting.placeholder_changes" : "awaiting.placeholder", { agent: waitingAgentName }) : undefined}
           prompt={waiting ? (
             <AwaitingInputPrompt
               key={activeSession?.id}
               waiting={waiting}
               agentName={waitingAgentName}
+              nextAgentName={waiting.nextAgentId ? logicalAgentNames[waiting.nextAgentId] : undefined}
               agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}

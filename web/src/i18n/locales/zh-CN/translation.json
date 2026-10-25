@@ -31,7 +31,13 @@
     "team_default_short": "团队默认",
     "inherit_hint": "沿用团队的设置。",
     "slot_lead_summary": "汇总",
-    "loop_until_approved": "由 {{builder}} 修改工作，直至 {{reviewer}} 批准。"
+    "loop_until_approved": "由 {{builder}} 修改工作，直至 {{reviewer}} 批准。",
+    "slot_approval": "审批",
+    "slot_approval_name": "你",
+    "approval_label": "最后一步前请我批准",
+    "approval_hint": "处理任务时，团队会在最后一步前暂停，直到你批准。要求修改会先把工作退回。",
+    "approval_lead_led": "负责人主导的轮次暂不支持审批暂停。选择“构建 → 评审”或“流水线”即可使用。",
+    "approval_loop": "你批准后，{{next}} 才进行最后一步。要求修改会把工作退回。"
   },
   "app": {
     "title": "Relay"
@@ -2360,7 +2366,15 @@
     "hint_check_task": "选择继续会恢复 {{ref}}；询问进展时它仍等待你的回复。",
     "hint_check_task_done": "选择继续会恢复 {{ref}}；询问进展时它仍等待你的回复；标记完成会按当前结果关闭它。",
     "choice_mark_done": "已完成，将 {{ref}} 标记为完成",
-    "notes_title": "同时阻碍这项工作的问题："
+    "notes_title": "同时阻碍这项工作的问题：",
+    "approval_title": "{{agent}} 已完成，批准后继续",
+    "approval_text": "你批准后，{{next}} 进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
+    "approval_text_unnamed": "你批准后，团队进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
+    "choice_approve": "批准并继续",
+    "choice_approve_reply": "已批准，继续下一步。",
+    "hint_approval_task": "批准后将恢复 {{ref}}。",
+    "request_changes": "要求修改",
+    "placeholder_changes": "需要 {{agent}} 修改什么？"
   },
   "recovery": {
     "title": "后续操作",

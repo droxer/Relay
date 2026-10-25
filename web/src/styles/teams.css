@@ -627,3 +627,13 @@
   letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
 }
+
+/* What a flag does, on its own line under it — the quieter supporting ink,
+   like .collab-style-loop under the step preview. */
+.team-work-flag-hint {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}

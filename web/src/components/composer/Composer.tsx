@@ -39,12 +39,16 @@ export type ComposerSendOptions = {
   /** `discuss` asks without handing the agent work: nothing it reports can
    *  move a task. Default is the composer's own `accomplish`. */
   intent?: ThreadMessageInput["intent"];
+  /** Approves the step an approval wait holds back, rather than asking for
+   *  changes (ADR-023). Only an approval wait's own pick sets it. */
+  approve?: boolean;
 };
 
 /** How dispatch should read the box. `literal`: the text is a picked answer,
  *  sent as written — a leading "@" is the agent's wording, not an address.
- *  `questionId`: the wait this message answers (see `AwaitingInput`). */
-export type ComposerDispatchOptions = { literal?: boolean; questionId?: string };
+ *  `questionId`: the wait this message answers (see `AwaitingInput`).
+ *  `approve`: the answer approves that wait's held step. */
+export type ComposerDispatchOptions = { literal?: boolean; questionId?: string; approve?: boolean };
 
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every
@@ -164,7 +168,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     || !composerText.trim()
     || (initializingThread && !projectName && !runtimeNodeId);
   const cannotSend = cannotSendAsWritten || parsed.blocked;
-  const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false): Promise<boolean> => {
+  const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false): Promise<boolean> => {
     if (running || sendPending) return false;
     // The send button is disabled on a mention that resolves to nobody, and on
     // a staged thread with no computer, but the keyboard shortcut bypasses the
@@ -180,7 +184,7 @@ const ComposerView = forwardRef<ComposerHandle, {
         ? style ?? undefined
         : undefined;
       const sent = await (literal
-        ? onSend(teamStyle, intent, { literal: true })
+        ? onSend(teamStyle, intent, { literal: true, ...(approve ? { approve: true } : {}) })
         : intent ? onSend(teamStyle, intent) : onSend(teamStyle));
       if (sent === false) return false;
       setStyle(null);
@@ -207,7 +211,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
-  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; resolve: (sent: boolean) => void } | null>(null);
+  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; approve?: boolean; resolve: (sent: boolean) => void } | null>(null);
   // A pick's `literal` read reaches the send through the queue, never the box.
   const triggerSendRef = useRef(triggerSend);
   // Declared first so the queued send below sees this render's closure.
@@ -216,7 +220,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     const queued = queuedSendRef.current;
     if (!queued || queued.text !== composerText) return;
     queuedSendRef.current = null;
-    void triggerSendRef.current(queued.intent, true).then(queued.resolve);
+    void triggerSendRef.current(queued.intent, true, queued.approve === true).then(queued.resolve);
   }, [composerText]);
   useEffect(() => () => {
     queuedSendRef.current?.resolve(false);
@@ -231,6 +235,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       queuedSendRef.current?.resolve(false);
       queuedSendRef.current = null;
       const intent = options?.intent;
+      const approve = options?.approve === true;
       // Whatever the person had started typing is theirs: it goes back in the
       // box once the picked answer has gone. A pick that failed leaves the box
       // exactly as it was, empty included — the answer was never a draft, and
@@ -238,9 +243,9 @@ const ComposerView = forwardRef<ComposerHandle, {
       const previous = composerText;
       const draft = composerText.trim() && composerText !== text ? composerText : null;
       const sent = text === composerText
-        ? triggerSendRef.current(intent, true)
+        ? triggerSendRef.current(intent, true, approve)
         : new Promise<boolean>((resolve) => {
-          queuedSendRef.current = { text, intent, resolve };
+          queuedSendRef.current = { text, intent, approve, resolve };
           setComposerText(text);
         });
       return sent.then((ok) => {
