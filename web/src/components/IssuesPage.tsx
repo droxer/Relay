@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { useCallback, memo, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
@@ -73,6 +73,7 @@ import {
 import { IssueQueueNav } from "./issues/IssueQueueNav";
 import { IssuesTable, type IssueRowContext } from "./issues/IssuesTable";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskListItem } from "../types";
+import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 type Lanes = Record<TaskWorkflowStage, Page<RelayTaskListItem>>;
 
@@ -143,6 +144,14 @@ function IssuesPageView({
   const [projectFilter, setProjectFilter] = useUrlSearchState<string | null>("project", null,
     (value) => value || null, (value) => value);
   const { page, setPage } = usePagination();
+  /* A tag on a row, tile, or the record filters this list by that tag
+     (TagFilterContext): from the record it also closes the record. */
+  const applyTagFilter = useCallback((tag: string) => {
+    setFilters((current) => ({ ...current, tag }));
+    setPage(1);
+  }, [setFilters, setPage]);
+  const closeRecord = useCallback(() => onOpenRecord(null), [onOpenRecord]);
+  const tagFilters = useTagFilters(filters.tag, applyTagFilter, closeRecord);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
   const [view, setView] = useState<BacklogView>("list");
   // Deterministic first render; the stored preference is browser-only.
@@ -318,184 +327,188 @@ function IssuesPageView({
   const creatable = queue === "open" || queue === "untriaged";
 
   return (
-    <section id="backlog-panel" className="backlog-page issues-page sec-shell" data-view={view} aria-label={t("issues.title")} tabIndex={-1}>
-      <div className="sec-rail">
-        <PageHeader title={t("issues.title")} titleAs="h2"
-          count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
-        <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
-      </div>
-      <div className="sec-main">
-        <PageHeader
-          title={t(`issues.queues.${queue}`)}
-          titleAs="h2"
-          titleVariant="title"
-          topbarActions
-          actions={(
-            <TaskBoardHeaderActions
-              leading={<BacklogViewToggle view={view} onChange={changeView} />}
-              refreshLabel={t("nav.refresh")}
-              createLabel={t("issues.new_issue")}
-              isRefreshing={isRefreshing}
-              onRefresh={onRefresh ? () => void onRefresh() : undefined}
-              onCreate={openCreate}
+    <TagFilterContext value={tagFilters.list}>
+      <section id="backlog-panel" className="backlog-page issues-page sec-shell" data-view={view} aria-label={t("issues.title")} tabIndex={-1}>
+        <div className="sec-rail">
+          <PageHeader title={t("issues.title")} titleAs="h2"
+            count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
+          <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
+        </div>
+        <div className="sec-main">
+          <PageHeader
+            title={t(`issues.queues.${queue}`)}
+            titleAs="h2"
+            titleVariant="title"
+            topbarActions
+            actions={(
+              <TaskBoardHeaderActions
+                leading={<BacklogViewToggle view={view} onChange={changeView} />}
+                refreshLabel={t("nav.refresh")}
+                createLabel={t("issues.new_issue")}
+                isRefreshing={isRefreshing}
+                onRefresh={onRefresh ? () => void onRefresh() : undefined}
+                onCreate={openCreate}
+              />
+            )}
+          />
+          {projectNotice}
+          <BacklogFiltersBar
+            filters={filters}
+            extraField={projectField}
+            agents={logicalAgents}
+            teams={teams}
+            tags={tagOptions}
+            onChange={(next) => { setFilters(next); setPage(1); }}
+            sortMenu={(
+              <>
+                {board ? null : <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
+                  <SelectTrigger className="issues-group-by" aria-label={t("issues.group_by")}>
+                    <SelectValue>{(value: IssueGroupBy) => t("issues.group_by_value", { value: t(`issues.groupings.${value}`) })}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ISSUE_GROUPINGS.map((value) => (
+                      <SelectItem key={value} value={value}>{t(`issues.groupings.${value}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>}
+                <SortMenu
+                  options={[
+                    { key: "title", label: t("issues.col_issue") },
+                    /* On the board the lanes already are the status order. */
+                    ...(board ? [] : [{ key: "status" as const, label: t("backlog.status") }]),
+                    { key: "project", label: t("issues.col_project") },
+                    { key: "priority", label: t("backlog.priority") },
+                    { key: "assignee", label: t("backlog.assignee") },
+                    { key: "due", label: t("backlog.due") },
+                    { key: "updated", label: t("issues.col_updated"), defaultDirection: "desc" },
+                  ]}
+                  sort={sort}
+                  onSortChange={setSort}
+                  label={t("backlog.sort_label")}
+                />
+              </>
+            )}
+          />
+
+          {visible.length === 0 ? (
+            <BoardEmpty
+              title={filtered ? t("backlog.no_match_title") : t(`issues.empty.${queue}`)}
+              body={filtered ? t("backlog.no_match_body") : t("issues.empty_body")}
+              createLabel={filtered || !creatable ? undefined : t("issues.new_issue")}
+              onCreate={filtered || !creatable ? undefined : openCreate}
+              clearLabel={filtered ? t("backlog.clear_filters") : undefined}
+              onClear={filtered ? () => { setFilters(initialFilters); setProjectFilter(null); } : undefined}
             />
+          ) : board ? (
+            <BacklogBoard
+              lanes={pagedLanes}
+              laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, laneTasks[status].length])) as Record<TaskWorkflowStage, number>}
+              cardProps={(task) => {
+                const context = rowContext(task);
+                return {
+                  task,
+                  projectName: context.projectName,
+                  selected: visibleSelection.has(task.id),
+                  onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
+                  agentDisplayName: context.agentDisplayName,
+                  agentImageUrl: context.agentImageUrl,
+                  ready: context.ready,
+                  onOpen: () => onOpenRecord(task.id),
+                };
+              }}
+              onMoveTask={moveTaskToLane}
+              onCreateInLane={creatable
+                ? (status) => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined, status })
+                : undefined}
+              onLanePageChange={setLanePage}
+            />
+          ) : (
+            <div className="backlog-rows issues-rows" data-density="compact">
+              <IssuesTable
+                groups={groups}
+                groupBy={groupBy}
+                groupTotals={groupTotals}
+                sort={sort}
+                onSort={toggleSort}
+                selectAll={(
+                  <TaskSelectAllCheckbox
+                    state={selectionCheckState(visibleSelection, visibleIds)}
+                    label={t("issues.select_all")}
+                    onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                  />
+                )}
+                selectedIds={visibleSelection}
+                onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+                contextFor={rowContext}
+                onOpenIssue={onOpenRecord}
+                edits={phone ? null : inlineEdits}
+                roster={{ agents: logicalAgents, teams }}
+              />
+              <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
+            </div>
           )}
-        />
-        {projectNotice}
-        <BacklogFiltersBar
-          filters={filters}
-          extraField={projectField}
-          agents={logicalAgents}
-          teams={teams}
-          tags={tagOptions}
-          onChange={(next) => { setFilters(next); setPage(1); }}
-          sortMenu={(
-            <>
-              {board ? null : <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
-                <SelectTrigger className="issues-group-by" aria-label={t("issues.group_by")}>
-                  <SelectValue>{(value: IssueGroupBy) => t("issues.group_by_value", { value: t(`issues.groupings.${value}`) })}</SelectValue>
+
+          <TaskSelectionBar
+            count={visibleSelection.size}
+            deleting={batchBusy}
+            deleteLabel={t("backlog.delete_selected")}
+            onDelete={() => { void deleteSelected(); }}
+            onClear={() => setSelection(EMPTY_TASK_SELECTION)}
+            actions={movable.length ? (
+              <Select value="" onValueChange={(value) => { if (value) void moveSelected(value); }}>
+                <SelectTrigger className="issues-move" aria-label={t("issues.move_to_project")} disabled={batchBusy || !openProjects.length}>
+                  <SelectValue>{() => t("issues.move_count", { count: movable.length })}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {ISSUE_GROUPINGS.map((value) => (
-                    <SelectItem key={value} value={value}>{t(`issues.groupings.${value}`)}</SelectItem>
-                  ))}
+                  {openProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
                 </SelectContent>
-              </Select>}
-              <SortMenu
-                options={[
-                  { key: "title", label: t("issues.col_issue") },
-                  /* On the board the lanes already are the status order. */
-                  ...(board ? [] : [{ key: "status" as const, label: t("backlog.status") }]),
-                  { key: "project", label: t("issues.col_project") },
-                  { key: "priority", label: t("backlog.priority") },
-                  { key: "assignee", label: t("backlog.assignee") },
-                  { key: "due", label: t("backlog.due") },
-                  { key: "updated", label: t("issues.col_updated"), defaultDirection: "desc" },
-                ]}
-                sort={sort}
-                onSortChange={setSort}
-                label={t("backlog.sort_label")}
-              />
-            </>
-          )}
-        />
+              </Select>
+            ) : null}
+          />
+        </div>
 
-        {visible.length === 0 ? (
-          <BoardEmpty
-            title={filtered ? t("backlog.no_match_title") : t(`issues.empty.${queue}`)}
-            body={filtered ? t("backlog.no_match_body") : t("issues.empty_body")}
-            createLabel={filtered || !creatable ? undefined : t("issues.new_issue")}
-            onCreate={filtered || !creatable ? undefined : openCreate}
-            clearLabel={filtered ? t("backlog.clear_filters") : undefined}
-            onClear={filtered ? () => { setFilters(initialFilters); setProjectFilter(null); } : undefined}
-          />
-        ) : board ? (
-          <BacklogBoard
-            lanes={pagedLanes}
-            laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, laneTasks[status].length])) as Record<TaskWorkflowStage, number>}
-            cardProps={(task) => {
-              const context = rowContext(task);
-              return {
-                task,
-                projectName: context.projectName,
-                selected: visibleSelection.has(task.id),
-                onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
-                agentDisplayName: context.agentDisplayName,
-                agentImageUrl: context.agentImageUrl,
-                ready: context.ready,
-                onOpen: () => onOpenRecord(task.id),
-              };
-            }}
-            onMoveTask={moveTaskToLane}
-            onCreateInLane={creatable
-              ? (status) => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined, status })
-              : undefined}
-            onLanePageChange={setLanePage}
-          />
-        ) : (
-          <div className="backlog-rows issues-rows" data-density="compact">
-            <IssuesTable
-              groups={groups}
-              groupBy={groupBy}
-              groupTotals={groupTotals}
-              sort={sort}
-              onSort={toggleSort}
-              selectAll={(
-                <TaskSelectAllCheckbox
-                  state={selectionCheckState(visibleSelection, visibleIds)}
-                  label={t("issues.select_all")}
-                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                />
-              )}
-              selectedIds={visibleSelection}
-              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-              contextFor={rowContext}
-              onOpenIssue={onOpenRecord}
-              edits={phone ? null : inlineEdits}
-              roster={{ agents: logicalAgents, teams }}
+        {drawerRecordId ? (
+          <TagFilterContext value={tagFilters.record}>
+            <TaskRecordView
+              taskId={drawerRecordId}
+              currentUser={currentUser}
+              tasks={tasks}
+              drawer={{ open: Boolean(recordTaskId), onClose: () => onOpenRecord(null), onClosed: recordMirror.release }}
+              onEdit={editTask}
+              onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}
+              onOpenRecord={(nextId) => onOpenRecord(nextId)}
+              onDeleted={() => onOpenRecord(null)}
             />
-            <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
-          </div>
-        )}
+        </TagFilterContext>
+        ) : null}
 
-        <TaskSelectionBar
-          count={visibleSelection.size}
-          deleting={batchBusy}
-          deleteLabel={t("backlog.delete_selected")}
-          onDelete={() => { void deleteSelected(); }}
-          onClear={() => setSelection(EMPTY_TASK_SELECTION)}
-          actions={movable.length ? (
-            <Select value="" onValueChange={(value) => { if (value) void moveSelected(value); }}>
-              <SelectTrigger className="issues-move" aria-label={t("issues.move_to_project")} disabled={batchBusy || !openProjects.length}>
-                <SelectValue>{() => t("issues.move_count", { count: movable.length })}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {openProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          ) : null}
-        />
-      </div>
-
-      {drawerRecordId ? (
-        <TaskRecordView
-          taskId={drawerRecordId}
-          currentUser={currentUser}
-          tasks={tasks}
-          drawer={{ open: Boolean(recordTaskId), onClose: () => onOpenRecord(null), onClosed: recordMirror.release }}
-          onEdit={editTask}
-          onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}
-          onOpenRecord={(nextId) => onOpenRecord(nextId)}
-          onDeleted={() => onOpenRecord(null)}
-        />
-      ) : null}
-
-      {form ? (
-        <TaskDrawer
-          open={drawerOpen}
-          form={form}
-          projectChoice={projectChoice}
-          logicalAgents={logicalAgents}
-          projects={projects}
-          tagSuggestions={tagOptions}
-          onCreateProject={onCreateProject
-            ? () => onCreateProject((id) => setForm((current) => (current ? { ...current, projectId: id } : current)))
-            : undefined}
-          teams={teams}
-          saving={saving}
-          deleting={deleting}
-          initialFocus={assignmentFocus ? "assignment" : "title"}
-          title={form.id ? t("issues.edit_issue") : t("issues.new_issue")}
-          subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
-          onClose={() => { void requestClose(); }}
-          onClosed={release}
-          onChange={(next) => { if (next.variant === "backlog") setForm(next); }}
-          onSubmit={(event) => void submit(event)}
-          onDelete={form.id ? () => { void remove(); } : undefined}
-          layer={drawerRecordId ? 1 : 0}
-        />
-      ) : null}
-    </section>
+        {form ? (
+          <TaskDrawer
+            open={drawerOpen}
+            form={form}
+            projectChoice={projectChoice}
+            logicalAgents={logicalAgents}
+            projects={projects}
+            tagSuggestions={tagOptions}
+            onCreateProject={onCreateProject
+              ? () => onCreateProject((id) => setForm((current) => (current ? { ...current, projectId: id } : current)))
+              : undefined}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            title={form.id ? t("issues.edit_issue") : t("issues.new_issue")}
+            subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
+            onClose={() => { void requestClose(); }}
+            onClosed={release}
+            onChange={(next) => { if (next.variant === "backlog") setForm(next); }}
+            onSubmit={(event) => void submit(event)}
+            onDelete={form.id ? () => { void remove(); } : undefined}
+            layer={drawerRecordId ? 1 : 0}
+          />
+        ) : null}
+      </section>
+    </TagFilterContext>
   );
 }
 

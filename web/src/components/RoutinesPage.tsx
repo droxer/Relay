@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -47,6 +47,7 @@ import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { taskRef } from "../lib/taskRef";
+import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 interface RoutinesPageProps {
   projects?: ProjectRecord[];
@@ -104,6 +105,14 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { page, setPage } = usePagination();
+  /* A tag on a row, tile, or the record filters this list by that tag
+     (TagFilterContext): from the record it also closes the record. */
+  const applyTagFilter = useCallback((tag: string) => {
+    setFilters((current) => ({ ...current, tag }));
+    setPage(1);
+  }, [setFilters, setPage]);
+  const closeRecord = useCallback(() => onOpenRecord(null), [onOpenRecord]);
+  const tagFilters = useTagFilters(filters.tag, applyTagFilter, closeRecord);
   const filteredTasks = useMemo(
     () => applySort(filterRoutineTasks(tasks, filters), sortColumns, sort),
     [filters, sort, sortColumns, tasks],
@@ -318,162 +327,166 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   }
 
   return (
-    <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
-      {/* The rail names the surface and lists its sections; the board's own
-          header names the section being read. Same rail-and-content shape as
-          the control panel and personal settings — see section-rail.css. */}
-      <div className="sec-rail">
-        {/* Title + count, like every other rail in the app. No "Workspace"
-            kicker: the sidebar group already says where the reader is. */}
-        <PageHeader
-          title={t("routine.title")}
-          count={t("routine.sub", { count: routineTasks.length })}
-          titleAs="h2"
-          titleVariant="title"
-          layout="stacked"
-        />
-        <RoutineStateNav
-          value={filters.state}
-          counts={sectionCounts}
-          total={sectionTotal}
-          onChange={(state) => setFilters({ ...filters, state })}
-        />
-      </div>
-
-      <div className="sec-main">
-        <PageHeader
-          title={sectionLabel}
-          titleAs="h2"
-          titleVariant="title"
-          topbarActions
-          count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
-          actions={
-            <TaskBoardHeaderActions
-              refreshLabel={t("nav.refresh")}
-              createLabel={t("routine.new")}
-              isRefreshing={isRefreshing}
-              onRefresh={() => void onRefresh()}
-              onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
-            />
-          }
-        />
-
-        <RoutineFiltersBar
-          filters={filters}
-          agents={logicalAgents}
-          tags={tagOptions}
-          onChange={setFilters}
-          sortMenu={
-            <SortMenu
-              options={[
-                { key: "title", label: t("backlog.col_automation") },
-                { key: "priority", label: t("backlog.priority") },
-                { key: "assignee", label: t("backlog.assignee") },
-                { key: "nextRun", label: t("routine.next_run") },
-              ]}
-              sort={sort}
-              onSortChange={setSort}
-              label={t("routine.sort_label")}
-            />
-          }
-        />
-
-        {filteredTasks.length === 0 ? (
-          <BoardEmpty feature="routines"
-            title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
-            body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-            createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
-            onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+    <TagFilterContext value={tagFilters.list}>
+      <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
+        {/* The rail names the surface and lists its sections; the board's own
+            header names the section being read. Same rail-and-content shape as
+            the control panel and personal settings — see section-rail.css. */}
+        <div className="sec-rail">
+          {/* Title + count, like every other rail in the app. No "Workspace"
+              kicker: the sidebar group already says where the reader is. */}
+          <PageHeader
+            title={t("routine.title")}
+            count={t("routine.sub", { count: routineTasks.length })}
+            titleAs="h2"
+            titleVariant="title"
+            layout="stacked"
           />
-        ) : (
-          /* One table, one header, no bands: the rail beside this list has
-             already said which schedule state is on screen. Sorting and
-             pagination stay outside it — the table receives the already
-             ordered, already paged rows. */
-          <>
-            <div className="backlog-rows" data-density="compact">
-              <RoutineTable
-                rows={pagedTasks.items}
-                sort={sort}
-                onSort={toggleSort}
-                ariaLabel={sectionLabel}
-                selectAll={
-                  <TaskSelectAllCheckbox
-                    state={selectionCheckState(visibleSelection, visibleIds)}
-                    label={t("routine.select_all_routines")}
-                    onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                  />
-                }
-                selection={visibleSelection}
-                onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-                stateFor={(task) => routineState(task, runningIds)}
-                assignmentFor={taskAssignmentDisplay}
-                handlersFor={routineHandlers}
+          <RoutineStateNav
+            value={filters.state}
+            counts={sectionCounts}
+            total={sectionTotal}
+            onChange={(state) => setFilters({ ...filters, state })}
+          />
+        </div>
+
+        <div className="sec-main">
+          <PageHeader
+            title={sectionLabel}
+            titleAs="h2"
+            titleVariant="title"
+            topbarActions
+            count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
+            actions={
+              <TaskBoardHeaderActions
+                refreshLabel={t("nav.refresh")}
+                createLabel={t("routine.new")}
+                isRefreshing={isRefreshing}
+                onRefresh={() => void onRefresh()}
+                onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
               />
-            </div>
-            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
-          </>
-        )}
-      </div>
+            }
+          />
 
-      <TaskSelectionBar
-        count={visibleSelection.size}
-        deleting={deletingSelection}
-        deleteLabel={t("routine.delete_selected")}
-        onDelete={() => { void deleteSelectedRoutines(); }}
-        onClear={() => setSelection(EMPTY_TASK_SELECTION)}
-      />
+          <RoutineFiltersBar
+            filters={filters}
+            agents={logicalAgents}
+            tags={tagOptions}
+            onChange={setFilters}
+            sortMenu={
+              <SortMenu
+                options={[
+                  { key: "title", label: t("backlog.col_automation") },
+                  { key: "priority", label: t("backlog.priority") },
+                  { key: "assignee", label: t("backlog.assignee") },
+                  { key: "nextRun", label: t("routine.next_run") },
+                ]}
+                sort={sort}
+                onSortChange={setSort}
+                label={t("routine.sort_label")}
+              />
+            }
+          />
 
-      {form ? (
-        <TaskDrawer
-          open={drawerOpen}
-          form={form}
-          logicalAgents={logicalAgents}
-          projects={projects}
-          tagSuggestions={tagOptions}
-          onCreateProject={() => setCreatingProject(true)}
-          teams={teams}
-          saving={saving}
-          deleting={deleting}
-          initialFocus={assignmentFocus ? "assignment" : "title"}
-          title={form.id ? t("routine.edit") : t("routine.new")}
-          subtitle={form.id ? taskRef({ id: form.id, number: form.number, isRoutine: true }) : t("routine.new_routine_id")}
-          onClose={() => { void closeRoutineForm(); }}
-          onClosed={releaseRoutineForm}
-          onChange={(next) => {
-            if (next.variant === "routine") setForm(next);
-          }}
-          onSubmit={(event) => void submitRoutine(event)}
-          onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
-          layer={drawerRecord ? 1 : 0}
+          {filteredTasks.length === 0 ? (
+            <BoardEmpty feature="routines"
+              title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
+              body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
+              createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
+              onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+            />
+          ) : (
+            /* One table, one header, no bands: the rail beside this list has
+               already said which schedule state is on screen. Sorting and
+               pagination stay outside it — the table receives the already
+               ordered, already paged rows. */
+            <>
+              <div className="backlog-rows" data-density="compact">
+                <RoutineTable
+                  rows={pagedTasks.items}
+                  sort={sort}
+                  onSort={toggleSort}
+                  ariaLabel={sectionLabel}
+                  selectAll={
+                    <TaskSelectAllCheckbox
+                      state={selectionCheckState(visibleSelection, visibleIds)}
+                      label={t("routine.select_all_routines")}
+                      onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                    />
+                  }
+                  selection={visibleSelection}
+                  onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+                  stateFor={(task) => routineState(task, runningIds)}
+                  assignmentFor={taskAssignmentDisplay}
+                  handlersFor={routineHandlers}
+                />
+              </div>
+              <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
+            </>
+          )}
+        </div>
+
+        <TaskSelectionBar
+          count={visibleSelection.size}
+          deleting={deletingSelection}
+          deleteLabel={t("routine.delete_selected")}
+          onDelete={() => { void deleteSelectedRoutines(); }}
+          onClear={() => setSelection(EMPTY_TASK_SELECTION)}
         />
-      ) : null}
 
-      {/* The record rides over the board rather than replacing it: the rail
-          and the list keep their places — and their filters, which the record
-          route now carries — while the drawer is open. Editing still happens
-          here: the record delegates `onEdit` up, and the form drawer stacks
-          above the record's. */}
-      {drawerRecord ? (
-        <TaskRecordView
-          taskId={drawerRecord.taskId}
-          currentUser={currentUser}
-          runId={drawerRecord.runId}
-          tasks={tasks}
-          drawer={{
-            open: Boolean(recordTaskId),
-            onClose: () => onOpenRecord(null),
-            onClosed: recordMirror.release,
-          }}
-          onEdit={editTask}
-          onOpenThread={onOpenThread}
-          onOpenRecord={onOpenRecord}
-          onDeleted={() => onOpenRecord(null)}
-        />
-      ) : null}
-      <ProjectDrawer open={creatingProject} computers={nodes} userId={currentUser.userId} layer={drawerRecord ? 2 : 1}
-        onClose={() => setCreatingProject(false)}
-        onSaved={(project) => setForm((current) => current ? { ...current, projectId: project.id } : current)} />
-    </section>
+        {form ? (
+          <TaskDrawer
+            open={drawerOpen}
+            form={form}
+            logicalAgents={logicalAgents}
+            projects={projects}
+            tagSuggestions={tagOptions}
+            onCreateProject={() => setCreatingProject(true)}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            title={form.id ? t("routine.edit") : t("routine.new")}
+            subtitle={form.id ? taskRef({ id: form.id, number: form.number, isRoutine: true }) : t("routine.new_routine_id")}
+            onClose={() => { void closeRoutineForm(); }}
+            onClosed={releaseRoutineForm}
+            onChange={(next) => {
+              if (next.variant === "routine") setForm(next);
+            }}
+            onSubmit={(event) => void submitRoutine(event)}
+            onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
+            layer={drawerRecord ? 1 : 0}
+          />
+        ) : null}
+
+        {/* The record rides over the board rather than replacing it: the rail
+            and the list keep their places — and their filters, which the record
+            route now carries — while the drawer is open. Editing still happens
+            here: the record delegates `onEdit` up, and the form drawer stacks
+            above the record's. */}
+        {drawerRecord ? (
+          <TagFilterContext value={tagFilters.record}>
+            <TaskRecordView
+              taskId={drawerRecord.taskId}
+              currentUser={currentUser}
+              runId={drawerRecord.runId}
+              tasks={tasks}
+              drawer={{
+                open: Boolean(recordTaskId),
+                onClose: () => onOpenRecord(null),
+                onClosed: recordMirror.release,
+              }}
+              onEdit={editTask}
+              onOpenThread={onOpenThread}
+              onOpenRecord={onOpenRecord}
+              onDeleted={() => onOpenRecord(null)}
+            />
+        </TagFilterContext>
+        ) : null}
+        <ProjectDrawer open={creatingProject} computers={nodes} userId={currentUser.userId} layer={drawerRecord ? 2 : 1}
+          onClose={() => setCreatingProject(false)}
+          onSaved={(project) => setForm((current) => current ? { ...current, projectId: project.id } : current)} />
+      </section>
+    </TagFilterContext>
   );
 }

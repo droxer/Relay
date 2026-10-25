@@ -211,14 +211,19 @@
      so a tag can never be mistaken for a status (a toned word on a toned
      fill), the action, or a live run. Each tone sits off the status hues
      (ok 148 · warn 89 · err 9 · live 258) and clears 3:1 as a graphic
-     against --surface-3, the brightest dark plane. */
-  --tag-1: #9aa6b8; /* slate — a cool grey; the old steel blue sat on --live */
+     against --surface-3, the brightest dark plane. All eight are hues: the
+     two greys this set once held (slate, stone) read as "no colour" beside
+     the rest, so a third of a list looked untagged. Lagoon and blush took
+     their places — picked to maximise the smallest OKLab distance to every
+     other tone and to the status hues, and set paler than their neighbours
+     (teal, rose) so lightness separates them where hue is close. */
+  --tag-1: #73dfe0; /* lagoon — a pale cyan between teal and sky */
   --tag-2: #5fc2b2; /* teal */
   --tag-3: #a9c47c; /* moss */
   --tag-4: #d9b56c; /* sand */
   --tag-5: #df8e6c; /* clay */
   --tag-6: #e389a8; /* rose */
-  --tag-7: #b5aa9b; /* stone — a warm grey; no purple tone */
+  --tag-7: #feb0d1; /* blush — a pale pink, lighter than rose; no purple tone */
   --tag-8: #74bcdd; /* sky */
 
 
@@ -913,14 +918,16 @@ html[data-theme="light"] {
   --code-attribute: #1b6670;
 
   /* Light tag tones — the same eight hues deepened until each glyph clears
-     3:1 as a graphic on --surface-2, the darkest light plane. */
-  --tag-1: #556274;
+     3:1 as a graphic on --surface-2, the darkest light plane. Lagoon and
+     blush stop just past it (3.2:1 and 3.6:1 on the chip fill), paler than
+     the rest for the same reason they are paler in the dark set. */
+  --tag-1: #3c8f90;
   --tag-2: #1d7a6b;
   --tag-3: #557226;
   --tag-4: #8d6412;
   --tag-5: #a64b2b;
   --tag-6: #b13f6b;
-  --tag-7: #6f655a;
+  --tag-7: #b56088;
   --tag-8: #26709a;
 
 
