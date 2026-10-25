@@ -13,7 +13,7 @@ from ...collaboration.models import (
     COLLABORATION_NEW_SESSION_STATE_KEY,
 )
 from ...core.computer_identity import computer_id
-from ...persistence.validation import valid_agent
+from ...core.validation import valid_agent
 from ...sessions.agent_state import initial_agent_state
 from ...sessions.controller import SessionController
 from ...sessions.bridge import latest_user_turn_marker, latest_user_turn_text

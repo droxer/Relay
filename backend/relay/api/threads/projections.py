@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from ...collaboration.awaiting import task_awaiting
-from ...persistence.session.workspace_artifacts import workspace_artifacts
+from ...core.workspace_artifacts import workspace_artifacts
 from ...security.actor import Actor
 from ..deps import AppContext
 

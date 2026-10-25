@@ -28,8 +28,8 @@ from ...collaboration.policy import (
 )
 from ...core.human_waits import question_id_for_run, wait_record
 from ...core.ids import new_database_id, now_iso
-from ...persistence.task.execution import request_execution_owner
-from ...persistence.task.lifecycle import acceptance_status
+from ...tasks.execution import request_execution_owner
+from ...tasks.flow import acceptance_status
 from ...persistence.events import relay_event
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_TASK_WORKSPACES,

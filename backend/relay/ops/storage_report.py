@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy import create_engine, func, select, text
 
-from ..schema import metadata
+from ..persistence.schema import metadata
 
 INLINE_CONTENT_COLUMNS = {
     "sessionArtifactBytes": ("session_artifacts", "content"),

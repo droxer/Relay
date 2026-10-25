@@ -161,7 +161,7 @@ def test_ready_backlog_and_templates_do_not_consume_wip(store, monkeypatch):
 
 
 def test_limit_must_be_positive(monkeypatch):
-    from relay.persistence.task.lifecycle import wip_limit
+    from relay.tasks.flow import wip_limit
 
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "0")
     with pytest.raises(ValueError, match="positive integer"):

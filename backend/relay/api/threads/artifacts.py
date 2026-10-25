@@ -9,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
 from ...core.ids import new_database_id
-from ...persistence.session.workspace_artifacts import is_workspace_artifact
+from ...core.workspace_artifacts import is_workspace_artifact
 from ...tasks.workspace import recorded_session_workspace
 from ..actors import (
     get_session_for_actor,

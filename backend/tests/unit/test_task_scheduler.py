@@ -11,6 +11,7 @@ from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_daemon_store
+from store_fixtures import make_managed_node_store
 from store_fixtures import make_agent_store
 from relay.persistence.automation.store import DatabaseAutomationStore
 from relay.persistence.project.store import DatabaseProjectStore
@@ -19,7 +20,6 @@ from store_fixtures import make_session_store
 from relay.persistence.task.store import DatabaseTaskStore
 from store_fixtures import make_task_store
 from store_fixtures import make_team_store
-from relay.persistence.daemon.managed_nodes import LocalManagedNodeStore
 from relay.automations.service import AutomationService
 from relay.tasks.scheduler import SchedulerTickResult, TaskScheduler
 from relay.tasks.placement import materialize_legacy_agent_assignment
@@ -435,7 +435,7 @@ def test_scheduler_requests_managed_capacity_once_when_no_node_is_ready() -> Non
             registry = DaemonNodeRegistry(
                 make_session_store(root), make_daemon_store(root), task_store=task_store
             )
-            managed_nodes = LocalManagedNodeStore(root)
+            managed_nodes = make_managed_node_store(root)
             backend, agent = _logical_backend(root, registry)
             task_store.create_task(
                 {
@@ -483,7 +483,7 @@ def test_scheduler_waits_for_an_user_device_node_regardless_of_sandbox_mode() ->
                 sandbox_mode="boxlite",
                 node_location="user-device",
             )
-            managed_nodes = LocalManagedNodeStore(root)
+            managed_nodes = make_managed_node_store(root)
             backend, agent = _logical_backend(root, registry)
             task_store.create_task(
                 {
@@ -518,7 +518,7 @@ def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
                 "alice", "/Users/alice/workspace", sandbox_mode="none"
             )
             registry.delete(local_node["id"])
-            managed_nodes = LocalManagedNodeStore(root)
+            managed_nodes = make_managed_node_store(root)
             backend, agent = _logical_backend(root, registry)
             task_store.create_task(
                 {
@@ -1426,7 +1426,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
             registry = DaemonNodeRegistry(
                 make_session_store(root), make_daemon_store(root), task_store=task_store
             )
-            managed_nodes = LocalManagedNodeStore(root)
+            managed_nodes = make_managed_node_store(root)
             agent_store = make_agent_store(root)
             placements = make_agent_placement_store(root)
             lead = agent_store.create_agent(

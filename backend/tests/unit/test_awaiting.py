@@ -12,7 +12,7 @@ from relay.core.human_waits import (
     question_id_for_run,
     wait_record,
 )
-from relay.persistence.task.lifecycle import acceptance_status
+from relay.tasks.flow import acceptance_status
 
 
 def _waiting(**fields: Any) -> dict[str, Any]:

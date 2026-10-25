@@ -10,7 +10,7 @@ from loguru import logger
 from ..core.computer_identity import computer_id
 from ..daemon_registry.scheduling import node_accepts_run
 from ..persistence.agent.placements import create_node_placement
-from ..persistence.validation import valid_agent
+from ..core.validation import valid_agent
 from ..teams.dispatch import (
     task_execution_user_id,
 )

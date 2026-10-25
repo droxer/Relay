@@ -7,7 +7,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..persistence.validation import task_priority, task_status
+from ..core.validation import task_priority, task_status
 from ..sessions.controller import SessionController
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (

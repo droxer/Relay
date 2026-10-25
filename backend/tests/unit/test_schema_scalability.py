@@ -452,7 +452,7 @@ def test_dashboard_counters_share_one_pass_over_sessions(tmp_path):
 
 
 def test_storage_report_counts_rows_and_inline_content(tmp_path):
-    from relay.persistence.ops.storage_report import storage_report
+    from relay.ops.storage_report import storage_report
 
     store = session_store(tmp_path)
     session = store.create_session({"taskGoal": "Report", "workspacePath": "/work"})

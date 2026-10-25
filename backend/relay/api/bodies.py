@@ -9,8 +9,8 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request
 from starlette.requests import ClientDisconnect
 from ..core.legacy_names import upgrade_legacy_names
-from ..persistence.token_usage import build_token_usage
-from ..persistence.validation import valid_agent
+from ..core.token_usage import build_token_usage
+from ..core.validation import valid_agent
 from .deps import app_context
 
 

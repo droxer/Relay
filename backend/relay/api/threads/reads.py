@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from ...core.computer_identity import computer_id as resolve_computer_id
-from ...persistence.session.workspace_artifacts import (
+from ...core.workspace_artifacts import (
     artifact_index_item,
     workspace_artifacts,
 )

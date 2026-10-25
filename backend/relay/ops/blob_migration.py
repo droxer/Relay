@@ -24,12 +24,12 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import select, update
 
-from ..session.artifact_blobs import artifact_blob_key, blob_metadata
-from .store import BlobStore
-from ..session.store import DatabaseSessionStore
-from ..skill.objects import BlobSkillObjectStore, LocalSkillObjectStore
-from ..skill.store import DatabaseSkillStore
-from ..engine import store_transaction
+from ..persistence.session.artifact_blobs import artifact_blob_key, blob_metadata
+from ..persistence.blob.store import BlobStore
+from ..persistence.session.store import DatabaseSessionStore
+from ..persistence.skill.objects import BlobSkillObjectStore, LocalSkillObjectStore
+from ..persistence.skill.store import DatabaseSkillStore
+from ..persistence.engine import store_transaction
 
 _BATCH = 100
 

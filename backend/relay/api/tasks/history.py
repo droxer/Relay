@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
-from ...persistence.session.workspace_artifacts import (
+from ...core.workspace_artifacts import (
     artifact_index_item,
     workspace_artifact_key,
     workspace_artifacts,

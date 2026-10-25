@@ -7,7 +7,7 @@ from loguru import logger
 
 from ...core.models import AGENT_NAMES
 from ...core.permission_requests import PERMISSION_DECISIONS, PERMISSION_NOTE_MAX_CHARS
-from ...persistence.validation import valid_agent
+from ...core.validation import valid_agent
 from ...sessions.controller import SessionController
 from ...sessions.task_scope import thread_task_scope
 from ..actors import (

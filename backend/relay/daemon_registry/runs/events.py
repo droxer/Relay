@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ...core.ids import now_iso
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
-from ...persistence.task.execution import request_execution_owner
+from ...tasks.execution import request_execution_owner
 from ...persistence.events import relay_event
 from ...persistence.events import relay_task_event
 from .. import config

@@ -15,7 +15,7 @@ from ...core.ids import new_database_id, new_relay_id, now_iso
 from ...core.runtime_status import executor_not_ready_message
 from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.workspace_layout import workspace_artifacts_dir
-from ...persistence.task.execution import request_execution_owner
+from ...tasks.execution import request_execution_owner
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_ROUND_RESULT,
     has_capability,

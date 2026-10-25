@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
-from ...persistence.skill.rules import (
+from ...skills.rules import (
     MAX_FILE_BYTES,
     MAX_FILES,
     MAX_REVISION_BYTES,

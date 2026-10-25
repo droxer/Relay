@@ -31,9 +31,9 @@ from .reducer import materialize_task_events
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_task_event
 from ..engine import store_transaction
-from .execution import prepare_execution_events
+from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
-from .lifecycle import flow_scope, needs_wip_admission, wip_limit
+from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
 from .rules import (
     TaskExecutionActiveError,
     _HYDRATE_TASK_WRITES,

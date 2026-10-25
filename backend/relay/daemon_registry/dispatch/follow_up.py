@@ -12,7 +12,7 @@ from loguru import logger
 from ...collaboration.approvals import awaits_approval
 from ...core.computer_identity import computer_id
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
-from ...persistence.task.execution import request_execution_owner
+from ...tasks.execution import request_execution_owner
 from ...sessions.controller import SessionController
 from .. import config
 from ..records import (

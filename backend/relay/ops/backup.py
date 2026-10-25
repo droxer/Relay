@@ -24,7 +24,7 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.engine import make_url
 
-from ..blob import store as blob_store
+from ..persistence.blob import store as blob_store
 
 Runner = Callable[..., subprocess.CompletedProcess]
 

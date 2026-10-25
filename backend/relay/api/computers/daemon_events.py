@@ -12,7 +12,7 @@ from ...core.permission_requests import (
     is_permission_request_id,
     parse_permission_request,
 )
-from ...persistence.validation import valid_agent
+from ...core.validation import valid_agent
 from ..bodies import raw_string_field, string_field, token_usage_field
 
 

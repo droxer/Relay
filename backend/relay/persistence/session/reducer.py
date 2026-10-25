@@ -10,7 +10,7 @@ from ...core.permission_requests import (
     apply_permission_resolved,
     expire_permission_requests,
 )
-from ..token_usage import merge_token_usage
+from ...core.token_usage import merge_token_usage
 
 SESSION_WORKSPACE_LAYOUT_THREAD = "thread"
 

@@ -1,30 +1,23 @@
-"""Shared managed-node state using the existing lifecycle validation rules."""
+"""Managed-node desired state, provisioning attempts, and enrollment grants."""
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import Any
+import hashlib
+import hmac
+import json
+import secrets
 from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import delete, insert, select, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..resource_lock import resource_transaction
 from ..tables import managed_nodes as managed_nodes_tables
-import fcntl
-import hashlib
-import hmac
-import json
-import secrets
-from contextlib import nullcontext
-from datetime import datetime, timedelta, UTC
-from pathlib import Path
-from threading import RLock
-from uuid import uuid4
-from ...core.environment import DEFAULT_RELAY_DATA_DIR
-from ...core.legacy_names import upgrade_legacy_names
 from ...core.ids import now_iso
-from ..validation import safe_name
 from ...core.managed_node_policy import (
     ATTEMPT_HISTORY_LIMIT,
     DEFAULT_MANAGED_NODE_PROVIDER,
@@ -38,8 +31,6 @@ from ...core.managed_node_policy import (
     validate_managed_provider,
     validate_managed_sandbox_mode,
 )
-
-
 
 
 def _new_id(prefix: str) -> str:
@@ -76,32 +67,24 @@ def _managed_node_policy_slot(node: dict[str, Any], default_provider: str) -> tu
     )
 
 
-def _canonical_node_rank(node: dict[str, Any]) -> tuple[int, int, str, str]:
-    return (
-        0 if node.get("activeDaemonNodeId") else 1,
-        0 if node.get("phase") == "ready" else 1,
-        node.get("createdAt") or "",
-        node["id"],
-    )
+class DatabaseManagedNodeStore:
+    """Durable store for managed-node desired state and attempts."""
 
+    records = managed_nodes_tables.records
 
-class LocalManagedNodeStore:
-    """Durable local-first store for managed-node desired state and attempts."""
-
-    # The provider a node gets when its request names none; a deployment picks
-    # it with RELAY_MANAGED_NODE_PROVIDER.
-    default_provider = DEFAULT_MANAGED_NODE_PROVIDER
-
-    def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
-        root = Path(root_dir) / "managed-nodes"
-        self.nodes_dir = root / "nodes"
-        self.attempts_dir = root / "attempts"
-        self.grants_dir = root / "enrollment-grants"
-        self.slot_lock_path = root / ".policy-slots.lock"
-        self._lock = RLock()
-        for path in (self.nodes_dir, self.attempts_dir, self.grants_dir):
-            path.mkdir(parents=True, exist_ok=True)
-        self._reconcile_legacy_duplicate_policy_slots()
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        create_schema: bool = False,
+        default_provider: str = DEFAULT_MANAGED_NODE_PROVIDER,
+    ):
+        # The provider a node gets when its request names none; a deployment
+        # picks it with RELAY_MANAGED_NODE_PROVIDER.
+        self.default_provider = default_provider
+        self.engine = shared_engine(database_url)
+        if create_schema:
+            create_all_tables(self.engine)
 
     def create_node(
         self, payload: dict[str, Any], *, _policy_slot_locked: bool = False
@@ -140,48 +123,6 @@ class LocalManagedNodeStore:
             self._assert_active_policy_slot_available(node)
             self._write_node(node)
             return node
-
-    @contextmanager
-    def _policy_slot_lock(self) -> Iterator[None]:
-        with self.slot_lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-    def _reconcile_legacy_duplicate_policy_slots(self) -> None:
-        """Retire duplicate active records written before slot uniqueness.
-
-        Creation has enforced one running record per user/policy slot since
-        the invariant was introduced, but existing JSON records predate that
-        guard. Leaving those records active makes every backend restart expose
-        and provision all of them again. Prefer an already-enrolled runtime;
-        otherwise retain the oldest desired record and route the extras through
-        the normal managed-node deletion lifecycle.
-        """
-        with self._policy_slot_lock(), self._mutation_scope():
-            groups: dict[tuple[str, tuple[Any, ...]], list[dict[str, Any]]] = {}
-            for node in self.list_nodes():
-                if node.get("desiredState") != "running":
-                    continue
-                raw_user_id = node.get("userId")
-                if not isinstance(raw_user_id, str) or not raw_user_id.strip():
-                    continue
-                key = (raw_user_id.strip(), _managed_node_policy_slot(node, self.default_provider))
-                groups.setdefault(key, []).append(node)
-            for candidates in groups.values():
-                if len(candidates) < 2:
-                    continue
-                canonical = min(candidates, key=_canonical_node_rank)
-                for duplicate in candidates:
-                    if duplicate["id"] == canonical["id"]:
-                        continue
-                    self.update_node(
-                        duplicate["id"],
-                        {"desiredState": "deleted"},
-                        _policy_slot_locked=True,
-                    )
 
     def _assert_active_policy_slot_available(
         self, candidate: dict[str, Any], *, exclude_node_id: str | None = None
@@ -418,19 +359,6 @@ class LocalManagedNodeStore:
             self._delete_record("attempts", attempt["id"])
         self._sweep_grants({attempt["id"] for attempt in stale})
 
-    def _sweep_grants(self, discarded_attempt_ids: set[str]) -> None:
-        """Delete grants that can no longer authorize an enrollment.
-
-        Consumed grants are left to expire on their own so a replayed
-        credential still reports why it was refused.
-        """
-        now = datetime.now(UTC)
-        for grant in self._records("grants"):
-            expires_at = grant.get("expiresAt")
-            expired = bool(expires_at and _parse_timestamp(expires_at) <= now)
-            if grant.get("attemptId") in discarded_attempt_ids or expired:
-                self._delete_record("grants", grant["id"])
-
     def list_attempts(self, node_id: str) -> list[dict[str, Any]]:
         attempts = self._records("attempts", node_id=node_id)
         return sorted(
@@ -604,52 +532,6 @@ class LocalManagedNodeStore:
 
     def _write_node(self, node: dict[str, Any]) -> None:
         self._write_record("nodes", node)
-
-    @contextmanager
-    def _mutation_scope(self, node_id: str | None = None, *, attempt_id: str | None = None, grant_id: str | None = None) -> Iterator[None]:
-        with self._lock:
-            yield
-
-    def _record_path(self, kind: str, record_id: str) -> Path:
-        directory = {"nodes": self.nodes_dir, "attempts": self.attempts_dir, "grants": self.grants_dir}[kind]
-        return directory / f"{safe_name(record_id)}.json"
-
-    def _read_record(self, kind: str, record_id: str) -> dict[str, Any] | None:
-        path = self._record_path(kind, record_id)
-        return self._read_local_record(path) if path.exists() else None
-
-    @staticmethod
-    def _read_local_record(path: Path) -> dict[str, Any]:
-        return upgrade_legacy_names(json.loads(path.read_text(encoding="utf-8")))
-
-    def _write_record(self, kind: str, record: dict[str, Any]) -> None:
-        path = self._record_path(kind, record["id"])
-        temporary = path.with_suffix(".json.tmp")
-        temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-        temporary.replace(path)
-
-    def _delete_record(self, kind: str, record_id: str) -> None:
-        self._record_path(kind, record_id).unlink(missing_ok=True)
-
-    def _records(self, kind: str, *, node_id: str | None = None) -> list[dict[str, Any]]:
-        directory = {"nodes": self.nodes_dir, "attempts": self.attempts_dir, "grants": self.grants_dir}[kind]
-        return [self._read_local_record(path) for path in directory.glob("*.json")]
-
-
-class DatabaseManagedNodeStore(LocalManagedNodeStore):
-    records = managed_nodes_tables.records
-
-    def __init__(
-        self,
-        database_url: str,
-        *,
-        create_schema: bool = False,
-        default_provider: str = DEFAULT_MANAGED_NODE_PROVIDER,
-    ):
-        self.default_provider = default_provider
-        self.engine = shared_engine(database_url)
-        if create_schema:
-            create_all_tables(self.engine)
 
     @contextmanager
     def _policy_slot_lock(self) -> Iterator[None]:
