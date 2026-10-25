@@ -732,7 +732,11 @@
         "failed": "Failed",
         "running": "Running",
         "pending": "Not started"
-      }
+      },
+      "col_trigger": "Trigger",
+      "col_started": "Started",
+      "detail_label": "Run details",
+      "files_none": "None"
     },
     "columns": "Columns",
     "result_title": "Result",

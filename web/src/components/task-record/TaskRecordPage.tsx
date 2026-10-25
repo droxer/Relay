@@ -243,6 +243,7 @@ export function TaskRecordPage({
                 runId: runTaskId,
               })}
               onOpenRun={onOpenRun}
+              onOpenThread={onOpenThread}
             />
           </TabsContent>
         ) : (

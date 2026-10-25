@@ -38,14 +38,38 @@ it("opens on the newest run's folder and follows the selected run", async () => 
   expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1);
 });
 
-it("still opens a run's own record from its row", async () => {
+it("opens the selected run's own record from its detail, never from selecting", async () => {
   const onOpenRun = renderRuns();
   await screen.findByTestId("run-workspace");
-  const open = screen.getAllByRole("link");
-  expect(open[1]!.getAttribute("href")).toBe("/automations/routine-1/runs/run-old");
-  fireEvent.click(open[1]!);
-  expect(onOpenRun).toHaveBeenCalledWith("run-old");
   // Selecting is not navigating.
   fireEvent.click(within(screen.getAllByRole("listitem")[1]!).getByRole("button"));
-  expect(onOpenRun).toHaveBeenCalledTimes(1);
+  expect(onOpenRun).not.toHaveBeenCalled();
+
+  // The detail follows the selection, and its link is a real href.
+  const open = screen.getByRole("link", { name: "record.open_run" });
+  expect(open.getAttribute("href")).toBe("/automations/routine-1/runs/run-old");
+  fireEvent.click(open);
+  expect(onOpenRun).toHaveBeenCalledWith("run-old");
+});
+
+it("says the selected run's failure in full beside the ledger", async () => {
+  renderRuns();
+  await screen.findByTestId("run-workspace");
+  fireEvent.click(within(screen.getAllByRole("listitem")[1]!).getByRole("button"));
+  const detail = screen.getByRole("banner", { name: "backlog.runs.detail_label" });
+  expect(within(detail).getByText("Timed out")).toBeTruthy();
+});
+
+it("walks the ledger with the arrow keys, one tab stop for the list", async () => {
+  renderRuns();
+  await screen.findByTestId("run-workspace");
+  const rows = within(screen.getByRole("list")).getAllByRole("button");
+  expect(rows.map((row) => row.tabIndex)).toEqual([0, -1]);
+
+  fireEvent.keyDown(rows[0]!, { key: "ArrowDown" });
+  expect(screen.getByTestId("run-workspace").getAttribute("data-task-id")).toBe("run-old");
+  expect(document.activeElement).toBe(rows[1]);
+
+  fireEvent.keyDown(rows[1]!, { key: "Home" });
+  expect(screen.getByTestId("run-workspace").getAttribute("data-task-id")).toBe("run-new");
 });
