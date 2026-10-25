@@ -52,6 +52,22 @@ def test_work_outcome_survives_database_snapshot_and_summary():
         assert session_brief_item(summary)["workOutcome"] == "unfinished"
 
 
+def test_session_summary_carries_participant_agents():
+    """The thread rail draws every row's agents from the summary list, not
+    only the selected thread's full snapshot."""
+    from relay.api.threads.projections import session_brief_item
+
+    with TemporaryDirectory() as root:
+        store = DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True)
+        store.create_session(
+            {"workspacePath": "/workspace", "taskGoal": "Pair", "ownerAgentId": "agent_a"}
+        )
+        [summary] = store.list_session_summaries()
+        assert summary["participantAgentIds"] == ["agent_a"]
+        assert session_brief_item(summary)["participantAgentIds"] == ["agent_a"]
+        assert session_brief_item({"id": "ses_legacy"})["participantAgentIds"] == []
+
+
 def test_session_stores_create_uuid_thread_ids() -> None:
     with TemporaryDirectory() as root:
         stores = (

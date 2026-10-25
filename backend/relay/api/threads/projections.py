@@ -75,6 +75,8 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "workspacePath": session.get("workspacePath"),
         "ownerUserId": session.get("ownerUserId"),
         "ownerAgentId": session.get("ownerAgentId"),
+        # Every rail row draws its room's faces, not only the opened thread.
+        "participantAgentIds": session.get("participantAgentIds") or [],
         "teamId": session.get("teamId"),
         "projectId": session.get("projectId"),
         "workspaceLayout": session.get("workspaceLayout"),

@@ -14,6 +14,7 @@ export interface SessionSummary {
   workspacePath: string;
   ownerUserId?: string;
   ownerAgentId?: string;
+  participantAgentIds?: string[];
   teamId?: string;
   projectId?: string;
   workspaceLayout?: "node-root" | "thread" | "project" | "task";
