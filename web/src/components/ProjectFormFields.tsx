@@ -132,16 +132,19 @@ type FolderCheck =
 /** An existing folder on the project's computer to use as its workspace.
  *  Empty creates a new folder. Leaving the field asks the computer whether it
  *  would link the path, so a refusal shows before the project is created;
- *  `error` carries the refusal from creating the project itself. */
+ *  `error` carries the refusal from creating the project itself, and
+ *  `unavailable` disables the field with the reason it cannot be used. */
 export function ProjectFolderField({
   daemonNodeId,
   value,
   error,
+  unavailable = null,
   onChange,
 }: {
   daemonNodeId: string;
   value: string;
   error: string | null;
+  unavailable?: string | null;
   onChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
@@ -151,14 +154,14 @@ export function ProjectFolderField({
   const shapeError = folderPathLooksValid(value) ? null : t("project.folder_invalid");
   const refusal = check.kind === "refused" ? t(check.key) : null;
   const shownError = error ?? shapeError ?? refusal;
-  const hint = check.kind === "checking"
+  const hint = unavailable ?? (check.kind === "checking"
     ? t("project.folder_checking")
     : check.kind === "linkable"
       ? t("project.folder_linkable", { path: check.path })
-      : t("project.folder_hint");
+      : t("project.folder_hint"));
 
   async function verify() {
-    if (!path || shapeError) return;
+    if (unavailable || !path || shapeError) return;
     const request = ++latest.current;
     setCheck({ kind: "checking" });
     try {
@@ -189,6 +192,7 @@ export function ProjectFolderField({
         className="code"
         placeholder={t("project.folder_placeholder")}
         value={value}
+        disabled={Boolean(unavailable)}
         onChange={(event) => {
           latest.current += 1;
           setCheck({ kind: "idle" });
