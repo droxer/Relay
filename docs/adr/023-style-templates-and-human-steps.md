@@ -127,6 +127,13 @@ needs no roster or placement change.
    plan recompiles the steps) and folding `acceptancePolicy: "human"` are not
    done yet. A round with no task runs straight through: its Wait would have
    nothing to resume.
+   Approval closeout is retried after an interrupted park, including when the
+   thread completed before its resume index was saved. Terminal-request
+   retention preserves the request named by an outstanding approval Wait;
+   answering, marking done, or deleting the task releases that protection.
+   Opening the Wait writes an `approval_requested` notification with the task
+   change. Its question id deduplicates delivery per recipient, and the inbox
+   opens the thread where the person can answer.
 3. Custom per-team templates with an editor: ordered steps, who (role, member,
    or a person), mode, required, and repair target.
 

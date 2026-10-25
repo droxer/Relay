@@ -42,6 +42,21 @@ function renderBell(value: NotificationsController, onOpenSettings = vi.fn()) {
 }
 
 describe("NotificationBell", () => {
+  it("shows an approval notice and opens the thread where it can be answered", () => {
+    const [approval] = notificationViews([{
+      id: "n-approval", kind: "approval_requested",
+      data: { taskId: "t1", sessionId: "s1", questionId: "q1", title: "Ship it" },
+      createdAt: "2026-10-16T09:00:00Z", readAt: null,
+    }]);
+    const value = controller({ notices: [approval], unreadCount: 1 });
+    renderBell(value);
+    const row = screen.getByText("notifications.approval_requested").closest("a")!;
+    expect(row.getAttribute("href")).toBe("/threads/s1");
+    expect(row.hasAttribute("data-unread")).toBe(true);
+    fireEvent.click(row);
+    expect(value.open).toHaveBeenCalledWith(approval);
+  });
+
   it("caps the unread badge and names the count on the trigger", () => {
     renderBell(controller());
     const trigger = screen.getByRole("button", { name: "notifications.bell_unread" });

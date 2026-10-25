@@ -54,7 +54,8 @@ _Avoid_: Old version, stale daemon (stale means it stopped heartbeating)
 **Notification**:
 A notice in one person's inbox that something they own changed while they may
 not have been looking: a Task they own or are assigned finished
-(`task_completed`), a Computer they hold went online or offline
+(`task_completed`), a team awaits their approval before its next step
+(`approval_requested`), a Computer they hold went online or offline
 (`computer_status`), or a Computer runs an Outdated Client
 (`client_outdated`). Shared hardware no User holds notifies every admin. It
 carries facts, not prose; muting a kind hides its notices without deleting

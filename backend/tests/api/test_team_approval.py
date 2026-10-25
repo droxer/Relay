@@ -317,3 +317,24 @@ def test_an_approval_notifies_its_person_once_and_each_reworked_wait_notifies_ag
         assert len(inbox["notifications"]) == 2
         assert inbox["unreadCount"] == 1
         assert len({item["data"]["questionId"] for item in inbox["notifications"]}) == 2
+
+
+@pytest.mark.parametrize("action", ["done", "delete"])
+def test_a_closed_approval_no_longer_pins_its_run_request(monkeypatch, action) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        builder, _reviewer, task = _approval_team_task(client)
+        assert client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).status_code == 202
+        thread_id = _finish(app, agent_id=builder["id"])["sessionId"]
+        _awaiting(client, task["id"])
+        response = (
+            client.delete(f"/api/v1/tasks/{task['id']}")
+            if action == "delete"
+            else client.post(f"/api/v1/threads/{thread_id}/decisions", json={"kind": "mark_done"})
+        )
+        assert response.status_code == 200, response.text
+        store = app.state.registry.daemon_store
+        assert store.prune_terminal_records(0, 0, run_request_retention_seconds=0)["runRequests"] == 1
