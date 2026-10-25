@@ -132,3 +132,20 @@ export function taskHistoryEntries(
     .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || right.id.localeCompare(left.id))
     .slice(0, limit);
 }
+
+/**
+ * Entries that carry the "open thread" link: the newest entry naming each
+ * thread. A task runs in one thread, and every status, dispatch, and activity
+ * line of that run names it — linking each one stacked the same link down the
+ * whole timeline.
+ */
+export function threadLinkEntryIds(entries: readonly TaskHistoryEntry[]): ReadonlySet<string> {
+  const seen = new Set<string>();
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.sessionId || seen.has(entry.sessionId)) continue;
+    seen.add(entry.sessionId);
+    ids.add(entry.id);
+  }
+  return ids;
+}
