@@ -719,7 +719,11 @@
         "failed": "失败",
         "running": "运行中",
         "pending": "未开始"
-      }
+      },
+      "col_trigger": "触发方式",
+      "col_started": "开始时间",
+      "detail_label": "运行详情",
+      "files_none": "无"
     },
     "columns": "列",
     "result_title": "结果",

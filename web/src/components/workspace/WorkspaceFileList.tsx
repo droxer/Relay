@@ -26,19 +26,25 @@ type WorkspaceFilesResponseLike = Omit<ProjectWorkspaceFilesResponse, "projectId
 export function WorkspacePathBreadcrumb({
   path,
   rootLabel,
+  rootPath = "",
   onNavigate,
 }: {
   path: string;
   /** What the root reads as when it is not the generic workspace home — a
    *  routine run's folder is named by its date. */
   rootLabel?: string;
+  /** Where the bar starts, when the browser is held inside one folder: the
+   *  folders above it are not shown, and the root reads as `rootLabel`. */
+  rootPath?: string;
   onNavigate: (path: string) => void;
 }) {
   const { t } = useTranslation();
-  const parts = path.split("/").filter(Boolean);
-  const segments = [{ label: rootLabel ?? t("workspace.path_root"), path: "" }, ...parts.map((part, index) => ({
+  const base = rootPath && (path === rootPath || path.startsWith(`${rootPath}/`)) ? rootPath : "";
+  const parts = path.slice(base.length).split("/").filter(Boolean);
+  const prefix = base ? `${base}/` : "";
+  const segments = [{ label: rootLabel ?? t("workspace.path_root"), path: base }, ...parts.map((part, index) => ({
     label: part,
-    path: parts.slice(0, index + 1).join("/"),
+    path: prefix + parts.slice(0, index + 1).join("/"),
   }))];
 
   return (

@@ -32,7 +32,7 @@ function PaneHeader({
 }
 
 export function WorkspaceFilePanes({
-  path, roots = DEFAULT_WORKSPACE_FILE_ROOTS, rootLabel, selectedPath, files, content, view, setView, homeStatus, barActions,
+  path, roots = DEFAULT_WORKSPACE_FILE_ROOTS, rootLabel, scoped = false, selectedPath, files, content, view, setView, homeStatus, barActions,
   openDirectory, onSelectFile, onRetry, onClosePreview,
 }: {
   path: string;
@@ -40,6 +40,9 @@ export function WorkspaceFilePanes({
   roots?: WorkspaceFileRoots;
   /** Replaces "home" at the root of the path bar. */
   rootLabel?: string;
+  /** Hold the browser inside the current tab's root: no parent row above it,
+   *  and the path bar starts there under `rootLabel`. */
+  scoped?: boolean;
   selectedPath: string;
   files: Pick<ComponentProps<typeof WorkspaceFileList>, "data" | "error" | "isLoading">;
   content: Pick<ComponentProps<typeof WorkspaceFilePreview>, "data" | "error" | "isLoading">;
@@ -55,17 +58,19 @@ export function WorkspaceFilePanes({
 }) {
   const { t } = useTranslation();
   const selected = selectedPath ? { name: selectedPath.split("/").at(-1) || selectedPath } : null;
+  const tab = workspaceFileTabForPath(path, roots);
+  const scopeRoot = scoped && tab ? roots[tab] : undefined;
   return (
     <div className={`workspace-panes${selected ? "" : " is-browse-only"}`}>
       <section className="workspace-pane workspace-pane-browse" aria-label={t("workspace.tab_files")}>
         <div className="workspace-tabpanel-files">
           <WorkspaceFileTabs
-            tab={workspaceFileTabForPath(path, roots)}
+            tab={tab}
             projectFiles={roots.artifacts === ""}
             onSelect={(tab) => openDirectory(roots[tab])}
           />
           <div className="workspace-files-bar">
-            <WorkspacePathBreadcrumb path={path} rootLabel={rootLabel} onNavigate={openDirectory} />
+            <WorkspacePathBreadcrumb path={path} rootLabel={rootLabel} rootPath={scopeRoot} onNavigate={openDirectory} />
             <div className="workspace-files-bar-end">
               {homeStatus?.kind === "live" ? (
                 <span className="workspace-home-status" title={homeStatus.nodeId || undefined}>
@@ -83,6 +88,7 @@ export function WorkspaceFilePanes({
             isLoading={files.isLoading}
             path={path}
             roots={roots}
+            rootPath={scopeRoot}
             selectedPath={selectedPath}
             onOpenDirectory={openDirectory}
             onSelectFile={onSelectFile}
