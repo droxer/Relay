@@ -31,6 +31,7 @@ from .dispatch.follow_up import FollowUpRetryMixin
 from .runs.progression import RunProgressionMixin
 from .runs.transitions import RunTransitionMixin
 from .runs.failure import RunFailureMixin
+from .runs.approval import ApprovalParkMixin
 from .runs.completion import RunCompletionMixin
 from .runs.events import EventIngestMixin
 from .runs.reaper import RunReaperMixin
@@ -55,6 +56,7 @@ class DaemonNodeRegistry(
     RunTransitionMixin,
     RunFailureMixin,
     RunCompletionMixin,
+    ApprovalParkMixin,
     EventIngestMixin,
     RunReaperMixin,
 ):

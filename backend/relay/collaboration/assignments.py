@@ -227,7 +227,7 @@ class AssignmentsMixin(ConductorState):
                     ),
                     "mode": mode,
                     "phase": phase,
-                    **{key: item[key] for key in ("required", "acceptanceCriteria", "expectedOutputs") if key in item},
+                    **{key: item[key] for key in ("required", "acceptanceCriteria", "expectedOutputs", "awaitApproval") if key in item},
                     **({"role": role} if role else {}),
                     **(
                         {"brief": item["brief"].strip()[:ASSIGNMENT_BRIEF_MAX_CHARS]}

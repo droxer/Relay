@@ -68,6 +68,7 @@ POLICY_MODULES = frozenset(
         "relay.automations.context",
         "relay.automations.model",
         "relay.automations.schedule",
+        "relay.collaboration.approvals",
         "relay.collaboration.awaiting",
         "relay.collaboration.contracts",
         "relay.collaboration.manifest",

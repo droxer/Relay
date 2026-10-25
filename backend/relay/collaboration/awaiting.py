@@ -70,6 +70,11 @@ def task_awaiting(task: dict[str, Any]) -> dict[str, Any] | None:
         "sessionId": task.get("waitingSessionId") or None,
         "resumable": not task.get("isRoutine"),
         **({"unreported": True} if kind == "check" and request.get("unreported") is True else {}),
+        **(
+            {"nextAgentId": request["nextAgentId"]}
+            if kind == "approval" and isinstance(request.get("nextAgentId"), str)
+            else {}
+        ),
     }
 
 

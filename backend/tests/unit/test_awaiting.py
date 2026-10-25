@@ -34,7 +34,7 @@ def test_a_park_without_a_record_still_gets_an_id_an_answer_can_name() -> None:
 
 def test_an_unknown_wait_kind_is_refused() -> None:
     with pytest.raises(ValueError):
-        wait_record("approval", "q_1")  # type: ignore[arg-type]
+        wait_record("vote", "q_1")  # type: ignore[arg-type]
 
 
 def test_a_question_projects_its_words_answers_and_notes() -> None:
@@ -74,6 +74,19 @@ def test_a_spent_budget_is_its_own_kind() -> None:
     ))
     assert awaiting["kind"] == "budget"
     assert "5-round budget" in awaiting["text"]
+
+
+def test_an_approval_names_who_takes_the_held_step() -> None:
+    awaiting = task_awaiting(_waiting(
+        waitingReason="Waiting for approval before the next step.",
+        waitingRequest=wait_record("approval", "q_req_9", next_agent_id="agt_reviewer"),
+    ))
+    assert awaiting["kind"] == "approval"
+    assert awaiting["questionId"] == "q_req_9"
+    assert awaiting["nextAgentId"] == "agt_reviewer"
+    assert awaiting["options"] == []
+    # Only an approval carries the next agent.
+    assert "nextAgentId" not in wait_record("check", "q_1", next_agent_id="agt_x")
 
 
 def test_a_wait_recorded_before_ids_still_projects() -> None:

@@ -267,12 +267,18 @@ def _styled_assignments(
         if len(compiled.turns) > 1
         else base_snapshot
     )
+    # The person approves the work before the step that closes the round; a
+    # one-turn round has nothing to hold back (ADR-023).
+    approval = bool(team.get("humanApproval")) and len(compiled.turns) > 1
     return [
-        _styled_assignment(
-            turn.agent, turn.role, turn.mode, turn.synthesizer, turn.brief,
-            team, snapshot, configs,
-            optional_allowed=compiled.optional_steps,
-        )
+        {
+            **_styled_assignment(
+                turn.agent, turn.role, turn.mode, turn.synthesizer, turn.brief,
+                team, snapshot, configs,
+                optional_allowed=compiled.optional_steps,
+            ),
+            **({"awaitApproval": True} if approval and turn.synthesizer else {}),
+        }
         for turn in compiled.turns
     ]
 
@@ -347,6 +353,7 @@ def team_runtime_snapshot(
         "leadAgentId": team.get("leadAgentId"),
         **({"collaborationStyle": style} if style else {}),
         **({"styleFallbackFrom": style_fallback_from} if style_fallback_from else {}),
+        **({"humanApproval": True} if team.get("humanApproval") else {}),
     }
 
 

@@ -220,6 +220,7 @@ def create_control_panel_team(
                 "memberConfigs": body.get("memberConfigs", {}),
                 "acceptanceCriteria": body.get("acceptanceCriteria", []),
                 "collaborationStyle": body.get("collaborationStyle"),
+                "humanApproval": body.get("humanApproval"),
                 "leadAgentId": lead,
                 "memberAgentIds": members,
                 **computer,

@@ -1,7 +1,7 @@
 """The state every ``CollaborationConductor`` mixin shares.
 
 The conductor is split by concern into mixins (``roster``, ``assignments``,
-``task_scope``, ``request``). They all act on one application context, set by
+``task_scope``, ``request``, ``approval_round``). They all act on one application context, set by
 ``CollaborationConductor.__init__``; this class only declares it, plus the
 methods one mixin calls on another, so each mixin type-checks alone.
 """

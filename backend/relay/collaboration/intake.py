@@ -38,6 +38,7 @@ class _PreparedRound:
     style: str | None = None
     project_setup: dict[str, Any] | None = None
     question_id: str | None = None
+    approve: bool = False
 
 
 # What a caller may say about a participant it names. Identity (`assignmentId`)
@@ -79,6 +80,8 @@ def _request_fingerprint(intent: _PreparedRound) -> str:
         payload.pop("style", None)
     if payload.get("question_id") is None:
         payload.pop("question_id", None)
+    if not payload.get("approve"):
+        payload.pop("approve", None)
     if payload.get("project_setup") is None:
         payload.pop("project_setup", None)
     else:
@@ -162,6 +165,7 @@ def _prepare_message(intent: MessageIntent) -> _PreparedRound:
         address=address,
         style=intent.style,
         question_id=intent.question_id,
+        approve=intent.approve,
     )
 
 

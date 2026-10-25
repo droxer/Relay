@@ -67,6 +67,7 @@ class RunAdmissionMixin(RegistryState):
         *,
         active_runs: list[dict[str, Any]] | None = None,
         request_id: str | None = None,
+        start_index: int = 0,
     ) -> dict[str, Any]:
         assignments = [
             {
@@ -93,6 +94,7 @@ class RunAdmissionMixin(RegistryState):
                 task_id,
                 active_runs,
                 request_id,
+                start_index,
             )
 
     def _prepare_run_request_unlocked(
@@ -105,7 +107,10 @@ class RunAdmissionMixin(RegistryState):
         task_id: str | None,
         active_runs: list[dict[str, Any]] | None,
         request_id: str | None,
+        start_index: int = 0,
     ) -> dict[str, Any]:
+        """Stage a request at ``start_index``: 0 for a new round, the held
+        turn for a round an approval resumes."""
         existing = self.daemon_store.get_run_request(request_id) if request_id else None
         if existing:
             state = {**state, WORK_PROTOCOL: bool((existing.get("state") or {}).get(WORK_PROTOCOL))}
@@ -168,7 +173,7 @@ class RunAdmissionMixin(RegistryState):
                         COLLABORATION_ADMISSION_EXPIRED_STATE_KEY: True,
                     },
                     "status": "prepared",
-                    "currentIndex": 0,
+                    "currentIndex": start_index,
                     **CLEARED_RUN_CURSOR,
                     "error": None,
                     "completedAt": None,
@@ -191,6 +196,7 @@ class RunAdmissionMixin(RegistryState):
                 "assignments": assignments,
                 "state": state,
                 "status": "prepared",
+                "currentIndex": start_index,
                 **({"taskId": task_id} if task_id else {}),
             }
         )

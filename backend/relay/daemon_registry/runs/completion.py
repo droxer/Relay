@@ -174,18 +174,22 @@ class RunCompletionMixin(RegistryState):
                 snapshot=item.get("content") is not None,
             )
 
-    def _complete_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
+    def _closing_controller(self, run_request: dict[str, Any]) -> SessionController:
+        """The controller that closes a round's thread and settles its task."""
         sandbox = self.sandboxes.get(run_request["nodeId"])
-        controller = (
-            self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
-            if sandbox
-            else SessionController(
-                self.store,
-                task_store=self.task_store,
-                task_id=run_request.get("taskId"),
-                task_execution_owner=request_execution_owner(run_request),
+        if sandbox:
+            return self._controller_for_sandbox(
+                sandbox, run_request.get("taskId"), run_request
             )
+        return SessionController(
+            self.store,
+            task_store=self.task_store,
+            task_id=run_request.get("taskId"),
+            task_execution_owner=request_execution_owner(run_request),
         )
+
+    def _complete_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
+        controller = self._closing_controller(run_request)
         task_status = "done"
         round_result = (run_request.get("state") or {}).get(ROUND_RESULT_STATE_KEY)
         if isinstance(round_result, dict):

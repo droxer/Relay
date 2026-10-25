@@ -11,6 +11,10 @@ from ..collaboration.models import (
     COLLABORATION_FINGERPRINT_STATE_KEY,
     COLLABORATION_MANIFEST_STATE_KEY,
 )
+from ..collaboration.approvals import (
+    APPROVED_INDEX_STATE_KEY,
+    PARKED_INDEX_STATE_KEY,
+)
 from ..collaboration.work import (
     WORK_STATE_KEYS,
 )
@@ -38,8 +42,8 @@ from ..core.daemon_capabilities import (
 ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
 
 
-# Person-only round sources: an answer, or a rerun/handoff.
-HUMAN_ROUND_SOURCES = frozenset({"message", "recovery"})
+# Person-only round sources: an answer, a rerun/handoff, or an approval.
+HUMAN_ROUND_SOURCES = frozenset({"message", "recovery", "approval"})
 
 
 def is_human_started_round(manifest: dict[str, Any]) -> bool:
@@ -72,6 +76,8 @@ CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
         FOLLOW_UP_FAILURE_STATE_KEY,
         COLLABORATION_MANIFEST_STATE_KEY,
         COLLABORATION_FINGERPRINT_STATE_KEY,
+        APPROVED_INDEX_STATE_KEY,
+        PARKED_INDEX_STATE_KEY,
     }
 )
 

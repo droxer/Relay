@@ -225,6 +225,10 @@ class RunIntentMixin(NodeBackendState):
         fingerprint = request.get("idempotencyFingerprint")
         if isinstance(fingerprint, str) and fingerprint:
             state[COLLABORATION_FINGERPRINT_STATE_KEY] = fingerprint
+        # Set only by the conductor when an approval resumes a parked round
+        # (ADR-023): the work so far, and the turn to pick up at.
+        resume = request.get("_resume") or {}
+        state.update(resume.get("state") or {})
         return self.registry.prepare_run_request(
             sandbox_id,
             session_id,
@@ -234,6 +238,7 @@ class RunIntentMixin(NodeBackendState):
             task_id,
             active_runs=active_runs_by_node[node_id],
             request_id=run_request_id,
+            start_index=resume.get("index", 0),
         )
 
 

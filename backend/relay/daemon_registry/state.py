@@ -3,7 +3,7 @@
 The registry is split by concern into mixins, grouped by subpackage:
 ``nodes`` (``registration``, ``liveness``, ``admin``), ``dispatch``
 (``commands``, ``admission``, ``delivery``, ``follow_up``), and ``runs``
-(``progression``, ``transitions``, ``failure``, ``completion``, ``events``,
+(``progression``, ``transitions``, ``failure``, ``completion``, ``approval``, ``events``,
 ``reaper``). They all act on one in-memory view and one set of
 locks, owned and initialized by ``DaemonNodeRegistry.__init__``; this class
 only declares that state so each mixin reads as code against a known shape.
@@ -77,6 +77,12 @@ class RegistryState:
             ...
 
         def _close_superseded_thread(self, session_id: str) -> None:
+            ...
+
+        def _closing_controller(self, run_request: dict[str, Any]) -> SessionController:
+            ...
+
+        def _park_for_approval(self, run_request: dict[str, Any]) -> None:
             ...
 
         def _complete_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
