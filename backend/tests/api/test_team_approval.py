@@ -10,6 +10,7 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
@@ -224,3 +225,95 @@ def test_a_team_without_approval_runs_straight_to_review(monkeypatch) -> None:
         _finish(app, agent_id=builder["id"])
         _finish(app, agent_id=reviewer["id"])
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] in ("review", "done")
+
+
+def test_an_interrupted_approval_park_recovers_and_can_be_answered(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        builder, reviewer, task = _approval_team_task(client)
+        assert client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).status_code == 202
+        store = app.state.registry.daemon_store
+        original = store.update_run_request
+
+        def fail_park(request_id, patch):
+            if "_relay_approval_parked_index" in (patch.get("state") or {}):
+                raise RuntimeError("Interrupted approval park")
+            return original(request_id, patch)
+
+        monkeypatch.setattr(store, "update_run_request", fail_park)
+        with pytest.raises(RuntimeError, match="Interrupted approval park"):
+            _finish(app, agent_id=builder["id"])
+        monkeypatch.setattr(store, "update_run_request", original)
+
+        # The wait committed before the request update failed. Recovery must
+        # finish the park, rather than suppressing the undelivered held step.
+        app.state.registry.reap_stale_runs(force=True)
+        waiting = _awaiting(client, task["id"])
+        assert app.state.registry.take_commands(NODE, "node_token") == []
+        thread_id = waiting["sessionId"]
+        response = client.post(f"/api/v1/threads/{thread_id}/messages", json={
+            "text": "Approved.", "questionId": waiting["questionId"], "approve": True,
+        })
+        assert response.status_code == 202, response.text
+        _finish(app, agent_id=reviewer["id"])
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] in ("review", "done")
+
+
+@pytest.mark.parametrize("approve", [True, False])
+def test_retention_keeps_an_unanswered_approval_and_prunes_it_after_answer(monkeypatch, approve) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        builder, reviewer, task = _approval_team_task(client)
+        assert client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).status_code == 202
+        thread_id = _finish(app, agent_id=builder["id"])["sessionId"]
+        waiting = _awaiting(client, task["id"])
+        store = app.state.registry.daemon_store
+        pruned = store.prune_terminal_records(0, 0, run_request_retention_seconds=0)
+        assert pruned["runRequests"] == 0
+        response = client.post(f"/api/v1/threads/{thread_id}/messages", json={
+            "text": "Approved." if approve else "Rename the helper.",
+            "questionId": waiting["questionId"], "approve": approve,
+        })
+        assert response.status_code == 202, response.text
+        assert store.prune_terminal_records(0, 0, run_request_retention_seconds=0)["runRequests"] == 1
+        _finish(app, agent_id=reviewer["id"] if approve else builder["id"])
+
+
+def test_an_approval_notifies_its_person_once_and_each_reworked_wait_notifies_again(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        builder, _reviewer, task = _approval_team_task(client)
+        assert client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).status_code == 202
+        thread_id = _finish(app, agent_id=builder["id"])["sessionId"]
+        waiting = _awaiting(client, task["id"])
+        [notice] = client.get("/api/v1/notifications").json()["notifications"]
+        assert notice["kind"] == "approval_requested"
+        assert notice["data"]["questionId"] == waiting["questionId"]
+        assert notice["data"]["sessionId"] == thread_id
+        assert notice["data"]["taskId"] == task["id"]
+
+        # Retried closeout neither duplicates the notice nor marks it unread.
+        client.post("/api/v1/notifications/read", json={"ids": [notice["id"]]})
+        request = app.state.registry.daemon_store.get_run_request(waiting["questionId"][2:])
+        app.state.registry._park_for_approval(request)
+        inbox = client.get("/api/v1/notifications").json()
+        assert len(inbox["notifications"]) == 1
+        assert inbox["unreadCount"] == 0
+        response = client.post(f"/api/v1/threads/{thread_id}/messages", json={
+            "text": "Rename the helper.", "questionId": waiting["questionId"],
+        })
+        assert response.status_code == 202, response.text
+        _finish(app, agent_id=builder["id"])
+        inbox = client.get("/api/v1/notifications").json()
+        assert len(inbox["notifications"]) == 2
+        assert inbox["unreadCount"] == 1
+        assert len({item["data"]["questionId"] for item in inbox["notifications"]}) == 2
