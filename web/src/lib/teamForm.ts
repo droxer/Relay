@@ -23,6 +23,7 @@ function normalizeAcceptanceCriteria(criteria: string[]): string[] {
 
 export function teamMutationInput(input: {
   collaborationStyle?: CollaborationStyle | null;
+  humanApproval?: boolean;
   name: string;
   leadAgentId: string;
   memberAgentIds: string[];
@@ -38,6 +39,7 @@ export function teamMutationInput(input: {
     ...(input.computerId ? { computerId: input.computerId } : {}),
     enabled: input.enabled,
     ...(input.collaborationStyle !== undefined ? { collaborationStyle: input.collaborationStyle } : {}),
+    ...(input.humanApproval !== undefined ? { humanApproval: input.humanApproval } : {}),
     ...(input.memberConfigs
       ? { memberConfigs: normalizeMemberConfigs(input.memberConfigs, input.memberAgentIds) }
       : {}),

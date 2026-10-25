@@ -75,6 +75,9 @@ export interface ThreadMessageInput {
    *  it still waits on this question, and answers 409 `question_superseded`
    *  otherwise. Sent only with intent `accomplish`. */
   questionId?: string;
+  /** Answering an approval wait: approve the held step. Any other answer to
+   *  it asks for changes. Requires `questionId`. */
+  approve?: boolean;
 }
 
 export interface ThreadRecoveryInput {

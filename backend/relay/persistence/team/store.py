@@ -378,6 +378,7 @@ def _new_team(
             if payload.get("collaborationStyle") is not None
             else {}
         ),
+        **({"humanApproval": True} if _human_approval(payload.get("humanApproval")) else {}),
         "enabled": payload.get("enabled") is not False,
         "createdAt": timestamp,
         "updatedAt": timestamp,
@@ -402,10 +403,20 @@ def _normalized_team_snapshot(
     return {**normalized, "ownerUserId": owner} if owner else normalized
 
 
+def _human_approval(value: Any) -> bool:
+    """Whether the team's person approves the work before its round's final
+    step (ADR-023). Absent means no."""
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise ValueError("humanApproval must be a boolean.")
+    return value
+
+
 def _normalize_team_patch(
     patch: dict[str, Any], *, current: dict[str, Any]
 ) -> dict[str, Any]:
-    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle"}
+    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle", "humanApproval"}
     unknown = set(patch) - allowed
     if unknown:
         raise ValueError(f"Unsupported team field(s): {', '.join(sorted(unknown))}.")
@@ -448,6 +459,8 @@ def _normalize_team_patch(
         normalized["collaborationStyle"] = (
             None if value is None else validate_collaboration_style(value)
         )
+    if "humanApproval" in patch:
+        normalized["humanApproval"] = _human_approval(patch["humanApproval"])
     # An emptied team has no lead; edits that leave the roster alone (a rename,
     # a style change) stay valid until it is restaffed.
     if (members or "leadAgentId" in patch) and lead not in members:

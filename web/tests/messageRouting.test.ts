@@ -224,4 +224,16 @@ describe("thread message input with a team", () => {
     assert.equal(input.addressTeamId, "team_b");
     assert.equal(input.addressAgentIds, undefined);
   });
+
+  it("approves only with the wait it answers, and keys approval apart", () => {
+    const approved = threadMessageInput({
+      text: "Approved.", addressAgentIds: [], userMessageId: "evt_1", questionId: "q_1", approve: true,
+    });
+    assert.equal(approved.approve, true);
+    assert.equal(approved.questionId, "q_1");
+    const unnamed = threadMessageInput({ text: "Approved.", addressAgentIds: [], userMessageId: "evt_2", approve: true });
+    assert.equal(unnamed.approve, undefined);
+    const base = { sessionId: "s", text: "Approved.", intent: "accomplish" as const, addressAgentIds: [], questionId: "q_1" };
+    assert.notEqual(threadMessageOperationKey(base), threadMessageOperationKey({ ...base, approve: true }));
+  });
 });

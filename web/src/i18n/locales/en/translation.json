@@ -31,7 +31,13 @@
     "team_default_short": "team default",
     "inherit_hint": "Follow the team’s setting.",
     "slot_lead_summary": "Summary",
-    "loop_until_approved": "{{builder}} revises the work until {{reviewer}} approves it."
+    "loop_until_approved": "{{builder}} revises the work until {{reviewer}} approves it.",
+    "slot_approval": "Approval",
+    "slot_approval_name": "You",
+    "approval_label": "Ask me to approve before the final step",
+    "approval_hint": "On task work, the team stops before its last step until you approve. Asking for changes sends the work back first.",
+    "approval_lead_led": "Lead-led rounds can’t stop for approval yet. Choose Build → Review or Pipeline to use it.",
+    "approval_loop": "You approve the work before {{next}} takes the last step. Asking for changes sends it back."
   },
   "app": {
     "title": "Relay"
@@ -2419,6 +2425,15 @@
     "hint_choices_task": "Pick one to resume {{ref}}, or write your own answer.",
     "write_own": "Write my own",
     "choice_mark_done": "It’s finished. Mark {{ref}} done",
+    "approval_title": "{{agent}} is done. Approve to continue",
+    "approval_text": "{{next}} takes the next step once you approve. To ask for changes, write what to fix: {{agent}} reworks it and asks you again.",
+    "approval_text_unnamed": "The team takes the next step once you approve. To ask for changes, write what to fix: {{agent}} reworks it and asks you again.",
+    "choice_approve": "Approve and continue",
+    "choice_approve_reply": "Approved. Continue with the next step.",
+    "hint_approval_task": "Approving resumes {{ref}}.",
+    "request_changes": "Request changes",
+    "placeholder_changes": "What should {{agent}} change?",
+    "sent_approval": "Sent. The team continues with the next step.",
     "effect_resume": "Resumes {{ref}}",
     "effect_resume_thread": "Resumes the work",
     "effect_stays": "Keeps it waiting on you",
@@ -2974,6 +2989,7 @@
     "mark_failed": "Could not mark notifications as read. Try again.",
     "task_review": "Ready for your review",
     "task_done": "Task finished",
+    "approval_requested": "Your approval is needed",
     "task_detail": "{{ref}} {{title}}",
     "task_detail_untitled": "{{ref}}",
     "computer_online": "Computer back online",
@@ -2992,6 +3008,8 @@
     "kind": {
       "task_completed": "Finished tasks",
       "task_completed_sub": "When agents finish a task, or it is ready for your review.",
+      "approval_requested": "Team approvals",
+      "approval_requested_sub": "When a team waits for your approval before its next step.",
       "computer_status": "Computer status",
       "computer_status_sub": "When one of your computers goes offline or comes back online.",
       "client_outdated": "Relay client updates",

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, UTC
 from typing import Any
 from loguru import logger
+from ...collaboration.approvals import awaits_approval
 from ...core.computer_identity import computer_id
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ...persistence.task.execution import request_execution_owner
@@ -39,7 +40,8 @@ class FollowUpRetryMixin(RegistryState):
     def _follow_up_run_request(
         self, run_request: dict[str, Any], outcome: str = "Assignments completed."
     ) -> None:
-        """Start the request's current assignment, or close the round past its end.
+        """Start the request's current assignment, park it for its person's
+        approval, or close the round past its end.
 
         Runs after finalization has released its terminal claim, so a failure
         here is outside that claim's attempt counting. Count it on the request
@@ -49,6 +51,8 @@ class FollowUpRetryMixin(RegistryState):
         try:
             if run_request.get("currentIndex", 0) >= len(run_request["assignments"]):
                 self._complete_run_request(run_request, outcome)
+            elif awaits_approval(run_request):
+                self._park_for_approval(run_request)
             else:
                 self._enqueue_current_assignment(run_request)
         except Exception as error:

@@ -29,6 +29,14 @@ it("presents the team sequence as an ordered, readable preview", () => {
   ]);
 });
 
+it("shows the person's approval before the step that closes the round", () => {
+  render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="build_review" approval nameOf={(id) => id} />);
+  expect(screen.getAllByRole("listitem").map((item) => item.getAttribute("data-slot"))).toEqual([
+    "builder", "approval", "reviewer",
+  ]);
+  expect(screen.getByText(/collab_style.approval_loop/)).toBeTruthy();
+});
+
 it("offers only team styles and normalizes legacy Solo settings", () => {
   expect(COLLABORATION_STYLES).toEqual(["build_review", "pipeline", "lead_led"]);
   expect(effectiveStyle({ collaborationStyle: "solo" })).toBe("build_review");

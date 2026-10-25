@@ -12,11 +12,12 @@ from collections.abc import Sequence
 from typing import Any
 
 TASK_COMPLETED = "task_completed"
+APPROVAL_REQUESTED = "approval_requested"
 COMPUTER_STATUS = "computer_status"
 CLIENT_OUTDATED = "client_outdated"
 PERMISSION_REQUESTED = "permission_requested"
 NOTIFICATION_KINDS: tuple[str, ...] = (
-    TASK_COMPLETED, PERMISSION_REQUESTED, COMPUTER_STATUS, CLIENT_OUTDATED,
+    TASK_COMPLETED, APPROVAL_REQUESTED, PERMISSION_REQUESTED, COMPUTER_STATUS, CLIENT_OUTDATED,
 )
 
 
@@ -65,21 +66,53 @@ def task_notification_rows(
 ) -> list[dict[str, Any]]:
     """Notices for this write; whoever changed the status themself gets none."""
     completion = task_completion(before, after)
-    if not completion:
+    approval = _new_approval_wait(before, after)
+    if not completion and not approval:
         return []
     data = {
         "taskId": after["id"],
         "title": after.get("title") or "",
-        "status": completion,
+        "status": completion or "waiting_for_human",
+        **(
+            {"questionId": approval["questionId"], "sessionId": after["waitingSessionId"]}
+            if approval else {}
+        ),
         **({"number": after["number"]} if after.get("number") is not None else {}),
         **({"projectId": after["projectId"]} if after.get("projectId") else {}),
         **({"sourceRoutineId": after["sourceRoutineId"]} if after.get("sourceRoutineId") else {}),
     }
     actors = status_actors(events)
     return [
-        {"user_id": user_id, "kind": TASK_COMPLETED, "data": data}
+        {
+            "user_id": user_id,
+            "kind": APPROVAL_REQUESTED if approval else TASK_COMPLETED,
+            "data": data,
+            **({"dedupeKey": approval["questionId"]} if approval else {}),
+        }
         for user_id in task_recipients(after) if user_id not in actors
     ]
+
+
+def _new_approval_wait(
+    before: dict[str, Any] | None, after: dict[str, Any],
+) -> dict[str, Any] | None:
+    """A newly opened approval, identified by the question an answer names."""
+    if before is None or after.get("deletedAt") or after.get("isRoutine"):
+        return None
+    wait = after.get("waitingRequest") or {}
+    if (
+        after.get("status") != "waiting_for_human"
+        or wait.get("kind") != "approval"
+        or not wait.get("questionId")
+        or not after.get("waitingSessionId")
+    ):
+        return None
+    if (
+        before.get("status") == "waiting_for_human"
+        and (before.get("waitingRequest") or {}).get("questionId") == wait["questionId"]
+    ):
+        return None
+    return wait
 
 
 def computer_name(node: dict[str, Any]) -> str:

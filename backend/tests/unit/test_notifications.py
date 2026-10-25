@@ -8,6 +8,7 @@ from typing import Any
 from relay.core.daemon_capabilities import client_outdated, missing_capabilities
 from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 from relay.notifications.rules import (
+    APPROVAL_REQUESTED,
     CLIENT_OUTDATED,
     COMPUTER_STATUS,
     TASK_COMPLETED,
@@ -76,6 +77,45 @@ def test_task_notice_carries_facts_not_prose() -> None:
     assert row == {"user_id": "u-1", "kind": TASK_COMPLETED, "data": {
         "taskId": "t-1", "title": "Ship it", "status": "review", "number": 12, "projectId": "p-1",
     }}
+
+
+def test_approval_notifies_owner_and_assignee_once_per_question() -> None:
+    before = {"status": "running"}
+    after = {
+        "id": "t-1", "title": "Ship it", "ownerUserId": "u-1", "assigneeUserId": "u-2",
+        "status": "waiting_for_human", "waitingSessionId": "s-1",
+        "waitingRequest": {"kind": "approval", "questionId": "q-1"},
+    }
+    rows = task_notification_rows(before, after)
+    assert [row["user_id"] for row in rows] == ["u-1", "u-2"]
+    assert all(row["kind"] == APPROVAL_REQUESTED for row in rows)
+    assert all(row["dedupeKey"] == "q-1" for row in rows)
+    assert task_notification_rows(after, {**after, "title": "Renamed"}) == []
+    assert len(task_notification_rows(after, {
+        **after, "waitingRequest": {"kind": "approval", "questionId": "q-2"},
+    })) == 2
+    for patch in (
+        {"deletedAt": SEEN}, {"isRoutine": True}, {"waitingSessionId": None},
+        {"waitingRequest": {"kind": "question", "questionId": "q-2"}},
+        {"waitingRequest": {"kind": "approval"}},
+    ):
+        assert task_notification_rows(before, {**after, **patch}) == []
+
+
+def test_replaying_an_approval_notice_preserves_read_state_and_scopes_deduplication(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    row = {"user_id": "u-1", "kind": APPROVAL_REQUESTED, "data": {}, "dedupeKey": "q-1"}
+    store.add([row])
+    first = store.list_for_user("u-1")["notifications"][0]
+    store.mark_read("u-1", [first["id"]])
+    store.add([row, {**row, "dedupeKey": "q-2"}, {**row, "user_id": "u-2"}])
+    inbox = store.list_for_user("u-1")
+    assert len(inbox["notifications"]) == 2
+    assert inbox["unreadCount"] == 1
+    replayed = next(item for item in inbox["notifications"] if item["id"] == first["id"])
+    assert replayed["readAt"] is not None
+    assert replayed["createdAt"] == first["createdAt"]
+    assert store.list_for_user("u-2")["unreadCount"] == 1
 
 
 # --- client version ----------------------------------------------------------

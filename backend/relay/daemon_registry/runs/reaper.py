@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, UTC
 from typing import Any
 from loguru import logger
+from ...collaboration.approvals import awaits_approval
 from ...collaboration.models import (
     COLLABORATION_ADMISSION_EXPIRED_ERROR,
     COLLABORATION_ADMISSION_EXPIRED_OUTCOME,
@@ -409,11 +410,16 @@ class RunReaperMixin(RegistryState):
         if (
             session["status"] == "completed"
             and not request.get("currentCommandId")
-            and request.get("currentIndex", 0) >= len(request["assignments"])
+            and (
+                request.get("currentIndex", 0) >= len(request["assignments"])
+                or awaits_approval(request)
+            )
         ):
             # Closeout may have persisted the session before its task write
-            # failed. Replay the original completion; repair_completion fences
-            # newer human decisions.
+            # failed, or an approval park may have closed the thread before
+            # recording its resume index. Replay that closeout rather than
+            # suppressing the held step; repair_completion fences newer human
+            # decisions.
             if not self._follow_up_backing_off(request):
                 self._follow_up_run_request(request)
             return

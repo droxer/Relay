@@ -127,6 +127,9 @@ export interface TeamMemberConfig {
 
 export interface AgentTeam {
   collaborationStyle?: CollaborationStyle;
+  /** The team's person approves the work before its round's final step
+   *  (ADR-023). Absent means no. */
+  humanApproval?: boolean;
   id: string;
   ownerUserId: string;
   name: string;
@@ -152,6 +155,7 @@ export interface AgentTeamsResponse {
 
 export interface TeamMutationInput {
   collaborationStyle?: CollaborationStyle | null;
+  humanApproval?: boolean;
   memberConfigs?: Record<string, TeamMemberConfig>;
   acceptanceCriteria?: string[];
   name: string;

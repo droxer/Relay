@@ -39,6 +39,9 @@ class MessageIntent:
     # message resumes the task only while that is still the question it waits
     # on; a stale id is refused rather than answering a newer question.
     question_id: str | None = None
+    # With `question_id` naming an approval wait: approve the held step.
+    # Any other answer to an approval asks for changes (ADR-023).
+    approve: bool = False
 
 
 @dataclass(frozen=True)

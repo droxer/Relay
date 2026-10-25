@@ -25,6 +25,18 @@ function notice(kind: string, data: unknown, overrides: Record<string, unknown> 
 }
 
 describe("notificationView", () => {
+  it("opens an approval notice in the thread where the person can answer", () => {
+    const view = notificationView(notice("approval_requested", {
+      taskId: "t1", sessionId: "s1", questionId: "q_1", title: "Ship it", projectId: "p1",
+    }));
+    assert.ok(view);
+    assert.equal(view.tone, "info");
+    assert.deepEqual(view.title, { key: "notifications.approval_requested", params: {} });
+    assert.deepEqual(view.detail, { key: "notifications.thread_detail", params: { title: "Ship it" } });
+    assert.equal(notificationHref(view.target), "/projects/p1/threads/s1");
+    assert.equal(notificationView(notice("approval_requested", { taskId: "t1" })), null);
+  });
+
   it("reads a task waiting for review as an info notice that opens the task", () => {
     const view = notificationView(notice("task_completed", { taskId: "t1", title: "Fix login", status: "review", number: 12 }));
     assert.ok(view);

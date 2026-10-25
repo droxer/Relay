@@ -250,6 +250,9 @@ class ThreadMessageBody(RequestSchema):
         WithJsonSchema({"anyOf": [{"enum": sorted(MESSAGE_PURPOSES)}, {"type": "null"}]}),
     ] = None
     question_id: CheckedStr = Field(None, alias="questionId")
+    # Answering an approval wait (ADR-023): true approves the held step; any
+    # other answer asks for changes.
+    approve: Annotated[Any, WithJsonSchema({"type": "boolean"})] = None
     address_agent_ids: CheckedStrList = Field(None, alias="addressAgentIds")
     # The singular field the chat gateway still sends.
     address_agent_id: TrimmedStr = Field(None, alias="addressAgentId")
@@ -274,6 +277,16 @@ class ThreadMessageBody(RequestSchema):
                 {
                     "code": "answer_requires_accomplish",
                     "message": "An answer is sent with intent accomplish.",
+                },
+            )
+        if self.approve is not None and not isinstance(self.approve, bool):
+            raise HTTPException(400, "approve must be a boolean.")
+        if self.approve and not question_id:
+            raise HTTPException(
+                400,
+                {
+                    "code": "approval_requires_question",
+                    "message": "An approval names the wait it answers.",
                 },
             )
         raw = self.address_agent_ids

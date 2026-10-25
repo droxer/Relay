@@ -31,7 +31,13 @@
     "team_default_short": "团队默认",
     "inherit_hint": "沿用团队的设置。",
     "slot_lead_summary": "汇总",
-    "loop_until_approved": "由 {{builder}} 修改工作，直至 {{reviewer}} 批准。"
+    "loop_until_approved": "由 {{builder}} 修改工作，直至 {{reviewer}} 批准。",
+    "slot_approval": "审批",
+    "slot_approval_name": "你",
+    "approval_label": "最后一步前请我批准",
+    "approval_hint": "处理任务时，团队会在最后一步前暂停，直到你批准。要求修改会先把工作退回。",
+    "approval_lead_led": "负责人主导的轮次暂不支持审批暂停。选择“构建 → 评审”或“流水线”即可使用。",
+    "approval_loop": "你批准后，{{next}} 才进行最后一步。要求修改会把工作退回。"
   },
   "app": {
     "title": "Relay"
@@ -2365,6 +2371,15 @@
     "hint_choices_task": "选择一项以继续 {{ref}}，或自己填写回答。",
     "write_own": "自己填写",
     "choice_mark_done": "已完成，将 {{ref}} 标记为完成",
+    "approval_title": "{{agent}} 已完成，批准后继续",
+    "approval_text": "你批准后，{{next}} 进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
+    "approval_text_unnamed": "你批准后，团队进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
+    "choice_approve": "批准并继续",
+    "choice_approve_reply": "已批准，继续下一步。",
+    "hint_approval_task": "批准后将恢复 {{ref}}。",
+    "request_changes": "要求修改",
+    "placeholder_changes": "需要 {{agent}} 修改什么？",
+    "sent_approval": "已发送，团队将继续下一步。",
     "effect_resume": "继续 {{ref}}",
     "effect_resume_thread": "继续这项工作",
     "effect_stays": "仍等待你的回复",
@@ -2910,6 +2925,7 @@
     "mark_failed": "无法将通知标为已读。请重试。",
     "task_review": "等待你审阅",
     "task_done": "任务已完成",
+    "approval_requested": "等待你批准",
     "task_detail": "{{ref}} {{title}}",
     "task_detail_untitled": "{{ref}}",
     "computer_online": "电脑已恢复在线",
@@ -2928,6 +2944,8 @@
     "kind": {
       "task_completed": "已完成的任务",
       "task_completed_sub": "智能体完成任务，或任务等待你审阅时。",
+      "approval_requested": "团队批准请求",
+      "approval_requested_sub": "团队在下一步开始前等待你批准时。",
       "computer_status": "电脑状态",
       "computer_status_sub": "你的电脑离线或恢复在线时。",
       "client_outdated": "Relay 客户端更新",

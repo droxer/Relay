@@ -38,6 +38,21 @@ RUNNING_AGENT = (False, True)
 SESSION_STATUSES = ("running", "cancelled", "completed")
 
 
+def test_an_approval_wait_holds_no_execution_reservation_and_allows_deletion() -> None:
+    # A parked approval completed its segment. Its request is retained only
+    # as resume state, so it is absent from active execution lookups.
+    session = {
+        "id": "s", "status": "completed", "workOutcome": "blocked",
+        "hasRunningAgent": False, "agentRuns": [{"id": "r", "status": "completed"}],
+        "awaiting": {"kind": "approval", "questionId": "q_parked"},
+        "deletionRequestedAt": LONG_AGO,
+    }
+    status = execution_status(session, None, None, now=NOW)
+    assert status["phase"] == "terminal"
+    assert status["canDelete"] is True
+    assert status["canReportGone"] is False
+
+
 def _inputs():
     for (request_status, command_status, lease, stop, recovery, claim,
          running_agent, session_status, execution_state) in product(

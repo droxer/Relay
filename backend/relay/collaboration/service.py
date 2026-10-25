@@ -5,6 +5,7 @@ from typing import Any
 
 from ..agents.routing import AgentRoutingError
 from ..teams.dispatch import TeamDispatchError
+from .approval_round import ApprovalRoundMixin
 from .assignments import AssignmentsMixin, _with_work_contract
 from .errors import CollaborationError
 from .intake import (
@@ -32,7 +33,7 @@ from ..security.actor import Actor
 
 
 class CollaborationConductor(
-    RosterMixin, AssignmentsMixin, TaskScopeMixin, RoundRequestMixin
+    RosterMixin, AssignmentsMixin, TaskScopeMixin, RoundRequestMixin, ApprovalRoundMixin
 ):
     """Turn semantic collaboration intent into one durable, auditable round.
 
@@ -113,6 +114,16 @@ class CollaborationConductor(
             if intent.question_id
             else None
         )
+        if session and answered_task:
+            resumed = self._approval_round(
+                intent, actor, fingerprint, session=session, task=answered_task
+            )
+            if resumed is not None:
+                return await self.ctx.backend.run(resumed["daemonNodeId"], resumed)
+        elif intent.approve:
+            raise CollaborationError(
+                "approval_not_awaited", "An approval names the wait it answers."
+            )
         task_goal = _round_task_goal(intent, session)
         team_id, project_id = _round_scope_ids(intent, session)
         is_recovery = _is_recovery_decision(intent.decision)

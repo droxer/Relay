@@ -158,6 +158,7 @@ async def submit_thread_message(
                 user_message_id=body.user_message_id or None,
                 style=style,
                 question_id=body.answered_question_id(),
+                approve=body.approve is True,
             ),
             actor,
         )

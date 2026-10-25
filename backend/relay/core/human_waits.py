@@ -13,11 +13,13 @@ from typing import Any, Literal
 
 from .ids import new_relay_id
 
-WaitKind = Literal["question", "check", "budget"]
+WaitKind = Literal["question", "check", "budget", "approval"]
 # `question`: the agent stopped to ask. `check`: a gate stopped the round
 # (missing evidence, no verdict, an unblocked run) and a person decides what
-# happens next. `budget`: the task used its continuation rounds.
-WAIT_KINDS: tuple[str, ...] = ("question", "check", "budget")
+# happens next. `budget`: the task used its continuation rounds. `approval`:
+# the team asks its person to approve the work before the round's next step
+# (ADR-023); the round resumes from that step.
+WAIT_KINDS: tuple[str, ...] = ("question", "check", "budget", "approval")
 QUESTION_ID_PREFIX = "q"
 
 
@@ -42,10 +44,12 @@ def wait_record(
     options: list[str] | None = None,
     notes: list[str] | None = None,
     unreported: bool = False,
+    next_agent_id: str | None = None,
 ) -> dict[str, Any]:
     """A wait record. `unreported` marks a check whose agent ended its turn
     without filing its report: its last message, not the gate, says what it
-    needs, so a surface points there instead of quoting the gate."""
+    needs, so a surface points there instead of quoting the gate.
+    `next_agent_id` names who takes the step an approval holds back."""
     if kind not in WAIT_KINDS:
         raise ValueError(f"Unknown wait kind: {kind}")
     return {
@@ -55,6 +59,7 @@ def wait_record(
         **({"inputOptions": list(options)} if options else {}),
         **({"inputNotes": list(notes)} if notes else {}),
         **({"unreported": True} if unreported and kind == "check" else {}),
+        **({"nextAgentId": next_agent_id} if next_agent_id and kind == "approval" else {}),
     }
 
 

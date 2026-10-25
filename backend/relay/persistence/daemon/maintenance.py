@@ -8,14 +8,18 @@ from __future__ import annotations
 
 from datetime import timedelta
 from sqlalchemy import (
+    Text,
+    cast,
     delete,
     or_,
     select,
 )
 from ..db_time import require_db_time
 from ...core.ids import now_iso
+from ...core.human_waits import QUESTION_ID_PREFIX
 from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
+from ..tables.tasks import tasks
 from .rules import (
     PRUNABLE_DAEMON_EVENT_PREFIXES,
     PRUNABLE_DAEMON_EVENT_TYPES,
@@ -41,7 +45,8 @@ class DaemonRecordMaintenance(DaemonStoreState):
         each table. Keyset rotation prevents quiet nodes from starving.
         Terminal run requests double as idempotency records for dispatch
         retries, so they get their own, longer window and are skipped when it
-        is None.
+        is None. A request referenced by an unanswered approval remains live
+        resume state even though its execution segment has completed.
         """
         now = require_db_time(now_iso())
         cutoff = now - timedelta(seconds=max(0.0, retention_seconds))
@@ -84,6 +89,18 @@ class DaemonRecordMaintenance(DaemonStoreState):
                 request_cutoff = now - timedelta(
                     seconds=max(0.0, run_request_retention_seconds)
                 )
+                approval_wait = (
+                    select(tasks.c.id)
+                    .where(
+                        tasks.c.id == self.run_requests.c.task_id,
+                        tasks.c.status == "waiting_for_human",
+                        tasks.c.deleted_at.is_(None),
+                        tasks.c.snapshot["waitingRequest"]["kind"].as_string() == "approval",
+                        tasks.c.snapshot["waitingRequest"]["questionId"].as_string()
+                        == f"{QUESTION_ID_PREFIX}_" + cast(self.run_requests.c.id, Text),
+                    )
+                    .exists()
+                )
                 request_ids = list(
                     conn.scalars(
                         select(self.run_requests.c.id)
@@ -92,6 +109,7 @@ class DaemonRecordMaintenance(DaemonStoreState):
                                 ACTIVE_RUN_REQUEST_STATUSES
                             ),
                             self.run_requests.c.updated_at <= request_cutoff,
+                            ~approval_wait,
                         )
                         .order_by(self.run_requests.c.updated_at, self.run_requests.c.id)
                         .limit(1000)
