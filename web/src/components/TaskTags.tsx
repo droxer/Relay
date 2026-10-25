@@ -2,20 +2,32 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { tagTone } from "../lib/taskTags";
 
 /**
- * The ONE tag mark: a hairline outline and the tag's name, in ink.
+ * A tag's colour, alone: the "#" every tag badge leads with, and the mark
+ * beside a tag in the filter menu. Its tone comes from the tag's name
+ * (`tagTone`), so one tag is one colour everywhere. The glyph is drawn by CSS
+ * and hidden from assistive tech, which reads the tag's name alone.
+ */
+export function TagMark({ tag }: { tag: string }) {
+  return <span className="tag-mark" data-tone={tagTone(tag)} aria-hidden="true" />;
+}
+
+/**
+ * The ONE tag badge: the tag's toned "#" and its name, in ink, on the shared
+ * chip fill.
  *
- * Deliberately not a toned Badge. Badges are tinted fills that carry status
- * (done, blocked, needs project); a tag is a label the person chose and means
- * nothing to Relay, so it takes the quieter outline and no colour at all —
- * a hashed dot per tag put five accents on a row beside the one hue that
- * means something, its status. `children` is a trailing control — the
- * editor's remove button.
+ * Deliberately not a toned Badge. Badges are status — a toned word on a toned
+ * fill (done, blocked, needs project); a tag is a label the person chose and
+ * means nothing to Relay, so its name stays ink and its colour stays in the
+ * "#", which also says what the chip is without a legend. `children` is a
+ * trailing control — the editor's remove button.
  */
 export function TagBadge({ tag, className, children }: { tag: string; className?: string; children?: ReactNode }) {
   return (
     <span className={cn("tag-badge", className)} title={tag}>
+      <TagMark tag={tag} />
       <span className="tag-badge-text">{tag}</span>
       {children}
     </span>
