@@ -148,6 +148,8 @@ export interface DaemonRuntimeOptions {
   shutdownGraceMs?: number;
   /** Bound on the final "stopped" registration; defaults to SHUTDOWN_REGISTRATION_TIMEOUT_MS. */
   shutdownRegistrationTimeoutMs?: number;
+  /** How often a host run left over from a previous daemon is checked again for exit; defaults to EXIT_RECHECK_INTERVAL_MS. */
+  exitRecheckIntervalMs?: number;
   agentHome?: string;
   maxConcurrentRuns?: number;
   environment?: DaemonExecutionEnvironment;
@@ -340,13 +342,24 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   // waiting for a person. They stay fenced: none of them is ever run again.
   const provenExits = await proveJournaledExits(environment, executionJournal.pending(), logger, sandboxId);
   for (const record of provenExits) unreportedExecutions.delete(record.id);
-  for (const execution of executionJournal.pending()) {
-    if (provenExits.some((record) => record.id === execution.id)) continue;
+  // A host run can outlive its daemon (a killed daemon never stops its
+  // process groups), and usually ends soon after. Those are checked again
+  // while this daemon runs; a BoxLite check retires guests, so it runs once.
+  let leftoverExecutions = executionJournal.pending()
+    .filter((execution) => !provenExits.some((record) => record.id === execution.id));
+  for (const execution of leftoverExecutions) {
     logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
       sandboxId, commandId: execution.id, runId: execution.runId,
       sessionId: execution.sessionId, leaseId: execution.leaseId,
+      ...(environment.sandboxMode === "none" ? {
+        evidence: execution.processGroup ? `process group ${execution.processGroup} still running` : "no process group recorded",
+      } : {}),
     });
   }
+  leftoverExecutions = environment.sandboxMode === "none"
+    ? leftoverExecutions.filter((execution) => execution.processGroup)
+    : [];
+  const exitRecheckIntervalMs = options.exitRecheckIntervalMs ?? EXIT_RECHECK_INTERVAL_MS;
   setHealth("starting", { userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
   const activeRuns = new Map<string, { command: DaemonNodeRunCommand; controller: AbortController; promise: Promise<void> }>();
   // Runs whose stop could not be verified, each with the switch that lets it go.
@@ -407,10 +420,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       fetchFn, url, buildRegistration(), undefined, runtimeSignal,
     );
     for (const id of response.acknowledgedJournalIds ?? []) {
-      if (!unreportedExecutions.delete(id)) continue;
-      // The backend now holds the run as interrupted (or already settled), so
-      // the record has served its purpose. The fence stays for this process.
-      executionJournal.confirmExit(id);
+      // Acknowledgement accounts for the interrupted run, but is not exit
+      // evidence. Keep its journal so another restart can still prove exit;
+      // the durable terminal outbox removes it once that proof is recorded.
+      unreportedExecutions.delete(id);
     }
     if (Array.isArray(response.projectLinks)) {
       for (const rejected of projectLinks.replaceAll(response.projectLinks)) {
@@ -464,14 +477,20 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   };
   const handleSigint = (): void => shutdown("SIGINT", true);
   const handleSigterm = (): void => shutdown("SIGTERM", true);
+  // Closing the terminal a daemon runs in hangs it up. Left to Node's default
+  // that kills the daemon outright, while each run's own process group keeps
+  // going with nobody to stop or report it; stop the runs like any shutdown.
+  const handleSighup = (): void => shutdown("SIGHUP", true);
   const handleExternalAbort = (): void => shutdown("external", false);
   const cleanupShutdownListeners = (): void => {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
+    process.off("SIGHUP", handleSighup);
     options.signal?.removeEventListener("abort", handleExternalAbort);
   };
   process.once("SIGINT", handleSigint);
   process.once("SIGTERM", handleSigterm);
+  process.once("SIGHUP", handleSighup);
   options.signal?.addEventListener("abort", handleExternalAbort, { once: true });
   if (options.signal?.aborted) shutdown("external", false);
   if (stopping) {
@@ -486,6 +505,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   watchdogTimer.unref();
   let heartbeatTask: Promise<void> | undefined;
   let outboxTask: Promise<void> | undefined;
+  let exitRecheckTask: Promise<void> | undefined;
   try {
     const reconnectControl = {
       signal: runtimeSignal,
@@ -502,7 +522,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ?? DEFAULT_LIVENESS_HEARTBEAT_MS;
     heartbeatFeatures = new Set(initialHeartbeatSettings?.features ?? enrolledHeartbeatSettings?.features ?? []);
     let lastRegisteredAt = Date.now();
-    for (const record of provenExits) {
+    const reportProvenExit = (record: ExecutionRecord, reason: string): void => {
       // Persisted to the outbox before sending, so delivery survives another
       // restart; the outbox clears the journal record once it holds the event.
       void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
@@ -512,13 +532,30 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         sessionId: record.sessionId,
         runId: record.runId,
         agent: record.agent as AgentName,
-        reason: "The computer restarted, and this run's process had already stopped.",
+        reason,
       } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
         logger.warn("proven-exit report failed; the outbox will retry", {
           sandboxId, commandId: record.id, error: error instanceof Error ? error.message : String(error),
         });
       });
+    };
+    for (const record of provenExits) {
+      reportProvenExit(record, "The computer restarted, and this run's process had already stopped.");
     }
+    exitRecheckTask = (async () => {
+      while (leftoverExecutions.length > 0 && !runtimeSignal.aborted) {
+        await delay(exitRecheckIntervalMs, runtimeSignal);
+        const exited = await proveJournaledExits(environment, leftoverExecutions, logger, sandboxId);
+        for (const record of exited) {
+          // Not yet acknowledged means not yet reported: the cancel says it all.
+          unreportedExecutions.delete(record.id);
+          reportProvenExit(record, "The computer restarted while this run was going; its process has since stopped.");
+        }
+        leftoverExecutions = leftoverExecutions.filter((execution) => !exited.some((record) => record.id === execution.id));
+      }
+    })().catch((error: unknown) => {
+      if (!runtimeSignal.aborted) logger.warn("leftover run check stopped", { sandboxId, error: String(error) });
+    });
     logger.info("daemon registered", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
     console.log(`${out.success(`Relay daemon registered sandbox ${sandboxId}`)} ${out.muted(`with backend at ${backendUrl} (sandbox: ${sandboxMode})`)}`);
@@ -1110,6 +1147,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     clearInterval(watchdogTimer);
     await heartbeatTask;
     await outboxTask;
+    await exitRecheckTask;
     cleanupShutdownListeners();
   }
 }
@@ -2170,6 +2208,8 @@ const DEFAULT_COMMAND_LEASE_SECONDS = 90;
 const DEFAULT_UNREACHABLE_GRACE_MS = 300_000;
 /** Matches the backend's per-registration journal report bound. */
 const JOURNAL_REPORT_LIMIT = 200;
+/** How often a host run left over from a previous daemon is checked again for exit. */
+const EXIT_RECHECK_INTERVAL_MS = 15_000;
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);

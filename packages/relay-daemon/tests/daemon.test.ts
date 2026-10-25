@@ -2456,6 +2456,8 @@ test("relay daemon removes shutdown listeners after external stop", async () => 
   const stop = new AbortController();
   const beforeSigint = process.listenerCount("SIGINT");
   const beforeSigterm = process.listenerCount("SIGTERM");
+  const beforeSighup = process.listenerCount("SIGHUP");
+  let hupHandled = false;
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
@@ -2472,6 +2474,8 @@ test("relay daemon removes shutdown listeners after external stop", async () => 
       if (path === "/api") return jsonResponse({ name: "Relay backend" });
       if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
       if (path.endsWith("/commands")) {
+        // Closing the daemon's terminal stops it like any other signal.
+        hupHandled = process.listenerCount("SIGHUP") === beforeSighup + 1;
         stop.abort();
         return jsonResponse({ commands: [] });
       }
@@ -2483,6 +2487,8 @@ test("relay daemon removes shutdown listeners after external stop", async () => 
 
   assert.equal(process.listenerCount("SIGINT"), beforeSigint);
   assert.equal(process.listenerCount("SIGTERM"), beforeSigterm);
+  assert.equal(hupHandled, true);
+  assert.equal(process.listenerCount("SIGHUP"), beforeSighup);
 });
 
 test("relay daemon exits polling sleep after external stop", async () => {
@@ -5108,7 +5114,7 @@ test("daemon restart fences a retained execution instead of running it again", a
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
-test("daemon reports retained executions at registration and forgets them once acknowledged", async () => {
+test("daemon stops reporting acknowledged executions but retains their exit evidence", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-journal-report-"));
   const stop = new AbortController();
   const command = runCommand();
@@ -5133,6 +5139,8 @@ test("daemon reports retained executions at registration and forgets them once a
           if (body.status !== "stopped") {
             reported.push(body.journaledCommandIds);
             capabilities = body.capabilities;
+          } else {
+            assert.equal(body.journaledCommandIds, undefined);
           }
           return jsonResponse({ acknowledgedJournalIds: body.journaledCommandIds ?? [] });
         }
@@ -5145,8 +5153,8 @@ test("daemon reports retained executions at registration and forgets them once a
     });
     assert.deepEqual(reported[0], [command.id]);
     assert.ok(capabilities.includes("execution-journal-report"));
-    assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), false);
-    // Forgetting the record never makes the run eligible to start again.
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), true);
+    // Retaining the record keeps the run fenced against duplicate execution.
     assert.equal(executions, 0);
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
@@ -5191,6 +5199,133 @@ test("a restarted daemon settles a run it can prove ended instead of leaving it 
     assert.deepEqual(reported, [unproven.id]);
     assert.equal(new ExecutionJournal(join(root, "executions")).has(proven.id), false);
     assert.equal(new ExecutionJournal(join(root, "executions")).has(unproven.id), true);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("a host run that outlived its daemon is settled once its process group is gone", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-leftover-exit-"));
+  const stop = new AbortController();
+  const leftover = runCommand("cmd_leftover");
+  const journal = new ExecutionJournal(join(root, "executions"));
+  journal.record(leftover);
+  journal.attach(leftover.id, { processGroup: 4242, spawnedAt: Date.now(), bootAt: Date.now() });
+  const events: DaemonNodeEvent[] = [];
+  let checks = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "leftover-exit", userId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      exitRecheckIntervalMs: 5, signal: stop.signal, logger: testLogger(),
+      // Still running at startup and on the first re-check; gone after that.
+      environment: { ...fakeEnvironment(), proveExited: async (records) =>
+        ++checks > 2 ? records.map((record) => record.id) : [] },
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/v1/daemon-node-registrations") {
+          const body = JSON.parse(String(init?.body));
+          return jsonResponse({ acknowledgedJournalIds: body.journaledCommandIds ?? [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.cancelled") setTimeout(() => stop.abort(), 0);
+          return jsonResponse({ ok: true });
+        }
+        if (path.endsWith("/commands")) return jsonResponse({ commands: [] });
+        return jsonResponse({ ok: true });
+      },
+    });
+    const cancelled = events.find((event) => event.type === "run.cancelled" && event.commandId === leftover.id);
+    assert.ok(cancelled?.type === "run.cancelled");
+    assert.match(cancelled.reason, /since stopped/);
+    assert.equal(checks, 3);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("a leftover host run is still rechecked after a second daemon restart", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-leftover-restarts-"));
+  const leftover = { ...runCommand("cmd_leftover_restarts"), leaseId: "lease_leftover" };
+  const journal = new ExecutionJournal(join(root, "executions"));
+  journal.record(leftover);
+  journal.attach(leftover.id, { processGroup: 4242, spawnedAt: Date.now(), bootAt: Date.now() });
+  const events: DaemonNodeEvent[] = [];
+  const reported: unknown[] = [];
+  try {
+    for (let restart = 0; restart < 2; restart++) {
+      const stop = new AbortController();
+      let checks = 0;
+      let polls = 0;
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "leftover-restarts", userId: "alice", token: "node_token",
+        workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+        exitRecheckIntervalMs: 5, signal: stop.signal, logger: testLogger(),
+        // The process stays alive through both startup checks, then exits.
+        environment: { ...fakeEnvironment(), proveExited: async (records) =>
+          ++checks > 1 && restart === 1 ? records.map((record) => record.id) : [] },
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api/v1/daemon-node-registrations") {
+            const body = JSON.parse(String(init?.body));
+            if (body.status !== "stopped") reported.push(body.journaledCommandIds);
+            else assert.equal(body.journaledCommandIds, undefined);
+            return jsonResponse({ acknowledgedJournalIds: body.journaledCommandIds ?? [] });
+          }
+          if (path.endsWith("/events")) {
+            const event = await jsonBody<DaemonNodeEvent>(init);
+            events.push(event);
+            if (event.type === "run.cancelled") setTimeout(() => stop.abort(), 0);
+            return jsonResponse({ ok: true });
+          }
+          if (path.endsWith("/commands")) {
+            if (restart === 0 || polls++ > 20) stop.abort();
+            return jsonResponse({ commands: [] });
+          }
+          return jsonResponse({ ok: true });
+        },
+      });
+      if (restart === 0) {
+        assert.equal(events.length, 0);
+        assert.equal(journal.has(leftover.id), true, "registration acknowledgement must preserve process evidence");
+      }
+    }
+    assert.deepEqual(reported, [[leftover.id], [leftover.id]]);
+    const cancelled = events.find((event) => event.type === "run.cancelled");
+    assert.ok(cancelled?.type === "run.cancelled");
+    assert.equal(cancelled.commandId, leftover.id);
+    assert.equal(cancelled.leaseId, leftover.leaseId);
+    assert.equal(cancelled.runId, leftover.runId);
+    assert.match(cancelled.reason, /since stopped/);
+    assert.equal(journal.has(leftover.id), false);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("a BoxLite computer checks leftover runs only at startup", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-leftover-boxlite-"));
+  const stop = new AbortController();
+  const leftover = runCommand("cmd_leftover_box");
+  const journal = new ExecutionJournal(join(root, "executions"));
+  journal.record(leftover);
+  journal.attach(leftover.id, { processGroup: 4242, spawnedAt: Date.now(), bootAt: Date.now() });
+  let checks = 0;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "leftover-boxlite", userId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      exitRecheckIntervalMs: 1, signal: stop.signal, logger: testLogger(),
+      // A BoxLite check retires guests, which would stop this daemon's own runs.
+      environment: { ...fakeEnvironment(), sandboxMode: "boxlite", proveExited: async () => { checks++; return []; } },
+      fetchFn: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/commands")) {
+          if (polls++ > 5) stop.abort();
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return jsonResponse({ commands: [] });
+        }
+        return jsonResponse({ ok: true });
+      },
+    });
+    assert.equal(checks, 1);
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
