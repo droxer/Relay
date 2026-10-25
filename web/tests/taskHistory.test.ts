@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { taskHistoryEntries } from "../src/lib/taskHistory.js";
+import { taskHistoryEntries, threadLinkEntryIds } from "../src/lib/taskHistory.js";
 import type { RelayTaskEvent } from "../src/types.js";
 
 function event(input: Partial<RelayTaskEvent> & { id: string; type: RelayTaskEvent["type"]; timestamp: string }): RelayTaskEvent {
@@ -97,5 +97,38 @@ describe("taskHistoryEntries", () => {
     assert.equal(entries[0]?.message, "Picked up by the node");
     // The assignment entry carries its target so the label can print a name.
     assert.equal(entries[2]?.teamId, "team_9");
+  });
+});
+
+describe("threadLinkEntryIds", () => {
+  it("links each thread once, on its newest entry", () => {
+    const entries = taskHistoryEntries([
+      event({ id: "e1", type: "task.session_linked", timestamp: "2026-06-01T00:00:00.000Z", sessionId: "session_1" } as never),
+      event({
+        id: "e2",
+        type: "task.activity",
+        timestamp: "2026-06-02T00:00:00.000Z",
+        activity: { id: "act_1", createdAt: "2026-06-02T00:00:00.000Z", message: "Dispatched to claude", sessionId: "session_1" },
+      } as never),
+      event({
+        id: "e3",
+        type: "task.activity",
+        timestamp: "2026-06-03T00:00:00.000Z",
+        activity: { id: "act_2", createdAt: "2026-06-03T00:00:00.000Z", message: "Round finished", sessionId: "session_1" },
+      } as never),
+      event({ id: "e4", type: "task.status", timestamp: "2026-06-04T00:00:00.000Z", status: "review" } as never),
+    ], "task_1");
+
+    assert.deepEqual([...threadLinkEntryIds(entries)], ["e3"]);
+  });
+
+  it("keeps one link per distinct thread", () => {
+    const entries = taskHistoryEntries([
+      event({ id: "e1", type: "task.session_linked", timestamp: "2026-06-01T00:00:00.000Z", sessionId: "session_1" } as never),
+      event({ id: "e2", type: "task.session_linked", timestamp: "2026-06-02T00:00:00.000Z", sessionId: "session_2" } as never),
+      event({ id: "e3", type: "task.session_unlinked", timestamp: "2026-06-03T00:00:00.000Z", sessionId: "session_1" } as never),
+    ], "task_1");
+
+    assert.deepEqual([...threadLinkEntryIds(entries)].sort(), ["e2", "e3"]);
   });
 });

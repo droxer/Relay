@@ -7,7 +7,7 @@ import { listTaskEvents } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
 import { pathForAppState } from "../../lib/appRoute";
-import { taskHistoryEntries } from "../../lib/taskHistory";
+import { taskHistoryEntries, threadLinkEntryIds } from "../../lib/taskHistory";
 import { historyEntryLabel, historyTime, type HistoryNameResolver } from "./taskHistoryLabel";
 import type { RelayTaskEvent } from "../../types";
 
@@ -49,6 +49,7 @@ export function RecordHistory({
   });
   const events: RelayTaskEvent[] | undefined = eventsQuery.data?.events;
   const entries = events ? taskHistoryEntries(events, taskId) : [];
+  const threadLinkIds = threadLinkEntryIds(entries);
 
   return (
     <section className="record-timeline" aria-label={t("backlog.history_title")}>
@@ -69,7 +70,7 @@ export function RecordHistory({
            step state carries no meaning here and is not styled. */
         <Timeline render={<ol />} className="record-timeline-list" value={entries.length}>
           {entries.map((entry, index) => {
-            const sessionId = entry.sessionId;
+            const sessionId = threadLinkIds.has(entry.id) ? entry.sessionId : undefined;
             return (
             <TimelineItem key={entry.id} step={index + 1} render={<li />} className="record-timeline-entry">
               <TimelineIndicator className="record-timeline-marker" />
