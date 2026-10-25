@@ -7,8 +7,6 @@ import { navigateToAppPath, pathForAppState } from "../lib/appRoute";
 import { taskRef } from "../lib/taskRef";
 import { Button } from "@/components/ui/button";
 import { ActionSend, ICON } from "./icons";
-import { IdentityMark } from "./IdentityMark";
-import { ProfileImage } from "./ProfileImagePicker";
 
 type Choice = {
   label: string;
@@ -21,6 +19,11 @@ type Choice = {
   approve?: true;
   /** Acts on the task instead of replying; resolves false when it did not. */
   act?: () => Promise<boolean>;
+  /** What picking it does to the work, said on the row itself, so the
+   *  person never has to read a paragraph to tell the choices apart. */
+  effect?: string;
+  /** What the prompt says once the pick went through. */
+  sent: string;
 };
 
 const TITLE_KEYS = {
@@ -50,12 +53,11 @@ const ANNOUNCE_DELAY_MS = 150;
  * else has focus (or focus is on the prompt itself). Typing stays available
  * for anything else.
  */
-export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentImage, onChoose, onReply, onMarkDone }: {
+export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoose, onReply, onMarkDone }: {
   waiting: AwaitingInput;
   agentName: string;
   /** An approval's: who takes the held step once it is approved. */
   nextAgentName?: string;
-  agentImage?: string;
   /** Send this answer as the reply. */
   onChoose: (reply: string, options?: { intent?: "discuss"; approve?: true }) => Promise<boolean>;
   /** Put the caret in the composer. */
@@ -67,6 +69,9 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
   const headingId = useId();
   const sectionRef = useRef<HTMLElement | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
+  // Set once a pick went through: the prompt then says what happens next
+  // instead of leaving a lit row and silence until the thread moves on.
+  const [sent, setSent] = useState<string | null>(null);
   // A prompt appearing when a round finishes is news to a screen reader user
   // whose focus is elsewhere. Said once: the words never change afterwards,
   // so later renders say nothing.
@@ -87,21 +92,46 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
   // The person may judge the work finished whatever the agent left unsaid;
   // beside an agent's own answers it would read as one of them, so a
   // question keeps only those.
+  const resumed = t("awaiting.sent_resume", { agent: agentName });
   const markDone: Choice | null = !asked && ref && onMarkDone
-    ? { label: t("awaiting.choice_mark_done", { ref }), reply: "mark_done", act: onMarkDone }
+    ? {
+      label: t("awaiting.choice_mark_done", { ref }),
+      reply: "mark_done",
+      act: onMarkDone,
+      effect: t("awaiting.effect_close", { ref }),
+      sent: t("awaiting.sent_done", { ref }),
+    }
     : null;
   const choices: Choice[] = approval
     ? [
-      { label: t("awaiting.choice_approve"), reply: t("awaiting.choice_approve_reply"), approve: true },
+      {
+        label: t("awaiting.choice_approve"),
+        reply: t("awaiting.choice_approve_reply"),
+        approve: true,
+        sent: nextAgentName
+          ? t("awaiting.sent_resume", { agent: nextAgentName })
+          : t("awaiting.sent_approval"),
+      },
       ...(markDone ? [markDone] : []),
     ]
     : !asked
     ? [
-      { label: t("awaiting.choice_continue"), reply: t("awaiting.choice_continue_reply") },
-      { label: t("awaiting.choice_status"), reply: t("awaiting.choice_status_reply"), intent: "discuss" },
+      {
+        label: t("awaiting.choice_continue"),
+        reply: t("awaiting.choice_continue_reply"),
+        effect: ref ? t("awaiting.effect_resume", { ref }) : t("awaiting.effect_resume_thread"),
+        sent: resumed,
+      },
+      {
+        label: t("awaiting.choice_status"),
+        reply: t("awaiting.choice_status_reply"),
+        intent: "discuss",
+        effect: t("awaiting.effect_stays"),
+        sent: t("awaiting.sent_discuss", { agent: agentName }),
+      },
       ...(markDone ? [markDone] : []),
     ]
-    : waiting.options.map((option) => ({ label: option, reply: option }));
+    : waiting.options.map((option) => ({ label: option, reply: option, sent: resumed }));
   const choose = async (index: number) => {
     const choice = choices[index];
     if (!choice || chosen !== null) return;
@@ -113,7 +143,8 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
           choice.reply,
           choice.intent ? { intent: choice.intent } : choice.approve ? { approve: true } : undefined,
         );
-      if (!done) setChosen(null);
+      if (done) setSent(choice.sent);
+      else setChosen(null);
     } catch {
       setChosen(null);
     }
@@ -142,12 +173,12 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [choiceCount]);
   // The hint says only what the controls cannot: which task a reply resumes,
-  // or that a bare reply box continues the work. "Pick one or write your
-  // own" is already said by the answers and the button beside them.
+  // or that a bare reply box continues the work. A gate stop's rows each say
+  // their own effect; an approval names the task its next step resumes.
   const hint = approval
-    ? (ref ? t("awaiting.hint_approval_task", { ref, agent: agentName }) : null)
+    ? (ref ? t("awaiting.hint_approval_task", { ref }) : null)
     : !asked
-    ? (ref ? t(markDone ? "awaiting.hint_check_task_done" : "awaiting.hint_check_task", { ref }) : null)
+    ? null
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : null)
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));
@@ -162,9 +193,6 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
     <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
       <p role="status" className="sr-only">{announced ? title : ""}</p>
       <div className="awaiting-input-head">
-        <span className="awaiting-input-avatar" aria-hidden="true">
-          <ProfileImage src={agentImage} alt="" fallback={<IdentityMark kind="agent" />} />
-        </span>
         <h2 id={headingId} className="awaiting-input-title">{title}</h2>
         {task && taskHref ? (
           <a
@@ -193,8 +221,13 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
       ) : (
         <p className="awaiting-input-quote" data-empty="true">{t("awaiting.no_question", { agent: agentName })}</p>
       )}
-      {waiting.notes.length ? <AwaitingInputNotes notes={waiting.notes} /> : null}
-      {choices.length ? (
+      {waiting.notes.length ? <AwaitingInputNotes notes={waiting.notes} collapsed /> : null}
+      {sent ? (
+        <p className="awaiting-input-sent" role="status">
+          <ActionSend size={ICON.sm} aria-hidden="true" />
+          <span>{sent}</span>
+        </p>
+      ) : choices.length ? (
         <ul className="awaiting-input-choices" aria-label={t("awaiting.choices")}>
           {choices.map((choice, index) => (
             <li key={choice.reply}>
@@ -205,22 +238,24 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
                 disabled={chosen !== null}
                 aria-busy={chosen === index || undefined}
                 aria-keyshortcuts={String(index + 1)}
+                aria-describedby={choice.effect ? `${headingId}-effect-${index}` : undefined}
                 onClick={() => void choose(index)}
               >
                 <kbd className="awaiting-input-choice-key" aria-hidden="true">{index + 1}</kbd>
                 <span className="awaiting-input-choice-label">{choice.label}</span>
+                {choice.effect ? <span id={`${headingId}-effect-${index}`} className="awaiting-input-choice-effect" aria-hidden="true">{choice.effect}</span> : null}
                 <ActionSend className="awaiting-input-choice-send" size={ICON.sm} aria-hidden="true" />
               </button>
             </li>
           ))}
         </ul>
       ) : null}
-      <div className="awaiting-input-foot">
+      {sent ? null : <div className="awaiting-input-foot">
         {hint ? <p className="awaiting-input-hint">{hint}</p> : null}
         <Button type="button" variant="ghost" size="dense" disabled={chosen !== null} onClick={onReply}>
           {t(approval ? "awaiting.request_changes" : choices.length ? "awaiting.write_own" : "awaiting.reply")}
         </Button>
-      </div>
+      </div>}
     </section>
   );
 }
@@ -230,15 +265,26 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, agentIm
  * acceptance gates it stood in front of, so the person answering is not
  * surprised when the next round stops on them.
  */
-export function AwaitingInputNotes({ notes }: { notes: readonly string[] }) {
+export function AwaitingInputNotes({ notes, collapsed = false }: {
+  notes: readonly string[];
+  /** Folded behind a one-line summary, where the question must stay the loud thing. */
+  collapsed?: boolean;
+}) {
   const { t } = useTranslation();
   const headingId = useId();
+  const list = <ul>{notes.map((note) => <li key={note}>{note}</li>)}</ul>;
+  if (collapsed) {
+    return (
+      <details className="awaiting-input-notes">
+        <summary className="awaiting-input-notes-title">{t("awaiting.notes_summary", { count: notes.length })}</summary>
+        {list}
+      </details>
+    );
+  }
   return (
     <div className="awaiting-input-notes" role="group" aria-labelledby={headingId}>
       <p id={headingId} className="awaiting-input-notes-title">{t("awaiting.notes_title")}</p>
-      <ul>
-        {notes.map((note) => <li key={note}>{note}</li>)}
-      </ul>
+      {list}
     </div>
   );
 }

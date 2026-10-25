@@ -725,7 +725,11 @@
         "failed": "失败",
         "running": "运行中",
         "pending": "未开始"
-      }
+      },
+      "col_trigger": "触发方式",
+      "col_started": "开始时间",
+      "detail_label": "运行详情",
+      "files_none": "无"
     },
     "columns": "列",
     "result_title": "结果",
@@ -2344,6 +2348,9 @@
     "save_member": "保存",
     "no_responsibility": "尚未设置职责范围。"
   },
+  "next_steps": {
+    "title": "建议的下一步"
+  },
   "awaiting": {
     "question_title": "{{agent}} 需要你的回答",
     "check_title": "{{agent}} 在完成前停下了",
@@ -2363,10 +2370,7 @@
     "choice_status_reply": "继续之前，请告诉我哪些已完成、还剩什么，以及需要我提供什么。",
     "hint_choices_task": "选择一项以继续 {{ref}}，或自己填写回答。",
     "write_own": "自己填写",
-    "hint_check_task": "选择继续会恢复 {{ref}}；询问进展时它仍等待你的回复。",
-    "hint_check_task_done": "选择继续会恢复 {{ref}}；询问进展时它仍等待你的回复；标记完成会按当前结果关闭它。",
     "choice_mark_done": "已完成，将 {{ref}} 标记为完成",
-    "notes_title": "同时阻碍这项工作的问题：",
     "approval_title": "{{agent}} 已完成，批准后继续",
     "approval_text": "你批准后，{{next}} 进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
     "approval_text_unnamed": "你批准后，团队进行下一步。如需修改，请写下要改的地方：{{agent}} 修改后会再次请你批准。",
@@ -2374,7 +2378,17 @@
     "choice_approve_reply": "已批准，继续下一步。",
     "hint_approval_task": "批准后将恢复 {{ref}}。",
     "request_changes": "要求修改",
-    "placeholder_changes": "需要 {{agent}} 修改什么？"
+    "placeholder_changes": "需要 {{agent}} 修改什么？",
+    "sent_approval": "已发送，团队将继续下一步。",
+    "effect_resume": "继续 {{ref}}",
+    "effect_resume_thread": "继续这项工作",
+    "effect_stays": "仍等待你的回复",
+    "effect_close": "按当前结果关闭 {{ref}}",
+    "sent_resume": "已发送，{{agent}} 将接着处理。",
+    "sent_discuss": "已发送，{{agent}} 会回答；这项工作仍等待你。",
+    "sent_done": "{{ref}} 已标记为完成。",
+    "notes_summary_other": "另有 {{count}} 项阻碍这项工作",
+    "notes_title": "同时阻碍这项工作的问题："
   },
   "recovery": {
     "title": "后续操作",

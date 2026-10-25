@@ -43,6 +43,7 @@ class SessionControllerState:
             *, work_outcome: str = "unverified",
             input_request: dict[str, Any] | None = None,
             accepted_by_human: bool = False,
+            next_steps: list[str] | None = None,
         ) -> dict[str, Any]:
             ...
 

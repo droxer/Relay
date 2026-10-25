@@ -13,6 +13,7 @@ from ...collaboration.models import (
 )
 from ...core.ids import new_database_id, new_relay_id, now_iso
 from ...core.runtime_status import executor_not_ready_message
+from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.workspace_layout import workspace_artifacts_dir
 from ...persistence.task.execution import request_execution_owner
 from ...core.daemon_capabilities import (
@@ -258,6 +259,11 @@ class AssignmentDeliveryMixin(RegistryState):
             and has_capability(sandbox, DAEMON_CAPABILITY_ROUND_RESULT)
         ):
             state = {**state, "round_result_file": ROUND_RESULT_RELATIVE_PATH}
+        # The member that speaks for the round may suggest what its person asks
+        # next, in a thread as in a task. An older daemon never reads the file
+        # and its prompt never asks for it, so this needs no capability.
+        if self._assignment_reports_round_result(assignments, index):
+            state = {**state, "next_steps_file": NEXT_STEPS_RELATIVE_PATH}
         # The role was recorded on the thread but never reached the agent, so a
         # team of specialists all received the same prompt. Carry it in the run
         # state the way the display name and instructions travel.

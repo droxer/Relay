@@ -114,8 +114,9 @@ it("navigates into a run from its open link, and only from there", async () => {
 
   await user.click((await screen.findAllByRole("button", { name: /backlog\.runs\.outcome/ }))[1]!);
   expect(onOpenRecord).not.toHaveBeenCalled();
-  await user.click(screen.getAllByRole("link", { name: "record.open_run" })[0]!);
-  expect(onOpenRecord).toHaveBeenCalledWith("R-42", "T-2288");
+  // The selected run's detail carries the one link into it.
+  await user.click(screen.getByRole("link", { name: "record.open_run" }));
+  expect(onOpenRecord).toHaveBeenCalledWith("R-42", "T-2270");
 });
 
 it("gives a run its own title and a breadcrumb back to its routine", async () => {

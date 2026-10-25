@@ -39,29 +39,6 @@
   min-width: 0;
 }
 
-/* Agents are squares (see .rail-node): the silhouette, not a fill, says
-   machine. */
-.awaiting-input-avatar {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: var(--avatar-xs);
-  height: var(--avatar-xs);
-  overflow: hidden;
-  border: 0.5px solid var(--ink-4);
-  border-radius: var(--r-1);
-  background: var(--surface-3);
-  color: var(--ink-1);
-}
-
-.awaiting-input-avatar .profile-image,
-.awaiting-input-avatar img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .awaiting-input-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -123,6 +100,14 @@
   color: var(--ink-3);
 }
 
+/* Folded in the prompt: one quiet line until asked for. */
+summary.awaiting-input-notes-title {
+  width: fit-content;
+  cursor: pointer;
+}
+
+summary.awaiting-input-notes-title:hover { color: var(--ink-1); }
+
 .awaiting-input-notes ul {
   margin: var(--sp-1) 0 0;
   padding-inline-start: var(--sp-4);
@@ -150,7 +135,7 @@
 
 .awaiting-input-choice {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
@@ -185,6 +170,17 @@
   overflow-wrap: anywhere;
 }
 
+/* What the pick does to the work, in the quiet voice at the row's trailing
+   edge: it tells the rows apart without a paragraph under them. */
+.awaiting-input-choice-effect {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+.awaiting-input-choice:disabled:not([data-chosen]) .awaiting-input-choice-effect { color: var(--ink-4); }
+
 .awaiting-input-choice-send {
   color: var(--action);
   opacity: 0;
@@ -217,6 +213,20 @@
    until intent, with the caution tone kept for the rail alone. */
 .awaiting-input:is([data-kind="check"], [data-kind="budget"]) .awaiting-input-choice { color: var(--ink-2); }
 
+/* After a pick: what happens next, in place of the rows, so a click never
+   ends in silence while the thread catches up. */
+.awaiting-input-sent {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.awaiting-input-sent > svg { flex: 0 0 auto; color: var(--action); }
+
 /* The hint, when it says something the controls do not, and the way to type
    an answer instead. With no hint the button keeps the trailing edge, under
    the rows' send glyphs. */
@@ -241,6 +251,11 @@
     --awaiting-inset: var(--sp-3);
     padding-inline: var(--sp-3);
   }
+
+  /* No room for a trailing column: the effect drops under the label. */
+  .awaiting-input-choice { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .awaiting-input-choice-effect { grid-column: 2; grid-row: 2; white-space: normal; }
+  .awaiting-input-choice-send { grid-column: 3; grid-row: 1; }
 }
 
 /* The task record quotes the same words in its recovery panel. There the

@@ -22,6 +22,22 @@ export function tagKey(tag: string): string {
   return tag.toLocaleLowerCase();
 }
 
+export const TAG_TONES = 8;
+
+/**
+ * The tone (1–TAG_TONES) a tag is drawn in: an FNV-1a hash of its
+ * case-folded name, so "Bug" and "bug" match and a tag keeps its colour on
+ * every surface and every reload without anything being stored.
+ */
+export function tagTone(tag: string): number {
+  let hash = 0x811c9dc5;
+  for (const char of tagKey(tag)) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return ((hash >>> 0) % TAG_TONES) + 1;
+}
+
 export function hasTag(tags: readonly string[] | undefined, tag: string): boolean {
   const key = tagKey(tag);
   return (tags ?? []).some((item) => tagKey(item) === key);

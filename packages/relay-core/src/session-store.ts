@@ -331,6 +331,8 @@ export interface RelaySession {
   inputOptions?: string[];
   /** Acceptance-gate reasons the question stood in front of. */
   inputNotes?: string[];
+  /** Follow-up requests the finished turn suggested; any new activity retires them. */
+  nextSteps?: string[];
   archived?: boolean;
   tokenUsage?: TokenUsage;
 }
@@ -524,6 +526,8 @@ export type RelayEvent =
       inputQuestion?: string;
       inputOptions?: string[];
       inputNotes?: string[];
+      /** Set only when nobody is being waited on. */
+      nextSteps?: string[];
     }
   | {
       id: string;
@@ -586,12 +590,13 @@ export function relayEvent<T extends RelayEvent["type"]>(
 /** A completed session's question for its human; any other transition drops it. */
 function applyInputRequest(
   session: RelaySession,
-  event: { inputQuestion?: string; inputOptions?: string[]; inputNotes?: string[] },
+  event: { inputQuestion?: string; inputOptions?: string[]; inputNotes?: string[]; nextSteps?: string[] },
 ): void {
   clearInputRequest(session);
   if (event.inputQuestion) session.inputQuestion = event.inputQuestion;
   if (event.inputOptions?.length) session.inputOptions = [...event.inputOptions];
   if (event.inputNotes?.length) session.inputNotes = [...event.inputNotes];
+  if (event.nextSteps?.length) session.nextSteps = [...event.nextSteps];
 }
 
 /** Close the open prompts of `runId` (or every one) — their run is gone. */
@@ -627,6 +632,7 @@ function clearInputRequest(session: RelaySession): void {
   delete session.inputQuestion;
   delete session.inputOptions;
   delete session.inputNotes;
+  delete session.nextSteps;
 }
 
 export function materializeEvents(events: RelayEvent[]): RelaySession {

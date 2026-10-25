@@ -37,22 +37,17 @@
 
 /* ── Run ledger ───────────────────────────────────────────────────── */
 
-/* One column template for the header and every row's select button, so
-   "Duration" sits over the durations and a row without files still holds the
-   files column open. Mark · date · outcome (+ why) · duration · files. The
-   open-record link sits outside the button, so the header reserves its width
-   on the right instead of as a sixth column. */
+/* One column template for the header and every row, so "Duration" sits
+   over the durations. Mark · when (day over clock time) · outcome (over its
+   trigger or failure reason) · duration. The file count and the links into
+   the run live in the detail beside the ledger, so the row is one target
+   and the outcome keeps the width it needs to say why. */
 .record-run-head,
 .record-run-link {
   display: grid;
-  grid-template-columns: var(--sp-3) 5.5rem minmax(0, 1fr) 3.5rem 4.5rem;
+  grid-template-columns: var(--sp-3) 5.25rem minmax(0, 1fr) 3.5rem;
   column-gap: var(--sp-3);
-  align-items: center;
   padding-inline: var(--sp-3);
-}
-
-.record-run-head {
-  padding-right: calc(var(--sp-3) + var(--control-h-xs));
 }
 
 .record-run-head {
@@ -79,39 +74,38 @@
   grid-column: 4;
 }
 
-.record-run-head > :nth-child(4) {
-  grid-column: 5;
-}
-
-/* The select target and the open-record link side by side. */
-.record-run {
-  display: flex;
-  align-items: start;
-}
-
 .record-run-head-num {
   text-align: right;
 }
 
 .record-run-list {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: var(--sp-1) 0 0;
   padding: 0;
   list-style: none;
 }
 
 /* Hairlines between rows rather than floating pills: a ledger is read down
-   its columns, and the rules are what carry the eye across a row. */
+   its columns. The rule hides beside the selected row so its wash reads as
+   one shape. */
 .record-run + .record-run {
   border-top: 0.5px solid var(--line-2);
 }
 
-/* The row's main target selects the run; its folder opens beside the
-   ledger. Selected wears the selection wash the file rows and rails use. */
+.record-run:has(> .record-run-link[aria-pressed="true"]) + .record-run,
+.record-run:has(+ .record-run > .record-run-link[aria-pressed="true"]) + .record-run {
+  border-top-color: transparent;
+}
+
+/* The row selects the run; its detail and folder open beside the ledger.
+   Everything hangs from the first line, so the mark and the day stay level
+   with the outcome word, and the second line (clock time, trigger or
+   reason, ink-3) reads as one quieter line across the row. */
 .record-run-link {
-  flex: 1;
-  min-width: 0;
-  /* --control-h-lg, not 2.75rem: that was 44px on a 16px root, but the app
-     root is 14px, so it rendered an off-scale 38.5px row. */
+  align-items: start;
+  width: 100%;
   min-height: var(--control-h-lg);
   padding-block: var(--sp-2);
   border: 0;
@@ -128,22 +122,8 @@
   background: var(--control-fill-hover);
 }
 
-/* The wash covers the whole row, open link included, so the selection reads
-   as one row rather than a highlighted cell beside a bare chevron. */
-.record-run:has(> .record-run-link[aria-pressed="true"]) {
-  border-radius: var(--r-2);
+.record-run-link[aria-pressed="true"] {
   background: var(--action-soft);
-}
-
-.record-run-link[aria-pressed="true"]:hover {
-  background: transparent;
-}
-
-/* Everything hangs from the first line, so a two-line row (a failure and its
-   reason) keeps its date and mark level with the outcome word instead of
-   floating between the two lines. The mark is centred on that line box. */
-.record-run-link {
-  align-items: start;
 }
 
 .record-run-link > .state-mark {
@@ -151,102 +131,134 @@
   margin-top: calc((1lh - var(--dot)) / 2);
 }
 
-
-/* The mark carries the outcome's tone; the row's own text stays neutral so
-   a ledger of thirty runs does not read as thirty coloured lines. */
-.record-run[data-outcome="failed"] .record-run-outcome {
-  color: var(--err);
-}
-
-.record-run-date {
-  color: var(--ink-1);
-  white-space: nowrap;
-}
-
+.record-run-when,
 .record-run-summary {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
+.record-run-date,
 .record-run-outcome {
   color: var(--ink-1);
-}
-
-.record-run-reason {
-  overflow: hidden;
-  color: var(--ink-3);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.record-run-duration,
-.record-run-files {
+/* The mark carries the outcome's tone; only a failure's word takes it too,
+   so a ledger of thirty runs does not read as thirty coloured lines. */
+.record-run[data-outcome="failed"] .record-run-outcome {
+  color: var(--err);
+}
+
+.record-run-time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Two lines, not one: "Agent…" said nothing. The detail quotes it whole. */
+.record-run-reason {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.record-run-duration {
   color: var(--ink-3);
   text-align: right;
   white-space: nowrap;
 }
 
-/* The way into the run's own record. Quiet until the row is under the
-   pointer — thirty chevrons at full ink would outweigh the dates. */
-.record-run-open {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h-xs);
-  height: var(--control-h-lg);
-  border-radius: var(--r-2);
-  color: var(--ink-4);
-}
-
-.record-run:hover .record-run-open {
-  color: var(--ink-2);
-}
-
-.record-run-open:hover {
-  background: var(--control-fill-hover);
-  color: var(--ink-1);
-}
-
-/* A narrow drawer cannot give files a column of its own: the count tucks
-   under the duration, and the outcome keeps the width it needs to say why. */
-@container record (max-width: 640px) {
+/* A narrow pane: the day column narrows to the date's own width. */
+@container record (max-width: 480px) {
   .record-run-head,
   .record-run-link {
     grid-template-columns: var(--sp-3) 3.75rem minmax(0, 1fr) auto;
     column-gap: var(--sp-2);
     padding-inline: var(--sp-2);
   }
+}
 
-  .record-run-head {
-    padding-right: calc(var(--sp-2) + var(--control-h-xs));
-  }
+/* ── Selected run ─────────────────────────────────────────────────── */
 
-  .record-run-head > :nth-child(3) {
-    grid-column: 4;
-  }
+/* The run said in full above its folder: outcome and the ways out on one
+   line, its facts on a second, a failure's whole reason under them. It
+   shares the folder's flush geometry — a header with a rule, not a card. */
+.record-run-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
+}
 
-  .record-run-head > :nth-child(4) {
-    display: none;
-  }
+.record-run-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
 
-  .record-run-link {
-    grid-template-rows: auto auto;
-  }
+.record-run-detail-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+}
 
-  .record-run-link > * {
-    grid-row: 1;
-  }
+.record-run-detail[data-outcome="failed"] .record-run-detail-title {
+  color: var(--err);
+}
 
-  .record-run-summary {
-    grid-row: 1 / span 2;
-  }
+.record-run-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-left: auto;
+}
 
-  .record-run-files {
-    grid-column: 4;
-    grid-row: 2;
-  }
+.record-run-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-6);
+  margin: 0;
+}
+
+.record-run-detail-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.record-run-detail-fact dt {
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
+
+.record-run-detail-fact dd {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+/* The reason as written: wrapped, selectable, on the error tone's quiet wash. */
+.record-run-detail-failure {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+  color: var(--err);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .record-run-more {
@@ -406,7 +418,7 @@
 .record-runs-split {
   display: grid;
   flex: 1 1 0;
-  grid-template-columns: minmax(18rem, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(19rem, 0.8fr) minmax(0, 1.2fr);
   grid-template-rows: minmax(0, 1fr);
   min-height: 360px;
 }

@@ -321,8 +321,18 @@ describe("the record surface owns what the drawer used to", () => {
     // The row selects the run whose folder the explorer beside it shows…
     assert.match(runs, /className="record-run-link"[\s\S]*?aria-pressed=/);
     assert.match(runs, /<RecordWorkspace\b/);
-    // …and the run's own record stays one real link away.
-    assert.match(runs, /<a\s+className="record-run-open"/);
+    // …the selected run is said in full above it, and that detail keeps the
+    // run's own record and its thread real links away — so a row is a
+    // single select target, not a select button beside a chevron.
+    assert.match(runs, /<RecordRunDetail\b[\s\S]*?runHref=/);
+    assert.doesNotMatch(runs, /record-run-open/);
+    const detail = readWeb("src/components/task-record/RecordRunDetail.tsx");
+    assert.match(detail, /<a\s+data-slot="link-button"[\s\S]*?href=\{href\}/);
+    assert.match(detail, /record\.open_run/);
+    assert.match(detail, /backlog\.open_thread/);
+    // ↑/↓ walk the ledger with one tab stop.
+    assert.match(runs, /ArrowDown/);
+    assert.match(runs, /tabIndex=\{selected \? 0 : -1\}/);
     // The expand control and its per-row event fetch belong to the run's own
     // surface now; a row that both expands and navigates has two answers to
     // one click.

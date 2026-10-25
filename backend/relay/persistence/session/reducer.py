@@ -83,6 +83,8 @@ def apply_session_event(
 # What a thread waiting on its human asked: the question, the answers it
 # offered, and any acceptance-gate reasons the question stood in front of.
 INPUT_REQUEST_FIELDS = ("inputQuestion", "inputOptions", "inputNotes")
+# Follow-up requests the finished turn suggested; any new activity retires them.
+NEXT_STEPS_FIELD = "nextSteps"
 
 
 def _apply_session_status(session: dict[str, Any], event: dict[str, Any]) -> None:
@@ -95,6 +97,7 @@ def _apply_session_status(session: dict[str, Any], event: dict[str, Any]) -> Non
     if event["status"] not in ("completed", "failed"):
         session.pop("finalOutcome", None)
         session.pop("workOutcome", None)
+        session.pop(NEXT_STEPS_FIELD, None)
         # A reject parks the thread for feedback on the turn; the question that
         # turn asked is still what its task waits on, so it stays quoted.
         if event.get("pendingDecision") != "feedback":
@@ -124,6 +127,7 @@ def _apply_agent_started(session: dict[str, Any], event: dict[str, Any]) -> None
     if any(run["id"] == event["runId"] for run in session["agentRuns"]):
         return
     session.pop("workOutcome", None)
+    session.pop(NEXT_STEPS_FIELD, None)
     for field in INPUT_REQUEST_FIELDS:
         session.pop(field, None)
     if event.get("daemonNodeId"):
@@ -247,6 +251,11 @@ def _apply_session_terminal(session: dict[str, Any], event: dict[str, Any]) -> N
             session[field] = list(value) if isinstance(value, list) else value
         else:
             session.pop(field, None)
+    next_steps = event.get(NEXT_STEPS_FIELD) if status == "completed" else None
+    if isinstance(next_steps, list) and next_steps:
+        session[NEXT_STEPS_FIELD] = list(next_steps)
+    else:
+        session.pop(NEXT_STEPS_FIELD, None)
     session.pop("currentAgent", None)
     session.pop("pendingDecision", None)
     expire_permission_requests(session, event["timestamp"])

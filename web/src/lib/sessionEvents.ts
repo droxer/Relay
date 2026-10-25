@@ -191,6 +191,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.inputQuestion) updated.inputQuestion = event.inputQuestion;
         if (event.inputOptions?.length) updated.inputOptions = [...event.inputOptions];
         if (event.inputNotes?.length) updated.inputNotes = [...event.inputNotes];
+        if (event.nextSteps?.length) updated.nextSteps = [...event.nextSteps];
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return withPermissionsExpired(updated, event.timestamp);
@@ -214,11 +215,13 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
   }
 }
 
-/** Drop a session's question for its human: only a completion carries one. */
+/** Drop a session's question for its human and its suggested next steps:
+ *  only a completion carries them. */
 function clearInputRequest(session: RelaySession): void {
   delete session.inputQuestion;
   delete session.inputOptions;
   delete session.inputNotes;
+  delete session.nextSteps;
 }
 
 /**

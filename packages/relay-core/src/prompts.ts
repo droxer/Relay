@@ -1,4 +1,5 @@
 import { handoffCheckpointFile, legacyHandoffFile } from "./handoff-files.js";
+import { NEXT_STEPS_MAX, NEXT_STEP_MAX_CHARS } from "./next-steps.js";
 import type { AgentState, ProjectSetupBrief } from "./state.js";
 
 export function prependPriorAgentBridge(prompt: string, state: AgentState): string {
@@ -157,6 +158,13 @@ function promptPreludes(state: AgentState): string[] {
         "It is a private control record for Relay, not part of your answer. Do not mention this file, its path, or that you wrote it in your reply; end with the answer itself.",
       ].join("\n"),
     );
+  }
+  if (state.next_steps_file) {
+    preludes.push([
+      "[Next steps]",
+      `When you finish, you may write \`${state.next_steps_file}\` as JSON: {"nextSteps": ["<request>", …]} with 1–${NEXT_STEPS_MAX} follow-up requests the user is likely to send next, each written as the user would type it to you (for example "Add tests for the parser"), at most ${NEXT_STEP_MAX_CHARS} characters, distinct, and doable in this workspace.`,
+      "Skip the file when nothing natural follows, or when you stopped to ask the user something. Like any Relay control file, it is private: never mention it in your reply.",
+    ].join("\n"));
   }
   if (state.repair_note) {
     preludes.push(["[Repair]", state.repair_note].join("\n"));

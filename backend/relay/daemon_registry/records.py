@@ -56,6 +56,10 @@ def is_human_started_round(manifest: dict[str, Any]) -> bool:
 FOLLOW_UP_FAILURE_STATE_KEY = "_relay_follow_up_failure"
 
 
+# What the round's speaking turn suggested its person ask next (bounded).
+NEXT_STEPS_STATE_KEY = "_relay_next_steps"
+
+
 # Run-request bookkeeping that has to survive being re-staged. Command state is
 # filtered down to the agent-visible keys, so anything not listed here is lost
 # the moment the next command is staged.
@@ -72,6 +76,7 @@ CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
         REPORT_REMINDER_TARGET_STATE_KEY,
         ROUND_RESULT_STATE_KEY,
         ROUND_RESULT_REJECTED_STATE_KEY,
+        NEXT_STEPS_STATE_KEY,
         PARTICIPANT_FAILURES_STATE_KEY,
         FOLLOW_UP_FAILURE_STATE_KEY,
         COLLABORATION_MANIFEST_STATE_KEY,
