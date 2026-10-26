@@ -28,7 +28,10 @@ an icon drifts from them.
 The web app has delivery copies under `web/public/brand/` (byte-identical to
 the two SVGs here), plus:
 
-- `web/public/favicon.svg`, the dark browser-tab icon.
+- `web/public/favicon.svg`, the browser-tab icon: dark by default, white
+  with the `--line-1` hairline when the viewer's scheme is light. Once the
+  signed-in app mounts, `useLiveFavicon` redraws it (`faviconState.ts`) in
+  the app's own painted theme, so a theme switch repaints the tab.
 - `web/public/apple-touch-icon.png`, rendered at 180×180 from
   `relay-mark.svg` cropped to its badge, as an opaque square without the
   hairline (iOS applies its own mask and paints transparency black).
