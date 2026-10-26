@@ -53,6 +53,22 @@ session cache.
 ## Limits
 
 The tests use SQLite. PostgreSQL uses the existing transaction-scoped advisory
-lock implementation and was not exercised against a live database. No browser
-behavior changed. Coverage tooling is not installed in the backend environment;
+lock implementation and was not exercised against a live database. Coverage
+tooling is not installed in the backend environment;
 no numeric coverage percentage is claimed.
+
+## PR validation after rebasing onto main
+
+- The focused backend tests and architecture/auth guards pass together: 77 tests.
+- Backend mypy (381 source files), ruff, package and web TypeScript checks,
+  CSS lint, and all applicable pre-commit hooks pass.
+- Web offer unit tests pass (5 tests).
+- `npm run build -w web -- --webpack` passes. Turbopack cannot bind its CSS
+  compiler's subprocess port in this environment.
+- The initial browser run exposed an assertion race: dialog closure precedes
+  completion of the accept request. The test now polls for the expected wire
+  requests. `npx playwright test -c playwright.recovery.config.ts
+  defaultAgentsPrompt.spec.ts --workers=1 --repeat-each=3` passes (12 tests).
+- `npm audit --registry=https://registry.npmjs.org` reports 12 existing
+  advisories: 1 critical, 6 high, 5 moderate. Dependency manifests and the
+  lockfile are unchanged by this feature.

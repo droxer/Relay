@@ -39,7 +39,7 @@ for (const theme of ["light", "dark"] as const) {
     await dialog.getByRole("button", { name: "Create agent" }).click();
 
     await expect(dialog).toBeHidden();
-    expect(answers).toEqual([
+    await expect.poll(() => answers).toEqual([
       { path: "/api/v1/agents/default-offers/decline", body: { computerId: "device:review:mac", executorKinds: ["codex"] } },
       { path: "/api/v1/agents/default-offers/accept", body: { computerId: "device:review:mac", executorKinds: ["claude"] } },
     ]);
@@ -53,7 +53,7 @@ test("skip declines every offered runtime", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Skip" }).click();
 
   await expect(page.getByRole("dialog")).toBeHidden();
-  expect(answers).toEqual([
+  await expect.poll(() => answers).toEqual([
     { path: "/api/v1/agents/default-offers/decline", body: { computerId: "device:review:mac", executorKinds: ["claude", "codex"] } },
   ]);
 });
