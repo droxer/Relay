@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 8 172 50" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
-  <!-- Standalone wordmark. The wordmark ink and both chevrons follow the
-       viewer's color scheme, using each register's palette ink-1, palette action
-       (lead chevron: what a person does) and palette live (trailing chevron: an
-       agent carrying the work on). -->
+  <!-- Standalone wordmark: RelayMark's chevrons, unscaled, beside the name
+       in the sans stack at weight 500. The ink and both chevrons follow the
+       viewer's color scheme, using each register's
+       palette ink-1, palette brand-lead (lead chevron: a person handing work
+       on) and palette live (trailing chevron: an agent carrying it on). -->
   <style>
     :root {
       color-scheme: light dark;
-      --relay-logo-ink: #171717;
+      --relay-logo-ink: #080808;
       --relay-logo-lead: #b84400;
       --relay-logo-trail: #2457c5;
     }
@@ -20,13 +21,13 @@
     }
   </style>
   <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 14 L28 32 L8 50" stroke="var(--relay-logo-lead, #b84400)"/>
-    <path d="M28 14 L48 32 L28 50" stroke="var(--relay-logo-trail, #2457c5)"/>
+    <path d="M12 14 L32 32 L12 50" stroke="var(--relay-logo-lead, #b84400)"/>
+    <path d="M32 14 L52 32 L32 50" stroke="var(--relay-logo-trail, #2457c5)"/>
   </g>
-  <text x="74" y="44"
-        font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+  <text x="74" y="47"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif"
         font-size="42"
-        font-weight="700"
+        font-weight="500"
         letter-spacing="0"
-        fill="var(--relay-logo-ink, #171717)">Relay</text>
+        fill="var(--relay-logo-ink, #080808)">Relay</text>
 </svg>

@@ -11,8 +11,9 @@ type RelayMarkProps = {
 
 export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMarkProps) {
   // The brand tone is the logo's one sanctioned static use of --live, the
-  // same carve-out the app icons take: the lead chevron is what a person
-  // does (--action), the trailing chevron an agent carrying it on (--live).
+  // same carve-out the app icons take: the lead chevron is a person handing
+  // work on (--brand-lead), the trailing chevron an agent carrying it on
+  // (--live). The app icons and the wordmark draw this same geometry.
   // Everywhere else blue still means work in progress and always moves.
   const isBrand = tone === "brand";
   return (

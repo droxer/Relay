@@ -6,9 +6,13 @@ do not duplicate its token table here.
 
 ## The mark
 
-Two chevrons draw a handoff. The lead chevron is the baton-orange action
-(`--action`, what a person does); the trailing chevron is the `--live` blue
-(an agent carrying the work on). The colours are the palette's own tokens for
+Two chevrons draw a handoff. The lead chevron is the baton orange
+(`--brand-lead`, a person handing work on); the trailing chevron is the
+`--live` blue (an agent carrying the work on). Every copy draws one geometry:
+`RelayMark`'s chevrons (64-unit box, stroke 7). The badges scale them by 0.7
+about the centre, so the pair sits on the badge's centre, with a 6.5 stroke
+that holds up at 16px. The wordmark draws them unscaled beside the name in
+the `--font-sans` stack at weight 500, in `--ink-1`. The colours are the palette's own tokens for
 each register, never new hexes, and `web/tests/paletteTokens.test.ts` fails if
 an icon drifts from them.
 
@@ -26,7 +30,9 @@ the two SVGs here), plus:
 
 - `web/public/favicon.svg`, the dark browser-tab icon.
 - `web/public/apple-touch-icon.png`, rendered at 180×180 from
-  `relay-mark.svg`.
+  `relay-mark.svg` cropped to its badge, as an opaque square without the
+  hairline (iOS applies its own mask and paints transparency black).
+- `web/public/favicon.ico`, 16/32/48px PNGs rendered from `favicon.svg`.
 
 ## Usage
 

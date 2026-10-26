@@ -36,8 +36,8 @@ export function faviconSvg(state: FaviconState): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
     + `<rect x="4" y="4" width="56" height="56" rx="15" fill="${FAVICON_INK.canvas}"/>`
     + `<g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M22 20 L36 32 L22 44" stroke="${lead}"/>`
-    + `<path d="M36 20 L50 32 L36 44" stroke="${trail}"/>`
+    + `<path d="M18 19.4 L32 32 L18 44.6" stroke="${lead}"/>`
+    + `<path d="M32 19.4 L46 32 L32 44.6" stroke="${trail}"/>`
     + `</g></svg>`;
 }
 
