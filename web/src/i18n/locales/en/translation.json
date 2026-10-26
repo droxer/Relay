@@ -503,11 +503,9 @@
       "outcome_failed": "Failed",
       "outcome_failed_exit": "Failed · exit code {{code}}",
       "outcome_cancelled": "Stopped",
-      "duration": "Duration",
-      "tokens": "Fresh tokens",
+      "tokens_count": "{{tokens}} tokens",
       "tokens_cached": "{{cached}} cached",
-      "tokens_unreported": "Not reported by the runtime",
-      "files": "Files",
+      "tokens_unreported": "Tokens not reported",
       "files_count_one": "{{count}} file",
       "files_count_other": "{{count}} files",
       "runtime": "Runtime"

@@ -1,51 +1,31 @@
-/* ── Run receipt — the ledger a finished turn closes with ───────────────────
-   See RunReceipt.tsx. One shape for every turn: the outcome on a head line,
-   then label/value rows in a two-column grid with tabular figures, so a
-   column of receipts scans vertically. It stays in ink; only a failure takes
-   a colour (--err), the same "quiet until it matters" rule as the rail. */
+/* ── Run receipt — the one line a finished turn closes with ─────────────────
+   See RunReceipt.tsx. Outcome, then duration, tokens, files, joined by
+   middle dots in tabular figures so a column of turns scans vertically. It
+   stays in meta ink; only a failure takes a colour (--err), the same "quiet
+   until it matters" rule as the rail. */
 .run-receipt {
-  margin-top: var(--sp-3);
-  max-inline-size: 30rem;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-2);
-  color: var(--ink-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-1-5);
+  margin-top: var(--sp-2);
+  color: var(--ink-4);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-}
-
-.run-receipt-head {
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--line-2);
-  color: var(--ink-1);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-.run-receipt[data-outcome="failed"] .run-receipt-head {
-  color: var(--err);
-}
-
-.run-receipt-rows {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--sp-1) var(--sp-4);
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
 }
 
-.run-receipt-rows dt {
+.run-receipt > * + *::before {
+  content: "·";
+  margin-inline-end: var(--sp-1-5);
   color: var(--ink-4);
 }
 
-.run-receipt-rows dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
+.run-receipt-outcome {
+  color: var(--ink-2);
 }
 
-.run-receipt-aside {
-  color: var(--ink-4);
+.run-receipt[data-outcome="failed"] .run-receipt-outcome {
+  color: var(--err);
 }

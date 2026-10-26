@@ -499,11 +499,9 @@
       "outcome_failed": "失败",
       "outcome_failed_exit": "失败 · 退出码 {{code}}",
       "outcome_cancelled": "已停止",
-      "duration": "用时",
-      "tokens": "新增 token",
+      "tokens_count": "{{tokens}} token",
       "tokens_cached": "缓存 {{cached}}",
-      "tokens_unreported": "运行时未报告",
-      "files": "文件",
+      "tokens_unreported": "未报告 token",
       "files_count_other": "{{count}} 个文件",
       "runtime": "运行时"
     }
