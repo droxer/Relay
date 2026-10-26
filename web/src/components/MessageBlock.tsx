@@ -234,6 +234,7 @@ export const MessageBlock = memo(function MessageBlock({
   if (message.kind === "agent") {
     const agentName = labelForAgentRun(message, logicalAgentNames, agentDisplayNames);
     const receipt = runReceipt(message);
+    const runtime = labelForExecutor(message.agent);
     return (
       <article
         className={`msg msg-agent ${message.streaming ? "streaming" : ""} ${grouped ? "grouped" : ""}`}
@@ -250,7 +251,20 @@ export const MessageBlock = memo(function MessageBlock({
             fallback={<IdentityMark kind="agent" />}
           />
         </span>
-        <header className="msg-speaker" translate="no">{agentName}{slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}</header>
+        {/* The runtime rides beside the name — vendor glyph plus label, in
+            meta ink — so who answered and what ran it read as one line. A
+            legacy turn named by its runtime alone skips the repeat. */}
+        <header className="msg-speaker" translate="no">
+          <span className="msg-speaker-name">{agentName}</span>
+          {runtime !== agentName ? (
+            <span className="msg-speaker-runtime" title={`${t("thread.receipt.runtime")}: ${runtime}`}>
+              <span className="sr-only">{t("thread.receipt.runtime")}: </span>
+              <AgentMark agent={message.agent} size={ICON.xs} />
+              <span className="msg-speaker-runtime-label">{runtime}</span>
+            </span>
+          ) : null}
+          {slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}
+        </header>
         <MsgTime value={message.timestamp} />
         <div className="turn-body">
           {styleFallback ? <p className="collab-status">{t("collab_style.ran_solo")}</p> : null}
@@ -283,11 +297,7 @@ export const MessageBlock = memo(function MessageBlock({
             <p className="msg-turn-note" role="note">{t("thread.output_truncated")}</p>
           ) : null}
           {receipt ? (
-            <RunReceipt
-              receipt={receipt}
-              runtime={labelForExecutor(message.agent)}
-              usage={message.tokenUsage}
-            />
+            <RunReceipt receipt={receipt} usage={message.tokenUsage} />
           ) : null}
           {/* Actions lead under the answer, where the eye ends; the run's
               cost and outcome live in the receipt above. */}

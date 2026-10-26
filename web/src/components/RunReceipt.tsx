@@ -7,8 +7,6 @@ import type { TokenUsage } from "../types";
 
 type Props = {
   receipt: Receipt;
-  /** The runtime that ran the turn, already labelled (`Claude Code`). */
-  runtime: string;
   /** The raw counts, for the tokens row's full breakdown on hover. */
   usage?: TokenUsage;
 };
@@ -18,7 +16,7 @@ type Props = {
  * every turn, figures in tabular digits. It stays in ink: only a failure takes
  * a colour (crimson), so a column of receipts reads calm until one is not.
  */
-export function RunReceipt({ receipt, runtime, usage }: Props) {
+export function RunReceipt({ receipt, usage }: Props) {
   const { t, i18n } = useTranslation();
   const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.language || undefined), [i18n.language]);
   const outcome = receipt.outcome === "failed" && receipt.exitCode
@@ -63,8 +61,6 @@ export function RunReceipt({ receipt, runtime, usage }: Props) {
             <dd>{t("thread.receipt.files_count", { count: receipt.files })}</dd>
           </>
         ) : null}
-        <dt>{t("thread.receipt.runtime")}</dt>
-        <dd translate="no">{runtime}</dd>
       </dl>
     </section>
   );
