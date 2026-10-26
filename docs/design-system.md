@@ -317,7 +317,7 @@ deliberate — a reader who takes the rule literally will file them as bugs:
 - **Link ink is wayfinding, not decoration**: anchors in prose (`--link`)
   and the focus ring (`--focus-outline`). It is ink, told apart by its
   underline (the ring by its offset) — never a fill, a status, or a hue.
-- **The brand mark is the one orange.** `favicon.svg` (dark register),
+- **The brand mark is the one orange.** `favicon.svg` (follows the viewer's scheme; the signed-in app redraws it in the painted theme),
   `relay-mark.svg` (light register, source of `apple-touch-icon.png`), the
   wordmark `relay-logo.svg` (follows the viewer's scheme), and `RelayMark`'s
   `tone="brand"` (side nav, sign-in, landing, empty transcript) draw a
