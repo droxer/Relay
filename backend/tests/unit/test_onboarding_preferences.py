@@ -4,7 +4,12 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from relay.security.auth import DatabaseAccountAuthStore
-from relay.security.onboarding import apply_onboarding_patch, normalize_onboarding
+from relay.security.onboarding import (
+    MAX_DECLINED_DEFAULT_AGENTS,
+    apply_onboarding_patch,
+    declined_default_agents,
+    normalize_onboarding,
+)
 
 NOW = "2026-10-16T19:40:00.000Z"
 LATER = "2026-10-17T08:00:00.000Z"
@@ -47,11 +52,55 @@ def test_closed_cards_are_deduped_into_catalogue_order() -> None:
         ({"introSeen": 1}, "onboarding.introSeen must be a boolean"),
         ({"closedCards": "tasks"}, "must be a list"),
         ({"closedCards": ["billing"]}, "unknown card"),
+        ({"declineDefaultAgents": []}, "non-empty list"),
+        ({"declineDefaultAgents": [{"computerId": "c"}]}, "need a computerId and an executorKind"),
     ],
 )
 def test_invalid_patches_are_rejected(patch: object, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         apply_onboarding_patch({}, patch, NOW)
+
+
+def test_declined_default_agents_accumulate_without_duplicates() -> None:
+    first = apply_onboarding_patch(
+        {"introSeenAt": NOW},
+        {"declineDefaultAgents": [{"computerId": "device:a", "executorKind": "claude"}]},
+        NOW,
+    )
+    second = apply_onboarding_patch(
+        first,
+        {
+            "declineDefaultAgents": [
+                {"computerId": "device:a", "executorKind": "codex"},
+                {"computerId": "device:a", "executorKind": "claude"},
+            ]
+        },
+        LATER,
+    )
+
+    assert second["introSeenAt"] == NOW
+    assert declined_default_agents(second) == {
+        ("device:a", "claude"),
+        ("device:a", "codex"),
+    }
+    assert len(second["declinedDefaultAgents"]) == 2
+
+
+def test_declined_default_agents_keep_only_the_newest() -> None:
+    record = apply_onboarding_patch(
+        {},
+        {
+            "declineDefaultAgents": [
+                {"computerId": f"device:{index}", "executorKind": "claude"}
+                for index in range(MAX_DECLINED_DEFAULT_AGENTS + 5)
+            ]
+        },
+        NOW,
+    )
+
+    kept = record["declinedDefaultAgents"]
+    assert len(kept) == MAX_DECLINED_DEFAULT_AGENTS
+    assert kept[-1]["computerId"] == f"device:{MAX_DECLINED_DEFAULT_AGENTS + 4}"
 
 
 def test_normalize_drops_whatever_it_does_not_recognize() -> None:

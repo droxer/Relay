@@ -670,6 +670,7 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (head === "tasks" && tail === "workspace" && leaf === "files") return workspaceFiles({ taskId: id, workspaceLayout: "task" });
 
   if (path === "/agents") return { agents };
+  if (path === "/agents/default-offers") return { offers: [] };
   if (head === "agents" && id) return { agent: byId(agents, id) };
   if (path === "/teams") return { teams };
   if (head === "teams" && id) return { team: byId(teams, id) };

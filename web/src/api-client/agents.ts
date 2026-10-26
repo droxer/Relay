@@ -1,4 +1,5 @@
 import type {
+  AgentName,
   AgentPlacement,
   AgentRole,
   AgentTeam,
@@ -154,4 +155,31 @@ export function deleteAgentPlacement(placementId: string): Promise<{ placement: 
   return apiJson<{ placement: AgentPlacement }>(`/admin/agent-placements/${encodeURIComponent(placementId)}`, {
     method: "DELETE",
   });
+}
+
+/** A connected computer's ready runtimes that have never had an agent there
+    and whose default agent the person has not declined. */
+export interface DefaultAgentOffer {
+  computerId: string;
+  computerName: string;
+  executorKinds: AgentName[];
+}
+
+export interface DefaultAgentAnswer {
+  computerId: string;
+  executorKinds: AgentName[];
+}
+
+export function listDefaultAgentOffers(signal?: AbortSignal): Promise<{ offers: DefaultAgentOffer[] }> {
+  return apiJson<{ offers: DefaultAgentOffer[] }>("/agents/default-offers", { signal });
+}
+
+/** Create one default agent per runtime; a runtime already answered is skipped. */
+export function acceptDefaultAgents(answer: DefaultAgentAnswer): Promise<{ agents: UserAgent[] }> {
+  return apiJson<{ agents: UserAgent[] }>("/agents/default-offers/accept", { method: "POST", body: answer });
+}
+
+/** Remember that the person does not want these defaults, so they are not asked again. */
+export function declineDefaultAgents(answer: DefaultAgentAnswer): Promise<{ ok: true }> {
+  return apiJson<{ ok: true }>("/agents/default-offers/decline", { method: "POST", body: answer });
 }

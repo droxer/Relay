@@ -3099,5 +3099,18 @@
     "add": "Add prerequisite",
     "remove": "Remove prerequisite {{ref}}",
     "remove_short": "Remove"
+  },
+  "default_agents": {
+    "title": "Set up agents on {{computer}}?",
+    "body_one": "This computer has an agent tool ready. Relay can create a default agent for it.",
+    "body_other": "This computer has {{count}} agent tools ready. Relay can create a default agent for each.",
+    "runtimes": "Agent tools",
+    "hint": "You can rename them later, or create agents yourself from Agents.",
+    "skip": "Skip",
+    "create_one": "Create agent",
+    "create_other": "Create {{count}} agents",
+    "created_one": "Created an agent on {{computer}}.",
+    "created_other": "Created {{count}} agents on {{computer}}.",
+    "error": "Couldn’t set up the agents. Try again."
   }
 }

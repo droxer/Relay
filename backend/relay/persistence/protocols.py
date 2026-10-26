@@ -314,6 +314,9 @@ class AuthStore(Protocol):
 
     session_ttl_seconds: int
 
+    @property
+    def engine(self) -> Any: ...
+
     def has_accounts(self) -> bool: ...
     def create_account(
         self,

@@ -594,6 +594,20 @@ GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/files?path={relativePath}
 GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/file?path={relativePath}
 ```
 
+Default agents a connecting computer offers its signed-in user. An offer lists
+a live computer's ready runtimes that have never had an agent there and were
+not declined; accepting creates one agent per runtime (named after it, role
+`implementer`, placed on the computer), declining is kept with the account's
+onboarding choices (`declinedDefaultAgents`). Both take
+`{"computerId": "...", "executorKinds": ["claude", ...]}`; a runtime already
+answered is skipped, so a repeated accept creates nothing.
+
+```text
+GET    /api/v1/agents/default-offers          -> {"offers": [{computerId, computerName, executorKinds}]}
+POST   /api/v1/agents/default-offers/accept   -> 201 {"agents": [...]}
+POST   /api/v1/agents/default-offers/decline  -> {"ok": true}
+```
+
 Admin logical-agent and placement management:
 
 ```text

@@ -18,7 +18,12 @@ from .api.accounts import (
     waitlist as waitlist_routes,
 )
 from .api.admin import dashboard as admin_dashboard_routes, settings as admin_settings_routes
-from .api.agents import agents as agent_routes, skills as skill_routes, teams as team_routes
+from .api.agents import (
+    agents as agent_routes,
+    default_agents as default_agent_routes,
+    skills as skill_routes,
+    teams as team_routes,
+)
 from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
 from .api.computers import (
     admin_nodes as admin_node_routes,
@@ -88,6 +93,7 @@ from .accounts.waitlist import WaitlistService
 from .tasks.flow import wip_limit
 from .execution.lifecycle import ExecutionLifecycleService
 from .core.settings import AppSettings
+from .migrations_runtime.default_agents import seed_default_agents_at_startup
 from .migrations_runtime.startup import (
     migrate_legacy_computer_ids,
     repair_records_before_serving,
@@ -158,6 +164,13 @@ def create_app(
     if settings.startup_repairs_enabled:
         migrate_legacy_computer_ids(
             agent_store=stores.agents, agent_placement_store=stores.placements, registry=registry
+        )
+        seed_default_agents_at_startup(
+            engine=stores.sessions.engine,
+            agent_store=stores.agents,
+            agent_placement_store=stores.placements,
+            registry=registry,
+            auth_store=stores.auth,
         )
     scheduler = task_scheduler_from_env(
         settings=settings,
@@ -331,6 +344,7 @@ API_ROUTERS = (
     automation_routes.router,
     auth_routes.router,
     device_authorization_routes.router,
+    default_agent_routes.router,
     agent_routes.router,
     team_routes.router,
     project_routes.router,

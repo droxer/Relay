@@ -49,6 +49,7 @@ import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
+import { DefaultAgentsPrompt } from "./components/computer/DefaultAgentsPrompt";
 import { useOnboarding } from "./hooks/useOnboarding";
 import { SETUP_STEPS } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
@@ -751,6 +752,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
         )}
       </Suspense>
       </ScreenErrorBoundary>
+      {/* A connecting computer asks, once, whether to create a default agent
+          per ready runtime it brought. */}
+      {user.userId ? <DefaultAgentsPrompt userId={user.userId} /> : null}
     </AppShell>
   );
 }
