@@ -149,6 +149,8 @@ export {
   type DaemonNodeRunCommand,
   type DaemonNodeSandboxMode,
   type DaemonNodeStatus,
+  type DaemonHostOs,
+  daemonHostOs,
   type DaemonPermissionDecision,
   type DaemonPermissionRequest,
   type PermissionAnswers,

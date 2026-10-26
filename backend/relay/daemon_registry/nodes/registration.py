@@ -34,6 +34,7 @@ from ..records import (
     agent_models_state,
     agent_registration_state,
     custom_model_endpoints_state,
+    host_os_state,
 )
 from ..state import RegistryState
 
@@ -122,6 +123,8 @@ def _registered_identity_fields(
         ),
         **_present("enrollmentKey", prior.get("enrollmentKey")),
         **_present("sandboxMode", sandbox_mode),
+        # An older daemon reports no OS; keep what an earlier one said.
+        **_present("hostOs", host_os_state(payload) or prior.get("hostOs")),
         **_present(
             "nodeLocation", prior.get("nodeLocation") or authorized_node_location
         ),

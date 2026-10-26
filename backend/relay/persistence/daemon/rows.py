@@ -40,6 +40,7 @@ def node_to_row(
         "node_token_hash": node.get("nodeTokenHash"),
         "node_token_secret": None,
         "last_error": node.get("lastError"),
+        "host_os": node.get("hostOs"),
         "created_at": parse_db_time(node["createdAt"]),
         "updated_at": parse_db_time(node["updatedAt"]),
         "last_seen_at": parse_db_time(node.get("lastSeenAt")),
@@ -173,6 +174,7 @@ def row_to_node(row: Any) -> dict[str, Any]:
             else {}
         ),
         **({"lastError": row["last_error"]} if row.get("last_error") else {}),
+        **({"hostOs": row["host_os"]} if row.get("host_os") else {}),
         "createdAt": format_db_time(row["created_at"]),
         "updatedAt": format_db_time(row["updated_at"]),
         **(

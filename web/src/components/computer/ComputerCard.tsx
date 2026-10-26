@@ -9,6 +9,7 @@ import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "./ClientOutdatedBadge";
+import { HostOsBadge } from "./HostOsBadge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -93,6 +94,7 @@ export function ComputerCard({
           <div className="computer-card-nameline">
             <h2 className="computer-card-name" translate="no">{title}</h2>
             <NodePresence node={node} t={t} withLabel />
+            <HostOsBadge node={node} />
             {showStatus ? (
               <TonePill
                 className="adm-status-plain"

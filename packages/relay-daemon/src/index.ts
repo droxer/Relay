@@ -83,6 +83,7 @@ import {
   agentCredentialEnv,
   customModelEndpointAgents,
   DAEMON_NODE_PROTOCOL_VERSION,
+  daemonHostOs,
   relayApiUrl,
 } from "relay-core";
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
@@ -390,6 +391,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs, providerModelLists);
   const runtimeRefreshCommands = new Map<string, string>();
   let refreshedCommands: Array<{ commandId: string; leaseId: string }> = [];
+  const hostOs = daemonHostOs(process.platform);
   const buildRegistration = (includeUserId = Boolean(configuredUserId), status?: DaemonNodeRegistration["status"]): DaemonNodeRegistration => ({
     sandboxId,
     ...(includeUserId ? { userId: effectiveUserId } : {}),
@@ -397,6 +399,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     workspacePath,
     ...(workspaceId ? { workspaceId } : {}),
     sandboxMode,
+    ...(hostOs ? { hostOs } : {}),
     protocolVersion: DAEMON_NODE_PROTOCOL_VERSION,
     supportedAgents: readyAgents(agentHealth),
     executorCapabilities: Object.entries(agentHealth).map(([executorKind, health]) => ({

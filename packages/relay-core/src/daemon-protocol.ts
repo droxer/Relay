@@ -3,6 +3,7 @@ import type {
   DaemonAgentAdapter,
   DaemonAgentHealthStatus,
   DaemonAgentInventory,
+  DaemonHostOs,
   DaemonNodeCapability,
   DaemonNodeSandboxMode,
 } from "./daemon-node-protocol.js";
@@ -22,6 +23,8 @@ export interface SandboxRecord {
   /** Stable host machine identity reported by the daemon; not a workspace path. */
   workspaceId?: string;
   sandboxMode?: DaemonNodeSandboxMode;
+  /** The OS the daemon reported; absent until a daemon that knows it registers. */
+  hostOs?: DaemonHostOs;
   capabilities?: DaemonNodeCapability[];
   nodeLocation?: DaemonNodeLocation;
   managedNodeId?: string;
