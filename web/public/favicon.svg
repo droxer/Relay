@@ -8,7 +8,7 @@
        Values are the dark register's tokens, keep them in step. -->
   <rect x="4" y="4" width="56" height="56" rx="15" fill="#000000"/>
   <g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M22 20 L36 32 L22 44" stroke="#ff8a3d"/>
-    <path d="M36 20 L50 32 L36 44" stroke="#6aa6ff"/>
+    <path d="M18 19.4 L32 32 L18 44.6" stroke="#ff8a3d"/>
+    <path d="M32 19.4 L46 32 L32 44.6" stroke="#6aa6ff"/>
   </g>
 </svg>

@@ -364,7 +364,7 @@ the color-emoji faces. No sans font is downloaded, so reading text never swaps
 after first paint and the build needs no font package.
 
 The display face is chosen by **content origin, not by size**: a fixed UI noun
-(Threads, Backlog, the wordmark, a drawer title) takes the display tier, while
+(Threads, Backlog, a drawer title) takes the display tier, while
 a string written by a person or an agent takes its calmer content sibling —
 the source system's editorial-subhead move, where a lighter weight at a display size
 introduces visual rest.
