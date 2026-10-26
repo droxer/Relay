@@ -97,3 +97,30 @@
 /* The announcement toast is the shadcn/ui component in
    components/ui/toast.tsx (base-ui Toast) — styling lives in its Tailwind
    classes on the shadcn token bridge, not here. */
+
+/* The default-agent prompt's runtime choices (DefaultAgentsPrompt): one row
+   per runtime, the checkbox before its vendor mark and name. */
+.default-agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.default-agents-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--control-h);
+}
+
+.default-agents-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font: var(--type-name);
+  color: var(--ink-1);
+  cursor: pointer;
+}

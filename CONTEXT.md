@@ -71,8 +71,12 @@ _Avoid_: Executor, CLI
 **Agent Runtime**:
 A capability on a Computer that can execute one implementation such as Claude,
 Codex, Pi, or Kimi. `Logical Agent.executorKind` selects the required runtime.
-A runtime is not an Agent and never creates one by registering.
-_Avoid_: Default Agent, Agent identity
+A runtime is not an Agent and never creates one by registering. A connecting
+Computer *offers* a **Default Agent** per ready runtime — an ordinary Logical
+Agent named after the runtime — and its User accepts or declines each, once
+per Computer and runtime. Computers enrolled before the offer existed were
+seeded once, unasked.
+_Avoid_: calling the runtime itself the Default Agent, Agent identity
 
 **Placement**:
 The active binding of one Logical Agent to one Agent Runtime on one stable

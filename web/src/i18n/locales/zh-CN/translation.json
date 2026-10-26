@@ -3033,5 +3033,18 @@
     "add": "添加前置任务",
     "remove": "移除前置任务 {{ref}}",
     "remove_short": "移除"
+  },
+  "default_agents": {
+    "title": "要在 {{computer}} 上创建智能体吗？",
+    "body_one": "这台电脑上有一个可用的智能体工具。Relay 可以为它创建一个默认智能体。",
+    "body_other": "这台电脑上有 {{count}} 个可用的智能体工具。Relay 可以为每个工具创建一个默认智能体。",
+    "runtimes": "智能体工具",
+    "hint": "之后可以重命名，也可以在“智能体”页面自行创建。",
+    "skip": "跳过",
+    "create_one": "创建智能体",
+    "create_other": "创建 {{count}} 个智能体",
+    "created_one": "已在 {{computer}} 上创建一个智能体。",
+    "created_other": "已在 {{computer}} 上创建 {{count}} 个智能体。",
+    "error": "无法创建智能体，请重试。"
   }
 }

@@ -551,8 +551,9 @@ def test_live_user_still_gets_a_placement_backfilled(tmp_path: Path) -> None:
     assert len(placements.list_placements(agent_id=agent["id"])) == 1
 
 
-def test_registration_no_longer_conjures_agents(tmp_path) -> None:
-    """Registering a computer no longer conjures an agent — agents are only declared by users."""
+def test_registration_does_not_create_agents(tmp_path) -> None:
+    """Registering a computer creates no agent: its default agents are only
+    offered, and created once the user accepts (computer.default_agents)."""
     ctx, agents, _ = _registry_ctx(tmp_path, nodes=[])
     node = {
         "id": "node-1",

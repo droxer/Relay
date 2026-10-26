@@ -77,10 +77,11 @@ def user_is_live(ctx: NodeAgentContext, user_id: str) -> bool:
 def sync_node_agents(ctx: NodeAgentContext, node: dict[str, Any]) -> None:
     """Attach this Computer's already-declared agents to its current node.
 
-    Does not create agents — agents are declared explicitly by users
-    (POST /agents). A user can declare an agent while its computer is
-    offline, when there's no node to place it on yet; this backfills that
-    once the computer comes online.
+    Does not create agents — agents are declared by users (POST /agents, or
+    accepting the default agents a connecting Computer offers:
+    `computer.default_agents`). A user can declare an agent while its
+    computer is offline, when there's no node to place it on yet; this
+    backfills that once the computer comes online.
     """
     user_id = node.get("userId")
     if not user_id:
