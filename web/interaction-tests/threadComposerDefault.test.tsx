@@ -46,3 +46,17 @@ it("keeps a pick the person saved for that thread", () => {
   renderHook((props: Props) => useThreadComposerSelection(props), { initialProps: base });
   expect(target()).toBe("agt_saved");
 });
+
+it("narrows a project thread from the crew to the task's agent", () => {
+  useComposerTargetStore.getState().pickRoom();
+  renderHook((props: Props) => useThreadComposerSelection(props), { initialProps: base });
+  expect(useComposerTargetStore.getState().projectRoomTarget).toBe(false);
+  expect(target()).toBe("agt_task");
+});
+
+it("keeps the crew when the person picked it for that thread", () => {
+  useComposerTargetStore.getState().pickRoom();
+  useComposerTargetStore.getState().rememberThreadPick("ses_task", { kind: "room" });
+  renderHook((props: Props) => useThreadComposerSelection(props), { initialProps: base });
+  expect(useComposerTargetStore.getState().projectRoomTarget).toBe(true);
+});

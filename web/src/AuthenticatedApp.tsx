@@ -204,9 +204,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
   const threadAgent = useMemo(() => {
     const id = threadOwnAgentId(activeSession);
-    const agent = id ? selectableLogicalAgents.find((candidate) => candidate.id === id) : undefined;
+    const agent = id ? logicalAgents.find((candidate) => candidate.id === id) : undefined;
     return agent ? { id: agent.id, executorKind: agent.executorKind } : null;
-  }, [activeSession, selectableLogicalAgents]);
+  }, [activeSession, logicalAgents]);
   useThreadComposerSelection({
     sessionId: activeSession?.id,
     composingNew,
