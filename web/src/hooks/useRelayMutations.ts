@@ -13,6 +13,8 @@ import {
   createTask,
   createProject,
   startProjectSetup,
+applySetupTasks,
+setTaskPrerequisites,
   createTeam,
   deleteSession,
   deleteTask,
@@ -29,7 +31,7 @@ import {
   updateProject,
   updateTeam,
 } from "../api";
-import type { AgentRunInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import type { PermissionAnswers } from "relay-core";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
@@ -362,6 +364,30 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to start project setup", "errors.start_project_setup"),
   });
 
+  // No shared error toast: the setup panel states the failure beside Apply,
+  // and a retry creates only the tasks still missing.
+  const applySetupTasksMutation = useMutation({
+    mutationFn: ({ projectId, input }: { projectId: string; input: ApplySetupTasksInput }) =>
+      applySetupTasks(projectId, input),
+    onSuccess: ({ project, tasks }) => {
+      cacheProject(project);
+      tasks.forEach(cacheTask);
+      void invalidateTasks();
+    },
+  });
+
+  const setTaskPrerequisitesMutation = useMutation({
+    mutationFn: ({ taskId, prerequisiteTaskIds }: { taskId: string; prerequisiteTaskIds: string[] }) =>
+      setTaskPrerequisites(taskId, prerequisiteTaskIds),
+    onSuccess: (task) => {
+      cacheTask(task);
+      // A dependent's `unblocks` and every list row's `waitingOn` changed too.
+      void invalidateTasks();
+      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
+    },
+    onError: onRelayError("Failed to save prerequisites", "errors.save_prerequisites"),
+  });
+
   const updateProjectMutation = useMutation({
     mutationFn: ({ projectId, input }: { projectId: string; input: UpdateProjectInput }) =>
       updateProject(projectId, input),
@@ -504,6 +530,8 @@ export function useRelayMutations() {
     createTeamMutation,
     createProjectMutation,
     startProjectSetupMutation,
+    applySetupTasksMutation,
+    setTaskPrerequisitesMutation,
     updateProjectMutation,
     archiveProjectMutation,
     unarchiveProjectMutation,

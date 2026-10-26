@@ -47,6 +47,8 @@ def prepare_task_start(
     """Resolve who runs a task the actor may start, recording any refusal."""
     task_id = task["id"]
     ensure_issue_in_project(task)
+    if ctx.task_store.open_prerequisites_for([task_id]).get(task_id):
+        raise TaskRequestError(409, "task_prerequisites_open")
     if agent_requested:
         raise TaskRequestError(400, "agent is read-only; start through assignedAgentId.")
     if assignments and task.get("assignedTeamId"):

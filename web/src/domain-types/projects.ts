@@ -27,12 +27,31 @@ export interface ProjectSetupProposal {
     instructions?: string;
     issue?: ProjectSetupMemberIssue;
   }>;
-  tasks?: Array<{ title: string; description?: string; assignedAgentId?: string }>;
+  tasks?: ProjectSetupProposedTask[];
 }
+
+/** A proposed task. `after` names earlier proposed tasks by key and
+ *  `afterTaskIds` existing project tasks; applied, they become prerequisites. */
+export interface ProjectSetupProposedTask {
+  key?: string;
+  title: string;
+  description?: string;
+  assignedAgentId?: string;
+  after?: string[];
+  afterTaskIds?: string[];
+}
+
+/** `setup` drafts the crew and first tasks; `plan` only the next tasks. */
+export type ProjectSetupMode = "setup" | "plan";
 
 /** An agent-drafted setup: an agent proposes, the owner applies. */
 export interface ProjectSetup {
   state: ProjectSetupState;
+  /** Absent on setups drafted before plan rounds existed. */
+  mode?: ProjectSetupMode;
+  draftId?: string;
+  /** Proposal task key → the task created from it, once applied. */
+  appliedTasks?: Record<string, string>;
   intent: string;
   agentId: string;
   threadId: string | null;
@@ -60,6 +79,17 @@ export interface StartProjectSetupInput {
   agentId?: string;
   /** Draft again in the same thread from the last proposal. */
   revise?: boolean;
+  mode?: ProjectSetupMode;
+}
+
+export interface ApplySetupTasksInput {
+  draftId: string;
+  /** The proposal tasks to create; all of them when omitted. */
+  taskKeys?: string[];
+  /** Per task key: the agent to assign, or null to file it unassigned. */
+  assignedAgentIds?: Record<string, string | null>;
+  /** Make the created tasks ready; each still waits for its prerequisites. */
+  queue?: boolean;
 }
 
 export interface ProjectContextSuggestion {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { setupNeedsAttention } from "../lib/projectSetup";
-import type { ProjectContextSuggestion, ProjectRecord } from "../types";
+import type { ProjectContextSuggestion, ProjectRecord, ProjectSetupMode } from "../types";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,27 +57,34 @@ export function contextWithSuggestion(context: string, text: string): string {
   return base ? `${base}\n- ${text}` : `- ${text}`;
 }
 
-/** Ask an agent to review the crew, context, and goal against the work so far.
- *  The proposal lands in the same review panel a new project's setup does. */
+/** Ask an agent to review the crew, context, and goal against the work so
+ *  far (`setup`), or to plan the project's next tasks in order (`plan`).
+ *  Either proposal lands in the same review panel a new project's setup
+ *  does; nothing changes until the owner applies it. */
 export function ProjectRefineSection({
   project,
   onStarted,
+  mode = "setup",
 }: {
   project: ProjectRecord;
   onStarted: () => void;
+  mode?: ProjectSetupMode;
 }) {
   const { t } = useTranslation();
   const { startProjectSetupMutation } = useRelayMutations();
   const [note, setNote] = useState("");
+  const keys = mode === "plan" ? PLAN_KEYS : REFINE_KEYS;
   const open = setupNeedsAttention(project.setup);
   const closed = Boolean(project.archivedAt) || !project.enabled;
-  const blocked = open || closed;
+  // A plan builds on the crew; the lead drafts it.
+  const uncrewed = mode === "plan" && !project.leadAgentId;
+  const blocked = open || closed || uncrewed;
 
   async function start() {
     try {
       await startProjectSetupMutation.mutateAsync({
         projectId: project.id,
-        input: { intent: note.trim() || t("project.refine_default_intent") },
+        input: { intent: note.trim() || t(keys.defaultIntent), ...(mode === "plan" ? { mode } : {}) },
       });
       setNote("");
       onStarted();
@@ -87,18 +94,20 @@ export function ProjectRefineSection({
   }
 
   return (
-    <section className="project-settings-section" aria-labelledby="project-settings-refine">
+    <section className="project-settings-section" aria-labelledby={`project-settings-${mode}`}>
       <header className="project-settings-head">
-        <h2 id="project-settings-refine" className="workspace-dossier-section-title">{t("project.refine_title")}</h2>
-        <p className="project-settings-hint">{t(open ? "project.refine_open" : "project.refine_hint")}</p>
+        <h2 id={`project-settings-${mode}`} className="workspace-dossier-section-title">{t(keys.title)}</h2>
+        <p className="project-settings-hint">
+          {t(open ? "project.refine_open" : uncrewed ? "project.plan_needs_crew" : keys.hint)}
+        </p>
       </header>
       <fieldset className="project-settings-fields" disabled={blocked || startProjectSetupMutation.isPending}>
-        <Field label={t("project.refine_note")}>
+        <Field label={t(keys.note)}>
           <Textarea
-            name="project-refine-note"
+            name={`project-${mode}-note`}
             rows={2}
             maxLength={4000}
-            placeholder={t("project.refine_placeholder")}
+            placeholder={t(keys.placeholder)}
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
@@ -108,10 +117,28 @@ export function ProjectRefineSection({
         <span />
         <div className="project-settings-actions">
           <Button type="button" variant="outline" disabled={blocked} loading={startProjectSetupMutation.isPending} onClick={() => void start()}>
-            {t("project.refine_start")}
+            {t(keys.start)}
           </Button>
         </div>
       </footer>
     </section>
   );
 }
+
+const REFINE_KEYS = {
+  title: "project.refine_title",
+  hint: "project.refine_hint",
+  note: "project.refine_note",
+  placeholder: "project.refine_placeholder",
+  start: "project.refine_start",
+  defaultIntent: "project.refine_default_intent",
+} as const;
+
+const PLAN_KEYS = {
+  title: "project.plan_title",
+  hint: "project.plan_hint",
+  note: "project.plan_note",
+  placeholder: "project.plan_placeholder",
+  start: "project.plan_start",
+  defaultIntent: "project.plan_default_intent",
+} as const;

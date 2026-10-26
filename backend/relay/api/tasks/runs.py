@@ -87,6 +87,8 @@ def _pick_up(
     ensure_issue_in_project(current)
     if current.get("status") not in ("backlog", "assigned"):
         raise HTTPException(409, "task_not_dispatchable")
+    if ctx.task_store.open_prerequisites_for([task_id]).get(task_id):
+        raise HTTPException(409, "task_prerequisites_open")
     if task_has_active_linked_session(ctx.session_store, current):
         raise HTTPException(409, "task_execution_active")
     if current.get("assignedTeamId"):

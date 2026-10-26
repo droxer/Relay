@@ -41,6 +41,14 @@ export function updateTask(taskId: string, input: TaskMutationInput): Promise<Re
   });
 }
 
+/** Replace a task's prerequisites: tasks in its project that must be done first. */
+export function setTaskPrerequisites(taskId: string, prerequisiteTaskIds: string[]): Promise<RelayTask> {
+  return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}/prerequisites`, {
+    method: "PUT",
+    body: { prerequisiteTaskIds },
+  });
+}
+
 export function deleteTask(taskId: string): Promise<TaskDeletionResponse> {
   return apiJson<TaskDeletionResponse>(`/tasks/${encodeURIComponent(taskId)}`, {
     method: "DELETE",

@@ -1,4 +1,5 @@
 import type { RelaySession, RelayTaskListItem } from "../types.js";
+import { waitsOnPrerequisites } from "./taskPrerequisites.ts";
 
 /**
  * Why a task is not simply moving — as data, not as markup.
@@ -77,10 +78,13 @@ export function taskExceptions(
  */
 export type TaskHoldup =
   | { kind: "blocked"; text: string | null }
-  | { kind: "waiting"; text: string | null };
+  | { kind: "waiting"; text: string | null }
+  /** Ready work the scheduler holds until these prerequisites are done. */
+  | { kind: "prerequisites"; ids: string[] };
 
 export function taskHoldup(task: RelayTaskListItem): TaskHoldup | null {
   if (task.status === "blocked") return { kind: "blocked", text: taskBlocker(task).reason };
   if (task.status === "waiting_for_human") return { kind: "waiting", text: task.awaiting?.text?.trim() || null };
+  if (waitsOnPrerequisites(task)) return { kind: "prerequisites", ids: task.waitingOn ?? [] };
   return null;
 }

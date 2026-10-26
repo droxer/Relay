@@ -185,6 +185,14 @@ export interface RelayTask {
    */
   workspaceArtifactsDir?: string | null;
   workspaceWaiting?: { runId: string; sessionId: string; blockingSessionId?: string };
+  /** Tasks in the same project that must be done before this one may run. */
+  prerequisiteTaskIds?: string[];
+  /** API-only, derived: the prerequisites not yet done. The scheduler holds
+   *  the task while this is non-empty; it is never a status. */
+  waitingOn?: string[];
+  /** API-only, on a single-task read: the tasks that name this one as a
+   *  prerequisite. */
+  unblocks?: string[];
   linkedSessionIds: string[];
   activity: RelayTaskActivity[];
   createdAt: string;

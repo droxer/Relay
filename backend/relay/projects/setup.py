@@ -18,10 +18,13 @@ from typing import Any
 from ..core.ids import new_relay_id, now_iso
 from ..core.models import AGENT_ROLES
 from .runtime import agent_on_project_computer
+from .setup_result import SETUP_MODES
 
 PROJECT_SETUP_CONTRACT = {"name": "relay.project.setup", "version": 1}
 SETUP_INTENT_MAX_LENGTH = 4_000
 SETUP_CANDIDATES_MAX = 32
+# How many of the project's open tasks a plan round is shown to build on.
+PLAN_OPEN_TASKS_MAX = 50
 SETUP_RESOLUTIONS = frozenset({"applied", "dismissed"})
 _INSTRUCTIONS_EXCERPT = 300
 _TERMINAL_SESSION_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -45,6 +48,45 @@ def setup_intent(value: Any) -> str:
     if len(normalized) > SETUP_INTENT_MAX_LENGTH:
         raise ProjectSetupError("project_setup_intent_too_long", status=400)
     return normalized
+
+
+def setup_mode(value: Any, project: dict[str, Any]) -> str:
+    """``setup`` drafts the crew and first tasks; ``plan`` drafts only the
+    next tasks, in order, for a project that already has its crew."""
+    mode = value if value is not None else "setup"
+    if not isinstance(mode, str) or mode not in SETUP_MODES:
+        raise ProjectSetupError("project_setup_mode_invalid", status=400)
+    if mode == "plan" and not project.get("leadAgentId"):
+        raise ProjectSetupError("project_plan_needs_crew")
+    return mode
+
+
+def plan_open_tasks(project: dict[str, Any], tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The project's unfinished tasks, oldest first, as a plan round sees
+    them: enough to place new work after existing work, nothing more."""
+    open_tasks = [
+        task
+        for task in tasks
+        if task.get("projectId") == project["id"]
+        and not task.get("deletedAt")
+        and not task.get("isRoutine")
+        and task.get("status") != "done"
+    ]
+    open_tasks.sort(key=lambda task: (task.get("createdAt") or "", task["id"]))
+    return [
+        {
+            "id": task["id"],
+            **({"number": task["number"]} if task.get("number") else {}),
+            "title": task.get("title", ""),
+            "status": task.get("status"),
+            **(
+                {"prerequisiteTaskIds": list(task["prerequisiteTaskIds"])}
+                if task.get("prerequisiteTaskIds")
+                else {}
+            ),
+        }
+        for task in open_tasks[:PLAN_OPEN_TASKS_MAX]
+    ]
 
 
 def setup_candidates(
@@ -110,11 +152,15 @@ def setup_manifest_block(
     candidates: list[dict[str, Any]],
     previous_proposal: dict[str, Any] | None,
     draft_id: str,
+    mode: str = "setup",
+    open_tasks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """What the round manifest carries so the registry can brief the agent."""
     return {
         "contract": PROJECT_SETUP_CONTRACT,
         "draftId": draft_id,
+        "mode": mode,
+        **({"openTasks": open_tasks} if mode == "plan" else {}),
         "intent": intent,
         "candidates": candidates,
         "roles": list(AGENT_ROLES),
@@ -122,7 +168,9 @@ def setup_manifest_block(
     }
 
 
-def setup_task_goal(intent: str, *, revising: bool) -> str:
+def setup_task_goal(intent: str, *, revising: bool, mode: str = "setup") -> str:
+    if mode == "plan":
+        return f"{'Revise the plan' if revising else 'Plan the next work'}: {intent}"
     if revising:
         return f"Revise the project setup proposal: {intent}"
     return f"Set up this project: {intent}"
@@ -134,10 +182,12 @@ def drafting_setup(
     agent_id: str,
     thread_id: str | None,
     previous: dict[str, Any] | None,
+    mode: str = "setup",
 ) -> dict[str, Any]:
     return {
         "state": "drafting",
         "draftId": new_relay_id("setup"),
+        "mode": mode,
         "intent": intent,
         "agentId": agent_id,
         "threadId": thread_id,

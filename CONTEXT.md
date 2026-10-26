@@ -159,6 +159,16 @@ A Thread that belongs to one Project and therefore shares that Project's
 persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
+**Prerequisite**:
+A Task in the same Project that must be done before another Task may run.
+A Task waiting on one keeps its status; "waiting on" is derived, never stored.
+_Avoid_: Blocker, dependency link, parent task
+
+**Project Plan**:
+An ordered list of proposed Tasks, with their Prerequisites, that a Project's
+lead drafts on request. Nothing changes until the Project Owner applies it.
+_Avoid_: Planner agent, roadmap
+
 **Project Owner**:
 The user who owns and can currently access a Project. Human collaborator
 membership is a separate future authorization concept, not the Project Agent roster.

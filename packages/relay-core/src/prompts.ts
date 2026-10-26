@@ -139,7 +139,11 @@ function promptPreludes(state: AgentState): string[] {
     }
   }
   if (state.project_setup) {
-    preludes.push(projectSetupPrelude(state.project_setup));
+    preludes.push(
+      state.project_setup.mode === "plan"
+        ? projectPlanPrelude(state.project_setup)
+        : projectSetupPrelude(state.project_setup),
+    );
   }
   if (state.round_result_file) {
     preludes.push(
@@ -227,6 +231,33 @@ export function kimiTaskPrompt(state: AgentState): string {
  * or claim the crew exists. Mirrors normalize_setup_proposal in
  * backend/relay/projects/setup.py — change both together.
  */
+const PROPOSED_TASK_SHAPE =
+  '{"key": "<short-slug>", "title": "<task>", "description": "<what and why>", "acceptanceCriteria": ["<observable criterion>"], "after": ["<key of an earlier task>"], "assignedAgentId": "<optional agentId>"}';
+const TASK_ORDER_RULE =
+  "Give each task a short lowercase key. List a task's prerequisites in `after`: keys of tasks earlier in your list, or ids of existing tasks. A task runs only after every task it names is done, so name only true prerequisites and leave independent work free to run in parallel.";
+
+/**
+ * A plan round drafts the project's next tasks, in order, for the owner to
+ * apply; it never restaffs the crew or starts the work. Mirrors the plan mode
+ * of normalize_setup_proposal in backend/relay/projects/setup_result.py.
+ */
+function projectPlanPrelude(setup: ProjectSetupBrief): string {
+  return [
+    "[Project plan]",
+    "You are planning this project's next work for its owner to review. Do not start the work and do not create project files; the owner applies your plan as tasks.",
+    `The owner's ask: ${setup.intent}`,
+    `The project's unfinished tasks (build on them; do not repeat them): ${JSON.stringify(setup.openTasks ?? [])}`,
+    `Agents you may assign (only these, by agentId): ${JSON.stringify(setup.candidates)}`,
+    ...(setup.previousProposal
+      ? [`Your previous plan, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
+      : []),
+    "Propose up to 8 tasks that are bounded and verifiable, in the order they should happen.",
+    TASK_ORDER_RULE,
+    `When you stop, write \`${setup.file}\` as JSON: {"tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this order>"}.`,
+    "Use valid JSON with double quotes. If the ask is too vague, still write your best plan and say what you assumed in the rationale; end your reply by asking the owner what to change.",
+  ].join("\n");
+}
+
 function projectSetupPrelude(setup: ProjectSetupBrief): string {
   return [
     "[Project setup]",
@@ -240,7 +271,8 @@ function projectSetupPrelude(setup: ProjectSetupBrief): string {
     "Staff only the agents the work needs; one is fine for small work. Give each member responsibilities as a concrete outcome contract, not a job title.",
     "The context is the standing brief every future run will read: conventions, constraints, what done means. Keep it specific to this project; do not restate generic advice.",
     "Propose up to 8 first tasks that are bounded, verifiable, and in a sensible order.",
-    `When you stop, write \`${setup.file}\` as JSON: {"name": "<short project name>", "goal": "<one-line outcome>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [{"title": "<task>", "description": "<what and why>", "acceptanceCriteria": ["<observable criterion>"], "assignedAgentId": "<optional agentId>"}], "rationale": "<why this crew and plan>"}.`,
+    TASK_ORDER_RULE,
+    `When you stop, write \`${setup.file}\` as JSON: {"name": "<short project name>", "goal": "<one-line outcome>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this crew and plan>"}.`,
     "Use valid JSON with double quotes. If the intent is too vague to staff, still write your best proposal and say what you assumed in the rationale; end your reply by asking the owner what to change.",
   ].join("\n");
 }

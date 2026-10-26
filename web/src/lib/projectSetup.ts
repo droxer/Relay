@@ -1,6 +1,6 @@
 import type {
   AgentRole,
-  CreateTaskInput,
+  ApplySetupTasksInput,
   ProjectRecord,
   ProjectSetup,
   ProjectSetupMemberIssue,
@@ -21,6 +21,12 @@ export interface SetupMemberDraft {
 }
 
 export interface SetupTaskDraft {
+  /** The proposal's handle for the task; positional for older proposals. */
+  key: string;
+  /** Keys of earlier proposed tasks this one waits for. */
+  after?: string[];
+  /** Existing project tasks this one waits for. */
+  afterTaskIds?: string[];
   title: string;
   description?: string;
   assignedAgentId?: string;
@@ -75,7 +81,11 @@ export function setupDraftFromProposal(proposal: ProjectSetupProposal, project: 
     context: proposal.context ?? project.context ?? "",
     leadAgentId: effectiveLead(members, proposal.leadAgentId ?? null),
     members,
-    tasks: (proposal.tasks ?? []).map((task) => ({ ...task, include: true })),
+    tasks: (proposal.tasks ?? []).map((task, index) => ({
+      ...task,
+      key: task.key ?? `task-${index + 1}`,
+      include: true,
+    })),
   };
 }
 
@@ -110,18 +120,39 @@ export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): Upda
   };
 }
 
-/** The tasks the owner kept, filed into the project. An assignee survives
- *  only when it is a member the owner kept. */
-export function setupTaskInputs(project: ProjectRecord, draft: SetupDraft): CreateTaskInput[] {
-  const kept = new Set(draft.members.filter(memberKept).map((member) => member.agentId));
-  return draft.tasks
-    .filter((task) => task.include && task.title.trim())
-    .map((task) => ({
-      title: task.title.trim(),
-      projectId: project.id,
-      ...(task.description?.trim() ? { description: task.description.trim() } : {}),
-      ...(task.assignedAgentId && kept.has(task.assignedAgentId) ? { assignedAgentId: task.assignedAgentId } : {}),
-    }));
+/** The apply request for the tasks the owner kept. An assignee survives only
+ *  when it is a member the owner kept (or, for a plan, a member already on
+ *  the project); otherwise the task is filed unassigned. */
+export function setupTasksApplyInput(
+  draftId: string,
+  draft: SetupDraft,
+  memberIds: ReadonlySet<string>,
+  queue: boolean,
+): ApplySetupTasksInput {
+  const kept = draft.tasks.filter((task) => task.include && task.title.trim());
+  return {
+    draftId,
+    taskKeys: kept.map((task) => task.key),
+    assignedAgentIds: Object.fromEntries(kept.map((task) => [
+      task.key,
+      task.assignedAgentId && memberIds.has(task.assignedAgentId) ? task.assignedAgentId : null,
+    ])),
+    queue,
+  };
+}
+
+/** Titles of the kept tasks a proposed task waits for, in its order.
+ *  A prerequisite the owner left out is dropped, as the apply drops it. */
+export function setupTaskAfterTitles(task: SetupTaskDraft, tasks: readonly SetupTaskDraft[]): string[] {
+  return (task.after ?? []).flatMap((key) => {
+    const earlier = tasks.find((item) => item.key === key);
+    return earlier?.include ? [earlier.title] : [];
+  });
+}
+
+/** Kept members' ids, for the assignees a setup apply may carry. */
+export function keptMemberIds(draft: SetupDraft): Set<string> {
+  return new Set(draft.members.filter(memberKept).map((member) => member.agentId));
 }
 
 /** A member Apply would carry: kept by the owner, with nothing blocking it,

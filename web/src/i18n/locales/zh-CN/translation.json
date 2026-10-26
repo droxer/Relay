@@ -104,7 +104,8 @@
     "unarchive_project_name_taken": "已有另一个进行中的项目使用此名称。请先重命名该项目，再取消归档此项目。",
     "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
-    "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。"
+    "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
+    "save_prerequisites": "无法保存前置任务。请检查连接后重试。"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {
@@ -371,7 +372,24 @@
     "refine_placeholder": "例如：我们总是遗漏无障碍问题。是否需要调整项目智能体或其职责？",
     "refine_default_intent": "根据目前的工作审视本项目的智能体配置、上下文和目标，并提出改进建议。",
     "refine_start": "请求提案",
-    "refine_open": "仪表盘中已有一份打开的设置草稿。"
+    "refine_open": "仪表盘中已有一份打开的设置草稿。",
+    "plan_title": "规划后续工作",
+    "plan_hint": "请项目负责人按顺序提议接下来的任务。在你应用计划之前不会有任何改动。",
+    "plan_needs_crew": "请先为项目选择负责人，再请求规划。",
+    "plan_note": "计划应涵盖什么？",
+    "plan_placeholder": "例如：规划定价页上线",
+    "plan_start": "起草计划",
+    "plan_default_intent": "根据项目目标和未完成的任务，规划项目接下来的工作。",
+    "plan_review_title": "审阅提议的计划",
+    "plan_review_body": "{{agent}} 提议了这些任务。保留你需要的；每个任务都会在其前置任务完成后才开始。",
+    "plan_tasks": "提议的任务",
+    "plan_apply": "添加任务",
+    "setup_queue_tasks": "按顺序排队",
+    "setup_queue_hint": "排队的任务会在其前置任务完成后自动开始。不勾选则留在待办中。",
+    "setup_task_after": "在 {{tasks}} 之后",
+    "setup_task_after_existing_one": "在 {{count}} 个已有任务之后",
+    "setup_task_after_existing_other": "在 {{count}} 个已有任务之后",
+    "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。"
   },
   "thread": {
     "project_indicator": "项目：{{name}}",
@@ -2977,7 +2995,9 @@
       "dispatch": "无法启动",
       "execution": "运行中停止",
       "operator": "由人工阻塞"
-    }
+    },
+    "waiting_on_label": "等待中",
+    "waiting_on": "等待 {{tasks}} 完成"
   },
   "tags": {
     "label": "标签",
@@ -2991,5 +3011,16 @@
     "placeholder_more": "继续添加…",
     "limit_other": "每个任务最多 {{count}} 个标签。",
     "more_label_other": "另外 {{count}} 个标签：{{tags}}"
+  },
+  "prerequisites": {
+    "title": "顺序",
+    "depends_on": "前置任务",
+    "unblocks": "后续任务",
+    "none": "无",
+    "open": "未完成",
+    "done": "已完成",
+    "add": "添加前置任务",
+    "remove": "移除前置任务 {{ref}}",
+    "remove_short": "移除"
   }
 }

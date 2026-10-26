@@ -34,6 +34,7 @@ from ..engine import store_transaction
 from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
 from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
+from ...tasks.prerequisites import PREREQUISITES_EVENT
 from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
 from ...tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from .events import (
@@ -214,6 +215,8 @@ class TaskWriteRows(TaskStoreState):
             validate_project_move_events(current, events)
             events = number_task_events(events, partial(self._next_task_number, conn))
             task = apply_task_events(current, events, version=sequence)
+            if any(event.get("type") == PREREQUISITES_EVENT for event in events):
+                self._check_prerequisites(conn, task)
             if needs_wip_admission(current, task):
                 if self.engine.dialect.name == "postgresql":
                     conn.execute(
@@ -283,6 +286,10 @@ class TaskWriteRows(TaskStoreState):
                 if event.get("type") == "task.session_linked":
                     self._ensure_task_session(
                         conn, task_pk, event["sessionId"], event["timestamp"]
+                    )
+                elif event.get("type") == PREREQUISITES_EVENT:
+                    self._replace_prerequisite_rows(
+                        conn, task_pk, list(task.get("prerequisiteTaskIds") or [])
                     )
                 elif event.get("type") == "task.session_unlinked":
                     conn.execute(

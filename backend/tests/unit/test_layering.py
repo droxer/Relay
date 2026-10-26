@@ -87,6 +87,7 @@ POLICY_MODULES = frozenset(
         "relay.tasks.execution",
         "relay.tasks.flow",
         "relay.tasks.issue_triage",
+        "relay.tasks.prerequisites",
         "relay.tasks.workspace",
     }
 )

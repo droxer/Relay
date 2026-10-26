@@ -12,6 +12,7 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import (
     and_,
+    exists,
     func,
     insert,
     or_,
@@ -20,6 +21,7 @@ from sqlalchemy import (
 )
 from ...core.ids import new_relay_id
 from ...tasks.issue_triage import issue_needs_project
+from ...tasks.prerequisites import SATISFIED_STATUS
 from ..protocols import TaskDispatchAssignment
 from ...core.models import AgentName
 from ..db_time import parse_db_time
@@ -75,7 +77,7 @@ class TaskDispatchRows(TaskStoreState):
         )
         statement = statement.where(
             self.tasks.c.deleted_at.is_(None)
-        )
+        ).where(~self._waiting_on_prerequisites())
         if after is not None:
             # The same total ordering as the candidate query, including NULL due dates.
             sort_key = task_claim_sort_key(after)
@@ -111,6 +113,30 @@ class TaskDispatchRows(TaskStoreState):
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return [row["snapshot"] for row in rows]
+
+    def _open_prerequisite_exists(self, conn: Any, task_pk: str) -> bool:
+        edges = self.task_prerequisites
+        prerequisite = self.tasks.alias("prerequisite")
+        return conn.execute(
+            select(edges.c.task_id)
+            .join(prerequisite, prerequisite.c.id == edges.c.prerequisite_task_id)
+            .where(edges.c.task_id == task_pk)
+            .where(prerequisite.c.deleted_at.is_(None))
+            .where(prerequisite.c.status != SATISFIED_STATUS)
+            .limit(1)
+        ).first() is not None
+
+    def _waiting_on_prerequisites(self) -> Any:
+        """A task with a live prerequisite that is not yet done."""
+        edges = self.task_prerequisites
+        prerequisite = self.tasks.alias("prerequisite")
+        return exists(
+            select(edges.c.task_id)
+            .join(prerequisite, prerequisite.c.id == edges.c.prerequisite_task_id)
+            .where(edges.c.task_id == self.tasks.c.id)
+            .where(prerequisite.c.deleted_at.is_(None))
+            .where(prerequisite.c.status != SATISFIED_STATUS)
+        )
 
     def claim_next_task_for_agent(
         self, agent: AgentName, assignee_user_id: str | None = None
@@ -171,6 +197,9 @@ class TaskDispatchRows(TaskStoreState):
                     and not expected_assignment.matches(snapshot)
                 )
                 or dispatch_claim_active(snapshot)
+                # Rechecked under the row lock: a prerequisite may have been
+                # added or reopened since the queue was listed.
+                or self._open_prerequisite_exists(conn, row["id"])
             ):
                 return None
             existing_claim = snapshot.get("dispatchClaim")

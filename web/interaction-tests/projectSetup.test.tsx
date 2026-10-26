@@ -6,15 +6,15 @@ import { ProjectDrawer } from "../src/components/ProjectDrawer";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
-const { create, startSetup, update, createTask, getProjectSetup, checkProjectWorkspace } = vi.hoisted(() => ({
-  create: vi.fn(), startSetup: vi.fn(), update: vi.fn(), createTask: vi.fn(), getProjectSetup: vi.fn(), checkProjectWorkspace: vi.fn(),
+const { create, startSetup, update, applyTasks, getProjectSetup, checkProjectWorkspace } = vi.hoisted(() => ({
+  create: vi.fn(), startSetup: vi.fn(), update: vi.fn(), applyTasks: vi.fn(), getProjectSetup: vi.fn(), checkProjectWorkspace: vi.fn(),
 }));
 vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProjectSetup, checkProjectWorkspace }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   createProjectMutation: { isPending: false, mutateAsync: create },
   startProjectSetupMutation: { isPending: false, mutateAsync: startSetup },
   updateProjectMutation: { isPending: false, mutateAsync: update },
-  createTaskMutation: { isPending: false, mutateAsync: createTask },
+  applySetupTasksMutation: { isPending: false, mutateAsync: applyTasks },
 }) }));
 const agents = [
   { id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
@@ -46,7 +46,7 @@ beforeEach(() => {
   create.mockReset().mockResolvedValue({ project: created });
   startSetup.mockReset().mockResolvedValue({ project: { ...created, version: 2 }, threadId: "t" });
   update.mockReset().mockResolvedValue({ project: created });
-  createTask.mockReset().mockResolvedValue({});
+  applyTasks.mockReset().mockResolvedValue({ project: created, tasks: [] });
   getProjectSetup.mockReset();
   checkProjectWorkspace.mockReset();
 });
@@ -168,14 +168,17 @@ it("pins the computer's refusal to the folder field", async () => {
 });
 
 const proposedSetup: ProjectSetup = {
-  state: "proposed", intent: "Launch", agentId: "ada", threadId: "t", startedAt: "s", finishedAt: "f",
+  state: "proposed", intent: "Launch", agentId: "ada", threadId: "t", startedAt: "s", finishedAt: "f", draftId: "setup_1",
   proposal: {
     name: "Spring launch", goal: "Ship by Friday", context: "Use Next.js.", leadAgentId: "ada",
     members: [
       { agentId: "ada", role: "planner", responsibilities: "Own the plan" },
       { agentId: "bo", role: "implementer", responsibilities: "Build pages" },
     ],
-    tasks: [{ title: "Draft the sitemap", assignedAgentId: "bo" }],
+    tasks: [
+      { key: "sitemap", title: "Draft the sitemap", assignedAgentId: "bo" },
+      { key: "pages", title: "Build the pages", after: ["sitemap"] },
+    ],
   },
 };
 
@@ -193,11 +196,14 @@ it("applies a reviewed proposal in one patch and files its tasks", async () => {
   getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
   renderPanel();
   fireEvent.click(screen.getByRole("button", { name: "project.setup_apply" }));
-  await waitFor(() => expect(createTask).toHaveBeenCalled());
+  await waitFor(() => expect(applyTasks).toHaveBeenCalled());
   const input = update.mock.calls[0][0].input;
   expect(input).toMatchObject({ expectedVersion: 3, name: "Spring launch", goal: "Ship by Friday", leadAgentId: "ada", setupResolution: "applied" });
   expect(input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada", "bo"]);
-  expect(createTask).toHaveBeenCalledWith({ title: "Draft the sitemap", projectId: "p", assignedAgentId: "bo" });
+  expect(applyTasks).toHaveBeenCalledWith({ projectId: "p", input: {
+    draftId: "setup_1", taskKeys: ["sitemap", "pages"], assignedAgentIds: { sitemap: "bo", pages: null }, queue: false,
+  } });
+  expect(screen.getByText("project.setup_task_after")).toBeTruthy();
 });
 
 it("unticks a proposed member who can no longer join and says why", async () => {
@@ -212,7 +218,8 @@ it("unticks a proposed member who can no longer join and says why", async () => 
   fireEvent.click(screen.getByRole("button", { name: "project.setup_apply" }));
   await waitFor(() => expect(update).toHaveBeenCalled());
   expect(update.mock.calls[0][0].input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada"]);
-  await waitFor(() => expect(createTask).toHaveBeenCalledWith({ title: "Draft the sitemap", projectId: "p" }));
+  await waitFor(() => expect(applyTasks).toHaveBeenCalled());
+  expect(applyTasks.mock.calls[0][0].input.assignedAgentIds).toEqual({ sitemap: null, pages: null });
 });
 
 it("asks for changes in the same thread", async () => {
@@ -225,9 +232,29 @@ it("asks for changes in the same thread", async () => {
   await waitFor(() => expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Drop Bo", revise: true } }));
 });
 
+it("applies a plan as tasks only, queued in order", async () => {
+  const plan: ProjectSetup = { ...proposedSetup, mode: "plan", proposal: { tasks: proposedSetup.proposal!.tasks } };
+  getProjectSetup.mockResolvedValue({ setup: plan, candidates: [] });
+  renderPanel(plan);
+  expect(screen.queryByText("project.setup_crew")).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "project.setup_queue_tasks" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.plan_apply" }));
+  await waitFor(() => expect(applyTasks).toHaveBeenCalled());
+  expect(update).not.toHaveBeenCalled();
+  expect(applyTasks.mock.calls[0][0].input).toMatchObject({ taskKeys: ["sitemap", "pages"], queue: true });
+});
+
 it("offers a retry and the manual path when a draft fails", async () => {
   renderPanel({ ...proposedSetup, state: "failed", error: "setup_no_proposal", proposal: undefined });
   expect(screen.getByText("project.setup_failed_no_proposal")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "project.setup_try_again" }));
   await waitFor(() => expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Launch", agentId: "ada" } }));
+});
+
+it("keeps plan mode when retrying a failed plan", async () => {
+  renderPanel({ ...proposedSetup, mode: "plan", state: "failed", error: "setup_run_failed", proposal: undefined });
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_try_again" }));
+  await waitFor(() => expect(startSetup).toHaveBeenCalledWith({
+    projectId: "p", input: { intent: "Launch", agentId: "ada", mode: "plan" },
+  }));
 });

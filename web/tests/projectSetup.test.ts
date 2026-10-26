@@ -6,8 +6,10 @@ import {
   provisionalProjectName,
   setupApplyInput,
   setupDraftFromProposal,
+  keptMemberIds,
   setupNeedsAttention,
-  setupTaskInputs,
+  setupTaskAfterTitles,
+  setupTasksApplyInput,
 } from "../src/lib/projectSetup.ts";
 import type { ProjectRecord, ProjectSetupProposal } from "../src/types.ts";
 
@@ -31,8 +33,8 @@ const proposal: ProjectSetupProposal = {
     { agentId: "bo", role: "implementer", responsibilities: "Build pages", instructions: "Mobile first" },
   ],
   tasks: [
-    { title: "Draft the sitemap", assignedAgentId: "ada" },
-    { title: "Hire a designer", assignedAgentId: "gone" },
+    { key: "sitemap", title: "Draft the sitemap", assignedAgentId: "ada" },
+    { title: "Hire a designer", assignedAgentId: "gone", after: ["sitemap"] },
   ],
 };
 
@@ -79,12 +81,25 @@ describe("setup drafts", () => {
     assert.equal(input.leadAgentId, undefined);
   });
 
-  it("files kept tasks and drops assignees who are not kept members", () => {
-    const tasks = setupTaskInputs(project, setupDraftFromProposal(proposal, project));
-    assert.deepEqual(tasks, [
-      { title: "Draft the sitemap", projectId: "p", assignedAgentId: "ada" },
-      { title: "Hire a designer", projectId: "p" },
-    ]);
+  it("applies kept tasks by key and drops assignees who are not kept members", () => {
+    const draft = setupDraftFromProposal(proposal, project);
+    assert.deepEqual(draft.tasks.map((task) => task.key), ["sitemap", "task-2"], "an unkeyed task is keyed by position");
+    assert.deepEqual(setupTasksApplyInput("setup_1", draft, keptMemberIds(draft), true), {
+      draftId: "setup_1",
+      taskKeys: ["sitemap", "task-2"],
+      assignedAgentIds: { sitemap: "ada", "task-2": null },
+      queue: true,
+    });
+  });
+
+  it("names a task's kept prerequisites and drops the ones left out", () => {
+    const draft = setupDraftFromProposal(proposal, project);
+    const [sitemap, designer] = draft.tasks;
+    assert.deepEqual(setupTaskAfterTitles(designer, draft.tasks), ["Draft the sitemap"]);
+    const without = [{ ...sitemap, include: false }, designer];
+    assert.deepEqual(setupTaskAfterTitles(designer, without), []);
+    const input = setupTasksApplyInput("setup_1", { ...draft, tasks: without }, new Set(), false);
+    assert.deepEqual(input.taskKeys, ["task-2"]);
   });
 
   it("shows only open setups", () => {
