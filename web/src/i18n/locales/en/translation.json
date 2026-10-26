@@ -104,7 +104,8 @@
     "unarchive_project_name_taken": "Another active project already uses this name. Rename that project, then unarchive this one.",
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
-    "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended."
+    "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
+    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -375,7 +376,24 @@
     "refine_placeholder": "e.g. We keep missing accessibility issues. Should we change the project agents or their responsibilities?",
     "refine_default_intent": "Review this project’s agents, context, and goal against its work so far, and propose improvements.",
     "refine_start": "Ask for a proposal",
-    "refine_open": "A setup draft is already open on the Dashboard."
+    "refine_open": "A setup draft is already open on the Dashboard.",
+    "plan_title": "Plan next work",
+    "plan_hint": "Ask the project's lead to propose the next tasks, in order. Nothing changes until you apply the plan.",
+    "plan_needs_crew": "Choose a lead for this project before asking for a plan.",
+    "plan_note": "What should the plan cover?",
+    "plan_placeholder": "e.g. Plan the pricing page launch",
+    "plan_start": "Draft plan",
+    "plan_default_intent": "Plan the next work for this project from its goal and its open tasks.",
+    "plan_review_title": "Review proposed plan",
+    "plan_review_body": "{{agent}} proposed these tasks. Keep the ones you want; each starts only after the tasks it depends on are done.",
+    "plan_tasks": "Proposed tasks",
+    "plan_apply": "Add tasks",
+    "setup_queue_tasks": "Queue them in order",
+    "setup_queue_hint": "Queued tasks start on their own as soon as the tasks they depend on are done. Leave this off to keep them in the backlog.",
+    "setup_task_after": "After {{tasks}}",
+    "setup_task_after_existing_one": "After {{count}} existing task",
+    "setup_task_after_existing_other": "After {{count}} existing tasks",
+    "setup_tasks_failed": "Some tasks could not be added: {{message}} Apply again to add the rest; tasks already added are not duplicated."
   },
   "thread": {
     "project_indicator": "Project: {{name}}",
@@ -3041,7 +3059,9 @@
       "dispatch": "Could not start",
       "execution": "Stopped during a run",
       "operator": "Blocked by a person"
-    }
+    },
+    "waiting_on_label": "Waiting",
+    "waiting_on": "Waiting on {{tasks}}"
   },
   "tags": {
     "label": "Tags",
@@ -3057,5 +3077,16 @@
     "limit_other": "A task holds at most {{count}} tags.",
     "more_label_one": "{{count}} more tag: {{tags}}",
     "more_label_other": "{{count}} more tags: {{tags}}"
+  },
+  "prerequisites": {
+    "title": "Order",
+    "depends_on": "Depends on",
+    "unblocks": "Unblocks",
+    "none": "None",
+    "open": "Not done",
+    "done": "Done",
+    "add": "Add prerequisite",
+    "remove": "Remove prerequisite {{ref}}",
+    "remove_short": "Remove"
   }
 }

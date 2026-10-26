@@ -265,6 +265,7 @@ export function ProjectSettingsPanel({
         </footer>
       </form>
 
+      <ProjectRefineSection project={project} mode="plan" onStarted={() => onSetupStarted?.()} />
       <ProjectRefineSection project={project} onStarted={() => onSetupStarted?.()} />
 
       <section className="project-settings-section project-settings-section--danger" aria-labelledby="project-settings-danger">

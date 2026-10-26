@@ -118,6 +118,11 @@ interface RoutineCellState {
   stateFor: (task: RelayTaskListItem) => RoutineListState;
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
+  projectNameFor: (task: RelayTaskListItem) => string | undefined;
+}
+
+function noProjectName(): undefined {
+  return undefined;
 }
 
 const RoutineCells = createCellState<RoutineCellState>("RoutineTable");
@@ -144,6 +149,7 @@ export function RoutineTable({
   stateFor,
   assignmentFor,
   handlersFor,
+  projectNameFor = noProjectName,
 }: {
   /** The already-sorted, already-paged records — pagination stays outside. */
   rows: RelayTaskListItem[];
@@ -157,13 +163,15 @@ export function RoutineTable({
   stateFor: (task: RelayTaskListItem) => RoutineListState;
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
+  /** The name of the project an automation is bound to, if any. */
+  projectNameFor?: (task: RelayTaskListItem) => string | undefined;
 }) {
   const { t } = useTranslation();
   // Values that change under the stable column defs; cells read them
   // through RoutineCells (see lib/cellState).
   const cellState = useMemo<RoutineCellState>(
-    () => ({ t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor }),
-    [t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor],
+    () => ({ t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor }),
+    [t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor],
   );
   const sorting = useMemo<SortingState>(
     () => (sort ? [{ id: sort.key, desc: sort.direction === "desc" }] : []),
@@ -244,6 +252,7 @@ export function RoutineTable({
         header: () => <RoutineCells.Read>{(s) => sortHead("title", s.t("backlog.col_automation"))}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
+          const projectName = s.projectNameFor(task);
           /* A real href, so a routine can be opened in a new tab or copied;
              a plain click navigates in place. */
           return (
@@ -257,6 +266,7 @@ export function RoutineTable({
                   s.handlersFor(task).onOpen();
                 }}
               >{task.title}</a>
+              {projectName ? <span className="task-project-label">{projectName}</span> : null}
               <TaskTagList tags={task.tags} max={2} />
             </div>
           );
@@ -266,7 +276,9 @@ export function RoutineTable({
         id: "priority",
         meta: { headClass: "task-col-priority", cellClass: "task-col-priority" } satisfies ColumnChrome,
         header: () => <RoutineCells.Read>{(s) => sortHead("priority", s.t("backlog.priority"))}</RoutineCells.Read>,
-        cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+        /* `always`: this column exists to state the rank, so an empty cell
+           for `normal` read as a missing value rather than the default. */
+        cell: ({ row }) => <PriorityBadge priority={row.original.priority} always />,
       },
       {
         id: "nextRun",

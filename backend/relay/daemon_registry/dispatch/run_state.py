@@ -219,6 +219,12 @@ def _project_setup_state(setup_block: dict[str, Any], run_id: str) -> dict[str, 
         "intent": setup_block.get("intent", ""),
         "candidates": setup_block.get("candidates", []),
         "roles": setup_block.get("roles", []),
+        **({"mode": setup_block["mode"]} if setup_block.get("mode") == "plan" else {}),
+        **(
+            {"openTasks": setup_block.get("openTasks") or []}
+            if setup_block.get("mode") == "plan"
+            else {}
+        ),
         **(
             {"previousProposal": setup_block["previousProposal"]}
             if setup_block.get("previousProposal")

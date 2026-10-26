@@ -31,10 +31,12 @@ from .api.computers import (
     sandboxes as sandbox_routes,
     user_nodes as user_node_routes,
 )
+from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
 from .api.tasks import (
     automations as automation_routes,
     history as task_history_routes,
+    prerequisites as task_prerequisite_routes,
     records as task_record_routes,
     runs as task_run_routes,
     workspace_files as task_workspace_routes,
@@ -332,6 +334,7 @@ API_ROUTERS = (
     agent_routes.router,
     team_routes.router,
     project_routes.router,
+    project_plan_routes.router,
     skill_routes.router,
     node_workspace_routes.router,
     admin_settings_routes.router,
@@ -342,6 +345,7 @@ API_ROUTERS = (
     chat_gateway_routes.router,
     thread_message_routes.router,
     task_record_routes.router,
+    task_prerequisite_routes.router,
     task_run_routes.router,
     task_history_routes.router,
     task_workspace_routes.router,

@@ -15,6 +15,10 @@ export interface ProjectSetupBrief {
   candidates: Array<{ agentId: string; name: string; executorKind?: string; defaultRole?: string; personality?: string }>;
   roles: string[];
   previousProposal?: Record<string, unknown>;
+  /** `plan` drafts only the next tasks of a project that has its crew. */
+  mode?: "setup" | "plan";
+  /** A plan round's view of the project's unfinished tasks. */
+  openTasks?: Array<{ id: string; number?: number; title: string; status?: string; prerequisiteTaskIds?: string[] }>;
 }
 
 export interface AgentState {

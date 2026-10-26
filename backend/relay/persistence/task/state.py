@@ -13,6 +13,7 @@ class TaskStoreState:
     events: Any
     number_counters: Any
     task_sessions: Any
+    task_prerequisites: Any
     engine: Any
     emit_automation_events: Any
 
@@ -22,6 +23,12 @@ class TaskStoreState:
             ...
 
         def _ensure_task_session(self, conn: Any, task_pk: str, session_id: str, timestamp: str) -> None:
+            ...
+
+        def _check_prerequisites(self, conn: Any, task: dict[str, Any]) -> None:
+            ...
+
+        def _replace_prerequisite_rows(self, conn: Any, task_pk: str, prerequisite_ids: list[str]) -> None:
             ...
 
         def _events_for_task(self, conn: Any, task_pk: str) -> list[dict[str, Any]]:

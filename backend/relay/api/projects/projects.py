@@ -22,10 +22,12 @@ from ...projects.setup import (
     annotate_setup,
     choose_setup_agent,
     drafting_setup,
+    plan_open_tasks,
     setup_candidates,
     setup_in_progress,
     setup_intent,
     setup_manifest_block,
+    setup_mode,
     setup_task_goal,
 )
 from ...core.daemon_capabilities import (
@@ -319,13 +321,18 @@ async def start_project_setup(
         raise HTTPException(409, code)
     try:
         intent = setup_intent(body.get("intent"))
+        mode = setup_mode(body.get("mode"), project)
         candidates = setup_candidates(
             project,
             agent_store=ctx.agent_store,
             placement_store=ctx.agent_placement_store,
         )
         previous = project.get("setup") or None
-        revising = bool(body.get("revise")) and bool(previous and previous.get("threadId"))
+        revising = (
+            bool(body.get("revise"))
+            and bool(previous and previous.get("threadId"))
+            and (previous or {}).get("mode", "setup") == mode
+        )
         if setup_in_progress(previous, ctx.session_store):
             raise ProjectSetupError("project_setup_in_progress")
         agent_id = choose_setup_agent(
@@ -345,6 +352,7 @@ async def start_project_setup(
     # Record the draft before dispatch so a fast result always finds it.
     draft = drafting_setup(
         intent=intent, agent_id=agent_id, thread_id=thread_id, previous=previous if revising else None,
+        mode=mode,
     )
 
     def claim_draft(latest: dict[str, Any]) -> dict[str, Any]:
@@ -360,7 +368,7 @@ async def start_project_setup(
     try:
         session = await CollaborationConductor(ctx).submit(
             RunIntent(
-                task_goal=setup_task_goal(intent, revising=revising),
+                task_goal=setup_task_goal(intent, revising=revising, mode=mode),
                 session_id=thread_id,
                 raw_assignments=[{"agentId": agent_id, "mode": "action"}],
                 requested_project_id=project_id,
@@ -371,6 +379,15 @@ async def start_project_setup(
                     candidates=candidates,
                     previous_proposal=previous_proposal,
                     draft_id=draft["draftId"],
+                    mode=mode,
+                    open_tasks=(
+                        plan_open_tasks(
+                            project,
+                            ctx.task_store.list_task_summaries(user_id=project["ownerUserId"]),
+                        )
+                        if mode == "plan"
+                        else None
+                    ),
                 ),
             ),
             actor,

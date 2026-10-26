@@ -1,8 +1,10 @@
 import type {
   CreateProjectInput,
   ProjectRecord,
+  ApplySetupTasksInput,
   ProjectSetupResponse,
   ProjectsResponse,
+  RelayTask,
   StartProjectSetupInput,
   UpdateProjectInput,
 } from "../types.ts";
@@ -49,6 +51,18 @@ export function startProjectSetup(projectId: string, input: StartProjectSetupInp
     method: "POST",
     body: input,
   });
+}
+
+/** Create a drafted proposal's tasks with their prerequisites. Retrying is
+ *  safe: tasks already created from the draft are not created again. */
+export function applySetupTasks(
+  projectId: string,
+  input: ApplySetupTasksInput,
+): Promise<{ project: ProjectRecord; tasks: RelayTask[] }> {
+  return apiJson<{ project: ProjectRecord; tasks: RelayTask[] }>(
+    `/projects/${encodeURIComponent(projectId)}/setup/tasks`,
+    { method: "POST", body: input },
+  );
 }
 
 export function archiveProject(projectId: string, expectedVersion: number): Promise<{ project: ProjectRecord }> {

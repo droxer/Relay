@@ -222,6 +222,8 @@ export function TaskRecordView({
         onDelete={() => { void deleteRecord(); }}
         onToggleBlock={() => { void toggleBlock(); }}
         onDone={() => { void markDone(); }}
+        tasks={tasks}
+        onOpenTask={(nextId) => onOpenRecord(nextId, null)}
       />
     );
   }

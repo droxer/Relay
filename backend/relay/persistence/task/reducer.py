@@ -7,6 +7,7 @@ from typing import Any
 
 from ...automations.model import LEGACY_FIELDS, STATES, upgrade_legacy
 from ...tasks.flow import apply_flow_status
+from ...tasks.prerequisites import PREREQUISITES_EVENT, apply_prerequisites_set
 from .numbering import NUMBERED_EVENT, apply_task_number
 
 
@@ -230,6 +231,7 @@ TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
     "task.workspace_wait": _apply_task_workspace_wait,
     "task.updated": _apply_task_updated,
     "task.project_set": _apply_task_project_set,
+    PREREQUISITES_EVENT: apply_prerequisites_set,
     NUMBERED_EVENT: apply_task_number,
     "task.assigned": _apply_task_assigned,
     "task.unassigned": _apply_task_unassigned,

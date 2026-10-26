@@ -23,6 +23,7 @@ import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
 import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
+import { RecordPrerequisites } from "./RecordPrerequisites";
 import { useUserAgents } from "../../hooks/useUserAgents";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
@@ -75,8 +76,14 @@ export function TaskRecordPage({
   onDone,
   onEdit,
   onDelete,
+  tasks = [],
+  onOpenTask,
 }: {
   task: RelayTaskListItem;
+  /** The tasks the board loaded: a project task's prerequisite candidates. */
+  tasks?: readonly RelayTaskListItem[];
+  /** Open another task's record, for a prerequisite link. */
+  onOpenTask?: (taskId: string) => void;
   /** Routines with a live occurrence — the one state a routine cannot derive alone. */
   runningRoutineIds: ReadonlySet<string>;
   /** Set when this record is open as one of a routine's runs. */
@@ -257,6 +264,9 @@ export function TaskRecordPage({
         )}
         <TabsContent value="definition">
           <TaskRecordDefinition task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
+          {onOpenTask ? (
+            <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
+          ) : null}
         </TabsContent>
         {/* What is in the workspace now — the project's explorer, given the
             whole tab — and, beside it, the durable record of what runs

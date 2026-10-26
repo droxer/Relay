@@ -92,6 +92,13 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const routineTasks = useMemo(() => tasks.filter((task) => task.isRoutine), [tasks]);
+  /* An automation bound to a project names it under its title, as a backlog
+     row does. An id the loaded projects do not know renders nothing rather
+     than a raw id. */
+  const projectNameFor = useMemo(() => {
+    const names = new Map(projects.map((project) => [project.id, project.name]));
+    return (task: RelayTaskListItem) => (task.projectId ? names.get(task.projectId) : undefined);
+  }, [projects]);
   const tagOptions = useMemo(() => collectTags(routineTasks), [routineTasks]);
   // Derived once for the whole board: `routineState` then costs a Set lookup
   // per row instead of a full task scan.
@@ -419,6 +426,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                   stateFor={(task) => routineState(task, runningIds)}
                   assignmentFor={taskAssignmentDisplay}
                   handlersFor={routineHandlers}
+                  projectNameFor={projectNameFor}
                 />
               </div>
               <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />

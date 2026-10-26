@@ -43,6 +43,7 @@ from ..schemas import (
     TaskPatchBodyDep,
     openapi_body,
 )
+from .prerequisites import task_with_prerequisite_view, with_waiting_on
 from .payloads import (
     project_move_target,
     public_task,
@@ -83,7 +84,7 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=limit,
         )
     return {
-        "tasks": [public_task(task) for task in tasks],
+        "tasks": with_waiting_on(ctx, [public_task(task) for task in tasks]),
         "flowPolicy": {"wipLimit": wip_limit(), "scope": "user"},
     }
 
@@ -121,7 +122,9 @@ def create_task(
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return public_task(get_task_for_actor(ctx.task_store, task_id, actor))
+    return task_with_prerequisite_view(
+        ctx, public_task(get_task_for_actor(ctx.task_store, task_id, actor))
+    )
 
 
 @router.patch("/tasks/{task_id}", openapi_extra=openapi_body(TaskPatchBody))

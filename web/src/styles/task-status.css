@@ -453,6 +453,7 @@
 }
 .task-holdup[data-kind="blocked"] .task-holdup-label { color: var(--err); }
 .task-holdup[data-kind="waiting"] .task-holdup-label { color: var(--warn); }
+.task-holdup[data-kind="prerequisites"] .task-holdup-label { color: var(--ink-3); }
 .task-holdup-text {
   min-width: 0;
   overflow: hidden;

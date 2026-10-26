@@ -179,3 +179,25 @@ task_sessions = Table(
     UniqueConstraint("task_id", "session_id", name="uq_task_sessions_task_session"),
     Index("ix_task_sessions_session_id", "session_id"),
 )
+
+# One row per (task, prerequisite) edge, derived from the dependent task's
+# ``prerequisiteTaskIds`` snapshot field. The dispatch queue reads it to hold
+# back a task whose prerequisites are not done; the reverse index answers
+# what a task unblocks.
+task_prerequisites = Table(
+    "task_prerequisites",
+    metadata,
+    Column(
+        "task_id",
+        entity_uuid_type(),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "prerequisite_task_id",
+        entity_uuid_type(),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Index("ix_task_prerequisites_prerequisite", "prerequisite_task_id"),
+)

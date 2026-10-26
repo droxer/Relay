@@ -212,6 +212,24 @@ it("asks the crew for a refine proposal and returns to the dashboard", async () 
 
 it("holds off a refine while a setup draft is open", () => {
   renderPanel({ ...project, setup: { state: "proposed", intent: "x", agentId: "a", threadId: "t", startedAt: "s" } });
-  expect(screen.getByText("project.refine_open")).toBeTruthy();
+  expect(screen.getAllByText("project.refine_open")).toHaveLength(2);
   expect((screen.getByRole("button", { name: "project.refine_start" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "project.plan_start" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("asks the lead for a plan once the project has a crew", async () => {
+  startSetup.mockResolvedValue({ project, threadId: "t" });
+  const onSetupStarted = vi.fn();
+  const crewed = { ...project, leadAgentId: "a" } as ProjectRecord;
+  render(<ProjectSettingsPanel project={crewed} computer={computer} onDeleted={vi.fn()} onSetupStarted={onSetupStarted} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.plan_note" }), { target: { value: "Plan the launch" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.plan_start" }));
+  await waitFor(() => expect(onSetupStarted).toHaveBeenCalled());
+  expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Plan the launch", mode: "plan" } });
+});
+
+it("holds off a plan until the project has a lead", () => {
+  render(<ProjectSettingsPanel project={project} computer={computer} onDeleted={vi.fn()} />);
+  expect(screen.getByText("project.plan_needs_crew")).toBeTruthy();
+  expect((screen.getByRole("button", { name: "project.plan_start" }) as HTMLButtonElement).disabled).toBe(true);
 });

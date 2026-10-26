@@ -334,6 +334,35 @@
   text-align: right;
 }
 
+/* Prerequisites sit under the definition, full width: a ref and its title
+   need the room the 18rem facts column does not have. */
+.record-definition + .record-definition-facts {
+  margin-block-start: var(--sp-7);
+}
+.record-prerequisites {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.record-prerequisite {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.record-prerequisite-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-prerequisite-state { color: var(--ink-3); }
+.record-prerequisite-add { margin-block-start: var(--sp-2); margin-inline-start: auto; }
+
 /* ── Drawer presentation ──────────────────────────────────────────── */
 
 /* On the boards the record opens as a drawer over the list instead of taking

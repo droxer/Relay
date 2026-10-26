@@ -25,3 +25,4 @@ sync with [`docs/implementation-plan.md`](../implementation-plan.md).
 | [ADR-021](021-team-collaboration-styles.md) | Role-based collaboration styles, frozen round semantics, and team/task/message overrides |
 | [ADR-022](022-agent-drafted-project-setup.md) | Agent-drafted project setup and a project brief every run reads |
 | [ADR-023](023-style-templates-and-human-steps.md) | Collaboration styles as compiled templates, and human approve steps (proposed) |
+| [ADR-024](024-task-prerequisites-and-project-plans.md) | Task prerequisites, and project plans that agents propose and owners apply |
