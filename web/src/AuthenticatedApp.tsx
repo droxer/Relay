@@ -54,7 +54,7 @@ import { useOnboarding } from "./hooks/useOnboarding";
 import { SETUP_STEPS } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
-import { resolveNewThreadComputer } from "./lib/threadRuntime";
+import { resolveNewThreadComputer, threadOwnAgentId } from "./lib/threadRuntime";
 import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
@@ -202,11 +202,17 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   }, [assignableComputers, initializingThread, setNewThreadNodeId, threadComputers]);
 
   const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
+  const threadAgent = useMemo(() => {
+    const id = threadOwnAgentId(activeSession);
+    const agent = id ? selectableLogicalAgents.find((candidate) => candidate.id === id) : undefined;
+    return agent ? { id: agent.id, executorKind: agent.executorKind } : null;
+  }, [activeSession, selectableLogicalAgents]);
   useThreadComposerSelection({
     sessionId: activeSession?.id,
     composingNew,
     targetsReady: agentsReady && teamsReady && nodesReady,
     teamIds: composerTeamIds,
+    threadAgent,
   });
 
   const applySessionFromHash = useCallback((sessionId: string) => {

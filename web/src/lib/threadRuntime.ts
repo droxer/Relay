@@ -289,3 +289,26 @@ export function threadNeedsRuntimeSelection(
 ): boolean {
   return composingNew || !threadRuntimeNodeId(session, agents, nodes);
 }
+
+/**
+ * The agent a plain thread runs — whoever ran its latest turn, else the first
+ * agent in its room — so the composer opens on it rather than on whatever was
+ * picked last elsewhere. A team or project thread answers null: its room is
+ * the default target.
+ */
+export function threadOwnAgentId(
+  session: {
+    teamId?: string;
+    projectId?: string;
+    participantAgentIds?: readonly string[];
+    agentRuns?: readonly { logicalAgentId?: string }[];
+  } | undefined,
+): string | null {
+  if (!session || session.teamId || session.projectId) return null;
+  const runs = session.agentRuns ?? [];
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const id = runs[index]?.logicalAgentId;
+    if (id) return id;
+  }
+  return session.participantAgentIds?.[0] ?? null;
+}
