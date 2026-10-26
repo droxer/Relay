@@ -43,7 +43,7 @@ it("names a workspace that was never created, not an empty Artifacts tab", async
 });
 
 it("shows an empty Artifacts tab when the workspace exists without artifacts/", async () => {
-  workspaceWith({ "": [".threads"] });
+  workspaceWith({ "": [".relay"] });
   renderWorkspace();
   expect(await screen.findByText("workspace.artifacts_empty")).toBeTruthy();
   expect(screen.queryByText("workspace.files_unavailable")).toBeNull();

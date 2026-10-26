@@ -12,9 +12,8 @@ from typing import Any
 
 from .handoff_files import (
     handoff_checkpoint_file,
-    handoff_file,
     legacy_handoff_checkpoint_file,
-    legacy_records_handoff_file,
+    records_handoff_files,
 )
 
 CONTRACT = {"name": "relay.handoff.receipt", "version": 1}
@@ -107,14 +106,14 @@ def capture_handoff_receipt(
         for path in (legacy_handoff_checkpoint_file(context["progressFile"]), checkpoint_path)
         if path
     ]
-    records_notes = (
-        handoff_file(session["id"], context.get("workspaceLayout") or ""),
-        legacy_records_handoff_file(session["id"]),
-    )
-    if context["progressFile"] == records_notes[0]:
-        # A run dispatched before `.threads/` was told the `threads/` name.
-        checkpoint_paths = [handoff_checkpoint_file(records_notes[1]), *checkpoint_paths]
+    records_notes = records_handoff_files(session["id"])
     if context["progressFile"] in records_notes:
+        # A run dispatched before a records move was told an older directory.
+        older_records = records_notes[records_notes.index(context["progressFile"]) + 1:]
+        checkpoint_paths = [
+            *(handoff_checkpoint_file(notes) for notes in reversed(older_records)),
+            *checkpoint_paths,
+        ]
         old_notes = (
             "HANDOFF.md" if context.get("workspaceLayout") == "thread"
             else f"HANDOFF-{session['id']}.md"

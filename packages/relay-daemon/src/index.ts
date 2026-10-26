@@ -89,7 +89,7 @@ import {
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
 import { workspaceCommandEvent } from "./workspace-read.js";
 import {
-  DEFAULT_ARTIFACTS_DIR, LEGACY_THREAD_RECORDS_DIR, THREADS_DIR, ThreadWorkspaceManager,
+  DEFAULT_ARTIFACTS_DIR, THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS, ThreadWorkspaceManager,
 } from "./thread-workspace.js";
 import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
@@ -1386,10 +1386,9 @@ async function executeCommand(
   // directory is the deliverable location, so no `artifacts/` is created.
   const artifactsDir = command.artifactsDir === undefined ? DEFAULT_ARTIFACTS_DIR : command.artifactsDir;
   // Records follow the handoff path the backend named: an older one still
-  // names `threads/`, and moving its records away would hide them.
-  const recordsDir = state.progress_file?.startsWith(`${LEGACY_THREAD_RECORDS_DIR}/`)
-    ? LEGACY_THREAD_RECORDS_DIR
-    : THREADS_DIR;
+  // names `.threads/` or `threads/`, and moving its records away would hide them.
+  const recordsDir = THREAD_RECORDS_DIRS.find((dir) => state.progress_file?.startsWith(`${dir}/`))
+    ?? THREAD_RECORDS_DIR;
   threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir, recordsDir);
   if (artifactsDir === null) {
     delete state.artifacts_dir;

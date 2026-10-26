@@ -15,12 +15,12 @@ import {
 
 describe("workspace file roots", () => {
   it("keeps artifacts/ for a thread or task, and for an older response", () => {
-    assert.deepEqual(workspaceFileRoots(undefined), { artifacts: "artifacts", activities: ".threads" });
-    assert.deepEqual(workspaceFileRoots("artifacts"), { artifacts: "artifacts", activities: ".threads" });
+    assert.deepEqual(workspaceFileRoots(undefined), { artifacts: "artifacts", activities: ".relay/threads" });
+    assert.deepEqual(workspaceFileRoots("artifacts"), { artifacts: "artifacts", activities: ".relay/threads" });
   });
 
   it("roots one automation run at its own artifacts folder", () => {
-    assert.deepEqual(workspaceFileRoots("artifacts/tsk_run"), { artifacts: "artifacts/tsk_run", activities: ".threads" });
+    assert.deepEqual(workspaceFileRoots("artifacts/tsk_run"), { artifacts: "artifacts/tsk_run", activities: ".relay/threads" });
   });
 
   it("makes the project directory itself the files root", () => {
@@ -33,12 +33,12 @@ describe("workspace file tab for a project path", () => {
   it("counts everything outside thread records as the project's files", () => {
     assert.equal(workspaceFileTabForPath("", PROJECT_WORKSPACE_FILE_ROOTS), "artifacts");
     assert.equal(workspaceFileTabForPath("src/app.ts", PROJECT_WORKSPACE_FILE_ROOTS), "artifacts");
-    assert.equal(workspaceFileTabForPath(".threads/t-1", PROJECT_WORKSPACE_FILE_ROOTS), "activities");
+    assert.equal(workspaceFileTabForPath(".relay/threads/t-1", PROJECT_WORKSPACE_FILE_ROOTS), "activities");
   });
 
   it("names the project root as the files tab root", () => {
     assert.equal(workspaceTabRootFor("", PROJECT_WORKSPACE_FILE_ROOTS), "artifacts");
-    assert.equal(workspaceTabRootFor(".threads", PROJECT_WORKSPACE_FILE_ROOTS), "activities");
+    assert.equal(workspaceTabRootFor(".relay/threads", PROJECT_WORKSPACE_FILE_ROOTS), "activities");
     assert.equal(workspaceTabRootFor("src", PROJECT_WORKSPACE_FILE_ROOTS), null);
   });
 
@@ -65,6 +65,7 @@ describe("workspace file tab for a browse path", () => {
   it("names the tab a path sits under", () => {
     assert.equal(workspaceFileTabForPath("artifacts"), "artifacts");
     assert.equal(workspaceFileTabForPath("artifacts/report.md"), "artifacts");
+    assert.equal(workspaceFileTabForPath(".relay/threads/t-1"), "activities");
     assert.equal(workspaceFileTabForPath(".threads/t-1"), "activities");
     assert.equal(workspaceFileTabForPath("threads/t-1"), "activities");
     assert.equal(workspaceFileTabForPath("threads/t-1", PROJECT_WORKSPACE_FILE_ROOTS), "activities");
@@ -78,7 +79,9 @@ describe("workspace file tab for a browse path", () => {
 
   it("names the tab only when the path is exactly a tab root", () => {
     assert.equal(workspaceTabRootFor("artifacts"), "artifacts");
+    assert.equal(workspaceTabRootFor(".relay/threads"), "activities");
     assert.equal(workspaceTabRootFor(".threads"), "activities");
+    assert.equal(workspaceTabRootFor(".relay"), null);
     assert.equal(workspaceTabRootFor("threads"), "activities");
     assert.equal(workspaceTabRootFor("artifacts/report"), null);
     assert.equal(workspaceTabRootFor(""), null);
@@ -102,8 +105,8 @@ describe("workspace browse path in the URL", () => {
   });
 
   it("round-trips any other folder unchanged", () => {
-    assert.equal(serializeWorkspaceBrowsePath(".threads/t-1"), ".threads/t-1");
-    assert.equal(parseWorkspaceBrowsePath(".threads/t-1"), ".threads/t-1");
+    assert.equal(serializeWorkspaceBrowsePath(".relay/threads/t-1"), ".relay/threads/t-1");
+    assert.equal(parseWorkspaceBrowsePath(".relay/threads/t-1"), ".relay/threads/t-1");
   });
 });
 

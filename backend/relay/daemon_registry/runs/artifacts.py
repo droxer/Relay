@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ...core.environment import load_backend_env
-from ...core.workspace_layout import LEGACY_THREAD_RECORDS_DIR, THREAD_RECORDS_DIR
+from ...core.workspace_layout import THREAD_RECORDS_DIRS
 
 load_backend_env()
 
@@ -110,12 +110,17 @@ def is_snapshotable_path(relative_path: str) -> bool:
         parts = parts[2:]
     return (
         len(parts) == 1 or parts[0] in ("output", "artifacts")
-        or (
-            len(parts) == 3
-            and parts[0] in (THREAD_RECORDS_DIR, LEGACY_THREAD_RECORDS_DIR)
-            and parts[2] in ("HANDOFF.md", "HANDOFF.json")
-        )
+        or _is_thread_record(parts)
     )
+
+
+def _is_thread_record(parts: tuple[str, ...]) -> bool:
+    """``<records dir>/<threadId>/HANDOFF.(md|json)`` in any records directory."""
+    for directory in THREAD_RECORDS_DIRS:
+        prefix = tuple(directory.split("/"))
+        if parts[: len(prefix)] == prefix and len(parts) == len(prefix) + 2:
+            return parts[-1] in ("HANDOFF.md", "HANDOFF.json")
+    return False
 
 
 def _clean_workspace_relative_path(value: Any) -> str | None:

@@ -5733,11 +5733,11 @@ def test_a_malformed_round_result_is_ignored_rather_than_steering_the_task() -> 
 
 def test_handoff_notes_are_named_per_thread_on_a_shared_node_workspace() -> None:
     # Records always name the thread, even inside its isolated workspace.
-    assert handoff_file("ses_alpha", "thread") == ".threads/ses_alpha/HANDOFF.md"
+    assert handoff_file("ses_alpha", "thread") == ".relay/threads/ses_alpha/HANDOFF.md"
     # A legacy node-root session shares its workspace with every other thread
     # that ran on the node; its records use the same thread directory convention.
-    assert handoff_file("ses_alpha", "node-root") == ".threads/ses_alpha/HANDOFF.md"
-    assert handoff_file("ses_beta", "node-root") == ".threads/ses_beta/HANDOFF.md"
+    assert handoff_file("ses_alpha", "node-root") == ".relay/threads/ses_alpha/HANDOFF.md"
+    assert handoff_file("ses_beta", "node-root") == ".relay/threads/ses_beta/HANDOFF.md"
 
 
 def test_handoff_checkpoint_sits_beside_its_notes() -> None:
@@ -5748,7 +5748,7 @@ def test_handoff_checkpoint_sits_beside_its_notes() -> None:
     assert handoff_checkpoint_file("PROGRESS-ses_alpha.md") == "PROGRESS-ses_alpha.md.handoff.json"
 
 
-@pytest.mark.parametrize("records_dir", ["threads", ".threads"])
+@pytest.mark.parametrize("records_dir", ["threads", ".threads", ".relay/threads"])
 def test_task_and_chat_runs_have_a_shared_checkpoint_path(records_dir: str) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -5764,7 +5764,10 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path(records_dir: str) -> N
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces", *(["dot-thread-records"] if records_dir == ".threads" else [])],
+                    "capabilities": ["thread-workspaces", *{
+                        ".threads": ["dot-thread-records"],
+                        ".relay/threads": ["dot-thread-records", "relay-thread-records"],
+                    }.get(records_dir, [])],
                     "status": "ready",
                 },
                 "ui_token",

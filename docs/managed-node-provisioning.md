@@ -169,13 +169,21 @@ or recovery appropriate to the provider. Sessions created before the
 thread-layout event field continue at the legacy node root after an upgrade;
 Relay does not copy an ambiguous shared root into a thread automatically.
 
-The `dot-thread-records` capability identifies daemons that create and snapshot
-`.threads/<threadId>/HANDOFF.*` inside a workspace. Ordinary runs on an older
-daemon keep `threads/<threadId>/HANDOFF.*`; a handoff accepted with a `.threads/`
-path requires an upgraded daemon before delivery. The Activity browser combines
-both record roots, so historical records remain accessible without another run.
-When records move, receipt validation can resolve a missing legacy handoff file
-at its new path while still enforcing the recorded hash and rejecting symlinks.
+Thread records sit in `.relay/threads/<threadId>/HANDOFF.*` inside a
+workspace, beside Relay's other control files. The `relay-thread-records`
+capability identifies daemons that create, migrate, and snapshot them there;
+`dot-thread-records` identifies the earlier daemons that use
+`.threads/<threadId>/`, and an older daemon still keeps
+`threads/<threadId>/`. The backend names the newest directory the receiving
+daemon advertises, and a handoff accepted with a `.relay/threads/` or
+`.threads/` path requires a daemon with the matching capability before
+delivery. The daemon moves a thread's older records forward on its next run
+when that directory holds nothing but record files (at a node root,
+`.threads/<id>/` is a thread's whole workspace and is never moved). The
+Activity browser combines all three record roots, so historical records remain
+accessible without another run. When records move, receipt validation can
+resolve a missing older handoff file at its new path while still enforcing the
+recorded hash and rejecting symlinks.
 
 ### ProvisioningAttempt
 

@@ -104,10 +104,13 @@ survives or spans Threads.
 _Avoid_: Agent Workspace, shared Computer workspace
 
 **Thread Records**:
-The `.threads/<threadId>/` directory inside a Thread's bound workspace.
-`HANDOFF.md` records status, progress, decisions, blockers, and next actions;
-`HANDOFF.json` is the structured handoff checkpoint. Each Thread has its own
-records even when several Threads share a Task or Project workspace.
+The `.relay/threads/<threadId>/` directory inside a Thread's bound workspace,
+beside Relay's other control files in `.relay/`. `HANDOFF.md` records status,
+progress, decisions, blockers, and next actions; `HANDOFF.json` is the
+structured handoff checkpoint. Each Thread has its own records even when
+several Threads share a Task or Project workspace. Older runs left them in
+`.threads/<threadId>/` or `threads/<threadId>/`; the daemon moves them on the
+Thread's next run.
 
 **Artifacts Directory**:
 Where a run writes generated deliverables, relative to its bound execution

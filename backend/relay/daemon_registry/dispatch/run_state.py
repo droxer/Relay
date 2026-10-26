@@ -26,12 +26,17 @@ from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     DAEMON_CAPABILITY_HANDOFF_VALIDATION,
     DAEMON_CAPABILITY_PROJECT_SETUP,
+    DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
     DAEMON_CAPABILITY_THREAD_WORKSPACES,
     has_capability,
     DAEMON_CAPABILITY_WORK_RESULTS,
 )
 from ...core.workspace_capabilities import required_workspace_capabilities
-from ...core.workspace_layout import THREAD_RECORDS_DIR
+from ...core.workspace_layout import (
+    DOT_THREAD_RECORDS_DIR,
+    LEGACY_THREAD_RECORDS_DIR,
+    THREAD_RECORDS_DIR,
+)
 from ...sessions.handoff_receipt import render_handoff_receipt
 from ..records import (
     PERSISTED_AGENT_STATE_KEYS,
@@ -143,6 +148,22 @@ def _handoff_validation(
     }
 
 
+# Newest first: the capability a daemon advertises when it keeps thread
+# records in each directory. Every daemon understands `threads/`.
+_RECORDS_DIR_CAPABILITIES = (
+    (THREAD_RECORDS_DIR, DAEMON_CAPABILITY_RELAY_THREAD_RECORDS),
+    (DOT_THREAD_RECORDS_DIR, DAEMON_CAPABILITY_DOT_THREAD_RECORDS),
+)
+
+
+def thread_records_dir(sandbox: dict[str, Any]) -> str:
+    """The newest thread-records directory this daemon knows."""
+    for directory, capability in _RECORDS_DIR_CAPABILITIES:
+        if has_capability(sandbox, capability):
+            return directory
+    return LEGACY_THREAD_RECORDS_DIR
+
+
 def _handoff_context_state(
     state: dict[str, Any],
     context: dict[str, Any],
@@ -156,12 +177,13 @@ def _handoff_context_state(
     The accepted context is immutable across staging and delivery retries.
     """
     _check_handoff_context(context, assignment)
-    if context["progressFile"].startswith(f"{THREAD_RECORDS_DIR}/") and not has_capability(
-        sandbox, DAEMON_CAPABILITY_DOT_THREAD_RECORDS
-    ):
-        raise _DeliveryRefused(
-            "Handoff requires a daemon with dot-thread-records support. Upgrade the daemon before retrying."
-        )
+    for directory, capability in _RECORDS_DIR_CAPABILITIES:
+        if context["progressFile"].startswith(f"{directory}/") and not has_capability(
+            sandbox, capability
+        ):
+            raise _DeliveryRefused(
+                f"Handoff requires a daemon with {capability} support. Upgrade the daemon before retrying."
+            )
     prior_conversation = context["priorContext"]
     if context.get("receipt") is not None:
         try:

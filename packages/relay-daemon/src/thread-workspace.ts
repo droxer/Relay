@@ -16,14 +16,25 @@ export interface ThreadWorkspace {
 }
 
 /**
- * Every thread workspace sits in this directory of the configured root, and
- * every workspace keeps its threads' records (`HANDOFF.md`, `HANDOFF.json`) in
- * one of its own, so neither crowds the files people and agents work on.
+ * Every thread workspace sits in this directory of the configured root, so
+ * none crowds the files people and agents work on.
  */
 export const THREADS_DIR = ".threads";
+/**
+ * Every workspace keeps its threads' records (`HANDOFF.md`, `HANDOFF.json`)
+ * beside Relay's other control files in `.relay/`.
+ */
+export const THREAD_RECORDS_DIR = ".relay/threads";
+/** Where thread records lived before `.relay/threads/`; a backend from then still names it. */
+export const DOT_THREAD_RECORDS_DIR = ".threads";
 /** Where thread records lived before `.threads/`; an older backend still names it. */
 export const LEGACY_THREAD_RECORDS_DIR = "threads";
-export type ThreadRecordsDir = typeof THREADS_DIR | typeof LEGACY_THREAD_RECORDS_DIR;
+export type ThreadRecordsDir =
+  | typeof THREAD_RECORDS_DIR | typeof DOT_THREAD_RECORDS_DIR | typeof LEGACY_THREAD_RECORDS_DIR;
+/** Newest first. */
+export const THREAD_RECORDS_DIRS: readonly ThreadRecordsDir[] = [
+  THREAD_RECORDS_DIR, DOT_THREAD_RECORDS_DIR, LEGACY_THREAD_RECORDS_DIR,
+];
 const THREAD_RECORD_FILES = new Set(["HANDOFF.md", "HANDOFF.json"]);
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 /** What a run.start from a backend that names no `artifactsDir` expects. */
@@ -123,11 +134,14 @@ export class ThreadWorkspaceManager {
   ensureRecords(
     workspace: ThreadWorkspace,
     artifactsDir: string | null = DEFAULT_ARTIFACTS_DIR,
-    recordsDir: ThreadRecordsDir = THREADS_DIR,
+    recordsDir: ThreadRecordsDir = THREAD_RECORDS_DIR,
   ): void {
     validateThreadId(workspace.sessionId);
-    if (recordsDir === THREADS_DIR) moveLegacyRecords(workspace);
-    const records = [[recordsDir, workspace.sessionId]];
+    // Records move only forward, into the directory the backend named.
+    for (const older of THREAD_RECORDS_DIRS.slice(THREAD_RECORDS_DIRS.indexOf(recordsDir) + 1)) {
+      moveOlderRecords(workspace, older, recordsDir);
+    }
+    const records = [[...recordsDir.split("/"), workspace.sessionId]];
     if (artifactsDir !== null) records.push(validateWorkspaceSubpath(artifactsDir));
     for (const segments of records) {
       rejectSymlinkComponents(workspace.hostPath, segments);
@@ -215,22 +229,27 @@ function assertWorkspaceRoot(rootPath: string): void {
 }
 
 /**
- * Moves this thread's records from `threads/<id>/` into `.threads/<id>/`, then
- * drops `threads/` once nothing is left in it. Only a directory holding nothing
- * but record files moves: a linked project may keep its own `threads/` folder.
- * Runs inside the workspace's run gate, so no other run of it is writing.
+ * Moves this thread's records from `<older>/<id>/` into `<recordsDir>/<id>/`,
+ * then drops `<older>/` once nothing is left in it. Only a directory holding
+ * nothing but record files moves: a linked project may keep its own
+ * `threads/` folder, and at a node root `.threads/<id>/` is a thread's whole
+ * workspace. Runs inside the workspace's run gate, so no other run of it is
+ * writing.
  */
-function moveLegacyRecords(workspace: ThreadWorkspace): void {
-  const legacyRoot = resolve(workspace.hostPath, LEGACY_THREAD_RECORDS_DIR);
-  const legacy = resolve(legacyRoot, workspace.sessionId);
-  const target = resolve(workspace.hostPath, THREADS_DIR, workspace.sessionId);
-  if (!isPlainDirectory(legacyRoot) || !isPlainDirectory(legacy) || pathExists(target)) return;
-  const entries = readdirSync(legacy, { withFileTypes: true });
+function moveOlderRecords(workspace: ThreadWorkspace, older: ThreadRecordsDir, recordsDir: ThreadRecordsDir): void {
+  const olderRoot = resolve(workspace.hostPath, older);
+  const source = resolve(olderRoot, workspace.sessionId);
+  const targetSegments = recordsDir.split("/");
+  const target = resolve(workspace.hostPath, ...targetSegments, workspace.sessionId);
+  if (!isPlainDirectory(olderRoot) || !isPlainDirectory(source) || pathExists(target)) return;
+  const entries = readdirSync(source, { withFileTypes: true });
   if (!entries.every((entry) => entry.isFile() && THREAD_RECORD_FILES.has(entry.name))) return;
-  rejectSymlinkComponents(workspace.hostPath, [THREADS_DIR]);
-  mkdirSync(resolve(workspace.hostPath, THREADS_DIR), { recursive: true });
-  renameSync(legacy, target);
-  if (readdirSync(legacyRoot).length === 0) rmdirSync(legacyRoot);
+  rejectSymlinkComponents(workspace.hostPath, targetSegments);
+  mkdirSync(resolve(workspace.hostPath, ...targetSegments), { recursive: true });
+  rejectSymlinkComponents(workspace.hostPath, targetSegments);
+  assertContainedRealPath(workspace.hostPath, resolve(workspace.hostPath, ...targetSegments), "Thread records");
+  renameSync(source, target);
+  if (readdirSync(olderRoot).length === 0) rmdirSync(olderRoot);
 }
 
 function isPlainDirectory(path: string): boolean {

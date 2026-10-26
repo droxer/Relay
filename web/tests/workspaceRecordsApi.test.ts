@@ -25,21 +25,27 @@ for (const list of [
   (path: string) => listTaskWorkspaceFiles({ taskId: "t", path }),
 ]) {
   test("Activity includes historical threads alongside migrated threads", async () => {
-    serve({ ".threads": ["current", "both"], threads: ["old", "both"] });
-    const result = await list(".threads");
-    assert.deepEqual(result.entries.map(e => e.path).sort(), [".threads/both", ".threads/current", "threads/old"]);
+    serve({
+      ".relay/threads": ["current", "all"],
+      ".threads": ["dotted", "all", "both"],
+      threads: ["old", "all", "both"],
+    });
+    const result = await list(".relay/threads");
+    assert.deepEqual(result.entries.map(e => e.path).sort(), [
+      ".relay/threads/all", ".relay/threads/current", ".threads/both", ".threads/dotted", "threads/old",
+    ]);
     assert.equal(result.exists, true);
   });
   test("Activity opens legacy-only records without a new run", async () => {
     serve({ threads: ["old"] });
-    const result = await list(".threads");
+    const result = await list(".relay/threads");
     assert.equal(result.exists, true);
     assert.equal(result.entries[0]?.path, "threads/old");
   });
   test("a partially migrated thread keeps legacy files reachable with their real preview path", async () => {
-    const calls = serve({ ".threads/both": ["HANDOFF.md"], "threads/both": ["HANDOFF.md", "HANDOFF.json"] });
-    const result = await list(".threads/both");
-    assert.deepEqual(result.entries.map(e => e.path).sort(), [".threads/both/HANDOFF.md", "threads/both/HANDOFF.json"]);
+    const calls = serve({ ".relay/threads/both": ["HANDOFF.md"], "threads/both": ["HANDOFF.md", "HANDOFF.json"] });
+    const result = await list(".relay/threads/both");
+    assert.deepEqual(result.entries.map(e => e.path).sort(), [".relay/threads/both/HANDOFF.md", "threads/both/HANDOFF.json"]);
     await readProjectWorkspaceFile({ projectId: "p", path: result.entries.find(e => e.name === "HANDOFF.json")!.path });
     assert.equal(calls.at(-1), "threads/both/HANDOFF.json");
   });

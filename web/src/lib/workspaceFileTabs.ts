@@ -7,11 +7,14 @@ export interface WorkspaceFileRoots {
    *  `artifacts/<taskId>` for one automation run, and "" for a project,
    *  whose directory is the deliverable location itself. */
   artifacts: string;
-  /** Per-thread records (`.threads/<threadId>/HANDOFF.md`). */
+  /** Per-thread records (`.relay/threads/<threadId>/HANDOFF.md`). */
   activities: string;
 }
 
-const THREAD_RECORDS_ROOT = ".threads";
+const THREAD_RECORDS_ROOT = ".relay/threads";
+/** Where thread records lived before `.relay/threads/`, newest first; a
+ *  thread keeps them there until it runs again on an upgraded computer. */
+export const OLDER_THREAD_RECORDS_ROOTS: readonly string[] = [".threads", "threads"];
 const DEFAULT_ARTIFACTS_ROOT = "artifacts";
 
 /** A thread or backlog task: deliverables under `artifacts/`. */
@@ -50,7 +53,7 @@ export function workspaceFileTabForPath(
   path: string,
   roots: WorkspaceFileRoots = DEFAULT_WORKSPACE_FILE_ROOTS,
 ): WorkspaceFileTab | null {
-  if (under(path, roots.activities) || under(path, "threads")) return "activities";
+  if (under(path, roots.activities) || olderThreadRecordsRoot(path)) return "activities";
   if (under(path, roots.artifacts)) return "artifacts";
   return null;
 }
@@ -61,7 +64,12 @@ export function workspaceTabRootFor(
   roots: WorkspaceFileRoots = DEFAULT_WORKSPACE_FILE_ROOTS,
 ): WorkspaceFileTab | null {
   const tab = workspaceFileTabForPath(path, roots);
-  return tab && (roots[tab] === path || (tab === "activities" && path === "threads")) ? tab : null;
+  return tab && (roots[tab] === path || (tab === "activities" && olderThreadRecordsRoot(path) === path)) ? tab : null;
+}
+
+/** The older thread-records root `path` sits under, if any. */
+export function olderThreadRecordsRoot(path: string): string | undefined {
+  return OLDER_THREAD_RECORDS_ROOTS.find((root) => under(path, root));
 }
 
 /* The workspace root is the empty path, and URL canonicalization drops an
@@ -88,10 +96,10 @@ export function serializeWorkspaceBrowsePath(
   return path === "" ? ROOT_PARAM : path;
 }
 
-/* Relay's own bookkeeping inside a project directory: thread records (the
-   Activity tab, and `threads/` where older runs left them), agents' private
-   homes, and the daemon's control files. */
-const PROJECT_INTERNAL_ENTRIES = new Set([THREAD_RECORDS_ROOT, "threads", "agents", ".relay"]);
+/* Relay's own bookkeeping inside a project directory: the daemon's control
+   files with the thread records the Activity tab shows (`.relay/`), the
+   folders older runs left records in, and agents' private homes. */
+const PROJECT_INTERNAL_ENTRIES = new Set([".relay", ...OLDER_THREAD_RECORDS_ROOTS, "agents"]);
 
 /** Whether a listing entry at `path` is Relay's own, not the user's files.
  *  Only the project root hides anything: a thread or task browser never

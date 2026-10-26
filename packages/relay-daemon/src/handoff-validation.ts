@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { DaemonNodeRunCommand } from "relay-core";
-import { LEGACY_THREAD_RECORDS_DIR, THREADS_DIR } from "./thread-workspace.js";
+import { THREAD_RECORDS_DIRS } from "./thread-workspace.js";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const fail = (reason: string): never => { throw new Error(`handoff_validation_failed: ${reason}`); };
@@ -52,12 +52,25 @@ function hashRecordedFile(root: string, path: string): string {
   try {
     return hashRegularFile(root, path);
   } catch (error) {
-    const [directory, thread, file, ...rest] = path.split("/");
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT"
-      || directory !== LEGACY_THREAD_RECORDS_DIR || !thread || rest.length
-      || (file !== "HANDOFF.md" && file !== "HANDOFF.json")) throw error;
-    return hashRegularFile(root, `${THREADS_DIR}/${thread}/${file}`);
+    const moved = (error as NodeJS.ErrnoException).code === "ENOENT" ? newerRecordPaths(path) : [];
+    for (const candidate of moved) {
+      try {
+        return hashRegularFile(root, candidate);
+      } catch (aliasError) {
+        if ((aliasError as NodeJS.ErrnoException).code !== "ENOENT") throw aliasError;
+      }
+    }
+    throw error;
   }
+}
+
+/** Where a record named under an older records directory may have moved, nearest first. */
+function newerRecordPaths(path: string): string[] {
+  const index = THREAD_RECORDS_DIRS.findIndex((dir) => path.startsWith(`${dir}/`));
+  if (index <= 0) return [];
+  const [thread, file, ...rest] = path.slice(THREAD_RECORDS_DIRS[index].length + 1).split("/");
+  if (!thread || rest.length || (file !== "HANDOFF.md" && file !== "HANDOFF.json")) return [];
+  return THREAD_RECORDS_DIRS.slice(0, index).reverse().map((dir) => `${dir}/${thread}/${file}`);
 }
 
 function hashRegularFile(root: string, path: string): string {

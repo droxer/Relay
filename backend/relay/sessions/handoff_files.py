@@ -1,6 +1,6 @@
 """Names of the handoff notes a thread's agents keep in the shared workspace.
 
-`.threads/<threadId>/HANDOFF.md` is the free-form record every agent reads before it starts and
+`.relay/threads/<threadId>/HANDOFF.md` is the free-form record every agent reads before it starts and
 updates before it finishes; `HANDOFF.json` beside it is the structured
 checkpoint a handoff receipt validates. Both were once `PROGRESS.md` and
 `PROGRESS.md.handoff.json`: a handoff context accepted before the rename still
@@ -11,7 +11,7 @@ in `relay-core/src/handoff-files.ts`.
 
 from __future__ import annotations
 
-from ..core.workspace_layout import LEGACY_THREAD_RECORDS_DIR, THREAD_RECORDS_DIR
+from ..core.workspace_layout import THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS
 
 HANDOFF_FILE = "HANDOFF.md"
 _STEM = "HANDOFF"
@@ -19,19 +19,21 @@ _LEGACY_STEM = "PROGRESS"
 _LEGACY_CHECKPOINT_SUFFIX = ".handoff.json"
 
 
-def handoff_file(session_id: str, workspace_layout: str, *, dot_threads: bool = True) -> str:
+def handoff_file(
+    session_id: str, workspace_layout: str, *, records_dir: str = THREAD_RECORDS_DIR
+) -> str:
     """Name the handoff notes for a thread, without colliding with other threads.
 
     Keep records separate even when task rounds or project threads share a cwd.
-    workspace_layout remains an argument for callers and older stored contexts.
+    workspace_layout remains an argument for callers and older stored contexts;
+    records_dir is the directory the receiving daemon keeps records in.
     """
-    directory = THREAD_RECORDS_DIR if dot_threads else LEGACY_THREAD_RECORDS_DIR
-    return f"{directory}/{session_id}/{HANDOFF_FILE}"
+    return f"{records_dir}/{session_id}/{HANDOFF_FILE}"
 
 
-def legacy_records_handoff_file(session_id: str) -> str:
-    """Where a thread's notes sat before `.threads/`; runs from then wrote there."""
-    return f"{LEGACY_THREAD_RECORDS_DIR}/{session_id}/{HANDOFF_FILE}"
+def records_handoff_files(session_id: str) -> tuple[str, ...]:
+    """Every name a thread's notes have had in its records, newest first."""
+    return tuple(f"{directory}/{session_id}/{HANDOFF_FILE}" for directory in THREAD_RECORDS_DIRS)
 
 
 def handoff_checkpoint_file(notes_file: str) -> str:

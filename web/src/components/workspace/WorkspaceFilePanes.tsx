@@ -11,6 +11,7 @@ import { WorkspaceFileActions } from "./WorkspaceFileActions";
 import { WorkspaceFileTabs } from "./WorkspaceFileTabs";
 import {
   DEFAULT_WORKSPACE_FILE_ROOTS,
+  olderThreadRecordsRoot,
   type WorkspaceFileRoots,
   workspaceFileTabForPath,
 } from "../../lib/workspaceFileTabs";
@@ -59,7 +60,7 @@ export function WorkspaceFilePanes({
   const { t } = useTranslation();
   const selected = selectedPath ? { name: selectedPath.split("/").at(-1) || selectedPath } : null;
   const tab = workspaceFileTabForPath(path, roots);
-  const activityRoot = path === "threads" || path.startsWith("threads/") ? "threads" : roots.activities;
+  const activityRoot = olderThreadRecordsRoot(path) ?? roots.activities;
   const scopeRoot = scoped && tab ? (tab === "activities" ? activityRoot : roots.artifacts) : undefined;
   return (
     <div className={`workspace-panes${selected ? "" : " is-browse-only"}`}>
