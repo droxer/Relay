@@ -1,14 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
-  <!-- App icon (dark default): the black canvas (palette surface-0) and the
-       handoff. The lead chevron is the baton orange (palette brand-lead), what a
-       person does; the trailing chevron is the palette live blue, an agent
-       carrying the work on. The two accents tell one story, and at 16px a
-       neutral chevron on a neutral square would vanish in a tab strip.
-       Values are the dark register's tokens, keep them in step. -->
-  <rect x="4" y="4" width="56" height="56" rx="15" fill="#000000"/>
+  <!-- App icon. The handoff: the lead chevron is the baton orange (palette
+       brand-lead), a person handing work on; the trailing chevron is the
+       palette live blue, an agent carrying it on. The two accents tell one
+       story, and at 16px a neutral chevron on a neutral square would vanish
+       in a tab strip. The attributes are the dark register (the default, and
+       what a browser that ignores the media query draws); the light register
+       follows the viewer's color scheme, a white badge with the line-1
+       hairline like relay-mark.svg. Values are each register's tokens, keep
+       them in step. The signed-in app redraws it in the app's own theme
+       (faviconState.ts). -->
+  <style>
+    @media (prefers-color-scheme: light) {
+      .canvas { fill: #ffffff; stroke: #d9d9d9; stroke-width: 1; }
+      .lead { stroke: #b84400; }
+      .trail { stroke: #2457c5; }
+    }
+  </style>
+  <rect class="canvas" x="4" y="4" width="56" height="56" rx="15" fill="#000000"/>
   <g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M18 19.4 L32 32 L18 44.6" stroke="#ff8a3d"/>
-    <path d="M32 19.4 L46 32 L32 44.6" stroke="#6aa6ff"/>
+    <path class="lead" d="M18 19.4 L32 32 L18 44.6" stroke="#ff8a3d"/>
+    <path class="trail" d="M32 19.4 L46 32 L32 44.6" stroke="#6aa6ff"/>
   </g>
 </svg>
