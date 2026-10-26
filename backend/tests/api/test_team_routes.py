@@ -273,7 +273,7 @@ def _agent(
             "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "dot-thread-records", "agent-resume"],
+            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "relay-thread-records", "agent-resume"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -2861,7 +2861,7 @@ def test_task_recovery_preserves_round_verdict(
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "dot-thread-records"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records"],
             "status": "ready",
         }
     )
@@ -2960,7 +2960,7 @@ def _waiting_task_thread(recovery_team_thread):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "dot-thread-records", "work-results"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records", "work-results"],
             "status": "ready",
         }
     )
@@ -3686,13 +3686,13 @@ def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monk
 
 
 @pytest.mark.parametrize("capable", [False, True])
-@pytest.mark.parametrize("required_capability", ["handoff-validation", "dot-thread-records"])
+@pytest.mark.parametrize("required_capability", ["handoff-validation", "relay-thread-records"])
 def test_handoff_requires_runtime_validation(recovery_team_thread, capable, required_capability):
     client, _controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
     registry.update_status("test_node_alice", {"capabilities": [
         PROJECT_CAPABILITY, "thread-workspaces",
-        *(capability for capability in ("handoff-validation", "dot-thread-records")
+        *(capability for capability in ("handoff-validation", "relay-thread-records")
           if capable or capability != required_capability),
     ]})
     response = client.post(

@@ -97,7 +97,7 @@ test("accepted receipt remains valid after record migration and rejects changed 
     assert.match(validateHandoffWorkspace(workspace.hostPath, input)!, /1 recorded file hashes matched/);
     manager.ensureRecords(workspace);
     assert.match(validateHandoffWorkspace(workspace.hostPath, input)!, /1 recorded file hashes matched/);
-    writeFileSync(join(workspace.hostPath, ".threads/thread/HANDOFF.json"), "changed");
+    writeFileSync(join(workspace.hostPath, ".relay/threads/thread/HANDOFF.json"), "changed");
     assert.throws(() => validateHandoffWorkspace(workspace.hostPath, input), /handoff_validation_failed/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

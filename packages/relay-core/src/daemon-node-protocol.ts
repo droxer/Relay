@@ -76,7 +76,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -103,6 +103,8 @@ export const DAEMON_CAPABILITY_PROJECT_LINKS: DaemonNodeCapability = "project-li
  */
 export const DAEMON_CAPABILITY_ARTIFACT_LAYOUT: DaemonNodeCapability = "artifact-layout";
 export const DAEMON_CAPABILITY_DOT_THREAD_RECORDS: DaemonNodeCapability = "dot-thread-records";
+/** Thread records under `.relay/threads/`, moved there from `.threads/` and `threads/`. */
+export const DAEMON_CAPABILITY_RELAY_THREAD_RECORDS: DaemonNodeCapability = "relay-thread-records";
 /** The daemon can map every round of one task onto a single validated task directory. */
 export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-workspaces";
 /**

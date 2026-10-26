@@ -47,6 +47,8 @@ DAEMON_CAPABILITY_PROJECT_LINKS = "project-links"
 DAEMON_CAPABILITY_ARTIFACT_LAYOUT = "artifact-layout"
 # Hidden thread records, migration-aware handoff validation, and snapshots.
 DAEMON_CAPABILITY_DOT_THREAD_RECORDS = "dot-thread-records"
+# Thread records under `.relay/threads/`, moved there from `.threads/` and `threads/`.
+DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
@@ -71,6 +73,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_PROJECT_LINKS,
         DAEMON_CAPABILITY_ARTIFACT_LAYOUT,
         DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
+        DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
     }
 )
 

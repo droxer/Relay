@@ -8,6 +8,9 @@ import type {
   WorkspaceFileEntry,
 } from "../types.ts";
 import { apiJson } from "./client.ts";
+import { DEFAULT_WORKSPACE_FILE_ROOTS, OLDER_THREAD_RECORDS_ROOTS } from "../lib/workspaceFileTabs.ts";
+
+const THREAD_RECORDS_ROOT = DEFAULT_WORKSPACE_FILE_ROOTS.activities;
 
 export function listArtifacts(
   input: { userId?: string; workspacePath?: string } = {},
@@ -60,7 +63,7 @@ export function listTaskWorkspaceFiles(
   );
 }
 
-/** Activity spans both layouts until every historical thread has run again.
+/** Activity spans every records layout until each historical thread has run again.
  * Keep actual entry paths so previews and directory navigation use real files.
  * Current records win duplicate names; errors still surface to the browser. */
 async function listWorkspaceFiles<T extends { path: string; exists: boolean; entries: WorkspaceFileEntry[] }>(
@@ -70,13 +73,19 @@ async function listWorkspaceFiles<T extends { path: string; exists: boolean; ent
     const query = new URLSearchParams(folder ? { path: folder } : {}).toString();
     return apiJson<T>(`${endpoint}${query ? `?${query}` : ""}`, { signal });
   };
-  if (path !== ".threads" && !path.startsWith(".threads/")) return list(path);
-  const [current, legacy] = await Promise.all([list(path), list(path.slice(1))]);
-  const entries = new Map(legacy.entries.map(entry => [entry.name, entry]));
-  for (const entry of current.entries) entries.set(entry.name, entry);
+  if (path !== THREAD_RECORDS_ROOT && !path.startsWith(`${THREAD_RECORDS_ROOT}/`)) return list(path);
+  const rest = path.slice(THREAD_RECORDS_ROOT.length);
+  // Oldest first, so newer records win a name both hold.
+  const [current, ...older] = await Promise.all(
+    [path, ...OLDER_THREAD_RECORDS_ROOTS.map(root => `${root}${rest}`)].map(list),
+  );
+  const entries = new Map<string, WorkspaceFileEntry>();
+  for (const listing of [...older].reverse().concat(current)) {
+    for (const entry of listing.entries) entries.set(entry.name, entry);
+  }
   return {
     ...current,
-    exists: current.exists || legacy.exists,
+    exists: [current, ...older].some(listing => listing.exists),
     entries: [...entries.values()].sort((left, right) => left.kind === right.kind
       ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
       : left.kind === "directory" ? -1 : 1),

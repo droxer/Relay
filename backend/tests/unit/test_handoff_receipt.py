@@ -216,26 +216,27 @@ def test_receipt_prefers_thread_directory_over_previous_root_checkpoint():
     session = source()
     session["artifacts"].append({
         "id": "new", "kind": "workspace_file", "agentRunId": "run",
-        "workspaceRelativePath": ".threads/thread/HANDOFF.json",
+        "workspaceRelativePath": ".relay/threads/thread/HANDOFF.json",
     })
     context = capture_handoff_context(session, TARGET, None, Snapshots({
         "checkpoint": b'{"assignmentId":"source","pending":["Old"]}',
         "new": b'{"assignmentId":"source","pending":["Current"]}',
     }))
-    assert context["progressFile"] == ".threads/thread/HANDOFF.md"
-    assert context["receipt"]["checkpoint"]["path"] == ".threads/thread/HANDOFF.json"
+    assert context["progressFile"] == ".relay/threads/thread/HANDOFF.md"
+    assert context["receipt"]["checkpoint"]["path"] == ".relay/threads/thread/HANDOFF.json"
     assert context["receipt"]["checkpoint"]["claims"]["pending"] == ["Current"]
 
 
-def test_receipt_reads_a_checkpoint_written_before_dot_threads():
+@pytest.mark.parametrize("records_dir", ["threads", ".threads"])
+def test_receipt_reads_a_checkpoint_written_in_an_older_records_directory(records_dir):
     session = source()
     session["artifacts"].append({
         "id": "older", "kind": "workspace_file", "agentRunId": "run",
-        "workspaceRelativePath": "threads/thread/HANDOFF.json",
+        "workspaceRelativePath": f"{records_dir}/thread/HANDOFF.json",
     })
     context = capture_handoff_context(session, TARGET, None, Snapshots({
         "older": b'{"assignmentId":"source","pending":["Before"]}',
     }))
-    assert context["progressFile"] == ".threads/thread/HANDOFF.md"
-    assert context["receipt"]["checkpoint"]["path"] == "threads/thread/HANDOFF.json"
+    assert context["progressFile"] == ".relay/threads/thread/HANDOFF.md"
+    assert context["receipt"]["checkpoint"]["path"] == f"{records_dir}/thread/HANDOFF.json"
     assert context["receipt"]["checkpoint"]["claims"]["pending"] == ["Before"]

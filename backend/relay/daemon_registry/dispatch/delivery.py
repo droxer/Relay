@@ -17,7 +17,6 @@ from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.workspace_layout import workspace_artifacts_dir
 from ...tasks.execution import request_execution_owner
 from ...core.daemon_capabilities import (
-    DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     DAEMON_CAPABILITY_ROUND_RESULT,
     has_capability,
 )
@@ -45,6 +44,7 @@ from .run_state import (
     _work_item_state,
     _work_protocol_state,
     run_follow_up,
+    thread_records_dir,
 )
 from .run_start import (
     _run_start_command,
@@ -333,7 +333,7 @@ class AssignmentDeliveryMixin(RegistryState):
         # every run; the prompt only asks to create a checkpoint for real work.
         progress_file = handoff_file(
             run_request["sessionId"], workspace_layout,
-            dot_threads=has_capability(sandbox, DAEMON_CAPABILITY_DOT_THREAD_RECORDS),
+            records_dir=thread_records_dir(sandbox),
         )
         next_state = {**state, "progress_file": progress_file}
         bridge = compute_prior_agent_bridge(

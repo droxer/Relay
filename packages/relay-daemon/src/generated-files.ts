@@ -3,7 +3,7 @@ import { join, relative, sep } from "node:path";
 
 import type { DaemonGeneratedFile } from "relay-core";
 
-import { LEGACY_THREAD_RECORDS_DIR, THREADS_DIR } from "./thread-workspace.js";
+import { THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS } from "./thread-workspace.js";
 
 /**
  * Workspace produced-file detection for daemon runs.
@@ -175,13 +175,33 @@ function isTextDocumentFile(relativePath: string, extension: string): boolean {
       ? parts.slice(2)
       : parts;
   return scoped.length === 1 || scoped[0] === "output" || scoped[0] === "artifacts"
-    || (scoped.length === 3 && isThreadsDir(scoped[0]) && /^HANDOFF\.(md|json)$/.test(scoped[2]));
+    || /^HANDOFF\.(md|json)$/.test(threadRecordPath(scoped)?.rest.join("/") ?? "");
 }
 
-/** `.threads/` holds thread records (and, at a node root, thread workspaces);
- * `threads/` is where records lived before it. */
-function isThreadsDir(name: string): boolean {
-  return name === THREADS_DIR || name === LEGACY_THREAD_RECORDS_DIR;
+/**
+ * Splits `<records dir>/<threadId>/...` into the thread and what follows, for
+ * any records directory: `.relay/threads/` now, `.threads/` (which at a node
+ * root also holds thread workspaces) and `threads/` where older runs left them.
+ */
+const [RELAY_DIR, RECORDS_SUBDIR] = THREAD_RECORDS_DIR.split("/");
+
+/** A real directory, never a symbolic link the walk would follow out of the workspace. */
+async function isPlainDirectory(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function threadRecordPath(parts: string[]): { thread: string; rest: string[] } | null {
+  for (const dir of THREAD_RECORDS_DIRS) {
+    const prefix = dir.split("/");
+    if (parts.length > prefix.length && prefix.every((segment, index) => parts[index] === segment)) {
+      return { thread: parts[prefix.length], rest: parts.slice(prefix.length + 1) };
+    }
+  }
+  return null;
 }
 
 function isSiblingAgentHome(relativeDir: string, ownAgentHomeSubdir: string | undefined): boolean {
@@ -255,11 +275,16 @@ async function listCandidates(
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         const relativeDir = relative(workspacePath, path).split(sep).join("/");
-        if (GENERATED_FILE_EXCLUDED_DIRS.has(entry.name)) continue;
+        if (GENERATED_FILE_EXCLUDED_DIRS.has(entry.name)) {
+          // `.relay/` holds Relay's control files; only its thread records are walked.
+          const records = join(path, RECORDS_SUBDIR);
+          if (relativeDir === RELAY_DIR && await isPlainDirectory(records)) pending.push(records);
+          continue;
+        }
         if (isSiblingAgentHome(relativeDir, ownAgentHomeSubdir)) continue;
-        const [top, thread, ...nested] = relativeDir.split("/");
-        if (options.ownThreadId && isThreadsDir(top) && thread && nested.length === 0
-          && thread !== options.ownThreadId) continue;
+        const record = threadRecordPath(relativeDir.split("/"));
+        if (options.ownThreadId && record && record.rest.length === 0
+          && record.thread !== options.ownThreadId) continue;
         pending.push(path);
         continue;
       }

@@ -3748,8 +3748,9 @@ test("upgraded daemon keeps legacy sessions on the existing node root", async (t
 
   assert.equal(events.some((event) => event.type === "run.completed"), true);
   assert.equal(existsSync(join(workspace, command.sessionId)), false);
-  // Only its records live under `.threads/`; no thread workspace was created.
-  assert.deepEqual(readdirSync(join(workspace, ".threads")), [command.sessionId]);
+  // Only its records live under `.relay/threads/`; no thread workspace was created.
+  assert.deepEqual(readdirSync(join(workspace, ".relay/threads")), [command.sessionId]);
+  assert.equal(existsSync(join(workspace, ".threads")), false);
   assert.equal(existsSync(join(workspace, "threads")), false);
 });
 
