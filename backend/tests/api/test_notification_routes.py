@@ -76,6 +76,24 @@ def test_mark_read_rejects_malformed_bodies(ada: TestClient, body: dict) -> None
     assert ada.post(f"{API}/notifications/read", json=body).status_code == 400
 
 
+def test_clearing_by_id_and_all(admin: TestClient, ada: TestClient) -> None:
+    _finish_task(ada, ADA)
+    _finish_task(ada, ADA)
+    first, second = (item["id"] for item in ada.get(f"{API}/notifications").json()["notifications"])
+
+    # Someone else's id is ignored, never reported.
+    assert admin.post(f"{API}/notifications/clear", json={"ids": [first]}).json() == {"unreadCount": 0}
+    assert ada.post(f"{API}/notifications/clear", json={"ids": [first]}).json() == {"unreadCount": 1}
+    assert [item["id"] for item in ada.get(f"{API}/notifications").json()["notifications"]] == [second]
+    assert ada.post(f"{API}/notifications/clear", json={"all": True}).json() == {"unreadCount": 0}
+    assert ada.get(f"{API}/notifications").json() == {"notifications": [], "unreadCount": 0}
+
+
+@pytest.mark.parametrize("body", [{}, {"ids": "x"}, {"ids": [1]}, {"ids": [""]}, {"ids": ["x"] * 101}])
+def test_clear_rejects_malformed_bodies(ada: TestClient, body: dict) -> None:
+    assert ada.post(f"{API}/notifications/clear", json=body).status_code == 400
+
+
 def test_muted_kinds_hide_notices_until_unmuted(ada: TestClient) -> None:
     _finish_task(ada, ADA)
 

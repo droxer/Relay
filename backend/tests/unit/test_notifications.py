@@ -167,6 +167,34 @@ def test_mark_read_touches_only_the_callers_notices(tmp_path: Path) -> None:
     assert inbox["notifications"][0]["readAt"].endswith("Z")
 
 
+def test_clearing_hides_only_the_callers_notices(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.add([{"user_id": "u-1", "kind": TASK_COMPLETED, "data": {}},
+               {"user_id": "u-1", "kind": TASK_COMPLETED, "data": {}},
+               {"user_id": "u-2", "kind": TASK_COMPLETED, "data": {}}])
+    first, second = (item["id"] for item in store.list_for_user("u-1")["notifications"])
+    theirs = store.list_for_user("u-2")["notifications"][0]["id"]
+
+    store.clear("u-1", [first, theirs, "not-a-uuid"])
+    inbox = store.list_for_user("u-1")
+    assert [item["id"] for item in inbox["notifications"]] == [second]
+    assert inbox["unreadCount"] == 1
+    assert store.list_for_user("u-2")["unreadCount"] == 1
+
+    store.clear("u-1", None)
+    assert store.list_for_user("u-1") == {"notifications": [], "unreadCount": 0}
+    assert store.list_for_user("u-2")["unreadCount"] == 1
+
+
+def test_a_cleared_notice_stays_cleared_when_replayed(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    row = {"user_id": "u-1", "kind": APPROVAL_REQUESTED, "data": {}, "dedupeKey": "q-1"}
+    store.add([row])
+    store.clear("u-1", None)
+    store.add([row])
+    assert store.list_for_user("u-1") == {"notifications": [], "unreadCount": 0}
+
+
 def test_muting_a_kind_hides_it_and_unmuting_brings_it_back(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.add([{"user_id": "u-1", "kind": COMPUTER_STATUS, "data": {}},

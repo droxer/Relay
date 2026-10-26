@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useNotifications, useNotificationPreferences } from "../src/hooks/useNotifications";
-import { listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
+import { clearNotifications, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
 import { NotificationsSection } from "../src/components/settings/NotificationsSection";
 
 const auth = vi.hoisted(() => ({ user: { id: "account-a" } as { id: string } | null }));
@@ -12,7 +12,7 @@ vi.mock("../src/hooks/useMutationError", () => ({ useMutationError: () => ({ rep
 vi.mock("../src/api", () => ({
   NOTIFICATION_KINDS: ["task_completed", "computer_status", "client_outdated"],
   listNotifications: vi.fn(), getNotificationPreferences: vi.fn(),
-  markNotificationsRead: vi.fn(), updateNotificationPreferences: vi.fn(),
+  markNotificationsRead: vi.fn(), clearNotifications: vi.fn(), updateNotificationPreferences: vi.fn(),
 }));
 
 function setup() {
@@ -48,6 +48,35 @@ it("never shows another account's cached inbox or preferences while the new fetc
   expect(second.result.current.inbox.notices).toEqual([]);
   expect(second.result.current.prefs.preferences).toBeUndefined();
   second.unmount(); client.clear();
+});
+
+it("removes a dismissed notice at once and restores it when the clear fails", async () => {
+  const { client, wrapper } = setup();
+  let fail!: (error: Error) => void;
+  vi.mocked(clearNotifications).mockReset().mockImplementation(() => new Promise((_resolve, reject) => { fail = reject; }));
+  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
+  act(() => view.result.current.dismiss(view.result.current.notices[0]));
+  await waitFor(() => expect(view.result.current.notices).toEqual([]));
+  expect(view.result.current.unreadCount).toBe(0);
+  expect(clearNotifications).toHaveBeenCalledWith(["private-notice"]);
+  await act(async () => { fail(new Error("offline")); });
+  await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
+  expect(view.result.current.unreadCount).toBe(1);
+  view.unmount(); client.clear();
+});
+
+it("clears the whole inbox", async () => {
+  const { client, wrapper } = setup();
+  vi.mocked(clearNotifications).mockReset().mockResolvedValue({ unreadCount: 0 });
+  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
+  vi.mocked(listNotifications).mockResolvedValue({ notifications: [], unreadCount: 0 });
+  act(() => view.result.current.clearAll());
+  await waitFor(() => expect(view.result.current.notices).toEqual([]));
+  expect(clearNotifications).toHaveBeenCalledWith("all");
+  expect(view.result.current.unreadCount).toBe(0);
+  view.unmount(); client.clear();
 });
 
 it("blocks overlapping preference saves, then allows the next change using saved preferences", async () => {

@@ -44,6 +44,15 @@ export function markNotificationsRead(target: readonly string[] | "all"): Promis
   });
 }
 
+/** Remove the named notices from the inbox, or every notice with `"all"`.
+    A cleared notice never comes back, even if the server replays it. */
+export function clearNotifications(target: readonly string[] | "all"): Promise<{ unreadCount: number }> {
+  return apiJson<{ unreadCount: number }>("/notifications/clear", {
+    method: "POST",
+    body: target === "all" ? { all: true } : { ids: [...target] },
+  });
+}
+
 export function getNotificationPreferences(signal?: AbortSignal): Promise<NotificationPreferences> {
   return apiJson<NotificationPreferences>("/notifications/preferences", { signal });
 }

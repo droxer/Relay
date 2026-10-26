@@ -3,6 +3,7 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
+  clearNotifications,
   getNotificationPreferences,
   listNotifications,
   markNotificationsRead,
@@ -104,6 +105,10 @@ export type NotificationsController = {
   readonly isPending: boolean;
   readonly isError: boolean;
   markAllRead: () => void;
+  /** Empty the inbox. */
+  clearAll: () => void;
+  /** Remove one notice from the inbox. */
+  dismiss: (notice: NotificationView) => void;
   /** Mark the notice read and open what it is about. */
   open: (notice: NotificationView) => void;
 };
@@ -121,9 +126,18 @@ function withRead(response: NotificationsResponse, ids: ReadonlySet<string> | "a
   };
 }
 
+function withoutCleared(response: NotificationsResponse, ids: ReadonlySet<string> | "all"): NotificationsResponse {
+  if (ids === "all") return { notifications: [], unreadCount: 0 };
+  const removedUnread = response.notifications.filter((notice) => ids.has(notice.id) && !notice.readAt).length;
+  return {
+    notifications: response.notifications.filter((notice) => !ids.has(notice.id)),
+    unreadCount: Math.max(0, response.unreadCount - removedUnread),
+  };
+}
+
 /**
  * The signed-in person's inbox: polled every 30s and on window focus, with
- * read marks applied to the cache before the server answers. When desktop
+ * read marks and clears applied to the cache before the server answers. When desktop
  * notifications are on and allowed, a notice that arrives while the page is
  * hidden is also shown by the browser — never the backlog the first read
  * finds.
@@ -177,7 +191,32 @@ export function useNotifications({ enabled, onOpen }: {
   });
   const { mutate } = markRead;
 
+  const clear = useMutation({
+    mutationFn: (ids: readonly string[] | "all") => clearNotifications(ids),
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
+      if (previous) {
+        queryClient.setQueryData(queryKey, withoutCleared(previous, ids === "all" ? "all" : new Set(ids)));
+      }
+      return { previous, queryKey };
+    },
+    onSuccess: ({ unreadCount: count }, _ids, context) => {
+      queryClient.setQueryData<NotificationsResponse>(context.queryKey, (current) =>
+        current && typeof count === "number" ? { ...current, unreadCount: count } : current);
+      // The inbox shows a page of notices; refill it from behind the cleared ones.
+      void queryClient.invalidateQueries({ queryKey: context.queryKey });
+    },
+    onError: (error, _ids, context) => {
+      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous);
+      reportMutationError("Failed to clear notifications", error, t("notifications.clear_failed"));
+    },
+  });
+  const { mutate: mutateClear } = clear;
+
   const markAllRead = useCallback(() => mutate("all"), [mutate]);
+  const clearAll = useCallback(() => mutateClear("all"), [mutateClear]);
+  const dismiss = useCallback((notice: NotificationView) => mutateClear([notice.id]), [mutateClear]);
   const open = useCallback((notice: NotificationView) => {
     if (notice.unread) mutate([notice.id]);
     onOpen(notice);
@@ -211,6 +250,8 @@ export function useNotifications({ enabled, onOpen }: {
     get isPending() { return query.isPending; },
     get isError() { return query.isError; },
     markAllRead,
+    clearAll,
+    dismiss,
     open,
   };
 }

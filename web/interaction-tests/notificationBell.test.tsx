@@ -24,6 +24,8 @@ function controller(overrides: Partial<NotificationsController> = {}): Notificat
     isPending: false,
     isError: false,
     markAllRead: vi.fn(),
+    clearAll: vi.fn(),
+    dismiss: vi.fn(),
     open: vi.fn(),
     ...overrides,
   };
@@ -93,12 +95,26 @@ describe("NotificationBell", () => {
     expect(value.markAllRead).toHaveBeenCalled();
   });
 
+  it("clears everything, or dismisses one notice without opening it", () => {
+    const value = controller();
+    renderBell(value);
+    fireEvent.click(screen.getByRole("button", { name: "notifications.clear_all" }));
+    expect(value.clearAll).toHaveBeenCalled();
+    const [dismissFirst] = screen.getAllByRole("button", { name: "notifications.dismiss" });
+    // The dismiss button sits beside the link, never inside it.
+    expect(dismissFirst.closest("a")).toBeNull();
+    fireEvent.click(dismissFirst);
+    expect(value.dismiss).toHaveBeenCalledWith(notices[0]);
+    expect(value.open).not.toHaveBeenCalled();
+  });
+
   it("says when the inbox is empty and offers no badge", () => {
     const { onOpenSettings } = renderBell(controller({ notices: [], unreadCount: 0 }));
     expect(screen.getByRole("status").textContent).toBe("notifications.empty");
     const trigger = screen.getByRole("button", { name: "notifications.title" });
     expect(trigger.querySelector(".notif-bell-badge")).toBeNull();
     expect((screen.getByRole("button", { name: "notifications.mark_all_read" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "notifications.clear_all" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByText("notifications.settings_link"));
     expect(onOpenSettings).toHaveBeenCalled();
   });

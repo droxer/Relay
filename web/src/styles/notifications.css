@@ -54,6 +54,12 @@
   border-bottom: 0.5px solid var(--line-1);
 }
 
+.notif-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
 .notif-heading {
   margin: 0;
   color: var(--ink-1);
@@ -69,19 +75,51 @@
   list-style: none;
 }
 
-.notif-row {
+/* One notice: the link and, beside it, its dismiss button. The hover wash
+   sits on the item so it covers both. */
+.notif-item {
   display: flex;
   align-items: flex-start;
+  border-radius: var(--r-2);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.notif-item:hover {
+  background: var(--row-hover);
+}
+
+.notif-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
   gap: var(--sp-3);
+  min-width: 0;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   color: var(--ink-2);
   text-decoration: none;
-  transition: background var(--t-fast) var(--ease);
 }
 
-.notif-row:hover {
-  background: var(--row-hover);
+/* Quiet until the row is pointed at or the button is reached by keyboard;
+   it keeps its slot so the time never shifts. Touch has no hover, so there
+   it always shows. */
+.notif-dismiss {
+  flex: 0 0 auto;
+  margin: var(--sp-1-5) var(--sp-2) 0 calc(var(--sp-2) * -1);
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.notif-item:hover .notif-dismiss,
+.notif-dismiss:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .notif-dismiss {
+    opacity: 1;
+  }
 }
 
 /* The tone mark sits on the title's first line. */

@@ -2,7 +2,7 @@
 
 import { useId, useState, type HTMLAttributes, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ICON, NavNotifications } from "../icons";
+import { ActionRemove, ICON, NavNotifications } from "../icons";
 import { StateMark } from "../StateMark";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -35,7 +35,8 @@ export type NotificationBellBinding = Pick<NotificationBellProps, "controller" |
 
 /**
  * The inbox bell: an unread count over the glyph, and a panel listing the
- * newest notices. Opening a notice marks it read and goes where it points.
+ * newest notices. Opening a notice marks it read and goes where it points;
+ * a row's dismiss button or "Clear all" removes notices from the inbox.
  * The rail and the phone top bar each mount one, over one shared controller.
  */
 export function NotificationBell({
@@ -101,16 +102,28 @@ export function NotificationBell({
       <PopoverContent side={side} align={align} className="notif-panel" aria-labelledby={headingId}>
         <header className="notif-head">
           <h2 id={headingId} className="notif-heading">{t("notifications.title")}</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="notif-mark-all"
-            disabled={unreadCount === 0}
-            onClick={controller.markAllRead}
-          >
-            {t("notifications.mark_all_read")}
-          </Button>
+          <div className="notif-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="notif-mark-all"
+              disabled={unreadCount === 0}
+              onClick={controller.markAllRead}
+            >
+              {t("notifications.mark_all_read")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="notif-clear-all"
+              disabled={controller.notices.length === 0}
+              onClick={controller.clearAll}
+            >
+              {t("notifications.clear_all")}
+            </Button>
+          </div>
         </header>
         <NotificationList
           controller={controller}
@@ -155,7 +168,7 @@ function NotificationList({
   return (
     <ul className="notif-list">
       {notices.map((notice) => (
-        <li key={notice.id}>
+        <li key={notice.id} className="notif-item">
           <a
             className="notif-row"
             href={hrefFor(notice.target)}
@@ -173,6 +186,19 @@ function NotificationList({
             </time>
             {notice.unread ? <span className="sr-only">{t("notifications.unread")}</span> : null}
           </a>
+          {/* A sibling of the link, never inside it: a button in an anchor is
+              invalid and its click would also follow the link. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="notif-dismiss"
+            aria-label={t("notifications.dismiss")}
+            title={t("notifications.dismiss")}
+            onClick={() => controller.dismiss(notice)}
+          >
+            <ActionRemove size={ICON.sm} aria-hidden="true" />
+          </Button>
         </li>
       ))}
     </ul>
