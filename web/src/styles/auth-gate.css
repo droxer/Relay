@@ -1,4 +1,4 @@
-/* The gate shown while the session is unknown (AuthChecking, DeviceApproval).
+/* The gate shown while the session is unknown (AuthChecking).
    It paints before the app's stylesheet (styles/app.css) arrives, so it lives
    in the global sheet beside the landing page. */
 

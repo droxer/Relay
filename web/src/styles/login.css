@@ -354,6 +354,46 @@
   color: var(--lg-muted);
 }
 
+/* The facts a request is about (the computer the terminal named, its
+   directory, the account it joins): a quiet ledger, not a form. Label over
+   value, rows split by hairlines, the path in mono and free to wrap anywhere
+   so a deep directory never pushes the gate wider. */
+.login-facts {
+  margin: 0;
+  border: 0.5px solid var(--lg-hairline-soft);
+  border-radius: var(--r-2);
+}
+
+.login-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.login-facts > div + div {
+  border-top: 0.5px solid var(--lg-hairline-soft);
+}
+
+.login-facts dt {
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--lg-muted);
+}
+
+.login-facts dd {
+  margin: 0;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--lg-ink);
+  overflow-wrap: anywhere;
+}
+
+.login-facts code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+
 /* "Forgot password?" — tucked under the password field it belongs to, on the
    trailing edge, so it reads as an aside to that field rather than a second
    action beside Sign in. */

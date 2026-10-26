@@ -149,6 +149,6 @@ function AuthGate() {
   }
 
   const deviceCode = deviceApprovalCode(window.location.pathname, window.location.search);
-  if (deviceCode) return <DeviceApproval code={deviceCode} />;
+  if (deviceCode) return <DeviceApproval code={deviceCode} user={user} />;
   return <AuthenticatedApp user={user} setUser={setUser} preferences={preferences} />;
 }
