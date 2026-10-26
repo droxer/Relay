@@ -1,7 +1,8 @@
 """A person's notification inbox, plus the watch state that feeds it.
 
 Rows are plain records, not an event log: a notification is written once and
-only its ``read_at`` changes. Task notifications are inserted inside the task
+only its ``read_at`` and ``cleared_at`` change. Clearing hides a notice rather
+than deleting it, so replaying a deduplicated notice cannot resurrect it. Task notifications are inserted inside the task
 store's own transaction (``insert_notification_rows``), so a completed task and
 its notice commit together. Computer notices come from the watcher, which
 claims each observed transition through ``notification_watch_state`` with a
@@ -95,8 +96,20 @@ class DatabaseNotificationStore:
 
     @staticmethod
     def _visible(user_id: str, muted: list[str]) -> Any:
-        clause = notifications.c.user_id == user_id
+        clause = and_(notifications.c.user_id == user_id, notifications.c.cleared_at.is_(None))
         return and_(clause, notifications.c.kind.not_in(muted)) if muted else clause
+
+    @staticmethod
+    def _owned(user_id: str, ids: list[str] | None) -> list[Any] | None:
+        """The caller's uncleared notices named by ``ids`` (all when None), or
+        None when no id can name one. Ids belonging to someone else are
+        ignored rather than reported."""
+        where = [notifications.c.user_id == user_id, notifications.c.cleared_at.is_(None)]
+        if ids is None:
+            return where
+        # Not a uuid cannot name a notice; Postgres would reject the bind.
+        ids = [item for item in ids if _is_uuid(item)]
+        return [*where, notifications.c.id.in_(ids)] if ids else None
 
     def list_for_user(self, user_id: str, *, limit: int = 50) -> dict[str, Any]:
         """Recent notices and the unread count, both without muted kinds —
@@ -116,17 +129,24 @@ class DatabaseNotificationStore:
         return {"notifications": [_public(row) for row in rows], "unreadCount": int(unread)}
 
     def mark_read(self, user_id: str, ids: list[str] | None) -> None:
-        """Mark the given notices read, or every unread one when ``ids`` is None.
-        Ids belonging to someone else are ignored rather than reported."""
-        where = [notifications.c.user_id == user_id, notifications.c.read_at.is_(None)]
-        if ids is not None:
-            # Not a uuid cannot name a notice; Postgres would reject the bind.
-            ids = [item for item in ids if _is_uuid(item)]
-            if not ids:
-                return
-            where.append(notifications.c.id.in_(ids))
+        """Mark the given notices read, or every unread one when ``ids`` is None."""
+        where = self._owned(user_id, ids)
+        if where is None:
+            return
         with store_transaction(self.engine) as conn:
-            conn.execute(update(notifications).where(*where).values(read_at=datetime.now(UTC)))
+            conn.execute(
+                update(notifications).where(*where, notifications.c.read_at.is_(None))
+                .values(read_at=datetime.now(UTC))
+            )
+
+    def clear(self, user_id: str, ids: list[str] | None) -> None:
+        """Remove the given notices from the inbox, or all of them when ``ids``
+        is None. Muted notices are cleared too: clearing all means all."""
+        where = self._owned(user_id, ids)
+        if where is None:
+            return
+        with store_transaction(self.engine) as conn:
+            conn.execute(update(notifications).where(*where).values(cleared_at=datetime.now(UTC)))
 
     def prune(self, before: datetime) -> int:
         with store_transaction(self.engine) as conn:

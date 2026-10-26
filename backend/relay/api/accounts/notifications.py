@@ -19,8 +19,8 @@ from ..bodies import JsonBodyDep
 
 router = APIRouter()
 
-# A mark-read batch larger than the inbox can show is not a real request.
-MAX_MARK_READ_IDS = MAX_LIST_LIMIT
+# A mark-read or clear batch larger than the inbox can show is not a real request.
+MAX_TARGET_IDS = MAX_LIST_LIMIT
 
 
 def _store(request: Request) -> DatabaseNotificationStore:
@@ -38,24 +38,44 @@ def list_notifications(
     return _store(request).list_for_user(_caller(request, ctx), limit=limit)
 
 
+def _target_ids(body: dict[str, Any]) -> list[str] | None:
+    """``{"ids": [...]}`` names notices; ``{"all": true}`` (None) names all."""
+    if body.get("all") is True:
+        return None
+    ids = body.get("ids")
+    if not isinstance(ids, list) or not all(isinstance(item, str) and item for item in ids):
+        raise HTTPException(400, "ids must be a list of notification ids, or pass all: true.")
+    if len(ids) > MAX_TARGET_IDS:
+        raise HTTPException(400, f"ids may name at most {MAX_TARGET_IDS} notifications.")
+    return ids
+
+
+def _unread_count(store: DatabaseNotificationStore, user_id: str) -> dict[str, Any]:
+    return {"unreadCount": store.list_for_user(user_id, limit=1)["unreadCount"]}
+
+
 @router.post("/notifications/read")
 def mark_notifications_read(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     """Body ``{"ids": [...]}`` marks those read; ``{"all": true}`` marks all."""
     user_id = _caller(request, ctx)
-    body = _request_body
-    if body.get("all") is True:
-        ids = None
-    else:
-        ids = body.get("ids")
-        if not isinstance(ids, list) or not all(isinstance(item, str) and item for item in ids):
-            raise HTTPException(400, "ids must be a list of notification ids, or pass all: true.")
-        if len(ids) > MAX_MARK_READ_IDS:
-            raise HTTPException(400, f"ids may name at most {MAX_MARK_READ_IDS} notifications.")
+    ids = _target_ids(_request_body)
     store = _store(request)
     store.mark_read(user_id, ids)
-    return {"unreadCount": store.list_for_user(user_id, limit=1)["unreadCount"]}
+    return _unread_count(store, user_id)
+
+
+@router.post("/notifications/clear")
+def clear_notifications(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    """Body ``{"ids": [...]}`` clears those; ``{"all": true}`` empties the inbox."""
+    user_id = _caller(request, ctx)
+    ids = _target_ids(_request_body)
+    store = _store(request)
+    store.clear(user_id, ids)
+    return _unread_count(store, user_id)
 
 
 @router.get("/notifications/preferences")

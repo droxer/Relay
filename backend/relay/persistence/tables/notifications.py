@@ -14,6 +14,9 @@ notifications = Table(
     Column("data", json_type(), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("read_at", DateTime(timezone=True), nullable=True),
+    # Cleared notices stay as rows so a replayed dedupe key cannot bring
+    # them back; the watcher prunes them with the rest.
+    Column("cleared_at", DateTime(timezone=True), nullable=True),
     Index("ix_notifications_user_id_created_at", "user_id", "created_at"),
     Index("ix_notifications_created_at", "created_at"),
 )

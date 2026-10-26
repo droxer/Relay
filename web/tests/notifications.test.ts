@@ -15,6 +15,7 @@ import {
   getNotificationPreferences,
   listNotifications,
   markNotificationsRead,
+  clearNotifications,
   updateNotificationPreferences,
 } from "../src/api.js";
 
@@ -224,6 +225,16 @@ describe("notification API client", () => {
     assert.match(calls[0].url, /\/api\/v1\/notifications\/read$/);
     assert.equal(calls[0].init?.method, "POST");
     assert.equal(calls[0].init?.body, JSON.stringify({ ids: ["n1", "n2"] }));
+    assert.equal(calls[1].init?.body, JSON.stringify({ all: true }));
+  });
+
+  it("clears named notices, or all of them", async () => {
+    const calls = capture({ unreadCount: 0 });
+    assert.deepEqual(await clearNotifications(["n1"]), { unreadCount: 0 });
+    await clearNotifications("all");
+    assert.match(calls[0].url, /\/api\/v1\/notifications\/clear$/);
+    assert.equal(calls[0].init?.method, "POST");
+    assert.equal(calls[0].init?.body, JSON.stringify({ ids: ["n1"] }));
     assert.equal(calls[1].init?.body, JSON.stringify({ all: true }));
   });
 
