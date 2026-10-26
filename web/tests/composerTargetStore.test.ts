@@ -105,6 +105,26 @@ describe("composer target store", () => {
     assert.equal(useComposerTargetStore.getState().projectRoomTarget, true);
   });
 
+  it("opens an unpicked thread on the agent it runs, never overriding a saved pick", () => {
+    const { pickAgent, rememberThreadPick, restoreThreadPick, defaultThreadPick } = useComposerTargetStore.getState();
+    pickAgent({ id: "agt_last_used", executorKind: "claude" });
+
+    restoreThreadPick("ses_task");
+    defaultThreadPick("ses_task", reviewer);
+    let state = useComposerTargetStore.getState();
+    assert.equal(state.activeLogicalAgentId, "agt_reviewer");
+    assert.equal(state.activeAgent, "codex");
+    assert.equal(state.projectRoomTarget, false);
+    assert.equal(state.threadPicks.ses_task, undefined);
+
+    pickAgent({ id: "agt_mine", executorKind: "pi" });
+    rememberThreadPick("ses_picked");
+    restoreThreadPick("ses_picked");
+    defaultThreadPick("ses_picked", reviewer);
+    state = useComposerTargetStore.getState();
+    assert.equal(state.activeLogicalAgentId, "agt_mine");
+  });
+
   it("records an explicit pick and keeps only the newest copy per thread", () => {
     const { rememberThreadPick } = useComposerTargetStore.getState();
     rememberThreadPick("ses_a", { kind: "room" });

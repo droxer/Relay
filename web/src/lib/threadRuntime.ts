@@ -289,3 +289,41 @@ export function threadNeedsRuntimeSelection(
 ): boolean {
   return composingNew || !threadRuntimeNodeId(session, agents, nodes);
 }
+
+type OwnAgentRound = {
+  workScope?: { kind: "thread" } | { kind: "task"; taskId: string };
+  assignments: readonly { agentId: string }[];
+};
+
+/**
+ * The agent a thread's composer opens on, so it starts on the agent doing the
+ * thread's work rather than on whatever was picked last elsewhere. A plain
+ * thread answers whoever ran its latest turn, else the first agent in its
+ * room. A project thread answers the agent of its latest task round when one
+ * agent ran it — a task assigned to that agent — and null otherwise, as does
+ * a team thread: their room is the default target.
+ */
+export function threadOwnAgentId(
+  session: {
+    teamId?: string;
+    projectId?: string;
+    participantAgentIds?: readonly string[];
+    agentRuns?: readonly { logicalAgentId?: string }[];
+    collaborationRounds?: readonly OwnAgentRound[];
+  } | undefined,
+): string | null {
+  if (!session || session.teamId) return null;
+  if (session.projectId) return projectTaskAgentId(session.collaborationRounds ?? []);
+  const runs = session.agentRuns ?? [];
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const id = runs[index]?.logicalAgentId;
+    if (id) return id;
+  }
+  return session.participantAgentIds?.[0] ?? null;
+}
+
+function projectTaskAgentId(rounds: readonly OwnAgentRound[]): string | null {
+  const taskRound = [...rounds].reverse().find((round) => round.workScope?.kind === "task");
+  const agentIds = new Set(taskRound?.assignments.map((assignment) => assignment.agentId));
+  return agentIds.size === 1 ? [...agentIds][0] : null;
+}

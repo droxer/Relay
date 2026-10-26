@@ -77,6 +77,9 @@ interface ComposerTargetStore {
   rememberThreadPick: (threadId: string, pick?: ThreadPick) => void;
   /** Re-apply `threadId`'s last pick; a thread with none opens on its room. */
   restoreThreadPick: (threadId: string) => void;
+  /** Address `agent` — the agent the thread runs — unless `threadId` has a
+   *  saved pick. Not saved: it is the thread's default, not a choice. */
+  defaultThreadPick: (threadId: string, agent: AgentTarget) => void;
 }
 
 export const useComposerTargetStore = create<ComposerTargetStore>((set, get) => ({
@@ -124,5 +127,8 @@ export const useComposerTargetStore = create<ComposerTargetStore>((set, get) => 
     } else {
       set({ pendingThreadTeamId: null, projectRoomTarget: true });
     }
+  },
+  defaultThreadPick: (threadId, agent) => {
+    if (!get().threadPicks[threadId]) get().pickAgent(agent);
   },
 }));
