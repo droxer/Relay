@@ -54,6 +54,8 @@ nodes = Table(
     # Legacy compatibility column, cleared by migration 0089. Always NULL.
     Column("node_token_secret", Text, nullable=True),
     Column("last_error", Text, nullable=True),
+    # The operating system the daemon reported at registration.
+    Column("host_os", Text, nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("last_seen_at", DateTime(timezone=True), nullable=True),

@@ -226,6 +226,17 @@ export interface DaemonSkippedSkill {
   assignmentMode?: "optional" | "required";
 }
 
+/** The operating system a daemon's host runs, as the web names it. */
+export type DaemonHostOs = "macos" | "linux" | "windows";
+
+/** Node's `process.platform` as a `DaemonHostOs`; another platform reports none. */
+export function daemonHostOs(platform: string): DaemonHostOs | undefined {
+  if (platform === "darwin") return "macos";
+  if (platform === "linux") return "linux";
+  if (platform === "win32") return "windows";
+  return undefined;
+}
+
 export interface DaemonNodeRegistration {
   runtimeRefreshCommands?: Array<{ commandId: string; leaseId: string }>;
   /** Runs admitted before a daemon restart that this daemon will not resume. */
@@ -236,6 +247,7 @@ export interface DaemonNodeRegistration {
   workspacePath?: string;
   workspaceId?: string;
   sandboxMode?: DaemonNodeSandboxMode;
+  hostOs?: DaemonHostOs;
   protocolVersion: number;
   supportedAgents: AgentName[];
   executorCapabilities?: DaemonExecutorCapability[];

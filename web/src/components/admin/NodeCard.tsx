@@ -10,6 +10,7 @@ import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
+import { HostOsBadge } from "../computer/HostOsBadge";
 import { isNodeOnline } from "../../lib/adminHelpers";
 
 interface NodeCardProps {
@@ -80,6 +81,7 @@ export function NodeCard({
             ) : (
               <NodePresence node={node} t={t} withLabel />
             )}
+            <HostOsBadge node={node} />
             <ClientOutdatedBadge node={node} t={t} />
           </span>
         </div>

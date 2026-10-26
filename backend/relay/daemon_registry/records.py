@@ -288,6 +288,15 @@ def agent_models_state(payload: dict[str, Any]) -> dict[str, list[str]]:
     return models
 
 
+DAEMON_HOST_OSES = ("macos", "linux", "windows")
+
+
+def host_os_state(payload: dict[str, Any]) -> str | None:
+    """The operating system the daemon says it runs on, known values only."""
+    raw = payload.get("hostOs")
+    return raw if raw in DAEMON_HOST_OSES else None
+
+
 def custom_model_endpoints_state(payload: dict[str, Any]) -> list[str]:
     """Runtimes the daemon says call a custom model endpoint, known agents only."""
     raw = payload.get("customModelEndpoints")
