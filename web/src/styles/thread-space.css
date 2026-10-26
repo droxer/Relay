@@ -198,7 +198,13 @@
 /* ---- project workspace inside the panel ----------------------------- */
 
 .thread-space-files {
+  /* The open file's bar answers to the panel's width, like the artifact
+     header beside it (.thread-space-preview). */
+  container: thread-space-files / inline-size;
   display: grid;
+  /* One clamped column: an implicit `auto` track would size to the file's
+     longest unbroken line and push the bar and body past the panel edge. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
@@ -268,6 +274,28 @@
   margin-left: auto;
 }
 
+/* Narrow panel (a phone, or the desktop panel at its usual width): back, name
+   and close on the first line, the file's actions on a second — the same
+   split the artifact header makes at the same width (artifact.css). In one
+   row the view switch, Download and Refresh pushed close off the edge. */
+@container thread-space-files (max-width: 640px) {
+  .thread-space-files-bar:not(.is-path) {
+    flex-wrap: wrap;
+    row-gap: var(--sp-1);
+  }
+
+  .thread-space-files-close {
+    order: 1;
+  }
+
+  .thread-space-files-bar:not(.is-path) .thread-space-files-actions {
+    order: 2;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+}
+
 /* Bounds its child; does NOT scroll. Both things that render here own a
    scroller already (the file list's .workspace-pane-body, the preview's
    .artifact-viewer-body), and a scrolling parent wrapped around a scrolling
@@ -276,7 +304,9 @@
    minmax(0, 1fr) hands the constraint down and leaves exactly one scroller. */
 .thread-space-files-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
   min-height: 0;
 }
 

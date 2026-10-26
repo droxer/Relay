@@ -116,7 +116,9 @@ export function ThreadSpaceFiles({
           {/* Same row, same controls, same order as the full-page pane
               (ProjectWorkspaceFiles) — a file behaves identically wherever it
               is opened. The language chip that used to sit here only restated
-              the extension already in the name beside it. */}
+              the extension already in the name beside it. Close sits outside
+              the actions group so a narrow panel can keep it on the name's
+              line while the actions wrap below (thread-space.css). */}
           <div className="thread-space-files-actions">
             <WorkspaceFileActions
               name={selectedName}
@@ -125,8 +127,12 @@ export function ThreadSpaceFiles({
               onViewChange={setView}
             />
             <RefreshFilesButton onClick={refresh} />
-            <OverlayCloseButton label={t("sheet.close")} onClick={onClose} />
           </div>
+          <OverlayCloseButton
+            className="overlay-close thread-space-files-close"
+            label={t("sheet.close")}
+            onClick={onClose}
+          />
         </div>
         <div className="thread-space-files-body">
           <WorkspaceFilePreview

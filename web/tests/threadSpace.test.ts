@@ -292,6 +292,22 @@ describe("thread space panel wiring", () => {
     assert.match(panel, /activeTab === "project" && projectId \? <RefreshFilesButton/);
   });
 
+  it("fills a phone screen and keeps an open file's close control on screen", () => {
+    /* The overlay hid the resize handle that owns the panel grid's `auto`
+       track, so the content auto-placed into it and a full-screen sheet showed
+       a ~170px strip of files (an open artifact shrank to 32px). */
+    const responsive = readWeb("src/styles/responsive.css");
+    const overlay = responsive.match(/@media \(max-width: 900px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+    assert.match(overlay, /\.thread-space-panel \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+    /* The open project file's bar wraps its actions under the name in a narrow
+       panel; close must sit outside the actions group to stay on line one. */
+    const files = readWeb("src/components/space/ThreadSpaceFiles.tsx");
+    assert.match(files, /<\/div>\s*<OverlayCloseButton\s+className="overlay-close thread-space-files-close"/);
+    const css = readWeb("src/styles/thread-space.css");
+    assert.match(css, /\.thread-space-files \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+    assert.match(css, /@container thread-space-files \(max-width: 640px\)/);
+  });
+
   it("gives the empty state an action, not just a sentence", () => {
     const panel = readWeb("src/components/space/ThreadSpacePanel.tsx");
     assert.match(panel, /space\.empty_cta_files/);
