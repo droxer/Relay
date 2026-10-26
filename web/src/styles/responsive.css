@@ -49,6 +49,13 @@
     inset: 0;
     z-index: var(--z-drawer);
     width: auto;
+    /* One column: the resize handle that owns the `auto` track is gone here,
+       so the content would auto-place into that track and size to its
+       content — a full-screen sheet showing a 170px strip of files. */
+    grid-template-columns: minmax(0, 1fr);
+    /* The sheet covers the whole viewport, so it owns the notch and the home
+       indicator the shell's padding would otherwise have kept clear. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     border-left: 0;
     background: var(--surface-0);
   }
