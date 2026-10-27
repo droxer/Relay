@@ -8,6 +8,7 @@ from typing import Any
 from ...automations.model import is_active
 from ...core.human_waits import ensure_wait_record
 from ...core.ids import new_relay_id
+from ...tasks.flow import LEGACY_ACCEPTANCE_POLICY, NEW_TASK_ACCEPTANCE_POLICY
 from ...tasks.issue_triage import project_move_error
 from ...core.models import AgentName
 from ...core.ids import new_database_id, now_iso
@@ -55,7 +56,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "title": payload["title"],
         "description": payload.get("description", ""),
         "priority": payload.get("priority", "normal"),
-        "acceptancePolicy": payload.get("acceptancePolicy", "human"),
+        "acceptancePolicy": payload.get("acceptancePolicy", NEW_TASK_ACCEPTANCE_POLICY),
     }
     if payload.get("tags"):
         created_payload["tags"] = list(payload["tags"])
@@ -265,7 +266,7 @@ def routine_occurrence_events(
                 "description": description,
                 "priority": routine.get("priority", "normal"),
                 **({"tags": list(routine["tags"])} if routine.get("tags") else {}),
-                "acceptancePolicy": routine.get("acceptancePolicy", "automatic"),
+                "acceptancePolicy": routine.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
                 "scheduledFor": occurrence_date,

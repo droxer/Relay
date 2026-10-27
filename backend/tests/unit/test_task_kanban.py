@@ -141,6 +141,11 @@ def test_concurrent_wip_admission_is_atomic(tmp_path, monkeypatch):
         assert sum(pool.map(attempt, tasks)) == 1
 
 
+def test_a_new_task_waits_for_a_persons_acceptance_by_default(store):
+    task = store.create_task({"title": "Fresh"})
+    assert task["acceptancePolicy"] == "human"
+
+
 def test_legacy_events_keep_automatic_acceptance():
     from relay.persistence.task.reducer import materialize_task_events
 

@@ -18,7 +18,7 @@ from ..core.models import TaskStatus
 from ..automations.service import lock_automation_state, prepare_resume
 from ..persistence.engine import store_transaction
 from ..core.validation import task_priority, task_status
-from .flow import validate_manual_transition
+from .flow import LEGACY_ACCEPTANCE_POLICY, validate_manual_transition
 from .claims import dispatch_claim_active
 from ..sessions.controller import SessionController
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
@@ -437,7 +437,7 @@ def _write_update(
             _validate_status_transition(ctx, current, status, unblock=unblock)
         if (
             acceptance_policy
-            and acceptance_policy != current.get("acceptancePolicy", "automatic")
+            and acceptance_policy != current.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY)
             and current.get("startedAt")
         ):
             raise TaskRequestError(409, "task_acceptance_policy_locked")

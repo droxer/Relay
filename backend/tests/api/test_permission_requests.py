@@ -359,3 +359,159 @@ def test_a_prompt_notifies_the_threads_owner_once(monkeypatch) -> None:
         assert prompts[0]["data"]["toolName"] == "Bash"
         assert prompts[0]["data"]["question"] is False
         assert "permission_requested" in client.get("/api/v1/notifications/preferences").json()["kinds"]
+
+
+def _thread(client: TestClient, session_id: str) -> dict:
+    return client.get(f"/api/v1/threads/{session_id}").json()
+
+
+def _prompt_notices(client: TestClient) -> list[dict]:
+    inbox = client.get("/api/v1/notifications").json()
+    return [item for item in inbox["notifications"] if item["kind"] == "permission_requested"]
+
+
+def test_always_allow_answers_later_prompts_for_that_tool_in_the_thread(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command)
+
+        answered = _answer(client, session_id, decision="allow", always=True)
+        assert answered.status_code == 200, answered.text
+        [decision] = answered.json()["permissionDecisions"]
+        assert decision["decision"] == "allow"
+        assert decision["always"] is True
+        assert _poll(client, session_id).json() == {"status": "allow"}
+
+        later = "perm_fedcba9876543210"
+        _ask(client, command, id=later)
+        thread = _thread(client, session_id)
+        assert not thread.get("permissionRequests")
+        assert _poll(client, session_id, later).json() == {"status": "allow"}
+        session = app.state.session_store.get_session(session_id)
+        granted = session["permissionDecisions"][-1]
+        assert granted["requestId"] == later
+        assert granted["grant"] is True
+        assert "decidedBy" not in granted
+        assert session["permissionGrants"] == [
+            {"agent": "claude", "toolName": "Bash", "grantedAt": decision["resolvedAt"], "grantedBy": decision["decidedBy"]},
+        ]
+        # Answered in advance, so the person is not called for it.
+        assert [item["data"]["requestId"] for item in _prompt_notices(client)] == [REQUEST_ID]
+
+
+def test_always_allow_retries_a_failed_automatic_resolution(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app, raise_server_exceptions=False)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command)
+        assert _answer(client, session_id, decision="allow", always=True).status_code == 200
+
+        later = "perm_fedcba9876543210"
+        append_event = app.state.session_store.append_event
+
+        def fail_resolution(session_id, event, **kwargs):
+            if event["type"] == "agent.permission_resolved":
+                raise RuntimeError("interrupted automatic approval write")
+            return append_event(session_id, event, **kwargs)
+
+        with monkeypatch.context() as failure:
+            failure.setattr(app.state.session_store, "append_event", fail_resolution)
+            response = client.post(
+                "/api/v1/daemon-nodes/sbx_alice/events",
+                json={
+                    "type": "run.permission_requested",
+                    "commandId": command["id"],
+                    "sessionId": session_id,
+                    "runId": command["runId"],
+                    "agent": "claude",
+                    "request": {
+                        "id": later, "toolName": "Bash", "input": "{}", "toolUseId": "toolu_1",
+                    },
+                },
+                headers=NODE_AUTH,
+            )
+        assert response.status_code == 500
+        assert _poll(client, session_id, later).json() == {"status": "pending"}
+
+        _ask(client, command, id=later, input="{}")
+        assert _poll(client, session_id, later).json() == {"status": "allow"}
+        # A further delivery stays closed and produces no additional decision.
+        _ask(client, command, id=later, input="{}")
+        thread = _thread(client, session_id)
+        assert not thread.get("permissionRequests")
+        decisions = [item for item in thread["permissionDecisions"] if item["requestId"] == later]
+        assert len(decisions) == 1
+        assert decisions[0]["grant"] is True
+        assert [item["data"]["requestId"] for item in _prompt_notices(client)] == [REQUEST_ID]
+
+
+def test_always_allow_covers_only_its_tool(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command)
+        assert _answer(client, session_id, decision="allow", always=True).status_code == 200
+
+        other = "perm_00000000aaaaaaaa"
+        _ask(client, command, id=other, toolName="Write", input='{"file_path":"a.txt"}')
+        [prompt] = _thread(client, session_id)["permissionRequests"]
+        assert prompt["id"] == other
+        assert _poll(client, session_id, other).json() == {"status": "pending"}
+
+        # A question is never answered in advance, even for a granted name.
+        question = "perm_00000000bbbbbbbb"
+        _ask(client, command, id=question, toolName="Bash", questions=QUESTIONS)
+        assert _poll(client, session_id, question).json() == {"status": "pending"}
+
+
+def test_always_is_only_an_allow_of_an_approval(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        _ask(client, command, toolName="AskUserQuestion", questions=QUESTIONS)
+
+        assert _answer(client, session_id, decision="deny", always=True).status_code == 400
+        assert _answer(client, session_id, decision="allow", always="yes").status_code == 400
+        refused = _answer(
+            client, session_id, decision="allow", always=True,
+            answers={"db": "SQLite", "name": ["relay"]},
+        )
+        assert refused.status_code == 400
+        assert _poll(client, session_id).json() == {"status": "pending"}
+        assert not app.state.session_store.get_session(session_id).get("permissionGrants")
+
+
+def test_always_allow_also_answers_the_same_tools_prompts_already_waiting(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id)
+        waiting, other = "perm_1111111111111111", "perm_2222222222222222"
+        _ask(client, command)
+        _ask(client, command, id=waiting)
+        _ask(client, command, id=other, toolName="Write")
+
+        assert _answer(client, session_id, decision="allow", always=True).status_code == 200
+        assert _poll(client, session_id, waiting).json() == {"status": "allow"}
+        assert _poll(client, session_id, other).json() == {"status": "pending"}
+        assert [item["id"] for item in _thread(client, session_id)["permissionRequests"]] == [other]

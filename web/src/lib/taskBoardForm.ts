@@ -7,6 +7,21 @@ import { defaultSchedule } from "./automationSchedule.ts";
 import { normalizeTriggerForSave, triggersEqual, triggersOf } from "./automationTrigger.ts";
 import { tagsEqual } from "./taskTags.ts";
 
+export type AcceptancePolicy = "human" | "automatic";
+
+/**
+ * Mirrors backend/relay/tasks/flow.py: a new task waits for a person's
+ * acceptance, while a task stored before the policy existed carries none and
+ * always closed on its own — so reading a stored task falls back to that.
+ */
+export const NEW_TASK_ACCEPTANCE_POLICY: AcceptancePolicy = "human";
+const LEGACY_ACCEPTANCE_POLICY: AcceptancePolicy = "automatic";
+
+/** The policy the backend applies to a stored task. */
+export function taskAcceptancePolicy(task: Pick<RelayTaskListItem, "acceptancePolicy">): AcceptancePolicy {
+  return task.acceptancePolicy ?? LEGACY_ACCEPTANCE_POLICY;
+}
+
 export type TaskBoardFormBase = {
   id?: string;
   number?: number;
@@ -20,7 +35,7 @@ export type TaskBoardFormBase = {
   assignedAgent: "" | AgentName;
   assignedAgentId?: string;
   assignedTeamId?: string;
-  acceptancePolicy?: "human" | "automatic";
+  acceptancePolicy?: AcceptancePolicy;
   collaborationStyle?: CollaborationStyle | null;
   startedAt?: string;
 };
@@ -45,7 +60,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
     variant: "backlog",
     title: "",
     description: "",
-    acceptancePolicy: "human",
+    acceptancePolicy: NEW_TASK_ACCEPTANCE_POLICY,
     priority: "normal",
     tags: [],
     status: "backlog",
@@ -62,7 +77,7 @@ export function emptyRoutineForm(currentUser: CurrentUser): RoutineTaskFormState
     variant: "routine",
     title: "",
     description: "",
-    acceptancePolicy: "human",
+    acceptancePolicy: NEW_TASK_ACCEPTANCE_POLICY,
     priority: "normal",
     tags: [],
     assigneeUserId: currentUser.userId ?? currentUser.username,

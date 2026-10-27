@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ...automations.model import LEGACY_FIELDS, STATES, upgrade_legacy
-from ...tasks.flow import apply_flow_status
+from ...tasks.flow import LEGACY_ACCEPTANCE_POLICY, apply_flow_status
 from ...tasks.prerequisites import PREREQUISITES_EVENT, apply_prerequisites_set
 from .numbering import NUMBERED_EVENT, apply_task_number
 
@@ -24,7 +24,7 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "priority": created.get("priority", "normal"),
         "status": "backlog",
         "workflowStage": "backlog",
-        "acceptancePolicy": created.get("acceptancePolicy", "automatic"),
+        "acceptancePolicy": created.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY),
         "isRoutine": bool(created.get("isRoutine")),
         "linkedSessionIds": [],
         "occurrenceIds": [],

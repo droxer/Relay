@@ -32,7 +32,7 @@ setTaskPrerequisites,
   updateTeam,
 } from "../api";
 import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
-import type { PermissionAnswers } from "relay-core";
+import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -136,15 +136,8 @@ export function useRelayMutations() {
   });
 
   const answerPermissionMutation = useMutation({
-    mutationFn: ({
-      sessionId,
-      requestId,
-      decision,
-      note,
-      answers,
-      token,
-    }: { sessionId: string; requestId: string; decision: "allow" | "deny"; note?: string; answers?: PermissionAnswers } & TokenArg) =>
-      answerPermissionRequest(sessionId, requestId, decision, note, token, answers),
+    mutationFn: ({ sessionId, requestId, answer, token }: { sessionId: string; requestId: string; answer: PermissionAnswerInput } & TokenArg) =>
+      answerPermissionRequest(sessionId, requestId, answer, token),
     onSuccess: (session) => cacheSession(session),
     onError: (error: unknown) => {
       // Someone answered first, or the run ended: the stream will drop the card.

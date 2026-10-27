@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
 import { effectiveStyle } from "../../lib/collaborationStyle";
+import { taskAcceptancePolicy } from "../../lib/taskBoardForm";
 import { CollaborationStyleBadge } from "../CollaborationStyleBadge";
 import { TaskTagList } from "../TaskTags";
 import type { ReactNode } from "react";
@@ -48,7 +49,7 @@ export function TaskRecordDefinition({
     {
       key: "acceptance",
       label: t("backlog.acceptance_policy"),
-      value: t(task.acceptancePolicy === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human"),
+      value: t(taskAcceptancePolicy(task) === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human"),
     },
   ];
   if (variant === "routine") {

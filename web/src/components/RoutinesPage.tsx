@@ -20,7 +20,7 @@ import { usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
+import { NEW_TASK_ACCEPTANCE_POLICY, emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskBoardFormsEqual, taskAcceptancePolicy, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
@@ -182,7 +182,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       number: task.number,
       projectId: task.projectId,
       title: task.title,
-      acceptancePolicy: task.acceptancePolicy ?? "automatic",
+      acceptancePolicy: taskAcceptancePolicy(task),
       collaborationStyle: task.collaborationStyle ?? null,
       description: task.description,
       priority: task.priority,
@@ -203,7 +203,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
-        acceptancePolicy: form.acceptancePolicy ?? "human",
+        acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
         priority: form.priority,

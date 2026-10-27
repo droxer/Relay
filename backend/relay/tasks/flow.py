@@ -7,6 +7,11 @@ from typing import Any
 
 UNKNOWN_REASON = "Execution needs attention."
 FLOW_STAGES = ("backlog", "assigned", "running", "review", "done")
+# A new task waits for a person's acceptance unless it asks otherwise. A task
+# created before the policy existed recorded none and always closed on its
+# own, so replay keeps that: the two defaults differ on purpose.
+NEW_TASK_ACCEPTANCE_POLICY = "human"
+LEGACY_ACCEPTANCE_POLICY = "automatic"
 
 
 def wip_limit() -> int:
@@ -115,7 +120,7 @@ def acceptance_status(
     if (
         status == "done"
         and not accepted_by_human
-        and task.get("acceptancePolicy", "automatic") == "human"
+        and task.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY) == "human"
     ):
         return "review"
     return status

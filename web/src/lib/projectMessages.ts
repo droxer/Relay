@@ -223,6 +223,14 @@ function visibleLogText(stdout: string, stderr: string): string {
   return [...text, stderr.trim()].filter(Boolean).join("\n").trim();
 }
 
+/** The audit line of a closed approval: a person's allow once or always, a
+ *  standing grant's allow, a deny, or an expiry. */
+function permissionAuditKey(event: { decision: string; always?: boolean; grant?: boolean }): string {
+  if (event.decision === "allow" && event.grant) return "message.permission_allow_granted";
+  if (event.decision === "allow" && event.always) return "message.permission_allow_always";
+  return `message.permission_${event.decision}`;
+}
+
 function applyCompletedLogFallback(state: { stdout: string; stderr: string }, agentLog: string): void {
   const fallback = streamsFromAgentLog(agentLog);
   const fallbackVisible = visibleLogText(fallback.stdout, fallback.stderr);
@@ -469,7 +477,7 @@ export class ProjectMessagesAccumulator {
         const answers = Object.values(event.answers ?? {}).map((picks) => picks.join(", ")).join(" · ");
         const label = prompt.question
           ? t(event.decision === "allow" ? "message.permission_answered" : event.decision === "deny" ? "message.permission_skipped" : "message.permission_expired", { tool: prompt.toolName })
-          : t(`message.permission_${event.decision}`, { tool: prompt.toolName });
+          : t(permissionAuditKey(event), { tool: prompt.toolName });
         this.out.push({
           kind: "system",
           id: event.id,

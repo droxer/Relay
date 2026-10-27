@@ -8,7 +8,12 @@ from typing import Any
 from loguru import logger
 
 from ..core.ids import new_relay_id, now_iso
-from ..core.permission_requests import open_permission_request, validate_answers
+from ..core.permission_requests import (
+    may_grant_always,
+    open_permission_request,
+    standing_grant,
+    validate_answers,
+)
 from ..persistence.events import relay_event
 from .controller_state import SessionControllerState
 
@@ -63,15 +68,22 @@ class SessionDecisionMixin(SessionControllerState):
         note: str | None = None,
         *,
         answers: Any = None,
+        always: bool = False,
         actor_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Answer a live run's permission prompt; None when it is no longer
         open. A question prompt is allowed with `answers`, which must answer
-        every question it asked (ValueError otherwise)."""
+        every question it asked (ValueError otherwise). `always` allows this
+        prompt and every later one from the same agent for the same tool in
+        this thread; it never answers a question."""
+        if always and decision != "allow":
+            raise ValueError("only allow can be always.")
         with self.store.mutation_scope(session_id):
             request = open_permission_request(self.store.get_session(session_id), request_id)
             if not request:
                 return None
+            if always and not may_grant_always(request):
+                raise ValueError("a question cannot be always allowed.")
             checked = (
                 validate_answers(request, answers)
                 if decision == "allow" and request.get("questions")
@@ -82,8 +94,9 @@ class SessionDecisionMixin(SessionControllerState):
                 session_id=session_id,
                 request_id=request_id,
                 decision=decision,
+                always=always,
             )
-            return self._append(
+            session = self._append(
                 session_id,
                 relay_event(
                     "agent.permission_resolved",
@@ -93,10 +106,27 @@ class SessionDecisionMixin(SessionControllerState):
                         "decision": decision,
                         **({"note": note} if note else {}),
                         **({"answers": checked} if checked else {}),
+                        **({"always": True} if always else {}),
                         **_decided_by(actor_user_id),
                     },
                 ),
             )
+            return self._allow_granted_prompts(session_id, session) if always else session
+
+    def _allow_granted_prompts(self, session_id: str, session: dict[str, Any]) -> dict[str, Any]:
+        """A new grant also answers the prompts already waiting that it covers
+        — a run may have asked twice before its person replied."""
+        for request in list(session.get("permissionRequests") or []):
+            if standing_grant(session, request):
+                session = self._append(
+                    session_id,
+                    relay_event(
+                        "agent.permission_resolved",
+                        session_id,
+                        {"requestId": request["id"], "decision": "allow", "grant": True},
+                    ),
+                )
+        return session
 
     def record_decision(
         self,

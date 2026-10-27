@@ -5,9 +5,14 @@ import { ActionApprove, ActionSend, ICON } from "../icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { answersComplete, isQuestionPrompt, permissionInputText, permissionNoteReachesAgent } from "@/lib/permissionRequests";
+import {
+  answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputText, permissionNoteReachesAgent,
+  type PermissionAnswerInput,
+} from "@/lib/permissionRequests";
 
-type Answer = (requestId: string, decision: "allow" | "deny", note?: string, answers?: PermissionAnswers) => Promise<void>;
+type Answer = (requestId: string, answer: PermissionAnswerInput) => Promise<void>;
+/** Which button is waiting on the backend. */
+type Pending = "allow" | "always" | "deny";
 
 /** Mirrors `PERMISSION_NOTE_MAX_CHARS` in backend/relay/core/permission_requests.py. */
 const NOTE_MAX_CHARS = 1000;
@@ -23,8 +28,10 @@ const ANNOUNCE_DELAY_MS = 150;
  * The prompts a live run is paused on: one card per tool call it asked to
  * make, oldest first, each answered on its own. The run resumes when its
  * prompt is answered, so the card leaves once the thread's stream closes it.
- * A card is either an approval (Allow / Deny) or the agent's question, whose
- * offered answers are one click each.
+ * A card is either an approval (Allow once / Always allow / Deny) or the
+ * agent's question, whose offered answers are one click each. Always allow
+ * answers this prompt and every later one from the same agent for the same
+ * tool in this thread.
  */
 export function PermissionPrompts({ requests, agentLabel, onAnswer }: {
   requests: PermissionRequest[];
@@ -62,7 +69,7 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
   const [note, setNote] = useState("");
   const [answers, setAnswers] = useState<PermissionAnswers>({});
   const [other, setOther] = useState<Record<string, string>>({});
-  const [pending, setPending] = useState<"allow" | "deny" | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
   const question = isQuestionPrompt(request);
   // A paused run is easy to miss mid-transcript, so the first card announces
   // itself and scrolls into view. Focus moves to it only when nothing is
@@ -81,11 +88,17 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
     if (!typing) firstControlRef.current?.focus();
   }, [primary]);
 
-  const answer = async (decision: "allow" | "deny", picked?: PermissionAnswers) => {
+  const answer = async (choice: Pending, picked?: PermissionAnswers) => {
     if (pending) return;
-    setPending(decision);
+    setPending(choice);
+    const decision = choice === "deny" ? "deny" : "allow";
     try {
-      await onAnswer(request.id, decision, note.trim() || undefined, decision === "allow" && question ? picked ?? answers : undefined);
+      await onAnswer(request.id, {
+        decision,
+        note: note.trim() || undefined,
+        answers: decision === "allow" && question ? picked ?? answers : undefined,
+        always: choice === "always" || undefined,
+      });
     } finally {
       setPending(null);
     }
@@ -157,6 +170,21 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
             <Button variant={primary ? "default" : "outline"} type="button" ref={firstControlRef} disabled={busy} loading={pending === "allow"} loadingLabel={pendingLabel} onClick={() => void answer("allow")}>
               <ActionApprove size={ICON.sm} /> {t("permission.allow")}
             </Button>
+            {mayAllowAlways(request) ? (
+              <Button
+                variant="outline"
+                type="button"
+                disabled={busy}
+                loading={pending === "always"}
+                loadingLabel={pendingLabel}
+                // Starts with the visible label, so the accessible name still matches it.
+                aria-label={t("permission.allow_always_hint", { agent, tool: request.toolName })}
+                title={t("permission.allow_always_hint", { agent, tool: request.toolName })}
+                onClick={() => void answer("always")}
+              >
+                {t("permission.allow_always")}
+              </Button>
+            ) : null}
             <Button variant="destructive" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>
               {t("permission.deny")}
             </Button>
