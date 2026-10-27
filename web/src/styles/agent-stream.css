@@ -388,7 +388,7 @@
 
 .agent-permission-mark.tone-warn,
 .agent-permission-line.tone-warn .agent-tool-name {
-  color: var(--warn);
+  color: var(--tone);
 }
 
 /* A command can be several lines long — an agent writing a file puts the whole
