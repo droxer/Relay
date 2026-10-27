@@ -243,7 +243,6 @@ describe("one meaning per colour", () => {
     assert.match(readStyle("task-status.css"), /\.task-status-icon\[data-status="review"\][^{]*\{ color: var\(--ok\); \}/);
     assert.match(readStyle("backlog-list.css"), /\.backlog-row\[data-status="review"\] \{ --row-accent: var\(--ok\); \}/);
     assert.match(readStyle("issues.css"), /\.issues-band\[data-status="review"\] \{ --row-accent: var\(--ok\); \}/);
-    assert.match(read("web", "src", "components", "ProjectDashboard.tsx"), /review: "good",/);
   });
 
   it("keeps the waiting gold off priority", () => {

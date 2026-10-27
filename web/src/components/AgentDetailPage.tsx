@@ -117,14 +117,6 @@ export function AgentDetailPage({
       title: agent.id,
     },
   ];
-  /* An editor's Profile tab carries the model as an editable field right
-     under the band; printing it in the band too said the same fact twice,
-     one line apart. Every other tab — and a reader who cannot edit — keeps
-     it in the band, where it is the only place it appears. */
-  const shownFacts = pageTab === "profile" && canEditMeta
-    ? bandFacts.filter((fact) => fact.key !== "model")
-    : bandFacts;
-
   return (
     <Tabs
       render={<section id="agent-detail-panel" tabIndex={-1} />}
@@ -171,7 +163,7 @@ export function AgentDetailPage({
         )}
       />
 
-      <RecordLayout facts={shownFacts} label={t("agents_page.record_label")}>
+      <RecordLayout facts={bandFacts} label={t("agents_page.record_label")}>
         <div className="workspace-body">
           <TabsContent value="profile" className="workspace-profile">
             <AgentProfilePanel

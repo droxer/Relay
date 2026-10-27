@@ -11,7 +11,6 @@ import {
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
 } from "../lib/projectPage";
-import { truncateId } from "../lib/adminHelpers";
 import type {
   CurrentUser,
   DaemonNodeMonitorRecord,
@@ -21,7 +20,6 @@ import type {
   RelayTaskListItem,
 } from "../types";
 import { ICON, NavBack } from "./icons";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "./PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectMark } from "./ProjectMark";
@@ -126,24 +124,14 @@ export function ProjectWorkspacePage({
     ownership: !computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local",
   };
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
-  /* The title line carries the state and the id; the computer, folder and
-     stamps live on the Settings tab with the rest of the record's facts. */
-  const bandFacts: RecordFact[] = [
+  /* The title line names the state only when it is not the default: an
+     active project needs no "Active" pill on every tab. The id, computer,
+     folder and stamps live on the Settings tab with the record's facts. */
+  const bandFacts: RecordFact[] = state === "active" ? [] : [
     {
       key: "state",
       label: t("project.band_state"),
-      value: (
-        <TonePill
-          tone={state === "active" ? "good" : state === "disabled" ? "warn" : "neutral"}
-          label={t(`project.state_${state}`)}
-        />
-      ),
-    },
-    {
-      key: "id",
-      label: t("project.band_id"),
-      value: <Badge className="code" translate="no">{truncateId(project.id)}</Badge>,
-      title: project.id,
+      value: <TonePill tone={state === "disabled" ? "warn" : "neutral"} label={t(`project.state_${state}`)} />,
     },
   ];
 
@@ -162,7 +150,7 @@ export function ProjectWorkspacePage({
         /* The record's common facts ride the title line on every tab instead
            of claiming a band row above the tab body, so each panel keeps the
            full height under the header. */
-        facts={<RecordBand facts={bandFacts} label={t("project.band_label")} variant="title" />}
+        facts={bandFacts.length > 0 ? <RecordBand facts={bandFacts} label={t("project.band_label")} variant="title" /> : undefined}
         title={(
           <span className="workspace-header-title">
             <span className="workspace-header-mark"><ProjectMark size={ICON.sm} /></span>

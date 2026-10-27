@@ -216,6 +216,10 @@ export function ProjectSettingsPanel({
                 </dd>
               </div>
             ) : null}
+            <div className="project-settings-fact">
+              <dt>{t("project.band_id")}</dt>
+              <dd className="code" title={project.id} translate="no">{project.id}</dd>
+            </div>
           </dl>
           <ProjectGoalField
             value={draft.goal}

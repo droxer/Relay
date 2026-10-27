@@ -35,13 +35,15 @@ it("offers nothing on a record whose project is closed for work", () => {
   expect(screen.queryByRole("button")).toBeNull();
 });
 
-it("marks delete as destructive and holds it while another action runs", () => {
+it("keeps delete behind the overflow menu and holds the menu while another action runs", () => {
   const onDelete = vi.fn();
   render(<TaskRecordActions task={blockedTask} variant="task" busyAction="retry"
     onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
     onEdit={vi.fn()} onDelete={onDelete} />);
-  const remove = screen.getByRole("button", { name: "record.delete" }) as HTMLButtonElement;
-  expect(remove.disabled).toBe(true);
-  fireEvent.click(remove);
+  // Delete is never a button of its own on the record header.
+  expect(screen.queryByRole("button", { name: "record.delete" })).toBeNull();
+  const more = screen.getByRole("button", { name: "record.more_actions" }) as HTMLButtonElement;
+  expect(more.disabled).toBe(true);
+  fireEvent.click(more);
   expect(onDelete).not.toHaveBeenCalled();
 });

@@ -325,11 +325,11 @@ export function AgentProfilePanel({
                 : t("admin.v2.agent_role_none")}
             </span>
           </div>
-          {/* Readers see the model in the record band; an editor sees it
-              here instead, as the field that changes it (AgentDetailPage
-              drops it from the band on this tab), so nobody reads it twice.
-              An empty field says "Runtime default" in its placeholder. */}
-          {canEditProfile ? (
+          {/* The record band prints the model; the field that changes it
+              appears only while the profile is being edited, so the read
+              view is not an open form. An empty field says "Runtime
+              default" in its placeholder. */}
+          {canEditProfile && editingProfile ? (
             <div className="workspace-dossier-field">
               <span className="workspace-dossier-field-label" id={modelLabelId}>
                 {t("agents_page.model_label")}
@@ -348,8 +348,6 @@ export function AgentProfilePanel({
             </div>
           ) : null}
           <p className="workspace-dossier-stamp">
-            {t("admin.v2.agent_meta_version", { version: agent.version })}
-            {" · "}
             {t("admin.v2.agent_meta_created", { time: formatRelativeTime(agent.createdAt, t) })}
             {" · "}
             {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(agent.updatedAt, t) })}
@@ -377,9 +375,10 @@ export function AgentProfilePanel({
         ) : null}
       </div>
 
-      {/* Management lives at the foot of the record — it acts on the whole
-          agent, not on the identity row or the document. */}
-      {canEditProfile ? (
+      {/* Management lives at the foot of the record and only in edit mode —
+          it acts on the whole agent, and a read view led by a red "Delete"
+          made every visit look like a settings page. */}
+      {canEditProfile && editingProfile ? (
         <div className="workspace-dossier-admin">
           {canManage ? (
             <>

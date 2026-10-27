@@ -88,7 +88,6 @@ function TeamProfile({
   const { updateTeamMutation, deleteTeamMutation } = useRelayMutations();
   const { agents, computerId } = useTeamComputer(team, userId);
   const [editing, setEditing] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(team.name);
   const [memberIds, setMemberIds] = useState<string[]>(team.memberAgentIds);
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
@@ -164,6 +163,7 @@ function TeamProfile({
   }
 
   function resetDraft() {
+    setNameDraft(team.name);
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
     setStyle(effectiveStyle(team));
@@ -171,34 +171,6 @@ function TeamProfile({
     setMemberConfigs(team.memberConfigs ?? {});
     setAcceptanceCriteria(team.acceptanceCriteria ?? []);
     setValidationError(null);
-  }
-
-  function startRename() {
-    setNameDraft(team.name);
-    setRenaming(true);
-  }
-
-  async function saveRename() {
-    const next = nameDraft.trim();
-    if (!next) return;
-    if (next === team.name.trim()) {
-      setRenaming(false);
-      return;
-    }
-    try {
-      await updateTeamMutation.mutateAsync({
-        teamId: team.id,
-        input: teamMutationInput({
-          name: next,
-          memberAgentIds: team.memberAgentIds,
-          leadAgentId: team.leadAgentId ?? "",
-          enabled: team.enabled,
-        }),
-      });
-      setRenaming(false);
-    } catch {
-      // The shared mutation handler announces the error and keeps the draft open.
-    }
   }
 
   function startEditing() {
@@ -238,7 +210,7 @@ function TeamProfile({
       await updateTeamMutation.mutateAsync({
         teamId: team.id,
         input: teamMutationInput({
-          name: team.name,
+          name: nameDraft.trim() || team.name,
           memberAgentIds: memberIds,
           // Pins a team saved before teams carried a computer, once its
           // whole roster is on one.
@@ -297,15 +269,10 @@ function TeamProfile({
   return (
     <div className="workspace-profile">
       {/* Same dossier grammar as the agent record: a document column holding
-          the thing you can change (the roster), an identity rail beside it,
-          and record-wide management below both. The header holds the team
-          ID and availability; the rail holds its identity and timestamps.
-
-          Unlike the agent record, a team's document is a roster — a few rows,
-          not an instructions essay — so the grid is stretched to the pane and
-          management is anchored at its foot. Left to size to content, the
-          panel ended a third of the way down and the rest of the surface was
-          dead space with a Danger zone floating in the middle of it. */}
+          the roster and its style, an identity rail beside it. Everything
+          that changes the team — name, roster, style, criteria, delete —
+          sits behind one "Edit team" button, so the read view is the team
+          and not a panel of pencils. */}
       <div className="workspace-profile-panel workspace-profile-dossier">
         <div className="workspace-dossier-doc">
           <form className="team-profile-inline-form" onSubmit={(event) => void save(event)}>
@@ -319,19 +286,26 @@ function TeamProfile({
                 </h2>
                 <span className="team-profile-section-head-side">
                   {!editing && cardEditingId === null ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="workspace-dossier-icon-btn"
-                      tooltip={t("teams.edit_members")}
-                      onClick={startEditing}
-                    >
+                    <Button type="button" variant="outline" size="dense" onClick={startEditing}>
                       <ActionEdit size={ICON.sm} aria-hidden="true" />
+                      {t("teams.edit")}
                     </Button>
                   ) : null}
                 </span>
               </div>
               {editing ? (
+                <>
+                <Field label={t("teams.name")}>
+                  <Input
+                    name="team-name"
+                    type="text"
+                    autoComplete="off"
+                    required
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    disabled={busy}
+                  />
+                </Field>
                 <TeamMemberPicker
                   ref={membersRef}
                   agents={computerAgents}
@@ -347,6 +321,7 @@ function TeamProfile({
                     : undefined}
                   errorId="team-profile-members-error"
                 />
+                </>
               ) : (
                 <div className="team-work-members team-profile-member-cards">
                   {team.members.map((member) => (
@@ -400,6 +375,12 @@ function TeamProfile({
                   />
                 </Field>
                 <div className="team-profile-inline-actions">
+                  {/* Delete sits on the far side of the spacer from Save, so
+                      the two never share a click target's neighbourhood. */}
+                  <Button type="button" variant="ghost" className="team-profile-delete" onClick={() => void remove()} loading={deleteTeamMutation.isPending} loadingLabel={t("teams.deleting")} disabled={updateTeamMutation.isPending || imageSaving}>
+                    <AdminDelete size={ICON.sm} aria-hidden="true" />
+                    {t("teams.delete")}
+                  </Button>
                   <span className="team-profile-inline-actions-spacer" />
                   <Button type="button" variant="ghost" onClick={() => void cancelEditing()} disabled={busy}>
                     {t("dialog.cancel")}
@@ -414,10 +395,6 @@ function TeamProfile({
                   team's document, not a loose form field under it. */}
               <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("collab_style.label")}</h2>
               <CollaborationStyleSummary style={effectiveStyle(team)} />
-              <CollaborationSlotPreview members={team.members.map((member) => ({
-                id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
-                onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
-              }))} leadId={team.leadAgentId ?? undefined} style={effectiveStyle(team)} approval={team.humanApproval === true} nameOf={(id) => team.members.find((m) => m.id === id)?.displayName ?? id} />
             </section>}
           </form>
         </div>
@@ -436,86 +413,11 @@ function TeamProfile({
             />
           </div>
 
-          <div className="workspace-dossier-field">
-            <span className="workspace-dossier-field-label">{t("teams.name")}</span>
-            {renaming ? (
-              <div className="workspace-dossier-rename">
-                <Input
-                  name="team-name"
-                  type="text"
-                  aria-label={t("teams.name")}
-                  autoComplete="off"
-                  autoFocus
-                  required
-                  value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void saveRename();
-                    if (event.key === "Escape") setRenaming(false);
-                  }}
-                  disabled={busy}
-                />
-                <div className="workspace-dossier-rename-actions">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="dense"
-                    onClick={() => setRenaming(false)}
-                    disabled={busy}
-                  >
-                    {t("dialog.cancel")}
-                  </Button>
-                  {/* Outline: an inline rename can sit open beside the roster's
-                      own Save, and the view keeps one accent fill. */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="dense"
-                    onClick={() => void saveRename()}
-                    disabled={busy}
-                  >
-                    {t("teams.save")}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="workspace-dossier-name-row">
-                <span className="workspace-dossier-name-value" translate="no">{team.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="workspace-dossier-icon-btn"
-                  tooltip={t("teams.rename")}
-                  onClick={startRename}
-                >
-                  <ActionEdit size={ICON.sm} aria-hidden="true" />
-                </Button>
-              </div>
-            )}
-          </div>
-
           {/* The record's properties as plain label/value rows — the same
               panel every record's right column carries (RecordLayout). */}
           <RecordBand facts={facts} label={t("workspace.band_team_label")} variant="panel" />
         </section>
 
-        {/* Management spans both columns — it acts on the whole record, not
-            on the roster document or the identity rail. Hidden while the
-            roster is open: a live Delete directly under Save is the wrong
-            thing to put next to the save target. */}
-        {!editing ? (
-          <div className="workspace-dossier-admin">
-            <section className="adm-drawer-section" aria-labelledby="team-profile-danger-title">
-              <p id="team-profile-danger-title" className="workspace-dossier-section-title">
-                {t("admin.v2.danger_zone")}
-              </p>
-              <Button type="button" variant="destructive" onClick={() => void remove()} loading={deleteTeamMutation.isPending} loadingLabel={t("teams.deleting")} disabled={updateTeamMutation.isPending || imageSaving}>
-                <AdminDelete size={ICON.sm} aria-hidden="true" />
-                {t("teams.delete")}
-              </Button>
-            </section>
-          </div>
-        ) : null}
       </div>
     </div>
   );

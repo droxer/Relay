@@ -205,6 +205,16 @@
     min-height: var(--touch-target);
   }
 
+  /* A row's tags are words in its meta line, and each one doubles as a
+     filter toggle. At 44px a 20px chip became a grey block that pushed every
+     task row on a phone to twice its height. The chip keeps its drawing and
+     takes the 24px floor (--chip-h) instead; the record and the filter menu
+     remain the full-size ways to narrow by tag. */
+  .tag-badge--toggle {
+    min-height: 0;
+    height: var(--chip-h);
+  }
+
   /* The command expander is a text label, not a glyph: it takes the same 32px
      height as the glyph buttons above but keeps its own width, because a
      square box would crop "Show 12 more lines" to two characters. */

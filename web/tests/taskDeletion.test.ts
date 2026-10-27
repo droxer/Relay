@@ -57,14 +57,14 @@ describe("task deletion", () => {
     }
     assert.match(drawerSource, /variant="destructive"/);
 
-    /* The record surface deletes too, and its button has to mark itself the
-       same way — it sat as a ghost beside Edit, and without a busy state a
-       second click fired a second delete before the first had landed. */
+    /* The record surface deletes too, from its overflow menu: the item marks
+       itself destructive, and the menu holds a busy state so a second click
+       cannot fire a second delete before the first has landed. */
     const recordActionsSource = await readFile(
       resolve("web/src/components/task-record/TaskRecordActions.tsx"),
       "utf8",
     );
-    assert.match(recordActionsSource, /variant="destructive"/);
+    assert.match(recordActionsSource, /<DropdownMenuItem danger onClick=\{onDelete\}>/);
     assert.match(recordActionsSource, /loading=\{busyAction === "delete"\}/);
     const recordViewSource = await readFile(
       resolve("web/src/components/task-record/TaskRecordView.tsx"),

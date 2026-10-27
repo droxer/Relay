@@ -388,16 +388,11 @@
   gap: var(--sp-2);
 }
 
-/* Dashboard: the issue and flow rails, stacked under their section titles. */
+/* Dashboard: one rail of counts above the issues that need a look. */
 .project-dashboard {
   display: grid;
   gap: var(--sp-6);
   padding: var(--sp-5) var(--page-gutter);
-}
-
-.project-dashboard-section {
-  display: grid;
-  gap: var(--sp-3);
 }
 
 /* No issues yet: one centered note and the way to the board, instead of two
@@ -408,38 +403,10 @@
   gap: 0;
 }
 
-/* Stages beside the issues that need a look — two cards, one row. Stages
-   takes the wider share so its five counts sit on one line. */
-.project-dashboard-cards {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--sp-5);
-  align-items: stretch;
-}
-
 .project-dashboard-card {
   min-width: 0;
 }
 
-/* Doubled class: the admin sheet loads later and sets the two-up grid. The
-   card, not the viewport, decides when five counts stop fitting one line —
-   it is narrowest beside the attention card, widest once they stack. */
-.project-dashboard-stage-card {
-  container: project-stages / inline-size;
-}
-
-.adm-dash-stat-grid.project-dashboard-stage-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-@container project-stages (max-width: 480px) {
-  .adm-dash-stat-grid.project-dashboard-stage-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* The rows' hover wash bleeds past the card's text edge, so the titles
-   line up with the card heading. */
 .project-dashboard-attention {
   display: grid;
   margin: 0 calc(-1 * var(--sp-2));
@@ -516,10 +483,6 @@
 @media (max-width: 900px) {
   .project-dashboard {
     padding: var(--sp-4);
-  }
-
-  .project-dashboard-cards {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .project-dashboard .adm-dash-tile:nth-child(2n) {

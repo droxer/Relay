@@ -28,6 +28,10 @@ function renderPanel(props: { canManage?: boolean; canEditMeta?: boolean }, onAg
       <AgentProfilePanel agent={agent} {...props} onAgentDeleted={onAgentDeleted} />
     </QueryClientProvider>,
   );
+  // Deleting is a management action, offered only while the profile is open
+  // for editing.
+  expect(screen.queryByRole("button", { name: "admin.v2.delete_agent" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.write_profile" }));
   fireEvent.click(screen.getByRole("button", { name: "admin.v2.delete_agent" }));
   return onAgentDeleted;
 }
