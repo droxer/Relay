@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { loadPackageEnv } from "relay-core";
 import { SupervisorBackendClient } from "./backend-client.js";
@@ -9,6 +8,7 @@ import { ManagedNodeReconciler } from "./managed-reconcile.js";
 import { LocalProcessProvider } from "./providers.js";
 import { RelaySupervisor } from "./reconcile.js";
 import type { DaemonLauncher, ManagedNodeProvider, UserRecord, SupervisorLogger } from "./types.js";
+import { defaultWorkspaceRoot } from "./workspace-root.js";
 
 loadPackageEnv("relay-supervisor");
 
@@ -44,7 +44,8 @@ Options:
   --backend-url <url>       Relay backend URL (also RELAY_BACKEND_URL).
   --admin-token <token>     Admin bearer token (also RELAY_ADMIN_TOKEN).
   --workspace-root <path>   Root for managed computer workspace roots; each
-                            daemon creates one child directory per thread.
+                            daemon creates one child directory per thread
+                            (default: .relay-workspaces).
   --provider <name>         "local" or "command" (default: local).
   --sandbox <mode>          Local provider sandbox mode: "none" or "boxlite"
                             (default: boxlite).
@@ -118,7 +119,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
   }
 
   const backendUrl = args.backendUrl ?? process.env.RELAY_BACKEND_URL ?? "http://127.0.0.1:8790";
-  const workspaceRoot = args.workspaceRoot ?? process.env.RELAY_SUPERVISOR_WORKSPACE_ROOT ?? defaultWorkspaceRoot();
+  const workspaceRoot = args.workspaceRoot ?? process.env.RELAY_SUPERVISOR_WORKSPACE_ROOT ?? defaultWorkspaceRoot(undefined, consoleLogger);
   const backend = new SupervisorBackendClient({
     backendUrl,
     adminToken: args.adminToken ?? process.env.RELAY_ADMIN_TOKEN,
@@ -207,14 +208,6 @@ function formatLog(level: string, message: string, fields?: Record<string, unkno
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const WORKSPACE_ROOT = ".relay/user-workspaces";
-const LEGACY_WORKSPACE_ROOT = ".relay/employee-workspaces";
-
-/** Keep using the pre-rename default when it holds a deployment's workspaces. */
-export function defaultWorkspaceRoot(exists: (path: string) => boolean = existsSync): string {
-  return exists(LEGACY_WORKSPACE_ROOT) && !exists(WORKSPACE_ROOT) ? LEGACY_WORKSPACE_ROOT : WORKSPACE_ROOT;
 }
 
 // Last, so every module-level binding above is initialized before main() reads it.

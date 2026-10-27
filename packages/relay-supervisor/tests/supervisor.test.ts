@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ControlPanelDaemonNodeRecord } from "relay-core";
 import { SupervisorBackendClient } from "../src/backend-client.js";
-import { defaultWorkspaceRoot } from "../src/cli.js";
+import { defaultWorkspaceRoot, type WorkspaceRootFs } from "../src/workspace-root.js";
 import { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForUser, workspaceForManagedNode } from "../src/launchers.js";
 import { RelaySupervisor } from "../src/reconcile.js";
 import type {
@@ -148,7 +148,7 @@ test("local supervisor launcher defaults daemon nodes to BoxLite mode", async ()
 });
 
 test("managed user workspaces are absolute when the configured root is relative", () => {
-  assert.equal(workspaceForUser(".relay/user-workspaces", "alice"), join(process.cwd(), ".relay/user-workspaces/alice"));
+  assert.equal(workspaceForUser(".relay-workspaces", "alice"), join(process.cwd(), ".relay-workspaces/alice"));
 });
 
 test("managed cloud computers receive distinct node workspace roots", () => {
@@ -320,12 +320,57 @@ test("remote command launcher rejects a missing bootstrap directory safely", asy
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("supervisor keeps the pre-rename workspace root when only it exists", () => {
-  const present = (paths: string[]) => (path: string) => paths.includes(path);
-  assert.equal(defaultWorkspaceRoot(present([])), ".relay/user-workspaces");
-  assert.equal(defaultWorkspaceRoot(present([".relay/employee-workspaces"])), ".relay/employee-workspaces");
-  assert.equal(
-    defaultWorkspaceRoot(present([".relay/employee-workspaces", ".relay/user-workspaces"])),
-    ".relay/user-workspaces",
-  );
+function workspaceRootFs(paths: string[], fail: { rename?: boolean; symlink?: boolean } = {}) {
+  const dirs = new Set(paths);
+  const links = new Map<string, string>();
+  const calls: string[] = [];
+  const fs: WorkspaceRootFs = {
+    exists: (path) => dirs.has(path) || links.has(path),
+    isSymlink: (path) => links.has(path),
+    rename: (from, to) => {
+      calls.push(`rename ${from} ${to}`);
+      if (fail.rename) throw new Error("EXDEV");
+      dirs.delete(from);
+      dirs.add(to);
+    },
+    symlink: (target, path) => {
+      calls.push(`symlink ${target} ${path}`);
+      if (fail.symlink) throw new Error("EPERM");
+      links.set(path, target);
+    },
+  };
+  return { fs, calls, dirs, links };
+}
+
+test("supervisor defaults managed workspaces to .relay-workspaces", () => {
+  const fresh = workspaceRootFs([]);
+  assert.equal(defaultWorkspaceRoot(fresh.fs), ".relay-workspaces");
+  assert.deepEqual(fresh.calls, []);
+
+  const current = workspaceRootFs([".relay-workspaces", ".relay/employee-workspaces"]);
+  assert.equal(defaultWorkspaceRoot(current.fs), ".relay-workspaces");
+  assert.deepEqual(current.calls, []);
+});
+
+test("supervisor moves an older workspace root and links the old path to it", () => {
+  for (const legacy of [".relay/employee-workspaces", ".relay/user-workspaces"]) {
+    const { fs, calls, dirs, links } = workspaceRootFs([legacy]);
+    assert.equal(defaultWorkspaceRoot(fs), ".relay-workspaces");
+    assert.deepEqual(calls, [`rename ${legacy} .relay-workspaces`, `symlink ../.relay-workspaces ${legacy}`]);
+    assert.ok(dirs.has(".relay-workspaces"));
+    assert.equal(links.get(legacy), "../.relay-workspaces");
+  }
+  const both = workspaceRootFs([".relay/employee-workspaces", ".relay/user-workspaces"]);
+  defaultWorkspaceRoot(both.fs);
+  assert.equal(both.calls[0], "rename .relay/user-workspaces .relay-workspaces");
+});
+
+test("supervisor keeps the older workspace root when the move cannot finish", () => {
+  const renameFails = workspaceRootFs([".relay/employee-workspaces"], { rename: true });
+  assert.equal(defaultWorkspaceRoot(renameFails.fs), ".relay/employee-workspaces");
+
+  const linkFails = workspaceRootFs([".relay/employee-workspaces"], { symlink: true });
+  assert.equal(defaultWorkspaceRoot(linkFails.fs), ".relay/employee-workspaces");
+  assert.ok(linkFails.dirs.has(".relay/employee-workspaces"));
+  assert.ok(!linkFails.dirs.has(".relay-workspaces"));
 });
