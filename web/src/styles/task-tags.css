@@ -93,12 +93,23 @@
   color: var(--ink-1);
 }
 
-/* "+N" — the same box with no mark; its tooltip names the hidden tags. */
+/* "+N" — a count, not another tag: no fill and no mark, so a row folded to
+   one tag plus "+N" reads as one chip and a number rather than two chips of
+   equal weight. It takes the chip fill only on hover or focus, the cue that
+   its tooltip names the hidden tags. */
 .tag-badge--more {
-  padding-inline: var(--sp-1-5);
+  padding-inline: var(--sp-1);
+  background: transparent;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
   cursor: default;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.tag-badge--more:hover,
+.tag-badge--more:focus-visible {
+  background: var(--control-fill);
+  color: var(--ink-2);
 }
 
 /* ── Lists of badges ────────────────────────────────────────────────── */
