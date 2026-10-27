@@ -30,6 +30,7 @@ import { TASK_PRIORITIES } from "../../lib/backlog";
 import { manualTaskStatuses } from "../../lib/taskFlow";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
 import {
+  NEW_TASK_ACCEPTANCE_POLICY,
   clearTaskAssignment,
   taskAssignmentValue,
   teamAssignmentPatch,
@@ -383,7 +384,7 @@ export function TaskDrawer({
             wrapper="div"
           >
             <Select
-              value={form.acceptancePolicy ?? "human"}
+              value={form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY}
               disabled={Boolean(form.startedAt)}
               onValueChange={(value) => {
                 if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });

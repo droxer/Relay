@@ -6,6 +6,8 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 import {
+  NEW_TASK_ACCEPTANCE_POLICY,
+  taskAcceptancePolicy,
   taskAssignmentMutationFields,
   taskBoardFormsEqual,
   type BacklogTaskFormState,
@@ -68,7 +70,7 @@ export function useBacklogTaskForm({
       priority: task.priority,
       tags: task.tags ?? [],
       status: task.status,
-      acceptancePolicy: task.acceptancePolicy ?? "automatic",
+      acceptancePolicy: taskAcceptancePolicy(task),
       collaborationStyle: task.collaborationStyle ?? null,
       startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
@@ -119,7 +121,7 @@ export function useBacklogTaskForm({
         priority: form.priority,
         tags: form.tags,
         ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
-        acceptancePolicy: form.acceptancePolicy ?? "human",
+        acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         dueDate: form.dueDate,
         /* Intake takes no agent or team. Clearing is still sent for a legacy

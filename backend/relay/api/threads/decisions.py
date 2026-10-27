@@ -144,6 +144,9 @@ def answer_permission_request(
     note = string_field(body, "note")
     if len(note) > PERMISSION_NOTE_MAX_CHARS:
         raise HTTPException(400, "note is too long.")
+    always = body.get("always", False)
+    if not isinstance(always, bool):
+        raise HTTPException(400, "always must be a boolean.")
     try:
         result = SessionController(ctx.session_store).resolve_permission_request(
             session_id,
@@ -151,6 +154,7 @@ def answer_permission_request(
             decision,
             note or None,
             answers=body.get("answers"),
+            always=always,
             actor_user_id=actor["userId"],
         )
     except ValueError as error:

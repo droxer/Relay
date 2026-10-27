@@ -8,7 +8,7 @@ import {
 } from "./icons";
 import { RelayMark } from "./RelayMark";
 import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, UserAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
-import type { PermissionAnswers } from "relay-core";
+import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import {
   buildExecutorDisplayNameMap,
   buildLogicalAgentImageMap,
@@ -160,7 +160,7 @@ type ThreadsViewProps = {
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<boolean>;
   sendHandoff: () => Promise<void>;
   /** Answer a live run's runtime permission prompt. */
-  onAnswerPermission: (requestId: string, decision: "allow" | "deny", note?: string, answers?: PermissionAnswers) => Promise<void>;
+  onAnswerPermission: (requestId: string, answer: PermissionAnswerInput) => Promise<void>;
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;

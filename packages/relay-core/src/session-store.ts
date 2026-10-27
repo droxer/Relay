@@ -132,10 +132,28 @@ export interface PermissionDecision {
   decidedBy?: string;
   /** The person's answers to a question prompt. */
   answers?: PermissionAnswers;
+  /** The person allowed this tool always for this agent in this thread. */
+  always?: boolean;
+  /** Closed by such a standing grant on arrival; no person answered it. */
+  grant?: boolean;
+}
+
+/**
+ * A person's standing "always allow": every later prompt from `agent` (the
+ * logical agent id when the run named one, else the executor) for `toolName`
+ * in this thread closes `allow` on arrival. Never covers a question.
+ */
+export interface PermissionGrant {
+  agent: string;
+  toolName: string;
+  grantedAt: string;
+  grantedBy?: string;
 }
 
 /** How many closed prompts the snapshot remembers. */
 export const PERMISSION_HISTORY_LIMIT = 50;
+/** How many standing grants a thread keeps. */
+export const PERMISSION_GRANTS_LIMIT = 50;
 
 export type CollaborationPurpose = "accomplish" | "discuss" | "review";
 export type CollaborationStyle = "solo" | "build_review" | "pipeline" | "lead_led";
@@ -304,6 +322,8 @@ export interface RelaySession {
   permissionRequests?: PermissionRequest[];
   /** How recent prompts closed, newest last. */
   permissionDecisions?: PermissionDecision[];
+  /** Tools a person allowed always for an agent in this thread. */
+  permissionGrants?: PermissionGrant[];
   agentRuns: AgentRun[];
   artifacts: RelayArtifact[];
   /**
@@ -498,6 +518,10 @@ export type RelayEvent =
       decision: PermissionDecisionKind;
       note?: string;
       answers?: PermissionAnswers;
+      /** An `allow` that also grants the tool for later prompts. */
+      always?: boolean;
+      /** Closed by a standing grant rather than a person. */
+      grant?: boolean;
       actorUserId?: string;
     }
   | {
@@ -611,7 +635,7 @@ function expirePermissionRequests(session: RelaySession, timestamp: string, runI
 function closePermissionRequest(
   session: RelaySession,
   request: PermissionRequest,
-  outcome: Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers">,
+  outcome: Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers" | "always" | "grant">,
 ): void {
   const remaining = (session.permissionRequests ?? []).filter((item) => item.id !== request.id);
   if (remaining.length) session.permissionRequests = remaining;
@@ -626,6 +650,22 @@ function closePermissionRequest(
       ...outcome,
     },
   ].slice(-PERMISSION_HISTORY_LIMIT);
+}
+
+/** Who a grant speaks for; mirrors `permission_grant_agent` in the backend. */
+export function permissionGrantAgent(request: Pick<PermissionRequest, "agent" | "logicalAgentId">): string {
+  return request.logicalAgentId || request.agent;
+}
+
+function grantPermission(session: RelaySession, request: PermissionRequest, grantedAt: string, grantedBy?: string): void {
+  if (request.questions?.length) return;
+  const agent = permissionGrantAgent(request);
+  const grants = session.permissionGrants ?? [];
+  if (grants.some((grant) => grant.agent === agent && grant.toolName === request.toolName)) return;
+  session.permissionGrants = [
+    ...grants,
+    { agent, toolName: request.toolName, grantedAt, ...(grantedBy ? { grantedBy } : {}) },
+  ].slice(-PERMISSION_GRANTS_LIMIT);
 }
 
 function clearInputRequest(session: RelaySession): void {
@@ -761,12 +801,16 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
     } else if (event.type === "agent.permission_resolved") {
       const request = session.permissionRequests?.find((item) => item.id === event.requestId);
       if (request) {
+        const always = event.always === true && event.decision === "allow";
+        if (always) grantPermission(session, request, event.timestamp, event.actorUserId);
         closePermissionRequest(session, request, {
           decision: event.decision,
           resolvedAt: event.timestamp,
           ...(event.note ? { note: event.note } : {}),
           ...(event.answers ? { answers: event.answers } : {}),
           ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
+          ...(always ? { always: true } : {}),
+          ...(event.grant ? { grant: true } : {}),
         });
       }
     } else if (event.type === "session.completed") {

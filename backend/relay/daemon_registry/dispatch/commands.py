@@ -12,6 +12,7 @@ from ...core.permission_requests import (
     open_permission_request,
     permission_request_node,
     permission_request_status,
+    standing_grant,
 )
 from ...core.ids import now_iso
 from ...notifications.rules import permission_request_rows
@@ -153,9 +154,34 @@ class CommandQueueMixin(RegistryState):
             hydrate_events=False,
         )
         opened = open_permission_request(session, request["id"])
-        if self.notification_store is None or known is not None or not opened:
+        if not opened:
             return
-        self.notification_store.add(permission_request_rows(session, opened))
+        if standing_grant(session, opened):
+            # The person already answered this one: they allowed the tool
+            # always for this agent in this thread. Close it now, unannounced.
+            # Retry this even for a known prompt: its first resolution write
+            # may have failed after the request was committed.
+            self._apply_standing_grant(event["sessionId"], opened)
+            return
+        if known is None and self.notification_store is not None:
+            self.notification_store.add(permission_request_rows(session, opened))
+
+    def _apply_standing_grant(self, session_id: str, request: dict[str, Any]) -> None:
+        logger.info(
+            "Permission request allowed by a standing grant",
+            session_id=session_id,
+            request_id=request["id"],
+            tool=request["toolName"],
+        )
+        self.store.append_event(
+            session_id,
+            relay_event(
+                "agent.permission_resolved",
+                session_id,
+                {"requestId": request["id"], "decision": "allow", "grant": True},
+            ),
+            hydrate_events=False,
+        )
 
     def _withdraw_permission_request(self, sandbox_id: str, event: dict[str, Any]) -> None:
         """The run stopped waiting on its prompt: close it so nobody answers a

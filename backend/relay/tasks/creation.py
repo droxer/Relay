@@ -9,6 +9,7 @@ from loguru import logger
 
 from ..core.validation import task_priority, task_status
 from ..sessions.controller import SessionController
+from .flow import NEW_TASK_ACCEPTANCE_POLICY
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (
     logical_agent_for_assignment,
@@ -148,7 +149,7 @@ def _create_record(
             **({"projectId": project["id"]} if project else {}),
             "dueDate": request.reader.date(body, "dueDate"),
             "status": plan.status,
-            "acceptancePolicy": plan.acceptance_policy or "human",
+            "acceptancePolicy": plan.acceptance_policy or NEW_TASK_ACCEPTANCE_POLICY,
             **(
                 {"collaborationStyle": plan.collaboration_style}
                 if plan.collaboration_style

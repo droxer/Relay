@@ -154,6 +154,8 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         ...(event.note ? { note: event.note } : {}),
         ...(event.answers ? { answers: event.answers } : {}),
         ...(event.actorUserId ? { decidedBy: event.actorUserId } : {}),
+        ...(event.always && event.decision === "allow" ? { always: true } : {}),
+        ...(event.grant ? { grant: true } : {}),
       });
     case "artifact.created": {
       const artifacts = next.artifacts.some((artifact) => artifact.id === event.artifact.id)

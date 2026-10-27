@@ -176,6 +176,23 @@ describe("projectMessages permission audit lines", () => {
   });
 });
 
+describe("projectMessages always-allow audit lines", () => {
+  it("names a person's always allow, and an allow a standing grant gave", () => {
+    const messages = projectMessages(session([
+      { id: "ev_run", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_1", agent: "claude" },
+      { id: "ev_ask", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_1", runId: "run_1", agent: "claude", toolName: "Bash", input: "{}" } },
+      { id: "ev_always", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_1", decision: "allow", always: true, actorUserId: "user_1" },
+      { id: "ev_ask2", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_2", runId: "run_1", agent: "claude", toolName: "Bash", input: "{}" } },
+      { id: "ev_grant", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_2", decision: "allow", grant: true },
+    ]), t);
+    const lines = messages.filter((message) => message.kind === "system");
+    assert.deepEqual(lines.map((line) => line.kind === "system" && [line.label, line.tone]), [
+      ["message.permission_allow_always", "info"],
+      ["message.permission_allow_granted", "info"],
+    ]);
+  });
+});
+
 describe("projectMessages artifact projection", () => {
   it("attaches structured collaboration events to the matching run", () => {
     const collaboration = {

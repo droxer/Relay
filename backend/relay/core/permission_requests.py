@@ -14,6 +14,13 @@ so nothing is left to answer — or when the daemon withdraws it
 (`run.permission_withdrawn`: its runtime hung up, or nobody answered before
 the daemon's deadline).
 
+A person may also allow a tool *always*: the `allow` carries `always: true`,
+and the thread keeps a standing grant (`permissionGrants`) for that agent and
+tool. A later prompt the grant covers is closed `allow` on arrival with
+`grant: true` and no actor — the person answered it in advance. A grant is
+scoped to its thread and never covers a question, which only a person can
+answer.
+
 A prompt may be a question rather than an approval: the runtime's "ask the
 user" tool (`questions`, each with offered answers). The person's `answers`
 ride the `allow` decision back to the daemon, which hands them to the tool.
@@ -35,6 +42,7 @@ PERMISSION_QUESTIONS_MAX = 4
 PERMISSION_OPTIONS_MAX = 8
 PERMISSION_TEXT_MAX_CHARS = 500
 PERMISSION_WITHDRAW_REASON_MAX_CHARS = 500
+PERMISSION_GRANTS_LIMIT = 50
 _REQUEST_ID = re.compile(r"^perm_[0-9a-f]{8,64}$")
 
 
@@ -187,10 +195,38 @@ def apply_permission_requested(session: dict[str, Any], event: dict[str, Any]) -
     )
 
 
+def permission_grant_agent(request: dict[str, Any]) -> str:
+    """Who a grant speaks for: the logical agent when the run names one, so
+    two agents sharing an executor never share a grant."""
+    return request.get("logicalAgentId") or request["agent"]
+
+
+def may_grant_always(request: dict[str, Any]) -> bool:
+    """Only an approval can be granted ahead of time; a question cannot."""
+    return not request.get("questions")
+
+
+def standing_grant(session: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
+    """The thread's grant that answers `request` in advance, if any."""
+    if not may_grant_always(request):
+        return None
+    agent = permission_grant_agent(request)
+    return next(
+        (
+            grant
+            for grant in session.get("permissionGrants") or []
+            if grant["agent"] == agent and grant["toolName"] == request["toolName"]
+        ),
+        None,
+    )
+
+
 def apply_permission_resolved(session: dict[str, Any], event: dict[str, Any]) -> None:
     request = open_permission_request(session, event["requestId"])
     if not request:
         return
+    if event.get("always") and event["decision"] == "allow":
+        _grant(session, request, event["timestamp"], event.get("actorUserId"))
     _close(
         session,
         request,
@@ -199,6 +235,8 @@ def apply_permission_resolved(session: dict[str, Any], event: dict[str, Any]) ->
         note=event.get("note"),
         decided_by=event.get("actorUserId"),
         answers=event.get("answers"),
+        grant=bool(event.get("grant")),
+        always=bool(event.get("always")) and event["decision"] == "allow",
     )
 
 
@@ -220,6 +258,8 @@ def _close(
     note: str | None = None,
     decided_by: str | None = None,
     answers: dict[str, list[str]] | None = None,
+    grant: bool = False,
+    always: bool = False,
 ) -> None:
     remaining = [
         item for item in session.get("permissionRequests") or [] if item["id"] != request["id"]
@@ -240,6 +280,25 @@ def _close(
             **({"note": note} if note else {}),
             **({"decidedBy": decided_by} if decided_by else {}),
             **({"answers": answers} if answers else {}),
+            **({"grant": True} if grant else {}),
+            **({"always": True} if always else {}),
         },
     ]
     session["permissionDecisions"] = history[-PERMISSION_HISTORY_LIMIT:]
+
+
+def _grant(
+    session: dict[str, Any], request: dict[str, Any], timestamp: str, granted_by: str | None
+) -> None:
+    if not may_grant_always(request) or standing_grant(session, request):
+        return
+    grants = [
+        *(session.get("permissionGrants") or []),
+        {
+            "agent": permission_grant_agent(request),
+            "toolName": request["toolName"],
+            "grantedAt": timestamp,
+            **({"grantedBy": granted_by} if granted_by else {}),
+        },
+    ]
+    session["permissionGrants"] = grants[-PERMISSION_GRANTS_LIMIT:]

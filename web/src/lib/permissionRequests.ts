@@ -13,7 +13,16 @@ import { omit } from "./omit.ts";
 /** Mirrors `PERMISSION_HISTORY_LIMIT` there. */
 const HISTORY_LIMIT = 50;
 
-type Outcome = Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers">;
+type Outcome = Pick<PermissionDecision, "decision" | "resolvedAt" | "note" | "decidedBy" | "answers" | "always" | "grant">;
+
+/** A person's answer to one prompt, as the thread's prompt card sends it. */
+export type PermissionAnswerInput = {
+  decision: "allow" | "deny";
+  note?: string;
+  answers?: PermissionAnswers;
+  /** Allow this tool for this agent for the rest of the thread. */
+  always?: boolean;
+};
 
 export function withPermissionRequested(
   session: RelaySession,
@@ -50,6 +59,15 @@ export function openPermissionRequests(session: Pick<RelaySession, "permissionRe
  */
 export function permissionNoteReachesAgent(request: Pick<PermissionRequest, "agent">): boolean {
   return request.agent === "claude" || request.agent === "pi";
+}
+
+/**
+ * Whether "Always allow" is offered: only an approval can be granted ahead of
+ * time — a question needs its person each time (`may_grant_always` in
+ * backend/relay/core/permission_requests.py).
+ */
+export function mayAllowAlways(request: Pick<PermissionRequest, "questions">): boolean {
+  return !isQuestionPrompt(request);
 }
 
 /** A prompt that asks the person something, rather than for an approval. */

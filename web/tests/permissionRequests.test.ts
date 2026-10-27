@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { applySessionEvent } from "../src/lib/sessionEvents.js";
 import { threadAwaitsHuman } from "../src/lib/awaitingInput.js";
-import { answersComplete, isQuestionPrompt, permissionInputSummary, permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
+import { answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputSummary, permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
 import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
 const created = relayEvent("session.created", "ses_1", { workspacePath: "/workspace", taskGoal: "Clean up", participants: ["human", "claude"] });
@@ -35,6 +35,30 @@ describe("runtime permission prompts", () => {
       ]);
       assert.equal(threadAwaitsHuman(session, []), false);
     }
+  });
+
+  it("records an always allow, and a standing grant's allow, the same in replay and live", () => {
+    const always = relayEvent("agent.permission_resolved", "ses_1", { requestId: "perm_00000001", decision: "allow", always: true, actorUserId: "user_1" });
+    const again = relayEvent("agent.permission_requested", "ses_1", {
+      request: { id: "perm_00000002", runId: "run_1", agent: "claude", toolName: "Bash", input: "{\"command\":\"make\"}" },
+    });
+    const granted = relayEvent("agent.permission_resolved", "ses_1", { requestId: "perm_00000002", decision: "allow", grant: true });
+    const { replay, live } = both([started, asked, always, again, granted]);
+    for (const session of [replay, live]) {
+      assert.equal(session.permissionRequests, undefined);
+      assert.deepEqual(session.permissionDecisions?.map(({ requestId, decision, always: a, grant }) => ({ requestId, decision, always: a, grant })), [
+        { requestId: "perm_00000001", decision: "allow", always: true, grant: undefined },
+        { requestId: "perm_00000002", decision: "allow", always: undefined, grant: true },
+      ]);
+    }
+    assert.deepEqual(replay.permissionGrants?.map(({ agent, toolName, grantedBy }) => ({ agent, toolName, grantedBy })), [
+      { agent: "claude", toolName: "Bash", grantedBy: "user_1" },
+    ]);
+  });
+
+  it("offers always allow on an approval, never on a question", () => {
+    assert.equal(mayAllowAlways({}), true);
+    assert.equal(mayAllowAlways({ questions: [{ id: "q", text: "Which?", options: [] }] }), false);
   });
 
   it("expires a prompt whose run ends first, and ignores a late answer", () => {
