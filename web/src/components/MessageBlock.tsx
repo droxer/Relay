@@ -279,6 +279,7 @@ export const MessageBlock = memo(function MessageBlock({
             stderr={message.stderr}
             streaming={message.streaming}
             collaborations={message.collaborations}
+            permissions={message.permissions}
             pickupFrom={pickupFrom}
           />
           {message.attachments.length > 0 ? (

@@ -30,6 +30,8 @@ import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { activityCounts, groupActivity, type ActivityEntry, type ActivityItem } from "../lib/activityGroups";
+import { placePermissionAudits } from "../lib/permissionAudits";
+import type { PermissionAudit } from "../lib/projectMessages";
 
 // "Working…" breathes on the shared live blink: plain words that dim and
 // return, not a gradient sweep across them.
@@ -50,10 +52,14 @@ type AgentStreamProps = {
   stderr: string;
   streaming: boolean;
   collaborations: CodexCollaborationEvent[];
+  /** How this run's permission prompts closed; each shows on its tool line. */
+  permissions?: PermissionAudit[];
   pickupFrom?: string;
 };
 
-export function AgentStream({ agent, stdout, stderr, streaming, collaborations, pickupFrom }: AgentStreamProps) {
+const NO_AUDITS: ReadonlyMap<string, PermissionAudit> = new Map();
+
+export function AgentStream({ agent, stdout, stderr, streaming, collaborations, permissions, pickupFrom }: AgentStreamProps) {
   const { t } = useTranslation();
   // Settling can append a completed-log fallback that overlaps live output;
   // rebuild once at that boundary so the final transcript is canonical.
@@ -84,25 +90,31 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
   // The previous items are remembered per stream (the accumulator is
   // replaced exactly when the stream restarts); they only choose which equal
   // object to hand back, so this is a cache, not state.
+  const keys = useMemo(() => segmentKeys(segments), [segments]);
   const items = useMemo(() => {
-    const next = groupActivity(segments, segmentKeys(segments), previousItemsByStream.get(accumulator) ?? []);
+    const next = groupActivity(segments, keys, previousItemsByStream.get(accumulator) ?? []);
     previousItemsByStream.set(accumulator, next);
     return next;
-  }, [accumulator, segments]);
+  }, [accumulator, segments, keys]);
+  // An approval reads on the line it let run, not in a second list below.
+  const audits = useMemo(() => placePermissionAudits(segments, keys, permissions), [segments, keys, permissions]);
+  const unplaced = audits.unplaced.map((audit) => <PermissionLine key={audit.id} audit={audit} />);
 
   if (segments.length === 0) {
     if (streaming) {
       return (
         <div className="agent-stream streaming">
           <SubagentTree nodes={collaborationNodes} />
+          {unplaced}
           <StreamActivity label={workingLabel} />
         </div>
       );
     }
-    if (collaborationNodes.length > 0) {
+    if (collaborationNodes.length > 0 || unplaced.length > 0) {
       return (
         <div className="agent-stream">
           <SubagentTree nodes={collaborationNodes} />
+          {unplaced}
         </div>
       );
     }
@@ -119,17 +131,20 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
         <ActivityGroup
           key={item.key}
           entries={item.entries}
+          audits={audits.bySegment.size > 0 ? audits.bySegment : NO_AUDITS}
           live={streaming && item.entries.at(-1)!.index === segments.length - 1}
         />
       ) : (
         <SegmentView
           key={item.key}
           segment={item.segment}
+          audit={audits.bySegment.get(item.key)}
           live={item.index === liveTextIndex}
           streaming={streaming}
           last={item.index === segments.length - 1}
         />
       ))}
+      {unplaced}
       {showActivity ? <StreamActivity label={workingLabel} /> : null}
     </div>
   );
@@ -139,10 +154,11 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
 // — the live text or the open reasoning — and the rest must not re-render.
 const SegmentView = memo(function SegmentView({
   segment,
+  audit,
   live = false,
   streaming = false,
   last = false,
-}: { segment: AgentSegment; live?: boolean; streaming?: boolean; last?: boolean }) {
+}: { segment: AgentSegment; audit?: PermissionAudit; live?: boolean; streaming?: boolean; last?: boolean }) {
   const { t } = useTranslation();
   if (segment.kind === "text") {
     return <TextSegment text={segment.text} live={live} />;
@@ -163,11 +179,12 @@ const SegmentView = memo(function SegmentView({
         <span className="agent-tool-marker" aria-hidden="true" />
         <span className="agent-tool-name">{segment.name}</span>
         {segment.target ? <span className="agent-tool-target">{segment.target}</span> : null}
+        {audit ? <PermissionMark audit={audit} /> : null}
       </div>
     );
   }
   if (segment.kind === "command") {
-    return <CommandSegment command={segment.command} />;
+    return <CommandSegment command={segment.command} audit={audit} />;
   }
   if (segment.kind === "narration") {
     return (
@@ -193,7 +210,11 @@ const SegmentView = memo(function SegmentView({
 // towards. Same null-until-touched override as ThinkingSegment: a live group
 // is open — it is where the turn's visible progress is — and closes itself
 // when the next text arrives, unless the reader already chose.
-const ActivityGroup = memo(function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: boolean }) {
+const ActivityGroup = memo(function ActivityGroup({
+  entries,
+  audits,
+  live,
+}: { entries: ActivityEntry[]; audits: ReadonlyMap<string, PermissionAudit>; live: boolean }) {
   const { t } = useTranslation();
   const [override, setOverride] = useState<boolean | null>(null);
   const open = override ?? live;
@@ -219,7 +240,7 @@ const ActivityGroup = memo(function ActivityGroup({ entries, live }: { entries: 
       {open ? (
         <div className="agent-activity-body">
           {entries.map(({ key, segment }) => (
-            <SegmentView key={key} segment={segment} />
+            <SegmentView key={key} segment={segment} audit={audits.get(key)} />
           ))}
         </div>
       ) : null}
@@ -342,7 +363,7 @@ function StreamingMarkdown({ text, live }: { text: string; live: boolean }) {
 // monospace. A command that carries a file body (`cat > f << \'EOF\'`) collapses
 // to its first lines — otherwise one write buries the answer it was working
 // towards — and opens on a click.
-function CommandSegment({ command }: { command: string }) {
+function CommandSegment({ command, audit }: { command: string; audit?: PermissionAudit }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const { lines, hidden, toggle } = useMemo(
@@ -369,6 +390,34 @@ function CommandSegment({ command }: { command: string }) {
           </button>
         ) : null}
       </div>
+      {audit ? <PermissionMark audit={audit} /> : null}
+    </div>
+  );
+}
+
+// How a permission prompt for this line closed — "Allowed", "Denied" — as a
+// quiet suffix on the line itself; the full sentence and any note ride the
+// title. Only a deny is coloured: it is the one that changed what ran.
+function PermissionMark({ audit }: { audit: PermissionAudit }) {
+  const { t } = useTranslation();
+  const title = [audit.label, audit.detail]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span className={`agent-permission-mark tone-${audit.tone}`} title={title}>
+      {t(`agent_stream.permission.${audit.outcome}`)}
+    </span>
+  );
+}
+
+// A prompt no line of the turn matches (a question, or a call the stream never
+// showed) still reads inside the turn that asked, as its own line.
+function PermissionLine({ audit }: { audit: PermissionAudit }) {
+  return (
+    <div className={`agent-permission-line tone-${audit.tone}`}>
+      <span className="agent-tool-marker" aria-hidden="true" />
+      <span className="agent-tool-name">{audit.label}</span>
+      {audit.detail ? <span className="agent-tool-target">{audit.detail}</span> : null}
     </div>
   );
 }

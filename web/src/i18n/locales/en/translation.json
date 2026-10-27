@@ -1940,6 +1940,15 @@
     "empty_cta_back": "Back to the thread"
   },
   "agent_stream": {
+    "permission": {
+      "allow": "Allowed",
+      "allow_always": "Always allowed",
+      "allow_granted": "Allowed (always)",
+      "deny": "Denied",
+      "expired": "Prompt expired",
+      "answered": "Answered",
+      "skipped": "Skipped"
+    },
     "empty_working": "Working…",
     "empty_done": "No output.",
     "claude_error": "Claude error",

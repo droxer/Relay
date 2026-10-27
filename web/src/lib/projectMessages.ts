@@ -2,6 +2,23 @@ import type { TFunction } from "i18next";
 import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 import { permissionInputSummary } from "./permissionRequests.ts";
+import { toolInput, toolTarget } from "./agent-stream/builders.ts";
+
+/** How a runtime permission prompt closed, as the turn that asked shows it:
+ *  on the tool line it covered, or as its own line in the turn when no line
+ *  matches. */
+export type PermissionAudit = {
+  id: string;
+  toolName: string;
+  /** The runtime's id for the tool call, when it sent one. */
+  toolUseId?: string;
+  /** The tool line's target (`toolTarget`) the prompt covered. */
+  target?: string;
+  outcome: "allow" | "allow_always" | "allow_granted" | "deny" | "expired" | "answered" | "skipped";
+  tone: Tone;
+  label: string;
+  detail?: string;
+};
 
 export type DerivedMessage =
   | {
@@ -27,6 +44,8 @@ export type DerivedMessage =
       stdout: string;
       stderr: string;
       collaborations: CodexCollaborationEvent[];
+      /** Permission prompts this run raised and how each closed. */
+      permissions?: PermissionAudit[];
       attachments: RelayArtifact[];
       /** Token usage reported by the run on completion; shown at the foot of
        * the agent turn. */
@@ -224,13 +243,26 @@ function visibleLogText(stdout: string, stderr: string): string {
   return [...text, stderr.trim()].filter(Boolean).join("\n").trim();
 }
 
-/** The audit line of a closed approval: a person's allow once or always, a
- *  standing grant's allow, a deny, or an expiry. */
-function permissionAuditKey(event: { decision: string; always?: boolean; grant?: boolean }): string {
-  if (event.decision === "allow" && event.grant) return "message.permission_allow_granted";
-  if (event.decision === "allow" && event.always) return "message.permission_allow_always";
-  return `message.permission_${event.decision}`;
+/** How a prompt closed: a person's allow once or always, a standing grant's
+ *  allow, a deny, or an expiry — for a question, answered or skipped. */
+function permissionOutcome(
+  event: { decision: string; always?: boolean; grant?: boolean },
+  question: boolean,
+): PermissionAudit["outcome"] {
+  if (question) return event.decision === "allow" ? "answered" : event.decision === "deny" ? "skipped" : "expired";
+  if (event.decision === "allow" && event.grant) return "allow_granted";
+  if (event.decision === "allow" && event.always) return "allow_always";
+  return event.decision === "deny" ? "deny" : event.decision === "allow" ? "allow" : "expired";
 }
+
+type OpenPrompt = {
+  runId: string;
+  toolName: string;
+  toolUseId?: string;
+  question: boolean;
+  summary?: string;
+  target?: string;
+};
 
 function applyCompletedLogFallback(state: { stdout: string; stderr: string }, agentLog: string): void {
   const fallback = streamsFromAgentLog(agentLog);
@@ -262,7 +294,7 @@ export class ProjectMessagesAccumulator {
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
   /** Open permission prompts by id: the resolution names only the id. */
-  private readonly prompts = new Map<string, { toolName: string; question: boolean; summary?: string }>();
+  private readonly prompts = new Map<string, OpenPrompt>();
 
   /** Derive the next projection without changing this committed accumulator. */
   advance(session: RelaySession | undefined, t: TFunction): { accumulator: ProjectMessagesAccumulator; messages: DerivedMessage[] } {
@@ -370,6 +402,28 @@ export class ProjectMessagesAccumulator {
     return { index, created: true };
   }
 
+  private permissionAudit(
+    event: Extract<RelaySession["events"][number], { type: "agent.permission_resolved" }>,
+    prompt: OpenPrompt,
+    t: TFunction,
+  ): PermissionAudit {
+    const outcome = permissionOutcome(event, prompt.question);
+    const answers = Object.values(event.answers ?? {}).map((picks) => picks.join(", ")).join(" · ");
+    return {
+      id: event.id,
+      toolName: prompt.toolName,
+      ...(prompt.toolUseId ? { toolUseId: prompt.toolUseId } : {}),
+      ...(prompt.target ? { target: prompt.target } : {}),
+      outcome,
+      tone: event.decision === "allow" ? "info" : event.decision === "deny" ? "warn" : "neutral",
+      label: t(`message.permission_${outcome}`, { tool: prompt.toolName }),
+      // Name what was allowed — the command, the file — not only the tool.
+      detail: prompt.question
+        ? (event.decision === "allow" && answers ? answers : event.note)
+        : [prompt.summary, event.note].filter(Boolean).join(" · ") || undefined,
+    };
+  }
+
   private applyEvent(event: RelaySession["events"][number], t: TFunction): boolean {
     switch (event.type) {
       case "system.notice":
@@ -470,31 +524,35 @@ export class ProjectMessagesAccumulator {
       case "agent.permission_requested": {
         const question = (event.request.questions?.length ?? 0) > 0;
         this.prompts.set(event.request.id, {
+          runId: event.request.runId,
           toolName: event.request.toolName,
+          ...(event.request.toolUseId ? { toolUseId: event.request.toolUseId } : {}),
           question,
           summary: question ? undefined : permissionInputSummary(event.request.input),
+          target: toolTarget(toolInput(event.request.input)),
         });
         return false;
       }
       case "agent.permission_resolved": {
-        // The audit line of a prompt: who allowed what, or that nobody did.
+        // The audit of a prompt: who allowed what, or that nobody did. It
+        // joins the turn that asked, beside the tool line it covered.
         const prompt = this.prompts.get(event.requestId);
         if (!prompt) return false;
         this.prompts.delete(event.requestId);
-        const answers = Object.values(event.answers ?? {}).map((picks) => picks.join(", ")).join(" · ");
-        const label = prompt.question
-          ? t(event.decision === "allow" ? "message.permission_answered" : event.decision === "deny" ? "message.permission_skipped" : "message.permission_expired", { tool: prompt.toolName })
-          : t(permissionAuditKey(event), { tool: prompt.toolName });
+        const audit = this.permissionAudit(event, prompt, t);
+        const state = this.runState.get(prompt.runId);
+        const block = state ? this.out[state.index] : undefined;
+        if (block?.kind === "agent") {
+          this.out[state!.index] = { ...block, permissions: [...(block.permissions ?? []), audit] };
+          return true;
+        }
         this.out.push({
           kind: "system",
           id: event.id,
           timestamp: event.timestamp,
-          tone: event.decision === "allow" ? "info" : event.decision === "deny" ? "warn" : "neutral",
-          label,
-          // Name what was allowed — the command, the file — not only the tool.
-          detail: prompt.question
-            ? (event.decision === "allow" && answers ? answers : event.note)
-            : [prompt.summary, event.note].filter(Boolean).join(" · ") || undefined,
+          tone: audit.tone,
+          label: audit.label,
+          detail: audit.detail,
         });
         return true;
       }
