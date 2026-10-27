@@ -51,11 +51,12 @@ it("opens on the Dashboard, listed first", () => {
   expect(document.querySelector(".project-dashboard")).not.toBeNull();
 });
 
-it("sends the Dashboard's board link to the Issues tab", async () => {
+it("offers no second way to the board when nothing needs attention", () => {
+  // The Tasks tab sits one row above the dashboard; the card links on only
+  // when it held some issues back (projectDashboard.test.tsx).
   renderPage(project());
-  fireEvent.click(screen.getByRole("button", { name: /project\.dashboard_open_board/ }));
-  await waitFor(() => expect(screen.getByTestId("backlog-board")).toBeTruthy());
-  expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /project\.dashboard_open_board/ })).toBeNull();
+  expect(screen.getByRole("tab", { name: "project.tasks_tab" })).toBeTruthy();
 });
 
 it("has no General tab; a retired ?tab=general link lands on the Dashboard", () => {

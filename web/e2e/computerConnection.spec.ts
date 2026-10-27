@@ -17,6 +17,6 @@ test("computer approval preserves its URL and requires explicit consent", async 
   await expect(page).toHaveURL(new RegExp(`connect=${code}`));
   expect(approvals).toBe(0);
   await page.getByRole("button", { name: "Connect computer", exact: true }).click();
-  await expect(page.getByText("Approved. Return to the terminal to finish setup.")).toBeVisible();
+  await expect(page.getByText("Return to your terminal. Setup finishes there on its own.")).toBeVisible();
   expect(approvals).toBe(1);
 });

@@ -23,7 +23,7 @@ test("team responsibilities can be edited and persist after reload", async ({ pa
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => saved?.memberConfigs).toEqual({ builder: { responsibility: "Own the API and regression tests" } });
   // Acceptance criteria belong to the team and are edited with the roster.
-  await page.getByRole("button", { name: "Edit members" }).click();
+  await page.getByRole("button", { name: "Edit team" }).click();
   await page.getByLabel("Acceptance criteria").fill("Existing clients remain compatible");
   await page.getByRole("button", { name: "Save team", exact: true }).click();
   await expect.poll(() => saved?.acceptanceCriteria).toEqual(["Existing clients remain compatible"]);
