@@ -400,7 +400,7 @@ function CommandSegment({ command, audit }: { command: string; audit?: Permissio
 // title. Only a deny is coloured: it is the one that changed what ran.
 function PermissionMark({ audit }: { audit: PermissionAudit }) {
   const { t } = useTranslation();
-  const title = [audit.label, audit.outcome === "deny" || audit.outcome === "answered" ? audit.detail : undefined]
+  const title = [audit.label, audit.detail]
     .filter(Boolean)
     .join(" · ");
   return (
