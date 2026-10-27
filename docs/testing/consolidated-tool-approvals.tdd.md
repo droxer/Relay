@@ -30,6 +30,8 @@ was supplied.
   `npm run lint:css -w web`: pass.
 - `npm run test:react -w web`: 664 passed, 1 timed out in
   `rosterTabs.test.tsx` (composer keyboard selection, outside this change).
+  Retrying with `npm run test:react -w web -- --maxWorkers=2` passed all
+  665 tests across 111 files.
 - `npm audit --audit-level=high --registry=https://registry.npmjs.org`:
   reports 12 existing dependency vulnerabilities (5 moderate, 6 high, 1 critical).
   The configured registry mirror does not implement the audit endpoint.
