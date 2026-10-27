@@ -1389,6 +1389,19 @@ async function executeCommand(
   // names `.threads/` or `threads/`, and moving its records away would hide them.
   const recordsDir = THREAD_RECORDS_DIRS.find((dir) => state.progress_file?.startsWith(`${dir}/`))
     ?? THREAD_RECORDS_DIR;
+  // Once a backend names `.relay/threads/`, every task workspace's older
+  // records move there, once per process: an automation run's thread never
+  // runs again, so its own run would never move them.
+  if (recordsDir === THREAD_RECORDS_DIR && !threadWorkspaces.taskRecordsMigrated) {
+    try {
+      const moved = threadWorkspaces.migrateTaskRecords((workspace, error) => {
+        logger.warn("thread records migration skipped a workspace", { sandboxId, workspace, error: error.message });
+      });
+      if (moved > 0) logger.info("thread records moved into .relay/threads", { sandboxId, threads: moved });
+    } catch (error) {
+      logger.warn("thread records migration failed", { sandboxId, error: (error as Error).message });
+    }
+  }
   threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir, recordsDir);
   if (artifactsDir === null) {
     delete state.artifacts_dir;

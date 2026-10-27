@@ -20,6 +20,8 @@ export interface ThreadWorkspace {
  * none crowds the files people and agents work on.
  */
 export const THREADS_DIR = ".threads";
+/** Every backlog task and automation directory sits in this directory of the root. */
+export const TASK_WORKSPACES_DIR = "tasks";
 /**
  * Every workspace keeps its threads' records (`HANDOFF.md`, `HANDOFF.json`)
  * beside Relay's other control files in `.relay/`.
@@ -49,6 +51,8 @@ const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
  */
 export class ThreadWorkspaceManager {
   readonly rootPath: string;
+  /** Whether `migrateTaskRecords` has run; it sweeps once per process. */
+  taskRecordsMigrated = false;
 
   constructor(
     rootPath: string,
@@ -139,7 +143,7 @@ export class ThreadWorkspaceManager {
     validateThreadId(workspace.sessionId);
     // Records move only forward, into the directory the backend named.
     for (const older of THREAD_RECORDS_DIRS.slice(THREAD_RECORDS_DIRS.indexOf(recordsDir) + 1)) {
-      moveOlderRecords(workspace, older, recordsDir);
+      moveOlderRecords(workspace.hostPath, workspace.sessionId, older, recordsDir);
     }
     const records = [[...recordsDir.split("/"), workspace.sessionId]];
     if (artifactsDir !== null) records.push(validateWorkspaceSubpath(artifactsDir));
@@ -150,6 +154,33 @@ export class ThreadWorkspaceManager {
       rejectSymlinkComponents(workspace.hostPath, segments);
       assertContainedRealPath(workspace.hostPath, path, "Thread records");
     }
+  }
+
+  /**
+   * Moves every thread's older records in every task workspace into
+   * `.relay/threads/`. A thread's records otherwise move only when that thread
+   * runs again, and an automation run's thread never does, so each run it
+   * finished before the move would keep its handoff in `.threads/` or
+   * `threads/`. Call it only once a backend names `.relay/threads/`: an older
+   * one still looks for records where it left them. Returns how many threads'
+   * records moved; a workspace that cannot be swept is reported, not thrown.
+   */
+  migrateTaskRecords(onError: (workspace: string, error: Error) => void = () => {}): number {
+    this.taskRecordsMigrated = true;
+    const tasksRoot = resolve(this.rootPath, TASK_WORKSPACES_DIR);
+    if (!isPlainDirectory(tasksRoot)) return 0;
+    let moved = 0;
+    for (const entry of readdirSync(tasksRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !isValidThreadId(entry.name)) continue;
+      const hostPath = resolve(tasksRoot, entry.name);
+      try {
+        assertContainedRealPath(this.rootPath, hostPath, "Task workspace");
+        moved += migrateWorkspaceRecords(hostPath);
+      } catch (error) {
+        onError(`${TASK_WORKSPACES_DIR}/${entry.name}`, error as Error);
+      }
+    }
+    return moved;
   }
 
   private resolveLinked(sessionId: string, workspaceSubpath: string): ThreadWorkspace {
@@ -184,14 +215,16 @@ export class ThreadWorkspaceManager {
   }
 }
 
+function isValidThreadId(sessionId: string): boolean {
+  return THREAD_ID_PATTERN.test(sessionId)
+    && sessionId !== "."
+    && sessionId !== ".."
+    && !sessionId.endsWith(".")
+    && !WINDOWS_RESERVED_NAME.test(sessionId);
+}
+
 function validateThreadId(sessionId: string): void {
-  if (
-    !THREAD_ID_PATTERN.test(sessionId)
-    || sessionId === "."
-    || sessionId === ".."
-    || sessionId.endsWith(".")
-    || WINDOWS_RESERVED_NAME.test(sessionId)
-  ) {
+  if (!isValidThreadId(sessionId)) {
     throw new Error(`Invalid thread id ${JSON.stringify(sessionId)}.`);
   }
 }
@@ -236,20 +269,40 @@ function assertWorkspaceRoot(rootPath: string): void {
  * workspace. Runs inside the workspace's run gate, so no other run of it is
  * writing.
  */
-function moveOlderRecords(workspace: ThreadWorkspace, older: ThreadRecordsDir, recordsDir: ThreadRecordsDir): void {
-  const olderRoot = resolve(workspace.hostPath, older);
-  const source = resolve(olderRoot, workspace.sessionId);
+/** Moves every thread's records out of the older records directories of one
+ *  workspace; returns how many threads' records moved. Only a non-empty
+ *  folder of records is a thread's, so an empty one is left where it is. */
+function migrateWorkspaceRecords(hostPath: string): number {
+  let moved = 0;
+  for (const older of THREAD_RECORDS_DIRS.slice(1)) {
+    const olderRoot = resolve(hostPath, older);
+    if (!isPlainDirectory(olderRoot)) continue;
+    for (const entry of readdirSync(olderRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !isValidThreadId(entry.name)) continue;
+      if (readdirSync(resolve(olderRoot, entry.name)).length === 0) continue;
+      if (moveOlderRecords(hostPath, entry.name, older, THREAD_RECORDS_DIR)) moved += 1;
+    }
+  }
+  return moved;
+}
+
+function moveOlderRecords(
+  hostPath: string, sessionId: string, older: ThreadRecordsDir, recordsDir: ThreadRecordsDir,
+): boolean {
+  const olderRoot = resolve(hostPath, older);
+  const source = resolve(olderRoot, sessionId);
   const targetSegments = recordsDir.split("/");
-  const target = resolve(workspace.hostPath, ...targetSegments, workspace.sessionId);
-  if (!isPlainDirectory(olderRoot) || !isPlainDirectory(source) || pathExists(target)) return;
+  const target = resolve(hostPath, ...targetSegments, sessionId);
+  if (!isPlainDirectory(olderRoot) || !isPlainDirectory(source) || pathExists(target)) return false;
   const entries = readdirSync(source, { withFileTypes: true });
-  if (!entries.every((entry) => entry.isFile() && THREAD_RECORD_FILES.has(entry.name))) return;
-  rejectSymlinkComponents(workspace.hostPath, targetSegments);
-  mkdirSync(resolve(workspace.hostPath, ...targetSegments), { recursive: true });
-  rejectSymlinkComponents(workspace.hostPath, targetSegments);
-  assertContainedRealPath(workspace.hostPath, resolve(workspace.hostPath, ...targetSegments), "Thread records");
+  if (!entries.every((entry) => entry.isFile() && THREAD_RECORD_FILES.has(entry.name))) return false;
+  rejectSymlinkComponents(hostPath, targetSegments);
+  mkdirSync(resolve(hostPath, ...targetSegments), { recursive: true });
+  rejectSymlinkComponents(hostPath, targetSegments);
+  assertContainedRealPath(hostPath, resolve(hostPath, ...targetSegments), "Thread records");
   renameSync(source, target);
   if (readdirSync(olderRoot).length === 0) rmdirSync(olderRoot);
+  return true;
 }
 
 function isPlainDirectory(path: string): boolean {
