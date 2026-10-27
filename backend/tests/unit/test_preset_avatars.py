@@ -32,8 +32,8 @@ def test_every_preset_has_a_committed_svg_and_every_svg_is_a_preset() -> None:
     [
         "/avatars/agents/lorelei-07.svg",
         "/avatars/agents/lorelei-16.svg",
-        "/avatars/agents/pixel-art-01.svg",
-        "/avatars/agents/personas-09.svg",
+        "/avatars/agents/lorelei-17.svg",
+        "/avatars/agents/lorelei-48.svg",
     ],
 )
 def test_every_agent_style_is_a_preset(url: str) -> None:
@@ -91,15 +91,23 @@ def test_validate_rejects_foreign_uploads_wrong_kind_presets_and_junk(url: objec
         validate_profile_image_url("agents", "a1", url)
 
 
-def test_retired_robots_are_not_offered_but_upgrade_to_their_pixel_art_face() -> None:
-    assert len(RETIRED_PRESET_AVATARS) == 16
+def test_retired_styles_are_not_offered_but_upgrade_to_their_own_lorelei_face() -> None:
+    assert len(RETIRED_PRESET_AVATARS) == 48
     for retired, replacement in RETIRED_PRESET_AVATARS.items():
         assert not is_preset_avatar_url("agents", retired)
         assert not (WEB_AVATARS / "agents" / retired.rsplit("/", 1)[1]).exists()
         assert is_preset_avatar_url("agents", replacement)
         assert current_preset_avatar_url(retired) == replacement
         assert validate_profile_image_url("agents", "a1", retired) == replacement
-    assert current_preset_avatar_url("/avatars/agents/bottts-07.svg") == "/avatars/agents/pixel-art-07.svg"
+    # A robot upgrades to the portrait its pixel-art successor now reads as.
+    assert current_preset_avatar_url("/avatars/agents/bottts-07.svg") == "/avatars/agents/lorelei-23.svg"
+    assert current_preset_avatar_url("/avatars/agents/pixel-art-07.svg") == "/avatars/agents/lorelei-23.svg"
+    assert current_preset_avatar_url("/avatars/agents/personas-07.svg") == "/avatars/agents/lorelei-39.svg"
+    # Pixel Art and Personas each land on portraits of their own.
+    pixel = {RETIRED_PRESET_AVATARS[f"/avatars/agents/pixel-art-{i:02d}.svg"] for i in range(1, 17)}
+    personas = {RETIRED_PRESET_AVATARS[f"/avatars/agents/personas-{i:02d}.svg"] for i in range(1, 17)}
+    assert len(pixel) == len(personas) == 16
+    assert not pixel & personas
 
 
 def test_current_preset_avatar_url_leaves_everything_else_alone() -> None:

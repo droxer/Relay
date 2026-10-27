@@ -78,3 +78,16 @@ it("says so when nothing needs attention", () => {
   renderDashboard([task({ id: "a" })]);
   expect(screen.getByText("project.dashboard_attention_empty")).toBeTruthy();
 });
+
+it("links on to the board only when it holds issues back", () => {
+  const blocked = Array.from({ length: 6 }, (_, index) => task({ id: `b${index}`, title: `Blocked ${index}`, status: "blocked" }));
+  const { onOpenBoard } = renderDashboard(blocked);
+  expect(screen.getByText("project.dashboard_attention_more")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "project.dashboard_open_board" }));
+  expect(onOpenBoard).toHaveBeenCalledOnce();
+});
+
+it("draws no footer when every issue that needs a look is shown", () => {
+  renderDashboard([task({ id: "a", status: "blocked" })]);
+  expect(screen.queryByRole("button", { name: "project.dashboard_open_board" })).toBeNull();
+});

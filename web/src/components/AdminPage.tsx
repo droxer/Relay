@@ -526,12 +526,10 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       tabIndex={-1}
     >
       <div className="sec-rail">
-        {/* Kicker + title, like every other list rail in the app (agents,
-            teams, projects). The rail used to carry a subtitle sentence as
-            well — three lines of identity above a four-row list, and the one
-            rail in the app that had one. */}
+        {/* Title alone, like every other list rail in the app (threads,
+            agents, teams, projects). A kicker above it restated where the
+            side navigation had already put the reader. */}
         <PageHeader
-          kicker={t("admin.control_panel.eyebrow")}
           title={t("admin.control_panel.title")}
           titleAs="h2"
           titleVariant="title"

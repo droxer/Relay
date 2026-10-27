@@ -30,9 +30,10 @@ function presetStyle(kind: PresetAvatarKind, style: string, count: number): Pres
 /** Presets grouped by style, in picker order. */
 export const PRESET_AVATAR_STYLES: Readonly<Record<PresetAvatarKind, readonly PresetAvatarStyle[]>> = {
   agents: [
-    presetStyle("agents", "lorelei", 16),
-    presetStyle("agents", "pixel-art", 16),
-    presetStyle("agents", "personas", 16),
+    /* One drawing style: Lorelei's ink line portraits. Pixel Art and
+       Personas were retired 2026-10-27 and the backend upgrades a stored one
+       to its own Lorelei portrait on read (preset_avatars.py). */
+    presetStyle("agents", "lorelei", 48),
   ],
   teams: [presetStyle("teams", "shape-grid", 12)],
 };

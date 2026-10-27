@@ -340,10 +340,14 @@
   height: 100%;
 }
 
+/* The ref keeps the mono face every table, record and automation row sets
+   it in: the label shorthand here used to reset .code's family, so a tile
+   read "#5" in sans beside a table's mono "#5". Caption size, as a tile's
+   eyebrow. */
 .task-card-id {
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: 500 var(--fs-1)/var(--leading-snug) var(--font-mono);
+  letter-spacing: var(--type-code-track);
   overflow-wrap: anywhere;
   /* Room for the corner checkbox when it appears, so it never covers the ID. */
   padding-right: var(--sp-6);

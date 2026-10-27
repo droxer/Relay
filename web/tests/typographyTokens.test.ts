@@ -202,9 +202,10 @@ describe("application typography roles", () => {
     assert.match(palette, /--track-body-sm:\s*0;/);
     // The display tier is the exception: reference systems tighten hard at
     // display sizes (eveland.ai runs -0.03 to -0.075em), well past what the
-    // platform faces apply on their own. -0.02em is the conservative
-    // half-step — about 0.5px at the 28px rung.
+    // platform faces apply on their own. The 16–17px title tiers take a
+    // smaller step, since -0.05em at 17px crowds the letters.
     assert.match(palette, /--track-display:\s*-0\.05em;/);
+    assert.match(palette, /--track-title:\s*-0\.02em;/);
     // Caps tracking is NOT solid any more. The source system sets its uppercase
     // captions solid because it sets them at 700, where stroke weight holds the
     // caps apart; --type-micro runs 500 here, so the track has to do that work
@@ -334,6 +335,7 @@ describe("application typography roles", () => {
     assert.doesNotMatch(localeBlock, /--font-(?:sans|display):/, "zh-CN must not fork the reading stack");
     assert.match(localeBlock, /--font-mono:\s*var\(--font-app-mono\),\s*"JetBrains Mono"[^;]*"Noto Sans Mono CJK SC"/);
     assert.match(localeBlock, /--track-display:\s*0;/);
+    assert.match(localeBlock, /--track-title:\s*0;/);
     assert.match(localeBlock, /--track-body:\s*0;/);
     assert.match(localeBlock, /--leading-normal:\s*1\.7;/);
 

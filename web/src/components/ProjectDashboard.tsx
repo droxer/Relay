@@ -136,14 +136,18 @@ function AttentionCard({
           ))}
         </ul>
       )}
-      <CardFooter className="border-t adm-dash-health-footer">
-        <CardDescription render={<span />}>
-          {hidden > 0 ? t("project.dashboard_attention_more", { count: hidden }) : null}
-        </CardDescription>
-        <Button variant="ghost" size="dense" onClick={onOpenBoard}>
-          {t("project.dashboard_open_board")}
-        </Button>
-      </CardFooter>
+      {/* The way to the rest appears only when the card held some back; with
+          nothing hidden it repeated the Tasks tab one row above it. */}
+      {hidden > 0 ? (
+        <CardFooter className="border-t adm-dash-health-footer">
+          <CardDescription render={<span />}>
+            {t("project.dashboard_attention_more", { count: hidden })}
+          </CardDescription>
+          <Button variant="ghost" size="dense" onClick={onOpenBoard}>
+            {t("project.dashboard_open_board")}
+          </Button>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

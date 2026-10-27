@@ -61,8 +61,12 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const { patches } = await fixture(page);
     await page.goto("/teams/delivery");
+    // The read view names the style; who fills which slot is shown while
+    // editing, beside the picker (the member cards already carry roles).
+    await expect(page.locator(".teams-detail .collab-style-summary")).toBeVisible();
+    await expect(page.locator(".collab-style-sequence")).toHaveCount(0);
+    await page.getByRole("button", { name: "Edit team" }).click();
     await expect(page.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
-    await page.getByRole("button", { name: "Edit members" }).click();
     const styles = page.getByRole("radiogroup", { name: "Collaboration style" });
     await expect(styles.getByRole("radio")).toHaveCount(3);
     await expect(styles.getByRole("radio", { name: "Solo", exact: true })).toHaveCount(0);
@@ -103,7 +107,7 @@ for (const theme of ["light", "dark"] as const) {
     await fixture(page, false, theme);
     await page.goto("/teams/delivery");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await page.getByRole("button", { name: "Edit members" }).click();
+    await page.getByRole("button", { name: "Edit team" }).click();
     const styles = page.getByRole("radiogroup", { name: "Collaboration style" });
     const current = styles.getByRole("radio", { name: "Build → Review", exact: true });
     await current.focus();

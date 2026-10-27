@@ -37,13 +37,16 @@ describe("preset avatars", () => {
     assert.equal(PRESET_AVATARS.teams.length, 12);
   });
 
-  it("groups agent presets by style in picker order", () => {
+  it("offers agents one drawing style", () => {
     assert.deepEqual(
       PRESET_AVATAR_STYLES.agents.map(({ style, urls }) => [style, urls.length]),
-      [["lorelei", 16], ["pixel-art", 16], ["personas", 16]],
+      [["lorelei", 48]],
     );
     assert.deepEqual(PRESET_AVATAR_STYLES.agents.flatMap(({ urls }) => urls), [...PRESET_AVATARS.agents]);
-    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/personas-16.svg"), true);
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/lorelei-48.svg"), true);
+    // Pixel Art and Personas are retired; the backend upgrades them on read.
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/personas-16.svg"), false);
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/pixel-art-01.svg"), false);
   });
 
   it("recognises presets only for their own kind", () => {

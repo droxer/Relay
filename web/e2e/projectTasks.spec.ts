@@ -33,13 +33,12 @@ for (const mobile of [false, true]) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
 
-    // The Dashboard leads: the project's issue metrics, stages, and the
-    // issues that need a look.
+    // The Dashboard leads: the project's four counts and the issues that
+    // need a look. Flow readings and the stage card are gone on purpose.
     await page.goto("/projects/launch");
     await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("group", { name: "Backlog metrics", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Flow", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Stages", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Flow", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
     await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

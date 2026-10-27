@@ -180,5 +180,5 @@ test("a completed turn whose live output had gaps says so", async ({ page }) => 
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/threads/recovery-thread");
-  await expect(page.getByRole("note")).toContainText("Some live output from this run wasn't saved");
+  await expect(page.getByRole("note")).toContainText("Some live output from this run wasn’t saved");
 });
