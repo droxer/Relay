@@ -286,7 +286,7 @@ def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
         )
         assert created.status_code == 201, created.text
         agent = created.json()["agent"]
-        assert agent["profileImageUrl"] == "/avatars/agents/pixel-art-02.svg"
+        assert agent["profileImageUrl"] == "/avatars/agents/lorelei-18.svg"
 
         team = client.post(
             "/api/v1/teams",
@@ -370,8 +370,8 @@ def test_an_agent_stored_with_a_retired_robot_reads_as_its_replacement(monkeypat
             )
 
         listed = client.get("/api/v1/admin/agents").json()["agents"][0]
-        assert listed["profileImageUrl"] == "/avatars/agents/pixel-art-05.svg"
-        assert store.get_agent(agent["id"])["profileImageUrl"] == "/avatars/agents/pixel-art-05.svg"
+        assert listed["profileImageUrl"] == "/avatars/agents/lorelei-21.svg"
+        assert store.get_agent(agent["id"])["profileImageUrl"] == "/avatars/agents/lorelei-21.svg"
 
 
 def test_the_preset_endpoint_upgrades_a_retired_robot(monkeypatch) -> None:
@@ -389,4 +389,4 @@ def test_the_preset_endpoint_upgrades_a_retired_robot(monkeypatch) -> None:
         )
 
         assert response.status_code == 200, response.text
-        assert response.json()["agent"]["profileImageUrl"] == "/avatars/agents/pixel-art-07.svg"
+        assert response.json()["agent"]["profileImageUrl"] == "/avatars/agents/lorelei-23.svg"

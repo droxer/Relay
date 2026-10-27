@@ -17,8 +17,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Avatar, Style } from "@dicebear/core";
 import lorelei from "@dicebear/styles/lorelei.json" with { type: "json" };
-import personas from "@dicebear/styles/personas.json" with { type: "json" };
-import pixelArt from "@dicebear/styles/pixel-art.json" with { type: "json" };
 import shapeGrid from "@dicebear/styles/shape-grid.json" with { type: "json" };
 
 const OUTPUT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "avatars");
@@ -70,6 +68,12 @@ function withoutPurple(source) {
   );
 }
 
+/* One agent style (2026-10-27). Lorelei's ink line portraits sit with the
+   ink identity; the Pixel Art and Personas sets beside them made a roster of
+   three drawing styles. Those two are retired and upgrade on read to the
+   portraits numbered after the original 16 (pixel-art-NN → lorelei-(16+NN),
+   personas-NN → lorelei-(32+NN); backend/relay/core/preset_avatars.py), so
+   every existing agent keeps a face of its own. */
 const AGENT_STYLES = [
   {
     name: "lorelei",
@@ -77,25 +81,18 @@ const AGENT_STYLES = [
     seeds: [
       "aria", "juniper", "sage", "wren", "hazel", "iris", "rowan", "willow",
       "clover", "ember", "lark", "maple", "robin", "sparrow", "violet", "fern",
-    ],
-  },
-  {
-    name: "pixel-art",
-    definition: pixelArt,
-    seeds: [
       "arcade", "joystick", "sprite", "bitmap", "chiptune", "cartridge", "quest", "level",
       "combo", "token", "boss", "portal", "respawn", "glitch", "retro", "byte",
-    ],
-  },
-  {
-    name: "personas",
-    definition: personas,
-    seeds: [
       "ada", "alan", "grace", "linus", "margaret", "dennis", "barbara", "ken",
       "radia", "tim", "frances", "guido", "hedy", "bjarne", "katherine", "yukihiro",
     ],
   },
 ];
+/* Team tiles keep a hue each, so teams stay tellable apart, but at the low
+   chroma of the agent backgrounds above: Shape Grid's stock pastels were the
+   most saturated colour on every screen a team appeared on, louder than the
+   blue that marks running work. One entry per seed, in seed order. */
+const TEAM_BACKGROUNDS = ["d3e2e8", "d4e6e3", "d9e8da", "d3e2e8", "d4e6e3", "d4e6e3", "ecdadd", "d9e8da", "ecdadd", "e5e8d3", "d4e6e3", "e5e8d3"];
 const TEAM_SEEDS = [
   "atlas", "harbor", "summit", "meadow", "comet", "delta",
   "orbit", "ember", "tide", "grove", "prism", "nova",
@@ -126,4 +123,6 @@ const shapeGridWithoutSparkle = {
     shape: { ...shapeGrid.components.shape, variants: teamShapes },
   },
 };
-writeSet("teams", { name: "shape-grid", definition: shapeGridWithoutSparkle }, TEAM_SEEDS, () => ({}));
+writeSet("teams", { name: "shape-grid", definition: shapeGridWithoutSparkle }, TEAM_SEEDS, (index) => ({
+  backgroundColor: [TEAM_BACKGROUNDS[index]],
+}));

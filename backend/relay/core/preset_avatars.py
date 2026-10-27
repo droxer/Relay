@@ -14,16 +14,28 @@ from typing import Any
 
 # (style, count) per kind, in picker order.
 PRESET_AVATAR_STYLES: dict[str, tuple[tuple[str, int], ...]] = {
-    "agents": (("lorelei", 16), ("pixel-art", 16), ("personas", 16)),
+    "agents": (("lorelei", 48),),
     "teams": (("shape-grid", 12),),
 }
 
-# The Bottts robots were retired (2026-10-24): a robot face is the stock
-# picture of "AI", the opposite of a named colleague. Their files are gone, so
-# a stored robot reads as the pixel-art face with the same number, upgraded on
-# read and on write; the event log keeps what was chosen.
+# Retired presets, upgraded on read and on write; the event log keeps what
+# was chosen. Their files are gone.
+#
+# The Bottts robots went first (2026-10-24): a robot face is the stock picture
+# of "AI", the opposite of a named colleague. Then Pixel Art and Personas
+# (2026-10-27): three drawing styles in one roster read as clip art beside the
+# ink identity, so Lorelei's line portraits are the one agent style. Each
+# retired face maps to its own Lorelei portrait — pixel-art-NN (and the robot
+# that became it) to lorelei-(16+NN), personas-NN to lorelei-(32+NN) — so no
+# two agents that looked different before share a face after.
+_RETIRED_AGENT_STYLES: tuple[tuple[str, int], ...] = (
+    ("bottts", 16),
+    ("pixel-art", 16),
+    ("personas", 32),
+)
 RETIRED_PRESET_AVATARS: dict[str, str] = {
-    f"/avatars/agents/bottts-{index:02d}.svg": f"/avatars/agents/pixel-art-{index:02d}.svg"
+    f"/avatars/agents/{style}-{index:02d}.svg": f"/avatars/agents/lorelei-{offset + index:02d}.svg"
+    for style, offset in _RETIRED_AGENT_STYLES
     for index in range(1, 17)
 }
 

@@ -122,13 +122,13 @@ const SKILL_RELEASE = { source: "catalog", skillId: "skill_release_notes", slug:
 export const agents = [
   agent({ id: "agent_aria", displayName: "Aria", executorKind: "claude", defaultRole: "implementer", avatar: "lorelei-01", availability: "ready", skills: [SKILL_BILLING, SKILL_RELEASE],
     instructions: "You own backend changes for the billing platform. Prefer small, reviewable diffs and always add a regression test for a bug fix." }),
-  agent({ id: "agent_cascade", displayName: "Cascade", executorKind: "codex", defaultRole: "reviewer", avatar: "pixel-art-07", availability: "busy", skills: [SKILL_REVIEW],
+  agent({ id: "agent_cascade", displayName: "Cascade", executorKind: "codex", defaultRole: "reviewer", avatar: "lorelei-23", availability: "busy", skills: [SKILL_REVIEW],
     instructions: "Review for correctness under concurrency, migration safety, and rollback. Block on missing tests." }),
-  agent({ id: "agent_pixel", displayName: "Pixel", executorKind: "kimi", defaultRole: "tester", avatar: "pixel-art-03", availability: "ready",
+  agent({ id: "agent_pixel", displayName: "Pixel", executorKind: "kimi", defaultRole: "tester", avatar: "lorelei-19", availability: "ready",
     instructions: "Write and run end-to-end checks. Report the exact command and its output." }),
-  agent({ id: "agent_scout", displayName: "Scout", executorKind: "pi", defaultRole: "planner", avatar: "personas-05", availability: "ready",
+  agent({ id: "agent_scout", displayName: "Scout", executorKind: "pi", defaultRole: "planner", avatar: "lorelei-37", availability: "ready",
     instructions: "Break a goal into ordered, verifiable steps before anyone writes code." }),
-  agent({ id: "agent_forge", displayName: "Forge", executorKind: "claude", defaultRole: "fixer", avatar: "pixel-art-11", availability: "ready", onBuildBox: true,
+  agent({ id: "agent_forge", displayName: "Forge", executorKind: "claude", defaultRole: "fixer", avatar: "lorelei-27", availability: "ready", onBuildBox: true,
     instructions: "Repair failing builds on the shared runner. Reproduce first, then fix the root cause." }),
 ];
 

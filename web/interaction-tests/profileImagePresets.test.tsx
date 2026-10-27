@@ -49,5 +49,5 @@ it("saves a preset on click", () => {
   fireEvent.click(options[24]!);
 
   expect(onSelect).toHaveBeenCalledTimes(1);
-  expect(onSelect).toHaveBeenCalledWith("/avatars/agents/pixel-art-09.svg");
+  expect(onSelect).toHaveBeenCalledWith("/avatars/agents/lorelei-25.svg");
 });
