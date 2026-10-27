@@ -16,9 +16,9 @@ SANDBOX_MODE ?=
 WORKSPACE ?=
 SUPERVISOR_PROVIDER ?= local
 SUPERVISOR_COMMAND ?=
-# Unset = the supervisor default (.relay/user-workspaces, or the pre-rename
-# .relay/employee-workspaces when only that exists).
-SUPERVISOR_WORKSPACE_ROOT ?= .relay/user-workspaces
+# Unset = the supervisor default, .relay-workspaces (an older
+# .relay/user-workspaces or .relay/employee-workspaces is moved there once).
+SUPERVISOR_WORKSPACE_ROOT ?= .relay-workspaces
 SUPERVISOR_INTERVAL_MS ?=
 SUPERVISOR_ONCE ?=
 ADMIN_TOKEN ?=
