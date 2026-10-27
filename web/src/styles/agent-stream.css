@@ -317,7 +317,8 @@
 }
 
 .agent-tool,
-.agent-command {
+.agent-command,
+.agent-permission-line {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
@@ -330,7 +331,8 @@
    a tool line is sans and stays on the body rung. One size per selector —
    the shared block above used to set the body rung only for this rule to
    restate it. */
-.agent-tool {
+.agent-tool,
+.agent-permission-line {
   font-size: var(--fs-2);
 }
 
@@ -371,6 +373,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-3);
+}
+
+/* How a permission prompt for the line closed, trailing the line itself so an
+   approval never becomes a second list under the log. Quiet unless denied. */
+.agent-permission-mark {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: var(--fs-1);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.agent-permission-mark.tone-warn,
+.agent-permission-line.tone-warn .agent-tool-name {
+  color: var(--warn);
 }
 
 /* A command can be several lines long — an agent writing a file puts the whole

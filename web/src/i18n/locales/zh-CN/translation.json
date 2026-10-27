@@ -1901,6 +1901,15 @@
     "empty_cta_back": "返回对话"
   },
   "agent_stream": {
+    "permission": {
+      "allow": "已允许",
+      "allow_always": "始终允许",
+      "allow_granted": "已允许（始终）",
+      "deny": "已拒绝",
+      "expired": "请求已过期",
+      "answered": "已回答",
+      "skipped": "已跳过"
+    },
     "empty_working": "运行中…",
     "empty_done": "暂无输出。",
     "claude_error": "Claude 错误",
