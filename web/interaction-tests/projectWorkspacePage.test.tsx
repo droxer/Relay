@@ -48,7 +48,7 @@ it("opens on the Dashboard, listed first", () => {
   const tabs = screen.getAllByRole("tab");
   expect(tabs[0].textContent).toBe("project.dashboard_tab");
   expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "project.dashboard_issues" })).toBeTruthy();
+  expect(document.querySelector(".project-dashboard")).not.toBeNull();
 });
 
 it("sends the Dashboard's board link to the Issues tab", async () => {

@@ -12,8 +12,10 @@ type Props = {
 };
 
 /**
- * The one line a finished turn closes with — outcome, duration, tokens, files,
- * always in that order, joined by middle dots in tabular digits. It stays in
+ * The one line a finished turn closes with — outcome, duration, tokens, always
+ * in that order, joined by middle dots in tabular digits. Cached reads live in
+ * the tokens hover and files in the turn's own files chip, so the line never
+ * restates either. It stays in
  * meta ink: only a failure takes a colour (crimson), so a column of turns
  * reads calm until one is not.
  */
@@ -40,10 +42,6 @@ export function RunReceipt({ receipt, usage }: Props) {
       <span className="run-receipt-outcome">{outcome}</span>
       {receipt.durationMs !== null ? <span>{formatRunDuration(receipt.durationMs)}</span> : null}
       <span title={breakdown}>{tokens}</span>
-      {receipt.tokens && receipt.tokens.cached > 0 ? (
-        <span>{t("thread.receipt.tokens_cached", { cached: formatCompactTokens(receipt.tokens.cached, i18n.language) })}</span>
-      ) : null}
-      {receipt.files > 0 ? <span>{t("thread.receipt.files_count", { count: receipt.files })}</span> : null}
     </section>
   );
 }

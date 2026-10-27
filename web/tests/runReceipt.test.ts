@@ -52,8 +52,7 @@ describe("run receipt", () => {
       outcome: "completed",
       exitCode: 0,
       durationMs: 192_000,
-      tokens: { fresh: 14_200, cached: 88_000 },
-      files: 0,
+      tokens: { fresh: 14_200 },
     });
   });
 
@@ -62,14 +61,5 @@ describe("run receipt", () => {
     assert.equal(receipt?.outcome, "failed");
     assert.equal(receipt?.exitCode, 1);
     assert.equal(receipt?.tokens, null);
-  });
-
-  it("counts the files the run produced, leaving plans out", () => {
-    const artifact = (id: string, kind: string) => ({
-      id: `ev_${id}`, type: "artifact.created", sessionId: "ses_1", timestamp: started,
-      artifact: { id, kind, title: id, path: `/w/${id}`, createdAt: started, agentRunId: "run_1" },
-    });
-    const receipt = runReceipt(turn({}, [artifact("a", "workspace_file"), artifact("b", "workspace_file"), artifact("p", "plan")] as RelaySession["events"]));
-    assert.equal(receipt?.files, 2);
   });
 });

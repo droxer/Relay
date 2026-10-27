@@ -1,5 +1,5 @@
 import type { DerivedMessage } from "./projectMessages.ts";
-import { freshTokens, splitCache } from "./tokenUsage.ts";
+import { freshTokens } from "./tokenUsage.ts";
 
 type AgentTurn = Extract<DerivedMessage, { kind: "agent" }>;
 
@@ -7,9 +7,10 @@ export type RunOutcome = NonNullable<AgentTurn["outcome"]>;
 
 /**
  * The ledger a finished turn closes with: how it ended, how long it took,
- * what it cost, and what it left behind. Fresh tokens are the headline (input,
- * output, cache writes); cache reads ride beside them because they dominate a
+ * and what it cost. Fresh tokens are the headline (input, output, cache
+ * writes); cache reads stay in the hover breakdown because they dominate a
  * long run while costing a tenth of input — the same rule as every headline.
+ * Files are left out: the turn's own files chip already counts them.
  */
 export type RunReceipt = {
   outcome: RunOutcome;
@@ -17,9 +18,7 @@ export type RunReceipt = {
   /** Null when either end of the run carries no readable time. */
   durationMs: number | null;
   /** Null when the runtime reported no counts. */
-  tokens: { fresh: number; cached: number } | null;
-  /** Files the run produced; plans render as their own card, not a file. */
-  files: number;
+  tokens: { fresh: number } | null;
 };
 
 export function runReceipt(message: AgentTurn): RunReceipt | null {
@@ -32,8 +31,7 @@ export function runReceipt(message: AgentTurn): RunReceipt | null {
     ...(message.exitCode !== undefined ? { exitCode: message.exitCode } : {}),
     durationMs,
     tokens: message.tokenUsage
-      ? { fresh: freshTokens(message.tokenUsage), cached: splitCache(message.tokenUsage).cacheRead }
+      ? { fresh: freshTokens(message.tokenUsage) }
       : null,
-    files: message.attachments.filter((artifact) => artifact.kind !== "plan").length,
   };
 }

@@ -17,7 +17,6 @@ import {
   projectIssueMetrics,
   type ProjectAttentionIssue,
 } from "../lib/projectDashboard";
-import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 import { taskRef } from "../lib/taskRef";
 import type { RelayTaskListItem } from "../types";
 import { KpiTile } from "./admin/dashboard/KpiTile";
@@ -25,30 +24,16 @@ import { ICON, NavProjects } from "./icons";
 import { formatDueDate } from "./task-board/BacklogChrome";
 import { WorkspaceEmpty } from "./workspace/WorkspacePrimitives";
 
-const formatDays = (days: number | null) => (days === null ? "—" : `${days.toFixed(1)}d`);
-
-/* Each stage takes the tone its status icon and row accent use everywhere
-   else: in progress is --live (grey at zero), review and done are --ok. Five
-   stages still separate in one 8px bar — review is hatched (delivered, not yet
-   accepted) beside done's solid fill; see admin-v2-dashboard.css. */
-type StageTone = "neutral" | "info" | "live" | "warn" | "good";
-const STAGE_TONE: Record<TaskWorkflowStage, StageTone> = {
-  backlog: "neutral",
-  assigned: "info",
-  running: "live",
-  review: "good",
-  done: "good",
-};
-
 interface ProjectDashboardProps {
   tasks: RelayTaskListItem[];
   onOpenRecord: (taskId: string) => void;
   onOpenBoard: () => void;
 }
 
-/** The project's readings over its issues, and the ones that need a look.
- *  They used to ride the Issues board's header; the board now carries only
- *  the controls that act on it. */
+/** The project at a glance: four counts and the issues that need a look.
+ *  Flow readings (cycle time, throughput) and a per-stage breakdown used to
+ *  sit here too; for a project of a handful of issues they restated these
+ *  four tiles, so the board's own columns carry the stages instead. */
 export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => projectIssueMetrics(tasks), [tasks]);
@@ -79,89 +64,31 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
 
   return (
     <div className="project-dashboard">
-      <section className="project-dashboard-section" aria-labelledby="project-dashboard-issues">
-        <h2 id="project-dashboard-issues" className="workspace-dossier-section-title">
-          {t("project.dashboard_issues")}
-        </h2>
-        <div className="adm-dash-kpis" role="group" aria-label={t("backlog.metrics")}>
-          <KpiTile
-            eyebrow={t("backlog.metric_total")}
-            value={metrics.total}
-            hint={t("project.dashboard_completed_share", { percent: completedPercent })}
-          />
-          <KpiTile
-            eyebrow={t("backlog.metric_active")}
-            value={metrics.active}
-            hint={policy ? t("project.dashboard_wip_limit", { count: policy.wipLimit }) : undefined}
-          />
-          <KpiTile
-            eyebrow={t("backlog.metric_blocked")}
-            value={metrics.blocked}
-            tone={metrics.blocked > 0 ? "bad" : undefined}
-          />
-          <KpiTile
-            eyebrow={t("backlog.metric_overdue")}
-            value={metrics.overdue}
-            tone={metrics.overdue > 0 ? "bad" : undefined}
-          />
-        </div>
-      </section>
-
-      <section className="project-dashboard-section" aria-labelledby="project-dashboard-flow">
-        <h2 id="project-dashboard-flow" className="workspace-dossier-section-title">
-          {t("project.dashboard_flow")}
-        </h2>
-        <div className="adm-dash-kpis" role="group" aria-label={t("project.dashboard_flow")}>
-          <KpiTile eyebrow={t("backlog.oldest_age")} value={formatDays(metrics.oldestAgeDays)} />
-          <KpiTile eyebrow={t("backlog.throughput")} value={metrics.throughput} />
-          <KpiTile eyebrow={t("backlog.cycle_time")} value={formatDays(metrics.averageCycleDays)} />
-          <KpiTile
-            eyebrow={t(metrics.sleIsEstimate ? "backlog.sle_estimate" : "backlog.sle")}
-            value={formatDays(metrics.sleDays)}
-          />
-        </div>
-      </section>
-
-      <div className="project-dashboard-cards">
-        <StageCard stages={metrics.stages} total={metrics.total} />
-        <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
+      <div className="adm-dash-kpis" role="group" aria-label={t("backlog.metrics")}>
+        <KpiTile
+          eyebrow={t("backlog.metric_total")}
+          value={metrics.total}
+          hint={t("project.dashboard_completed_share", { percent: completedPercent })}
+        />
+        <KpiTile
+          eyebrow={t("backlog.metric_active")}
+          value={metrics.active}
+          hint={policy ? t("project.dashboard_wip_limit", { count: policy.wipLimit }) : undefined}
+        />
+        <KpiTile
+          eyebrow={t("backlog.metric_blocked")}
+          value={metrics.blocked}
+          tone={metrics.blocked > 0 ? "bad" : undefined}
+        />
+        <KpiTile
+          eyebrow={t("backlog.metric_overdue")}
+          value={metrics.overdue}
+          tone={metrics.overdue > 0 ? "bad" : undefined}
+        />
       </div>
+
+      <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
     </div>
-  );
-}
-
-function StageCard({ stages, total }: { stages: Record<TaskWorkflowStage, number>; total: number }) {
-  const { t } = useTranslation();
-  const toneOf = (stage: TaskWorkflowStage) =>
-    STAGE_TONE[stage] === "live" && stages[stage] === 0 ? "neutral" : STAGE_TONE[stage];
-  return (
-    <Card render={<section />} className="project-dashboard-card project-dashboard-stage-card">
-      <CardHeader>
-        <CardTitle render={<h2 />}>{t("project.dashboard_stages")}</CardTitle>
-      </CardHeader>
-      <div className="adm-dash-bar" role="img" aria-label={t("project.dashboard_stages")}>
-        {TASK_FLOW_STAGES.filter((stage) => stages[stage] > 0).map((stage) => (
-          <span
-            key={stage}
-            className={`adm-dash-bar-seg tone-${toneOf(stage)}`}
-            data-stage={stage}
-            style={{ flexBasis: `${(stages[stage] / total) * 100}%` }}
-            title={`${t(`backlog.statuses.${stage}`)}: ${stages[stage]}`}
-          />
-        ))}
-      </div>
-      <dl className="adm-dash-stat-grid project-dashboard-stage-grid">
-        {TASK_FLOW_STAGES.map((stage) => (
-          <div key={stage} className={`adm-dash-stat tone-${toneOf(stage)}`}>
-            <dt className="adm-dash-stat-label">
-              <span className="adm-dash-stat-dot" aria-hidden="true" />
-              {t(`backlog.statuses.${stage}`)}
-            </dt>
-            <dd className="adm-dash-stat-value tnum">{stages[stage]}</dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
   );
 }
 

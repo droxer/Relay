@@ -132,7 +132,8 @@ export function IssuesTable({
           {group.tasks.map((task) => {
             const context = contextFor(task);
             const rowEdits = context.readOnly ? null : edits;
-            const intake = issueNeedsProject(task);
+            // Grouped by project, the "No project" band already says it.
+            const intake = groupBy !== "project" && issueNeedsProject(task);
             return (
               <TableRow
                 key={task.id}
@@ -158,7 +159,7 @@ export function IssuesTable({
                       {task.title}
                     </a>
                     {intake && task.status !== "done" ? <Badge variant="warning" className="issue-intake-chip">{t("issues.needs_project")}</Badge> : null}
-                    <TaskTagList tags={task.tags} max={2} />
+                    <TaskTagList tags={task.tags} max={1} />
                     <TaskHoldupLine task={task} />
                   </div>
                 </TableCell>

@@ -34,8 +34,8 @@ export type ThreadTaskFact = {
  * A thread's coordinates, as marks rather than a table of words.
  *
  * Which task the work is for and where that task stands, who is in the room,
- * which machine answers for them, which project the work belongs to — the
- * facts a reader checks mid conversation. They were an eyebrow-and-value band under the header, which
+ * which project the work belongs to — the facts a reader checks mid
+ * conversation — and the machine, only while it is offline. They were an eyebrow-and-value band under the header, which
  * cost a whole row of transcript and set uppercase labels against a
  * title; the room was ALSO drawn a second time beside them as a face stack.
  *
@@ -72,6 +72,9 @@ export function ThreadMeta({
     ? { id: session.projectId, name: projectOf(session.projectId)?.name || session.projectId }
     : null;
   const computer = computers.find((node) => stableComputerId(node) === session.computerId);
+  /* A computer that is there is not news mid-conversation; one that dropped
+     away is the reason a run stalls, so the header names it only then. */
+  const computerOffline = !computer?.online || Boolean(computer.stale);
 
   return (
     <div className="thread-meta" aria-label={t("thread.band_label")}>
@@ -80,7 +83,7 @@ export function ThreadMeta({
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
       <RoomMark participants={participants} agentName={agentName} />
-      {session.computerId ? (
+      {session.computerId && computerOffline ? (
         <ComputerChip computerId={session.computerId} node={computer} />
       ) : null}
     </div>

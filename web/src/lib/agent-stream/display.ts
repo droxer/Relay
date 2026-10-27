@@ -214,8 +214,17 @@ function mergeAdjacentReasoning(segments: AgentSegment[]): AgentSegment[] {
   return out;
 }
 
+// "Codex started." restates what the turn's header already says — who is
+// running, since when — and the "Working…" pulse under it, so it is never
+// shown, live or settled.
+const REDUNDANT_NARRATION_KEYS: ReadonlySet<string> = new Set(["agent_stream.codex_started"]);
+
+function isRedundantNarration(segment: AgentSegment): boolean {
+  return segment.kind === "narration" && REDUNDANT_NARRATION_KEYS.has(segment.key);
+}
+
 export function displayAgentSegments(segments: AgentSegment[], streaming: boolean): AgentSegment[] {
-  if (streaming) return mergeAdjacentReasoning(segments);
+  if (streaming) return mergeAdjacentReasoning(segments.filter((segment) => !isRedundantNarration(segment)));
   const visible = new Set(userVisibleAgentSegments(segments));
   // Merge after the filter, so reasoning left adjacent by a dropped lifecycle
   // narration folds together the way the reader sees it.

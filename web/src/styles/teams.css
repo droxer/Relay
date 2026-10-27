@@ -384,6 +384,12 @@
   flex: 1;
 }
 
+/* Delete in the edit row: a quiet ghost in error ink, the far side of the
+   spacer from Save. */
+.team-profile-delete {
+  color: var(--err);
+}
+
 .teams-mobile-back {
   display: none;
 }
@@ -553,6 +559,21 @@
 .team-work-member-edit:hover {
   color: var(--ink-1);
   background: var(--surface-2);
+}
+
+/* A pencil on every card read as a column of edit controls. On a pointer
+   that hovers, each card shows its pencil only while it is hovered or holds
+   focus; touch keeps it visible, since there is no hover to reveal it. */
+@media (hover: hover) {
+  .team-profile-member-cards .team-work-member-edit {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  .team-profile-member-cards > :hover .team-work-member-edit,
+  .team-profile-member-cards > :focus-within .team-work-member-edit {
+    opacity: 1;
+  }
 }
 
 

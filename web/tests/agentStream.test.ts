@@ -639,8 +639,9 @@ describe("agent stream parsing", () => {
       { kind: "narration", key: "agent_stream.claude_finished", params: { tone: "good" } },
     ];
 
-    // Live streams are untouched — the narration is the only visible progress.
-    assert.deepEqual(displayAgentSegments(segments, true), segments);
+    // Live streams keep progress narration, except "Codex started.", which
+    // only restates the turn header and its "Working…" pulse.
+    assert.deepEqual(displayAgentSegments(segments, true), segments.slice(1));
     assert.deepEqual(displayAgentSegments(segments, false), [
       { kind: "text", text: "Done." },
     ]);

@@ -43,7 +43,8 @@ describe("agent profile editor", () => {
 
   it("lets the agent owner delete their own agent, not just admins", async () => {
     const panelSource = await readFile(resolve("web/src/components/AgentProfilePanel.tsx"), "utf8");
-    assert.match(panelSource, /\{canEditProfile \? \(\s*<div className="workspace-dossier-admin">/);
+    // Management (delete included) shows to any editor, only in edit mode.
+    assert.match(panelSource, /\{canEditProfile && editingProfile \? \(\s*<div className="workspace-dossier-admin">/);
     assert.match(panelSource, /\{canManage \? \(/);
     assert.doesNotMatch(panelSource, /\{canManage \? \(\s*<div className="workspace-dossier-admin">/);
   });

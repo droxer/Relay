@@ -87,64 +87,49 @@ export function TaskRecordActions({
           {t("backlog.done")}
         </Button>
       ) : null}
-      {phone ? (
-        /* A phone row has room for the record's state action, not five
-           equal buttons: edit and delete fold into one overflow menu, so
-           the irreversible action is never the same size as the next step. */
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-dense"
-                disabled={busy}
-                aria-label={t("record.more_actions")}
-              >
-                <NavMore size={ICON.md} aria-hidden="true" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>
-              <ActionEdit size={ICON.sm} aria-hidden="true" />
-              {t("record.edit")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem danger onClick={onDelete}>
-              <AdminDelete size={ICON.sm} aria-hidden="true" />
-              {t("record.delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        <>
-          {/* The quiet outline tier every record header uses for its edit
-              action ("Edit profile", "Project settings"). At the 44px CTA size
-              these four buttons were the loudest thing in the drawer. */}
-          <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onEdit}>
-            <ActionEdit size={ICON.sm} aria-hidden="true" />
-            {t("record.edit")}
-          </Button>
-          {/* Destructive, and it says so. As a ghost beside Edit it was the
-              one irreversible action on the record wearing the same clothes
-              as the most reversible one — and with no busy state it took a
-              second click before the first delete had landed. */}
-          <Button
-            type="button"
-            variant="destructive"
-            size="dense"
-            loading={busyAction === "delete"}
-            disabled={busy}
-            onClick={onDelete}
-          >
-            {/* Plain "Delete" on both vocabularies: the record's title
-                already names what goes, and the confirm dialog repeats it.
-                "Delete task" on an automation was simply wrong. */}
-            {t("record.delete")}
-          </Button>
-        </>
+      {/* Edit stays a button beside the state action; delete folds into one
+          overflow menu on every width, so the irreversible action is never a
+          red button the same size as the next step. A phone row has room for
+          only the state action, so edit joins it in the menu there. */}
+      {phone ? null : (
+        <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onEdit}>
+          <ActionEdit size={ICON.sm} aria-hidden="true" />
+          {t("record.edit")}
+        </Button>
       )}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-dense"
+              disabled={busy}
+              loading={busyAction === "delete"}
+              aria-label={t("record.more_actions")}
+            >
+              <NavMore size={ICON.md} aria-hidden="true" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          {phone ? (
+            <>
+              <DropdownMenuItem onClick={onEdit}>
+                <ActionEdit size={ICON.sm} aria-hidden="true" />
+                {t("record.edit")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          {/* Plain "Delete" on both vocabularies: the record's title already
+              names what goes, and the confirm dialog repeats it. */}
+          <DropdownMenuItem danger onClick={onDelete}>
+            <AdminDelete size={ICON.sm} aria-hidden="true" />
+            {t("record.delete")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 }

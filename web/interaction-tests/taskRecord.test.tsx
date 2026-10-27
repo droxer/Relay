@@ -104,8 +104,9 @@ it("opens a routine on its runs, each selectable and each with its own record", 
   // A run is addressed under its routine, so it survives a reload or a paste.
   const open = screen.getAllByRole("link", { name: "record.open_run" });
   expect(open[0]!.getAttribute("href")).toBe("/automations/R-42/runs/T-2288");
-  // No accordion: a row selects or navigates, it does not unfold.
-  expect(document.querySelector("[aria-expanded]")).toBeNull();
+  // No accordion: a row selects or navigates, it does not unfold. (The
+  // header's overflow menu is the one disclosure on the record.)
+  expect(document.querySelector(`[aria-expanded]:not([aria-label="record.more_actions"])`)).toBeNull();
 });
 
 it("navigates into a run from its open link, and only from there", async () => {
@@ -201,7 +202,7 @@ it("offers one Resume action after the rate cap pauses an automation", async () 
   await userEvent.setup().click(resume);
   await waitFor(() => expect(resumeAutomation).toHaveBeenCalledWith({ taskId: "R-42" }));
   // The record's other actions wait while it resumes.
-  for (const name of ["record.edit", "record.delete", "automation.resume"]) {
+  for (const name of ["record.edit", "record.more_actions", "automation.resume"]) {
     expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
   }
   finish({});
