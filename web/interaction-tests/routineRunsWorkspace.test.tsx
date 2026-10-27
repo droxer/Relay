@@ -6,14 +6,14 @@ import { RecordRuns } from "../src/components/task-record/RecordRuns";
 vi.mock("../src/api", () => ({
   listTaskRuns: vi.fn(async () => ({
     runs: [
-      { taskId: "run-new", status: "done", createdAt: "2026-10-01T09:00:00Z", startedAt: "2026-10-01T09:00:00Z", finishedAt: "2026-10-01T09:02:00Z", artifactCount: 2 },
-      { taskId: "run-old", status: "failed", createdAt: "2026-09-24T09:00:00Z", startedAt: "2026-09-24T09:00:00Z", finishedAt: "2026-09-24T09:01:00Z", artifactCount: 0, failureMessage: "Timed out" },
+      { taskId: "run-new", status: "done", createdAt: "2026-10-01T09:00:00Z", startedAt: "2026-10-01T09:00:00Z", finishedAt: "2026-10-01T09:02:00Z", artifactCount: 2, latestSessionId: "ses-new" },
+      { taskId: "run-old", status: "failed", createdAt: "2026-09-24T09:00:00Z", startedAt: "2026-09-24T09:00:00Z", finishedAt: "2026-09-24T09:01:00Z", artifactCount: 0, failureMessage: "Timed out", latestSessionId: "ses-old" },
     ],
   })),
 }));
 vi.mock("../src/components/task-record/RecordWorkspace", () => ({
-  RecordWorkspace: ({ taskId, rootLabel }: { taskId: string; rootLabel?: string }) => (
-    <div data-testid="run-workspace" data-task-id={taskId}>{rootLabel}</div>
+  RecordWorkspace: ({ taskId, threadId, rootLabel }: { taskId: string; threadId?: string | null; rootLabel?: string }) => (
+    <div data-testid="run-workspace" data-task-id={taskId} data-thread-id={threadId ?? ""}>{rootLabel}</div>
   ),
 }));
 
@@ -31,10 +31,13 @@ it("opens on the newest run's folder and follows the selected run", async () => 
   renderRuns();
   const workspace = await screen.findByTestId("run-workspace");
   expect(workspace.getAttribute("data-task-id")).toBe("run-new");
+  // Each run's activity shows only its own thread's handoff.
+  expect(workspace.getAttribute("data-thread-id")).toBe("ses-new");
 
   const rows = screen.getAllByRole("button", { pressed: false });
   fireEvent.click(rows[0]!);
   expect(screen.getByTestId("run-workspace").getAttribute("data-task-id")).toBe("run-old");
+  expect(screen.getByTestId("run-workspace").getAttribute("data-thread-id")).toBe("ses-old");
   expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1);
 });
 

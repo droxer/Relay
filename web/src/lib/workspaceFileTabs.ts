@@ -31,11 +31,21 @@ export const PROJECT_WORKSPACE_FILE_ROOTS: WorkspaceFileRoots = {
 
 /** The roots for a workspace whose deliverables folder the API named:
  *  a string is that folder, null means the workspace itself (a project),
- *  and undefined (an older response) keeps `artifacts/`. */
-export function workspaceFileRoots(artifactsDir: string | null | undefined): WorkspaceFileRoots {
-  if (artifactsDir === null) return PROJECT_WORKSPACE_FILE_ROOTS;
-  if (artifactsDir === undefined || artifactsDir === DEFAULT_ARTIFACTS_ROOT) return DEFAULT_WORKSPACE_FILE_ROOTS;
-  return { artifacts: artifactsDir, activities: THREAD_RECORDS_ROOT };
+ *  and undefined (an older response) keeps `artifacts/`.
+ *
+ *  `threadId` narrows the activity tab to that one thread's records. Every
+ *  run of an automation shares one workspace, so its `.relay/threads/` holds
+ *  a handoff per run; a single run shows only its own. */
+export function workspaceFileRoots(
+  artifactsDir: string | null | undefined,
+  threadId?: string | null,
+): WorkspaceFileRoots {
+  const roots = artifactsDir === null
+    ? PROJECT_WORKSPACE_FILE_ROOTS
+    : artifactsDir === undefined || artifactsDir === DEFAULT_ARTIFACTS_ROOT
+      ? DEFAULT_WORKSPACE_FILE_ROOTS
+      : { artifacts: artifactsDir, activities: THREAD_RECORDS_ROOT };
+  return threadId ? { ...roots, activities: `${THREAD_RECORDS_ROOT}/${threadId}` } : roots;
 }
 
 /** Where a thread's or task's file browser opens: its Artifacts tab. */
