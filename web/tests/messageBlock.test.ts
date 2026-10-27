@@ -142,19 +142,36 @@ describe("memoized transcript messages", () => {
 });
 
 describe("projectMessages permission audit lines", () => {
+  it("keeps complete, exact commands available after approval", () => {
+    const prefix = "# shared setup\n".repeat(30);
+    const commands = [prefix + "printf '%s' 'a  b'", prefix + "printf '%s' 'a b'"];
+    const events = commands.flatMap((command, index): RelaySession["events"] => [
+      { id: `ask_${index}`, type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: `perm_${index}`, runId: "run_1", agent: "claude", toolName: "Bash", input: JSON.stringify({ command }) } },
+      { id: `allow_${index}`, type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: `perm_${index}`, decision: "allow" },
+    ]);
+    const lines = projectMessages(session(events), t).filter((message) => message.kind === "system");
+    assert.deepEqual(lines.map((line) => line.detail), commands);
+  });
+
   it("records how each prompt closed: the person's answer, or that nobody answered", () => {
     const messages = projectMessages(session([
       { id: "ev_run", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_1", agent: "claude" },
-      { id: "ev_ask", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_1", runId: "run_1", agent: "claude", toolName: "Bash", input: "{}" } },
+      { id: "ev_ask", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_1", runId: "run_1", agent: "claude", toolName: "Bash", input: JSON.stringify({ command: "git fetch --prune\n  origin", description: "Fetch" }) } },
+      { id: "ev_ask_edit", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_3", runId: "run_1", agent: "claude", toolName: "Edit", input: JSON.stringify({ file_path: "/repo/a.ts", old_string: "x" }) } },
+      { id: "ev_ask_bare", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_4", runId: "run_1", agent: "claude", toolName: "Read", input: "{}" } },
       { id: "ev_q", type: "agent.permission_requested", sessionId: "ses_1", timestamp, request: { id: "perm_2", runId: "run_1", agent: "claude", toolName: "AskUserQuestion", input: "{}", questions: [{ id: "Which?", text: "Which?", options: [{ label: "A" }] }] } },
       { id: "ev_deny", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_1", decision: "deny", note: "Not that" },
       { id: "ev_answer", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_2", decision: "allow", answers: { "Which?": ["A"] } },
+      { id: "ev_allow_edit", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_3", decision: "allow" },
+      { id: "ev_expire_bare", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_4", decision: "expired" },
       { id: "ev_stale", type: "agent.permission_resolved", sessionId: "ses_1", timestamp, requestId: "perm_unknown", decision: "allow" },
     ]), t);
     const lines = messages.filter((message) => message.kind === "system");
     assert.deepEqual(lines.map((line) => line.kind === "system" && [line.label, line.detail, line.tone]), [
-      ["message.permission_deny", "Not that", "warn"],
+      ["message.permission_deny", "git fetch --prune\n  origin · Not that", "warn"],
       ["message.permission_answered", "A", "info"],
+      ["message.permission_allow", "/repo/a.ts", "info"],
+      ["message.permission_expired", undefined, "neutral"],
     ]);
   });
 });

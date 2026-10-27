@@ -80,6 +80,32 @@ export function permissionInputText(input: string): string {
   }
 }
 
+/** Input keys that name what a tool acts on, most telling first. */
+const SUMMARY_KEYS = ["command", "file_path", "path", "notebook_path", "url", "pattern", "query"] as const;
+
+/**
+ * Name what a prompt let a tool do — the command, the file, the URL.
+ * Preserve the complete available text and its whitespace for inspection;
+ * the transcript uses CSS ellipsis for its inline preview. Undefined when
+ * the input says nothing (`{}` or blank).
+ */
+export function permissionInputSummary(input: string | undefined): string | undefined {
+  if (!input?.trim()) return undefined;
+  let text = input;
+  try {
+    const parsed: unknown = JSON.parse(input);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const fields = parsed as Record<string, unknown>;
+      const named = SUMMARY_KEYS.map((key) => fields[key]).find((value): value is string => typeof value === "string" && value.trim() !== "");
+      if (!named && Object.keys(fields).length === 0) return undefined;
+      text = named ?? JSON.stringify(parsed);
+    }
+  } catch {
+    // A capped preview is not JSON; show it as is.
+  }
+  return text.trim() ? text : undefined;
+}
+
 function closed(session: RelaySession, requests: PermissionRequest[], outcome: Outcome): RelaySession {
   const ids = new Set(requests.map((item) => item.id));
   const remaining = (session.permissionRequests ?? []).filter((item) => !ids.has(item.id));
