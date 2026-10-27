@@ -260,7 +260,7 @@
   --type-title-content: 400 var(--fs-title)/var(--leading-tight) var(--font-sans);
 
   --type-display-track:      var(--track-display); /* the one tightened tier — see palette.css */
-  --type-title-track:        var(--track-display);
+  --type-title-track:        var(--track-title);
   --type-heading-track:      var(--track-0);
   --type-number-track:       var(--track-display);
   --type-body-track:         var(--track-body);
@@ -272,7 +272,7 @@
   --type-code-track:         var(--track-0); /* never tighten a monospace column */
   --type-name-track:          var(--track-body);
   --type-meta-track:          var(--track-body-sm);
-  --type-title-content-track: var(--track-display);
+  --type-title-content-track: var(--track-title);
 }
 
 /* OS “increase contrast” — boost hairlines, body copy and the focus ring.

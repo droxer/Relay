@@ -392,6 +392,8 @@
 .login-facts code {
   font-family: var(--font-mono);
   font-size: var(--fs-code);
+  /* Mono keeps its fixed advance; it must not inherit the dd's tracking. */
+  letter-spacing: 0;
 }
 
 /* "Forgot password?" — tucked under the password field it belongs to, on the
