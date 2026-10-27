@@ -342,7 +342,7 @@ export const MessageBlock = memo(function MessageBlock({
           <span>{message.label}</span>
         </span>
         {message.detail ? (
-          <span className="msg-system-detail">{message.detail}</span>
+          <span className="msg-system-detail" title={message.detail}>{message.detail}</span>
         ) : null}
       </div>
       <MsgTime value={message.timestamp} />

@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
+import { permissionInputSummary } from "./permissionRequests.ts";
 
 export type DerivedMessage =
   | {
@@ -261,7 +262,7 @@ export class ProjectMessagesAccumulator {
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
   /** Open permission prompts by id: the resolution names only the id. */
-  private readonly prompts = new Map<string, { toolName: string; question: boolean }>();
+  private readonly prompts = new Map<string, { toolName: string; question: boolean; summary?: string }>();
 
   /** Derive the next projection without changing this committed accumulator. */
   advance(session: RelaySession | undefined, t: TFunction): { accumulator: ProjectMessagesAccumulator; messages: DerivedMessage[] } {
@@ -466,9 +467,15 @@ export class ProjectMessagesAccumulator {
         });
         return true;
       }
-      case "agent.permission_requested":
-        this.prompts.set(event.request.id, { toolName: event.request.toolName, question: (event.request.questions?.length ?? 0) > 0 });
+      case "agent.permission_requested": {
+        const question = (event.request.questions?.length ?? 0) > 0;
+        this.prompts.set(event.request.id, {
+          toolName: event.request.toolName,
+          question,
+          summary: question ? undefined : permissionInputSummary(event.request.input),
+        });
         return false;
+      }
       case "agent.permission_resolved": {
         // The audit line of a prompt: who allowed what, or that nobody did.
         const prompt = this.prompts.get(event.requestId);
@@ -484,7 +491,10 @@ export class ProjectMessagesAccumulator {
           timestamp: event.timestamp,
           tone: event.decision === "allow" ? "info" : event.decision === "deny" ? "warn" : "neutral",
           label,
-          detail: event.decision === "allow" && answers ? answers : event.note,
+          // Name what was allowed — the command, the file — not only the tool.
+          detail: prompt.question
+            ? (event.decision === "allow" && answers ? answers : event.note)
+            : [prompt.summary, event.note].filter(Boolean).join(" · ") || undefined,
         });
         return true;
       }

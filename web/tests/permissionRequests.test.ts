@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { applySessionEvent } from "../src/lib/sessionEvents.js";
 import { threadAwaitsHuman } from "../src/lib/awaitingInput.js";
-import { answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
+import { answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputSummary, permissionInputText, permissionNoteReachesAgent } from "../src/lib/permissionRequests.js";
 import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
 const created = relayEvent("session.created", "ses_1", { workspacePath: "/workspace", taskGoal: "Clean up", participants: ["human", "claude"] });
@@ -123,5 +123,34 @@ describe("runtime permission prompts", () => {
   it("shows the tool input as readable JSON, and anything else as sent", () => {
     assert.equal(permissionInputText("{\"command\":\"ls\"}"), "{\n  \"command\": \"ls\"\n}");
     assert.equal(permissionInputText("{\"command\":\"ls -la…"), "{\"command\":\"ls -la…");
+  });
+});
+
+describe("permissionInputSummary", () => {
+  it("names what the tool acts on without changing its whitespace", () => {
+    assert.equal(permissionInputSummary(JSON.stringify({ command: "python3 -I -c \"\n  print(1)\"", description: "Run" })), 'python3 -I -c "\n  print(1)"');
+    assert.equal(permissionInputSummary(JSON.stringify({ file_path: "/repo/a.ts", content: "x" })), "/repo/a.ts");
+    assert.equal(permissionInputSummary(JSON.stringify({ server: "github", issue: 4 })), '{"server":"github","issue":4}');
+  });
+
+  it("says nothing for an empty input and keeps a capped preview as is", () => {
+    assert.equal(permissionInputSummary("{}"), undefined);
+    assert.equal(permissionInputSummary(""), undefined);
+    assert.equal(permissionInputSummary(undefined), undefined);
+    assert.equal(permissionInputSummary('{"command": "ls -la'), '{"command": "ls -la');
+  });
+
+  it("preserves long commands that differ after a shared prefix", () => {
+    const prefix = "# setup\n".repeat(40);
+    for (const suffix of ["printf first", "printf second"]) {
+      const command = prefix + suffix;
+      assert.equal(permissionInputSummary(JSON.stringify({ command })), command);
+    }
+  });
+
+  it("preserves quoted spaces, tabs, and newlines exactly", () => {
+    for (const command of ["printf '%s' 'a  b'", "printf '%s' 'a b'", "cat <<'EOF'\n\tindented  text\nEOF"]) {
+      assert.equal(permissionInputSummary(JSON.stringify({ command })), command);
+    }
   });
 });
