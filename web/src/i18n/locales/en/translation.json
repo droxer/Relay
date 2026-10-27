@@ -1122,7 +1122,6 @@
   "admin": {
     "control_panel": {
       "title": "Admin console",
-      "eyebrow": "Organization / Administration",
       "subtitle": "Manage users, computers, and organization settings.",
       "workspace": "Workspace controls",
       "queued": "Queued",
@@ -2589,7 +2588,6 @@
     "reply_in_thread": "Reply in thread"
   },
   "settings": {
-    "eyebrow": "Personal settings",
     "sub": "Manage your computers, skills, and display preferences."
   },
   "record": {

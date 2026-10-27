@@ -275,13 +275,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       data-phone-pane={phone ? (selectedId ? "detail" : "list") : undefined}
     >
       <nav className="skills-list" aria-label={t("skills.library_label")}>
-        {/* A dedicated Infra page: the library rail heads it the way the
-            agent and team rosters head theirs — kicker, title, and count
-            stacked, with the record pane beside it. The skill detail's
-            eyebrow below is record metadata (source · visibility), not
-            surface identity. */}
+        {/* The library rail heads the page the way the agent and team
+            rosters head theirs — title and count, with the record pane
+            beside it. The skill detail's eyebrow below is record metadata
+            (source · visibility), not surface identity. */}
         <PageHeader
-          kicker={t("nav.infra")}
           title={t("skills.title")}
           count={t("skills.count", { count: skills.length })}
           titleAs="h2"

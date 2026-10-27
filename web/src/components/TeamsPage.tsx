@@ -9,8 +9,7 @@ import { teamAvailability } from "../lib/taskAssignment";
 import { effectiveStyle } from "../lib/collaborationStyle";
 import { StatusPill, TonePill } from "./StatusPill";
 import { CollaborationStyleIcon } from "./CollaborationStyleBadge";
-import { StateMark, type StateShape, type StateTone } from "./StateMark";
-import type { CurrentUser, LogicalAgentAvailability } from "../types";
+import type { CurrentUser } from "../types";
 import {
   ActionAdd,
   ICON,
@@ -26,17 +25,6 @@ import { TeamWorkspacePage } from "./TeamWorkspacePage";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { ListSkeleton } from "./ListSkeleton";
-
-const AVAILABILITY_PIP: Record<LogicalAgentAvailability, { tone: StateTone; shape?: StateShape }> = {
-  ready: { tone: "good" },
-  busy: { tone: "live" },
-  pending: { tone: "warn" },
-  offline: { tone: "neutral", shape: "muted" },
-};
-
-function teamPip(enabled: boolean, availability: LogicalAgentAvailability) {
-  return enabled ? AVAILABILITY_PIP[availability] : AVAILABILITY_PIP.offline;
-}
 
 export function TeamsPage({
   currentUser,
@@ -182,12 +170,14 @@ export function TeamsPage({
                         aria-current={selected ? "page" : undefined}
                         onClick={() => onSelectTeam(team.id)}
                       >
-                        {/* Icon-led, like the thread and agent rails: the
-                            state pip leads the name, the style rides the meta
-                            line as a glyph, and the team's mark trails. */}
+                        {/* Like the agent rail: the name leads, the style
+                            rides the meta line as a glyph, and the team's
+                            mark trails. Ready is the default and unnamed;
+                            any other state is its pill alone. A leading pip
+                            used to say it a second time, so a busy team read
+                            busy twice. */}
                         <span className="teams-list-identity">
                           <span className="teams-list-titleline">
-                            <StateMark {...teamPip(team.enabled, availability)} />
                             <span className="teams-list-title">{team.name}</span>
                           </span>
                           <span className="teams-list-sub">
@@ -198,8 +188,6 @@ export function TeamsPage({
                           </span>
                         </span>
                         <span className="teams-list-status">
-                          {/* "ready" is the default healthy state: the pip
-                              says it, so only other states get named. */}
                           {!team.enabled ? (
                             <TonePill tone="neutral" label={t("teams.disabled")} />
                           ) : availability !== "ready" ? (

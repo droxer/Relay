@@ -1100,7 +1100,6 @@
   "admin": {
     "control_panel": {
       "title": "管理控制台",
-      "eyebrow": "组织 / 管理",
       "subtitle": "管理用户、电脑和组织设置。",
       "workspace": "工作区管理",
       "queued": "排队中",
@@ -2535,7 +2534,6 @@
     "reply_in_thread": "在对话中回复"
   },
   "settings": {
-    "eyebrow": "个人设置",
     "sub": "管理电脑、技能和显示偏好。"
   },
   "record": {

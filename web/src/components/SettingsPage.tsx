@@ -57,10 +57,9 @@ export function SettingsPage({
       tabIndex={-1}
     >
       <div className="sec-rail">
-        {/* Kicker + title, like every other list rail in the app — see the
+        {/* Title alone, like every other list rail in the app — see the
             note on the control panel's rail. */}
         <PageHeader
-          kicker={t("settings.eyebrow")}
           title={t("nav.settings")}
           titleAs="h2"
           titleVariant="title"
