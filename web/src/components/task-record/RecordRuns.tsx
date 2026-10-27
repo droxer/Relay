@@ -173,9 +173,10 @@ export function RecordRuns({
         {/* Keyed by run: a folder path or an open file belongs to the run it
             was browsed in, not to whichever run is selected next. */}
         <RecordWorkspace
-          key={`${selected.taskId}:${selected.artifactsDir ?? ""}`}
+          key={`${selected.taskId}:${selected.artifactsDir ?? ""}:${selected.latestSessionId ?? ""}`}
           taskId={selected.taskId}
           artifactsDir={selected.artifactsDir}
+          threadId={selected.latestSessionId}
           rootLabel={selectedDate}
           scoped
         />

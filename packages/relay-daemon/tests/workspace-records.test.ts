@@ -200,3 +200,74 @@ test("only a thread's own records are walked inside .relay/", async () => {
     assert.deepEqual(files.map(file => file.relativePath), [".relay/threads/ses_one/HANDOFF.md"]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("every automation run's older records move into .relay/threads/, not only the running thread's", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const automation = manager.ensureSubpath("ses_new", "tasks/routine_one");
+    const backlog = manager.ensureSubpath("ses_task", "tasks/task_one");
+    for (const [workspace, older, thread] of [
+      [automation.hostPath, ".threads", "ses_run_one"],
+      [automation.hostPath, "threads", "ses_run_two"],
+      [backlog.hostPath, ".threads", "ses_task_old"],
+    ] as const) {
+      mkdirSync(join(workspace, older, thread), { recursive: true });
+      writeFileSync(join(workspace, older, thread, "HANDOFF.md"), thread);
+    }
+    // Not a thread's records: the user's own folder, and an empty one.
+    mkdirSync(join(automation.hostPath, "threads/notes"), { recursive: true });
+    writeFileSync(join(automation.hostPath, "threads/notes/todo.txt"), "the user's");
+    mkdirSync(join(automation.hostPath, ".threads/ses_empty"), { recursive: true });
+
+    assert.equal(manager.migrateTaskRecords(), 3);
+
+    assert.equal(readFileSync(join(automation.hostPath, ".relay/threads/ses_run_one/HANDOFF.md"), "utf8"), "ses_run_one");
+    assert.equal(readFileSync(join(automation.hostPath, ".relay/threads/ses_run_two/HANDOFF.md"), "utf8"), "ses_run_two");
+    assert.equal(readFileSync(join(backlog.hostPath, ".relay/threads/ses_task_old/HANDOFF.md"), "utf8"), "ses_task_old");
+    assert.ok(existsSync(join(automation.hostPath, "threads/notes/todo.txt")));
+    assert.ok(existsSync(join(automation.hostPath, ".threads/ses_empty")));
+    assert.ok(!existsSync(join(backlog.hostPath, ".threads")));
+    // A second sweep finds nothing left to move.
+    assert.equal(manager.migrateTaskRecords(), 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("records migration never overwrites a thread's newer records", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensureSubpath("ses_one", "tasks/routine_one");
+    for (const dir of [".threads/ses_one", ".relay/threads/ses_one"]) {
+      mkdirSync(join(workspace.hostPath, dir), { recursive: true });
+      writeFileSync(join(workspace.hostPath, dir, "HANDOFF.md"), dir);
+    }
+    assert.equal(manager.migrateTaskRecords(), 0);
+    assert.equal(readFileSync(join(workspace.hostPath, ".relay/threads/ses_one/HANDOFF.md"), "utf8"), ".relay/threads/ses_one");
+    assert.ok(existsSync(join(workspace.hostPath, ".threads/ses_one/HANDOFF.md")));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("records migration reports a workspace it cannot sweep and carries on", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  const outside = mkdtempSync(join(tmpdir(), "relay-records-outside-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const bad = manager.ensureSubpath("ses_one", "tasks/routine_bad");
+    symlinkSync(outside, join(bad.hostPath, ".relay"));
+    mkdirSync(join(bad.hostPath, ".threads/ses_one"), { recursive: true });
+    writeFileSync(join(bad.hostPath, ".threads/ses_one/HANDOFF.md"), "notes");
+    const good = manager.ensureSubpath("ses_two", "tasks/routine_good");
+    mkdirSync(join(good.hostPath, ".threads/ses_two"), { recursive: true });
+    writeFileSync(join(good.hostPath, ".threads/ses_two/HANDOFF.md"), "notes");
+
+    const skipped: string[] = [];
+    assert.equal(manager.migrateTaskRecords((workspace) => skipped.push(workspace)), 1);
+    assert.deepEqual(skipped, ["tasks/routine_bad"]);
+    assert.ok(existsSync(join(good.hostPath, ".relay/threads/ses_two/HANDOFF.md")));
+    assert.ok(existsSync(join(bad.hostPath, ".threads/ses_one/HANDOFF.md")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});

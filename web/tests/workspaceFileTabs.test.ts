@@ -23,6 +23,15 @@ describe("workspace file roots", () => {
     assert.deepEqual(workspaceFileRoots("artifacts/tsk_run"), { artifacts: "artifacts/tsk_run", activities: ".relay/threads" });
   });
 
+  it("narrows one automation run's activity to its own thread's records", () => {
+    const roots = workspaceFileRoots("artifacts/tsk_run", "ses_run");
+    assert.deepEqual(roots, { artifacts: "artifacts/tsk_run", activities: ".relay/threads/ses_run" });
+    assert.equal(workspaceTabRootFor(".relay/threads/ses_run", roots), "activities");
+    assert.equal(workspaceFileTabForPath(".relay/threads/ses_run/HANDOFF.md", roots), "activities");
+    assert.equal(workspaceFileTabForPath(".relay/threads/ses_other", roots), null);
+    assert.deepEqual(workspaceFileRoots("artifacts/tsk_run", null), { artifacts: "artifacts/tsk_run", activities: ".relay/threads" });
+  });
+
   it("makes the project directory itself the files root", () => {
     assert.equal(workspaceFileRoots(null), PROJECT_WORKSPACE_FILE_ROOTS);
     assert.equal(PROJECT_WORKSPACE_FILE_ROOTS.artifacts, "");

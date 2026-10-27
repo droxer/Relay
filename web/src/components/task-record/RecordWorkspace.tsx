@@ -43,12 +43,15 @@ function cachedTaskStatus(queryClient: QueryClient, taskId: string): TaskStatus 
  *
  *  A routine never runs, so it has no folder of its own to show here: the
  *  Runs tab mounts this once per selected run, rooted at that run's folder. */
-export function RecordWorkspace({ taskId, artifactsDir, rootLabel, scoped = false }: {
+export function RecordWorkspace({ taskId, artifactsDir, threadId, rootLabel, scoped = false }: {
   taskId: string;
   /** Where this task's deliverables live, relative to the workspace it
    *  browses: `artifacts`, one automation run's `artifacts/<taskId>`, or
    *  null for a project task, whose workspace is the deliverable location. */
   artifactsDir?: string | null;
+  /** One automation run's thread: its Activity tab shows only that thread's
+   *  handoff, not every run's records in the shared workspace. */
+  threadId?: string | null;
   /** The path bar's root label — a run's date when browsed from the Runs tab. */
   rootLabel?: string;
   /** Keep the browser inside its tab roots — a run's folder, not its
@@ -56,7 +59,7 @@ export function RecordWorkspace({ taskId, artifactsDir, rootLabel, scoped = fals
   scoped?: boolean;
 }) {
   const { t } = useTranslation();
-  const roots = workspaceFileRoots(artifactsDir);
+  const roots = workspaceFileRoots(artifactsDir, threadId);
   const [path, setPath] = useState(roots.artifacts);
   const [selectedPath, setSelectedPath] = useState("");
 
