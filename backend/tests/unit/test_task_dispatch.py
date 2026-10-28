@@ -374,6 +374,7 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
         command = _take_command(app, node)
         assert command["workspaceLayout"] == "task"
         assert command["workspaceSubpath"] == f"tasks/{routine['id']}"
+        assert command["state"]["progress_file"] == f"threads/{routine['id']}/HANDOFF.md"
         assert command["artifactsDir"] == f"artifacts/{occurrence['id']}"
         record = client.get(f"/api/v1/tasks/{occurrence['id']}").json()
         assert record["workspaceArtifactsDir"] == f"artifacts/{occurrence['id']}"

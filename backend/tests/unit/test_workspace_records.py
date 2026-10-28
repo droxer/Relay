@@ -15,6 +15,16 @@ def test_every_thread_has_its_own_record_directory(layout):
     assert handoff_file("ses_two", layout) == ".relay/threads/ses_two/HANDOFF.md"
 
 
+@pytest.mark.parametrize("layout", ["task", "project"])
+def test_automation_runs_share_handoff_records(layout):
+    for session_id, task_id in [("ses_one", "task_one"), ("ses_two", "task_two")]:
+        task = {"id": task_id, "sourceRoutineId": "routine_nightly"}
+        assert handoff_file(session_id, layout, task=task) == ".relay/threads/routine_nightly/HANDOFF.md"
+    assert handoff_file("ses_other", layout, task={"sourceRoutineId": "routine_other"}) == (
+        ".relay/threads/routine_other/HANDOFF.md"
+    )
+
+
 @pytest.mark.parametrize(("capabilities", "records_dir"), [
     (["relay-thread-records", "dot-thread-records"], ".relay/threads"),
     (["dot-thread-records"], ".threads"),

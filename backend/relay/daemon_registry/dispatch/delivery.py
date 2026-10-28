@@ -331,9 +331,14 @@ class AssignmentDeliveryMixin(RegistryState):
         """Progress file, agent bridge, conversation, and handoff note for a run without handoff context."""
         # Chat can grow into substantial work too. Provide a stable path on
         # every run; the prompt only asks to create a checkpoint for real work.
+        task = None
+        task_id = run_request.get("taskId")
+        if task_id and self.task_store:
+            task = self.task_store.get_task(task_id)
         progress_file = handoff_file(
             run_request["sessionId"], workspace_layout,
             records_dir=thread_records_dir(sandbox),
+            task=task,
         )
         next_state = {**state, "progress_file": progress_file}
         bridge = compute_prior_agent_bridge(
