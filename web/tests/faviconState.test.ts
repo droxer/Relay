@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { FAVICON_INK, faviconState, faviconSvg } from "../src/lib/faviconState.js";
+import { FAVICON_INK, FAVICON_PATHS, faviconState, faviconSvg } from "../src/lib/faviconState.js";
 import type { ThreadItem } from "../src/lib/threads.js";
 import type { RelaySession } from "../src/types.js";
 
@@ -51,33 +51,41 @@ describe("favicon state", () => {
 });
 
 describe("favicon mark", () => {
-  it("lights only the half that is acting, in both registers", () => {
-    for (const theme of ["dark", "light"] as const) {
-      const ink = FAVICON_INK[theme];
-      assert.deepEqual(strokes(faviconSvg("idle", theme)), [ink.unlit, ink.unlit]);
-      assert.deepEqual(strokes(faviconSvg("running", theme)), [ink.unlit, ink.live]);
-      assert.deepEqual(strokes(faviconSvg("waiting", theme)), [ink.action, ink.unlit]);
+  it("lights only the half that is acting", () => {
+    const ink = FAVICON_INK;
+    assert.deepEqual(strokes(faviconSvg("idle")), [ink.unlit, ink.unlit]);
+    assert.deepEqual(strokes(faviconSvg("running")), [ink.unlit, ink.live]);
+    assert.deepEqual(strokes(faviconSvg("waiting")), [ink.action, ink.unlit]);
+  });
+
+  it("keeps an idle mark legible on its tile", () => {
+    // WCAG relative luminance; an unlit chevron at the old ~2.7:1 vanished
+    // in a 16px tab.
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    for (const hue of [FAVICON_INK.unlit, FAVICON_INK.action, FAVICON_INK.live]) {
+      assert.ok(contrast(hue, FAVICON_INK.canvas) >= 4.5, `${hue} on ${FAVICON_INK.canvas}`);
     }
   });
 
-  it("draws the light register on a white badge with a hairline, the dark one without", () => {
-    assert.match(faviconSvg("idle", "light"), /<rect [^>]*fill="#ffffff" stroke="#d9d9d9"/);
-    assert.doesNotMatch(faviconSvg("idle", "dark"), /<rect [^>]*stroke=/);
-    assert.equal(faviconSvg("running"), faviconSvg("running", "dark"));
-  });
-
-  it("draws the same geometry and both registers' colours as the static favicon", () => {
+  it("draws one register, whatever the viewer's color scheme", () => {
     let dir = path.dirname(fileURLToPath(import.meta.url));
     while (!existsSync(path.join(dir, "web", "public", "favicon.svg"))) dir = path.dirname(dir);
     const shipped = readFileSync(path.join(dir, "web", "public", "favicon.svg"), "utf8");
+    assert.doesNotMatch(shipped, /prefers-color-scheme/);
     const geometry = (svg: string) => [...svg.matchAll(/<path [^>]*d="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(geometry(faviconSvg("idle")), geometry(shipped));
-    assert.deepEqual(strokes(shipped), [FAVICON_INK.dark.action, FAVICON_INK.dark.live]);
-    assert.ok(shipped.includes(`fill="${FAVICON_INK.dark.canvas}"`));
-    const light = shipped.slice(shipped.indexOf("prefers-color-scheme: light"));
-    const { canvas, edge, action, live } = FAVICON_INK.light;
-    assert.match(light, new RegExp(`\\.canvas \\{ fill: ${canvas}; stroke: ${edge};`));
-    assert.match(light, new RegExp(`\\.lead \\{ stroke: ${action}; \\}`));
-    assert.match(light, new RegExp(`\\.trail \\{ stroke: ${live}; \\}`));
+    assert.deepEqual(geometry(shipped), [FAVICON_PATHS.lead, FAVICON_PATHS.trail]);
+    assert.deepEqual(strokes(shipped), [FAVICON_INK.action, FAVICON_INK.live]);
+    assert.ok(shipped.includes(`fill="${FAVICON_INK.canvas}"`));
   });
 });

@@ -12,18 +12,26 @@ import type { ThreadWaitSource } from "./awaitingInput.ts";
  */
 export type FaviconState = "idle" | "running" | "waiting";
 
-/** Which register the tab's mark draws in: the theme the app is painted in. */
-export type FaviconTheme = "dark" | "light";
-
-/** Each register of palette.css, as favicon.svg draws it: the canvas
- *  (surface-0), the lead chevron (brand-lead), the trail (live), and the
- *  light badge's hairline (line-1; a white badge on a white tab strip needs
- *  an edge). `unlit` is a chevron at rest: present on the canvas, quieter
- *  than any ink tier, at the same ~2.7:1 in both registers.
- *  faviconState.test.ts pins these to the shipped favicon. */
+/** The tab's ink. One register whatever the app's theme: the app cannot see
+ *  the browser's tab strip, and a badge matched to the app's theme vanished
+ *  into a strip of the same tone (a white badge on a light strip, a black
+ *  one on a dark strip). A black tile carries the mark on both, as the
+ *  chevrons do the reading. `canvas` is the dark surface-0, `action` the
+ *  brand lead, `live` the dark live blue; `unlit` is a chevron at rest —
+ *  quieter than either lit hue but ~6:1 on the tile, so an idle tab still
+ *  shows the mark at 16px. faviconState.test.ts pins these to favicon.svg. */
 export const FAVICON_INK = {
-  dark: { canvas: "#000000", edge: null, action: "#ff8a3d", live: "#6aa6ff", unlit: "#525252" },
-  light: { canvas: "#ffffff", edge: "#d9d9d9", action: "#b84400", live: "#2457c5", unlit: "#9e9e9e" },
+  canvas: "#000000",
+  action: "#ff8a3d",
+  live: "#6aa6ff",
+  unlit: "#8f8f8f",
+} as const;
+
+/** favicon.svg's geometry: a full-bleed tile and two bold chevrons, sized so
+ *  each stroke is ~2px and the gap between them ~1px at 16px. */
+export const FAVICON_PATHS = {
+  lead: "M15 16 L31 32 L15 48",
+  trail: "M33 16 L49 32 L33 48",
 } as const;
 
 export function faviconState(items: readonly ThreadItem[], tasks: ThreadWaitSource = []): FaviconState {
@@ -33,19 +41,17 @@ export function faviconState(items: readonly ThreadItem[], tasks: ThreadWaitSour
 }
 
 /** favicon.svg's geometry with only the acting half lit. */
-export function faviconSvg(state: FaviconState, theme: FaviconTheme = "dark"): string {
-  const ink = FAVICON_INK[theme];
-  const lead = state === "waiting" ? ink.action : ink.unlit;
-  const trail = state === "running" ? ink.live : ink.unlit;
-  const edge = ink.edge ? ` stroke="${ink.edge}" stroke-width="1"` : "";
+export function faviconSvg(state: FaviconState): string {
+  const lead = state === "waiting" ? FAVICON_INK.action : FAVICON_INK.unlit;
+  const trail = state === "running" ? FAVICON_INK.live : FAVICON_INK.unlit;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
-    + `<rect x="4" y="4" width="56" height="56" rx="15" fill="${ink.canvas}"${edge}/>`
-    + `<g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M18 19.4 L32 32 L18 44.6" stroke="${lead}"/>`
-    + `<path d="M32 19.4 L46 32 L32 44.6" stroke="${trail}"/>`
+    + `<rect width="64" height="64" rx="14" fill="${FAVICON_INK.canvas}"/>`
+    + `<g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">`
+    + `<path d="${FAVICON_PATHS.lead}" stroke="${lead}"/>`
+    + `<path d="${FAVICON_PATHS.trail}" stroke="${trail}"/>`
     + `</g></svg>`;
 }
 
-export function faviconDataUri(state: FaviconState, theme: FaviconTheme = "dark"): string {
-  return `data:image/svg+xml,${encodeURIComponent(faviconSvg(state, theme))}`;
+export function faviconDataUri(state: FaviconState): string {
+  return `data:image/svg+xml,${encodeURIComponent(faviconSvg(state))}`;
 }

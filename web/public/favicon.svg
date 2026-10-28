@@ -2,24 +2,15 @@
   <title>Relay</title>
   <!-- App icon. The handoff: the lead chevron is the baton orange (palette
        brand-lead), a person handing work on; the trailing chevron is the
-       palette live blue, an agent carrying it on. The two accents tell one
-       story, and at 16px a neutral chevron on a neutral square would vanish
-       in a tab strip. The attributes are the dark register (the default, and
-       what a browser that ignores the media query draws); the light register
-       follows the viewer's color scheme, a white badge with the line-1
-       hairline like relay-mark.svg. Values are each register's tokens, keep
-       them in step. The signed-in app redraws it in the app's own theme
-       (faviconState.ts). -->
-  <style>
-    @media (prefers-color-scheme: light) {
-      .canvas { fill: #ffffff; stroke: #d9d9d9; stroke-width: 1; }
-      .lead { stroke: #b84400; }
-      .trail { stroke: #2457c5; }
-    }
-  </style>
-  <rect class="canvas" x="4" y="4" width="56" height="56" rx="15" fill="#000000"/>
-  <g fill="none" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
-    <path class="lead" d="M18 19.4 L32 32 L18 44.6" stroke="#ff8a3d"/>
-    <path class="trail" d="M32 19.4 L46 32 L32 44.6" stroke="#6aa6ff"/>
+       palette live blue, an agent carrying it on. One register for every
+       viewer: the tile is black and full-bleed, the strokes bold, so the
+       mark reads at 16px on a light tab strip and a dark one alike — a badge
+       that followed the color scheme dissolved into a strip of its own tone.
+       Values are FAVICON_INK / FAVICON_PATHS in faviconState.ts; the
+       signed-in app redraws it with only the acting half lit. -->
+  <rect width="64" height="64" rx="14" fill="#000000"/>
+  <g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 16 L31 32 L15 48" stroke="#ff8a3d"/>
+    <path d="M33 16 L49 32 L33 48" stroke="#6aa6ff"/>
   </g>
 </svg>
