@@ -7,6 +7,7 @@ from loguru import logger
 
 from ...core.workspace_artifacts import (
     artifact_index_item,
+    is_thread_record_artifact,
     workspace_artifact_key,
     workspace_artifacts,
 )
@@ -100,6 +101,10 @@ def newest_artifacts_by_file(
             )
             continue
         for artifact in workspace_artifacts(session):
+            # Continuity checkpoints are retained artifacts too, but they are
+            # not deliverables in the task/automation Files view or run count.
+            if is_thread_record_artifact(session, artifact):
+                continue
             key = (
                 f"{session_id}:{artifact['id']}"
                 if all_versions

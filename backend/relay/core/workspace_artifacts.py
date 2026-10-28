@@ -6,7 +6,35 @@ projection both key files through ``workspace_file_key``.
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Any
+
+from .workspace_layout import THREAD_RECORDS_DIRS
+
+
+def is_thread_record_artifact(session: dict[str, Any], artifact: dict[str, Any]) -> bool:
+    """Recognize continuity files by their workspace path, never their title.
+
+    Older records may carry only an absolute path; resolve it relative to the
+    recorded workspace without consulting the backend's filesystem.
+    """
+    relative = artifact.get("workspaceRelativePath")
+    if not isinstance(relative, str) or not relative:
+        path = artifact.get("path")
+        if not isinstance(path, str):
+            return False
+        relative = path.replace("\\", "/")
+        workspace = session.get("workspacePath")
+        if isinstance(workspace, str) and workspace:
+            prefix = workspace.replace("\\", "/").rstrip("/") + "/"
+            if relative.startswith(prefix):
+                relative = relative[len(prefix):]
+    parts = PurePosixPath(relative.replace("\\", "/")).parts
+    for directory in THREAD_RECORDS_DIRS:
+        root = PurePosixPath(directory).parts
+        if parts[:len(root)] == root and len(parts) == len(root) + 2:
+            return parts[-1] in ("HANDOFF.md", "HANDOFF.json")
+    return False
 
 
 def workspace_file_key(artifact: dict[str, Any]) -> str | None:

@@ -107,6 +107,47 @@ def test_routine_artifacts_roll_up_from_occurrences(monkeypatch) -> None:
         assert body["artifacts"][0]["sessionId"] == session_id
 
 
+def test_routine_files_exclude_thread_records_in_every_listing(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root, TemporaryDirectory() as ws:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        agent = _create_agent(app)
+        routine = _create_routine(client, agent["id"])
+        occurrence = _promote(app, routine["id"])
+        session_id = _session_for(app, occurrence["id"], ws, agent["id"])
+        paths = [
+            f"artifacts/{occurrence['id']}/daily-update.md",
+            f"artifacts/{occurrence['id']}/HANDOFF.md",
+            f".relay/threads/{routine['id']}/HANDOFF.md",
+            f".relay/threads/{routine['id']}/HANDOFF.json",
+            f".threads/{session_id}/HANDOFF.md",
+            f"threads/{session_id}/HANDOFF.json",
+        ]
+        for index, path in enumerate(paths):
+            artifact = _workspace_artifact(
+                ws, path, artifact_id=f"30000000-0000-4000-8000-{index + 100:012d}",
+                created_at="2026-06-25T09:00:00.000Z",
+            )
+            # The daemon uses the basename for the title, as in the screenshot.
+            artifact["title"] = Path(path).name
+            app.state.session_store.append_event(
+                session_id, relay_event("artifact.created", session_id, {"artifact": artifact})
+            )
+
+        for task_id in (routine["id"], occurrence["id"]):
+            for suffix in ("", "?versions=all"):
+                response = client.get(f"/api/v1/tasks/{task_id}/artifacts{suffix}")
+                assert response.status_code == 200, response.text
+                assert {item["workspaceRelativePath"] for item in response.json()["artifacts"]} == set(paths[:2])
+
+        runs = client.get(f"/api/v1/tasks/{routine['id']}/runs").json()["runs"]
+        assert runs[0]["artifactCount"] == 2
+        # Filtering the Files view must preserve the underlying continuity record.
+        assert len(app.state.session_store.get_session(session_id)["artifacts"]) == len(paths)
+
+
 def test_routine_artifacts_dedupe_regenerated_file_across_occurrences(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root, TemporaryDirectory() as ws:
