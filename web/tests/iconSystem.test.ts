@@ -48,9 +48,6 @@ describe("icon system regressions", () => {
       }
     }
 
-    const transcript = readWeb("src/components/TranscriptEmpty.tsx");
-    assert.match(transcript, /<ActionPrompt size=\{ICON\.xs\}/);
-    assert.doesNotMatch(transcript, /<ActionPrompt[^>]*(?:width|height)=/);
   });
 
   it("publishes one deterministic favicon and a raster Apple touch icon", () => {

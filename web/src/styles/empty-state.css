@@ -60,8 +60,8 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: var(--avatar-3xl);
-  height: var(--avatar-3xl);
+  width: var(--avatar-xl);
+  height: var(--avatar-xl);
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
@@ -139,12 +139,18 @@
   margin-bottom: var(--sp-3);
 }
 
-/* The new-thread landing is the calm room: more air above and between, a
-   longer breath per line, and each piece rising in after the last. */
-.relay-empty.transcript-empty {
-  gap: var(--sp-4);
-  max-width: 600px;
-  padding-block: var(--sp-8);
+/* The new-thread landing is one centred entry: the brand mark in its tile,
+   a two-tone heading, and the composer directly under them. The panel
+   centres the composer (.chat-panel--landing, chat.css); this block draws
+   what sits above it, which rises in once as the welcome. */
+.transcript-empty {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
+  text-align: center;
+  color: var(--ink-1);
 }
 
 .transcript-empty > * {
@@ -153,276 +159,39 @@
 }
 
 .transcript-empty > :nth-child(2) { animation-delay: calc(var(--t-stagger) * 2); }
-.transcript-empty > :nth-child(3) { animation-delay: calc(var(--t-stagger) * 4); }
-.transcript-empty > :nth-child(4) { animation-delay: calc(var(--t-stagger) * 6); }
-.transcript-empty > :nth-child(n + 5) { animation-delay: calc(var(--t-stagger) * 8); }
 
-/* The handoff drawn as a path: a solid leg already walked, a dotted leg
-   ahead that drifts forward, the brand mark on the crest between them. The
-   walked leg draws itself once; the dots keep a slow walk on --t-pulse-calm. */
-.handoff-scene {
-  position: relative;
-  display: block;
-  width: 240px;
-  height: 88px;
-}
-
-.handoff-scene-path {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  fill: none;
-  stroke-linecap: round;
-}
-
-.handoff-scene-ground { stroke: var(--line-1); stroke-width: 1.5; }
-
-.handoff-scene-walked,
-.handoff-scene-ahead {
-  stroke: var(--ink-4);
-  stroke-width: 1.5;
-}
-
-.handoff-scene-walked {
-  stroke-dasharray: 1;
-  animation: handoff-draw var(--t-draw) var(--ease-breathe) both;
-}
-
-.handoff-scene-ahead {
-  stroke-dasharray: 3 5;
-  animation: handoff-walk var(--t-pulse-calm) linear infinite;
-}
-
-.handoff-scene-start { fill: var(--ink-3); }
-.handoff-scene-end { fill: var(--surface-0); stroke: var(--ink-3); stroke-width: 1.5; }
-
-.handoff-scene-mark {
-  position: absolute;
-  left: 50%;
-  top: calc(30 / 88 * 100%);
+/* One layer of chrome: a hairline tile, no fill — the app-icon shape the
+   other empty states use for their mark. */
+.transcript-empty-mark {
   display: grid;
-  transform: translate(-50%, -50%);
-}
-
-@keyframes handoff-draw {
-  from { stroke-dashoffset: 1; }
-  to   { stroke-dashoffset: 0; }
-}
-
-@keyframes handoff-walk {
-  to { stroke-dashoffset: -16; }
-}
-
-/* Where things stand: three kinds of row at most two deep, read as plain
-   sentences. Only the thread that needs the person carries an action word. */
-.welcome-recap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 0;
-  list-style: none;
-}
-
-.welcome-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-2);
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
-}
-
-.welcome-row:hover { background: var(--row-hover); }
-
-.welcome-row-mark {
-  display: grid;
-  flex: none;
   place-items: center;
-  width: var(--sp-3);
-}
-
-.welcome-row-text {
-  display: flex;
-  flex: 1;
-  align-items: baseline;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.welcome-row-title {
-  overflow: hidden;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.welcome-row-phrase {
-  flex: none;
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.welcome-row-stamp {
-  flex: none;
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
-
-.welcome-row-go {
-  flex: none;
-  color: var(--link-ink);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-}
-
-.welcome-row:hover .welcome-row-go { color: var(--link-ink-strong); }
-
-/* A done thing settles: the check draws itself once and stays. */
-.welcome-row-check {
-  fill: none;
-  stroke: var(--ok);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.welcome-row-check path {
-  stroke-dasharray: 1;
-  animation: handoff-draw var(--t-draw) var(--ease-breathe) calc(var(--t-stagger) * 10) both;
-}
-
-/* The week in one line: progress made visible, quietly. */
-.welcome-week {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--sp-1) var(--sp-4);
-  width: 100%;
-  margin: var(--sp-3) 0 0;
-  color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.welcome-week > span + span::before {
-  content: "·";
-  margin-inline-end: var(--sp-4);
-  color: var(--ink-4);
-}
-
-.transcript-empty .relay-empty-actions { order: 5; width: 100%; }
-.transcript-empty .relay-empty-hint { order: 6; margin-top: var(--sp-3); }
-
-.transcript-empty .relay-empty-title {
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
-}
-
-.transcript-empty .relay-empty-body {
-  max-width: 440px;
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  line-height: var(--leading-loose);
-}
-
-.transcript-empty-suggestions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sp-3);
-  width: 100%;
-}
-
-/* Starters are flat outline tiles (border at rest, fill on hover) — the same
-   single layer of chrome as outline buttons; a fill plus a border read as a
-   second card stack under the hero. The prompt arrow rides the label and
-   only lights up under the pointer. */
-button.transcript-empty-suggestion {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: var(--sp-1);
-  height: auto;
-  padding: var(--sp-3) var(--sp-4);
-  white-space: normal;
-  text-align: left;
+  width: var(--avatar-xl);
+  height: var(--avatar-xl);
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
-  background: transparent;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-  cursor: pointer;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 
-.transcript-empty-suggestion-label {
+/* Greeting and question at one size, separated by ink alone: the person's
+   name leads, the question recedes and hands off to the field below. */
+.transcript-empty-heading {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-0-5);
+  margin: 0;
 }
 
-.transcript-empty-suggestion-label > svg {
-  flex-shrink: 0;
-  color: var(--ink-4);
-  transition: color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
-}
-
-.transcript-empty-suggestion-detail {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  line-height: var(--leading-normal);
+.transcript-empty-title,
+.transcript-empty-prompt {
+  margin: 0;
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
-button.transcript-empty-suggestion:hover {
-  border-color: var(--line-strong);
-  background: var(--control-fill-hover);
-}
-
-button.transcript-empty-suggestion:hover .transcript-empty-suggestion-label > svg {
-  color: var(--ink-1);
-  transform: translate(1px, -1px);
-}
-
-.transcript-empty-hints {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--sp-4);
-}
-
-.transcript-empty-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
+.transcript-empty-title { color: var(--ink-1); }
+.transcript-empty-prompt { color: var(--ink-4); }
 
 @media (max-width: 820px) {
   .relay-empty { padding: var(--sp-6) var(--sp-4); }
-  .transcript-empty-suggestions { grid-template-columns: 1fr; max-width: 360px; }
-  /* A phone has no room above the composer for the decorative tile; the
-     headline and the starters are the landing. */
-  .transcript-empty .relay-empty-illustration { display: none; }
-}
-
-/* Keyboard hints mean nothing without a keyboard. */
-@media (hover: none) and (pointer: coarse) {
-  .transcript-empty .relay-empty-hint { display: none; }
 }

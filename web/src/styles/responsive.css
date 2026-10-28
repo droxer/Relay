@@ -163,6 +163,15 @@
     grid-template-rows: minmax(0, 1fr) auto;
   }
 
+  /* Same headerless shape for the centred landing (chat.css). */
+  .messenger-shell[data-mobile-view="chat"] .chat-panel--landing {
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .chat-panel--landing .composer-textarea {
+    min-height: 96px;
+  }
+
   .mobile-topbar-back {
     width: var(--touch-target);
     height: var(--touch-target);
@@ -695,10 +704,6 @@
     padding: var(--sp-5) var(--sp-4) var(--sp-6);
   }
 
-  .transcript-empty {
-    margin-top: var(--sp-5);
-  }
-
   .handoff-row {
     grid-template-columns: 1fr;
   }
@@ -707,7 +712,8 @@
      it, so a second inset here creates a dead band on notched phones. */
   .composer {
     --composer-inline: var(--sp-4);
-    padding: var(--sp-3) var(--sp-3) var(--sp-4);
+    --composer-pad-x: var(--sp-3);
+    padding: var(--sp-3) var(--composer-pad-x) var(--sp-4);
   }
 
   /* Inside an open conversation the tab bar steps aside, as it does on a
