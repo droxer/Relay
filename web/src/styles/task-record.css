@@ -434,8 +434,9 @@
   padding: 0;
 }
 
-/* Runs: the ledger beside the selected run's artifacts, each scrolling
-   independently within the drawer. */
+/* Runs: the ledger beside the selected run's folder. Flush like the
+   Workspace tab, so the explorer runs to the drawer's edges and takes its
+   full height; the ledger scrolls on its own. */
 .record-drawer .workspace-body > .record-runs-panel {
   display: flex;
   flex: 1 0 auto;
@@ -469,17 +470,30 @@
   min-height: 0;
 }
 
-.record-runs-workspace > .record-panel {
+.record-runs-workspace > .record-workspace {
   flex: 1 1 0;
   min-height: 0;
-  overflow-y: auto;
-  margin-top: 0;
-  padding: var(--sp-4);
-  border-top: 0;
 }
 
 .record-runs-message {
   padding: var(--sp-6) var(--sp-7);
+}
+
+/* The run pane has no room for list and preview side by side: opening a
+   file swaps the listing for the preview, and the preview's close is the
+   way back to the folder. */
+.record-runs-workspace .record-workspace-files .workspace-panes:not(.is-browse-only) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.record-runs-workspace .record-workspace-files .workspace-panes:not(.is-browse-only) .workspace-pane-browse {
+  display: none;
+}
+
+.record-runs-workspace .record-workspace-note,
+.record-runs-workspace .record-workspace-notice {
+  padding-inline: var(--sp-4);
 }
 
 /* The paused notice under the band starts where the band's first fact does. */
@@ -501,7 +515,7 @@
     padding: 0;
   }
 
-  /* A phone has no width for two panes: runs above, artifacts below. */
+  /* A phone has no width for two panes: runs above, the folder below. */
   .record-runs-split {
     flex: 1 0 auto;
     grid-template-columns: minmax(0, 1fr);

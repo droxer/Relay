@@ -756,6 +756,11 @@ The artifact endpoint keeps its latest-per-file default. `versions=all` returns
 all recorded versions across the authorized linked sessions/occurrences, newest
 first. Artifact downloads prefer retained bytes over live workspace files;
 existing size limits and legacy live-file fallback still apply.
+Task and automation artifact lists, including `versions=all` and run artifact
+counts, exclude internal `HANDOFF.md` and `HANDOFF.json` records under
+`.relay/threads/<id>/`, `.threads/<id>/`, and `threads/<id>/`. These continuity
+records remain stored on their threads; deliverables with the same names under
+an artifacts directory remain visible.
 
 New task runs require a daemon advertising `task-workspaces`. The run admission
 records `task.workspace_bound`; conflicting bindings are rejected. Commands with

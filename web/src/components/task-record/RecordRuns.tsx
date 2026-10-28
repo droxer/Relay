@@ -11,18 +11,20 @@ import { formatRunDuration, runDurationMs, runOutcome } from "../../lib/taskRuns
 import type { TaskRun } from "../../types";
 import { StateMark } from "../StateMark";
 import { RecordRunDetail, TONE_FOR_OUTCOME } from "./RecordRunDetail";
-import { RecordArtifacts } from "./RecordArtifacts";
+import { RecordWorkspace } from "./RecordWorkspace";
 import { runDate, runTime } from "./runDates";
 
 /**
- * A routine's runs, beside the artifacts of the one selected.
+ * A routine's runs, beside the folder of the one selected.
  *
  * A routine is a definition — it never runs itself, so its runs live in
- * promoted occurrences. The ledger is the master list and the run's artifacts
- * are the detail: selecting a row shows only what that run produced, with
- * previews and downloads available even when its computer is offline.
+ * promoted occurrences, and each one works in a folder of its own
+ * (`tasks/<routine>/<run>/`). The ledger is the master list and the run's
+ * folder is the detail: selecting a row re-roots the project's explorer at
+ * that run, so a run's output sits next to its outcome instead of one tab
+ * away under an opaque run id.
  *
- * Above the artifacts, the selected run is said in full (`RecordRunDetail`):
+ * Above the folder, the selected run is said in full (`RecordRunDetail`):
  * outcome, start, duration, trigger, the whole failure reason, and real links
  * to its thread and its own record — so a row is one select target, choosing
  * a run to look at never navigates away, and ↑/↓ walk the ledger. Never an
@@ -44,7 +46,7 @@ function isTerminal(run: TaskRun): boolean {
 }
 
 /** ↑/↓ (and Home/End) walk the ledger the way a list box does: the next row
- *  takes focus and is selected, so its artifacts follow the keyboard. */
+ *  takes focus and is selected, so its folder follows the keyboard. */
 const STEP_FOR_KEY: Record<string, (index: number, count: number) => number> = {
   ArrowDown: (index, count) => Math.min(count - 1, index + 1),
   ArrowUp: (index) => Math.max(0, index - 1),
@@ -115,6 +117,7 @@ export function RecordRuns({
 
   const selected = runs.find((run) => run.taskId === pickedRunId) ?? runs[0];
   const selectedIndex = runs.indexOf(selected);
+  const selectedDate = runDate(selected.scheduledFor ?? selected.createdAt, i18n.language);
 
   function onListKeyDown(event: KeyboardEvent<HTMLOListElement>): void {
     const step = STEP_FOR_KEY[event.key];
@@ -167,7 +170,16 @@ export function RecordRuns({
           onOpenRun={() => onOpenRun(selected.taskId)}
           onOpenThread={onOpenThread}
         />
-        <RecordArtifacts key={selected.taskId} taskId={selected.taskId} />
+        {/* Keyed by run: a folder path or an open file belongs to the run it
+            was browsed in, not to whichever run is selected next. */}
+        <RecordWorkspace
+          key={`${selected.taskId}:${selected.artifactsDir ?? ""}:${selected.latestSessionId ?? ""}`}
+          taskId={selected.taskId}
+          artifactsDir={selected.artifactsDir}
+          threadId={selected.latestSessionId}
+          rootLabel={selectedDate}
+          scoped
+        />
       </div>
     </div>
   );
