@@ -70,15 +70,19 @@ test("automation runs share one directory and keep their artifacts apart", async
   try {
     const manager = new ThreadWorkspaceManager(root, "none");
     const workspace = manager.ensureSubpath("ses_one", "tasks/automation");
-    manager.ensureRecords(workspace, "artifacts/run_one");
-    manager.ensureRecords({ ...workspace, sessionId: "ses_two" }, "artifacts/run_two");
+    const progressFile = ".relay/threads/automation/HANDOFF.md";
+    const recordsId = manager.ensureRecords(workspace, "artifacts/run_one", ".relay/threads", progressFile);
+    writeFileSync(join(workspace.hostPath, progressFile), "Continue with the second run");
+    manager.ensureRecords({ ...workspace, sessionId: "ses_two" }, "artifacts/run_two", ".relay/threads", progressFile);
+    assert.equal(readFileSync(join(workspace.hostPath, progressFile), "utf8"), "Continue with the second run");
     assert.ok(existsSync(join(workspace.hostPath, "artifacts/run_one")));
     assert.ok(existsSync(join(workspace.hostPath, "artifacts/run_two")));
-    assert.ok(existsSync(join(workspace.hostPath, ".relay/threads/ses_one")));
-    assert.ok(existsSync(join(workspace.hostPath, ".relay/threads/ses_two")));
+    assert.ok(!existsSync(join(workspace.hostPath, ".relay/threads/ses_one")));
+    assert.ok(!existsSync(join(workspace.hostPath, ".relay/threads/ses_two")));
     writeFileSync(join(workspace.hostPath, "artifacts/run_one/report.md"), "result");
-    const files = await diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: "ses_one" });
+    const files = await diffGeneratedFiles(workspace.hostPath, {}, { ownThreadId: recordsId });
     assert.ok(files.some(file => file.relativePath === "artifacts/run_one/report.md" && file.contentBase64));
+    assert.ok(files.some(file => file.relativePath === progressFile && file.contentBase64));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -100,6 +104,19 @@ test("an escaping artifacts directory is refused", () => {
     const workspace = manager.ensure("ses_one");
     for (const bad of ["../outside", "/tmp/abs", "artifacts/..", ""]) {
       assert.throws(() => manager.ensureRecords(workspace, bad), /Invalid durable workspace path/);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("handoff record scopes cannot escape their records directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-records-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    const workspace = manager.ensure("ses_one");
+    for (const scope of ["../outside", "nested/thread", "..", "NUL"]) {
+      assert.throws(() => manager.ensureRecords(
+        workspace, null, ".relay/threads", `.relay/threads/${scope}/HANDOFF.md`,
+      ), /Invalid thread id/);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

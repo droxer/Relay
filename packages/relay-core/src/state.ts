@@ -94,7 +94,8 @@ export interface AgentState {
    */
   repair_note?: string;
   /**
-   * Workspace-relative handoff notes, e.g. ".relay/threads/<threadId>/HANDOFF.md". The
+   * Workspace-relative handoff notes, e.g. ".relay/threads/<threadId>/HANDOFF.md"
+   * or ".relay/threads/<routineId>/HANDOFF.md" shared by automation runs. The
    * transcript is capped, so this is what carries decisions past the point
    * where earlier turns are elided.
    */

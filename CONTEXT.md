@@ -107,7 +107,9 @@ _Avoid_: Agent Workspace, shared Computer workspace
 The `.relay/threads/<threadId>/` directory inside a Thread's bound workspace,
 beside Relay's other control files in `.relay/`. `HANDOFF.md` records status,
 progress, decisions, blockers, and next actions; `HANDOFF.json` is the
-structured handoff checkpoint. Each Thread has its own records even when
+structured handoff checkpoint. Automation runs share one pair of handoff files
+at `.relay/threads/<routineId>/` in their bound workspace, so later runs read
+and update the same checkpoint. Other Threads have their own records even when
 several Threads share a Task or Project workspace. Older runs left them in
 `.threads/<threadId>/` or `threads/<threadId>/`; the daemon moves them on the
 Thread's next run.

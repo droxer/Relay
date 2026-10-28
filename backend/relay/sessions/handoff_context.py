@@ -147,7 +147,7 @@ def capture_handoff_context(
         "computerId": session.get("computerId"),
         "workspaceLayout": layout,
         "workspaceSubpath": session.get("workspaceSubpath"),
-        "progressFile": handoff_file(session["id"], layout),
+        "progressFile": handoff_file(session["id"], layout, task=task),
         "objective": objective,
         "note": instruction,
         "priorContext": prior,

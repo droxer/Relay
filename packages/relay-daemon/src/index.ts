@@ -1402,7 +1402,7 @@ async function executeCommand(
       logger.warn("thread records migration failed", { sandboxId, error: (error as Error).message });
     }
   }
-  threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir, recordsDir);
+  const recordsId = threadWorkspaces.ensureRecords(threadWorkspace, artifactsDir, recordsDir, state.progress_file);
   if (artifactsDir === null) {
     delete state.artifacts_dir;
     state.deliverables_in_workspace = true;
@@ -1678,7 +1678,7 @@ async function executeCommand(
     if (command.logicalAgentId) {
       ensureAgentWorkspaceDir(threadWorkspace.hostPath, command.logicalAgentId);
     }
-    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: command.sessionId };
+    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: recordsId };
     const options = {
       execStream: execution.execStream,
       eventSink,

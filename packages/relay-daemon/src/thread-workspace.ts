@@ -128,7 +128,8 @@ export class ThreadWorkspaceManager {
   }
 
   /**
-   * Record ownership follows the thread; deliverables follow the bound
+   * Record ownership follows the backend's handoff path (the automation ID
+   * for its runs, otherwise the thread ID); deliverables follow the bound
    * workspace. `artifactsDir` is where this run's deliverables go, relative
    * to the workspace: `artifacts/` for a thread or task, `artifacts/<taskId>/`
    * for an automation occurrence sharing its automation's directory, and null
@@ -139,13 +140,19 @@ export class ThreadWorkspaceManager {
     workspace: ThreadWorkspace,
     artifactsDir: string | null = DEFAULT_ARTIFACTS_DIR,
     recordsDir: ThreadRecordsDir = THREAD_RECORDS_DIR,
-  ): void {
+    progressFile?: string,
+  ): string {
     validateThreadId(workspace.sessionId);
+    const prefix = `${recordsDir}/`;
+    const recordsId = progressFile?.startsWith(prefix) && progressFile.endsWith("/HANDOFF.md")
+      ? progressFile.slice(prefix.length, -"/HANDOFF.md".length)
+      : workspace.sessionId;
+    validateThreadId(recordsId);
     // Records move only forward, into the directory the backend named.
     for (const older of THREAD_RECORDS_DIRS.slice(THREAD_RECORDS_DIRS.indexOf(recordsDir) + 1)) {
-      moveOlderRecords(workspace.hostPath, workspace.sessionId, older, recordsDir);
+      moveOlderRecords(workspace.hostPath, recordsId, older, recordsDir);
     }
-    const records = [[...recordsDir.split("/"), workspace.sessionId]];
+    const records = [[...recordsDir.split("/"), recordsId]];
     if (artifactsDir !== null) records.push(validateWorkspaceSubpath(artifactsDir));
     for (const segments of records) {
       rejectSymlinkComponents(workspace.hostPath, segments);
@@ -154,6 +161,7 @@ export class ThreadWorkspaceManager {
       rejectSymlinkComponents(workspace.hostPath, segments);
       assertContainedRealPath(workspace.hostPath, path, "Thread records");
     }
+    return recordsId;
   }
 
   /**

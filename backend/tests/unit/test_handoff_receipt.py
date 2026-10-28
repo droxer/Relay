@@ -47,6 +47,21 @@ def source():
 TARGET = {"assignmentId": "target", "agentId": "reviewer", "executorKind": "codex"}
 
 
+@pytest.mark.parametrize("records_dir", [".relay/threads", ".threads", "threads"])
+def test_automation_handoff_context_and_receipt_use_shared_checkpoint(records_dir):
+    session = source()
+    session["workspaceLayout"] = "task"
+    session["workspaceSubpath"] = "tasks/routine"
+    session["artifacts"][0]["workspaceRelativePath"] = f"{records_dir}/routine/HANDOFF.json"
+    checkpoint = json.dumps({"assignmentId": "source", "nextAction": "Continue next run"}).encode()
+    context = capture_handoff_context(
+        session, TARGET, None, Snapshots({"checkpoint": checkpoint}),
+        task={"id": "occurrence", "sourceRoutineId": "routine"},
+    )
+    assert context["progressFile"] == ".relay/threads/routine/HANDOFF.md"
+    assert context["receipt"]["checkpoint"]["claims"]["nextAction"] == "Continue next run"
+
+
 def test_receipt_freezes_requirements_claims_and_snapshot_digest():
     session = source()
     checkpoint = {

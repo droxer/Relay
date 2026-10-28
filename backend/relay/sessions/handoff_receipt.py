@@ -106,7 +106,7 @@ def capture_handoff_receipt(
         for path in (legacy_handoff_checkpoint_file(context["progressFile"]), checkpoint_path)
         if path
     ]
-    records_notes = records_handoff_files(session["id"])
+    records_notes = records_handoff_files(session["id"], task=task)
     if context["progressFile"] in records_notes:
         # A run dispatched before a records move was told an older directory.
         older_records = records_notes[records_notes.index(context["progressFile"]) + 1:]
