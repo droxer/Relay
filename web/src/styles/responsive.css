@@ -629,65 +629,33 @@
     border-right: 0;
   }
 
-  /* The tab bar already names this surface, so the heading is dropped here —
-     which left the header as a full-height band holding nothing but its one
-     button, reading as a rendering fault. Rather than shrink that band, the
-     grid pulls the button up beside the search field and gives the row back
-     to the list. Relocation is done in CSS, not markup: the header keeps its
-     desktop structure and semantics, it just occupies a different cell. */
+  /* The rail's create action is portaled into the top bar here, as every
+     other list's is (agents, teams, skills, backlog), so the header band —
+     title already hidden by the rule above — would hold nothing at all. The
+     rail keeps its filter band over the list, the same two-part shape the
+     other three rosters show on a phone. */
   .thread-panel-inner {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "search action"
-      "list   list";
-    column-gap: var(--sp-2);
-    padding: var(--sp-3) 0 0;
+    padding: 0;
   }
 
-  /* Stripped of its title the header is no longer a header horizon, so it
-     gives up the shared band's fill and hairline too — otherwise the row
-     reads as a header band wrapped around one button. */
   #thread-panel .page-header {
-    grid-area: action;
-    min-height: 0;
-    padding: 0 var(--sp-4) 0 0;
-    border-bottom: 0;
-    background: transparent;
-  }
-
-  #thread-panel .page-header-lead {
     display: none;
   }
 
   #thread-panel .list-filter-bar {
-    grid-area: search;
-    padding: 0 0 0 var(--sp-4);
-    border-bottom: 0;
-  }
-
-  .thread-panel-inner > .conversation-list {
-    grid-area: list;
+    padding: var(--sp-2) var(--sp-3);
   }
 
   /* A filled search field, Linear's phone grammar: the bare input read as a
      placeholder floating over the list rather than a control. */
   #thread-panel .list-filter-search,
   .agents-roster .list-filter-search,
-  .teams-roster .list-filter-search {
+  .teams-roster .list-filter-search,
+  .skills-list .list-filter-search {
     min-height: var(--touch-target);
     padding-inline: var(--sp-3);
     border-radius: var(--r-2);
     background: var(--control-fill);
-  }
-
-  /* New thread is a bare "+" beside the search, like every other create
-     action in the top bar — not a framed square. */
-  #thread-panel .page-header-icon-action--primary,
-  #thread-panel .page-header-icon-action--primary:hover {
-    border-color: transparent;
-    background: transparent;
   }
 
   /* Rail groups: the name and count are enough on a phone — the hairline

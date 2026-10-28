@@ -252,8 +252,8 @@ describe("markdown stylesheet", () => {
     assert.match(readWeb("src/styles/app.css"), /@import "katex\/dist\/katex\.min\.css" layer\(relay\)/);
   });
 
-  it("moves the document variant up the type ladder", () => {
-    assert.match(markdownCss, /\.doc-prose \{[^}]*font-size: var\(--fs-4\)/s);
+  it("keeps document previews at the compact reading size with a reading measure", () => {
+    assert.match(markdownCss, /\.doc-prose \{[^}]*font-size: var\(--fs-document\)/s);
     assert.match(markdownCss, /max-width: var\(--measure-wide\)/);
   });
 });

@@ -73,7 +73,6 @@ describe("application typography roles", () => {
       ["--fs-1", 12],
       ["--fs-2", 14],
       ["--fs-code", 14],
-      ["--fs-heading", 15],
       ["--fs-title", 16],
       ["--fs-5", 22],
       ["--fs-6", 28],
@@ -86,6 +85,14 @@ describe("application typography roles", () => {
         `${name} should resolve to ${expected}px at the default browser size`,
       );
     }
+
+    // Section and panel headings share one size; weight and spacing carry hierarchy.
+    assert.match(palette, /--fs-heading:\s*var\(--fs-title\);/);
+    assert.match(palette, /--fs-title-lg:\s*var\(--fs-title\);/);
+    assert.match(palette, /--fs-document:\s*var\(--fs-4\);/);
+    const roles = readWebSource("styles/tokens/roles.css");
+    assert.match(roles, /--type-label:\s+500 var\(--fs-2\)\//);
+    assert.match(roles, /--type-label-strong:\s+700 var\(--fs-2\)\//);
 
     // One reading rung: --fs-3/--fs-4 name jobs, not sizes, so they alias
     // --fs-2 instead of restating its value — and compact density, which has
@@ -202,9 +209,9 @@ describe("application typography roles", () => {
     assert.match(palette, /--track-body-sm:\s*0;/);
     // The display tier is the exception: reference systems tighten hard at
     // display sizes (eveland.ai runs -0.03 to -0.075em), well past what the
-    // platform faces apply on their own. The 16–17px title tiers take a
-    // smaller step, since -0.05em at 17px crowds the letters.
-    assert.match(palette, /--track-display:\s*-0\.05em;/);
+    // platform faces apply on their own. The 16px title tier take a
+    // smaller step, so they do not crowd smaller headings.
+    assert.match(palette, /--track-display:\s*-0\.03em;/);
     assert.match(palette, /--track-title:\s*-0\.02em;/);
     // Caps tracking is NOT solid any more. The source system sets its uppercase
     // captions solid because it sets them at 700, where stroke weight holds the

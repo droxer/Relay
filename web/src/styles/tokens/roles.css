@@ -183,17 +183,17 @@
      signature: size carries hierarchy, weight carries emphasis. (The brand
      publishes this tier at 48px; palette.css documents why the app ladder
      runs a console-density step below the marketing one.) */
-  /* --type-title is 17px/500 — the fixed-noun tier for rail, section,
+  /* --type-title is 16px/500 — the fixed-noun tier for rail, section,
      drawer and dialog titles. The page h1 takes the 22px rung below. */
   --type-title:        500 var(--fs-title-lg)/var(--leading-tight) var(--font-display);
-  /* Page h1: 22px/500. 28px (--type-display) against a 17px h2 made the page
+  /* Page h1: 22px/500. 28px (--type-display) against a 16px h2 made the page
      title shout over its own sections; 22 sits one clean rung above. */
   --type-page:         500 var(--fs-5)/var(--leading-tight) var(--font-display);
   --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
   --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm:      400 var(--fs-1)/var(--leading-snug) var(--font-sans);
-  --type-label:        500 var(--fs-1)/var(--leading-snug) var(--font-sans);
-  --type-label-strong: 700 var(--fs-1)/var(--leading-snug) var(--font-sans);
+  --type-body-sm:      400 var(--fs-1)/var(--leading-normal) var(--font-sans);
+  --type-label:        500 var(--fs-2)/var(--leading-snug) var(--font-sans);
+  --type-label-strong: 700 var(--fs-2)/var(--leading-snug) var(--font-sans);
   /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier —
      at 12px in a variable face the counters close up. It is also the app's most-applied role (63
      rules), and the inverted ramp documented above only reads as emphasis
@@ -202,8 +202,8 @@
      It lands on 500 rather than 600 because the weight ladder is three rungs
      on purpose — shadcn-bridge.css maps font-semibold onto 700 precisely so a
      fourth weight cannot creep back in, and dimensionScales.test.ts pins the
-     set. Sharing 500 with --type-label is fine: micro is separated from it by
-     its dimmer ink and caption leading. */
+     set. Micro stays below the 14px label role through its 12px size,
+     dimmer ink, and caption leading. */
   /* Group labels are SENTENCE CASE now (2026-10-09). Forty-odd rules set
      their lane, band and field labels in tracked capitals — BACKLOG, RUNTIME,
      TEAM ROLE — so the quietest structure on a page was its loudest shape, and
@@ -229,12 +229,12 @@
      roles split the question by ORIGIN rather than by size.
 
      --type-name  the identity of the thing a row or card is ABOUT —
-                  14px/500 (see the note below for why not 700). It sits
-                  above the 12px label tier because a card title that differs
-                  from its own description by weight alone does not lead.
+                  14px/500 (see the note below for why not 700). It shares
+                  the 14px reading size with labels; position, weight, and ink
+                  distinguish a name from the description below it.
      --type-title-content
                   a title whose text comes from a user or an agent. 16px,
-                  one rung under --type-title and one weight calmer (400) —
+                  the same size as --type-title and one weight calmer (400) —
                   The source system's editorial-subhead move, where a lighter weight
                   at a display size introduces visual rest rather than
                   shouting someone's words back at them.

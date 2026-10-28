@@ -83,10 +83,9 @@ function Field({
         ) : null}
       </Label>
       {children}
-      {/* --type-body-sm: supporting text sits at the label's size, never above
-          it — at text-sm the guidance out-weighed the label and the value. */}
+      {/* Guidance is reading text; optional markers keep the caption size. */}
       {hint ? (
-        <p className="m-0 text-xs leading-snug text-muted-foreground">{hint}</p>
+        <p className="m-0 text-sm leading-normal text-muted-foreground">{hint}</p>
       ) : null}
       {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </Wrapper>
@@ -103,7 +102,7 @@ function Field({
    foot of a drawer form. Field errors sit inline under their control. */
 function FieldError({ id, children }: { id?: string; children: ReactNode }) {
   return (
-    <span id={id} role="alert" className="text-xs leading-snug text-danger">
+    <span id={id} role="alert" className="text-sm leading-normal text-danger">
       {children}
     </span>
   )

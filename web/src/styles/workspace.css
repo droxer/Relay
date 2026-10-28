@@ -706,8 +706,8 @@
   padding-top: var(--sp-4);
   border-top: 0.5px solid var(--line-2);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .workspace-profile .adm-drawer-section {

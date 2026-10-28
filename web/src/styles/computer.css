@@ -60,8 +60,8 @@
   max-width: 22rem;
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: right;
 }
 
@@ -198,8 +198,8 @@
 .computer-card-outdated {
   margin: var(--sp-1) 0 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .computer-card-actions {
@@ -255,8 +255,8 @@
 .computer-card-idle {
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 /* ---- running work ---------------------------------------------------- */
@@ -347,8 +347,8 @@ button.computer-run-open:hover {
   gap: var(--sp-2);
   min-width: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 /* A switched-off runtime dims whole: the mark's own is-disabled would leave
@@ -545,8 +545,8 @@ button.computer-run-open:hover {
 }
 
 .computer-kind-desc {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 
@@ -594,8 +594,8 @@ button.computer-run-open:hover {
 
 .computer-os-support {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 

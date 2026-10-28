@@ -169,8 +169,8 @@ tr[data-routine-state="paused"] .backlog-row-title,
   gap: var(--sp-1);
   min-width: 0;
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -191,8 +191,8 @@ tr[data-routine-state="paused"] .backlog-row-title,
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -215,8 +215,8 @@ tr[data-routine-state="paused"] .backlog-row-title,
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: nowrap;
 }
 
@@ -507,8 +507,8 @@ tr[data-selected="true"] > td:first-child {
 .task-selection-count {
   margin: 0;
   color: var(--ink-1);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 

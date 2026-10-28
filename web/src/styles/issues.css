@@ -44,8 +44,8 @@
 /* The intake band says why it matters without a second row of chrome. */
 .issues-band-hint {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .issue-project {

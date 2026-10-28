@@ -138,8 +138,8 @@
 
 .roster-option-copy > span:last-child {
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* A filter chip is a compact control, so the badge it carries steps down to

@@ -93,8 +93,8 @@
 .agent-personality-help {
   max-width: var(--measure);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-wrap: pretty;
 }
 
@@ -127,8 +127,8 @@
   max-width: var(--measure);
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-wrap: pretty;
 }
 
@@ -197,8 +197,8 @@
 .agent-personality-editor-guide > p {
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .agent-personality-editor-guide li div {
@@ -589,8 +589,8 @@
 .agent-skill-description,
 .agent-skill-unavailable {
   grid-column: 1;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .agent-skill-description {
@@ -606,7 +606,7 @@
 .agent-skill-footnote {
   margin: var(--sp-6) 0 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-normal);
 }

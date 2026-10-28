@@ -57,8 +57,8 @@
   align-items: center;
   gap: var(--sp-1-5);
   color: var(--ink-3);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -77,8 +77,8 @@
   display: inline-flex;
   align-items: center;
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -433,8 +433,8 @@
 
 .artifact-index-row-date {
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 

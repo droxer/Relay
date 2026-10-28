@@ -56,7 +56,7 @@ it("rejects an archived selected project at submit time", () => {
 
 it("offers project creation without discarding the task draft", () => {
   const save = vi.fn(); const create = vi.fn(); render(<Form save={save} choices={[]} createProject={create} />);
-  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.create_action" }));
   expect(create).toHaveBeenCalled();
   expect((screen.getByRole("textbox", { name: "backlog.title_field" }) as HTMLInputElement).value).toBe("Ship");
   expect(save).not.toHaveBeenCalled();

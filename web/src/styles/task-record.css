@@ -26,8 +26,8 @@
   margin: 0;
   padding: var(--sp-3) 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .record-missing {
@@ -112,8 +112,8 @@
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: left;
   cursor: pointer;
 }
@@ -255,8 +255,8 @@
   border-radius: var(--r-2);
   background: color-mix(in srgb, var(--err) 8%, transparent);
   color: var(--err);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -550,8 +550,8 @@
   margin: 0;
   padding: var(--sp-3) 0;
   color: var(--err);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .record-failure > span {
@@ -574,8 +574,8 @@
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 0.5px solid var(--line-1);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .record-automation-paused p {

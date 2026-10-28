@@ -243,8 +243,8 @@
 /* The label role beside the lane name, a quieter ink — one role, not a
    hand-assembled family/size/weight triple. */
 .backlog-lane-count {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-4);
 }
 

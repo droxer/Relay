@@ -117,7 +117,7 @@
    primary door, a hairline outline for the other.
 
    ONE public CTA recipe: the shared Button's `lg` hero rung — --control-h-lg,
-   --sp-5 inline pad, --r-2, the 12px/500 label (text-xs font-medium). The
+   --sp-5 inline pad, --r-2, the 14px/500 name role (text-sm font-medium). The
    sign-in, waitlist, join, and password-reset submits are `Button size="lg"`,
    so a visitor's first two clicks (landing door, then the gate's submit) are
    the same button. These anchors restate that geometry rather than wrap the
@@ -132,8 +132,8 @@
   /* The public CTA is a capsule, as eveland.ai draws it; app controls keep
      the 6px control radius. */
   border-radius: var(--r-pill);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   text-decoration: none;
   white-space: nowrap;
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
@@ -194,7 +194,7 @@
 
 .landing-runtimes {
   margin: var(--sp-2) 0 0;
-  font: var(--type-body-sm);
+  font: var(--type-body);
   color: var(--ld-muted);
 }
 
@@ -399,8 +399,8 @@
 }
 
 .landing-terminal-label {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ld-muted);
 }
 
@@ -467,8 +467,8 @@
 }
 
 .landing-foot-tagline {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ld-muted);
 }
 

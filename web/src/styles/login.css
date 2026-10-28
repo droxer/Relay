@@ -143,8 +143,8 @@
   /* The cover's prose is short enough that the last line can strand a single
      word; pretty rebreaks it. Headings get balance from a11y.css. */
   text-wrap: pretty;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-loose);
   color: var(--lg-muted);
 }
@@ -169,8 +169,8 @@
      read as a list on their own. */
   max-width: 54ch;
   text-wrap: pretty;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-normal);
   color: var(--lg-muted);
 }
@@ -340,8 +340,8 @@
    takes the supporting-text role in the muted ink. */
 .login-note {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--lg-muted);
 }
 
@@ -349,8 +349,8 @@
    action, never a second button competing with it. */
 .login-alt {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--lg-muted);
 }
 
@@ -376,8 +376,8 @@
 }
 
 .login-facts dt {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--lg-muted);
 }
 
@@ -402,8 +402,8 @@
 .login-forgot {
   margin: calc(var(--sp-2) * -1) 0 0;
   text-align: end;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 /* Ink, not the link orange: the screen spends no accent, and the underline is

@@ -64,6 +64,6 @@
   gap: var(--sp-3);
   padding: var(--sp-3) var(--page-gutter);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }

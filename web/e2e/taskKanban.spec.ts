@@ -51,9 +51,12 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   // A blocked task keeps the lane of the stage it was blocked FROM.
   const card = page.locator('.backlog-lane[data-status="review"] article').filter({ hasText: "Blocked review" });
   await expect(card).toBeVisible();
-  // A tile is an ID, a title and one facts line; the blocker and every action
-  // live in the record drawer it opens.
-  await expect(card.getByRole("button")).toHaveCount(0);
+  // A tile is an ID, a title and one facts line; the record's actions live in
+  // the drawer it opens. The one control a tile carries is its hold-up line,
+  // which opens what blocked it without leaving the board.
+  for (const action of ["Done", "Unblock", "Start", "Assign"]) {
+    await expect(card.getByRole("button", { name: action, exact: true })).toHaveCount(0);
+  }
   // Sharing the Review lane, the tile itself says it is blocked, and on what.
   await expect(card.locator(".task-holdup")).toContainText("Blocked");
   await expect(card.locator(".task-holdup")).toContainText("Need approval");

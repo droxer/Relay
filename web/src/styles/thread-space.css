@@ -166,8 +166,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
 }
 
 .thread-space-row-meta {
@@ -176,8 +176,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-loose);
   text-wrap: pretty;
 }
@@ -348,8 +348,8 @@
   margin: 0;
   max-width: var(--measure-tight);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .thread-space-preview {

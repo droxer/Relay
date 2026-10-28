@@ -143,6 +143,19 @@
   padding-block: var(--sp-4);
 }
 
+/* A collection rail — the agents, teams, skills and threads rosters — heads
+   its list with this header, so it takes the rail's own gutter (--sp-3), the
+   one the filter band under it and the rows themselves take. At the page
+   gutter the title sat 20px right of the row wash it introduced, and the
+   create action floated off the rail's right edge. Page-level headers keep
+   --page-gutter: they head a canvas, whose own insets are the page gutter. */
+.agents-roster > .page-header,
+.teams-roster > .page-header,
+.skills-list > .page-header,
+.thread-panel-inner > .page-header {
+  padding-inline: var(--sp-3);
+}
+
 .page-header-lead {
   display: flex;
   min-width: 0;
@@ -251,8 +264,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
@@ -261,8 +274,8 @@
 .page-header-subtitle {
   margin: 0;
   max-width: var(--measure);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 

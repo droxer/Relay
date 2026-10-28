@@ -587,8 +587,8 @@
 .team-work-member-responsibility {
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -612,8 +612,8 @@
   margin: 0;
   padding-left: var(--sp-4);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .team-work-member-participation {
@@ -655,6 +655,6 @@
   flex-basis: 100%;
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }

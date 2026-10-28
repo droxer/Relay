@@ -149,7 +149,7 @@ test("creating the first project preserves a global task draft", async ({ page }
   await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
   const taskForm = page.getByRole("dialog", { name: "New task", exact: true });
   await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
-  await taskForm.getByRole("button", { name: "Create project", exact: true }).click();
+  await taskForm.getByRole("button", { name: "New project", exact: true }).click();
   const projectForm = page.getByRole("dialog", { name: "Create project", exact: true });
   // The drawer opens on the agent-drafted setup (ADR-022); this test names
   // the project itself, so it takes the manual path.

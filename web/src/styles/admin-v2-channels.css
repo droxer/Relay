@@ -201,8 +201,8 @@
   color: var(--ink-1);
   background: color-mix(in srgb, var(--ink-3) 12%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--ink-3) 22%, transparent);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .adm-chat-avatar svg {
@@ -268,8 +268,8 @@
   border-radius: var(--r-1);
   border: 0.5px solid var(--line-1);
   color: var(--ink-3);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .adm-chat-section-actions {
@@ -406,8 +406,8 @@
 .adm-chat-callback small,
 .adm-chat-form > small {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-snug);
 }
 

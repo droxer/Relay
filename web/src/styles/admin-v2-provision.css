@@ -214,8 +214,8 @@
 
 .create-agent-runtime-option-meta {
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* A radio indicator drawn as a ring, on the --dot-lg rung. */
@@ -249,8 +249,8 @@
 
 .adm-provision-outcome-body {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-normal);
   color: var(--ink-3);
 }
@@ -497,8 +497,8 @@
    their siblings get 24px. */
 .adm-cred-note {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   line-height: var(--leading-loose);
 }
@@ -510,8 +510,8 @@
 .adm-cred-empty {
   margin: 0;
   padding: var(--sp-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   border: var(--well-dashed);
   border-radius: var(--r-3);
@@ -561,8 +561,8 @@
 
 .adm-auth-sub {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   line-height: var(--leading-loose);
 }

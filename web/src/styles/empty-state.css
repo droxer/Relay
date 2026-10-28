@@ -93,8 +93,8 @@
   margin: 0;
   max-width: var(--measure-tight);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-loose);
   text-wrap: pretty;
   overflow-wrap: anywhere;
