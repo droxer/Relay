@@ -146,6 +146,7 @@
     "resize_label": "调整侧边栏宽度"
   },
   "project": {
+    "archive_unsaved": "请先保存或放弃更改，再归档此项目。",
     "locked_hint": "任务保存后不可更改所属项目。",
     "delete": "删除项目",
     "deleting": "正在删除…",
@@ -798,6 +799,8 @@
     }
   },
   "workspace": {
+    "preview_missing": "此文件已不可用，可能已被移动或删除。",
+    "preview_error": "无法加载此文件，请重试。",
     "title": "工作区",
     "sub": "文件",
     "sections": "工作区分区",

@@ -46,7 +46,6 @@ export function useThreadNavigation({
   recordTaskId,
   threadComputers,
   assignableComputers,
-  composerRef,
   pinTranscriptToBottom,
   showThreadList,
   syncThreadUrl,
@@ -113,7 +112,6 @@ export function useThreadNavigation({
     // Same rule as the staging effect: a pick survives a heartbeat flap, and
     // only a machine that is no longer this user's drops it.
     setNewThreadNodeId((current) => resolveNewThreadComputer(current, threadComputers, assignableComputers));
-    composerRef.current?.clear();
     pinTranscriptToBottom();
     syncThreadUrl(null, false, projectId);
   }

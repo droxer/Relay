@@ -290,11 +290,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             <Button
               variant="ghost"
               type="button"
-              className="page-header-icon-action page-header-icon-action--primary"
+              className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
               tooltip={t("skills.publish_skill")}
               onClick={openCreate}
             >
               <ActionAdd size={ICON.md} aria-hidden="true" />
+              <span className="page-header-create-label">{t("skills.publish_skill")}</span>
             </Button>
           }
         />

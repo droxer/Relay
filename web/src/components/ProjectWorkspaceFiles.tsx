@@ -88,6 +88,7 @@ function WorkspaceFileBrowser({
       openDirectory={openDirectory}
       onSelectFile={(entry) => setSelectedKey(`file:${entry.path}`)}
       onRetry={() => void fileQuery.refetch()}
+      onRetryPreview={() => void contentQuery.refetch()}
       onClosePreview={() => setSelectedKey("")}
     />
   );

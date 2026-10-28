@@ -76,7 +76,10 @@
    Three ascending bars filled to the level (low 1 / normal 2 / high 3). One
    glyph on every surface (see PriorityBadge.tsx); the word is in the tooltip.
    `.priority-badge` is only the tooltip's hover target around the glyph. */
+.priority-label { display: none; }
+
 .priority-badge {
+  gap: var(--sp-1);
   display: inline-flex;
   align-items: center;
   flex: none;
@@ -435,9 +438,15 @@
    One line, shared by the board tile and every list row. The status glyph
    and word carry the tone; the reason itself stays in secondary ink, so a
    lane of blocked work reads as flagged rather than as a wall of red. It
-   truncates to one line: the full text rides the title attribute, and in
-   full on the record. */
+   truncates to one line; pressing it opens the complete explanation. */
 .task-holdup {
+  position: relative;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -446,6 +455,9 @@
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
+.task-holdup-popover { max-width: calc(100vw - var(--sp-8)); }
+.task-holdup:hover .task-holdup-text,
+.task-holdup:focus-visible .task-holdup-text { text-decoration: underline; }
 .task-holdup > .task-status-icon { flex: none; }
 .task-holdup-label {
   flex: none;

@@ -115,7 +115,7 @@ export function InlinePriority({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  if (readOnly) return <PriorityBadge priority={priority} />;
+  if (readOnly) return <PriorityBadge priority={priority} always />;
   const label = t(`backlog.priorities.${priority}`);
 
   return (
@@ -131,6 +131,7 @@ export function InlinePriority({
             title={label}
           >
             <PriorityGlyph priority={priority} />
+            <span className="priority-label" aria-hidden="true">{label}</span>
           </Button>
         }
       />

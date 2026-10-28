@@ -187,11 +187,12 @@ export function ThreadListPanel({
           return (
             <Button variant="ghost"
               type="button"
-              className="page-header-icon-action page-header-icon-action--primary"
+              className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
               tooltip={createLabel}
               onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(null)}
             >
               <ActionAdd size={ICON.md} />
+              <span className="page-header-create-label">{createLabel}</span>
             </Button>
           );
         })()}

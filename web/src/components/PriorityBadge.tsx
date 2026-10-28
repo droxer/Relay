@@ -10,8 +10,8 @@ import { Tooltip } from "@/components/ui/tooltip";
  * This is the ONE priority mark. It used to be drawn three ways — bare bars in
  * the issue table, a bordered "High" chip on board cards, and bordered chips in
  * the automations table — so the same attribute looked like a different thing
- * on every surface. The word now lives in the tooltip and the accessibility
- * tree; what the eye scans is the same 11px glyph everywhere.
+ * on every surface. The word lives in the tooltip and accessibility tree, and is also
+ * visible beside the glyph on phones.
  */
 export function PriorityGlyph({ priority }: { priority: TaskPriority }) {
   return (
@@ -39,6 +39,7 @@ export function PriorityBadge({ priority, always = false }: { priority: TaskPrio
       <span className="priority-badge" data-priority={priority}>
         <PriorityGlyph priority={priority} />
         <span className="sr-only">{label}</span>
+        <span className="priority-label" aria-hidden="true">{label}</span>
       </span>
     </Tooltip>
   );

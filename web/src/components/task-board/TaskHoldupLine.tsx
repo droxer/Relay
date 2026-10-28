@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger, PopoverTitle, PopoverDescription } from "@/components/ui/popover";
 import { TaskStatusIcon } from "../TaskStatusIcon";
 import { taskHoldup } from "../../lib/taskExceptions";
 import { waitingOnRefs } from "../../lib/taskPrerequisites";
@@ -30,13 +31,7 @@ export function TaskHoldupLine({ task, className, labeled = false }: {
   if (holdup.kind === "prerequisites") return <PrerequisiteHoldup task={task} className={className} labeled={labeled} />;
   const label = t(`backlog.statuses.${task.status}`);
   const text = holdup.text ?? t(holdup.kind === "blocked" ? "blocker.no_reason" : "blocker.no_question");
-  return (
-    <span className={cn("task-holdup", className)} data-kind={holdup.kind} title={`${label}: ${text}`}>
-      <TaskStatusIcon status={task.status} />
-      {labeled ? <span className="task-holdup-label">{label}</span> : <span className="sr-only">{label}:</span>}
-      <span className={cn("task-holdup-text", !holdup.text && "task-holdup-text--none")}>{text}</span>
-    </span>
-  );
+  return <HoldupDisclosure task={task} className={className} labeled={labeled} label={label} text={text} kind={holdup.kind} missing={!holdup.text} />;
 }
 
 /** Waiting on prerequisites: named by ref, from the task list the row came
@@ -53,11 +48,34 @@ function PrerequisiteHoldup({ task, className, labeled }: {
   const tasks = new Map(cached.map((item) => [item.id, item]));
   const label = t("blocker.waiting_on_label");
   const text = t("blocker.waiting_on", { tasks: waitingOnRefs(task, tasks).join(", ") });
+  return <HoldupDisclosure task={task} className={className} labeled={labeled} label={label} text={text} kind="prerequisites" />;
+}
+
+function HoldupDisclosure({ task, className, labeled, label, text, kind, missing = false }: {
+  task: RelayTaskListItem;
+  className?: string;
+  labeled: boolean;
+  label: string;
+  text: string;
+  kind: string;
+  missing?: boolean;
+}) {
   return (
-    <span className={cn("task-holdup", className)} data-kind="prerequisites" title={text}>
-      <TaskStatusIcon status={task.status} />
-      {labeled ? <span className="task-holdup-label">{label}</span> : <span className="sr-only">{label}:</span>}
-      <span className="task-holdup-text">{text}</span>
-    </span>
+    <Popover>
+      <PopoverTrigger
+        className={cn("task-holdup", className)}
+        data-kind={kind}
+        aria-label={`${label}: ${text}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <TaskStatusIcon status={task.status} />
+        {labeled ? <span className="task-holdup-label">{label}</span> : null}
+        <span className={cn("task-holdup-text", missing && "task-holdup-text--none")}>{text}</span>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="task-holdup-popover" onClick={(event) => event.stopPropagation()}>
+        <PopoverTitle>{label}</PopoverTitle>
+        <PopoverDescription className="whitespace-pre-wrap break-words">{text}</PopoverDescription>
+      </PopoverContent>
+    </Popover>
   );
 }

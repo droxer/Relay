@@ -608,6 +608,7 @@ export function ThreadsView({
         )}
 
         <Composer
+          draftKey={JSON.stringify([currentUser.userId ?? currentUser.username, activeSession?.id ?? "new"])}
           ref={composerRef}
           logicalAgents={composerLogicalAgents}
           activeLogicalAgentId={activeLogicalAgentId}

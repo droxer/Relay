@@ -255,11 +255,12 @@ function AgentsPageView({
               <Button
                 variant="ghost"
                 type="button"
-                className="page-header-icon-action page-header-icon-action--primary"
+                className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
                 tooltip={t("agents_page.create_action")}
                 onClick={() => setCreateOpen(true)}
               >
                 <ActionAdd size={ICON.md} aria-hidden="true" />
+                <span className="page-header-create-label">{t("agents_page.create_action")}</span>
               </Button>
             ) : null
           }

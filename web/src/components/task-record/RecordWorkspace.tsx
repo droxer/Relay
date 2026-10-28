@@ -192,6 +192,7 @@ export function RecordWorkspace({ taskId, artifactsDir, threadId, rootLabel, sco
             openDirectory={openDirectory}
             onSelectFile={(entry) => setSelectedPath(entry.path)}
             onRetry={() => void fileQuery.refetch()}
+            onRetryPreview={() => void contentQuery.refetch()}
             onClosePreview={() => setSelectedPath("")}
           />
         </div>

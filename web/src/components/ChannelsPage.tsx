@@ -30,16 +30,16 @@ export function ChannelsPage() {
         layout="stacked"
         actions={
           hasChannels ? (
-            // The shared list-header create affordance — a ghost plus, same
-            // as every other list page; the header already names the list.
+            // The shared create action names itself when the header has room.
             <Button
               type="button"
               variant="ghost"
-              className="page-header-icon-action page-header-icon-action--primary"
+              className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
               tooltip={t("admin.v2.chat_create")}
               onClick={() => setCreateOpen(true)}
             >
               <ActionAdd size={ICON.md} aria-hidden="true" />
+              <span className="page-header-create-label">{t("admin.v2.chat_create")}</span>
             </Button>
           ) : null
         }

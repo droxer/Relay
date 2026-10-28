@@ -123,7 +123,7 @@ export function ComputerPage({
     <Button
       variant="ghost"
       type="button"
-      className="page-header-icon-action page-header-icon-action--primary"
+      className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
       tooltip={computerLimit !== undefined
         ? `${t("computer.connect_button")} · ${computersUsed}/${computerLimit}`
         : t("computer.connect_button")}
@@ -131,6 +131,7 @@ export function ComputerPage({
       onClick={() => setConnectDrawerOpen(true)}
     >
       <ActionAdd size={ICON.md} aria-hidden="true" />
+      <span className="page-header-create-label">{t("computer.connect_button")}</span>
     </Button>
   );
   const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (

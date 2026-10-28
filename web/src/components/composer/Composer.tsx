@@ -54,6 +54,7 @@ export type ComposerDispatchOptions = { literal?: boolean; questionId?: string; 
 // control. Draft state stays inside this component so every
 // keystroke does not re-render the full application shell and transcript.
 const ComposerView = forwardRef<ComposerHandle, {
+  draftKey?: string;
   logicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: UserAgent) => void;
@@ -91,9 +92,9 @@ const ComposerView = forwardRef<ComposerHandle, {
   prompt?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
+}>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
   const { t } = useTranslation();
-  const composer = useComposer();
+  const composer = useComposer(draftKey);
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
   useEffect(() => setStyle(null), [activeTeamId]);
   const {

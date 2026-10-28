@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { RelayApiError } from "../src/api";
 import { ProjectSettingsPanel } from "../src/components/ProjectSettingsPanel";
@@ -132,6 +132,30 @@ it("archives a project only after confirmation", async () => {
   expect(archive).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "project.archive" }));
   await waitFor(() => expect(archive).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 1 }));
+});
+
+it("requires saving or discarding changes before archiving", () => {
+  renderPanel();
+  fireEvent.change(nameInput(), { target: { value: "Keep my edits" } });
+  const button = screen.getByRole("button", { name: "project.archive" }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(screen.getByText("project.archive_unsaved")).toBeTruthy();
+  fireEvent.click(button);
+  expect(archive).not.toHaveBeenCalled();
+  expect(nameInput().value).toBe("Keep my edits");
+  fireEvent.click(screen.getByRole("button", { name: "unsaved.confirm" }));
+  expect(button.disabled).toBe(false);
+});
+
+it("preserves a draft if another client archives the project and it is unarchived here", async () => {
+  const view = renderPanel();
+  fireEvent.change(nameInput(), { target: { value: "Keep my edits" } });
+  view.rerenderWith({ ...project, archivedAt: "today", version: 2 });
+  unarchive.mockResolvedValue({ project: { ...project, version: 3 } });
+  fireEvent.click(screen.getByRole("button", { name: "project.unarchive" }));
+  await waitFor(() => expect(unarchive).toHaveBeenCalled());
+  await act(async () => {});
+  expect(nameInput().value).toBe("Keep my edits");
 });
 
 it("locks the details of an archived project but still allows unarchiving and deleting it", () => {
