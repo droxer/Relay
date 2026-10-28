@@ -85,6 +85,77 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   return page;
 }
 
+/* The four collection rails — agents, teams, projects, skills — are one
+   surface in four places: a roster heading its own list. They drifted apart
+   one page at a time (a page-gutter header over a 12px band, a raw count here
+   and a counted noun there, "Publish skill" beside three "New …" actions), so
+   the contract is measured on the rendered pages rather than restated in CSS
+   comments. Each entry names the rail element; the header is its first child
+   and the filter band follows it. */
+const COLLECTION_RAILS = [
+  ["/agents", ".agents-roster"],
+  ["/teams", ".teams-roster"],
+  ["/projects", ".thread-panel-inner"],
+  ["/skills", ".skills-list"],
+] as const;
+
+async function collectionHeader(page: Page, rail: string) {
+  return page.locator(`${rail} > .page-header`).evaluate((header) => {
+    const title = header.querySelector<HTMLElement>(".page-header-title")!;
+    const field = header.parentElement!.querySelector<HTMLElement>(".list-filter-search");
+    const icon = field?.querySelector<SVGElement>("svg");
+    return {
+      display: getComputedStyle(header).display,
+      height: Math.round(header.getBoundingClientRect().height * 100) / 100,
+      inset: parseFloat(getComputedStyle(header).paddingInlineStart),
+      titleSize: getComputedStyle(title).fontSize,
+      titleX: Math.round(title.getBoundingClientRect().x),
+      fieldX: field ? Math.round(field.getBoundingClientRect().x) : null,
+      iconX: icon ? Math.round(icon.getBoundingClientRect().x) : null,
+      fieldHeight: field ? Math.round(field.getBoundingClientRect().height * 100) / 100 : null,
+      count: header.querySelector(".page-header-count")?.textContent ?? "",
+      create: header.querySelector(".page-header-create-label")?.textContent ?? "",
+    };
+  });
+}
+
+test("collection headers share one recipe across agents, teams, projects, and skills", async ({ browser }, testInfo) => {
+  const measured = [];
+  for (const [path, rail] of COLLECTION_RAILS) {
+    const page = await openPage(browser, path, false);
+    await expect(page.locator(`${rail} > .page-header`)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`${path.slice(1)}-desktop.png`) });
+    measured.push({ path, ...await collectionHeader(page, rail) });
+    await page.context().close();
+  }
+  for (const header of measured) {
+    expect(header.display, header.path).toBe("flex");
+    expect(header.count, header.path).toMatch(/^\d+ \S+$/);
+    expect(header.create, header.path).toBe(`New ${header.count.split(" ")[1]!.replace(/s$/, "")}`);
+    expect(header.height, header.path).toBe(measured[0]!.height);
+    expect(header.inset, header.path).toBe(measured[0]!.inset);
+    expect(header.titleSize, header.path).toBe(measured[0]!.titleSize);
+    expect(header.fieldHeight, header.path).toBe(measured[0]!.fieldHeight);
+    // One left edge: the title, the filter field and its glyph line up, so a
+    // rail reads as a column rather than a heading floated over a list.
+    expect(header.titleX, header.path).toBe(header.fieldX);
+    expect(header.fieldX, header.path).toBe(header.iconX);
+  }
+
+  // On a phone the rails drop that heading band — the top bar names the
+  // surface — and the create action joins the bar with it, as every other
+  // list on this tier does. No thread is seeded, so each rail is the pane on
+  // screen; a rail behind an open thread stands down instead (its plus would
+  // land on the thread's own bar).
+  for (const [path, rail] of COLLECTION_RAILS) {
+    const page = await openPage(browser, path, true, undefined, undefined, { sessions: [] });
+    expect((await collectionHeader(page, rail)).display, path).toBe("none");
+    await page.screenshot({ path: testInfo.outputPath(`${path.slice(1)}-phone.png`) });
+    await expect(page.locator(".mobile-topbar-tools").getByRole("button", { name: /^New \S+$/ })).toHaveCount(1);
+    await page.context().close();
+  }
+});
+
 /** How far any descendant paints outside the element's own box, in px. */
 function overhang(page: Page, selector: string) {
   return page.locator(selector).first().evaluate((element) => {

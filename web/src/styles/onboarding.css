@@ -151,8 +151,8 @@
   align-items: center;
   gap: var(--sp-2);
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 
@@ -217,8 +217,8 @@ button.onboarding-starter {
 .onboarding-starter-label > svg { color: var(--ink-4); }
 
 .onboarding-starter-text {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-2);
 }
 
@@ -251,8 +251,8 @@ button.onboarding-starter {
 
 .onboarding-card-copy p {
   margin: var(--sp-0-5) 0 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 

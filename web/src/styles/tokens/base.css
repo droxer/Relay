@@ -137,6 +137,16 @@ button[data-slot="button"] {
   font-family: inherit;
 }
 
+[data-slot="button"] {
+  /* Fixed heights must yield when the reader enlarges the font. */
+  min-height: calc(1lh + var(--sp-1));
+}
+
+[data-slot="input"],
+[data-slot="select-trigger"] {
+  min-height: calc(1lh + var(--sp-2) + var(--sp-0-5));
+}
+
 button,
 a,
 input,

@@ -24,14 +24,6 @@
   color: var(--ink-2);
 }
 
-/* One header step across both columns, so the rail's identity block and the
-   open skill's header draw one rule across the page. The section rail gave
-   the library this step while it was a settings section; as a page of its
-   own it reads the same root token. */
-.skills-page .page-header {
-  min-height: var(--sec-header-h);
-}
-
 /* Rail shell, on the .agents-roster recipe: the shared list elevation between
    the nav rail and the detail canvas, not the canvas itself. */
 .skills-list {
@@ -110,8 +102,8 @@
 .skills-roster-row-meta {
   overflow: hidden;
   min-width: 0;
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-4);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -125,8 +117,8 @@
 }
 
 .skill-muted {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 
@@ -216,13 +208,18 @@
 }
 
 .skill-file-list code {
-  font: var(--type-body-sm);
+  font: var(--type-body);
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
   color: var(--ink-2);
 }
 
-.skill-file-list span,
+.skill-file-list span {
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--ink-3);
+}
+
 .skill-revisions time {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -365,8 +362,8 @@
 
 .skill-error {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--err);
 }
 
@@ -386,8 +383,8 @@
   border: var(--well-dashed);
   border-radius: var(--r-2);
   background: var(--field-on-overlay);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   cursor: pointer;
 }
@@ -574,7 +571,7 @@
   margin: 0;
   padding: var(--sp-6) var(--sp-4);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: center;
 }

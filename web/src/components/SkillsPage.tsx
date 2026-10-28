@@ -291,11 +291,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               variant="ghost"
               type="button"
               className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
-              tooltip={t("skills.publish_skill")}
+              tooltip={t("skills.create_action")}
               onClick={openCreate}
             >
               <ActionAdd size={ICON.md} aria-hidden="true" />
-              <span className="page-header-create-label">{t("skills.publish_skill")}</span>
+              <span className="page-header-create-label">{t("skills.create_action")}</span>
             </Button>
           }
         />
@@ -338,7 +338,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             actions={
               skills.length ? undefined : (
                 <Button type="button" variant="outline" onClick={openCreate}>
-                  {t("skills.publish_first")}
+                  {t("skills.create_action")}
                 </Button>
               )
             }

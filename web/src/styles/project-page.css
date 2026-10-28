@@ -184,8 +184,8 @@
 .project-member-tile-meta {
   overflow: hidden;
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -199,8 +199,8 @@
 .project-member-tile-responsibilities {
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: pre-wrap;
 }
 
@@ -219,8 +219,8 @@
 .project-member-tile-instructions p {
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: pre-wrap;
 }
 
@@ -464,8 +464,8 @@
 .project-dashboard-attention-reason {
   grid-area: reason;
   overflow: hidden;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -473,8 +473,8 @@
 
 .project-dashboard-attention-empty {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 
@@ -558,8 +558,8 @@
 .project-settings-hint {
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .project-settings-fields {
@@ -684,8 +684,8 @@
 .project-settings-danger-copy p {
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 @media (max-width: 820px) {
@@ -728,8 +728,8 @@
 .project-setup-rationale {
   margin: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: pre-line;
 }
 
@@ -783,8 +783,8 @@
 
 .project-setup-error {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 /* The mode switch leads the drawer's action bar; Cancel and the primary

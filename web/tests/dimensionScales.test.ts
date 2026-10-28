@@ -140,7 +140,7 @@ describe("control height ladder", () => {
     assert.equal(Number(touch), 44);
     const a11y = readFileSync(path.join(stylesDir, "a11y.css"), "utf8");
     assert.match(a11y, /@media \(pointer: coarse\)/);
-    assert.match(a11y, /min-height: var\(--touch-target\);/);
+    assert.match(a11y, /min-height: max\(var\(--touch-target\), calc\(1lh/);
   });
 
   it("sizes interactive chrome from the ladder, not a raw literal", () => {

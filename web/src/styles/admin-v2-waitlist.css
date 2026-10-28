@@ -12,8 +12,8 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-2);
 }
 
@@ -60,8 +60,8 @@
 }
 
 .adm-waitlist-delivery-error {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--err);
   overflow-wrap: anywhere;
 }

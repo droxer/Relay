@@ -135,8 +135,8 @@
 }
 
 .permission-prompt-summary {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 
@@ -196,7 +196,7 @@
 }
 
 .permission-option-description {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }

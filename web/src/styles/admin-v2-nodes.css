@@ -129,8 +129,8 @@
   background: var(--surface-2);
   box-shadow: inset 0 0 0 0.5px var(--line-2);
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .adm-node-owner-name {
@@ -280,8 +280,8 @@
 .adm-cred-hint {
   display: block;
   margin-top: var(--sp-0-5);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   line-height: var(--leading-snug);
 }
@@ -316,8 +316,8 @@
   color: var(--ink-3);
   background: var(--surface-2);
   border: 0.5px solid var(--line-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 /* User cards represent people: a circular avatar that reads as a
@@ -570,8 +570,8 @@
 .adm-node-card-error {
   /* The card's flex gap already separates the error from the footer. */
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--err);
 }
 
@@ -581,8 +581,8 @@
   /* The table cell is nowrap; a failure message wraps inside its track
      rather than running across the runtimes column. */
   white-space: normal;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--err);
 }
 

@@ -131,8 +131,8 @@ tr.is-pulse > td:first-child::after {
 .adm-node-chip {
   background: var(--control-fill);
   color: var(--ink-1);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
@@ -250,8 +250,8 @@ tr.is-pulse > td:first-child::after {
    control fill, the same "this one is on" wash the view toggle uses. */
 .adm-fleet-chip {
   gap: var(--sp-1-5);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -310,8 +310,8 @@ tr.is-pulse > td:first-child::after {
 .adm-node-history-head p {
   margin: var(--sp-1) 0 0;
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-node-history-count {
@@ -556,8 +556,8 @@ tr.is-pulse > td:first-child::after {
 }
 
 .adm-emp-card-metric .tnum {
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   font-variant-numeric: tabular-nums;
 }
 

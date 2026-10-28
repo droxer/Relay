@@ -24,8 +24,8 @@
   /* 6px control rung, matching the list rows it sits above. */
   border-radius: var(--r-2);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 
@@ -99,8 +99,8 @@
   /* --ink-3, the artifact preview's status ink: one tier for every
      loading / empty note, not a dimmer one in the record. */
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .record-file-list {
@@ -132,8 +132,8 @@
   border-radius: var(--r-2);
   background: none;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: left;
   cursor: pointer;
 }
@@ -154,15 +154,15 @@
 .record-file-meta {
   flex: none;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .record-inline-action {
   flex: none;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -205,8 +205,8 @@
   margin: 0;
   padding: 0 0 0 var(--sp-5);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 /* The marker is the small dot rung; the rail below hangs from its centre.

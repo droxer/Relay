@@ -241,8 +241,8 @@
   gap: var(--sp-2);
   padding: 0 var(--sp-3) var(--sp-2) var(--sp-8);
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-dash-chart--empty { opacity: var(--opacity-dormant); }
@@ -340,8 +340,8 @@
 
 .adm-dash-empty-copy {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   max-width: var(--measure-tight);
   background: var(--surface-1);

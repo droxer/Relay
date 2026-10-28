@@ -198,16 +198,17 @@
   color: var(--ink-1);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
 }
 
 .workspace-pick-meta {
   display: inline-flex;
   align-items: baseline;
   color: var(--ink-3);
-  /* Size and date are metadata beside a 14px filename: the meta tier, the
-     same step the transcript's timestamps take. */
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
+  /* File names, sizes, and dates share the 14px reading size. */
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   white-space: nowrap;
 }
 
@@ -258,8 +259,8 @@
   padding: 0 var(--sp-4);
   color: var(--ink-3);
   cursor: pointer;
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: left;
 }
 
@@ -360,8 +361,8 @@
 .workspace-preview-truncated {
   margin: var(--sp-3) var(--doc-inset-inline) 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .code-view-toolbar {
@@ -420,8 +421,8 @@
   display: block;
   padding: var(--sp-2) var(--sp-4) 0;
   color: var(--ink-3);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   text-transform: lowercase;
 }
 
@@ -538,8 +539,8 @@
   border-width: 1px;
   padding-block: var(--sp-hairline);
   color: color-mix(in srgb, var(--info) 80%, transparent);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .artifacts-empty-line {
@@ -586,8 +587,8 @@
   margin: auto;
   padding: var(--sp-7);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .workspace-loading-bar {

@@ -117,7 +117,7 @@ export function TaskTagsField({
           </datalist>
         ) : null}
       </div>
-      <p id={hintId} className="m-0 text-xs leading-snug text-muted-foreground">{t("tags.hint")}</p>
+      <p id={hintId} className="m-0 text-sm leading-normal text-muted-foreground">{t("tags.hint")}</p>
     </Field>
   );
 }

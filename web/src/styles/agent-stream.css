@@ -443,8 +443,8 @@
   border-radius: var(--r-1);
   background: none;
   color: var(--ink-4);
-  /* Under a 13px mono command, a 14px toggle outweighed what it toggles. */
-  font: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   font-style: normal;
   text-align: left;
   cursor: pointer;
@@ -645,8 +645,8 @@
 .msg-system-detail {
   max-width: 360px;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -63,8 +63,8 @@
 
 .dialog-message {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }

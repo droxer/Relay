@@ -174,16 +174,21 @@ export function ThreadListPanel({
           .list-filter-bar band, each carrying its own hairline. */}
       <PageHeader
         title={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
-        count={directoryMode === "projects" ? projectCount : threads.length}
+        count={directoryMode === "projects"
+          ? t("project.count", { count: projectCount })
+          : t("thread.count", { count: threads.length })}
         titleAs="h2"
         titleVariant="title"
         // No "Workspace" kicker over Projects: the sidebar group already
         // says where the reader is, and the eyebrow cost every rail a line.
         layout="stacked"
+        // On a phone the rail's create joins every other list's in the top
+        // bar; an open thread replaces this pane, so it stands down then.
+        topbarActions={selectedSessionId ? "inactive" : true}
         actions={(() => {
           // One plus for both modes — the shared list-header create
           // affordance, in its primary tier (.page-header-icon-action, shell.css).
-          const createLabel = directoryMode === "projects" ? t("project.create") : t("thread.new_thread");
+          const createLabel = directoryMode === "projects" ? t("project.create_action") : t("thread.new_thread");
           return (
             <Button variant="ghost"
               type="button"
@@ -275,7 +280,7 @@ export function ThreadListPanel({
         {directoryMode === "projects" ? (
           // Loading and error are their own answers here, matching the detail
           // pane beside it — an unfinished or failed fetch is not an empty
-          // account, and offering "Create project" for one is a lie.
+          // account, and offering "New project" for one is a lie.
           directoryState === "loading" ? (
             <ListSkeleton label={t("project.loading")} />
           ) : directoryState === "error" ? (
@@ -300,7 +305,7 @@ export function ThreadListPanel({
               title={t("project.no_projects")}
               actions={(
                 <Button type="button" onClick={() => onCreateProject()}>
-                  {t("project.create")}
+                  {t("project.create_action")}
                 </Button>
               )}
             />

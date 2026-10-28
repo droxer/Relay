@@ -4,13 +4,17 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SkillsPage } from "../src/components/SkillsPage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.publish_first": "Publish your first skill", "skills.publish_title": "Publish a skill", "skills.close": "Close", "skills.author": "Author", "skills.upload_bundle": "Upload bundle", "skills.github": "GitHub", "skills.skill_name": "Skill name", "skills.namespace": "Namespace", "skills.description": "Description", "skills.instructions": "Instructions", "skills.publish": "Publish", "skills.cancel": "Cancel", "skills.required": "required", "skills.optional": "optional" }[key] ?? key), i18n: { language: "en" } }) }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.create_action": "New skill", "skills.publish_title": "Publish a skill", "skills.close": "Close", "skills.author": "Author", "skills.upload_bundle": "Upload bundle", "skills.github": "GitHub", "skills.skill_name": "Skill name", "skills.namespace": "Namespace", "skills.description": "Description", "skills.instructions": "Instructions", "skills.publish": "Publish", "skills.cancel": "Cancel", "skills.required": "required", "skills.optional": "optional" }[key] ?? key), i18n: { language: "en" } }) }));
 
 const { createSkill } = vi.hoisted(() => ({ createSkill: vi.fn(async (input: any) => ({ id: "new-skill", ...input })) }));
 vi.mock("../src/api", () => ({ createSkill, importSkill: vi.fn(), deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
 vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
+
+/* The rail header and the empty state both name the create affordance "New
+   skill"; either opens the publish drawer. */
+const createButton = () => screen.getAllByRole("button", { name: "New skill" })[0]!;
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -30,7 +34,7 @@ it.each([
 ] as const)("rejects %s before reading or publishing files", async (code, makeFiles) => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   const files = makeFiles();
   await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, files);
   expect((await screen.findByRole("alert")).textContent).toBe(`skills.errors.${code}`);
@@ -42,7 +46,7 @@ it.each([
 it("clears a previously valid upload when replacement files cannot be read", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
   await user.upload(input, bundleFile());
@@ -57,13 +61,13 @@ it("clears a previously valid upload when replacement files cannot be read", asy
 it("ignores uploads finishing after the publish drawer is closed", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   let finish!: (bytes: ArrayBuffer) => void;
   const file = bundleFile();
   Object.defineProperty(file, "arrayBuffer", { value: () => new Promise<ArrayBuffer>((resolve) => { finish = resolve; }) });
   await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file);
   await user.click(screen.getByRole("button", { name: "Cancel" }));
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
   await act(async () => finish(new ArrayBuffer(0)));
   expect((screen.getByRole("button", { name: "Publish" }) as HTMLButtonElement).disabled).toBe(true);
@@ -72,7 +76,7 @@ it("ignores uploads finishing after the publish drawer is closed", async () => {
 it("publishes directory uploads relative to the selected bundle root", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   await user.click(screen.getByRole("button", { name: "Upload bundle" }));
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
   const files = ["SKILL.md", "references/example.md"].map((path) => {
@@ -90,7 +94,7 @@ it("publishes directory uploads relative to the selected bundle root", async () 
 it("defaults to upload and offers no authoring mode", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   expect(screen.queryByRole("button", { name: "Author" })).toBeNull();
   expect(screen.queryByLabelText(/^Instructions/)).toBeNull();
   expect(screen.getByRole("button", { name: "Upload bundle" }).getAttribute("aria-pressed")).toBe("true");
@@ -100,7 +104,7 @@ it("defaults to upload and offers no authoring mode", async () => {
 it("marks which publish fields are required", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider></QueryClientProvider>);
-  await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
+  await user.click(createButton());
   const field = (label: string) =>
     screen.getByLabelText(new RegExp(`^${label}`)).closest('[data-slot="field"]') as HTMLElement;
   // The <Field> grammar: a destructive asterisk for required, the word for optional.

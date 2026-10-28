@@ -1002,8 +1002,8 @@
   /* The one chip height (it read 17px, the line box of its label). */
   min-height: var(--chip-h);
   color: var(--ink-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .thread-meta-chip > svg {

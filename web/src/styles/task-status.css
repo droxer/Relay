@@ -384,8 +384,8 @@
   border: var(--well-dashed);
   border-radius: var(--r-3);
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-align: center;
 }
 
@@ -452,8 +452,8 @@
   gap: var(--sp-2);
   min-width: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 .task-holdup-popover { max-width: calc(100vw - var(--sp-8)); }
 .task-holdup:hover .task-holdup-text,

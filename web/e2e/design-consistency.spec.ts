@@ -24,6 +24,57 @@ for (const theme of ["light", "dark"] as const) {
       await page.getByRole("button", { name: `${theme === "light" ? "Light" : "Dark"} theme` }).click();
     });
 
+    test("controls, file lists, and documents share the reading size", async ({ page }) => {
+      const field = page.getByRole("textbox", { name: "Page input", exact: true });
+      const reading = await tokenStyle(field, "font-size", "var(--fs-2)");
+      const caption = await tokenStyle(field, "font-size", "var(--fs-1)");
+      const title = await tokenStyle(field, "font-size", "var(--fs-title)");
+      const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
+      const fieldSize = touch ? await tokenStyle(field, "font-size", "var(--fs-input-touch)") : reading;
+      const buttons = page.locator("section").filter({ has: page.getByRole("heading", { name: "Button sizes", exact: true }) }).getByRole("button");
+      for (const button of await buttons.all()) await expect(button).toHaveCSS("font-size", reading);
+      await expect(field).toHaveCSS("font-size", fieldSize);
+      await expect(page.getByRole("combobox", { name: "Page select", exact: true })).toHaveCSS("font-size", fieldSize);
+      await expect(page.getByRole("combobox", { name: "Small select", exact: true })).toHaveCSS("font-size", fieldSize);
+      await expect(page.getByText("Standalone label", { exact: true })).toHaveCSS("font-size", reading);
+      await expect(page.getByText("A hint under the control.", { exact: true })).toHaveCSS("font-size", reading);
+      await expect(page.locator(".workspace-pick-title")).toHaveCSS("font-size", reading);
+      await expect(page.locator(".workspace-pick-meta")).toHaveCSS("font-size", reading);
+      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", reading);
+      await expect(page.locator(".doc-prose h2")).toHaveCSS("font-size", title);
+      await expect(page.getByTestId("warning-badge")).toHaveCSS("font-size", caption);
+      await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      await expect(page.getByRole("menuitem").first()).toHaveCSS("font-size", reading);
+    });
+
+    test("reading text and mobile fields follow a larger font preference", async ({ page }) => {
+      // Doubling the root size models the rem scale under a larger browser
+      // font preference; the touch floor must grow rather than stay at 16px.
+      await page.evaluate(() => { document.documentElement.style.fontSize = "175%"; });
+      const fileName = page.locator(".workspace-pick-title");
+      const reading = await tokenStyle(fileName, "font-size", "var(--fs-2)");
+      expect(parseFloat(reading)).toBeCloseTo(28, 1);
+      await expect(fileName).toHaveCSS("font-size", reading);
+      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", reading);
+      const field = page.getByRole("textbox", { name: "Page input", exact: true });
+      const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
+      const fieldSize = touch ? await tokenStyle(field, "font-size", "var(--fs-input-touch)") : reading;
+      await expect(field).toHaveCSS("font-size", fieldSize);
+      if (touch) expect(parseFloat(fieldSize)).toBeGreaterThan(16);
+      // The text must fit, not merely compute to the larger requested size.
+      const buttons = page.locator("section").filter({ has: page.getByRole("heading", { name: "Button sizes", exact: true }) }).getByRole("button");
+      for (const control of [field, ...await buttons.all()]) {
+        const dimensions = await control.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            available: element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+            line: parseFloat(style.lineHeight),
+          };
+        });
+        expect(dimensions.available).toBeGreaterThanOrEqual(Math.floor(dimensions.line));
+      }
+    });
+
     test("select and checked switch retain their control chrome", async ({ page }) => {
       const select = page.getByRole("combobox", { name: "Page select", exact: true });
       await expect(select).toHaveCSS("border-top-style", "solid");
@@ -78,10 +129,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(alert).toHaveCSS("border-top-color", await tokenStyle(alert, "border-top-color", "color-mix(in srgb, var(--err) 35%, transparent)"));
     });
 
-    test("drawer fields preserve control and invalid borders", async ({ page }) => {
+    test("drawer fields preserve the field border and an invalid one", async ({ page }) => {
       await page.getByRole("button", { name: "Open drawer" }).click();
       const field = page.getByRole("textbox", { name: "Overlay input", exact: true });
-      await expect(field).toHaveCSS("border-top-color", await tokenStyle(field, "border-top-color", "var(--control-border)"));
+      await expect(field).toHaveCSS("border-top-color", await tokenStyle(field, "border-top-color", "var(--field-border)"));
       const invalid = page.getByRole("textbox", { name: "Invalid overlay input" });
       await expect(invalid).toHaveCSS("border-top-color", await tokenStyle(invalid, "border-top-color", "var(--err)"));
     });
@@ -94,7 +145,7 @@ for (const theme of ["light", "dark"] as const) {
       expect(await field.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 5]);
       await expect(field).toHaveCSS("outline-style", "solid");
       await page.keyboard.press("Tab");
-      await expect(field).toHaveCSS("border-top-color", await tokenStyle(field, "border-top-color", "var(--control-border)"));
+      await expect(field).toHaveCSS("border-top-color", await tokenStyle(field, "border-top-color", "var(--field-border)"));
       await page.keyboard.press("Escape");
       await expect(page.getByRole("button", { name: "Open prompt" })).toBeFocused();
     });

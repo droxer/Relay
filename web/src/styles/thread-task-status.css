@@ -59,8 +59,8 @@
   margin: 0;
   overflow: hidden;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -100,8 +100,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

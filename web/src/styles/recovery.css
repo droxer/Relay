@@ -38,8 +38,8 @@
 .recovery-panel[data-tone="info"] { --recovery-rail: var(--info); }
 .recovery-panel strong { color: var(--ink-1); }
 .recovery-panel p { margin: 0; }
-.recovery-context { font: var(--type-body-sm);
- letter-spacing: var(--type-body-sm-track);}
+.recovery-context { font: var(--type-body);
+ letter-spacing: var(--type-body-track);}
 .recovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
 .recovery-actions:empty { display: none; }
 /* Actions are shared controls (Button / link-button); the panel only lays
@@ -60,7 +60,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
-  font: var(--type-body-sm);
+  font: var(--type-body);
 }
 .blocker-head .blocker-label { color: var(--err); font: var(--type-label); }
 .blocker-meta { color: var(--ink-3); }
@@ -77,7 +77,7 @@
   gap: var(--sp-1);
   padding-block-start: var(--sp-3);
   border-top: 0.5px solid var(--line-2);
-  font: var(--type-body-sm);
+  font: var(--type-body);
 }
 .blocker-resolve-label {
   color: var(--ink-3);

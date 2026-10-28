@@ -117,17 +117,17 @@
   margin-top: 0;
 }
 
-/* Six content rungs, one ladder: 16/15/14/14/12/12, with weight splitting the
+/* Six content levels, one compact ladder: 16/16/14/14/14/14, with weight splitting the
    shared sizes (700 over 500). The ladder stays under the 16px pane title so
    a content heading never rivals chrome, and h3/h4 sit at the 14px transcript
    body where the rung is carried by weight alone — the same move the rest of
    the system uses to separate roles inside one size. */
 .md-body h1 { font-size: var(--fs-title); } /* 16px/700 — weight from the shared rule */
-.md-body h2 { font-size: var(--fs-heading); } /* 15px/700 */
+.md-body h2 { font-size: var(--fs-heading); } /* 16px/700 */
 .md-body h3 { font-size: var(--fs-transcript); } /* 14px/700 */
 .md-body h4 { font-size: var(--fs-transcript); font-weight: 500; } /* 14px/500 */
-.md-body h5 { font-size: var(--fs-1); } /* 12px/700 */
-.md-body h6 { font-size: var(--fs-1); font-weight: 500; } /* 12px/500 */
+.md-body h5 { font-size: var(--fs-transcript); font-weight: 500; }
+.md-body h6 { font-size: var(--fs-transcript); font-weight: 500; font-style: italic; }
 
 .md-body ul,
 .md-body ol {
@@ -491,7 +491,7 @@ html:lang(zh-CN) .md-body blockquote {
    KaTeX ships its own stylesheet; these rules only place the output in the
    reading. A display equation can be wider than the column, so it scrolls. */
 /* KaTeX's serif runs small beside the sans at the same size, so math sits
-   one rung up the ladder (15px), not on an off-ladder 1.05em. */
+   on the 16px heading rung, not on an off-ladder 1.05em. */
 .md-body .katex {
   font-size: var(--fs-heading);
 }
@@ -505,15 +505,14 @@ html:lang(zh-CN) .md-body blockquote {
 
 /* ---- document variant ----
    The thread space preview and the workspace file preview render whole
-   artifacts, not chat turns. The heading ladder is the same six rungs as
-   .md-body (16/15/14/14/12/12); what differs is the body — documents keep
-   --fs-4 with prose leading and gain a reading measure. Element rules above
-   are untouched — only scale and rhythm differ. */
+   artifacts, not chat turns. Documents keep 14px reading text and a compact
+   heading ladder; deep headings stay at least as large as the body.
+   Transcript sizing and technical text retain their compact metrics. */
 .doc-prose {
   max-width: var(--measure-wide);
   color: var(--ink-1);
   font-family: var(--font-sans);
-  font-size: var(--fs-4);
+  font-size: var(--fs-document);
   line-height: var(--leading-prose);
 }
 
@@ -533,15 +532,14 @@ html:lang(zh-CN) .md-body blockquote {
   margin: var(--sp-7) 0 var(--sp-2);
 }
 
-/* Same six-rung ladder as .md-body (see its comment): 16/15/14/14/12/12,
-   weight splitting the shared sizes. The document body is --fs-4, so h3/h4
-   read it here rather than the transcript alias. */
-.doc-prose h1 { font-size: var(--fs-title); font-weight: 700; } /* 16px */
-.doc-prose h2 { font-size: var(--fs-heading); } /* 15px/700 */
-.doc-prose h3 { font-size: var(--fs-4); } /* 14px/700 */
-.doc-prose h4 { font-size: var(--fs-4); font-weight: 500; } /* 14px/500 */
-.doc-prose h5 { font-size: var(--fs-1); } /* 12px/700 */
-.doc-prose h6 { font-size: var(--fs-1); font-weight: 500; } /* 12px/500 */
+/* Document hierarchy: 16/16/14/14/14/14. Weight and italic distinguish deep
+   sections without reducing their text below the reading size. */
+.doc-prose h1 { font-size: var(--fs-title); font-weight: 700; }
+.doc-prose h2 { font-size: var(--fs-heading); }
+.doc-prose h3 { font-size: var(--fs-document); }
+.doc-prose h4 { font-size: var(--fs-document); font-weight: 700; }
+.doc-prose h5 { font-size: var(--fs-document); font-weight: 500; }
+.doc-prose h6 { font-size: var(--fs-document); font-weight: 500; font-style: italic; }
 
 /* A document h1 is the artifact's own title line — give it the rule that a
    chat turn cannot afford, since there it would compete with the thread name. */

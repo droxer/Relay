@@ -94,8 +94,8 @@
   /* The inline empty well (see .adm-cred-empty in admin-v2-provision.css). */
   padding: var(--sp-4);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   border: var(--well-dashed);
   border-radius: var(--r-3);
 }

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import { Markdown } from "@/components/Markdown";
 import { StatusPill } from "@/components/StatusPill";
 import { paginate } from "@/lib/pagination";
 import { ActionRemove, ICON, NavPreferences } from "@/components/icons";
@@ -68,7 +69,7 @@ function OverlayFields() {
  *  stylesheet, or it would stop being a test of the primitives alone. */
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return <section className="flex flex-col gap-3">
-    <h2 className="m-0 text-base font-bold text-ink">{title}</h2>
+    <h2 className="m-0 text-xl font-bold text-ink">{title}</h2>
     <Card padding="compact"><div className="flex flex-wrap items-center gap-3">{children}</div></Card>
   </section>;
 }
@@ -89,7 +90,7 @@ export function DesignSystemSpecimen() {
   const page = paginate(Array.from({ length: 84 }, (_, i) => i), pageNumber, 25);
 
   return <main className="flex flex-col gap-6 p-6">
-    <h1>Design system</h1>
+    <h1 className="m-0 text-2xl font-medium text-ink">Design system</h1>
     <div className="flex flex-wrap gap-3">
       <Button onClick={() => document.documentElement.dataset.theme = "light"}>Light theme</Button>
       <Button onClick={() => document.documentElement.dataset.theme = "dark"}>Dark theme</Button>
@@ -116,6 +117,21 @@ export function DesignSystemSpecimen() {
       <Badge variant="state" className="tone-live" data-testid="live-badge">Live</Badge>
       <RoutineStateBadge state="due" /><Alert variant="boxed">Unable to save</Alert>
     </div></Card>
+
+    <Section title="Reading typography">
+      <div className="flex min-w-0 w-full flex-col gap-4">
+        <div className="thread-space-files">
+          <div className="workspace-pick-list">
+            <button className="workspace-pick workspace-file-pick" type="button">
+              <span className="workspace-file-icon"><NavPreferences size={ICON.sm} /></span>
+              <span className="workspace-pick-title">project-notes.md</span>
+              <span className="workspace-pick-meta tnum">2 KB</span>
+            </button>
+          </div>
+        </div>
+        <Markdown variant="document" text={"# Document preview\n\nBody text stays at the shared reading size. 项目文件使用相同的字号。\n\n## Section heading\n\nA consistent hierarchy makes this easier to scan.\n\n### Details\n\nSmaller sections remain as readable as body text."} />
+      </div>
+    </Section>
 
     {/* ---- Button matrix: every variant at every size ---- */}
     <Section title="Button variants">

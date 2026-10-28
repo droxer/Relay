@@ -100,8 +100,13 @@
   background: transparent;
   padding: var(--sp-1) 0;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  /* The band is a control row, not reading text: its height must not follow
+     the rail's density scope. The thread rail is [data-density="compact"],
+     whose snug body leading made its band 1px shorter than the agent, team
+     and skill rails' — four bands, one of them a hairline off. */
+  line-height: var(--leading-normal);
 }
 
 .list-filter-search input::placeholder {

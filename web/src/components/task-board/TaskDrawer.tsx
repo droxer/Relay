@@ -341,7 +341,7 @@ export function TaskDrawer({
                 {availableProjects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create")}</Button> : null}
+            {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create_action")}</Button> : null}
           </Field>
         ) : project ? (
           /* Locked once saved, but still a field: labelled like every other

@@ -59,8 +59,8 @@
 /* The field hint speaks at the description's size: at body size it was the
    loudest text in the row, louder than the setting's own explanation. */
 .adm-settings-item > :not(.adm-settings-head) p {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 @media (max-width: 820px) {
@@ -90,8 +90,8 @@
 
 .adm-settings-sub {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
 }
 

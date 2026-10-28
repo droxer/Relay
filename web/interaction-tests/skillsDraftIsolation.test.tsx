@@ -6,7 +6,7 @@ import { SkillsPage } from "../src/components/SkillsPage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 
 const LABELS: Record<string, string> = {
-  "skills.publish_skill": "Publish skill",
+  "skills.create_action": "New skill",
   "skills.publish_title": "Publish a skill",
   "skills.close": "Close",
   "skills.author": "Author",

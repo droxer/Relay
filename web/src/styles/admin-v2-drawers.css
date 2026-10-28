@@ -234,8 +234,8 @@
 
 .adm-form-hint {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   line-height: var(--leading-normal);
 }
@@ -245,8 +245,8 @@
   border-radius: var(--r-2);
   background: var(--surface-1);
   border: 0.5px solid var(--line-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   color: var(--ink-3);
   line-height: var(--leading-normal);
 }
@@ -361,8 +361,8 @@
   background: var(--surface-2);
   border: 0.5px solid var(--line-1);
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
   flex-shrink: 0;
 }
 
@@ -562,8 +562,8 @@
 
 .adm-assign-empty-body {
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   line-height: var(--leading-normal);
   color: var(--ink-3);
 }

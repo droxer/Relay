@@ -684,8 +684,8 @@
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
   /* Compact application typography (2026-10-02): 12px utility text, ONE 14px
-     reading size, 15px section headings, 16/17px titles, 22px page titles and
-     numerals, 28px display. The ladder is 12/14/15/16/17/22/28.
+     reading size, 16px section headings and titles, 22px page titles and
+     numerals, 28px display. The ladder is 12/14/16/22/28.
 
      There is one reading rung, not three. --fs-3 and --fs-4 survive only as
      names for the jobs call sites already ask for (dense prose, body copy),
@@ -704,6 +704,10 @@
      inline markdown code, diffs, plain artifacts, the file viewer — reads this
      token, so they cannot drift apart again. */
   --fs-code: 1rem;   /* 14px — code, diffs, file contents */
+  /* Document previews keep the compact 14px reading size. */
+  --fs-document: var(--fs-4); /* 14px */
+  /* Scale with font preferences while retaining the iOS focus-zoom floor. */
+  --fs-input-touch: max(16px, var(--fs-title));
   /* The thread transcript's reading size. The transcript is a chat column
      read beside the thread rail and the dossier, not a standalone document:
      on the 16px body rung with prose leading every line took ~28px and the
@@ -721,9 +725,9 @@
   /* A MONO step, not a sans rung: nothing in the sans ladder reads it, and
      the sans ladder deliberately has no 13px. */
   --fs-code-transcript: 0.9286rem;           /* 13px */
-  --fs-heading: 1.0714rem; /* 15px — section headings */
-  --fs-title: 1.1429rem;   /* 16px — pane and page titles */
-  --fs-title-lg: 1.2143rem; /* 17px — fixed-noun titles: rails, section headers, drawers, dialogs */
+  --fs-title: 1.1429rem;   /* 16px — section, pane, drawer, and dialog titles */
+  --fs-heading: var(--fs-title);
+  --fs-title-lg: var(--fs-title);
   --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
   --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty
@@ -746,7 +750,7 @@
   /* The caps/meta line box (--type-micro, --type-meta). It existed only as a
      literal inside roles.css, which is why the scale above looked complete
      while 11 of 12 roles bypassed it. */
-  --leading-caps: 1.33;
+  --leading-caps: 1.5;
   --leading-normal: 1.5;
   --leading-loose: 1.65;
   /* Long-form prose (transcript answers, document previews). Loose is the
@@ -768,12 +772,12 @@
      22px page title, a KPI numeral or the landing headline from reading
      loose. Reading tiers stay at 0.
 
-     The 16–17px title tiers (rail, section, drawer and record titles) take
+     The 16px title tier (rail, section, drawer and record titles) take
      a smaller step of their own. At -0.05em a 17px "Automations" lost
      0.85px between every pair of letters and read pinched, not tight —
      eveland's own tracking scales down with size for the same reason. */
-  --track-display: -0.05em; /* eveland's display tracking, 22px and up */
-  --track-title: -0.02em; /* the 16–17px title tiers */
+  --track-display: -0.03em; /* display tracking, 22px and up */
+  --track-title: -0.02em; /* the 16px title tier */
   --track-body: 0;
   --track-body-sm: 0;
   --track-0: 0;

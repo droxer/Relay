@@ -129,8 +129,8 @@ th[data-slot="table-head"] {
    thing on screen saying how much is NOT shown. */
 .list-pager-range {
   margin: 0;
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }

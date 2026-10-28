@@ -75,7 +75,11 @@ describe("UI primitive contracts", () => {
     assert.match(styles, /input:not\(\[type="hidden"\]\):not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):not\(\[type="file"\]\)/);
     assert.match(styles, /\n\s*select,/);
     assert.match(styles, /\n\s*textarea/);
-    assert.match(styles, /font-size:\s*16px/);
+    assert.match(styles, /font-size:\s*var\(--fs-input-touch\)/);
+    const palette = await readFile(resolve("web/src/styles/tokens/palette.css"), "utf8");
+    assert.match(palette, /--fs-input-touch:\s*max\(16px, var\(--fs-title\)\)/);
+    const composer = await readFile(resolve("web/src/styles/composer.css"), "utf8");
+    assert.match(composer, /\.composer-textarea,\s*\.composer-highlight\s*\{\s*font-size:\s*var\(--fs-input-touch\)/);
   });
 
   it("keeps a compact switch with a 44px pseudo-element hit target", async () => {

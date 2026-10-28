@@ -81,8 +81,8 @@
   gap: var(--sp-1-5);
   min-width: 0;
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .composer-context > svg {
@@ -95,8 +95,8 @@
    second control that lost its chrome. */
 .composer-context-label {
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -431,13 +431,11 @@
 }
 
 /* iOS zooms any focused field under 16px; coarse pointers get the bump. The
-   mirror takes the same bump or the pills stop lining up on phones. The 16px
-   must stay a hard literal floor — the desktop draft reads at
-   --fs-transcript (14px), and var(--fs-4) is 14px as well; either would
-   reintroduce the zoom bug. */
+   mirror takes the same size or the pills stop lining up on phones. The
+   shared token preserves a 16px floor and grows with font preferences. */
 @media (pointer: coarse) {
   .composer-textarea,
-  .composer-highlight { font-size: 16px; }
+  .composer-highlight { font-size: var(--fs-input-touch); }
 }
 
 .composer-textarea::placeholder {
@@ -594,8 +592,8 @@
 .mention-option-reason {
   margin-left: auto;
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* The `@Name` pill inside the draft. Painted by the mirror layer, so it can

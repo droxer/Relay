@@ -98,7 +98,7 @@
   [data-slot="select-item"],
   [data-slot="select-scroll-up-button"],
   [data-slot="select-scroll-down-button"] {
-    min-height: var(--touch-target);
+    min-height: max(var(--touch-target), calc(1lh + var(--sp-2) + var(--sp-0-5)));
   }
 
   [data-slot="button"],
@@ -115,7 +115,9 @@
   input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   select,
   textarea {
-    font-size: 16px;
+    /* This accessibility floor also wins over surface-specific controls,
+       including the composer's nested runtime selectors. */
+    font-size: var(--fs-input-touch) !important;
   }
 
   /* Square icon buttons want the floor on BOTH axes — the rule above only
@@ -126,7 +128,6 @@
   .artifact-index-btn,
   .adm-placement-remove,
   .view-toggle-btn,
-  #thread-panel .page-header-actions button,
   .chat-header [data-variant="icon"],
   .send-button,
   .overlay-close,

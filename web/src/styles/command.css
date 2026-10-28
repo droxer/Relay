@@ -98,8 +98,8 @@
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   cursor: pointer;
   user-select: none;
 }
@@ -139,8 +139,8 @@
   padding: var(--sp-6) var(--sp-4);
   text-align: center;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .command-footer {
@@ -150,8 +150,8 @@
   padding: var(--sp-2) var(--sp-3);
   border-top: 0.5px solid var(--line-1);
   color: var(--ink-4);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .command-footer-hint {
@@ -201,8 +201,8 @@
   padding: var(--sp-1-5) var(--sp-3);
   border-radius: var(--r-2);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .shortcuts-row-label {
