@@ -75,7 +75,7 @@ export function AgentStateBadge({
      carrying it for assistive tech, as it always did. */
   return (
     <Tooltip content={label}>
-      <span className={cn("agent-state", tone)} data-agent={agent}>
+      <span className={cn("agent-state", tone)} data-agent={agent} data-availability={availability}>
         {imageUrl || name ? (
           <ProfileImage
             src={imageUrl}

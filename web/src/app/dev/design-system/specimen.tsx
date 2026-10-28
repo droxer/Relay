@@ -155,6 +155,7 @@ export function DesignSystemSpecimen() {
       <Badge variant="warning">Warning</Badge>
       <Badge variant="danger">Danger</Badge>
       <StatusPill value="running" />
+      <StatusPill value="offline" />
     </Section>
 
     {/* ---- Consolidated chips ----
