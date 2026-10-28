@@ -53,14 +53,13 @@ export function TaskBoardHeaderActions({
       {onCreate ? <Button
         type="button"
         variant="ghost"
-        // The shared list-header create affordance, same as the
-        // projects/threads rail — no text label, the header already names the
-        // list. aria-label carries the action for the accessibility tree.
-        className="page-header-icon-action page-header-icon-action--primary"
+        // A visible label on desktop; the phone top bar keeps a named icon.
+        className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
         tooltip={createLabel}
         onClick={onCreate}
       >
         <ActionAdd size={ICON.md} />
+        <span className="page-header-create-label">{createLabel}</span>
       </Button> : null}
     </>
   );

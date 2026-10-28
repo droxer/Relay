@@ -34,7 +34,7 @@ function PaneHeader({
 
 export function WorkspaceFilePanes({
   path, roots = DEFAULT_WORKSPACE_FILE_ROOTS, rootLabel, scoped = false, selectedPath, files, content, view, setView, homeStatus, barActions,
-  openDirectory, onSelectFile, onRetry, onClosePreview,
+  openDirectory, onSelectFile, onRetry, onRetryPreview, onClosePreview,
 }: {
   path: string;
   /** Where this workspace keeps deliverables and thread records. */
@@ -55,6 +55,7 @@ export function WorkspaceFilePanes({
   openDirectory: (path: string) => void;
   onSelectFile: ComponentProps<typeof WorkspaceFileList>["onSelectFile"];
   onRetry: () => void;
+  onRetryPreview?: () => void;
   onClosePreview: () => void;
 }) {
   const { t } = useTranslation();
@@ -135,6 +136,7 @@ export function WorkspaceFilePanes({
               isLoading={content.isLoading}
               error={content.error}
               view={view}
+              onRetry={onRetryPreview}
             />
           </div>
         </section>

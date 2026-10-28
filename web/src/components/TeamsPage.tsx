@@ -94,11 +94,12 @@ export function TeamsPage({
             <Button
               variant="ghost"
               type="button"
-              className="page-header-icon-action page-header-icon-action--primary"
+              className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
               tooltip={t("teams.add")}
               onClick={() => setAddTeam(true)}
             >
               <ActionAdd size={ICON.md} aria-hidden="true" />
+              <span className="page-header-create-label">{t("teams.add")}</span>
             </Button>
           )}
         />

@@ -653,7 +653,7 @@ tr[data-selected="true"] > td:first-child {
 
   /* Line one: the mark, then the title taking every remaining pixel — its
      basis fills the line, so the meta cells after it wrap to line two. */
-  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"]:is(.task-col-mark, .issue-col-status) {
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-mark {
     position: absolute;
     /* Centred on the 20px title line: (20px − the 14px status icon) / 2. The
        20px is the title's rendered line box, not a token. */
@@ -689,6 +689,7 @@ tr[data-selected="true"] > td:first-child {
   }
 
   /* Line two: the meta, indented under the title. */
+  .task-table .issue-col-status,
   .task-table .task-col-ref,
   .task-table .issue-col-project,
   .task-table .task-col-priority,
@@ -711,15 +712,11 @@ tr[data-selected="true"] > td:first-child {
   .task-table .task-col-due { order: 13; }
   .task-table .issue-col-project { order: 14; }
 
-  /* The status column's word is the mark's tooltip here; the mark leads. */
-  .task-table .issue-col-status .inline-field > span:not(.sr-only) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  /* Keep the status readable when the table headers disappear. */
+  .task-table .issue-col-status { order: 9; }
+  .task-table > tbody > tr:has(.issue-col-status) { padding-left: var(--sp-4); }
+  .priority-label { display: inline; }
+  .inline-field--icon:has(.priority-label) { gap: var(--sp-1); padding-inline: var(--sp-1); }
 
   .task-table .issue-col-project .issue-project--none { display: none; }
 

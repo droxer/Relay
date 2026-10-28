@@ -122,7 +122,7 @@ export function ProjectSettingsPanel({
   }
 
   async function archive() {
-    if (busy || archived) return;
+    if (busy || archived || dirty) return;
     const accepted = await confirm({
       title: t("project.archive_confirm_title", { project: project.name }),
       message: t("project.archive_confirm_message"),
@@ -142,7 +142,7 @@ export function ProjectSettingsPanel({
     if (busy || !archived) return;
     try {
       const result = await unarchiveProjectMutation.mutateAsync({ projectId: project.id, expectedVersion: project.version });
-      if (result) adopt(result.project);
+      if (result && !dirty) adopt(result.project);
     } catch {
       // The shared mutation handler announces the error; the panel stays as it was.
     }
@@ -303,6 +303,7 @@ export function ProjectSettingsPanel({
               <div className="project-settings-danger-copy">
                 <strong>{t("project.archive")}</strong>
                 <p>{t("project.archive_confirm_message")}</p>
+                {dirty ? <p id="project-archive-unsaved" role="status">{t("project.archive_unsaved")}</p> : null}
               </div>
               <Button
                 type="button"
@@ -310,7 +311,8 @@ export function ProjectSettingsPanel({
                 onClick={() => void archive()}
                 loading={archiveProjectMutation.isPending}
                 loadingLabel={t("project.archiving")}
-                disabled={busy}
+                disabled={busy || dirty}
+                aria-describedby={dirty ? "project-archive-unsaved" : undefined}
               >
                 {t("project.archive")}
               </Button>

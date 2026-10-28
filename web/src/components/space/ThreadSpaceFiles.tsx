@@ -141,6 +141,7 @@ export function ThreadSpaceFiles({
             isLoading={contentQuery.isLoading}
             error={contentQuery.isError ? contentQuery.error : null}
             view={view}
+            onRetry={() => void contentQuery.refetch()}
           />
         </div>
       </div>

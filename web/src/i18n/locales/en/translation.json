@@ -146,6 +146,7 @@
     "resize_label": "Resize sidebar"
   },
   "project": {
+    "archive_unsaved": "Save or discard your changes before archiving this project.",
     "locked_hint": "A task’s project can’t change after it’s saved.",
     "delete": "Delete project",
     "deleting": "Deleting…",
@@ -812,6 +813,8 @@
     }
   },
   "workspace": {
+    "preview_missing": "This file is no longer available. It may have been moved or deleted.",
+    "preview_error": "This file could not be loaded. Try again.",
     "title": "Workspace",
     "sub": "Files",
     "sections": "Workspace sections",

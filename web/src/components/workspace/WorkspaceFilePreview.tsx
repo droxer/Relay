@@ -18,6 +18,8 @@ import { Markdown } from "../LazyMarkdown";
 import type { ArtifactView } from "../artifact/ArtifactViewToggle";
 import { PdfFrame } from "../artifact/PdfFrame";
 import { useKeyChange } from "../../hooks/useKeyChange";
+import { Button } from "@/components/ui/button";
+import { isWorkspaceRetryableError } from "../../lib/workspaceHome";
 
 /** Every workspace-file response (project, node, task, …) shares this shape
  *  apart from which id field names the owner — the preview never reads that
@@ -52,12 +54,14 @@ export function WorkspaceFilePreview({
   isLoading,
   error,
   view,
+  onRetry,
 }: {
   name: string;
   data?: WorkspaceFileResponseLike;
   isLoading: boolean;
   error: unknown;
   view: ArtifactView;
+  onRetry?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const renderable = isRenderableFile(name);
@@ -67,8 +71,15 @@ export function WorkspaceFilePreview({
     return <WorkspaceLoading label={t("workspace.loading_preview")} />;
   }
   if (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return <p className="artifact-viewer-status artifact-viewer-error">{message}</p>;
+    const missing = error instanceof Error && "status" in error && error.status === 404;
+    const message = t(missing ? "workspace.preview_missing"
+      : isWorkspaceRetryableError(error) ? "workspace.shared_unavailable" : "workspace.preview_error");
+    return (
+      <div className="artifact-viewer-status artifact-viewer-error">
+        <p role="alert">{message}</p>
+        {onRetry ? <Button type="button" variant="outline" size="dense" onClick={onRetry}>{t("workspace.retry")}</Button> : null}
+      </div>
+    );
   }
   if (!data) return null;
   if (data.isBinary) {
