@@ -75,6 +75,7 @@ export function AppearanceSection({
       <legend className="pref-group-label">{t("pref.theme.group")}</legend>
       <RadioGroup
         className="pref-option-list"
+        aria-label={t("pref.theme.group")}
         value={theme}
         onValueChange={(value) => onThemeChange(value as Theme)}
       >

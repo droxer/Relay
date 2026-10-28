@@ -108,6 +108,12 @@
   /* One top bar on every route (AppShell): [back] · title · tools. The back
      control only exists on a nested screen, so the grid takes its leading
      track only then. */
+  /* Toasts must leave the phone's persistent navigation reachable. Modal
+     feedback can use the viewport edge because its tab bar is inert. */
+  body:has(.messenger-shell:not([data-mobile-chat])):not(:has([data-slot="dialog-content"])) [data-slot="toast-viewport"] {
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--sp-4));
+  }
+
   .mobile-topbar {
     display: grid;
     grid-row: 1;

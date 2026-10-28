@@ -104,6 +104,8 @@ export type NotificationsController = {
   /** True until the first read settles. */
   readonly isPending: boolean;
   readonly isError: boolean;
+  readonly isFetching: boolean;
+  retry: () => void;
   markAllRead: () => void;
   /** Empty the inbox. */
   clearAll: () => void;
@@ -249,6 +251,8 @@ export function useNotifications({ enabled, onOpen }: {
     unreadCount,
     get isPending() { return query.isPending; },
     get isError() { return query.isError; },
+    get isFetching() { return query.isFetching; },
+    retry: () => { void query.refetch(); },
     markAllRead,
     clearAll,
     dismiss,
@@ -310,6 +314,8 @@ export function useNotificationPreferences(enabled = true) {
     preferences,
     get isPending() { return query.isPending; },
     get isError() { return query.isError; },
+    get isFetching() { return query.isFetching; },
+    retry: () => { void query.refetch(); },
     isSaving,
     setKindEnabled,
   };

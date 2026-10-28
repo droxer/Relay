@@ -169,3 +169,13 @@ it("keeps a previous account's pending save response out of the current account'
   expect(view.result.current.preferences?.mutedKinds).toEqual([]);
   view.unmount(); client.clear();
 });
+
+it("lets a person retry failed notification preferences without reloading", async () => {
+  const { client, wrapper } = setup();
+  vi.mocked(getNotificationPreferences).mockRejectedValueOnce(new Error("offline"));
+  render(<NotificationsSection />, { wrapper });
+  await waitFor(() => expect(screen.getByText("notifications.prefs_load_failed")).toBeTruthy());
+  fireEvent.click(screen.getByRole("button", { name: "notifications.retry" }));
+  await waitFor(() => expect(screen.getByRole("switch", { name: "notifications.kind.task_completed" })).toBeTruthy());
+  client.clear();
+});

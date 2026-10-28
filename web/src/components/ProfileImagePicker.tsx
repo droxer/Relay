@@ -33,10 +33,12 @@ export function ProfileImage({
   fallback: ReactNode;
   className?: string;
 }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const imageSrc = src && src !== failedSrc ? src : null;
   return (
-    <span className={`profile-image${className ? ` ${className}` : ""}`} data-has-image={src ? "true" : "false"}>
+    <span className={`profile-image${className ? ` ${className}` : ""}`} data-has-image={imageSrc ? "true" : "false"}>
       {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a user-uploaded image */}
-      {src ? <img src={src} alt={alt} width={PROFILE_IMAGE_PX} height={PROFILE_IMAGE_PX} /> : fallback}
+      {imageSrc ? <img src={imageSrc} alt={alt} width={PROFILE_IMAGE_PX} height={PROFILE_IMAGE_PX} onError={() => setFailedSrc(imageSrc)} /> : fallback}
     </span>
   );
 }
@@ -46,7 +48,7 @@ export function ProfileImagePicker({
   name,
   fallback,
   editable,
-  disabled = false,
+  disabled: externallyDisabled = false,
   onUpload,
   onRemove,
   presets,
@@ -64,10 +66,30 @@ export function ProfileImagePicker({
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const disabled = externallyDisabled || saving;
   const [error, setError] = useState<string | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
   // The tile the arrow keys have highlighted; nothing is saved until commit.
   const [highlightedPreset, setHighlightedPreset] = useState<string | null>(null);
+
+  async function changeImage(action: () => Promise<void>) {
+    if (externallyDisabled || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      await action();
+    } catch (changeError) {
+      setError(changeError instanceof ImageReadError
+        ? t("profile_image.read_failed")
+        : changeError instanceof Error ? changeError.message : t("profile_image.failed"));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
 
   function togglePresets(open: boolean) {
     setHighlightedPreset(null);
@@ -75,14 +97,9 @@ export function ProfileImagePicker({
   }
 
   async function selectPreset(url: string) {
-    if (!presets) return;
-    setError(null);
+    if (!presets || disabled || savingRef.current) return;
     togglePresets(false);
-    try {
-      await presets.onSelect(url);
-    } catch (selectError) {
-      setError(selectError instanceof Error ? selectError.message : t("profile_image.failed"));
-    }
+    await changeImage(() => presets.onSelect(url));
   }
 
   function chooseUpload() {
@@ -91,7 +108,9 @@ export function ProfileImagePicker({
   }
 
   async function selectImage(file: File | undefined) {
-    if (!file) return;
+    // Reset even rejected selections so choosing the same file fires change.
+    if (inputRef.current) inputRef.current.value = "";
+    if (!file || disabled || savingRef.current) return;
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
       setError(t("profile_image.unsupported"));
       return;
@@ -100,25 +119,11 @@ export function ProfileImagePicker({
       setError(t("profile_image.too_large"));
       return;
     }
-    setError(null);
-    try {
-      await onUpload(await readFileAsDataUrl(file));
-    } catch (uploadError) {
-      setError(uploadError instanceof ImageReadError
-        ? t("profile_image.read_failed")
-        : uploadError instanceof Error ? uploadError.message : t("profile_image.failed"));
-    } finally {
-      if (inputRef.current) inputRef.current.value = "";
-    }
+    await changeImage(async () => onUpload(await readFileAsDataUrl(file)));
   }
 
   async function removeImage() {
-    setError(null);
-    try {
-      await onRemove();
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : t("profile_image.failed"));
-    }
+    await changeImage(onRemove);
   }
 
   const image = (
@@ -137,13 +142,14 @@ export function ProfileImagePicker({
   const removeInPopover = Boolean(presets && imageUrl && touch);
 
   return (
-    <div className="profile-image-picker">
+    <div className="profile-image-picker" aria-busy={saving || undefined}>
       {editable ? (
         <>
           <input
             ref={inputRef}
             className="sr-only"
             type="file"
+            tabIndex={-1}
             accept="image/png,image/jpeg,image/webp"
             aria-label={t("profile_image.choose")}
             disabled={disabled}

@@ -49,6 +49,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
   border-bottom: 0.5px solid var(--line-1);
@@ -57,6 +58,7 @@
 .notif-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-1);
 }
 
@@ -209,4 +211,22 @@
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
+}
+
+/* Keep the error and its recovery together, including above cached notices. */
+.notif-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.notif-load-error p {
+  flex: 1 1 12rem;
+  margin: 0;
+  overflow-wrap: anywhere;
 }

@@ -157,50 +157,57 @@ function NotificationList({
 }) {
   const { t } = useTranslation();
   const { notices } = controller;
+  const failure = controller.isError ? (
+    <div className="notif-load-error">
+      <p role="alert">{t("notifications.load_failed")}</p>
+      <Button type="button" variant="outline" size="sm" onClick={controller.retry} loading={controller.isFetching}>
+        {t("notifications.retry")}
+      </Button>
+    </div>
+  ) : null;
   if (notices.length === 0) {
-    const message = controller.isPending
-      ? t("notifications.loading")
-      : controller.isError
-        ? t("notifications.load_failed")
-        : t("notifications.empty");
-    return <p className="notif-empty" role="status">{message}</p>;
+    if (failure) return failure;
+    return <p className="notif-empty" role="status">{t(controller.isPending ? "notifications.loading" : "notifications.empty")}</p>;
   }
   return (
-    <ul className="notif-list">
-      {notices.map((notice) => (
-        <li key={notice.id} className="notif-item">
-          <a
-            className="notif-row"
-            href={hrefFor(notice.target)}
-            data-unread={notice.unread || undefined}
-            onClick={(event) => onOpenNotice(event, notice)}
-          >
-            {/* The row's one dot: toned while unread, settled once read. */}
-            <StateMark tone={notice.tone} shape={notice.unread ? undefined : "muted"} className="notif-mark" />
-            <span className="notif-copy">
-              <span className="notif-title">{t(notice.title.key, notice.title.params)}</span>
-              <span className="notif-detail" translate="no">{t(notice.detail.key, notice.detail.params)}</span>
-            </span>
-            <time className="notif-time tnum" dateTime={notice.createdAt}>
-              {formatThreadStamp(notice.createdAt, locale, now)}
-            </time>
-            {notice.unread ? <span className="sr-only">{t("notifications.unread")}</span> : null}
-          </a>
-          {/* A sibling of the link, never inside it: a button in an anchor is
-              invalid and its click would also follow the link. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="notif-dismiss"
-            aria-label={t("notifications.dismiss")}
-            title={t("notifications.dismiss")}
-            onClick={() => controller.dismiss(notice)}
-          >
-            <ActionRemove size={ICON.sm} aria-hidden="true" />
-          </Button>
-        </li>
-      ))}
-    </ul>
+    <>
+      {failure}
+      <ul className="notif-list">
+        {notices.map((notice) => (
+          <li key={notice.id} className="notif-item">
+            <a
+              className="notif-row"
+              href={hrefFor(notice.target)}
+              data-unread={notice.unread || undefined}
+              onClick={(event) => onOpenNotice(event, notice)}
+            >
+              {/* The row's one dot: toned while unread, settled once read. */}
+              <StateMark tone={notice.tone} shape={notice.unread ? undefined : "muted"} className="notif-mark" />
+              <span className="notif-copy">
+                <span className="notif-title">{t(notice.title.key, notice.title.params)}</span>
+                <span className="notif-detail" translate="no">{t(notice.detail.key, notice.detail.params)}</span>
+              </span>
+              <time className="notif-time tnum" dateTime={notice.createdAt}>
+                {formatThreadStamp(notice.createdAt, locale, now)}
+              </time>
+              {notice.unread ? <span className="sr-only">{t("notifications.unread")}</span> : null}
+            </a>
+            {/* A sibling of the link, never inside it: a button in an anchor is
+                invalid and its click would also follow the link. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="notif-dismiss"
+              aria-label={t("notifications.dismiss")}
+              title={t("notifications.dismiss")}
+              onClick={() => controller.dismiss(notice)}
+            >
+              <ActionRemove size={ICON.sm} aria-hidden="true" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
