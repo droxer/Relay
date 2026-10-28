@@ -7,11 +7,11 @@ import {
   NavBacklog,
   NavProjects,
   NavRoutine,
-  NodeOffline,
 } from "./icons";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { StateMark, type StateShape, type StateTone } from "./StateMark";
+import { OfflineBadge } from "./OfflineBadge";
 import type { RelaySession } from "../types";
 import { canDeleteThread, sessionAgents, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { formatThreadStamp } from "../lib/threadStamp";
@@ -176,14 +176,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   }
 
   const offlineMark = item.nodeOffline ? (
-    <span
-      className="conversation-offline"
-      role="img"
-      aria-label={offlineLabel}
-      title={offlineLabel}
-    >
-      <NodeOffline size={ICON.xs} />
-    </span>
+    <OfflineBadge className="conversation-offline" title={offlineLabel} />
   ) : null;
 
   // Which backlog task or routine started the thread, in words: a kind badge

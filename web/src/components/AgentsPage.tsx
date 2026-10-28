@@ -104,7 +104,7 @@ function BindingStatusBadge({ status }: { status: UserAgent["bindingStatus"] }) 
   const { t } = useTranslation();
   if (!status || status === "available") return null;
   return (
-    <TonePill tone="bad" label={t(`agents_page.binding_status_${status}`)} />
+    <TonePill tone={status === "computer_offline" ? "neutral" : "bad"} label={t(`agents_page.binding_status_${status}`)} />
   );
 }
 
@@ -172,7 +172,10 @@ function RosterRow({
               <StatusPill value={agent.availability} />
             </span>
           ) : null}
-          <BindingStatusBadge status={agent.bindingStatus} />
+          {/* Availability already communicates this connection loss. */}
+          {!(agent.enabled && agent.availability === "offline" && agent.bindingStatus === "computer_offline") ? (
+            <BindingStatusBadge status={agent.bindingStatus} />
+          ) : null}
         </Button>
       </article>
     </li>

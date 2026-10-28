@@ -5,6 +5,7 @@ import { statusTone } from "../lib/statusTone";
 import { StateMark } from "./StateMark";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { OfflineBadge } from "./OfflineBadge";
 
 // Map the app's status tone vocabulary onto the shadcn Badge tone variants.
 const TONE_VARIANT: Record<Tone, "success" | "info" | "danger" | "warning" | "neutral"> = {
@@ -46,6 +47,7 @@ type StatusPillProps = { value: StatusValue };
 
 export function StatusPill({ value }: StatusPillProps) {
   const { t } = useTranslation();
+  if (value === "offline") return <OfflineBadge />;
   return (
     <TonePill
       tone={statusTone(value)}

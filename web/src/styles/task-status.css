@@ -42,14 +42,27 @@
   background: var(--tone, var(--ink-4));
 }
 
-/* Offline is told by shape, not brightness: at pip size a solid --err fill
-   reads as just another bright dot, so the offline pip is a hollow ring
-   instead — the same "dark / no signal" shape the fleet presence + node
-   status dots use, so the agent list speaks the same status language as the
-   computers. */
+/* Offline keeps its neutral tone, with a hollow center to distinguish
+   absence from a ready agent even without color. */
+.agent-state[data-availability="offline"]::after,
 .agent-state.tone-bad::after {
-  background: transparent;
+  background: var(--surface-0);
   box-shadow: inset 0 0 0 1px var(--tone);
+}
+
+/* A quiet, readable connection badge shared by agent and thread lists.
+   Compact enough for a title line; the icon and label carry the state
+   together, without borrowing the red reserved for failed work. */
+.offline-badge {
+  min-height: 20px;
+  gap: var(--sp-1);
+  padding-inline: var(--sp-1-5);
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+.offline-badge > svg {
+  flex-shrink: 0;
 }
 
 /* Unassigned slot — dashed placeholder, no readiness pip. */

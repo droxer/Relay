@@ -485,9 +485,6 @@
    so it survives the hover swap that hides the timestamp. */
 .conversation-offline {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  color: var(--err);
 }
 
 /* The state pip leads every row's title, nested or full, so the marks line up
