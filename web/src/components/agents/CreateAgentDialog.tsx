@@ -8,6 +8,7 @@ import { computerCanSelectModel, computerReportedModels, computerUsesCustomModel
 import { modelHintKey, modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
 import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
+import { ComputerOptionsFeedback } from "../computer/ComputerOptionsFeedback";
 import { ComputerSelect } from "../ComputerSelect";
 import { USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
 import { agentLabel } from "../../lib/plan";
@@ -235,9 +236,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
               error={Boolean(fieldErrors.computerId)}
               errorId="create-agent-computer-error"
             />
-            {!computers.isLoading && computerOptions.length === 0 ? (
-              <p className="adm-form-hint">{t("agents_page.create_computer_empty")}</p>
-            ) : null}
+            <ComputerOptionsFeedback {...computers} empty={computerOptions.length === 0} />
           </Field>
 
           <Field
@@ -392,7 +391,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
           <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={isBusy}>
             {t("admin.v2.cancel")}
           </Button>
-          <Button size="cta" type="submit" loading={isBusy}>
+          <Button size="cta" type="submit" loading={isBusy} disabled={computers.isLoading || computerOptions.length === 0}>
             {isBusy ? t("agents_page.create_creating") : t("agents_page.create_submit")}
           </Button>
         </div>

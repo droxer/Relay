@@ -23,6 +23,8 @@ function controller(overrides: Partial<NotificationsController> = {}): Notificat
     unreadCount: 12,
     isPending: false,
     isError: false,
+    isFetching: false,
+    retry: vi.fn(),
     markAllRead: vi.fn(),
     clearAll: vi.fn(),
     dismiss: vi.fn(),
@@ -118,4 +120,18 @@ describe("NotificationBell", () => {
     fireEvent.click(screen.getByText("notifications.settings_link"));
     expect(onOpenSettings).toHaveBeenCalled();
   });
+});
+
+it("offers immediate recovery when the inbox cannot load", () => {
+  const retry = vi.fn();
+  renderBell(controller({ notices: [], unreadCount: 0, isError: true, retry }));
+  expect(screen.getByRole("alert").textContent).toContain("notifications.load_failed");
+  fireEvent.click(screen.getByRole("button", { name: "notifications.retry" }));
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
+it("keeps cached notices visible and reports a failed refresh", () => {
+  renderBell(controller({ isError: true, retry: vi.fn() }));
+  expect(screen.getByText("notifications.task_review")).toBeTruthy();
+  expect(screen.getByRole("alert").textContent).toContain("notifications.load_failed");
 });

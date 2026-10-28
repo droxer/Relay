@@ -55,6 +55,9 @@ export function useComputerOptions(userId: string, enabled: boolean): {
   options: ComputerOption[];
   nodeLikes: NodeLike[];
   isLoading: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  retry: () => void;
 } {
   const query = useQuery({
     queryKey: ["computer-options", "sandboxes"],
@@ -77,5 +80,5 @@ export function useComputerOptions(userId: string, enabled: boolean): {
     }),
     [nodeLikes, sandboxes, userId],
   );
-  return { options, nodeLikes, isLoading: query.isLoading };
+  return { options, nodeLikes, isLoading: query.isLoading, isError: query.isError, isFetching: query.isFetching, retry: () => { void query.refetch(); } };
 }

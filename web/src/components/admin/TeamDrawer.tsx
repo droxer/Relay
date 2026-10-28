@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { TeamMemberPicker, type TeamMembership } from "../TeamMemberPicker";
+import { ComputerOptionsFeedback } from "../computer/ComputerOptionsFeedback";
 import { ComputerSelect } from "../ComputerSelect";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useOnOpen } from "@/hooks/useKeyChange";
@@ -201,6 +202,7 @@ export function TeamDrawer({
             error={validationError === "computer"}
             errorId="team-computer-error"
           />
+          <ComputerOptionsFeedback {...computers} empty={computers.options.length === 0} />
         </Field>
         <Field
           label={t("teams.name")}
@@ -257,7 +259,7 @@ export function TeamDrawer({
         <div className="adm-form-actions">
           {team ? <Button size="cta" type="button" variant="destructive" className="adm-form-actions-leading" onClick={() => void remove()} disabled={busy} loading={deleteTeamMutation.isPending}>{t("teams.delete")}</Button> : null}
           <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" loading={saving} disabled={deleteTeamMutation.isPending}>{saving ? t("admin.saving") : team ? t("teams.save") : t("teams.create")}</Button>
+          <Button size="cta" type="submit" loading={saving} disabled={deleteTeamMutation.isPending || (!team && (computers.isLoading || computers.options.length === 0))}>{saving ? t("admin.saving") : team ? t("teams.save") : t("teams.create")}</Button>
         </div>
       </form>
     </Drawer>

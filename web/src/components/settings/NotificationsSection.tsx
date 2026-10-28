@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { NOTIFICATION_KINDS, type NotificationKind } from "../../api";
 import {
@@ -51,12 +52,19 @@ function ToggleRow({
 
 function KindToggles() {
   const { t } = useTranslation();
-  const { preferences, isPending, isError, isSaving, setKindEnabled } = useNotificationPreferences();
+  const { preferences, isPending, isError, isFetching, retry, isSaving, setKindEnabled } = useNotificationPreferences();
   if (!preferences) {
     return (
-      <p className="notif-pref-status" role="status">
-        {isPending ? t("notifications.prefs_loading") : isError ? t("notifications.prefs_load_failed") : null}
-      </p>
+      <div>
+        <p className="notif-pref-status" role={isError ? "alert" : "status"}>
+          {isPending ? t("notifications.prefs_loading") : isError ? t("notifications.prefs_load_failed") : null}
+        </p>
+        {isError ? (
+          <Button type="button" variant="outline" onClick={retry} loading={isFetching}>
+            {t("notifications.retry")}
+          </Button>
+        ) : null}
+      </div>
     );
   }
   // A kind a newer server offers but this build cannot name stays as it is.
