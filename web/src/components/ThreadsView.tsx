@@ -58,6 +58,7 @@ import { ProjectDrawer } from "./ProjectDrawer";
 const ProjectWorkspacePage = lazy(() => import("./ProjectWorkspacePage").then((m) => ({ default: m.ProjectWorkspacePage })));
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /** The project pane while its record, or the page's own code, is on the way. */
 function ProjectLoadingState() {
@@ -293,14 +294,6 @@ export function ThreadsView({
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentImages = useMemo(() => buildLogicalAgentImageMap(logicalAgents), [logicalAgents]);
-  // The new-thread landing names who is doing what by the agent's name.
-  const welcomeAgentName = useCallback((item: ThreadItem) => {
-    if (item.runningAgentName) return item.runningAgentName;
-    const run = item.session.agentRuns?.at(-1);
-    return run
-      ? labelForAgentRun({ agent: run.agent, agentId: run.logicalAgentId }, logicalAgentNames, agentDisplayNames)
-      : undefined;
-  }, [logicalAgentNames, agentDisplayNames]);
   const activeLogicalAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === activeLogicalAgentId && !agent.deletedAt),
     [activeLogicalAgentId, logicalAgents],
@@ -309,6 +302,8 @@ export function ThreadsView({
     () => activeLogicalAgent?.displayName ?? displayNameForExecutor(activeAgent, logicalAgents),
     [activeAgent, activeLogicalAgent, logicalAgents],
   );
+  // A new thread with nothing sent yet: the composer is the page (chat.css).
+  const landing = !activeSession && !pendingUserMessage && !onboardingPanel;
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
@@ -473,7 +468,12 @@ export function ThreadsView({
           />
         </section>
       ) : (
-      <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
+      <section
+        id="chat-panel"
+        className={cn("chat-panel", landing && "chat-panel--landing")}
+        aria-label={t("nav.threads")}
+        tabIndex={-1}
+      >
         <ThreadHeader
           taskThread={taskThread}
           activeSession={activeSession}
@@ -601,18 +601,7 @@ export function ThreadsView({
                 ) : null}
               </>
             ) : (
-              <TranscriptEmpty
-                selectedUser={selectedUser}
-                onSuggestion={(text) => {
-                  composerRef.current?.setText(text);
-                  composerRef.current?.focus();
-                }}
-                greetingName={greetingName(currentUser)}
-                threads={filteredThreads}
-                tasks={tasks}
-                agentNameFor={welcomeAgentName}
-                onOpenThread={onSelectThread}
-              />
+              <TranscriptEmpty selectedUser={selectedUser} greetingName={greetingName(currentUser)} />
             )}
           </div>
         </div>
@@ -643,7 +632,11 @@ export function ThreadsView({
           running={running}
           onSend={sendAnswering}
           onCancelRun={onCancelRun}
-          placeholder={waiting ? t(waiting.kind === "approval" ? "awaiting.placeholder_changes" : "awaiting.placeholder", { agent: waitingAgentName }) : undefined}
+          placeholder={waiting
+            ? t(waiting.kind === "approval" ? "awaiting.placeholder_changes" : "awaiting.placeholder", { agent: waitingAgentName })
+            : landing && selectedUser && activeAgentDisplayName
+              ? t("composer.placeholder_landing", { agent: activeAgentDisplayName })
+              : undefined}
           prompt={waiting ? (
             <AwaitingInputPrompt
               key={activeSession?.id}

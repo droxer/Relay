@@ -14,6 +14,9 @@
      those apps share, and it stays concentric with the 32px send disc
      inset --sp-2 + its border from the corner. */
   --composer-radius: calc(var(--r-3) * 2.5);
+  /* Side padding, named so the new-thread landing can hang the meta row
+     under the card at the same inset (chat.css). */
+  --composer-pad-x: var(--sp-6);
   position: relative;
   display: grid;
   /* Side padding matters now that the card floats on shadow alone (no
@@ -21,7 +24,7 @@
      chat panel is narrower than the --thread-measure cap on .composer-input-wrap —
      the common case — and the shadow gets clipped instead of reading as
      floating. */
-  padding: var(--sp-3) var(--sp-6) max(var(--sp-4), env(safe-area-inset-bottom, 0px));
+  padding: var(--sp-3) var(--composer-pad-x) max(var(--sp-4), env(safe-area-inset-bottom, 0px));
   border-top: 0;
   background: transparent;
 }

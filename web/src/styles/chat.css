@@ -225,9 +225,62 @@
   margin-block-end: calc(-1 * var(--sp-7));
 }
 
-/* Transcript empty — layout shell; visual language from empty-state.css */
-.transcript-empty {
-  margin: auto;
+/* The new-thread landing centres the composer itself: equal flexible rows
+   above and below hold it in the middle of the panel, and the greeting rides
+   the bottom of the row above it. Sending the first message drops the class
+   and the composer docks at the bottom as usual. */
+.chat-panel--landing {
+  /* Narrower than the thread's reading column: a single field this wide
+     reads as a form, not a prompt. */
+  --landing-measure: 720px;
+  grid-template-rows: var(--header-h) minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.chat-panel--landing .transcript-inner {
+  justify-content: flex-end;
+  padding-bottom: var(--sp-7);
+}
+
+/* The field as the page's one object: the canvas surface a step lifted and
+   a hairline that firms under the pointer — a single layer, where the docked
+   card's raised fill would read as a slab at this size. */
+.chat-panel--landing .composer-input-wrap {
+  width: min(100%, var(--landing-measure));
+  border-color: var(--line-strong);
+  background: var(--surface-1);
+}
+
+.chat-panel--landing .composer-input-wrap:hover {
+  border-color: var(--line-drag);
+}
+
+/* Centre the card, not the card plus the "Runs on" row under it: the row
+   leaves the flow and hangs below the card, and the composer pads its foot
+   to match its head, so the auto row is symmetric around the card. */
+.chat-panel--landing .composer {
+  padding-bottom: var(--sp-3);
+}
+
+.chat-panel--landing .composer-meta {
+  position: absolute;
+  top: calc(100% - var(--sp-3));
+  inset-inline: var(--composer-pad-x);
+  width: auto;
+  max-width: var(--landing-measure);
+  margin-inline: auto;
+}
+
+/* The composer is the page here, so it opens a little roomier than its
+   docked size: a few lines tall, and the draft one rung up. The highlight
+   mirror takes the same size or the mention pills slide off their names. */
+.chat-panel--landing .composer-textarea {
+  min-height: 104px;
+  max-height: 280px;
+}
+
+.chat-panel--landing .composer-textarea,
+.chat-panel--landing .composer-highlight {
+  font-size: var(--fs-title);
 }
 
 .transcript-turn {
