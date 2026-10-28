@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TaskRecordView } from "../src/components/task-record/TaskRecordView";
 
+vi.mock("../src/components/ArtifactViewerProvider", () => ({
+  useArtifactViewer: () => ({ open: vi.fn() }),
+}));
+
 const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask, resumeAutomation } = vi.hoisted(() => ({
   updateTask: vi.fn(async () => ({})),
   resumeAutomation: vi.fn(async () => ({})),
@@ -97,7 +101,7 @@ it("opens a routine on its runs, each selectable and each with its own record", 
   // The ledger is the routine's default tab — its history is the point of the record.
   const runs = await screen.findAllByRole("button", { name: /backlog\.runs\.outcome/ });
   expect(runs).toHaveLength(2);
-  // The newest run is selected, so its folder is what the explorer shows.
+  // The newest run is selected, so its artifacts are shown beside the ledger.
   expect(runs[0]!.getAttribute("aria-pressed")).toBe("true");
   // A failed run says why on its own row; nothing else on the row can.
   expect(runs[0]!.textContent).toContain("dispatch refused: no ready computer");
