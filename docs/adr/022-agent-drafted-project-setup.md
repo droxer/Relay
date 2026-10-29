@@ -55,7 +55,10 @@ or dismisses them. Nothing an agent writes changes the standing brief by itself.
 ## Update: generated project names
 
 The setup agent generates the project name in the same proposal as the brief,
-roster, and first tasks. On successful drafting, the generated name replaces
+roster, and first tasks, deriving it from the goal it sets: the prompt asks
+for the goal first and a 2–5 word name that says what that goal delivers, and
+the proposal file lists `goal` before `name`. A revision renames from the
+revised goal. On successful drafting, the generated name replaces
 its provisional name immediately. A name the owner edited during drafting is
 preserved; a duplicate name stays in the proposal for the owner to adjust.
 The other proposed fields and tasks still await the owner's review.

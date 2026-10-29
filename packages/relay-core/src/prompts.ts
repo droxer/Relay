@@ -268,12 +268,12 @@ function projectSetupPrelude(setup: ProjectSetupBrief): string {
     ...(setup.previousProposal
       ? [`Your previous proposal, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
       : []),
-    "Generate a concise, distinctive project name from the owner’s intent in this same proposal. The current project name is provisional; do not simply copy it.",
+    "Settle the goal first: the one-line outcome this project delivers. Then name the project after that goal, in 2 to 5 words that say what it delivers; the name must follow from the goal you wrote, not from the intent's wording. The current project name is provisional; do not copy it.",
     "Staff only the agents the work needs; one is fine for small work. Give each member responsibilities as a concrete outcome contract, not a job title.",
     "The context is the standing brief every future run will read: conventions, constraints, what done means. Keep it specific to this project; do not restate generic advice.",
     "Propose up to 8 first tasks that are bounded, verifiable, and in a sensible order.",
     TASK_ORDER_RULE,
-    `When you stop, write \`${setup.file}\` as JSON: {"name": "<short project name>", "goal": "<one-line outcome>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this crew and plan>"}.`,
+    `When you stop, write \`${setup.file}\` as JSON: {"goal": "<one-line outcome>", "name": "<2-5 word name derived from the goal>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this crew and plan>"}.`,
     "Use valid JSON with double quotes. If the intent is too vague to staff, still write your best proposal and say what you assumed in the rationale; end your reply by asking the owner what to change.",
   ].join("\n");
 }
