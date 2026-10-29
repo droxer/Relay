@@ -129,7 +129,7 @@ export function DesignSystemSpecimen() {
             </button>
           </div>
         </div>
-        <Markdown variant="document" text={"# Document preview\n\nBody text stays at the shared reading size. 项目文件使用相同的字号。\n\n## Section heading\n\nA consistent hierarchy makes this easier to scan.\n\n### Details\n\nSmaller sections remain as readable as body text."} />
+        <Markdown variant="document" text={"# Document preview\n\nDocuments use a comfortable reading size. 文档正文使用清晰易读的字号。\n\n## Section heading\n\nA consistent hierarchy makes this easier to scan.\n\n### Details\n\nSmaller sections remain as readable as body text."} />
       </div>
     </Section>
 

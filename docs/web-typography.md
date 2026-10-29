@@ -1,7 +1,8 @@
 # Web typography
 
-Relay uses a compact application scale. Body text, document previews, and file
-lists stay at 14px, following the product's chosen density. Values below are
+Relay uses a compact application scale. Application body text and file lists
+stay at 14px; standalone document previews use 16px for sustained reading.
+Values below are
 the result at the browser's default 16px font setting; the root is 87.5% and
 the size tokens use rem so font preferences can scale them.
 
@@ -16,6 +17,8 @@ the size tokens use rem so font preferences can scale them.
 | Section, panel, drawer, and dialog headings | 16px | `--type-heading`, `--type-title` |
 | Page headings and key metrics | 22px | `--type-page`, `--type-number` |
 | Display headings | 28px | `--type-display` |
+| Document body | 16px | `--fs-document` |
+| Document H1 / H2 / H3 | 28 / 22 / 18px | Document heading scale |
 | Public hero headings | 22–36px | `--fs-hero` |
 
 ## Applying the scale
@@ -27,9 +30,9 @@ the size tokens use rem so font preferences can scale them.
   instructions, errors, menu items, search fields, or help text to fit a dense row.
 - Keep workspace file names, sizes, and dates at 14px in both the project page
   and the Files drawer. Both use `WorkspaceFileList`.
-- Document previews and transcripts use 14px body text. Document headings use
-  16px at the first two levels and 14px for deeper levels, distinguished by
-  weight, spacing, the title divider, and italic at the final level.
+- Document previews use 16px body text and 28/22/18px headings, with 16px for
+  deeper levels. Headings use medium weight, with bold at H4 and italic at H6.
+  Transcripts retain 14px body text and their compact heading scale.
 - Small status badges, counts, table metadata, and mobile navigation captions
   can remain at 12px. These are short scanning aids rather than reading text.
 

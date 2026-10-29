@@ -24,11 +24,14 @@ for (const theme of ["light", "dark"] as const) {
       await page.getByRole("button", { name: `${theme === "light" ? "Light" : "Dark"} theme` }).click();
     });
 
-    test("controls, file lists, and documents share the reading size", async ({ page }) => {
+    test("controls and file lists stay compact while documents use a reading hierarchy", async ({ page }) => {
       const field = page.getByRole("textbox", { name: "Page input", exact: true });
       const reading = await tokenStyle(field, "font-size", "var(--fs-2)");
       const caption = await tokenStyle(field, "font-size", "var(--fs-1)");
-      const title = await tokenStyle(field, "font-size", "var(--fs-title)");
+      const documentBody = await tokenStyle(field, "font-size", "var(--fs-document)");
+      const documentTitle = await tokenStyle(field, "font-size", "var(--fs-6)");
+      const documentSection = await tokenStyle(field, "font-size", "var(--fs-5)");
+      const documentSubheading = await tokenStyle(field, "font-size", "var(--fs-document-subheading)");
       const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
       const fieldSize = touch ? await tokenStyle(field, "font-size", "var(--fs-input-touch)") : reading;
       const buttons = page.locator("section").filter({ has: page.getByRole("heading", { name: "Button sizes", exact: true }) }).getByRole("button");
@@ -40,8 +43,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByText("A hint under the control.", { exact: true })).toHaveCSS("font-size", reading);
       await expect(page.locator(".workspace-pick-title")).toHaveCSS("font-size", reading);
       await expect(page.locator(".workspace-pick-meta")).toHaveCSS("font-size", reading);
-      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", reading);
-      await expect(page.locator(".doc-prose h2")).toHaveCSS("font-size", title);
+      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", documentBody);
+      await expect(page.locator(".doc-prose h1")).toHaveCSS("font-size", documentTitle);
+      await expect(page.locator(".doc-prose h2")).toHaveCSS("font-size", documentSection);
+      await expect(page.locator(".doc-prose h3")).toHaveCSS("font-size", documentSubheading);
       await expect(page.getByTestId("warning-badge")).toHaveCSS("font-size", caption);
       await page.getByRole("button", { name: "Open menu", exact: true }).click();
       await expect(page.getByRole("menuitem").first()).toHaveCSS("font-size", reading);
@@ -55,7 +60,9 @@ for (const theme of ["light", "dark"] as const) {
       const reading = await tokenStyle(fileName, "font-size", "var(--fs-2)");
       expect(parseFloat(reading)).toBeCloseTo(28, 1);
       await expect(fileName).toHaveCSS("font-size", reading);
-      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", reading);
+      const documentBody = await tokenStyle(fileName, "font-size", "var(--fs-document)");
+      expect(parseFloat(documentBody)).toBeCloseTo(32, 1);
+      await expect(page.locator(".doc-prose")).toHaveCSS("font-size", documentBody);
       const field = page.getByRole("textbox", { name: "Page input", exact: true });
       const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
       const fieldSize = touch ? await tokenStyle(field, "font-size", "var(--fs-input-touch)") : reading;
