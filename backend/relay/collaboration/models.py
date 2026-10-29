@@ -75,3 +75,4 @@ class RunIntent:
     # A project setup round: the intent, candidate agents, and any earlier
     # proposal the setup agent drafts from (projects/setup.py).
     project_setup: dict[str, Any] | None = None
+    task_id: str | None = None

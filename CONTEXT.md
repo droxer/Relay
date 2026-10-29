@@ -151,7 +151,10 @@ _Avoid_: Folder, Team
 **Linked Directory**:
 An existing directory on a Project's Computer that the Project uses as its
 persistent workspace instead of one Relay creates under the Node Workspace
-Root. The Computer decides which directories may be linked; deleting the
+Root. This is the existing-project creation path: such a Project keeps the
+name, brief, and roster its owner gives it, so setup drafting is offered only
+for fresh projects, while planning further work is offered for either. The
+Computer decides which directories may be linked; deleting the
 Project forgets the link and leaves the directory in place. UI copy calls it
 the project's folder — the folder is the directory, never the Project itself.
 _Avoid_: Project path, mount, external workspace

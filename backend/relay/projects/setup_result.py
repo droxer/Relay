@@ -68,6 +68,20 @@ def completed_setup(
     }
 
 
+def generated_setup_name(project: dict[str, Any], setup: dict[str, Any]) -> str | None:
+    """Adopt the drafter's name only if the owner has not renamed the project."""
+    current = project.get("setup") or {}
+    if (
+        current.get("state") != "drafting"
+        or setup.get("state") != "proposed"
+        or setup.get("mode", "setup") != "setup"
+        or current.get("nameAtStart") != project.get("name")
+    ):
+        return None
+    name = (setup.get("proposal") or {}).get("name")
+    return name if isinstance(name, str) and name.strip() else None
+
+
 def normalize_setup_proposal(raw: Any, *, mode: str = "setup") -> dict[str, Any] | None:
     """Hold an agent-written proposal to the shape the PATCH accepts.
 

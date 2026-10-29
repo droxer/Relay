@@ -470,7 +470,7 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
     assert _request_fingerprint(answer) != _request_fingerprint(approval)
     legacy_payload = {
         k: v for k, v in asdict(plain).items()
-        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve")
+        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve", "task_id")
     }
     legacy = hashlib.sha256(
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
@@ -490,6 +490,33 @@ def test_setup_draft_identity_does_not_change_the_request_fingerprint() -> None:
     assert _request_fingerprint(first) == _request_fingerprint(prepare("retry"))
     assert _request_fingerprint(first) == _request_fingerprint(prepare(None))
     assert _request_fingerprint(first) != _request_fingerprint(prepare("first", "Revise"))
+
+
+def test_setup_task_identity_does_not_change_the_request_fingerprint() -> None:
+    def prepare(task_id: str | None):
+        return CollaborationConductor._prepare(RunIntent(
+            task_goal="Set up the project", session_id=None, requested_project_id="p",
+            raw_assignments=[{"agentId": "lead"}], source="project_setup",
+            project_setup={"intent": "Launch"}, task_id=task_id,
+        ))
+
+    assert _request_fingerprint(prepare("task_a")) == _request_fingerprint(prepare("task_b"))
+    assert _request_fingerprint(prepare("task_a")) == _request_fingerprint(prepare(None))
+
+
+def test_a_setup_round_without_a_task_is_refused() -> None:
+    import pytest
+
+    from relay.collaboration.errors import CollaborationError
+
+    intent = CollaborationConductor._prepare(RunIntent(
+        task_goal="Set up the project", session_id=None, requested_project_id="p",
+        raw_assignments=[{"agentId": "lead"}], source="project_setup",
+        project_setup={"intent": "Launch"},
+    ))
+    with pytest.raises(CollaborationError) as refused:
+        CollaborationConductor(SimpleNamespace())._round_work_scope(intent, None, False, None)
+    assert refused.value.code == "project_setup_task_required"
 
 
 def _round_team_conductor(roster: list[str]) -> CollaborationConductor:

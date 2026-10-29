@@ -50,6 +50,8 @@ export interface ProjectSetup {
   /** Absent on setups drafted before plan rounds existed. */
   mode?: ProjectSetupMode;
   draftId?: string;
+  /** Task that owns the current drafting round. */
+  taskId?: string;
   /** Proposal task key → the task created from it, once applied. */
   appliedTasks?: Record<string, string>;
   intent: string;
@@ -88,8 +90,6 @@ export interface ApplySetupTasksInput {
   taskKeys?: string[];
   /** Per task key: the agent to assign, or null to file it unassigned. */
   assignedAgentIds?: Record<string, string | null>;
-  /** Make the created tasks ready; each still waits for its prerequisites. */
-  queue?: boolean;
 }
 
 export interface ProjectContextSuggestion {

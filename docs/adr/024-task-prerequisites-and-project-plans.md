@@ -59,3 +59,10 @@ replicas read the applied keys under the same lock.
   only the proposal's tasks, so the round still yields a usable plan.
 - Prerequisites stay within one project; cross-project ordering and
   parent/subtask hierarchies are out of scope.
+
+## Update: user-controlled task starts
+
+Setup and plan drafting first create a task and immediately run it in a linked
+thread. Applying the resulting proposal only creates backlog tasks and their
+prerequisites, and closes the drafting task. Queue-on-apply is retired; the
+owner starts each proposed task separately after reviewing the created tasks.

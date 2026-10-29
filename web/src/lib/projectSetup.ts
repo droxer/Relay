@@ -4,6 +4,7 @@ import type {
   ProjectRecord,
   ProjectSetup,
   ProjectSetupMemberIssue,
+  ProjectSetupMode,
   ProjectSetupProposal,
   UpdateProjectInput,
 } from "../types.ts";
@@ -47,7 +48,7 @@ export interface SetupDraft {
 
 /** A project needs a unique name before its setup agent can name it. The
  *  first line of the intent, clipped on a word boundary, stands in until the
- *  owner applies the proposal. */
+ *  setup agent returns its generated name. */
 export function provisionalProjectName(intent: string, fallback: string): string {
   const line = intent.split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? "";
   const words = line.replace(/\s+/g, " ").replace(/[.!?。！？]+$/u, "");
@@ -61,6 +62,13 @@ export function provisionalProjectName(intent: string, fallback: string): string
 /** The setup states the review panel shows; resolved setups stay out of the way. */
 export function setupNeedsAttention(setup: ProjectSetup | undefined | null): setup is ProjectSetup {
   return Boolean(setup && (setup.state === "drafting" || setup.state === "proposed" || setup.state === "failed"));
+}
+
+/** Whether an agent may draft for this project in `mode`. An existing
+ *  (linked) project keeps the setup its owner gave it, so only planning is
+ *  drafted for it; the backend refuses the rest (`project_setup_fresh_only`). */
+export function setupDraftingAllowed(project: ProjectRecord, mode: ProjectSetupMode = "setup"): boolean {
+  return mode === "plan" || !project.workspaceHostPath;
 }
 
 /** Members an Apply would refuse arrive unchecked, so the default Apply
@@ -127,7 +135,6 @@ export function setupTasksApplyInput(
   draftId: string,
   draft: SetupDraft,
   memberIds: ReadonlySet<string>,
-  queue: boolean,
 ): ApplySetupTasksInput {
   const kept = draft.tasks.filter((task) => task.include && task.title.trim());
   return {
@@ -137,7 +144,6 @@ export function setupTasksApplyInput(
       task.key,
       task.assignedAgentId && memberIds.has(task.assignedAgentId) ? task.assignedAgentId : null,
     ])),
-    queue,
   };
 }
 

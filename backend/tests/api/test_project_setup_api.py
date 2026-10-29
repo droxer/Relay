@@ -110,6 +110,7 @@ def test_setup_drafts_a_proposal_the_owner_applies(setup_env):
 
     setup = client.get(f"/api/v1/projects/{project['id']}/setup").json()["setup"]
     assert setup["state"] == "proposed"
+    assert client.get(f"/api/v1/projects/{project['id']}").json()["project"]["name"] == "Spring site launch"
     members = {m["agentId"]: m for m in setup["proposal"]["members"]}
     assert members[builder["id"]]["role"] == "implementer", "an unknown role is normalized"
     assert members["agent-from-nowhere"]["issue"] == "agent_not_found"
@@ -165,6 +166,10 @@ def test_revise_drafts_again_in_the_same_thread(setup_env):
     assert revised.json()["threadId"] == thread_id
     command = _take_command(app, node)
     assert command["state"]["project_setup"]["previousProposal"]["name"] == "Spring site launch"
+    tasks = client.get("/api/v1/tasks").json()["tasks"]
+    assert len(tasks) == 2
+    assert all(thread_id in task["linkedSessionIds"] for task in tasks)
+    assert revised.json()["project"]["setup"]["taskId"] in {task["id"] for task in tasks}
 
 
 def test_a_setup_in_progress_refuses_a_second_draft(setup_env):
@@ -226,6 +231,60 @@ def test_a_revise_that_cannot_dispatch_restores_the_proposal(setup_env, monkeypa
     setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
     assert setup["state"] == "proposed"
     assert setup["proposal"]["name"] == "Spring site launch"
+    tasks = client.get("/api/v1/tasks").json()["tasks"]
+    assert [task["id"] for task in tasks] == [setup["taskId"]], "the undispatched task is discarded"
+
+
+def test_an_unexpected_dispatch_error_discards_the_task_and_fails_the_draft(setup_env, monkeypatch):
+    from relay.collaboration.service import CollaborationConductor
+
+    _app, client, _node, project, planner, _builder = setup_env
+
+    async def explode(self, intent, actor):
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(CollaborationConductor, "submit", explode)
+    with pytest.raises(RuntimeError):
+        client.post(f"/api/v1/projects/{project['id']}/setup", json={
+            "intent": "Launch", "agentId": planner["id"],
+        })
+
+    setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
+    assert (setup["state"], setup["error"]) == ("failed", "project_setup_dispatch_failed")
+    assert client.get("/api/v1/tasks").json()["tasks"] == []
+
+
+@pytest.mark.parametrize("resolution", ["applied", "dismissed"])
+def test_resolving_a_proposal_closes_its_drafting_task(setup_env, resolution):
+    app, client, node, project, planner, builder = setup_env
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Launch", "agentId": planner["id"],
+    }).json()["threadId"]
+    _complete(app, node, _take_command(app, node), thread_id, proposal=_proposal(planner, builder))
+    latest = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
+    assert app.state.task_store.get_task(latest["setup"]["taskId"])["status"] == "review"
+
+    resolved = client.patch(f"/api/v1/projects/{project['id']}", json={
+        "expectedVersion": latest["version"], "setupResolution": resolution,
+    })
+
+    assert resolved.status_code == 200, resolved.text
+    assert app.state.task_store.get_task(latest["setup"]["taskId"])["status"] == "done"
+
+
+def test_a_revision_closes_the_task_of_the_draft_it_replaces(setup_env):
+    app, client, node, project, planner, builder = setup_env
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Launch", "agentId": planner["id"],
+    }).json()["threadId"]
+    _complete(app, node, _take_command(app, node), thread_id, proposal=_proposal(planner, builder))
+    first_task_id = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]["taskId"]
+
+    revised = client.post(f"/api/v1/projects/{project['id']}/setup", json={"intent": "Smaller", "revise": True})
+
+    assert revised.status_code == 202, revised.text
+    assert app.state.task_store.get_task(first_task_id)["status"] == "done"
+    assert revised.json()["project"]["setup"]["taskId"] != first_task_id
 
 
 @pytest.mark.parametrize("replacement", ["dismissed", "new_draft", "new_unbound_draft", "new_revision"])
@@ -317,3 +376,125 @@ def test_start_rechecks_for_another_draft_at_the_write_boundary(setup_env, monke
     assert response.status_code == 409, response.text
     assert response.json()["detail"] == "project_setup_in_progress"
     assert store.get_project(project["id"])["setup"] == replacement
+    assert client.get("/api/v1/tasks").json()["tasks"] == []
+
+
+def test_drafting_has_a_task_before_the_thread_starts(setup_env):
+    app, client, node, project, planner, builder = setup_env
+    started = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Launch the site", "agentId": planner["id"],
+    }).json()
+    tasks = client.get("/api/v1/tasks").json()["tasks"]
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task["projectId"] == project["id"]
+    assert task["assignedAgentId"] == planner["id"]
+    assert started["threadId"] in task["linkedSessionIds"]
+    command = _take_command(app, node)
+    request = app.state.registry.daemon_store.active_run_request_for_session_any_node(started["threadId"])
+    assert request["taskId"] == task["id"]
+    manifest = request["state"]["_relay_collaboration_manifest"]
+    assert manifest["workScope"] == {"kind": "task", "taskId": task["id"]}
+    _complete(app, node, command, started["threadId"], proposal=_proposal(planner, builder))
+    assert client.get(f"/api/v1/projects/{project['id']}/setup").json()["setup"]["state"] == "proposed"
+
+
+@pytest.mark.parametrize("scenario", ["owner_renamed", "name_taken", "missing_name"])
+def test_generated_name_preserves_owner_edits_and_name_uniqueness(setup_env, scenario):
+    app, client, node, project, planner, builder = setup_env
+    started = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Launch the site", "agentId": planner["id"],
+    }).json()
+    expected_name = project["name"]
+    if scenario == "owner_renamed":
+        expected_name = "My chosen name"
+        renamed = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": started["project"]["version"], "name": expected_name,
+        })
+        assert renamed.status_code == 200, renamed.text
+    if scenario == "name_taken":
+        other = client.post("/api/v1/projects", json={
+            "name": "Spring site launch", "daemonNodeId": node["id"], "members": [],
+        })
+        assert other.status_code == 201, other.text
+    proposal = _proposal(planner, builder)
+    if scenario == "missing_name":
+        proposal.pop("name")
+    _complete(app, node, _take_command(app, node), started["threadId"], proposal=proposal)
+    latest = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
+    assert latest["name"] == expected_name
+    assert latest["setup"]["state"] == "proposed"
+
+
+def _assert_draft_owns_its_task(app, client, project_id, thread_id):
+    """The draft, its run, and its thread all name one task in the project."""
+    setup = client.get(f"/api/v1/projects/{project_id}").json()["project"]["setup"]
+    task = app.state.task_store.get_task(setup["taskId"])
+    assert task["projectId"] == project_id
+    assert not task.get("deletedAt")
+    assert thread_id in task["linkedSessionIds"]
+    request = app.state.registry.daemon_store.active_run_request_for_session_any_node(thread_id)
+    assert request["taskId"] == task["id"]
+    assert request["state"]["_relay_collaboration_manifest"]["workScope"] == {"kind": "task", "taskId": task["id"]}
+    return task
+
+
+def test_every_kind_of_draft_runs_under_its_own_task(setup_env):
+    from tests.api.test_project_plan_api import _crewed
+
+    app, client, node, project, planner, builder = setup_env
+    url = f"/api/v1/projects/{project['id']}/setup"
+
+    # A first draft.
+    thread_id = client.post(url, json={"intent": "Launch", "agentId": planner["id"]}).json()["threadId"]
+    first = _assert_draft_owns_its_task(app, client, project["id"], thread_id)
+    _complete(app, node, _take_command(app, node), thread_id, exit_code=1)
+    failed = client.get(url).json()["setup"]
+    assert (failed["state"], failed["taskId"]) == ("failed", first["id"]), "a failed run keeps its task"
+
+    # A retry after a failed run starts a new task and settles the old one.
+    thread_id = client.post(url, json={"intent": "Launch", "agentId": planner["id"]}).json()["threadId"]
+    retried = _assert_draft_owns_its_task(app, client, project["id"], thread_id)
+    assert retried["id"] != first["id"]
+    assert app.state.task_store.get_task(first["id"])["status"] == "done"
+    _complete(app, node, _take_command(app, node), thread_id, proposal=_proposal(planner, builder))
+    assert client.get(url).json()["setup"]["taskId"] == retried["id"], "a proposal keeps its task"
+
+    # A revision runs in the same thread under a new task.
+    revised = client.post(url, json={"intent": "Smaller", "revise": True}).json()
+    assert revised["threadId"] == thread_id
+    revision = _assert_draft_owns_its_task(app, client, project["id"], thread_id)
+    assert revision["id"] != retried["id"]
+    _complete(app, node, _take_command(app, node), thread_id, proposal=_proposal(planner, builder))
+    latest = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
+    client.patch(f"/api/v1/projects/{project['id']}", json={
+        "expectedVersion": latest["version"], "setupResolution": "dismissed",
+    })
+
+    # A plan draft.
+    _crewed(client, project, planner, builder)
+    planned = client.post(url, json={"intent": "Plan the next work", "mode": "plan"})
+    assert planned.status_code == 202, planned.text
+    plan_task = _assert_draft_owns_its_task(app, client, project["id"], planned.json()["threadId"])
+    assert plan_task["assignedAgentId"] == planner["id"], "the lead drafts the plan"
+
+
+def test_a_draft_that_never_dispatched_names_no_deleted_task(setup_env, monkeypatch):
+    from relay.collaboration.errors import CollaborationError
+    from relay.collaboration.service import CollaborationConductor
+
+    _app, client, _node, project, planner, _builder = setup_env
+
+    async def refuse(self, intent, actor):
+        raise CollaborationError("workspace_busy")
+
+    monkeypatch.setattr(CollaborationConductor, "submit", refuse)
+    refused = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Launch", "agentId": planner["id"],
+    })
+
+    assert refused.status_code == 409
+    setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
+    assert setup["state"] == "failed"
+    assert "taskId" not in setup
+    assert client.get("/api/v1/tasks").json()["tasks"] == []

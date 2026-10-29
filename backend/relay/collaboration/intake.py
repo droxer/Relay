@@ -37,6 +37,7 @@ class _PreparedRound:
     address: dict[str, Any]
     style: str | None = None
     project_setup: dict[str, Any] | None = None
+    task_id: str | None = None
     question_id: str | None = None
     approve: bool = False
 
@@ -74,6 +75,9 @@ def _scoped_idempotency_key(
 def _request_fingerprint(intent: _PreparedRound) -> str:
     payload = asdict(intent)
     payload.pop("idempotency_key", None)
+    # Each setup draft creates its own task, so like the draft id below it is
+    # identity, not request content, and must not make a retry conflict.
+    payload.pop("task_id", None)
     # Unset style is omitted so fingerprints recorded before styles existed
     # still match a retry of the same request.
     if payload.get("style") is None:
@@ -219,6 +223,7 @@ def _prepare_run(intent: RunIntent) -> _PreparedRound:
         source=intent.source,
         style=intent.style,
         project_setup=intent.project_setup,
+        task_id=intent.task_id,
         purpose=_purpose_for_mode(intent.mode),
         address=(
             {"kind": "members", "agentIds": addressed}

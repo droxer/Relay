@@ -1,9 +1,7 @@
 """Applying a drafted proposal's tasks to the project in one request.
 
-The tasks are created through the ordinary task path, their prerequisites
-set from the proposal's ``after`` links, and only then — when the owner asks
-to queue them — made ready, so the scheduler can never pick up a task before
-it knows what that task waits for.
+The tasks are created through the ordinary task path with their prerequisites.
+They stay in the backlog until the owner starts them separately.
 """
 
 from __future__ import annotations
@@ -27,13 +25,14 @@ from ...security.actor import Actor
 from ...tasks.creation import TaskCreateRequest
 from ...tasks.creation import create_task as create_task_record
 from ...tasks.prerequisites import PrerequisiteError
-from ...tasks.requests import TaskRequestError, update_task_unless_dispatching
+from ...tasks.requests import TaskRequestError
 from ..actors import assignee_user_id_for_task, request_actor
 from ..bodies import JsonBodyDep
 from ..deps import AppContext, AppContextDep
 from ..tasks.payloads import public_task, request_reader
 from ..tasks.prerequisites import with_waiting_on
 from .access import project_for_owner, project_session_fields
+from .setup_task import close_setup_task
 
 router = APIRouter()
 
@@ -43,7 +42,7 @@ def apply_setup_tasks(
     project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     """Create the proposal's tasks (or the ``taskKeys`` subset) with their
-    prerequisites; with ``queue: true`` they are made ready in order."""
+    prerequisites, ready for the owner to review and start separately."""
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
     if project_for_owner(ctx, project_id, actor["userId"], require_enabled=True) is None:
@@ -60,10 +59,6 @@ def apply_setup_tasks(
         overrides = assignee_overrides(body.get("assignedAgentIds"))
         applied = _create_missing(ctx, actor, project, setup, chosen, overrides)
         _link_prerequisites(ctx, project, chosen, applied)
-        if body.get("queue") is True:
-            # Every chosen task still in the backlog, not only the ones this
-            # call created: a retry after a partial apply must still queue.
-            _queue(ctx, [applied[task["key"]] for task in chosen])
         return {
             **setup,
             "appliedTasks": applied,
@@ -79,6 +74,9 @@ def apply_setup_tasks(
     except ProjectSetupError as error:
         raise HTTPException(error.status, error.code) from error
     setup = applicable_setup(project, body.get("draftId"))
+    if setup.get("state") == "applied":
+        # The plan is in the backlog now; its drafting task is finished.
+        close_setup_task(ctx, setup)
     chosen = selected_tasks(setup, body.get("taskKeys"))
     applied = setup["appliedTasks"]
     tasks = [ctx.task_store.get_task(applied[task["key"]]) for task in chosen]
@@ -147,17 +145,6 @@ def _link_prerequisites(
                 error.status,
                 {"code": error.code, "key": task["key"]},
             ) from error
-
-
-def _queue(ctx: AppContext, task_ids: list[str]) -> None:
-    for task_id in task_ids:
-        if ctx.task_store.get_task(task_id).get("status") != "backlog":
-            continue
-        try:
-            update_task_unless_dispatching(ctx, task_id, {"status": "assigned"})
-        except (TaskRequestError, ValueError) as error:
-            detail = error.detail if isinstance(error, TaskRequestError) else str(error)
-            raise HTTPException(409, {"code": "project_setup_queue_failed", "message": detail}) from error
 
 
 def _mutate(ctx: AppContext, project_id: str, change: Any) -> dict[str, Any]:

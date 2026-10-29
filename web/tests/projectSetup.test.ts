@@ -7,6 +7,7 @@ import {
   setupApplyInput,
   setupDraftFromProposal,
   keptMemberIds,
+  setupDraftingAllowed,
   setupNeedsAttention,
   setupTaskAfterTitles,
   setupTasksApplyInput,
@@ -84,11 +85,10 @@ describe("setup drafts", () => {
   it("applies kept tasks by key and drops assignees who are not kept members", () => {
     const draft = setupDraftFromProposal(proposal, project);
     assert.deepEqual(draft.tasks.map((task) => task.key), ["sitemap", "task-2"], "an unkeyed task is keyed by position");
-    assert.deepEqual(setupTasksApplyInput("setup_1", draft, keptMemberIds(draft), true), {
+    assert.deepEqual(setupTasksApplyInput("setup_1", draft, keptMemberIds(draft)), {
       draftId: "setup_1",
       taskKeys: ["sitemap", "task-2"],
       assignedAgentIds: { sitemap: "ada", "task-2": null },
-      queue: true,
     });
   });
 
@@ -98,7 +98,7 @@ describe("setup drafts", () => {
     assert.deepEqual(setupTaskAfterTitles(designer, draft.tasks), ["Draft the sitemap"]);
     const without = [{ ...sitemap, include: false }, designer];
     assert.deepEqual(setupTaskAfterTitles(designer, without), []);
-    const input = setupTasksApplyInput("setup_1", { ...draft, tasks: without }, new Set(), false);
+    const input = setupTasksApplyInput("setup_1", { ...draft, tasks: without }, new Set());
     assert.deepEqual(input.taskKeys, ["task-2"]);
   });
 
@@ -106,5 +106,15 @@ describe("setup drafts", () => {
     assert.equal(setupNeedsAttention(undefined), false);
     assert.equal(setupNeedsAttention({ state: "applied" } as never), false);
     assert.equal(setupNeedsAttention({ state: "failed" } as never), true);
+  });
+});
+
+describe("setupDraftingAllowed", () => {
+  it("drafts setup only for a fresh project but plans for either kind", () => {
+    const existing = { ...project, workspaceHostPath: "/Users/ada/code/site" };
+    assert.equal(setupDraftingAllowed(project), true);
+    assert.equal(setupDraftingAllowed(existing), false);
+    assert.equal(setupDraftingAllowed(existing, "setup"), false);
+    assert.equal(setupDraftingAllowed(existing, "plan"), true);
   });
 });

@@ -268,6 +268,7 @@ function projectSetupPrelude(setup: ProjectSetupBrief): string {
     ...(setup.previousProposal
       ? [`Your previous proposal, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
       : []),
+    "Generate a concise, distinctive project name from the owner’s intent in this same proposal. The current project name is provisional; do not simply copy it.",
     "Staff only the agents the work needs; one is fine for small work. Give each member responsibilities as a concrete outcome contract, not a job title.",
     "The context is the standing brief every future run will read: conventions, constraints, what done means. Keep it specific to this project; do not restate generic advice.",
     "Propose up to 8 first tasks that are bounded, verifiable, and in a sensible order.",

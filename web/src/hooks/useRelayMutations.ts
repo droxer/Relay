@@ -353,6 +353,7 @@ export function useRelayMutations() {
     onSuccess: ({ project }) => {
       cacheProject(project);
       void invalidateProjects();
+      void invalidateTasks();
     },
     onError: onRelayError("Failed to start project setup", "errors.start_project_setup"),
   });

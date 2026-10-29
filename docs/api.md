@@ -547,8 +547,18 @@ GET  /api/v1/projects/{id}/setup   → { setup, candidates }
 POST /api/v1/projects/{id}/setup   { intent, agentId?, revise? } → 202 { project, threadId }
 ```
 
-Setup asks one agent on the project's computer to draft a proposal; nothing
-changes until the owner applies it. The drafter is any owner agent placed on
+The create drawer offers a fresh project (a new workspace) or an existing
+project (a Linked Directory). Existing projects require a folder and are
+configured manually; setup and refinement drafts are unavailable, but plan
+drafts (`mode: "plan"`) are not. `POST …/setup` rejects a setup draft for a
+linked project with `project_setup_fresh_only` (409).
+
+Setup first creates a project task for drafting, then immediately runs it in a
+linked thread. The proposed brief, roster, and work are applied only after
+the owner reviews them. The generated name replaces the provisional project name
+when drafting finishes, unless the owner renamed it during drafting. A name
+collision preserves the provisional name and keeps the proposal for review.
+The drafter is any owner agent placed on
 that computer (the project-task admission rule), defaulting to the project's
 lead, then a planner. `revise: true` drafts again in the same thread from the
 last proposal and the owner's note. The run writes
@@ -568,7 +578,15 @@ effect. `GET …/setup` marks each proposed member with an `issue`
 Each draft has a `draftId` pinned in its round manifest. Setup transitions
 check the current draft and state inside the project mutation, so a late
 result cannot reopen a dismissed setup or replace a newer draft. Definitive
-failures before daemon delivery also close the draft as `failed`.
+failures before daemon delivery also close the draft as `failed` and delete
+its unstarted task. Each revision creates a new drafting task while reusing
+the setup thread, and closes the replaced draft's task as `done`; applying or
+dismissing a proposal closes its task the same way.
+
+`POST /api/v1/projects/{id}/setup/tasks` creates the selected proposal tasks
+with their prerequisites in the backlog. Applying or retrying a proposal
+never queues these tasks, including requests from older clients carrying
+`queue: true`. The owner starts each task separately through the task controls.
 
 A project run's round result may carry up to three `contextSuggestions`
 (`{ text, evidence? }`). They are kept, attributed to their run, on

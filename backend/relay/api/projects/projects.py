@@ -42,6 +42,7 @@ from ...projects.deletion import (
 from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep
+from .setup_task import close_setup_task, discard_setup_task
 from .access import project_for_owner
 from .links import (
     link_existing_directory,
@@ -280,6 +281,9 @@ def update_project(
         raise HTTPException(404, "Project not found.") from error
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
+    if "setupResolution" in body:
+        # Applying or dismissing the proposal ends its drafting task.
+        close_setup_task(ctx, project.get("setup"))
     return {"project": project}
 
 
@@ -322,6 +326,10 @@ async def start_project_setup(
     try:
         intent = setup_intent(body.get("intent"))
         mode = setup_mode(body.get("mode"), project)
+        if mode == "setup" and project.get("workspaceHostPath"):
+            # An existing project keeps the name, brief, and roster its owner
+            # gave it; only planning further work is drafted for it.
+            raise ProjectSetupError("project_setup_fresh_only")
         candidates = setup_candidates(
             project,
             agent_store=ctx.agent_store,
@@ -364,11 +372,39 @@ async def start_project_setup(
             raise ProjectVersionConflict(project_id)
         return draft
 
-    _mutate_setup(ctx, project_id, claim_draft)
+    open_tasks = (
+        plan_open_tasks(
+            project, ctx.task_store.list_task_summaries(user_id=project["ownerUserId"]),
+        )
+        if mode == "plan" else None
+    )
+    goal = setup_task_goal(intent, revising=revising, mode=mode)
+
+    def claim_with_task(latest: dict[str, Any]) -> dict[str, Any]:
+        claimed = claim_draft(latest)
+        # The project mutation and task creation share one transaction. A
+        # competing draft can never leave an orphan task behind.
+        candidate = next(item for item in candidates if item["agentId"] == agent_id)
+        task = ctx.task_store.create_task({
+            "title": goal[:200],
+            "description": goal,
+            "projectId": project_id,
+            "ownerUserId": project["ownerUserId"],
+            "assigneeUserId": project["ownerUserId"],
+            "assignedAgentId": agent_id,
+            "assignedAgent": candidate["executorKind"],
+        })
+        if thread_id:
+            ctx.task_store.link_session(task["id"], thread_id)
+        return {**claimed, "taskId": task["id"], "nameAtStart": latest["name"]}
+
+    project = _mutate_setup(ctx, project_id, claim_with_task)
+    draft = project["setup"]
     try:
         session = await CollaborationConductor(ctx).submit(
             RunIntent(
-                task_goal=setup_task_goal(intent, revising=revising, mode=mode),
+                task_goal=goal,
+                task_id=draft["taskId"],
                 session_id=thread_id,
                 raw_assignments=[{"agentId": agent_id, "mode": "action"}],
                 requested_project_id=project_id,
@@ -380,31 +416,20 @@ async def start_project_setup(
                     previous_proposal=previous_proposal,
                     draft_id=draft["draftId"],
                     mode=mode,
-                    open_tasks=(
-                        plan_open_tasks(
-                            project,
-                            ctx.task_store.list_task_summaries(user_id=project["ownerUserId"]),
-                        )
-                        if mode == "plan"
-                        else None
-                    ),
+                    open_tasks=open_tasks,
                 ),
             ),
             actor,
         )
     except CollaborationError as error:
-        failure_code = error.code
-        # Undo only our own draft: a revise falls back to the setup it was
-        # revising, a fresh start is marked failed so it never waits forever.
-        def restore(latest: dict[str, Any]) -> dict[str, Any] | None:
-            current = latest.get("setup") or {}
-            if current.get("state") != "drafting" or current.get("draftId") != draft["draftId"]:
-                return None
-            return previous if revising and previous else {**current, "state": "failed", "error": failure_code}
-
-        _mutate_setup(ctx, project_id, restore)
+        _undo_draft(ctx, project_id, draft, previous if revising else None, error.code)
         detail: Any = str(error) if error.status in (400, 403) else {"code": error.code, "message": str(error)}
         raise HTTPException(error.status, detail) from error
+    except Exception:
+        # Whatever failed, the draft must not wait forever on a run that
+        # never started, nor leave its task in the backlog.
+        _undo_draft(ctx, project_id, draft, previous if revising else None, "project_setup_dispatch_failed")
+        raise
 
     def attach_thread(latest: dict[str, Any]) -> dict[str, Any] | None:
         current = latest.get("setup") or {}
@@ -417,7 +442,36 @@ async def start_project_setup(
         return {**current, "threadId": session["id"]}
 
     project = _mutate_setup(ctx, project_id, attach_thread)
+    # The draft this one replaces is settled: its run is over and its
+    # proposal superseded.
+    close_setup_task(ctx, previous)
     return {"project": project, "threadId": session["id"]}
+
+
+def _undo_draft(
+    ctx: Any,
+    project_id: str,
+    draft: dict[str, Any],
+    previous: dict[str, Any] | None,
+    failure_code: str,
+) -> None:
+    """Undo only our own draft: a revise falls back to the setup it was
+    revising, a fresh start is marked failed so it never waits forever."""
+    # Admission can fail before a daemon request exists to settle the task.
+    discard_setup_task(ctx, draft)
+
+    def restore(latest: dict[str, Any]) -> dict[str, Any] | None:
+        current = latest.get("setup") or {}
+        if current.get("state") != "drafting" or current.get("draftId") != draft["draftId"]:
+            return None
+        if previous:
+            return previous
+        # The unstarted task was just discarded; a failed draft names no task
+        # rather than one that no longer exists.
+        failed = {key: value for key, value in current.items() if key != "taskId"}
+        return {**failed, "state": "failed", "error": failure_code}
+
+    _mutate_setup(ctx, project_id, restore)
 
 
 def _mutate_setup(

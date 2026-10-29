@@ -191,6 +191,7 @@ export function ProjectWorkspacePage({
               setup={project.setup}
               agents={agents}
               onOpenThread={onOpenThread}
+              onOpenTask={openTaskRecord}
               onManual={() => setPageTab("members")}
             />
           ) : null}
