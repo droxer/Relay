@@ -145,9 +145,9 @@
   border: 0;
   background: transparent;
   color: var(--ink-1);
-  /* Same 14px/700 list-rail identity as the agent roster and thread rail. */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  /* Same medium-weight list-rail identity as the thread rail. */
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -172,27 +172,15 @@
   gap: var(--sp-2);
 }
 
-/* Indented past the pip so the meta line starts under the name, not the dot. */
+/* Team rows carry no pip, so the meta line starts flush under the name. */
 .teams-list-sub {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--sp-1-5);
-  padding-inline-start: calc(var(--dot) + var(--sp-2));
   color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-}
-
-.teams-list-style {
-  display: inline-flex;
-  flex: none;
-  color: var(--ink-4);
-}
-
-.teams-list-style svg {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
 }
 
 .teams-list-roster {
@@ -505,8 +493,6 @@
   align-items: center;
   column-gap: var(--sp-3);
   min-width: 0;
-  padding-bottom: var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
 }
 
 .team-work-member .agent-state {
@@ -527,6 +513,15 @@
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
+}
+
+/* The role the member plays, in words beside the name — quieter than the
+   name, no chip. */
+.team-work-member-role {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  white-space: nowrap;
 }
 
 .team-work-member-identity .agent-meta {
@@ -618,8 +613,6 @@
 
 .team-work-member-participation {
   margin: 0;
-  padding-top: var(--sp-3);
-  border-top: 0.5px solid var(--line-2);
   color: var(--ink-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);

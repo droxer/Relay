@@ -9,13 +9,13 @@ const session = { id: "s", projectId: "p", taskGoal: "Release discussion", statu
 const project = { id: "p", name: "Autumn launch" } as ProjectRecord;
 const task = { id: "t", title: "Release notes", linkedSessionIds: ["s"] } as RelayTaskListItem;
 
-it("lists task threads in Threads with their project badge and updates renamed projects", () => {
+it("lists task threads in Threads with their project name and updates renamed projects", () => {
   const options = { route: "main", myThreads: [session], projects: [project], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] };
   const hook = renderHook((props) => useThreadDirectory(props), { initialProps: options });
   expect(hook.result.current.directoryThreads.map(item => item.session.id)).toEqual(["s"]);
   const select = vi.fn();
   const row = render(<ThreadRow item={hook.result.current.directoryThreads[0]} selected={false} onSelect={select} tone="idle" now={Date.parse(session.updatedAt)} />);
-  expect(screen.getByText("Autumn launch").closest("[data-slot=badge]")).toBeTruthy();
+  expect(screen.getByText("Autumn launch").closest(".conversation-project")).toBeTruthy();
   hook.rerender({ ...options, projects: [{ ...project, name: "New launch" }] });
   row.rerender(<ThreadRow item={hook.result.current.directoryThreads[0]} selected={false} onSelect={select} tone="idle" now={Date.parse(session.updatedAt)} />);
   expect(screen.getByText("New launch")).toBeTruthy();
@@ -23,21 +23,15 @@ it("lists task threads in Threads with their project badge and updates renamed p
   expect(hook.result.current.directoryThreads).toHaveLength(1);
 });
 
-it("draws the room agents' faces instead of runtime marks", () => {
+it("names its project in plain words, with no agent faces or runtime marks", () => {
   const agent = { id: "ag1", displayName: "Ada", profileImageUrl: null, placements: [] };
   const room = { ...session, participantAgentIds: ["ag1"], currentAgent: "claude" } as unknown as RelaySession;
   const options = { route: "main", myThreads: [room], projects: [project], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [agent] };
   const { result } = renderHook((props) => useThreadDirectory(props), { initialProps: options });
   const { container } = render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
-  expect(container.querySelector(".conversation-agent-face")?.getAttribute("title")).toBe("Ada");
-  expect(container.querySelector(".identity-mark")).toBeTruthy();
-  expect(container.querySelector(".conversation-agents > svg:not(.identity-mark)")).toBeNull();
-});
-
-it("falls back to runtime marks when the room has no resolvable agents", () => {
-  const { container } = render(<ThreadRow item={{ session: { ...session, currentAgent: "claude" } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
-  expect(container.querySelector(".conversation-agent-face")).toBeNull();
-  expect(container.querySelector(".conversation-agents > svg")).toBeTruthy();
+  expect(container.querySelector(".conversation-subline")?.textContent).toBe("Autumn launch");
+  expect(container.querySelector(".conversation-agents")).toBeNull();
+  expect(container.querySelector(".conversation-subline svg, [data-slot=badge]")).toBeNull();
 });
 
 it("keeps a task conversation in Threads when sending from Threads", async () => {
@@ -50,10 +44,10 @@ it("keeps a task conversation in Threads when sending from Threads", async () =>
   expect(window.location.pathname).toBe("/threads");
 });
 
-it("keeps a task thread visible while projects load and gives it an ID badge", () => {
+it("keeps a task thread visible while projects load and names it by its ID", () => {
   const { result } = renderHook(() => useThreadDirectory({ route: "main", myThreads: [session], projects: [], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] }));
   render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
-  expect(screen.getByText("p").closest("[data-slot=badge]")).toBeTruthy();
+  expect(screen.getByText("p").closest(".conversation-project")).toBeTruthy();
 });
 
 it("does not give an independent thread a project badge", () => {

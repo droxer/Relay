@@ -40,7 +40,7 @@ function isRequired(config: TeamMemberConfig) {
 
 /* Who the member is: avatar with readiness pip; name with the role they will
    actually play (so an inherited role is visible without opening the select)
-   and the lead star; then the shared <AgentMetaLine> — runtime glyph and the
+   and the lead star; then the shared <AgentMetaLine> — runtime and the
    computers it runs on, the one meta line every agent surface renders. Same
    head grammar as the project crew tiles. */
 function TeamMemberCardHead({ member, config, lead, nameId, side }: {
@@ -66,7 +66,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
         <span className="team-work-member-name">
           <strong id={nameId}>{member.displayName}</strong>
           {lead ? <LeadBadge /> : null}
-          {role ? <TonePill tone="neutral" label={t(`team_work.role_${role}`)} /> : null}
+          {role ? <span className="team-work-member-role">{t(`team_work.role_${role}`)}</span> : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>
         <AgentMetaLine executorKind={member.executorKind} placements={member.placements ?? []} />

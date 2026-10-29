@@ -16,12 +16,14 @@ const read = (path: string) => readFile(resolve("web", path), "utf8");
  * copy again.
  */
 describe("agent meta line", () => {
-  it("shows the runtime glyph and every active computer", async () => {
+  it("names the runtime and every active computer in plain words", async () => {
     const source = await read("src/components/AgentMetaLine.tsx");
 
     assert.match(source, /agentLabel\(executorKind\)/);
-    assert.match(source, /<AgentMark agent=\{executorKind\}/);
-    assert.match(source, /className="agent-meta-runtime-mark"/);
+    // Words only: a vendor glyph beside "Claude" and an ownership glyph beside
+    // a computer's name said each fact twice on every row.
+    assert.doesNotMatch(source, /<AgentMark\b/);
+    assert.doesNotMatch(source, /<NodeOwnershipIcon\b/);
     // Every active placement, in route order — never just the first.
     assert.match(source, /descriptions\.map\(/);
     assert.doesNotMatch(source, /descriptions\[0\]/);

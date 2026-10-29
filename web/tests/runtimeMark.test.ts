@@ -75,6 +75,13 @@ describe("runtime mark surfaces", () => {
     assert.doesNotMatch(mark, /<i className/);
   });
 
+  it("draws the vendor glyph only where no name sits beside it", async () => {
+    const mark = await read("src/components/RuntimeMark.tsx");
+    // The bare mark is a glyph alone, so it keeps it; a labeled mark sits
+    // beside the runtime's name, where the glyph would say it twice.
+    assert.match(mark, /variant === "labeled" \? null : <AgentMark\b/);
+  });
+
   it("has one implementation, shared by the fleet and the computer page", async () => {
     for (const path of [
       "src/components/admin/NodeRuntimeMarks.tsx",

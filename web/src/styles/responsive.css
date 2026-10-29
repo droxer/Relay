@@ -658,16 +658,10 @@
     background: var(--control-fill);
   }
 
-  /* Rail groups: the name and count are enough on a phone — the hairline
-     stretched after them doubled as a row divider — and the groups sit one
-     step apart rather than a full section rung. */
+  /* Rail groups sit one step apart on a phone rather than a full section
+     rung. */
   .conversation-group + .conversation-group {
     margin-top: var(--sp-3);
-  }
-
-  .conversation-group-label::after,
-  .agents-roster-group-label::after {
-    display: none;
   }
 
   /* No .chat-header / .chat-title overrides at this tier: the header only

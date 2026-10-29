@@ -47,12 +47,12 @@
 }
 
 .agents-roster-group + .agents-roster-group {
-  margin-top: var(--sp-5);
+  margin-top: var(--sp-4);
 }
 
-/* Same section divider as the thread rail's state groups: a micro-caps name,
-   a count, and a hairline stretched across the rail. The band names the
-   computer; the rows beneath it no longer repeat it. */
+/* Same group label as the thread rail's state groups: a quiet name and a
+   count, no divider line. The band names the computer; the rows beneath it
+   no longer repeat it. */
 .agents-roster-group-label {
   position: sticky;
   top: 0;
@@ -67,14 +67,6 @@
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
-}
-
-.agents-roster-group-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  align-self: center;
-  background: var(--line-1);
 }
 
 .agents-roster-group-count {
@@ -177,10 +169,9 @@
 .agents-roster-row-name {
   overflow: hidden;
   color: var(--ink-1);
-  /* Same 12px/700 list-rail identity as the thread rail — 14px bold names
-     read too loud in a 318px roster, CJK more so. */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  /* Same medium-weight list-rail identity as the thread rail. */
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -192,7 +183,7 @@
 }
 
 /* ── The agent meta line ─────────────────────────────────────────────────
-   `[vendor glyph] runtime · [ownership glyph] computer, computer` — the one
+   `runtime · computer, computer` in plain words — the one
    annotation under an agent's name, shared by the roster row, the team
    profile's member list, and the team member picker (<AgentMetaLine>).
 
@@ -233,15 +224,6 @@
   letter-spacing: var(--type-meta-track);
 }
 
-.agent-meta-runtime-mark {
-  display: inline-flex;
-  align-items: center;
-}
-
-.agent-meta-runtime-mark > svg {
-  display: block;
-}
-
 .agent-meta-runtime-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -264,13 +246,6 @@
   align-items: center;
   min-width: 0;
   gap: var(--sp-1);
-}
-
-/* Ownership glyph — the local/cloud badge. Kind is carried by the icon,
-   never a hue, same rule as the placement badge. */
-.agent-meta-computer > svg {
-  flex: none;
-  color: var(--ink-3);
 }
 
 .agent-meta-computer > span:last-child {
@@ -308,23 +283,12 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-.agent-placement-badge > svg {
-  flex: none;
-}
-
-/* Same ownership mapping as .adm-node-profile-kind: the cloud mark steps up
-   one ink tier and the chip itself stays a neutral hairline, so ownership
-   never competes with the status dot (the loud/calm brightness tiers stay
-   reserved for health). */
-.agent-placement-badge[data-ownership="managed"] > svg {
-  color: var(--ink-2);
-}
-
 /* Status hue lives only on the dot (tone-* sets --tone in base.css), matching
    the placement list — the node name stays identity-colored. Flat: the fill
    alone tells ready/busy/offline, no halo. */
 /* The badge's status pip is a .state-mark (it carries its own tone); only the
-   extra breathing room before the ownership glyph is local. */
+   extra breathing room before the name is local. Ownership reads in words,
+   from the kind term after the name — no glyph. */
 .agent-placement-badge > .state-mark {
   margin-right: var(--sp-1);
 }
@@ -338,7 +302,7 @@
   min-width: 6ch;
   overflow: hidden;
   color: var(--ink-1);
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -271,7 +271,7 @@
 
 .computer-run-open {
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-2);
   width: 100%;
@@ -299,14 +299,10 @@ button.computer-run-open:hover {
   --mark-accent: var(--live);
 }
 
-.computer-run-agent-mark {
-  color: var(--ink-3);
-}
-
 .computer-run-agent {
   color: var(--ink-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .computer-run-goal {
@@ -359,10 +355,6 @@ button.computer-run-open:hover {
 
 .computer-card[data-online="false"] .computer-runtime-row {
   opacity: var(--opacity-dormant);
-}
-
-.computer-runtime-mark {
-  color: var(--ink-3);
 }
 
 .computer-runtime-name {

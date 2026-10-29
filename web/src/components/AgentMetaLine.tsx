@@ -4,12 +4,11 @@ import { useTranslation } from "react-i18next";
 import { activePlacements, describeAgentPlacements } from "../lib/agentPlacements";
 import { agentLabel } from "../lib/plan";
 import type { AgentName, AgentPlacement } from "../types";
-import { AgentMark } from "./AgentMark";
-import { ICON, NodeOwnershipIcon } from "./icons";
 
 /**
- * The one line that annotates an agent: which runtime it is, and which
- * computers it runs on.
+ * The one line that annotates an agent, in plain words: which runtime it is,
+ * and which computers it runs on. No vendor or ownership glyphs — the words
+ * already say it, and a glyph per fact cluttered every roster row.
  *
  * Three surfaces drew this by hand — the agent roster row, the team profile's
  * member list, and the team member picker — and they had drifted apart on
@@ -59,9 +58,6 @@ export function AgentMetaLine({
     >
       <span className="agent-meta-runtime">
         <span className="sr-only">{t("agents_page.runtime")}: </span>
-        <span className="agent-meta-runtime-mark" aria-hidden="true">
-          <AgentMark agent={executorKind} size={ICON.xs} />
-        </span>
         <span className="agent-meta-runtime-label" translate="no">{runtime}</span>
       </span>
       {showComputers ? (
@@ -76,7 +72,6 @@ export function AgentMetaLine({
                     {index > 0 ? (
                       <span className="agent-meta-computer-separator" aria-hidden="true">,</span>
                     ) : null}
-                    <NodeOwnershipIcon ownership={description.ownership} size={ICON.xs} aria-hidden="true" />
                     <span translate="no">{description.nodeName}</span>
                   </span>
                 );
