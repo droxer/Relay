@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
   ActionAdd,
   ICON,
-  NavProjects,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
@@ -249,9 +248,6 @@ export function ThreadListPanel({
                 aria-label={project.name}
                 onClick={() => onSelectProject(project.id)}
               >
-                <span className="project-folder-icon">
-                  <NavProjects size={ICON.sm} aria-hidden="true" />
-                </span>
                 <span className="project-folder-name">{project.name}</span>
                 {/* The crew and computer, which the tooltip says on a
                     pointer. Touch has no tooltip, so on a phone this line is

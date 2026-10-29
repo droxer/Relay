@@ -9,7 +9,6 @@ import {
   placementStatusTone,
   type AgentPlacementDescription,
 } from "../lib/agentPlacements";
-import { ICON, NodeOwnershipIcon } from "./icons";
 import { Badge } from "@/components/ui/badge";
 
 export function AgentPlacementBadge({
@@ -42,7 +41,6 @@ export function AgentPlacementBadge({
         data-ownership={description.ownership}
       >
         <StateMark tone={placementStatusTone(status)} />
-        <NodeOwnershipIcon ownership={description.ownership} size={ICON.sm} aria-hidden="true" />
         <span className="agent-placement-badge-name" translate="no">
           {description.nodeName}
         </span>

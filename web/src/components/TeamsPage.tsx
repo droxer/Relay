@@ -6,9 +6,7 @@ import { useTeams } from "../hooks/useTeams";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { selectedTeamForWorkspace } from "../lib/teamWorkspace";
 import { teamAvailability } from "../lib/taskAssignment";
-import { effectiveStyle } from "../lib/collaborationStyle";
 import { StatusPill, TonePill } from "./StatusPill";
-import { CollaborationStyleIcon } from "./CollaborationStyleBadge";
 import type { CurrentUser } from "../types";
 import {
   ActionAdd,
@@ -156,7 +154,6 @@ export function TeamsPage({
                   : supportNames || t("teams.no_members");
                 const selected = team.id === selectedTeam?.id;
                 const availability = teamAvailability(team);
-                const style = effectiveStyle(team);
                 return (
                   <li
                     key={team.id}
@@ -171,20 +168,16 @@ export function TeamsPage({
                         aria-current={selected ? "page" : undefined}
                         onClick={() => onSelectTeam(team.id)}
                       >
-                        {/* Like the agent rail: the name leads, the style
-                            rides the meta line as a glyph, and the team's
-                            mark trails. Ready is the default and unnamed;
-                            any other state is its pill alone. A leading pip
-                            used to say it a second time, so a busy team read
-                            busy twice. */}
+                        {/* Like the agent rail: the name leads over its
+                            roster in plain words, and the team's mark trails.
+                            Ready is the default and unnamed; any other state
+                            is its pill alone. The collaboration style is on
+                            the team's record, not repeated as a glyph here. */}
                         <span className="teams-list-identity">
                           <span className="teams-list-titleline">
                             <span className="teams-list-title">{team.name}</span>
                           </span>
                           <span className="teams-list-sub">
-                            <span className="teams-list-style" title={t(`collab_style.${style}`)}>
-                              <CollaborationStyleIcon style={style} />
-                            </span>
                             <span className="teams-list-roster">{roster}</span>
                           </span>
                         </span>

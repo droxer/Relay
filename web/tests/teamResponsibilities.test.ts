@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 const read = (path: string) => readFile(resolve(path), "utf8");
 
 describe("team member responsibility cards", () => {
-  it("draws each member as an identity card: avatar, name, lead mark + role pill, meta line", async () => {
+  it("draws each member as an identity card: avatar, name, lead mark + role, meta line", async () => {
     const source = await read("web/src/components/TeamMemberCard.tsx");
     assert.match(source, /<div\s+className="team-work-member"[^>]*?role="group"/);
     assert.match(source, /<header className="team-work-member-head">\s*<AgentStateBadge/);
@@ -17,10 +17,12 @@ describe("team member responsibility cards", () => {
     const badge = await read("web/src/components/LeadBadge.tsx");
     assert.match(badge, /<MarkLead className="fill-current" aria-hidden="true" \/>/);
     assert.match(badge, /aria-label=\{label\} title=\{label\}/);
-    // The role pill shows the role the member will actually play, so an
-    // inherited default is visible without opening the select.
+    // The role shows the role the member will actually play, so an
+    // inherited default is visible without opening the select — as plain
+    // muted text beside the name, not a pill with its own dot.
     assert.match(source, /const role = effectiveRoleOf\(member, config\)/);
-    assert.match(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_\$\{role\}`\)\} \/>/);
+    assert.match(source, /<span className="team-work-member-role">\{t\(`team_work\.role_\$\{role\}`\)\}<\/span>/);
+    assert.doesNotMatch(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_/);
     assert.match(source, /<AgentMetaLine executorKind=\{member\.executorKind\} placements=\{member\.placements \?\? \[\]\} \/>/);
     // A responsibility is a sentence or two, not a single-line value.
     assert.match(source, /<Textarea\s+rows=\{2\}\s+value=\{config\.responsibility/);

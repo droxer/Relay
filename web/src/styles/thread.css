@@ -167,26 +167,11 @@
   gap: var(--sp-2);
   min-width: 0;
   flex: 1;
-  /* --sp-row vertically, the same as every rail row. Horizontally the row's
-     --sp-3 is kept on the TRAILING edge — that is where the count sits, and it
-     has to line up with the stamp on the thread rows below it — while the
-     leading edge drops to --sp-2 because the chevron already supplies the
-     inset there. It was --sp-2 on both edges, which pulled the count 4px
-     further right than every other trailing mark in the rail. */
-  padding: var(--sp-row) var(--sp-3) var(--sp-row) var(--sp-2);
+  /* The same --sp-row / --sp-3 inset as every rail row, so the name lines up
+     with the thread, agent and team names in the rails beside it. */
+  padding: var(--sp-row) var(--sp-3);
   border-radius: var(--r-2);
   text-align: left;
-}
-
-.project-folder-icon {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-}
-
-.project-folder-icon > svg {
-  color: var(--ink-3);
-  transition: color var(--t-fast) var(--ease);
 }
 
 .project-folder-select > .project-folder-name {
@@ -198,9 +183,9 @@
   flex: 1;
   overflow: hidden;
   color: var(--ink-1);
-  /* Same 12px/700 list-rail identity as the thread rows it contains. */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  /* Same medium-weight list-rail identity as the thread rail. */
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -339,12 +324,14 @@
   gap: var(--sp-1);
 }
 
-/* The full row's second line: status, agent marks, offline badge. One
-   14px label-voiced line, and no hue at all — the tone is drawn once, by the
-   pip leading the title above it, and a status word in warn ink would read
-   as running text anyway (design-system.md status fill rules). */
+/* The full row's second line: status words, then the project or origin
+   name. Plain muted text, no glyphs or chips, and no hue — the tone is drawn
+   once, by the pip leading the title above it. */
 .conversation-subline {
   display: flex;
+  /* Hangs under the title text, not under the pip leading it: the pip's
+     width plus the title line's gap. */
+  padding-inline-start: calc(var(--dot) + var(--sp-2));
   align-items: center;
   gap: var(--sp-1-5);
   min-width: 0;
@@ -363,54 +350,18 @@
   color: var(--ink-4);
 }
 
+/* Status holds its width; the project / origin name is what gives on a
+   narrow rail. */
 .conversation-status {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  gap: var(--sp-1);
-  max-width: 100%;
 }
 
-.conversation-status > span:last-child {
+.conversation-project,
+.conversation-origin {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Who has worked the thread, as a cluster of agent marks. Decorative — the
-   running agent is named in the status text and the full set reads from the
-   cluster's tooltip — so the marks stay ink-3 and out of the hue budget.
-   Lives in the meta line on a row that has status, and on the title line on a
-   settled one, which is why it carries no positional geometry of its own. */
-.conversation-agents {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--sp-1);
-  color: var(--ink-3);
-}
-
-.conversation-agents > svg {
-  display: block;
-}
-
-/* One room agent's face inside the cluster. Same square-ish agent shape as
-   the avatar stack's faces (r-2, not the round human-avatar language), at the
-   mark cluster's 16px. */
-.conversation-agent-face {
-  display: inline-flex;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--r-2);
-  background: var(--surface-3);
-  color: var(--ink-2);
-  overflow: hidden;
-}
-
-.conversation-agent-face > .profile-image {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
 }
 
 .conversation-topline {
@@ -429,56 +380,17 @@
   gap: var(--sp-2);
 }
 
-/* The cluster inlined onto the title line holds its size; the name is what
-   ellipsizes when the rail is narrow. Without this the marks compressed to
-   slivers before a long title gave up a single character. */
-.conversation-name > .conversation-agents {
-  flex: none;
-}
-
 .conversation-name strong {
   min-width: 0;
   color: var(--ink-1);
-  /* List-rail identity: 12px/700, one rung under --type-name. Bolder, not
-     bigger — a rail of 14px bold titles reads shouty at 318px, and CJK
-     glyphs more so — so rows wear the strong-label role and let weight,
-     not size, separate title from meta. */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  /* List-rail identity at the label role's medium weight: a rail of bold
+     titles reads shouty, and ink (ink-1 over ink-3 meta) already separates
+     title from meta. */
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Backlog / routine origin: a neutral kind badge plus the source's name. It is
-   provenance, not state, so it stays out of the tone hues the status pips
-   spend. The name is the segment that gives up width on a narrow rail — the
-   status before it and the badge itself hold their size. */
-.conversation-origin {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: var(--sp-1-5);
-  min-width: 0;
-}
-
-.conversation-origin-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The shared badge chip, set in the meta line's own type and trimmed to its
-   line height: at the primitive's caption size and block pad it outgrew the
-   status text beside it and added 6px to every task row. */
-.conversation-origin-kind {
-  flex: none;
-  gap: var(--sp-1);
-  padding-block: 0;
-  padding-inline: var(--sp-1-5);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-  color: var(--ink-3);
 }
 
 /* Badges a thread whose computer is unreachable. Sits inside the name line
@@ -617,7 +529,7 @@
 
 /* ===================== state-grouped sections ===================== */
 .conversation-group + .conversation-group {
-  margin-top: var(--sp-6);
+  margin-top: var(--sp-4);
 }
 
 .conversation-group-label {
@@ -633,17 +545,6 @@
   color: var(--ink-3);
 }
 
-/* A trailing hairline stretches the section label across the rail — the
-   Linear-style section divider that lets the eye split a long list into
-   blocks without a heavier chrome band. */
-.conversation-group-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  align-self: center;
-  background: var(--line-1);
-}
-
 /* No pip on the group label: every row beneath it already carries its own,
    and a second warn dot one line above the first said the same thing twice.
    The label stays muted so status hue reads only as a row pip. */
@@ -653,36 +554,6 @@
 
 .conversation-group-count {
   color: var(--ink-4);
-}
-
-/* Project identity stays legible beside the task origin, even in narrow rails.
-   No fixed share: a 50% cap truncated "Platform Infrastructure" beside a
-   two-word status with half the row still empty. The status segment is
-   flex: none, so the chip is what gives when the row runs short — and it
-   gives only then. */
-.conversation-project {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--ink-3);
-}
-
-/* The project and origin read as the row's meta line — dim text behind a
-   glyph — not as bordered chips. A chip on every row of the rail made the
-   least important fact the most boxed-in shape in it. */
-.conversation-project,
-.conversation-origin-kind {
-  padding-inline: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.conversation-project > svg {
-  flex-shrink: 0;
-}
-
-.conversation-project > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .project-origin-options {

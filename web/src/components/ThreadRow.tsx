@@ -4,20 +4,14 @@ import {
   AdminDelete,
   ICON,
   NavMore,
-  NavBacklog,
-  NavProjects,
-  NavRoutine,
 } from "./icons";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { StateMark, type StateShape, type StateTone } from "./StateMark";
 import { OfflineBadge } from "./OfflineBadge";
 import type { RelaySession } from "../types";
-import { canDeleteThread, sessionAgents, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
+import { canDeleteThread, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { formatThreadStamp } from "../lib/threadStamp";
-import { agentLabel } from "../lib/plan";
-import { AgentMark } from "./AgentMark";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,8 +20,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { IdentityMark } from "./IdentityMark";
-import { ProfileImage } from "./ProfileImagePicker";
 
 export type { ThreadItem };
 
@@ -43,9 +35,9 @@ type ThreadRowProps = {
       mode runs. Every row draws it as a pip leading the title; rows with
       something more specific to say also spell it out on the meta line. */
   tone: ThreadTone;
-  /** "full" — the threads rail's two-line row: title + stamp over a status /
-      agent meta line. "nested" — a project folder's single-line sub-row:
-      pip + title + stamp, subordinate to the folder name. */
+  /** "full" — the threads rail's row: title + stamp, over one plain meta
+      line when the row has status or context to add. "nested" — a project
+      folder's single-line sub-row: pip + title + stamp. */
   layout?: "full" | "nested";
   /** The rail's minute clock. The stamp reads it instead of Date.now() so the
       memoized row re-renders once a minute to keep "3m ago" honest, and never
@@ -136,40 +128,19 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   // tone, including an unresponsive run, which `tone` already marks as err.
   const pipTone = tone === "err" || status?.tone === "err" ? "err" : tone;
 
-  // Who is in the thread's room, drawn as faces — the same fact the header's
-  // participant stack shows. Threads whose room never resolved (older
-  // sessions, deleted agents) fall back to the runtime marks that used to be
-  // the row's only identity. Either way the cluster is decorative: the
-  // running agent is named in the status text and the full set reads from
-  // the title tooltip.
-  const participants = item.participants ?? [];
-  const runtimeAgents = sessionAgents(session);
-  const agentsTitle = (participants.length > 0
-    ? participants.map((agent) => agent.displayName)
-    : runtimeAgents.map(agentLabel)
-  ).join(", ");
-  // Where the cluster goes, and whether the row earns a second line at all.
-  const { subline, inlineAgents } = threadRowMeta({
-    layout,
-    hasStatus: Boolean(status),
-    hasOrigin: Boolean(item.origin || projectName),
-    agentCount: participants.length || runtimeAgents.length,
-  });
-  const agentCluster = participants.length > 0 ? (
-    <span className="conversation-agents" title={agentsTitle} aria-hidden="true">
-      {participants.map((agent) => (
-        <span key={agent.id} className="conversation-agent-face" title={agent.displayName}>
-          <ProfileImage src={agent.profileImageUrl} alt="" fallback={<IdentityMark kind="agent" />} />
-        </span>
-      ))}
-    </span>
-  ) : runtimeAgents.length > 0 ? (
-    <span className="conversation-agents" title={agentsTitle} aria-hidden="true">
-      {runtimeAgents.map((agent) => (
-        <AgentMark key={agent} agent={agent} size={ICON.xs} />
-      ))}
-    </span>
-  ) : null;
+  // Where the work lives, in words: its project, else the task or automation
+  // that started it. One fact, never both — a project task's thread already
+  // reads as the project's. A source named like the thread itself (every
+  // automation run) would only repeat the title, so it reads as its kind.
+  const originKind = item.origin
+    ? t(item.origin.kind === "routine" ? "thread.origin_kind_routine" : "thread.origin_kind_backlog")
+    : undefined;
+  const originContext = item.origin && showOrigin
+    ? (item.origin.title.trim() === label.trim() ? originKind : item.origin.title)
+    : undefined;
+  const context = projectName ?? originContext;
+  const contextLabel = projectName ? projectLabel : originLabel;
+  const { subline } = threadRowMeta({ layout, hasStatus: Boolean(status), hasContext: Boolean(context) });
 
   function handleClose() {
     onClose?.(session.id);
@@ -177,25 +148,6 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
 
   const offlineMark = item.nodeOffline ? (
     <OfflineBadge className="conversation-offline" title={offlineLabel} />
-  ) : null;
-
-  // Which backlog task or routine started the thread, in words: a kind badge
-  // ("Backlog" / "Routine") and, on full rows, the source's name beside it.
-  // Nested rows are single-line, so they carry the badge alone and the name
-  // reads from its tooltip. The row's aria-label already speaks both. A
-  // project task's thread skips this — its project badge says it instead.
-  const OriginGlyph = item.origin?.kind === "routine" ? NavRoutine : NavBacklog;
-  const originBadge = item.origin && showOrigin ? (
-    <Badge className="conversation-origin-kind" data-kind={item.origin.kind} title={originLabel} aria-hidden="true">
-      <OriginGlyph size={ICON.xs} />
-      {t(item.origin.kind === "routine" ? "thread.origin_kind_routine" : "thread.origin_kind_backlog")}
-    </Badge>
-  ) : null;
-
-  const projectBadge = projectName ? (
-    <Badge className="conversation-project" title={projectLabel} aria-hidden="true">
-      <NavProjects size={ICON.xs} /><span>{projectName}</span>
-    </Badge>
   ) : null;
 
   return (
@@ -221,15 +173,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             <StateMark {...PIP[pipTone]} />
             <span className="conversation-name">
               <strong title={label}>{label}</strong>
-              {/* The offline badge rides the title in both layouts: it is a
-                  property of the thread itself, and the name line survives
-                  the hover swap that hides the timestamp. */}
+              {/* A property of the thread itself, so it rides the title and
+                  survives the hover swap that hides the timestamp. */}
               {offlineMark}
-              {/* A settled row has no status line to hang the marks under, so
-                  they ride here rather than keeping a second line alive for
-                  one decorative glyph. */}
-              {inlineAgents ? agentCluster : null}
-              {layout === "nested" ? <>{projectBadge}{originBadge}</> : null}
             </span>
             {stamp ? (
               <span className="conversation-stamp tnum">
@@ -238,23 +184,21 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             ) : null}
           </span>
           {subline ? (
+            /* One muted line of words: status first, then where the work
+               lives. The tone is drawn once, by the title's pip. */
             <span className="conversation-subline">
-              {projectBadge}
-              {/* Words only: the tone is drawn once, by the title's pip. Two
-                  pips a line apart said the same thing twice — the mistake
-                  the group labels already dropped their own pip over. */}
               {status ? (
-                <span className="conversation-status" data-tone={status.tone}>
-                  <span>{status.text}</span>
+                <span className="conversation-status" data-tone={status.tone}>{status.text}</span>
+              ) : null}
+              {context ? (
+                <span
+                  className={projectName ? "conversation-project" : "conversation-origin"}
+                  data-kind={projectName ? undefined : item.origin?.kind}
+                  title={contextLabel}
+                >
+                  {context}
                 </span>
               ) : null}
-              {item.origin && showOrigin ? (
-                <span className="conversation-origin" data-kind={item.origin.kind}>
-                  {originBadge}
-                  <span className="conversation-origin-name">{item.origin.title}</span>
-                </span>
-              ) : null}
-              {inlineAgents ? null : agentCluster}
             </span>
           ) : null}
         </span>

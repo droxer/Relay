@@ -7,7 +7,8 @@ import { StateMark } from "./StateMark";
 import { ICON } from "./icons";
 
 /**
- * One executor on one computer: a presence pip beside the vendor glyph.
+ * One executor on one computer: a presence pip, beside the vendor glyph when
+ * no name sits next to it.
  *
  * This existed twice — `.adm-runtime-mark` on the fleet card and row, and
  * `.computer-runtime-row` on the computer page — and the copies had already
@@ -55,7 +56,9 @@ export function RuntimeMark({
       {...rest}
     >
       <StateMark shape={pip.shape} tone={pip.tone} className="runtime-mark-pip" />
-      <AgentMark agent={agent} size={ICON.sm} className={cn("runtime-mark-glyph", glyphClassName)} />
+      {/* The labeled variant sits beside the runtime's name, so the vendor
+          glyph would only repeat it; the bare mark is the glyph alone. */}
+      {variant === "labeled" ? null : <AgentMark agent={agent} size={ICON.sm} className={cn("runtime-mark-glyph", glyphClassName)} />}
       {children}
     </span>
   );

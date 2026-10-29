@@ -2,7 +2,6 @@
 
 import type { TFunction } from "i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
-import { AgentMark } from "../AgentMark";
 import { RuntimeRefreshButton } from "./RuntimeRefreshButton";
 import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
@@ -194,7 +193,6 @@ export function ComputerCard({
                   title={t("computer.open_run_thread")}
                 >
                   <StateMark shape="live" className="computer-run-mark" />
-                  <AgentMark agent={run.agent} size={ICON.sm} className="computer-run-agent-mark" />
                   <span className="computer-run-agent">{labelForExecutor(run.agent)}</span>
                   <span className="computer-run-goal">{run.taskGoal || t("computer.untitled_run")}</span>
                   <span className="computer-run-elapsed tnum">{formatRunElapsed(run.startedAt)}</span>
@@ -269,7 +267,6 @@ function RuntimeRow({
         tone={tone}
         variant="labeled"
         disabled={disabled}
-        glyphClassName="computer-runtime-mark"
       />
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
       {ready ? null : <span className="computer-runtime-state">{stateLabel}</span>}

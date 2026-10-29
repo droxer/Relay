@@ -19,7 +19,6 @@ import {
   ActionEdit,
   AdminDelete,
   ICON,
-  NodeOwnershipIcon,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
@@ -460,7 +459,6 @@ export function TeamWorkspacePage({
       label: t("teams.computer"),
       value: computerLabel ? (
         <span className="record-band-inline" title={computerLabel}>
-          <NodeOwnershipIcon ownership={computer?.ownership ?? "pending"} size={ICON.xs} aria-hidden="true" />
           <span className="truncate" translate="no">{computerLabel}</span>
         </span>
       ) : <span className="record-band-value--empty">—</span>,

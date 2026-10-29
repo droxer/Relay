@@ -218,37 +218,20 @@ export function matchesThreadQuery(session: Labelled, query: string): boolean {
   return (session.title?.toLowerCase() ?? "").includes(q) || session.taskGoal.toLowerCase().includes(q);
 }
 
-/** How a thread row spends its vertical space.
- *
- *  The second line exists to carry status. A settled thread deliberately says
- *  nothing about status — the group header above it already reads "idle", and
- *  restating that on every row is noise — which left the line holding only the
- *  agent cluster, and that cluster is decorative: the running agent is named in
- *  the status text, and the full set reads from the row's tooltip. So a settled
- *  row was paying a whole line for one ornamental glyph, on the majority of
- *  rows in any long list. The marks ride the title line there instead, beside
- *  the offline badge that already sits on it, and the row collapses to one
- *  line. Height then tracks how much a row actually has to say: attention costs
- *  more of the rail than rest does, which is the signal the rail is built on.
- *
- *  Nested rows are single-line by construction and opt out of both — they carry
- *  their own state pip because the flat in-project list has no group headers,
- *  and marks would undo the density that layout exists for. */
+/** How a thread row spends its vertical space. A row is one line — state
+ *  pip, title, stamp — and earns a second, plain-text line only when it has
+ *  something to add: a status worth words (running, waiting, failed) or where
+ *  the work lives (its project, or the task / automation that started it).
+ *  Nested rows are single-line by construction. */
 export function threadRowMeta(
-  { layout, hasStatus, hasOrigin, agentCount }: {
+  { layout, hasStatus, hasContext }: {
     layout: "full" | "nested";
     hasStatus: boolean;
-    /** A backlog / routine thread names its source on the meta line. */
-    hasOrigin: boolean;
-    agentCount: number;
+    /** The row names a project or an originating task / automation. */
+    hasContext: boolean;
   },
-): { subline: boolean; inlineAgents: boolean } {
-  if (layout !== "full") return { subline: false, inlineAgents: false };
-  // The origin's name needs the meta line's width more than the decorative
-  // agent marks do, so they ride the title line whenever an origin shows.
-  if (hasOrigin) return { subline: true, inlineAgents: agentCount > 0 };
-  if (hasStatus) return { subline: true, inlineAgents: false };
-  return { subline: false, inlineAgents: agentCount > 0 };
+): { subline: boolean } {
+  return { subline: layout === "full" && (hasStatus || hasContext) };
 }
 
 /* ── Render budget ─────────────────────────────────────────────────────────

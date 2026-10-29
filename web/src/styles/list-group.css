@@ -48,21 +48,27 @@
 /* Small caps, the same tier the column header beneath it uses: the band is a
    label for a group, not a title for a page. */
 .list-group-name {
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   color: var(--ink-1);
 }
 
 /* The group's WHOLE size, not the page under it — a band that counted only
    what is on screen would report a different number as the reader pages.
+   Plain quiet figures beside the name, the same as the thread and agent
+   rails' group counts: a boxed chip made the count the loudest thing in a
+   band whose job is the name. */
+.list-group-count {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
 
-   ONE count-chip recipe, shared with the thread header's Files pill count
-   (.chat-artifacts-count): the micro role (no weight stacked on a raw rung),
-   one plane — the --control-fill ink wash, which reads on any surface where a
-   --surface-* fill vanished on its own plane — and a height derived from the
-   chip rung: a count rides inside a chip-height row, so it is the chip less
-   the binding inset on each side. */
-.list-group-count,
+/* The count chip inside the thread header's Files pill: the micro role (no
+   weight stacked on a raw rung), one plane — the --control-fill ink wash,
+   which reads on any surface where a --surface-* fill vanished on its own
+   plane — and a height derived from the chip rung: a count rides inside a
+   chip-height row, so it is the chip less the binding inset on each side. */
 .chat-artifacts-count {
   display: inline-flex;
   align-items: center;
