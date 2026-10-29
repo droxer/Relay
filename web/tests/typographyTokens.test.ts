@@ -89,7 +89,7 @@ describe("application typography roles", () => {
     // Section and panel headings share one size; weight and spacing carry hierarchy.
     assert.match(palette, /--fs-heading:\s*var\(--fs-title\);/);
     assert.match(palette, /--fs-title-lg:\s*var\(--fs-title\);/);
-    assert.match(palette, /--fs-document:\s*var\(--fs-4\);/);
+    assert.match(palette, /--fs-document:\s*var\(--fs-title\);/);
     const roles = readWebSource("styles/tokens/roles.css");
     assert.match(roles, /--type-label:\s+500 var\(--fs-2\)\//);
     assert.match(roles, /--type-label-strong:\s+700 var\(--fs-2\)\//);

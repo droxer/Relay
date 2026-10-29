@@ -704,8 +704,9 @@
      inline markdown code, diffs, plain artifacts, the file viewer — reads this
      token, so they cannot drift apart again. */
   --fs-code: 1rem;   /* 14px — code, diffs, file contents */
-  /* Document previews keep the compact 14px reading size. */
-  --fs-document: var(--fs-4); /* 14px */
+  /* Standalone documents have a larger reading scale than chat turns. */
+  --fs-document: var(--fs-title); /* 16px */
+  --fs-document-subheading: 1.2857rem; /* 18px */
   /* Scale with font preferences while retaining the iOS focus-zoom floor. */
   --fs-input-touch: max(16px, var(--fs-title));
   /* The thread transcript's reading size. The transcript is a chat column
@@ -714,7 +715,7 @@
      panel read oversized. Both voices (agent answer, user turn), the
      in-message heading ladder, and the composer draft read from these two
      tokens, so the size stays one decision. Document previews (.doc-prose)
-     keep --fs-4 and --leading-prose. */
+     keep --fs-document and --leading-prose. */
   --fs-transcript: var(--fs-2);              /* 14px */
   --leading-transcript: var(--leading-loose); /* 1.65 */
   /* Code set inside that 14px transcript. JetBrains Mono's taller x-height

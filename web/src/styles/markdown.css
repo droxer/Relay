@@ -505,7 +505,7 @@ html:lang(zh-CN) .md-body blockquote {
 
 /* ---- document variant ----
    The thread space preview and the workspace file preview render whole
-   artifacts, not chat turns. Documents keep 14px reading text and a compact
+   artifacts, not chat turns. Documents use 16px reading text and a distinct
    heading ladder; deep headings stay at least as large as the body.
    Transcript sizing and technical text retain their compact metrics. */
 .doc-prose {
@@ -530,13 +530,14 @@ html:lang(zh-CN) .md-body blockquote {
 .doc-prose h5,
 .doc-prose h6 {
   margin: var(--sp-7) 0 var(--sp-2);
+  font-weight: 500;
 }
 
-/* Document hierarchy: 16/16/14/14/14/14. Weight and italic distinguish deep
+/* Document hierarchy: 28/22/18/16/16/16. Weight and italic distinguish deep
    sections without reducing their text below the reading size. */
-.doc-prose h1 { font-size: var(--fs-title); font-weight: 700; }
-.doc-prose h2 { font-size: var(--fs-heading); }
-.doc-prose h3 { font-size: var(--fs-document); }
+.doc-prose h1 { font-size: var(--fs-6); }
+.doc-prose h2 { font-size: var(--fs-5); }
+.doc-prose h3 { font-size: var(--fs-document-subheading); }
 .doc-prose h4 { font-size: var(--fs-document); font-weight: 700; }
 .doc-prose h5 { font-size: var(--fs-document); font-weight: 500; }
 .doc-prose h6 { font-size: var(--fs-document); font-weight: 500; font-style: italic; }
