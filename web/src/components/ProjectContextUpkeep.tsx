@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
-import { setupNeedsAttention } from "../lib/projectSetup";
+import { setupDraftingAllowed, setupNeedsAttention } from "../lib/projectSetup";
 import type { ProjectContextSuggestion, ProjectRecord, ProjectSetupMode } from "../types";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -92,6 +92,8 @@ export function ProjectRefineSection({
       // The shared mutation handler announces the error; keep the note.
     }
   }
+
+  if (!setupDraftingAllowed(project, mode)) return null;
 
   return (
     <section className="project-settings-section" aria-labelledby={`project-settings-${mode}`}>

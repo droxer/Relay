@@ -684,3 +684,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.project-origin-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-5);
+}

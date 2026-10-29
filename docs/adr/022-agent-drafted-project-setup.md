@@ -51,3 +51,32 @@ or dismisses them. Nothing an agent writes changes the standing brief by itself.
   named per run, and only setup commands consume them.
 - A setup thread's later chat turns are not setup rounds; revising goes through
   `POST /projects/{id}/setup` with `revise: true`.
+
+## Update: generated project names
+
+The setup agent generates the project name in the same proposal as the brief,
+roster, and first tasks. On successful drafting, the generated name replaces
+its provisional name immediately. A name the owner edited during drafting is
+preserved; a duplicate name stays in the proposal for the owner to adjust.
+The other proposed fields and tasks still await the owner's review.
+
+## Update: fresh and existing project setup
+
+Creation offers a fresh workspace or an existing project folder. Only the
+fresh workspace supports setup drafting. Existing projects link their folder,
+keep their existing name and content, and are configured manually; planning
+their next tasks (`mode: "plan"`) stays available. The backend enforces this
+boundary on setup draft requests, including revisions and retries. A proposal
+an existing project already holds stays reviewable and dismissable.
+
+## Update: the drafting task
+
+Each draft runs under a project task created with it, in the same transaction
+as the draft record, so the drafting thread has a task scope: the draft's
+`taskId`, its run request, and its thread's links all name that task, and the
+setup panel opens it. The conductor refuses a setup round without a task
+(`project_setup_task_required`), and the task id stays out of the request
+fingerprint, like the draft id. That task is bookkeeping, not work the owner schedules: it
+is closed `done` when its proposal is applied or dismissed, or when a newer
+draft supersedes it, and a draft that fails before reaching a daemon deletes
+its task and marks itself failed, whatever the cause.

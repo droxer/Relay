@@ -89,20 +89,30 @@ def test_applying_a_plan_creates_ordered_tasks_once(setup_env):
 
     assert response.status_code == 200, response.text
     design, build = response.json()["tasks"]
-    assert design["status"] == build["status"] == "assigned"
+    assert design["status"] == build["status"] == "backlog"
     assert build["prerequisiteTaskIds"] == [design["id"]]
     assert build["waitingOn"] == [design["id"]]
     assert build["assignedAgentId"] == builder["id"]
     assert not design.get("assignedAgentId")
     assert response.json()["project"]["setup"]["state"] == "applied"
+    drafting = app.state.task_store.get_task(response.json()["project"]["setup"]["taskId"])
+    assert drafting["status"] == "done", "applying the plan closes its drafting task"
     queued = {task["id"] for task in app.state.task_store.list_dispatchable_tasks()}
-    assert design["id"] in queued and build["id"] not in queued
+    assert design["id"] not in queued and build["id"] not in queued
 
     again = client.post(f"/api/v1/projects/{project['id']}/setup/tasks", json=body)
     assert again.status_code == 200, again.text
     assert [task["id"] for task in again.json()["tasks"]] == [design["id"], build["id"]]
     titles = [t["title"] for t in client.get("/api/v1/tasks").json()["tasks"]]
     assert titles.count("Design pricing") == 1
+    assert app.state.registry.daemon_store.active_run_request_for_task(design["id"]) is None
+    blocked = client.post(f"/api/v1/tasks/{build['id']}/runs", json={})
+    assert blocked.status_code == 409
+    started = client.post(f"/api/v1/tasks/{design['id']}/runs", json={})
+    assert started.status_code == 202, started.text
+    assert started.json()["dispatch"]["state"] == "started"
+    assert app.state.registry.daemon_store.active_run_request_for_task(design["id"]) is not None
+
 
 
 def test_apply_refuses_a_stale_draft_or_unknown_keys(setup_env):
@@ -119,7 +129,7 @@ def test_apply_refuses_a_stale_draft_or_unknown_keys(setup_env):
     assert (unknown.status_code, unknown.json()["detail"]) == (400, "project_setup_task_keys_invalid")
 
 
-def test_a_retried_apply_still_queues_tasks_created_earlier(setup_env):
+def test_a_retried_apply_keeps_tasks_in_backlog(setup_env):
     app, client, node, project, planner, builder = setup_env
     project = _crewed(client, project, planner, builder)
     _plan(app, client, node, project, [{"key": "design", "title": "Design pricing"}])
@@ -131,7 +141,7 @@ def test_a_retried_apply_still_queues_tasks_created_earlier(setup_env):
 
     assert first.json()["tasks"][0]["status"] == "backlog"
     assert queued.json()["tasks"][0]["id"] == first.json()["tasks"][0]["id"]
-    assert queued.json()["tasks"][0]["status"] == "assigned"
+    assert queued.json()["tasks"][0]["status"] == "backlog"
 
 
 def test_interrupted_apply_rolls_back_tasks_before_retry(setup_env, monkeypatch):
@@ -149,13 +159,13 @@ def test_interrupted_apply_rolls_back_tasks_before_retry(setup_env, monkeypatch)
         interrupted.setattr(store, "_replace_members", fail_recording)
         failed = client.post(url, json={"draftId": draft_id, "queue": True})
     assert failed.status_code == 503
-    assert client.get("/api/v1/tasks").json()["tasks"] == []
+    assert [task["title"] for task in client.get("/api/v1/tasks").json()["tasks"]] == ["Plan the next work: Plan the pricing page"]
     assert store.get_project(project["id"])["setup"]["state"] == "proposed"
 
     retry = client.post(url, json={"draftId": draft_id, "queue": True})
     assert retry.status_code == 200, retry.text
-    assert len(client.get("/api/v1/tasks").json()["tasks"]) == 1
-    assert retry.json()["tasks"][0]["status"] == "assigned"
+    assert len(client.get("/api/v1/tasks").json()["tasks"]) == 2
+    assert retry.json()["tasks"][0]["status"] == "backlog"
 
 
 def test_plan_apply_refuses_more_than_ten_prerequisites(setup_env):
@@ -173,7 +183,7 @@ def test_plan_apply_refuses_more_than_ten_prerequisites(setup_env):
 
     assert response.status_code == 400, response.text
     assert response.json()["detail"] == {"code": "task_prerequisites_too_many", "key": "build"}
-    assert len(client.get("/api/v1/tasks").json()["tasks"]) == len(existing)
+    assert len(client.get("/api/v1/tasks").json()["tasks"]) == len(existing) + 1
     assert app.state.project_store.get_project(project["id"])["setup"]["state"] == "proposed"
 
 
@@ -202,7 +212,7 @@ def test_concurrent_plan_applies_return_the_same_tasks(setup_env):
         assert response.status_code == 200, response.text
     first, second = [[task["id"] for task in response.json()["tasks"]] for response in responses]
     assert first == second
-    assert len(client.get("/api/v1/tasks").json()["tasks"]) == 2
+    assert len(client.get("/api/v1/tasks").json()["tasks"]) == 3
     assert responses[1].json()["tasks"][1]["waitingOn"] == [first[0]]
 
 

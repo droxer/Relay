@@ -18,6 +18,24 @@ class TaskScopeMixin(ConductorState):
         answered_task: dict[str, Any] | None,
     ) -> tuple[str | None, dict[str, Any]]:
         """The task this round executes for, and the manifest fields naming it."""
+        if intent.source == "project_setup" and not intent.task_id:
+            # Every setup or plan draft runs under its own project task; a
+            # draft with no task would be a thread nothing on the board owns.
+            raise CollaborationError("project_setup_task_required")
+        if intent.task_id:
+            task = self.ctx.task_store.get_task(intent.task_id)
+            if (
+                intent.source != "project_setup"
+                or not intent.project_setup
+                or task.get("projectId") != intent.requested_project_id
+                or task.get("deletedAt")
+                or task.get("status") != "backlog"
+            ):
+                raise CollaborationError("task_unavailable")
+            return task["id"], {
+                "sourceTaskRevision": _execution_revision(task),
+                "workScope": {"kind": "task", "taskId": task["id"]},
+            }
         if session and is_recovery:
             ownership = {
                 "revision": session.get("collaborationRevision", 0),

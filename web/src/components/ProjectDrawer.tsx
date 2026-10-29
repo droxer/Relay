@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectDescriptionField, ProjectFolderField, ProjectNameField } from "./ProjectFormFields";
 import { RosterAgentItem, RosterEmptyOption, RosterTriggerValue } from "./roster/RosterOption";
@@ -25,8 +26,9 @@ const AUTO_SETUP_AGENT = "";
 
 type Mode = "describe" | "manual";
 
-/* Starting a project. With the owner's agents in reach the drawer opens on
-   intent: the owner says what the project is for, and an agent on the chosen
+/* Starting a project. Fresh projects open on intent when agents are in reach;
+   existing projects require a linked folder and skip drafting. In the fresh
+   flow, the owner says what the project is for, and an agent on the chosen
    computer drafts the name, brief, crew, and first tasks for review on the
    project page. "Set up manually" keeps the plain form — name, brief,
    computer — and the crew is then built on the Members tab. Editing an
@@ -64,6 +66,7 @@ function ProjectDrawerWithAgents(props: ProjectDrawerProps & { userId: string })
 function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, layer }: ProjectDrawerProps & { agents: UserAgent[] }) {
   const { t } = useTranslation();
   const { createProjectMutation, startProjectSetupMutation } = useRelayMutations();
+  const [origin, setOrigin] = useState<"fresh" | "existing">("fresh");
   const [mode, setMode] = useState<Mode>(userId ? "describe" : "manual");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -85,9 +88,12 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const selectedComputer = projectComputers.find((computer) => computer.id === computerId);
   const linksFolders = computerLinksFolders(selectedComputer);
   const folderUnavailableKey = folderFieldUnavailableKey(selectedComputer);
-  const folderUnavailable = folderUnavailableKey ? t(folderUnavailableKey) : null;
+  const folderUnavailable = folderUnavailableKey
+    ? t(origin === "existing" && folderUnavailableKey === "project.folder_choose_computer"
+      ? "project.existing_folder_choose_computer" : folderUnavailableKey)
+    : null;
   // A folder typed for one computer means nothing on another one.
-  const workspaceHostPath = linksFolders && folder.trim() ? folder.trim() : undefined;
+  const workspaceHostPath = origin === "existing" && linksFolders && folder.trim() ? folder.trim() : undefined;
   const setupAgents = useMemo(
     () => (selectedComputer ? agentsEligibleForProject(agents, stableComputerId(selectedComputer), selectedComputer.id) : []),
     [agents, selectedComputer],
@@ -95,8 +101,11 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const busy = createProjectMutation.isPending || startProjectSetupMutation.isPending;
   const hasUnsavedChanges = Boolean(name || description || intent || computerId || folder);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
-  const describing = mode === "describe";
+  const describing = origin === "fresh" && mode === "describe";
   const noSetupAgents = describing && Boolean(selectedComputer) && setupAgents.length === 0;
+  // A computer that cannot link folders cannot host an existing project; the
+  // folder field already says why, so submitting would only repeat it.
+  const existingUnlinkable = origin === "existing" && Boolean(selectedComputer) && !linksFolders;
 
   async function requestClose() {
     if (busy) return;
@@ -107,6 +116,10 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     if (!computerId) {
       setComputerError(t("project.computer_required"));
       computerTriggerRef.current?.focus();
+      return false;
+    }
+    if (origin === "existing" && !workspaceHostPath) {
+      setFolderError(t("project.existing_folder_required"));
       return false;
     }
     return !workspaceHostPath || folderPathLooksValid(workspaceHostPath);
@@ -142,7 +155,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
 
   /* The project exists before its setup is drafted, so a setup that cannot
      start still leaves a usable project — its page then offers the manual
-     path. The provisional name stands until the owner applies the draft. */
+     path. The provisional name stands until the planner returns a name. */
   async function submitDescribed() {
     const brief = intent.trim();
     if (!brief) {
@@ -194,12 +207,29 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       onClose={() => { void requestClose(); }}
       kicker={t("project.setup_kicker")}
       title={t("project.setup_title")}
-      subtitle={t(describing ? "project.setup_subtitle_describe" : "project.setup_subtitle")}
+      subtitle={t(origin === "existing" ? "project.origin_existing_subtitle" : describing ? "project.setup_subtitle_describe" : "project.setup_subtitle")}
       width="form"
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
     >
       <form className="adm-form project-setup-form" onSubmit={(event) => void submit(event)} noValidate>
+        <Field label={t("project.origin_label")} hint={t(origin === "fresh" ? "project.origin_fresh_hint" : "project.origin_existing_hint")}>
+          <RadioGroup
+            className="project-origin-options"
+            aria-label={t("project.origin_label")}
+            name="project-origin"
+            value={origin}
+            disabled={busy}
+            onValueChange={(value) => {
+              setOrigin(value as "fresh" | "existing");
+              setFolder("");
+              setFolderError(null);
+            }}
+          >
+            <label className="project-member-flag"><RadioGroupItem value="fresh" />{t("project.origin_fresh")}</label>
+            <label className="project-member-flag"><RadioGroupItem value="existing" />{t("project.origin_existing")}</label>
+          </RadioGroup>
+        </Field>
         {describing ? (
           <>
             <Field label={t("project.setup_intent")} hint={t("project.setup_intent_hint")} error={intentError ?? undefined} errorId="project-intent-error">
@@ -232,14 +262,6 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 onChange={setSetupAgentId}
               />
             </div>
-            <ProjectFolderField
-              key={computerId}
-              daemonNodeId={computerId}
-              value={linksFolders ? folder : ""}
-              error={folderError}
-              unavailable={folderUnavailable}
-              onChange={(value) => { setFolder(value); setFolderError(null); }}
-            />
           </>
         ) : (
           <>
@@ -248,7 +270,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 value={name}
                 error={nameError}
                 inputRef={nameRef}
-                autoFocus
+                autoFocus={origin === "fresh"}
                 onChange={(value) => {
                   setName(value);
                   setNameError(null);
@@ -262,20 +284,21 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 onChange={chooseComputer}
               />
             </div>
-            <ProjectFolderField
+            {origin === "existing" ? <ProjectFolderField
+              required
               key={computerId}
               daemonNodeId={computerId}
               value={linksFolders ? folder : ""}
               error={folderError}
               unavailable={folderUnavailable}
               onChange={(value) => { setFolder(value); setFolderError(null); }}
-            />
+            /> : null}
             <ProjectDescriptionField value={description} onChange={setDescription} />
           </>
         )}
 
         <div className="adm-form-actions">
-          {userId ? (
+          {userId && origin === "fresh" ? (
             <Button
               size="cta"
               type="button"
@@ -288,7 +311,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
             </Button>
           ) : null}
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" disabled={busy || noSetupAgents} loading={busy}>
+          <Button size="cta" type="submit" disabled={busy || noSetupAgents || existingUnlinkable} loading={busy}>
             {t(describing ? "project.setup_draft" : "project.create")}
           </Button>
         </div>

@@ -328,3 +328,27 @@ def test_linked_workspace_commands_are_not_delivered_after_a_downgrade(env, comm
     response = app.state.daemon_store.get_workspace_response(command["id"])
     assert response["type"] == "workspace.error"
     assert "project-links" in response["message"]
+
+
+@pytest.mark.parametrize("revise", [False, True])
+def test_existing_projects_cannot_draft_their_setup(env, daemon, revise):
+    app, client, node = env
+    project = _create(client, node, workspaceHostPath="/Users/alice/code/app").json()["project"]
+    response = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Draft work", "revise": revise,
+    })
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "project_setup_fresh_only"
+    assert app.state.project_store.get_project(project["id"]).get("setup") is None
+    assert app.state.task_store.list_tasks() == []
+
+
+def test_existing_projects_may_still_plan_work(env, daemon):
+    app, client, node = env
+    project = _create(client, node, workspaceHostPath="/Users/alice/code/app").json()["project"]
+    response = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Plan the next work", "mode": "plan",
+    })
+    # Planning reaches its own checks (a crew is required) rather than the
+    # fresh-project gate that setup drafting stops at.
+    assert response.json()["detail"] == "project_plan_needs_crew"

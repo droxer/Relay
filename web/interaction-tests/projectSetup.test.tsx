@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
+import { ProjectRefineSection } from "../src/components/ProjectContextUpkeep";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
@@ -94,7 +95,7 @@ const linkingComputers = [{ ...computers[0], capabilities: ["project-workspaces"
 
 function openManualForm(list: DaemonNodeMonitorRecord[]) {
   render(<ProjectDrawer open computers={list} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
+  fireEvent.click(screen.getByRole("radio", { name: "project.origin_existing" }));
   fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Existing repo" } });
   fireEvent.click(screen.getByRole("button", { name: "node" }));
 }
@@ -103,9 +104,9 @@ const folderBox = () => screen.getByRole("textbox", { name: /^project\.folder/ }
 
 it("shows the folder before a computer is chosen, and says to choose one", () => {
   render(<ProjectDrawer open computers={linkingComputers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
+  fireEvent.click(screen.getByRole("radio", { name: "project.origin_existing" }));
   expect((folderBox() as HTMLInputElement).disabled).toBe(true);
-  expect(screen.getByText("project.folder_choose_computer")).toBeTruthy();
+  expect(screen.getByText("project.existing_folder_choose_computer")).toBeTruthy();
 });
 
 it("keeps the folder visible but disabled on a computer that cannot link one", () => {
@@ -117,7 +118,7 @@ it("keeps the folder visible but disabled on a computer that cannot link one", (
 it("enables the folder once a linking computer is chosen", () => {
   openManualForm(linkingComputers);
   expect((folderBox() as HTMLInputElement).disabled).toBe(false);
-  expect(screen.getByText("project.folder_hint")).toBeTruthy();
+  expect(screen.getByText("project.existing_folder_hint")).toBeTruthy();
 });
 
 it("checks the folder with the computer and creates the project in it", async () => {
@@ -149,9 +150,13 @@ it("clears the folder when switching computers before creating the project", asy
   fireEvent.click(screen.getByRole("button", { name: "other" }));
   expect((folderBox() as HTMLInputElement).value).toBe("");
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  expect(create).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("project.existing_folder_required");
+  fireEvent.change(folderBox(), { target: { value: "/Users/alice/code/other" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   await waitFor(() => expect(create).toHaveBeenCalled());
-  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "other" });
-  expect(create.mock.calls[0][0]).not.toHaveProperty("workspaceHostPath");
+  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "other", workspaceHostPath: "/Users/alice/code/other" });
+  expect(startSetup).not.toHaveBeenCalled();
 });
 
 it("pins the computer's refusal to the folder field", async () => {
@@ -201,7 +206,7 @@ it("applies a reviewed proposal in one patch and files its tasks", async () => {
   expect(input).toMatchObject({ expectedVersion: 3, name: "Spring launch", goal: "Ship by Friday", leadAgentId: "ada", setupResolution: "applied" });
   expect(input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada", "bo"]);
   expect(applyTasks).toHaveBeenCalledWith({ projectId: "p", input: {
-    draftId: "setup_1", taskKeys: ["sitemap", "pages"], assignedAgentIds: { sitemap: "bo", pages: null }, queue: false,
+    draftId: "setup_1", taskKeys: ["sitemap", "pages"], assignedAgentIds: { sitemap: "bo", pages: null },
   } });
   expect(screen.getByText("project.setup_task_after")).toBeTruthy();
 });
@@ -232,16 +237,17 @@ it("asks for changes in the same thread", async () => {
   await waitFor(() => expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Drop Bo", revise: true } }));
 });
 
-it("applies a plan as tasks only, queued in order", async () => {
+it("creates plan tasks for the owner to start separately", async () => {
   const plan: ProjectSetup = { ...proposedSetup, mode: "plan", proposal: { tasks: proposedSetup.proposal!.tasks } };
   getProjectSetup.mockResolvedValue({ setup: plan, candidates: [] });
   renderPanel(plan);
   expect(screen.queryByText("project.setup_crew")).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "project.setup_queue_tasks" }));
+  expect(screen.getByText("project.setup_tasks_backlog_hint")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "project.plan_apply" }));
   await waitFor(() => expect(applyTasks).toHaveBeenCalled());
   expect(update).not.toHaveBeenCalled();
-  expect(applyTasks.mock.calls[0][0].input).toMatchObject({ taskKeys: ["sitemap", "pages"], queue: true });
+  expect(applyTasks.mock.calls[0][0].input.taskKeys).toEqual(["sitemap", "pages"]);
+  expect(applyTasks.mock.calls[0][0].input).not.toHaveProperty("queue");
 });
 
 it("offers a retry and the manual path when a draft fails", async () => {
@@ -257,4 +263,68 @@ it("keeps plan mode when retrying a failed plan", async () => {
   await waitFor(() => expect(startSetup).toHaveBeenCalledWith({
     projectId: "p", input: { intent: "Launch", agentId: "ada", mode: "plan" },
   }));
+});
+
+
+it("offers fresh and existing projects and keeps drafting exclusive to fresh projects", () => {
+  render(<ProjectDrawer open computers={linkingComputers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByRole("radio", { name: "project.origin_fresh" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.queryByRole("textbox", { name: /^project\.folder/ })).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: "project.origin_existing" }));
+  expect(screen.queryByRole("button", { name: "project.setup_draft" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "project.setup_describe" })).toBeNull();
+  expect(screen.getByRole("textbox", { name: "project.name" })).toBeTruthy();
+  expect(folderBox()).toBeTruthy();
+  fireEvent.click(screen.getByRole("radio", { name: "project.origin_fresh" }));
+  expect(screen.getByRole("button", { name: "project.setup_draft" })).toBeTruthy();
+  expect(screen.queryByRole("textbox", { name: /^project\.folder/ })).toBeNull();
+});
+
+
+it("offers only planning on an existing project's settings", () => {
+  const project = { ...created, workspaceHostPath: "/Users/alice/code/app" };
+  render(<>
+    <ProjectRefineSection project={project} onStarted={vi.fn()} />
+    <ProjectRefineSection project={project} mode="plan" onStarted={vi.fn()} />
+  </>);
+  expect(screen.queryByRole("button", { name: "project.refine_start" })).toBeNull();
+  expect(screen.getByRole("button", { name: "project.plan_start" })).toBeTruthy();
+});
+
+it("keeps an existing project's open proposal reviewable without drafting it again", () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const project = { ...created, version: 3, setup: proposedSetup, workspaceHostPath: "/Users/alice/code/app" } as ProjectRecord;
+  render(
+    <QueryClientProvider client={client}>
+      <ProjectSetupPanel project={project} setup={proposedSetup} agents={agents as never} onOpenThread={vi.fn()} onManual={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("button", { name: "project.setup_dismiss" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "project.setup_revise" })).toBeNull();
+});
+
+it("disables creating an existing project on a computer that cannot link folders", () => {
+  openManualForm(computers);
+  expect((screen.getByRole("button", { name: "project.create" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByText("project.existing_folder_required")).toBeNull();
+});
+
+it("links a draft to the task it runs under", () => {
+  const onOpenTask = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const drafting: ProjectSetup = { ...proposedSetup, state: "drafting", proposal: undefined, taskId: "task_setup" };
+  render(
+    <QueryClientProvider client={client}>
+      <ProjectSetupPanel
+        project={{ ...created, version: 3, setup: drafting } as ProjectRecord}
+        setup={drafting}
+        agents={agents as never}
+        onOpenThread={vi.fn()}
+        onOpenTask={onOpenTask}
+        onManual={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_open_task" }));
+  expect(onOpenTask).toHaveBeenCalledWith("task_setup");
 });

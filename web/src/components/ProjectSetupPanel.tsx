@@ -10,6 +10,7 @@ import {
   keptMemberIds,
   setupApplyInput,
   setupDraftFromProposal,
+  setupDraftingAllowed,
   setupTaskAfterTitles,
   setupTasksApplyInput,
   type SetupDraft,
@@ -33,6 +34,8 @@ type PanelProps = {
   setup: ProjectSetup;
   agents: UserAgent[];
   onOpenThread: (threadId: string) => void;
+  /** Open the task the draft runs under. */
+  onOpenTask?: (taskId: string) => void;
   /** Leave the setup to the owner: the Members tab is where a crew is built by hand. */
   onManual: () => void;
 };
@@ -98,14 +101,22 @@ function useDismiss(project: ProjectRecord) {
   return { dismiss, pending: updateProjectMutation.isPending, error };
 }
 
-function ThreadButton({ setup, onOpenThread }: Pick<PanelProps, "setup" | "onOpenThread">) {
+function ThreadButton({ setup, onOpenThread, onOpenTask }: Pick<PanelProps, "setup" | "onOpenThread" | "onOpenTask">) {
   const { t } = useTranslation();
-  const threadId = setup.threadId;
-  if (!threadId) return null;
-  return <Button type="button" variant="outline" onClick={() => onOpenThread(threadId)}>{t("project.setup_open_thread")}</Button>;
+  const { threadId, taskId } = setup;
+  return (
+    <>
+      {taskId && onOpenTask ? (
+        <Button type="button" variant="outline" onClick={() => onOpenTask(taskId)}>{t("project.setup_open_task")}</Button>
+      ) : null}
+      {threadId ? (
+        <Button type="button" variant="outline" onClick={() => onOpenThread(threadId)}>{t("project.setup_open_thread")}</Button>
+      ) : null}
+    </>
+  );
 }
 
-function SetupDrafting({ project, setup, agents, onOpenThread }: PanelProps) {
+function SetupDrafting({ project, setup, agents, onOpenThread, onOpenTask }: PanelProps) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { dismiss, pending, error } = useDismiss(project);
@@ -118,7 +129,7 @@ function SetupDrafting({ project, setup, agents, onOpenThread }: PanelProps) {
           <SetupError message={error} />
           <div className="project-settings-actions">
             <Button type="button" variant="ghost" onClick={() => void dismiss()} disabled={pending}>{t("project.setup_dismiss")}</Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
           </div>
         </>
       )}
@@ -126,7 +137,7 @@ function SetupDrafting({ project, setup, agents, onOpenThread }: PanelProps) {
   );
 }
 
-function SetupFailed({ project, setup, agents, onOpenThread, onManual }: PanelProps) {
+function SetupFailed({ project, setup, agents, onOpenThread, onOpenTask, onManual }: PanelProps) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { startProjectSetupMutation } = useRelayMutations();
@@ -152,10 +163,12 @@ function SetupFailed({ project, setup, agents, onOpenThread, onManual }: PanelPr
             <Button type="button" variant="ghost" disabled={busy} onClick={() => void dismiss().then((done) => { if (done) onManual(); })}>
               {t("project.setup_manual")}
             </Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
-            <Button type="button" disabled={busy} loading={startProjectSetupMutation.isPending} onClick={() => void retry()}>
-              {t("project.setup_try_again")}
-            </Button>
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
+            {setupDraftingAllowed(project, setup.mode) ? (
+              <Button type="button" disabled={busy} loading={startProjectSetupMutation.isPending} onClick={() => void retry()}>
+                {t("project.setup_try_again")}
+              </Button>
+            ) : null}
           </div>
         </>
       )}
@@ -163,13 +176,12 @@ function SetupFailed({ project, setup, agents, onOpenThread, onManual }: PanelPr
   );
 }
 
-function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
+function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: PanelProps) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { updateProjectMutation, applySetupTasksMutation, startProjectSetupMutation } = useRelayMutations();
   // A plan proposes only tasks: the crew and brief stay as they are.
   const plan = setup.mode === "plan";
-  const [queue, setQueue] = useState(false);
   const [draft, setDraft] = useState<SetupDraft>(() => setupDraftFromProposal(setup.proposal!, project));
   /* The record carries the proposal; the setup endpoint adds whether each
      proposed member could still be applied. When it answers, a member that
@@ -227,7 +239,7 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
     try {
       await applySetupTasksMutation.mutateAsync({
         projectId: project.id,
-        input: setupTasksApplyInput(setup.draftId, draft, members, queue),
+        input: setupTasksApplyInput(setup.draftId, draft, members),
       });
     } catch (cause) {
       setError(t("project.setup_tasks_failed", { message: cause instanceof Error ? cause.message : String(cause) }));
@@ -260,7 +272,7 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
           <SetupError message={error ?? dismissError} />
           <div className="project-settings-actions">
             <Button type="button" variant="ghost" disabled={busy} onClick={() => void dismiss()}>{t("project.setup_dismiss")}</Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
             <Button
               type="button"
               disabled={busy || (plan && !keptTasks.length)}
@@ -331,15 +343,11 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
                 />
               ))}
             </ol>
-            <label className="project-member-flag">
-              <Checkbox checked={queue} onCheckedChange={(value) => setQueue(value === true)} />
-              <span>{t("project.setup_queue_tasks")}</span>
-            </label>
-            <p className="project-settings-hint">{t("project.setup_queue_hint")}</p>
+            <p className="project-settings-hint">{t("project.setup_tasks_backlog_hint")}</p>
           </div>
         ) : null}
 
-        <div className="project-setup-group">
+        {setupDraftingAllowed(project, setup.mode) ? <div className="project-setup-group">
           <Field label={t("project.setup_revise_label")} error={revisionError ?? undefined} errorId="project-setup-revise-error">
             <Textarea
               name="setup-revision"
@@ -357,7 +365,7 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
               {t("project.setup_revise")}
             </Button>
           </div>
-        </div>
+        </div> : null}
       </fieldset>
     </SetupShell>
   );

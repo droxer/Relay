@@ -139,12 +139,14 @@ export function ProjectFolderField({
   value,
   error,
   unavailable = null,
+  required = false,
   onChange,
 }: {
   daemonNodeId: string;
   value: string;
   error: string | null;
   unavailable?: string | null;
+  required?: boolean;
   onChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
@@ -158,7 +160,7 @@ export function ProjectFolderField({
     ? t("project.folder_checking")
     : check.kind === "linkable"
       ? t("project.folder_linkable", { path: check.path })
-      : t("project.folder_hint"));
+      : t(required ? "project.existing_folder_hint" : "project.folder_hint"));
 
   async function verify() {
     if (unavailable || !path || shapeError) return;
@@ -179,13 +181,14 @@ export function ProjectFolderField({
   return (
     <Field
       label={t("project.folder")}
-      optional={t("project.folder_optional")}
+      optional={required ? undefined : t("project.folder_optional")}
       hint={shownError ? undefined : hint}
       error={shownError ?? undefined}
       errorId="project-folder-error"
     >
       <Input
         name="project-folder"
+        required={required}
         autoComplete="off"
         spellCheck={false}
         translate="no"

@@ -12,6 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ...core.ids import new_database_id, now_iso
+from ...projects.setup_result import generated_setup_name
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
@@ -164,11 +165,24 @@ class DatabaseProjectStore:
         owner's resolution or a newer draft between reading and recording.
         """
 
+        include_name = True
+
         def fields(latest: dict[str, Any]) -> dict[str, Any] | None:
             setup = change(latest)
-            return {"setup": setup} if setup is not None else None
+            if setup is None:
+                return None
+            name = generated_setup_name(latest, setup) if include_name else None
+            return {"setup": setup, **(_normalize_project_patch({"name": name}) if name else {})}
 
-        return self._mutate_current(project_id, "project.setup_recorded", fields)
+        try:
+            return self._mutate_current(project_id, "project.setup_recorded", fields)
+        except ProjectValidationError as error:
+            if error.code != "project_name_taken":
+                raise
+            # A naming collision must not lose the proposal. The owner can
+            # choose another name when applying it; no suffix is invented.
+            include_name = False
+            return self._mutate_current(project_id, "project.setup_recorded", fields)
 
     def add_context_suggestions(
         self,
