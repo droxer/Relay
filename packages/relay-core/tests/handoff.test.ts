@@ -315,7 +315,9 @@ describe("prompts", () => {
     assert.match(prompt, /The owner's intent: Launch the marketing site/);
     assert.match(prompt, /"agentId":"agent-1"/);
     assert.match(prompt, /Allowed roles: implementer, planner/);
-    assert.match(prompt, /Generate a concise, distinctive project name/);
+    assert.match(prompt, /Settle the goal first/);
+    assert.match(prompt, /name the project after that goal/);
+    assert.match(prompt, /\{"goal": "[^"]*", "name": "[^"]*derived from the goal>"/, "the goal is written before the name derived from it");
     assert.match(prompt, /Your previous proposal, to revise per the owner's note: \{"name":"Old plan"\}/);
     assert.match(prompt, /write `\.relay\/project-setup-run-1\.json` as JSON/);
   });
