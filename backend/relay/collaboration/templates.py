@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ..core.role_charters import ROLE_CHARTERS
 from .styles import StyleSlots, fill_build_review_slots, pipeline_order
 
 # Who takes a step: the Build → Review builder or reviewer slot, or every
@@ -60,15 +61,14 @@ class CompiledStyle:
 
 
 SOLO_BRIEF = "Complete the shared goal yourself and report the delivered result to the user."
-BUILDER_BRIEF = (
-    "Implement the shared goal. A teammate reviews your work next; if it reports "
-    "findings you will be asked to repair them."
+BUILDER_BRIEF = ROLE_CHARTERS["implementer"] + (
+    " A teammate reviews your work next; if it reports findings you will be asked "
+    "to repair them."
 )
-REVIEWER_BRIEF = (
-    "Review the builder's changes against the goal and acceptance criteria. Report "
-    "findings on the builder's work item to request changes. Report done with "
-    "evidence only when the result is acceptable, then summarize what was delivered "
-    "for the user."
+REVIEWER_BRIEF = ROLE_CHARTERS["reviewer"] + (
+    " Report findings on the builder's work item to request changes. Report done "
+    "with evidence only when the result is acceptable, then summarize what was "
+    "delivered for the user."
 )
 PIPELINE_CLOSING_NOTE = (
     " After completing your own contribution, "

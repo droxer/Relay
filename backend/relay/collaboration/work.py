@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from ..core.role_charters import role_charter
 from .contracts import text_list
 from .styles import role_stage
 
@@ -466,7 +467,9 @@ def compile_proposed_plan(
         }
         item.update(
             assignmentId=str(uuid5(NAMESPACE_URL, f"{round_id}:plan:{index}")),
-            brief=objective.strip(),
+            # The lead supplies the task boundary; the standing role charter
+            # still governs how the specialist carries it out.
+            brief=f"{objective.strip()}\n\n{role_charter(template.get('role'))}",
             acceptanceCriteria=list(
                 dict.fromkeys([*template.get("acceptanceCriteria", []), *criteria])
             ),

@@ -50,6 +50,7 @@ import {
   runAgentNode,
   StderrLineRenderer,
   withFailure,
+  roleTitle,
 } from "../src/index.js";
 import {
   BoxLiteExecutionManager,
@@ -259,13 +260,17 @@ describe("prompts", () => {
       const command = buildClaudeCommand(reviewerState);
       assert.match(
         command,
-        /\[Role\]\nYou are the reviewer on this task\./,
+        /\[Role\]\nYou are the Code Reviewer on this task\./,
       );
       assert.match(
         command,
         /Other agents on the thread hold the other roles/,
       );
     }
+  });
+  it("falls back to the role id for a role without a title", () => {
+    assert.equal(roleTitle("fixer"), "Bug Fixer");
+    assert.equal(roleTitle("auditor"), "auditor");
   });
   it("scopes a team member to its explicit assignment brief", () => {
     const assignedState = state({

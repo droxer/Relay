@@ -4,6 +4,7 @@ from typing import Any
 
 from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
+from ..core.role_charters import role_charter
 from ..agents.routing import resolve_agent_assignments
 from ..teams.dispatch import TeamDispatchError, team_agents, team_member_assignments
 from ..core.workspace_capabilities import required_workspace_capabilities
@@ -345,7 +346,10 @@ def _phase(role: str) -> str:
 
 
 def _member_brief(member: dict[str, Any]) -> str:
-    parts = [f"Responsibilities: {member['responsibilities']}."]
+    parts = [
+        role_charter(member.get("role")),
+        f"Responsibilities: {member['responsibilities']}.",
+    ]
     if member.get("instructions"):
         parts.append(f"Project instructions: {member['instructions']}")
     return " ".join(parts)

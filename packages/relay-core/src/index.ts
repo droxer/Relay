@@ -216,6 +216,7 @@ export {
   codexTaskPrompt,
   kimiTaskPrompt,
   piTaskPrompt,
+  roleTitle,
 } from "./prompts.js";
 
 export {

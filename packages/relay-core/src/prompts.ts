@@ -2,6 +2,20 @@ import { handoffCheckpointFile, legacyHandoffFile } from "./handoff-files.js";
 import { NEXT_STEPS_MAX, NEXT_STEP_MAX_CHARS } from "./next-steps.js";
 import type { AgentState, ProjectSetupBrief } from "./state.js";
 
+// The title an agent reads for its role id; ids stay the stored wire values.
+// Mirrors the web `roles.*` labels.
+const ROLE_TITLES: Record<string, string> = {
+  planner: "Architect",
+  implementer: "Software Engineer",
+  reviewer: "Code Reviewer",
+  tester: "QA Engineer",
+  fixer: "Bug Fixer",
+};
+
+export function roleTitle(role: string): string {
+  return ROLE_TITLES[role] ?? role;
+}
+
 export function prependPriorAgentBridge(prompt: string, state: AgentState): string {
   return state.prior_agent_bridge ? `${state.prior_agent_bridge}\n\n[User]\n${prompt}` : prompt;
 }
@@ -49,7 +63,7 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(
       [
         "[Role]",
-        `You are the ${state.agent_role} on this task.`,
+        `You are the ${roleTitle(state.agent_role)} on this task.`,
         "Other agents on the thread hold the other roles; do your own and rely on theirs.",
       ].join("\n"),
     );
