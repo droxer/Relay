@@ -13,6 +13,8 @@ import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import { useSessionDetail } from "./hooks/useSessionDetail";
+import { useMediaQuery } from "./hooks/useMediaQuery";
+import { OVERLAY_TAKEOVER_QUERY } from "./lib/breakpoints";
 import { useLocalDaemonNodes } from "./hooks/useLocalDaemonNodes";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNodes";
 import { isUserAgentRoutable } from "./lib/agentDisplayNames";
@@ -355,11 +357,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // the newest thread, so without this gate a run in that thread would stream
   // frames, and re-render everything here, under the Issues or Admin page.
   const threadSurfaceVisible = !showsWorkRoutePage(route, notFound, isTaskThread);
+  // A phone shows the thread list OR the conversation, never both, so on the
+  // list the fallback thread has no transcript on screen to keep fresh.
+  const isPhone = useMediaQuery(OVERLAY_TAKEOVER_QUERY);
+  const transcriptVisible = threadSurfaceVisible && !(isPhone && mobileView === "threads");
 
-  // Live SSE tail of the open thread; merges new events into the
-  // sessions cache so the active thread updates at push latency.
-  useSessionDetail(activeSession?.id, true);
-  useSessionEvents(activeSession?.id, threadSurfaceVisible && shouldTailSessionEvents(activeSession?.status));
+  // Full detail plus the live SSE tail of the open thread, merged into the
+  // sessions cache so it updates at push latency — only while it is shown.
+  useSessionDetail(activeSession?.id, transcriptVisible);
+  useSessionEvents(activeSession?.id, transcriptVisible && shouldTailSessionEvents(activeSession?.status));
 
   const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
   const {

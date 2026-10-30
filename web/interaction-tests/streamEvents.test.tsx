@@ -75,6 +75,27 @@ it("drops an HTTP recovery response after switching sessions", async () => {
   view.unmount(); client.clear();
 });
 
+it("keeps backing off a stream that drops right after opening, and resets once one holds", async () => {
+  const { client, view } = setup();
+  vi.mocked(getSession).mockResolvedValue({ ...initial } as never);
+  act(() => sources[0].onopen());
+  await act(async () => sources[0].onerror());
+  await act(() => vi.advanceTimersByTimeAsync(1_000));
+  expect(sources).toHaveLength(2);
+  act(() => sources[1].onopen());
+  await act(async () => sources[1].onerror());
+  await act(() => vi.advanceTimersByTimeAsync(1_000));
+  expect(sources).toHaveLength(2);
+  await act(() => vi.advanceTimersByTimeAsync(1_000));
+  expect(sources).toHaveLength(3);
+  act(() => sources[2].onopen());
+  await act(() => vi.advanceTimersByTimeAsync(10_000));
+  await act(async () => sources[2].onerror());
+  await act(() => vi.advanceTimersByTimeAsync(1_000));
+  expect(sources).toHaveLength(4);
+  view.unmount(); client.clear();
+});
+
 it("reports the stream connected from open until it errors, closes, or unmounts", async () => {
   const { client, view } = setup();
   vi.mocked(getSession).mockResolvedValue({ ...initial } as never);

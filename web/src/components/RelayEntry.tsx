@@ -76,6 +76,16 @@ function warmSignedInStart(): void {
 // of after hydration.
 if (typeof window !== "undefined" && !opensOnLanding()) warmSignedInStart();
 
+type NetworkInformation = { saveData?: boolean; effectiveType?: string };
+const SLOW_CONNECTIONS = new Set(["slow-2g", "2g", "3g"]);
+
+/** Data saver on, or a slow link: a visitor who may never sign in should not
+    download the whole signed-in app in the background. */
+function sparesData(): boolean {
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
+  return Boolean(connection?.saveData) || SLOW_CONNECTIONS.has(connection?.effectiveType ?? "");
+}
+
 function changeTheme(theme: Theme) {
   applyTheme(theme);
   writeTheme(theme);
@@ -100,8 +110,10 @@ function PublicLanding({ onNeedsApp }: { onNeedsApp: () => void }) {
     if (i18n.language !== language) void i18n.changeLanguage(language);
   }, [i18n]);
 
-  // Warm the app once the page is up, so "Sign in" opens without a wait.
+  // Warm the app once the page is up, so "Sign in" opens without a wait —
+  // unless the visitor's connection asks us to spare it.
   useEffect(() => {
+    if (sparesData()) return;
     const prefetch = () => void loadApp().catch(() => undefined);
     if (typeof window.requestIdleCallback === "function") {
       const handle = window.requestIdleCallback(prefetch, { timeout: APP_PREFETCH_FALLBACK_MS });

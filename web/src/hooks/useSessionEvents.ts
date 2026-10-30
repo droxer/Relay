@@ -11,6 +11,14 @@ import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
+const FIRST_RETRY_MS = 1_000;
+const MAX_RETRY_MS = 30_000;
+/** How long a stream must stay up before a later drop starts the backoff
+    over. A stream that opens and drops at once (flaky cellular, a proxy
+    closing idle streams) would otherwise reconnect — and refetch the whole
+    thread — every second. */
+const STABLE_STREAM_MS = 10_000;
+
 type RelayEvent = RelaySession["events"][number];
 
 // Live tail of a single session over SSE. Domain events arrive as default
@@ -24,12 +32,12 @@ type RelayEvent = RelaySession["events"][number];
 export function useSessionEvents(sessionId: string | undefined, enabled: boolean): void {
   const queryClient = useQueryClient();
   const [connection, setConnection] = useState(0);
-  const retryDelay = useRef({ sessionId, milliseconds: 1_000 });
+  const retryDelay = useRef({ sessionId, milliseconds: FIRST_RETRY_MS });
 
   useEffect(() => {
     if (!sessionId || !enabled || typeof window === "undefined") return;
 
-    if (retryDelay.current.sessionId !== sessionId) retryDelay.current = { sessionId, milliseconds: 1_000 };
+    if (retryDelay.current.sessionId !== sessionId) retryDelay.current = { sessionId, milliseconds: FIRST_RETRY_MS };
     const controller = new AbortController();
     const source = new EventSource(sessionEventsUrl(
       sessionId,
@@ -117,12 +125,14 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     // Recreate even CLOSED sources: browsers do not automatically retry some
     // failed handshakes. Resume from the last committed event, not a dropped frame.
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let stableTimer: ReturnType<typeof setTimeout> | undefined;
     source.onerror = () => {
+      clearTimeout(stableTimer);
       source.close();
       setSessionStreamConnected(false);
       if (reconnectTimer !== undefined) return;
       const delay = retryDelay.current.milliseconds;
-      retryDelay.current.milliseconds = Math.min(30_000, delay * 2);
+      retryDelay.current.milliseconds = Math.min(MAX_RETRY_MS, delay * 2);
       reconnectTimer = setTimeout(() => setConnection(value => value + 1), delay);
       // HTTP remains a fallback when SSE itself is unavailable. Also lets us
       // distinguish a temporary outage from revoked access or a deleted thread.
@@ -137,7 +147,8 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       });
     };
     source.onopen = () => {
-      retryDelay.current.milliseconds = 1_000;
+      clearTimeout(stableTimer);
+      stableTimer = setTimeout(() => { retryDelay.current.milliseconds = FIRST_RETRY_MS; }, STABLE_STREAM_MS);
       setSessionStreamConnected(true);
     };
 
@@ -147,6 +158,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       setSessionStreamConnected(false);
       scheduler.cancel();
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
+      clearTimeout(stableTimer);
     };
   }, [sessionId, enabled, queryClient, connection]);
 }

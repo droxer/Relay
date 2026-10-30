@@ -165,6 +165,12 @@
 /* Mobile: four coordinates across a phone leaves the id flush against the
    screen edge with nowhere to ellipsis. Two up, two down. */
 @media (max-width: 820px) {
+  /* The title lives in the top bar on a phone, so the record's tabs sit
+     straight under it — the project page's header, on every record. */
+  .workspace-page .page-header-toolbar {
+    margin-top: 0;
+  }
+
   .record-band {
     display: grid;
     grid-template-columns: 1fr 1fr;
