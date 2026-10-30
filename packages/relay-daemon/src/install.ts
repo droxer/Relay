@@ -268,9 +268,9 @@ async function install(): Promise<void> {
   const brand = brandForBackend(options.backendUrl);
   const installed = installedComputers(process.platform, homedir());
   if (options.deviceSetup) {
-    // install.sh prompts for it; reading /dev/tty from Node dies on EINTR under sudo.
-    if (!options.workspace) throw new Error('Pass --workspace <absolute path> to choose the local workspace directory.');
-    options.workspace = existingWorkspace(options.workspace);
+    // install.sh prompts for it (reading /dev/tty from Node dies on EINTR under sudo);
+    // run without one, the workspace is the directory the command ran in.
+    options.workspace = existingWorkspace(options.workspace || process.cwd());
   }
   const existing = options.deviceSetup ? await reusableComputer(installed, options.backendUrl, options.workspace) : undefined;
   if (existing) {

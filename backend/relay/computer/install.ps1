@@ -67,11 +67,13 @@ function Read-RelaySecret([string]$Prompt) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
 
+# An empty answer keeps the directory the command ran in.
 function Read-RelayWorkspace {
-    $workspace = (Read-Host 'Local workspace directory (absolute path)').Trim().Trim('"')
-    if ($workspace -eq '~') { $workspace = $HOME }
-    elseif ($workspace.StartsWith('~\') -or $workspace.StartsWith('~/')) { $workspace = Join-Path $HOME $workspace.Substring(2) }
-    if (-not $workspace) { throw 'Workspace directory must not be empty.' }
+    $current = (Get-Location -PSProvider FileSystem).ProviderPath
+    $workspace = (Read-Host "Local workspace directory [$current]").Trim().Trim('"')
+    if (-not $workspace) { return $current }
+    if ($workspace -eq '~') { return $HOME }
+    if ($workspace.StartsWith('~\') -or $workspace.StartsWith('~/')) { return (Join-Path $HOME $workspace.Substring(2)) }
     return $workspace
 }
 

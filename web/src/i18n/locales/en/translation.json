@@ -987,7 +987,7 @@
     "device_approval_scope": "Agents will work in this directory using the agent tools installed on this computer, with your local user permissions.",
     "device_error": "Couldn't complete this connection request. Try again, or run setup again in your terminal.",
     "device_loading": "Preparing install command…",
-    "device_choose_directory": "In the terminal, choose a local workspace directory.",
+    "device_choose_directory": "In the terminal, choose a local workspace directory, or press Enter to use the current one.",
     "device_confirm_browser": "Confirm the computer and directory in the browser window that opens.",
     "device_manual": "Manual setup with a computer token",
     "refresh_runtimes": "Refresh runtimes",
