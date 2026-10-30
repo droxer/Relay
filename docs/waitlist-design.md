@@ -305,8 +305,12 @@ status per row, and a **Resend** action rotates the token and sends again.
   link back to `/waitlist`. On success it hands off to the app as a login does.
   The token is read once and then removed from the URL with
   `history.replaceState` so it doesn't linger in history or screenshots.
-- **Admin: Waitlist section.** Add a new `sec-*` rail section in `/admin`
-  (addressable, per the section-rail grammar). It shows a list grouped by status
+- **Admin: Users → Waitlist tab.** Users contains the user roster and an
+  addressable Waitlist tab (`/admin/users` and `/admin/waitlist`). When public
+  signup is closed, the latter is named Invitations. The route tabs use the
+  record-tab ink underline, shared page gutters, and 44px touch targets;
+  Users remains selected in the admin rail for either tab. The waitlist shows
+  a list grouped by status
   (Waiting / Invited / Joined / Declined, like the backlog grouping) with
   search, a per-row Invite / Decline / Note / Erase menu, an "Invite next N"
   action, and the one-time invite-link reveal. While mounted, the queue polls

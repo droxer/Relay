@@ -53,7 +53,6 @@ interface NodesViewProps {
   onRenameNode: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
   onDeleteNode?: (node: ControlPanelDaemonNodeRecord) => Promise<void>;
-  onAddNode?: () => void;
   /** The computer just created from this console, marked once on arrival. */
   highlightedNodeId?: string | null;
 }
@@ -232,7 +231,7 @@ function NodeBandTable({
   );
 }
 
-export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, onAddNode, highlightedNodeId }: NodesViewProps) {
+export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, highlightedNodeId }: NodesViewProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<NodeQuickFilter>("all");
   const [query, setQuery] = useState("");
@@ -423,11 +422,6 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
           fill
           title={nodes.length === 0 ? t("admin.no_nodes") : t("admin.v2.no_nodes_for_filter")}
           illustration={<AdminNode size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
-          actions={nodes.length === 0 && onAddNode ? (
-            <Button type="button" variant="outline" onClick={onAddNode}>
-              {t("admin.v2.add_node_cta")}
-            </Button>
-          ) : undefined}
         />
       ) : layout === "card" ? (
         <div className="adm-fleet-grid">

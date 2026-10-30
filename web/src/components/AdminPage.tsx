@@ -10,35 +10,29 @@ import { StateMark } from "./StateMark";
 import { useMutationError } from "../hooks/useMutationError";
 import { Button } from "@/components/ui/button";
 import {
-  ActionAdd,
   AdminInvite,
   ICON,
 } from "./icons";
 import { getOrgSettings, deleteControlPanelDaemonNode, deleteControlPanelUser, deleteManagedNode, getAuthStatus, getMe, listManagedNodes, permanentlyDeleteManagedNode, recoverManagedNode, RelayApiError, unassignControlPanelDaemonNode, updateComputerDisplayName, updateControlPanelDaemonNodeDisabledAgents, updateManagedNodeDisplayName } from "../api";
 import type {
-  AssignControlPanelDaemonNodeResponse,
   ControlPanelDaemonNodeRecord,
-  CreateManagedNodeResponse,
-  CreateControlPanelDaemonNodeResponse,
-  CreateControlPanelUserResponse,
   CurrentUser,
   DaemonNodeMonitorRecord,
   WaitlistInviteResult,
   UserRecord,
   ManagedNodeRecord,
 } from "../types";
-import { AssignNodeDrawer } from "./admin/AssignNodeDrawer";
 import { AdminLoginScreen, FirstAdminSetupScreen } from "./admin/AdminAuthScreens";
 import { CredentialsDrawer } from "./admin/CredentialsDrawer";
 import { NodesView } from "./admin/NodesView";
 import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
 import { ManagedNodeHistory } from "./admin/ManagedNodeHistory";
 import { PageHeader } from "./PageHeader";
+import { SectionNav } from "./SectionNav";
+import { hrefForAdminSection } from "../lib/appRoute";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AdminViewToggle, type AdminView } from "./admin/AdminViewToggle";
-import { AddUserDrawer } from "./admin/AddUserDrawer";
-import { AddNodeDrawer, type AddNodeDrawerSuccess } from "./admin/AddNodeDrawer";
 import { UsersView } from "./admin/UsersView";
 import { EditUserDrawer } from "./admin/EditUserDrawer";
 import { SettingsView } from "./admin/SettingsView";
@@ -53,14 +47,11 @@ import { useRelayStore } from "../lib/store";
 import { CONTROL_PANEL_POLL_MS } from "../lib/controlPanelQueries";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import {
-  HIGHLIGHT_PULSE_MS,
   persistStoredNodeTokenMap,
   readStoredNodeTokens,
   upsertStoredCredentialsFromNodes,
-  writeStoredNodeToken,
   type StoredNodeTokenMap,
 } from "./admin/helpers";
-import { Alert } from "@/components/ui/alert";
 import { omit } from "../lib/omit";
 import { useKeyChange } from "../hooks/useKeyChange";
 
@@ -150,9 +141,8 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   // Absent while the query is in flight; only a definite false hides the
   // controls, so a slow answer does not flash them away.
   const canEditUsers = orgSettingsQuery.data?.capabilities?.userEdits !== false;
-  // The section is always there — an admin can invite people by email on any
-  // install. Whether people can also ask (the public join) only renames it
-  // and adds "Invite next"; both default off until the server says so.
+  // Users always includes invitations. Public signup renames that tab to
+  // Waitlist and enables "Invite next"; capabilities default off while loading.
   const waitlistOpen = orgSettingsQuery.data?.capabilities?.waitlist === true;
   const canEmailInvites = orgSettingsQuery.data?.capabilities?.inviteEmail === true;
   const [inviteEmailOpen, setInviteEmailOpen] = useState(false);
@@ -160,17 +150,9 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       the one place they can still be read; dismissing or leaving drops them. */
   const [waitlistInvites, setWaitlistInvites] = useState<WaitlistInviteResult[] | null>(null);
   const setAdminView = useRelayStore((state) => state.setAdminView);
-  const [addUserOpen, setAddUserOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<string | null>(null);
-  const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<{ userId?: string } | null>(null);
   const [credentialsNodeId, setCredentialsNodeId] = useState<string | null>(null);
   const [manageExecutorsNodeId, setManageExecutorsNodeId] = useState<string | null>(null);
-  const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
-  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
-  /** A created user whose computer could not be attached — the user is
-      real, so this is a warning to resolve from Assign, not a failed request. */
-  const [assignmentWarning, setAssignmentWarning] = useState<string | null>(null);
   const [storedTokens, setStoredTokens] = useState<StoredNodeTokenMap>(() => readStoredNodeTokens());
 
   function applyAuthProbe(probe: AuthProbe) {
@@ -211,7 +193,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
 
   const metrics = useNodeMetrics(nodes, users);
 
-  const unassignedNodes = useMemo(() => nodes.filter((node) => !node.userId), [nodes]);
   const credentialsNode = useMemo(
     () => (credentialsNodeId ? nodes.find((node) => node.id === credentialsNodeId) ?? null : null),
     [credentialsNodeId, nodes],
@@ -380,98 +361,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
     setEditUserId(null);
   }
 
-  function handleAddUserSuccess(result: CreateControlPanelUserResponse) {
-    const { node } = result;
-    mergeNodes((prev) => ({
-      nodes: node ? [node, ...prev.nodes.filter((current) => current.id !== node.id)] : prev.nodes,
-      users: [result.user, ...prev.users.filter((user) => user.id !== result.user.id)],
-    }));
-
-    if (node?.nodeToken) {
-      writeStoredNodeToken(node.id, {
-        userId: result.user.id,
-        nodeToken: node.nodeToken,
-        savedAt: new Date().toISOString(),
-      });
-      setStoredTokens(readStoredNodeTokens());
-    }
-
-    setHighlightedUserId(result.user.id);
-    window.setTimeout(() => setHighlightedUserId((prev) => (prev === result.user.id ? null : prev)), HIGHLIGHT_PULSE_MS);
-
-    setAddUserOpen(false);
-    setView("users");
-    // The user exists either way; a computer that got claimed in the
-    // meantime is reported alongside them rather than swallowing the result.
-    setAssignmentWarning(result.assignmentError ?? null);
-    // Only surface the credentials drawer when a sandbox was bound — it is
-    // keyed by node id and has nothing to show for an unassigned user.
-    if (node) setCredentialsNodeId(node.id);
-  }
-
-  function handleAssignSuccess(result: AssignControlPanelDaemonNodeResponse) {
-    mergeNodes((prev) => ({
-      nodes: [result.node, ...prev.nodes.filter((node) => node.id !== result.node.id)],
-      users: [result.user, ...prev.users.filter((user) => user.id !== result.user.id)],
-    }));
-    setHighlightedUserId(result.user.id);
-    window.setTimeout(() => setHighlightedUserId((prev) => (prev === result.user.id ? null : prev)), HIGHLIGHT_PULSE_MS);
-    setAssignTarget(null);
-    setView("users");
-  }
-
-  function handleCreateManagedNodeSuccess(result: CreateManagedNodeResponse) {
-    const { node } = result;
-    // The pulse used to be keyed on the user, but both node paths switch to
-    // the Computers view, where nothing reads that — so provisioning ended with
-    // the drawer closing and no confirmation anywhere on screen.
-    pulseNode(node.id);
-    setAddNodeOpen(false);
-    setAssignTarget(null);
-    setView("computers");
-    // Managed provisioning is asynchronous. The supervisor enrolls the daemon,
-    // and the existing node poll displays it once registration succeeds.
-    void refetch();
-  }
-
-  function pulseNode(nodeId: string) {
-    setHighlightedNodeId(nodeId);
-    window.setTimeout(
-      () => setHighlightedNodeId((prev) => (prev === nodeId ? null : prev)),
-      HIGHLIGHT_PULSE_MS,
-    );
-  }
-
-  function handleCreateManualNodeSuccess(result: CreateControlPanelDaemonNodeResponse) {
-    const { node } = result;
-    mergeNodes((prev) => ({
-      ...prev,
-      nodes: [node, ...prev.nodes.filter((current) => current.id !== node.id)],
-    }));
-
-    writeStoredNodeToken(node.id, {
-      userId: node.userId,
-      sandboxToken: result.sandboxToken,
-      nodeToken: result.nodeToken,
-      daemonCommand: result.daemonCommand,
-      savedAt: new Date().toISOString(),
-    });
-    setStoredTokens(readStoredNodeTokens());
-    pulseNode(node.id);
-    setAddNodeOpen(false);
-    setAssignTarget(null);
-    setView("computers");
-    setCredentialsNodeId(node.id);
-  }
-
-  function handleAddNodeSuccess(outcome: AddNodeDrawerSuccess) {
-    if (outcome.kind === "managed") {
-      handleCreateManagedNodeSuccess(outcome.result);
-    } else {
-      handleCreateManualNodeSuccess(outcome.result);
-    }
-  }
-
   if (!authChecked) {
     return (
       <section className="admin-console adm-bare">
@@ -502,16 +391,10 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       ? String(managedNodesQuery.error)
       : null;
   const headerError = authError ?? pollError ?? managedNodesError;
-  const viewTitle = view === "waitlist" && !waitlistOpen
-    ? t("admin.v2.title_invitations")
-    : t(`admin.v2.title_${view}`);
-  /* Only the two roster sections own a create action. The dashboard reads;
-     its Add computer / Add user pair repeated the sections one click away.
-     An EMPTY actions container is not the same as none: the narrow layout
-     hides a header that holds nothing but a title (section-rail.css), and an
-     empty container kept it on screen as a 1px rule. */
-  const hasHeaderActions = Boolean(headerError) || view === "users" || view === "computers" || view === "waitlist";
-  const headerCount = view === "users"
+  const usersSection = view === "users" || view === "waitlist";
+  const viewTitle = t(`admin.v2.title_${usersSection ? "users" : view}`);
+  const hasHeaderActions = Boolean(headerError) || usersSection;
+  const headerCount = usersSection
     ? t("admin.user_count", { count: users.length })
     : view === "computers"
       ? t("admin.node_count", { count: nodes.length })
@@ -535,7 +418,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
           titleVariant="title"
           layout="stacked"
         />
-        <AdminViewToggle view={view} onChange={setView} waitlistOpen={waitlistOpen} />
+        <AdminViewToggle view={usersSection ? "users" : view} onChange={setView} />
       </div>
 
       <div className="sec-main">
@@ -544,10 +427,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
           titleAs="h2"
           titleVariant="title"
           count={headerCount}
-          /* On a phone the section's create action is the top bar's "+",
-             as it is on every list route — not a full-width filled button on
-             a row of its own over the list. */
-          topbarActions={view === "users" || view === "computers"}
           actions={hasHeaderActions ? (
             <>
               {headerError ? (
@@ -563,28 +442,10 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                   </span>
                 </span>
               ) : null}
-              {/* No manual refresh: the view polls on its own (useAdminNodes),
-                  so the button was chrome for a job already done. */}
-              {/* One primary per fold: the section's own create action wears
-                  the accent fill and anything beside it steps down to an
-                  outline. Two ghost buttons side by side named no primary at
-                  all, which is how a page ends up with no focal point. */}
-              {view === "users" ? (
-                <Button
-                  type="button"
-                  className="adm-create-action"
-                  aria-label={t("admin.v2.add_user_cta")}
-                  onClick={() => setAddUserOpen(true)}
-                  tooltip={t("admin.v2.add_user_cta")}
-                >
-                  <ActionAdd size={ICON.md} aria-hidden="true" />
-                  <span className="adm-create-action-label">{t("admin.v2.add_user_cta")}</span>
-                </Button>
-              ) : null}
               {view === "waitlist" && waitlistOpen ? (
                 <InviteNextButton onInvited={(results) => setWaitlistInvites(results)} />
               ) : null}
-              {view === "waitlist" ? (
+              {usersSection ? (
                 <Button
                   type="button"
                   className="adm-create-action"
@@ -595,38 +456,28 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                   {t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
                 </Button>
               ) : null}
-              {view === "computers" ? (
-                <Button
-                  type="button"
-                  className="adm-create-action"
-                  aria-label={t("admin.v2.add_node_cta")}
-                  onClick={() => setAddNodeOpen(true)}
-                  tooltip={t("admin.v2.add_node_cta")}
-                >
-                  <ActionAdd size={ICON.md} aria-hidden="true" />
-                  <span className="adm-create-action-label">{t("admin.v2.add_node_cta")}</span>
-                </Button>
-              ) : null}
             </>
           ) : undefined}
         />
 
+        {usersSection ? (
+          <div className="adm-users-tabs">
+            <SectionNav
+              variant="tabs"
+              label={t("admin.v2.nav_users")}
+              value={view}
+              onChange={setView}
+              items={[
+                { id: "users", label: t("admin.v2.nav_users"), href: hrefForAdminSection("users") },
+                { id: "waitlist", label: t(waitlistOpen ? "admin.v2.nav_waitlist" : "admin.v2.nav_invitations"), href: hrefForAdminSection("waitlist") },
+              ]}
+            />
+          </div>
+        ) : null}
+
         <div className="adm-content">
           <div className="adm-content-main">
             <div key={view} className="adm-view-stage">
-              {assignmentWarning ? (
-                <Alert variant="boxed" render={<div />}>
-                  {t("admin.v2.add_user_assignment_warning", { message: assignmentWarning })}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="dense"
-                    onClick={() => setAssignmentWarning(null)}
-                  >
-                    {t("admin.v2.dismiss")}
-                  </Button>
-                </Alert>
-              ) : null}
               {view === "dashboard" ? (
                 <DashboardView
                   nodes={nodes} users={users} metrics={metrics}
@@ -638,10 +489,9 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                   nodes={nodes}
                   layout={shownLayout}
                   onLayoutChange={setLayout}
-                  onAddUser={() => setAddUserOpen(true)}
                   onDeleteUser={handleDeleteUser}
                   onEditUser={canEditUsers ? (user) => setEditUserId(user.id) : undefined}
-                  highlightedUserId={highlightedUserId}
+                  highlightedUserId={null}
                 />
               ) : view === "organization" ? (
                 <SettingsView />
@@ -663,8 +513,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                     onRenameNode={(node) => void handleRenameNode(node)}
                     onManageExecutors={handleManageExecutors}
                     onDeleteNode={handleDeleteNode}
-                    onAddNode={() => setAddNodeOpen(true)}
-                    highlightedNodeId={highlightedNodeId}
+                    highlightedNodeId={null}
                   />
                   <ManagedNodeHistory
                     nodes={managedNodes}
@@ -683,15 +532,10 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
         open={inviteEmailOpen}
         onClose={() => setInviteEmailOpen(false)}
         canEmail={canEmailInvites}
-        onInvited={(results) => setWaitlistInvites(results)}
-      />
-      <AddUserDrawer
-        open={addUserOpen}
-        onClose={() => setAddUserOpen(false)}
-        unassignedNodes={unassignedNodes}
-        defaultMaxLocalComputers={canEditUsers ? defaultMaxLocalComputers : undefined}
-        allowLimitOverride={canEditUsers}
-        onSuccess={handleAddUserSuccess}
+        onInvited={(results) => {
+          setWaitlistInvites(results);
+          setView("waitlist");
+        }}
       />
       <EditUserDrawer
         open={editUserId !== null}
@@ -699,21 +543,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
         user={users.find((user) => user.id === editUserId) ?? null}
         defaultMaxLocalComputers={defaultMaxLocalComputers}
         onSuccess={handleEditUserSuccess}
-      />
-      <AddNodeDrawer
-        open={addNodeOpen}
-        onClose={() => setAddNodeOpen(false)}
-        users={users}
-        onSuccess={handleAddNodeSuccess}
-      />
-      <AssignNodeDrawer
-        open={assignTarget !== null}
-        onClose={() => setAssignTarget(null)}
-        users={users}
-        unassignedNodes={unassignedNodes}
-        defaultUserId={assignTarget?.userId}
-        onAssignSuccess={handleAssignSuccess}
-        onCreateNodeSuccess={handleAddNodeSuccess}
       />
       <CredentialsDrawer
         open={credentialsNodeId !== null}

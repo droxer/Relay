@@ -7,6 +7,68 @@
    file's comments; no rule moved between sections. */
 
 /* ── Content ──────────────────────────────────────────────────────── */
+/* Route tabs use the record-tab underline grammar (workspace.css), rather
+   than the compact filter chips. Keep their labels on the header/list gutter. */
+.adm-users-tabs {
+  flex: none;
+  min-width: 0;
+  padding-inline: var(--page-gutter);
+  border-bottom: var(--sp-hairline) solid var(--line-1);
+}
+
+.adm-users-tabs .sec-nav {
+  padding: 0;
+  overflow-x: auto;
+  scroll-padding-inline: 0;
+  scrollbar-width: none;
+}
+
+.adm-users-tabs .sec-nav-list {
+  gap: var(--sp-5);
+  padding: 0;
+}
+
+.adm-users-tabs .sec-nav-btn {
+  height: auto;
+  min-height: var(--control-h-lg);
+  padding: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+
+.adm-users-tabs .sec-nav-btn:hover,
+.adm-users-tabs .sec-nav-btn[data-active="true"] {
+  color: var(--ink-1);
+  background: transparent;
+}
+
+.adm-users-tabs .sec-nav-btn[data-active="true"] {
+  border-bottom-color: var(--ink-1);
+}
+
+.adm-users-tabs .sec-nav-btn:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: calc(-1 * var(--focus-w));
+}
+
+@media (max-width: 820px) {
+  .adm-users-tabs {
+    padding-inline: var(--sp-4);
+  }
+}
+
+@media (pointer: coarse) {
+  .adm-users-tabs .sec-nav-btn {
+    min-height: var(--touch-target);
+  }
+}
+
 .adm-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
