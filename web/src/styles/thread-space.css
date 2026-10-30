@@ -117,6 +117,10 @@
   gap: var(--sp-3);
   width: 100%;
   min-width: 0;
+  /* Two lines, name over meta: the row sizes to them. The Button base's
+     h-(--control-h) fixed it at one control and the meta line fell into
+     the next row. */
+  height: auto;
   padding: var(--sp-3);
   border: 0;
   border-radius: var(--r-2);

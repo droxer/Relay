@@ -172,11 +172,13 @@
   white-space: nowrap;
 }
 
-/* A narrow pane: the day column narrows to the date's own width. */
+/* A narrow pane tightens the gutters, never the day column: at 14px the
+   longest day and clock ("10月29日", "08:02 AM") need 5.25rem, and a 3.75rem
+   column let them run into the outcome ("10月29日已完成"). */
 @container record (max-width: 480px) {
   .record-run-head,
   .record-run-link {
-    grid-template-columns: var(--sp-3) 3.75rem minmax(0, 1fr) auto;
+    grid-template-columns: var(--sp-3) 5.25rem minmax(0, 1fr) auto;
     column-gap: var(--sp-2);
     padding-inline: var(--sp-2);
   }

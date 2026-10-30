@@ -209,6 +209,13 @@ tr[data-routine-state="paused"] .backlog-row-title,
   align-items: center;
   gap: var(--sp-1-5);
   height: var(--control-h-2xs);
+  /* One line on the 24px rung. The control floor in tokens/base.css is
+     `1lh` plus the frame, so body leading (1.7 in zh-CN) pushed every inline
+     field to 27.8px and the assignee select — a framed field's floor — to
+     33.8px, stretching its row. Single-line leading, and a button's floor
+     for the select since this field has no frame, keep it on the rung while
+     a larger font still grows it. */
+  min-height: calc(1lh + var(--sp-1));
   min-width: var(--control-h-2xs);
   padding: 0 var(--sp-1);
   border: 0;
@@ -216,6 +223,7 @@ tr[data-routine-state="paused"] .backlog-row-title,
   background: transparent;
   color: var(--ink-2);
   font: var(--type-body);
+  line-height: var(--leading-tight);
   letter-spacing: var(--type-body-track);
   white-space: nowrap;
 }

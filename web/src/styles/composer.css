@@ -258,7 +258,11 @@
    composer so the same primitives keep their normal chrome in drawers. */
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"] {
   height: var(--control-h-xs);
+  /* Ghost chrome has no frame to pad: the field's block padding and its
+     framed floor (1lh + 10px) put this 28px picker at 30px. */
+  min-height: calc(1lh + var(--sp-1));
   gap: var(--sp-1-5);
+  padding-block: 0;
   padding-inline: var(--sp-2);
   border-color: transparent;
   background: transparent;
