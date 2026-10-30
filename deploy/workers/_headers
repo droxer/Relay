@@ -20,3 +20,10 @@
 # visitor's revalidations, and a replaced screenshot shows within a day.
 /landing/*
   Cache-Control: public, max-age=86400
+
+# The browser checks these fixed URLs for PWA updates on every deployment.
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache

@@ -16,7 +16,8 @@
     "test:e2e": "playwright test -c playwright.recovery.config.ts",
     "pretest:e2e": "npm run build",
     "test:react:coverage": "vitest run --coverage",
-    "test:design": "playwright test"
+    "test:design": "playwright test",
+    "test:pwa": "playwright test -c playwright.pwa.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

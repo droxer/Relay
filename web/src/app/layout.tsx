@@ -42,6 +42,9 @@ export const metadata: Metadata = {
   title: pageTitle,
   description: pageDescription,
   applicationName: SITE_NAME,
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
+  other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
     shortcut: "/favicon.svg",
