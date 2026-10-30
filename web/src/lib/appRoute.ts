@@ -495,6 +495,11 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     // written only when it is not the default.
     const impliedTab = tab === "tasks" && source.has("task") ? "tasks" : DEFAULT_PROJECT_PAGE_TAB;
     if (tab !== impliedTab) target.set("tab", tab);
+    if (tab === "automations") {
+      copyFilterParams("routines", source, target);
+      copySortParams("routines", source, target);
+      copyPageParams("routines", source, target);
+    }
     if (tab === "workspace") {
       copyParam(source, target, "path");
       copyParam(source, target, "item");

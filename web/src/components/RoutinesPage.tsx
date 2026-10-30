@@ -50,6 +50,8 @@ import { taskRef } from "../lib/taskRef";
 import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 interface RoutinesPageProps {
+  projectId?: string;
+  readOnly?: boolean;
   projects?: ProjectRecord[];
   /** The routine whose record is open, from `/automations/<id>`. */
   recordTaskId?: string | null;
@@ -60,12 +62,13 @@ interface RoutinesPageProps {
   tasks: RelayTaskListItem[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
-  isRefreshing: boolean;
-  onRefresh: () => Promise<void>;
+  isRefreshing?: boolean;
+  onRefresh?: () => Promise<void>;
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+export function RoutinesPage({ projectId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+  const tasks = useMemo(() => allTasks.filter((task) => !task.deletedAt && (!projectId || task.projectId === projectId)), [allTasks, projectId]);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
   const { t } = useTranslation();
@@ -152,6 +155,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
 
   function openRoutineForm(next: RoutineTaskFormState) {
+    if (readOnly) return;
+    if (projectId) next = { ...next, projectId };
     setForm(next);
     setFormBaseline(next);
     setDrawerOpen(true);
@@ -197,7 +202,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form || !form.title.trim()) return;
+    if (readOnly || !form || !form.title.trim()) return;
     if (form.routineTriggers.some((trigger) => triggerError(trigger))) return;
     setSaving(true);
     try {
@@ -222,7 +227,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   }
 
   async function deleteRoutine() {
-    if (!form?.id || deleting) return;
+    if (readOnly || !form?.id || deleting) return;
     const confirmed = await confirm({
       title: t("routine.delete_title"),
       message: t("routine.delete_body", { title: form.title }),
@@ -244,6 +249,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   }
 
   async function deleteSelectedRoutines() {
+    if (readOnly) return;
     const targets = selectedTasks(filteredTasks, visibleSelection);
     if (targets.length === 0 || deletingSelection) return;
     const confirmed = await confirm({
@@ -320,11 +326,12 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
 
   function routineHandlers(task: RelayTaskListItem) {
     return {
+      readOnly,
       starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
       onOpen: () => onOpenRecord(task.id),
       onAssign: () => assignTask(task),
       onStart: () => {
-        if (startInFlight.current) return;
+        if (readOnly || startInFlight.current) return;
         startInFlight.current = task.id;
         startTaskMutation.mutate(taskStartMutationInput(task), {
           onSettled: () => { startInFlight.current = null; },
@@ -369,8 +376,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                 refreshLabel={t("nav.refresh")}
                 createLabel={t("routine.new")}
                 isRefreshing={isRefreshing}
-                onRefresh={() => void onRefresh()}
-                onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
+                onRefresh={onRefresh ? () => void onRefresh() : undefined}
+                onCreate={readOnly ? undefined : () => openRoutineForm(emptyRoutineForm(currentUser))}
               />
             }
           />
@@ -399,8 +406,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
             <BoardEmpty feature="routines"
               title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
               body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-              createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
-              onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+              createLabel={!readOnly && routineTasks.length === 0 ? t("routine.new") : undefined}
+              onCreate={!readOnly && routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
             />
           ) : (
             /* One table, one header, no bands: the rail beside this list has
@@ -414,7 +421,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                   sort={sort}
                   onSort={toggleSort}
                   ariaLabel={sectionLabel}
-                  selectAll={
+                  selectAll={readOnly ? null :
                     <TaskSelectAllCheckbox
                       state={selectionCheckState(visibleSelection, visibleIds)}
                       label={t("routine.select_all_routines")}
@@ -422,7 +429,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                     />
                   }
                   selection={visibleSelection}
-                  onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+                  onToggleSelect={(taskId) => { if (!readOnly) setSelection((current) => toggleSelected(current, taskId)); }}
                   stateFor={(task) => routineState(task, runningIds)}
                   assignmentFor={taskAssignmentDisplay}
                   handlersFor={routineHandlers}
@@ -435,7 +442,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         </div>
 
         <TaskSelectionBar
-          count={visibleSelection.size}
+          count={readOnly ? 0 : visibleSelection.size}
           deleting={deletingSelection}
           deleteLabel={t("routine.delete_selected")}
           onDelete={() => { void deleteSelectedRoutines(); }}
@@ -448,8 +455,9 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
             form={form}
             logicalAgents={logicalAgents}
             projects={projects}
+            projectChoice={projectId ? "locked" : undefined}
             tagSuggestions={tagOptions}
-            onCreateProject={() => setCreatingProject(true)}
+            onCreateProject={projectId ? undefined : () => setCreatingProject(true)}
             teams={teams}
             saving={saving}
             deleting={deleting}

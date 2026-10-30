@@ -297,6 +297,7 @@
     "dashboard_open_board": "Open tasks",
     "dashboard_empty": "No tasks yet",
     "dashboard_empty_hint": "Progress shows here once the project has tasks.",
+    "automations_subtitle": "Create and manage automations for this project.",
     "tasks_subtitle": "Plan tasks, track progress, and review results.",
     "project": "Project",
     "tasks_workspace_subtitle": "Files produced by this project.",

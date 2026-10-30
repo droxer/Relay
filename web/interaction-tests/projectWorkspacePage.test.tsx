@@ -5,6 +5,9 @@ import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
 
+const automations = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
+vi.mock("../src/components/RoutinesPage", () => ({ RoutinesPage: (props: Record<string, unknown>) => { automations.props = props; return <div data-testid="project-automations" />; } }));
+
 const board = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 vi.mock("../src/components/BacklogPage", () => ({
   BacklogPage: (props: Record<string, unknown>) => {
@@ -40,6 +43,7 @@ function renderPage(record: ProjectRecord) {
 
 beforeEach(() => {
   board.props = null;
+  automations.props = null;
   window.history.replaceState({}, "", "/projects/p");
 });
 
@@ -63,7 +67,7 @@ it("has no General tab; a retired ?tab=general link lands on the Dashboard", () 
   window.history.replaceState({}, "", "/projects/p?tab=general");
   renderPage(project());
   expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-    "project.dashboard_tab", "project.tasks_tab", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
+    "project.dashboard_tab", "project.tasks_tab", "routine.title", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
   ]);
   expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
 });
@@ -128,4 +132,19 @@ it("hands a closed project's board over read-only", () => {
   window.history.replaceState({}, "", "/projects/p?tab=tasks");
   renderPage(project({ enabled: false }));
   expect(board.props).toMatchObject({ readOnly: true });
+});
+
+it("offers project-scoped automations directly inside a project", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=automations");
+  renderPage(project());
+  expect(screen.getByRole("tab", { name: "routine.title", selected: true })).toBeTruthy();
+  expect(screen.getByTestId("project-automations")).toBeTruthy();
+  expect(automations.props).toMatchObject({ projectId: "p", readOnly: false });
+  expect((automations.props?.tasks as RelayTaskListItem[]).map((item) => item.id)).toEqual(["mine"]);
+});
+
+it("keeps a closed project's automations read-only", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=automations");
+  renderPage(project({ archivedAt: "2026-10-01" }));
+  expect(automations.props).toMatchObject({ projectId: "p", readOnly: true });
 });

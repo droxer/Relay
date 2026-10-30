@@ -32,9 +32,10 @@ import { ProjectWorkspaceFiles } from "./ProjectWorkspaceFiles";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
+import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
-import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
+import { canonicalBrowserUrl, navigateToAppPath, pathForAppState } from "../lib/appRoute";
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
@@ -42,6 +43,7 @@ const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_tab",
   members: "project.members_tab",
   tasks: "project.tasks_tab",
+  automations: "routine.title",
   workspace: "workspace.tab_workspace",
   settings: "project.settings_tab",
 };
@@ -50,6 +52,7 @@ const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_subtitle",
   members: "project.members_subtitle",
   tasks: "project.tasks_subtitle",
+  automations: "project.automations_subtitle",
   workspace: "project.tasks_workspace_subtitle",
   settings: "project.settings_subtitle",
 };
@@ -222,6 +225,23 @@ export function ProjectWorkspacePage({
             recordTaskId={recordTaskId}
             onOpenRecord={openTaskRecord}
             onOpenThread={(sessionId) => onOpenThread(sessionId)}
+          />
+        </TabsContent>
+        <TabsContent value="automations" className="project-tasks-panel">
+          <RoutinesPage
+            key={project.id}
+            projectId={project.id}
+            readOnly={membersReadOnly}
+            projects={[project]}
+            tasks={projectTasks}
+            nodes={computers}
+            currentUser={currentUser}
+            onOpenRecord={(taskId, runId) => {
+              if (taskId) void navigateToAppPath(pathForAppState({
+                route: "routine", mobileView: "chat", sessionId: null, taskId, runId,
+              }));
+            }}
+            onOpenThread={onOpenThread}
           />
         </TabsContent>
         <TabsContent value="workspace" className="workspace-inspect">

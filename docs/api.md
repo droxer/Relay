@@ -494,8 +494,10 @@ Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
 Projects and Tasks are separate browser destinations. `/projects` opens the
-project directory; `/projects/{id}` opens General, and `?tab=tasks` opens the
-project's Tasks tab with its board/list views. `?task={taskId}` opens a task
+project directory; `/projects/{id}` opens Dashboard, and `?tab=tasks` opens the
+project's Tasks tab with its board/list views. `?tab=automations` lists the
+project's automations and creates new ones with that project fixed. Archived
+or disabled projects offer no automation creation or dispatch actions. `?task={taskId}` opens a task
 record over that project; `recordTab` selects a section of that record.
 
 `/tasks` is a list-only table across projects, grouped by project, status,
