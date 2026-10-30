@@ -81,7 +81,7 @@ export function NodeUserCell({
 
 export function NodeRuntimesCell({ node, t }: { node: ControlPanelDaemonNodeRecord; t: TFunction }) {
   return (
-    <span className="adm-node-row-agents group-data-[online=false]:opacity-(--opacity-dormant)">
+    <span className="adm-node-row-agents">
       <NodeRuntimeMarks node={node} t={t} />
     </span>
   );

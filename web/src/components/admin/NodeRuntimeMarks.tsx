@@ -2,10 +2,12 @@
 
 import type { TFunction } from "i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
+import { labelForExecutor } from "../../lib/agentDisplayNames";
 import { RuntimeMark } from "../RuntimeMark";
 import { runtimeNotReadyDetail, runtimeStateLabel } from "../computer/runtimeStateLabel";
 import {
   agentStatusTone,
+  isNodeOnline,
   nodeAgentPresence,
   runtimeStatusLabel,
   visibleNodeAgentNames,
@@ -31,15 +33,7 @@ function agentTitle(node: ControlPanelDaemonNodeRecord, agent: AgentName, t: TFu
   return parts.join(" · ");
 }
 
-/**
- * The executor glyph row shared by the fleet card and the fleet list row.
- *
- * Each mark carries its agent's presence as shape: a filled dot is an agent
- * that can take work right now, a hollow ring is one that cannot — because its
- * computer is dark, because the daemon never reported it ready, or because it
- * failed. Hue then says which of those it is. Presence is also spelled out for
- * assistive tech, so the cue is not shape-only.
- */
+/** Named runtime statuses shared by the fleet grid and list. */
 export function NodeRuntimeMarks({
   node,
   t,
@@ -57,19 +51,20 @@ export function NodeRuntimeMarks({
         const agentStatus = node.agents[name] ?? "unknown";
         const disabled = isAgentDisabled(node, name);
         const presence = nodeAgentPresence(node, name);
+        const tone = agentStatusTone(!isNodeOnline(node) && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
         return (
-          <RuntimeMark
-            key={name}
-            agent={name}
-            presence={presence}
-            tone={agentStatusTone(agentStatus, { disabled })}
-            disabled={disabled}
-            glyphClassName="adm-agent-chip-mark"
-            role="img"
-            aria-label={`${name} · ${runtimeStateLabel(node, name, disabled, t)}`}
-            title={agentTitle(node, name, t)}
-            translate="no"
-          />
+          <span key={name} className="adm-runtime-readout" title={agentTitle(node, name, t)}>
+            <span className="adm-runtime-name" translate="no">{labelForExecutor(name)}</span>
+            <RuntimeMark
+              agent={name}
+              presence={presence}
+              tone={tone}
+              variant="labeled"
+              role="img"
+              aria-label={runtimeStateLabel(node, name, disabled, t)}
+              title={runtimeStateLabel(node, name, disabled, t)}
+            />
+          </span>
         );
       })}
     </span>

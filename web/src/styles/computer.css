@@ -351,13 +351,11 @@ button.computer-run-open:hover {
 
 /* ---- runtimes -------------------------------------------------------- */
 
-/* One wrapping line of chips, not a table: a ready runtime is just its mark
-   and name. Four rows of "Ready 2.1.4" in mono were most of the card's
-   weight; the version and any failure detail wait in the row's tooltip. */
+/* Compact, wrapping name + status pairs; versions and diagnostics stay on hover. */
 .computer-runtime-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-5);
+  gap: var(--sp-3) var(--sp-6);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -367,34 +365,11 @@ button.computer-run-open:hover {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-width: 0;
-  color: var(--ink-2);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-}
-
-/* A switched-off runtime dims whole: the mark's own is-disabled would leave
-   the name and state at full strength beside a faded pip. */
-.computer-runtime-row.is-disabled {
-  opacity: var(--opacity-disabled);
-}
-
-.computer-card[data-online="false"] .computer-runtime-row {
-  opacity: var(--opacity-dormant);
 }
 
 .computer-runtime-name {
   color: var(--ink-1);
-  white-space: nowrap;
-}
-
-/* Only a runtime that is not ready says so, so the word is the exception
-   the reader's eye should land on. */
-.computer-runtime-state {
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  white-space: nowrap;
+  font: var(--type-meta);
 }
 
 /* ---- footer facts ---------------------------------------------------- */
