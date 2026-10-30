@@ -45,8 +45,8 @@
   margin: 0;
   overflow: hidden;
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
