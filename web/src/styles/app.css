@@ -75,6 +75,7 @@
 @import "./admin-v2-drawers.css" layer(relay);
 @import "./admin-v2-provision.css" layer(relay);
 @import "./admin-v2-dashboard.css" layer(relay);
+@import "./admin-v2-charts.css" layer(relay);
 @import "./mobile-overlays.css" layer(relay);
 @import "./more-sheet.css" layer(relay);
 

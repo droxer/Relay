@@ -1,0 +1,193 @@
+/* =====================================================================
+   Dashboard charts  (adm-chart-*, adm-series-*, adm-swatch)
+
+   StackedBarChart draws bars and gridlines in a stretched 100×100 SVG and
+   sets every label in HTML, so no text is ever scaled with the plot. The
+   --series-* hues are declared on .adm-dash (admin-v2-dashboard.css), the
+   only surface these charts render on.
+   ===================================================================== */
+
+.adm-chart {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: var(--sp-2);
+  row-gap: var(--sp-1-5);
+  /* Chart geometry (no token rung). */
+  --chart-h: 200px;
+}
+
+.adm-chart--short { --chart-h: 140px; }
+
+.adm-chart-y {
+  position: relative;
+  height: var(--chart-h);
+  /* Room for "10M" without the plot shifting as values change. */
+  min-width: 2.5rem;
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-chart-y span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.adm-chart-plot {
+  position: relative;
+  height: var(--chart-h);
+  min-width: 0;
+}
+
+.adm-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.adm-chart-grid {
+  stroke: var(--line-1);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.adm-chart-baseline {
+  stroke: var(--line-1);
+  stroke-width: 1;
+}
+
+/* A hairline in the card colour between stacked segments: neighbouring
+   series must read as two blocks, not one blended band. */
+.adm-series {
+  stroke: var(--surface-1);
+  stroke-width: 1;
+}
+
+/* The series vocabulary — one rule per key, shared by bar, legend swatch,
+   and tooltip swatch, so a colour can never mean two things on one page. */
+.adm-series--completed,
+.adm-series--output { fill: var(--series-1); background: var(--series-1); }
+.adm-series--input { fill: var(--series-2); background: var(--series-2); }
+.adm-series--cache { fill: var(--series-3); background: var(--series-3); }
+.adm-series--other { fill: var(--series-rest); background: var(--series-rest); }
+.adm-series--failed { fill: var(--err); background: var(--err); }
+
+/* Hover targets: one column per bar, full plot height, so a short bar is as
+   easy to point at as a tall one. */
+.adm-chart-hit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.adm-chart-hit span {
+  flex: 1;
+  border-radius: var(--r-2);
+}
+
+.adm-chart-hit span[data-active] {
+  background: color-mix(in srgb, var(--ink-1) 5%, transparent);
+}
+
+.adm-chart-tip {
+  position: absolute;
+  top: calc(var(--sp-2) * -1);
+  transform: translateX(-50%);
+  z-index: 2;
+  min-width: 10rem;
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  background: var(--surface-3);
+  border-radius: var(--r-2);
+  /* Separation is the hairline ring, never a blur (roles.css). */
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+.adm-chart-tip[data-edge="start"] { transform: translateX(-25%); }
+.adm-chart-tip[data-edge="end"] { transform: translateX(-75%); }
+
+.adm-chart-tip-title {
+  font: var(--type-label);
+  color: var(--ink-1);
+}
+
+.adm-chart-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.adm-chart-tip-row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+}
+
+.adm-chart-tip-row > span:last-child { color: var(--ink-1); }
+
+.adm-chart-x {
+  grid-column: 2;
+  display: flex;
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.adm-chart-x span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.adm-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.adm-chart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+}
+
+.adm-chart-legend strong {
+  font-weight: 500;
+  color: var(--ink-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A legend SWATCH, so square-ish rather than a status dot, at the --dot size. */
+.adm-swatch {
+  display: inline-block;
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: var(--r-1);
+}
+
+/* Phone: a 14-day axis has room for every fourth date, counted back from
+   today, and a 7-day axis for every other. Gridlines and hover still cover
+   every day. */
+@media (max-width: 640px) {
+  .adm-chart-x span:nth-last-child(2n),
+  .adm-chart-x span:nth-last-child(4n + 3) {
+    visibility: hidden;
+  }
+}

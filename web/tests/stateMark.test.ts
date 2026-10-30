@@ -36,7 +36,7 @@ const NON_STATE_DOTS = new Set([
   // The dashboard's in-chip stat dot, same --dot-sm tier and same reason.
   ".adm-dash-stat-dot",
   // A chart legend swatch, not a status readout — it keys a series to a hue.
-  ".adm-token-dot",
+  ".adm-swatch",
   // A presence pip overlaid on an avatar, not a row-tier state mark.
   ".adm-presence",
   // A grid slot in the transcript rail sized to the avatar tile it replaces,

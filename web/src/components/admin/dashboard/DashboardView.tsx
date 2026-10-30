@@ -10,7 +10,10 @@ import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
 import { TopUsers } from "./TopUsers";
+import { Sparkline } from "./Sparkline";
 import { formatCompact } from "../../../lib/compactNumber";
+import { activityTotals, successRate } from "../../../lib/activityChart";
+import { displayTone, fleetSummary } from "../../../lib/fleetSlots";
 
 interface DashboardViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -36,6 +39,11 @@ export function DashboardView({
   const last24h = sessions.last24h;
   const prior24h = clampNonNeg(sessions.last7d - last24h) / 6;
   const trend = compareTrend(last24h, prior24h);
+  const rate = successRate(sessions.dailyCounts);
+  const outcomes = activityTotals(sessions.dailyCounts);
+  const fleet = fleetSummary(nodes);
+  const fleetCount = (key: string) => fleet.slots.find((slot) => slot.key === key)?.count ?? 0;
+  const percent = new Intl.NumberFormat(i18n.language || undefined, { style: "percent", maximumFractionDigits: 1 });
 
   return (
     <div className="adm-dash">
@@ -48,6 +56,7 @@ export function DashboardView({
             slot="sessions"
             eyebrow={t("admin.v2.dash_kpi_sessions")}
             value={sessionsReady ? formatCompact(sessions.total, i18n.language) : dash}
+            visual={sessionsReady ? <Sparkline points={sessions.dailyCounts.map((day) => day.count)} /> : null}
             delta={
               sessionsReady
                 ? {
@@ -60,27 +69,53 @@ export function DashboardView({
                 : undefined
             }
           />
-          {/* Count only. The ready/failed split is the fleet card's job in the
-              rail beside this row, and saying it here made three widgets
-              report one fact. */}
+          {/* Completed share of the threads that finished in the chart's
+              window. No reading until something finishes: 0% would claim
+              that everything failed. */}
+          <KpiTile
+            slot="success"
+            eyebrow={t("admin.v2.dash_kpi_success")}
+            value={sessionsReady && rate !== null ? percent.format(rate) : dash}
+            hint={
+              sessionsReady && rate !== null
+                ? t("admin.v2.dash_kpi_success_hint", {
+                    failed: outcomes.failed,
+                    finished: outcomes.completed + outcomes.failed,
+                  })
+                : undefined
+            }
+          />
+          {/* The count, with the fleet's state mix as a meter. The full
+              breakdown is the fleet card's job in the rail below. */}
           <KpiTile
             slot="nodes"
             eyebrow={t("admin.v2.dash_kpi_nodes")}
             value={nodesReady ? formatCompact(metrics.total, i18n.language) : dash}
-          />
-          {/* No hint: it printed users.length, which IS the value above
-              whenever there are users ("3" over "3 users"), and
-              contradicted it when there were none. */}
-          <KpiTile
-            slot="users"
-            eyebrow={t("admin.v2.dash_kpi_users")}
-            value={nodesReady ? formatCompact(metrics.userTotal, i18n.language) : dash}
+            visual={
+              fleet.total > 0 ? (
+                <span className="adm-dash-bar adm-dash-tile-meter" aria-hidden="true">
+                  {fleet.slots.filter((slot) => slot.count > 0).map((slot) => (
+                    <span
+                      key={slot.key}
+                      className={`adm-dash-bar-seg tone-${displayTone(slot)}`}
+                      style={{ flexBasis: `${slot.share * 100}%` }}
+                    />
+                  ))}
+                </span>
+              ) : null
+            }
+            hint={
+              fleet.total > 0
+                ? t("admin.v2.dash_kpi_nodes_hint", { running: fleetCount("running"), ready: fleetCount("ready") })
+                : undefined
+            }
           />
           {showTokens ? (
             <KpiTile
               slot="tokens"
               eyebrow={t("admin.v2.dash_kpi_tokens")}
               value={tokens.isError ? dash : formatCompact(tokens.fresh, i18n.language)}
+              visual={tokens.isError ? null : <Sparkline points={tokens.daily.slice(-7).map((day) => day.fresh)} />}
               hint={tokens.isError ? t("workspace.load_failed") : t("admin.v2.dash_kpi_tokens_hint")}
             />
           ) : null}

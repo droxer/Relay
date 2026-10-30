@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Card,
@@ -10,8 +9,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { activityChartMetrics, type ActivityChartPoint } from "@/lib/activityChart";
+import {
+  activityChartMetrics,
+  activityOutcomes,
+  activityTotals,
+  type ActivityChartPoint,
+} from "@/lib/activityChart";
 import { formatChartDate } from "@/lib/chartDate";
+import { formatCompact } from "@/lib/compactNumber";
+import { ChartLegend, StackedBarChart, type ChartColumn } from "./StackedBarChart";
 
 interface ActivityChartProps {
   daily: ActivityChartPoint[];
@@ -20,106 +26,67 @@ interface ActivityChartProps {
   className?: string;
 }
 
-const WIDTH = 720;
-const HEIGHT = 160;
-const PADDING = { top: 12, right: 12, bottom: 24, left: 32 };
+const PLACEHOLDER_DAYS = 14;
 
 export function ActivityChart({ daily, ready, error, className }: ActivityChartProps) {
   const { t, i18n } = useTranslation();
-  const lineRef = useRef<SVGPathElement>(null);
-  const [lineLength, setLineLength] = useState(0);
+  const points = daily ?? [];
+  const hasData = points.length > 0;
+  const { dataPeak } = activityChartMetrics(points);
+  const outcomes = activityOutcomes(points);
+  const totals = activityTotals(points);
+  const format = (value: number) => formatCompact(value, i18n.language);
 
-  const { areaPath, linePath, gridLines, xTicks, dataPeak } = useMemo(() => {
-    const points = (daily?.length ?? 0) > 0 ? daily! : Array.from({ length: 14 }, (_, i) => ({
-      date: `d${i}`,
-      count: 0,
-      completed: 0,
-      failed: 0,
-    }));
-
-    const innerW = WIDTH - PADDING.left - PADDING.right;
-    const innerH = HEIGHT - PADDING.top - PADDING.bottom;
-    const { dataPeak, scaleMax } = activityChartMetrics(daily);
-    const step = innerW / Math.max(points.length - 1, 1);
-
-    const coords = points.map((p, i) => {
-      const x = PADDING.left + i * step;
-      const y = PADDING.top + innerH - (p.count / scaleMax) * innerH;
-      return { x, y };
-    });
-
-    const linePath = coords
-      .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
-      .join(" ");
-
-    const first = coords[0];
-    const last = coords[coords.length - 1];
-    const baselineY = PADDING.top + innerH;
-    const areaPath =
-      `M ${first.x.toFixed(1)} ${baselineY.toFixed(1)} ` +
-      coords.map((c) => `L ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ") +
-      ` L ${last.x.toFixed(1)} ${baselineY.toFixed(1)} Z`;
-
-    const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => PADDING.top + innerH - f * innerH);
-    const tickIndices = points.length > 7 ? [0, Math.floor(points.length / 2), points.length - 1] : points.map((_, i) => i);
-    const xTicks = tickIndices.map((i) => {
-      const c = coords[i];
-      const label = formatChartDate(points[i].date, i18n.language);
-      return { x: c.x, label };
-    });
-
-    return { areaPath, linePath, gridLines, xTicks, dataPeak };
-  }, [daily, i18n.language]);
-
-  useEffect(() => {
-    const path = lineRef.current;
-    if (!path) return;
-    setLineLength(path.getTotalLength());
-  }, [linePath]);
+  // Outcome is the story: completed takes the series colour, failed --err,
+  // and stopped or still-open threads sit underneath in a quiet grey.
+  const labels = {
+    completed: t("admin.v2.dash_sessions_completed"),
+    failed: t("admin.v2.dash_sessions_failed"),
+    other: t("admin.v2.dash_sessions_other"),
+  };
+  const series = [
+    { key: "other", label: labels.other },
+    { key: "failed", label: labels.failed },
+    { key: "completed", label: labels.completed },
+  ];
+  const columns: ChartColumn[] = hasData
+    ? outcomes.map((day) => ({
+        key: day.date,
+        label: formatChartDate(day.date, i18n.language),
+        values: { completed: day.completed, failed: day.failed, other: day.other },
+      }))
+    : Array.from({ length: PLACEHOLDER_DAYS }, (_, index) => ({ key: `d${index}`, label: "", values: {} }));
 
   return (
     <Card render={<section />} className={cn("adm-dash-card--chart", className)}>
-      <CardHeader>
+      <CardHeader className="adm-dash-chart-head">
         <CardTitle render={<h2 />}>{t("admin.v2.dash_sessions_title")}</CardTitle>
-      </CardHeader>
-      <svg
-        className="adm-dash-chart"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        role="img"
-        aria-label={t("admin.v2.dash_sessions_title")}
-        preserveAspectRatio="none"
-      >
-        {gridLines.map((y, i) => (
-          <line
-            key={i}
-            x1={PADDING.left}
-            x2={WIDTH - PADDING.right}
-            y1={y}
-            y2={y}
-            stroke="var(--line-2)"
-            strokeWidth={1}
-            strokeDasharray={i === gridLines.length - 1 ? "0" : "2 3"}
+        {hasData ? (
+          <ChartLegend
+            label={t("admin.v2.dash_sessions_legend")}
+            items={[
+              { key: "completed", label: labels.completed, total: format(totals.completed) },
+              { key: "failed", label: labels.failed, total: format(totals.failed) },
+              { key: "other", label: labels.other, total: format(totals.other) },
+            ]}
           />
-        ))}
-        <path d={areaPath} fill="var(--ink-3)" fillOpacity={0.08} className="adm-dash-chart-area" />
-        <path
-          ref={lineRef}
-          d={linePath}
-          fill="none"
-          stroke="var(--ink-2)"
-          strokeWidth={1.5}
-          className="adm-dash-chart-line"
-          style={lineLength > 0 ? { "--chart-path-length": `${lineLength}px` } as CSSProperties : undefined}
-        />
-      </svg>
-      <div className="adm-dash-chart-axis" aria-hidden="true">
-        {xTicks.map((tick) => <span key={`${tick.x}-${tick.label}`}>{tick.label}</span>)}
-      </div>
-      {(daily?.length ?? 0) > 0 ? (
+        ) : null}
+      </CardHeader>
+      <StackedBarChart
+        columns={columns}
+        series={series}
+        format={format}
+        floor={4}
+        barRatio={0.58}
+        labelEvery={2}
+        ariaLabel={t("admin.v2.dash_sessions_title")}
+        totalLabel={(column, total) => t("admin.v2.dash_chart_tip_total", { date: column.label, total: format(total) })}
+      />
+      {hasData ? (
         <ul className="sr-only">
-          {daily.map((point) => (
-            <li key={point.date}>
-              {`${formatChartDate(point.date, i18n.language)}: ${point.count}`}
+          {outcomes.map((day) => (
+            <li key={day.date}>
+              {`${formatChartDate(day.date, i18n.language)}: ${day.total} · ${labels.completed} ${day.completed}, ${labels.failed} ${day.failed}, ${labels.other} ${day.other}`}
             </li>
           ))}
         </ul>
