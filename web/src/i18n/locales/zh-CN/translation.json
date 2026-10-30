@@ -1406,7 +1406,7 @@
       "node_locality_saved_here_hint": "此电脑的凭据已保存在本浏览器中。",
       "dept_none": "未分配部门",
       "empty_users_title": "尚无用户",
-      "empty_users_body": "创建用户，再分配电脑。",
+      "empty_users_body": "邀请他人加入 Relay，接受邀请后将显示在这里。",
       "no_match": "没有匹配的用户。",
       "no_users_for_filter": "没有符合筛选条件的用户。",
       "col_node": "电脑",

@@ -1436,7 +1436,7 @@
       "node_locality_saved_here_hint": "Credentials for this computer are stored in this browser.",
       "dept_none": "No department",
       "empty_users_title": "No users yet",
-      "empty_users_body": "Create a user, then assign a computer.",
+      "empty_users_body": "Invite someone to join Relay. Accepted invites appear here.",
       "no_match": "No users match this search.",
       "no_users_for_filter": "No users match these filters.",
       "col_node": "Computer",

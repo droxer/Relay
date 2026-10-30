@@ -41,7 +41,6 @@ interface UsersViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
   layout: AdminLayout;
   onLayoutChange: (next: AdminLayout) => void;
-  onAddUser: () => void;
   onDeleteUser?: (user: import("../../types").UserRecord) => Promise<void>;
   onEditUser?: (user: import("../../types").UserRecord) => void;
   highlightedUserId: string | null;
@@ -81,7 +80,6 @@ export function UsersView({
   nodes,
   layout,
   onLayoutChange,
-  onAddUser,
   onDeleteUser,
   onEditUser,
   highlightedUserId,
@@ -180,11 +178,6 @@ export function UsersView({
         title={t("admin.v2.empty_users_title")}
         body={t("admin.v2.empty_users_body")}
         illustration={<AdminUsers size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
-        actions={(
-          <Button type="button" variant="outline" onClick={onAddUser}>
-            {t("admin.v2.add_user_cta")}
-          </Button>
-        )}
       />
     );
   }
