@@ -712,6 +712,14 @@
   margin: 0 auto var(--sp-6);
 }
 
+/* The setup thread's pointer back to the dashboard, where a draft is applied. */
+.project-setup-cue-body {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 .project-setup-group {
   display: grid;
   gap: var(--sp-2);

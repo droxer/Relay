@@ -11,6 +11,7 @@ import {
   setupNeedsAttention,
   setupTaskAfterTitles,
   setupTasksApplyInput,
+  setupAwaitingApply,
 } from "../src/lib/projectSetup.ts";
 import type { ProjectRecord, ProjectSetupProposal } from "../src/types.ts";
 
@@ -116,5 +117,26 @@ describe("setupDraftingAllowed", () => {
     assert.equal(setupDraftingAllowed(existing), false);
     assert.equal(setupDraftingAllowed(existing, "setup"), false);
     assert.equal(setupDraftingAllowed(existing, "plan"), true);
+  });
+});
+
+describe("setupAwaitingApply", () => {
+  const proposed = {
+    ...project,
+    setup: { state: "proposed", intent: "x", agentId: "a", threadId: "t1", startedAt: "", proposal },
+  } as unknown as ProjectRecord;
+
+  it("points the setup thread at an unapplied proposal", () => {
+    assert.equal(setupAwaitingApply(proposed, "t1"), proposed.setup);
+  });
+
+  it("stays quiet in other threads and once the setup is resolved", () => {
+    assert.equal(setupAwaitingApply(proposed, "t2"), null);
+    assert.equal(setupAwaitingApply(proposed, undefined), null);
+    assert.equal(setupAwaitingApply(null, "t1"), null);
+    for (const state of ["drafting", "applied", "dismissed", "failed"]) {
+      const other = { ...proposed, setup: { ...proposed.setup!, state } } as unknown as ProjectRecord;
+      assert.equal(setupAwaitingApply(other, "t1"), null, state);
+    }
   });
 });

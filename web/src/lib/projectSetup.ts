@@ -171,3 +171,15 @@ function changed<K extends "goal" | "description" | "context">(key: K, draft: st
   const next = draft.trim();
   return next !== (saved ?? "").trim() ? { [key]: next } as Record<K, string> : {};
 }
+
+/** The proposal a finished setup thread left for its owner to apply. The
+ *  thread only drafts; applying happens on the project dashboard, so the
+ *  thread points there until the owner applies or dismisses it. */
+export function setupAwaitingApply(
+  project: ProjectRecord | null | undefined,
+  threadId: string | null | undefined,
+): ProjectSetup | null {
+  const setup = project?.setup;
+  if (!setup || !threadId || setup.threadId !== threadId) return null;
+  return setup.state === "proposed" && setup.proposal ? setup : null;
+}

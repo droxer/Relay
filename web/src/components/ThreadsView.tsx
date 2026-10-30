@@ -44,6 +44,7 @@ import { HandoffStatus } from "./HandoffStatus";
 import { TeamHandoffCue } from "./TeamHandoffCue";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
+import { ProjectSetupCue } from "./ProjectSetupCue";
 import { DecisionBar } from "./composer/DecisionBar";
 import { PermissionPrompts } from "./composer/PermissionPrompts";
 import { openPermissionRequests } from "../lib/permissionRequests";
@@ -371,6 +372,11 @@ export function ThreadsView({
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+  const activeProjectId = activeSession?.projectId ?? null;
+  const activeThreadProject = useMemo(
+    () => (activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null),
+    [projects, activeProjectId],
+  );
   const projectOverviewState = resolveProjectOverviewState({
     showProjectOverview,
     project: selectedProject,
@@ -577,6 +583,14 @@ export function ThreadsView({
                 />
                 <HandoffStatus session={activeSession} />
                 <CollaborationStatus session={activeSession} />
+                {/* A setup thread only drafts; the owner applies on the dashboard. */}
+                {!projectReadOnly ? (
+                  <ProjectSetupCue
+                    project={activeThreadProject}
+                    threadId={activeSession?.id}
+                    onOpenProject={onSelectProject}
+                  />
+                ) : null}
                 <PermissionPrompts
                   requests={openPermissionRequests(activeSession)}
                   agentLabel={(request) => labelForAgentRun(
