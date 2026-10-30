@@ -206,3 +206,24 @@ def test_split_deployment_redirects_browser_routes_to_the_web_origin(
 
     for path in ("/api/v1/missing", "/typoed-api/path", "/missing.js"):
         assert client.get(path, follow_redirects=False).status_code == 404
+
+
+def test_pwa_assets_are_public_and_revalidate(monkeypatch, tmp_path: Path) -> None:
+    client = _client(monkeypatch, tmp_path)
+    dist = tmp_path / "web-out"
+    assets = {
+        "sw.js": ("self.addEventListener('fetch', () => {});", "javascript"),
+        "manifest.webmanifest": ('{"name":"Relay"}', "application/manifest+json"),
+        "offline.html": ("<html>Relay is offline</html>", "text/html"),
+    }
+    for name, (content, content_type) in assets.items():
+        (dist / name).write_text(content)
+        response = client.get(f"/{name}")
+        assert response.status_code == 200
+        assert response.text == content
+        assert content_type in response.headers["content-type"]
+        assert response.headers["cache-control"] == "no-cache"
+        revalidated = client.get(
+            f"/{name}", headers={"if-none-match": response.headers["etag"]}
+        )
+        assert revalidated.status_code == 304

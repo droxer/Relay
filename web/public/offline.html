@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Relay · Offline</title>
+  <style>
+    :root { color-scheme: dark; background: #000; color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center; padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
+    main { width: 100%; max-width: 400px; }
+    svg { display: block; margin-bottom: 32px; }
+    h1 { margin: 0 0 12px; font-size: 32px; line-height: 1.2; letter-spacing: -0.02em; }
+    p { margin: 0 0 28px; color: #b3b3b3; font-size: 16px; line-height: 1.6; }
+    button { min-height: 44px; padding: 10px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; background: #fafafa; color: #000; cursor: pointer; }
+    button:hover { background: #d4d4d4; }
+    button:focus-visible { outline: 2px solid #fafafa; outline-offset: 4px; }
+    ::selection { background: #fafafa; color: #000; }
+  </style>
+</head>
+<body>
+  <main>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48" role="img" aria-label="Relay">
+      <g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 16 L31 32 L15 48" stroke="#ff8a3d"/>
+        <path d="M33 16 L49 32 L33 48" stroke="#6aa6ff"/>
+      </g>
+    </svg>
+    <h1 id="heading">You’re offline</h1>
+    <p id="message">Reconnect to open your workspace. Relay needs a connection to load your threads and tasks.</p>
+    <button id="retry" type="button">Try again</button>
+  </main>
+  <script>
+    try {
+      var language = localStorage.getItem("relay-web.language") || navigator.language;
+      if (/^zh/i.test(language)) {
+        document.documentElement.lang = "zh-CN";
+        document.title = "Relay · 离线";
+        document.getElementById("heading").textContent = "你已离线";
+        document.getElementById("message").textContent = "请连接网络以打开工作区。Relay 需要网络连接才能加载对话和任务。";
+        document.getElementById("retry").textContent = "重试";
+      }
+    } catch (_) {}
+    document.getElementById("retry").addEventListener("click", function () { location.reload(); });
+    window.addEventListener("online", function () { location.reload(); });
+  </script>
+</body>
+</html>

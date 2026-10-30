@@ -7,6 +7,7 @@ import { useClientMounted } from "../hooks/useClientMounted";
 import i18n from "../i18n";
 import { APP_NAVIGATION_EVENT, isLandingPath, parseAppPath } from "../lib/appRoute";
 import { applyTheme, readLanguage, readSignedInHint, writeTheme, type Theme } from "../lib/appStorage";
+import { registerPwaServiceWorker } from "../lib/pwa";
 import { preloadRouteChunk } from "../lib/routeChunks";
 import { AuthChecking } from "./AuthChecking";
 import { LandingScreen } from "./landing/LandingScreen";
@@ -132,6 +133,7 @@ function PublicLanding({ onNeedsApp }: { onNeedsApp: () => void }) {
  * chunk that loads alongside it for everyone else.
  */
 export function RelayEntry() {
+  useEffect(() => { void registerPwaServiceWorker(); }, []);
   const mounted = useClientMounted();
   const [needsApp, setNeedsApp] = useState(false);
   const handOver = useCallback(() => setNeedsApp(true), []);
