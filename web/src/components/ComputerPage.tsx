@@ -37,6 +37,7 @@ import {
   AdminNode,
   ICON,
   ICON_STROKE_LARGE,
+  StatusInfo,
 } from "./icons";
 import { omit } from "../lib/omit";
 import { isNodeOnline } from "../lib/adminHelpers";
@@ -134,13 +135,19 @@ export function ComputerPage({
       <span className="page-header-create-label">{t("computer.connect_button")}</span>
     </Button>
   );
-  const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
+  const connectCta = (
+    size: "default" | "sm",
+    variant: "default" | "ghost" = "default",
+    showReason = false,
+  ) => (
     <div className="computer-connect-cta">
       {/* Connecting a computer is what this page is for, so the CTA carries
           the accent — once. With no computers the empty state's CTA is the
           primary and the header's steps down to ghost, so the two never
-          compete. The usage readout (2/3) and limit reason stay attached to
-          the action either way. */}
+          compete. The usage readout (2/3) rides on the button; the limit
+          reason sits beside the action only in the empty state — in the
+          header it would wrap the corner into a ragged paragraph, so there
+          it becomes the notice above the roster. */}
       <Button
         type="button"
         size={size}
@@ -157,7 +164,7 @@ export function ComputerPage({
           </span>
         ) : null}
       </Button>
-      {limitHint ? <p className="computer-connect-limit">{limitHint}</p> : null}
+      {showReason && limitHint ? <p className="computer-connect-limit">{limitHint}</p> : null}
     </div>
   );
 
@@ -245,9 +252,16 @@ export function ComputerPage({
             title={t("computer.empty_title")}
             body={t("computer.empty_body")}
             illustration={<AdminNode size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
-            actions={connectCta("default")}
+            actions={connectCta("default", "default", true)}
           />
         ) : (
+          <>
+          {limitHint ? (
+            <p className="computer-limit-notice" role="status">
+              <StatusInfo size={ICON.sm} aria-hidden="true" />
+              <span>{limitHint}</span>
+            </p>
+          ) : null}
           <ul className="computer-list">
             {pagedNodes.items.map((node) => (
               <li key={node.id}>
@@ -263,6 +277,7 @@ export function ComputerPage({
               </li>
             ))}
           </ul>
+          </>
         )}
         {/* Each card is a full record rather than a tile, so a handful of
             machines already fills the viewport — the pager stays absent below

@@ -74,6 +74,32 @@
   text-align: center;
 }
 
+/* At the limit the header keeps only the disabled button and its 2/2; the
+   reason is a quiet note above the roster, the roster's own width, so the
+   page corner stays one clean row. Informational, not an error: neutral ink,
+   no danger tone. */
+.computer-limit-notice {
+  display: flex;
+  max-width: 72rem;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.computer-limit-notice svg {
+  flex: 0 0 auto;
+  /* Centre the glyph on the first line of text. */
+  margin-top: 0.125em;
+  color: var(--ink-3);
+}
+
 /* A handful of machines, not a fleet: full records rather than survey tiles.
    As a page of its own the roster has the whole canvas, so records sit two
    abreast once each still gets a record's width (34rem) — and never more,
