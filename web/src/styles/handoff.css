@@ -22,8 +22,8 @@
   min-height: var(--control-h);
   padding: 0 var(--sp-4);
   border-radius: var(--r-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
@@ -69,8 +69,8 @@
 }
 
 .handoff-panel-title {
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   color: var(--ink-1);
 }
 
@@ -81,12 +81,12 @@
   gap: var(--sp-2);
 }
 
-/* Stronger than --type-label so a routing row reads as a decision, not a form.
+/* Label weight, not strong: these sit on a quiet HITL card.
    Applies to the <Label> primitive here, hence the data-slot hook. */
 .handoff-row [data-slot="label"] {
   color: var(--ink-3);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* The row's own selects/inputs are the <Select> and <Input> primitives,
@@ -128,8 +128,8 @@
 }
 
 .permission-prompt-title {
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   color: var(--ink-1);
   overflow-wrap: anywhere;
 }

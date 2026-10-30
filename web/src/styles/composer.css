@@ -165,8 +165,8 @@
 
 .thread-runtime-option-name {
   overflow: hidden;
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -180,8 +180,8 @@
   /* The supporting-text role, not a raw rung. A bare `font-size: var(--fs-1)`
      pinned this to 12px at every density — so compact, which restates
      --type-body-sm one rung down, could not move it — and left weight, leading,
-     and family to inherit rather than be declared. The name above it stays
-     --type-label-strong, so the pair still separates by weight and ink. */
+     and family to inherit rather than be declared. The name above it is
+     --type-label, so the pair still separates by size and ink. */
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
@@ -268,8 +268,8 @@
   background: transparent;
   box-shadow: none;
   color: var(--ink-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   transition:
     background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
@@ -282,7 +282,7 @@
 }
 
 /* The environment line is context, so it speaks a step quieter than the
-   agent chip inside the card: regular weight, --ink-3. */
+   agent chip inside the card: same label weight, --ink-3. */
 .composer-meta [data-slot="select-trigger"] {
   color: var(--ink-3);
   font: var(--type-label);
@@ -563,8 +563,8 @@
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-align: left;
   cursor: pointer;
 }

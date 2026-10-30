@@ -101,7 +101,7 @@
 .chat-agent-select {
   min-width: 0;
   /* Capped against the rail's compact type (see the density block in
-     composer.css): the same name fits in fewer pixels at --type-label-strong,
+     composer.css): the same name fits in fewer pixels at --type-label,
      so the cap comes in with it rather than leaving a 280px plate half-empty. */
   max-width: min(232px, 40vw);
 }
@@ -130,8 +130,8 @@
      sentence; without a shrinkable box the chevron was pushed out past the
      trigger's border. The words give way, the mark and chevron do not. */
   min-width: 0;
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .chat-agent-select-unavailable-text {

@@ -130,8 +130,8 @@
   color: var(--ink-1);
   /* A menu row, not a record name: --type-name (16px) made each option
      louder than the 14px trigger and transcript it opens over. */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
