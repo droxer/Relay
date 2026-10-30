@@ -131,10 +131,29 @@ def test_piped_installer_preserves_paths_and_does_not_print_token(tmp_path):
 
 def test_bare_installer_supplies_the_backend_it_was_served_from(tmp_path):
     source, env = _shell_fixture(tmp_path)
-    # No controlling terminal: the workspace prompt is skipped, not left blocking.
-    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True, start_new_session=True)
+    # No controlling terminal: the workspace prompt is skipped, not left blocking,
+    # and the directory the command ran in becomes the workspace.
+    workdir = tmp_path / "a work dir"
+    workdir.mkdir()
+    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True,
+                            start_new_session=True, cwd=workdir)
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "args").read_text().splitlines()[1:] == ["--backend-url", "https://relay.example.com"]
+    assert (tmp_path / "args").read_text().splitlines()[1:] == [
+        "--backend-url", "https://relay.example.com", "--workspace", str(workdir)]
+
+
+def test_sudo_hand_off_keeps_the_directory_the_command_ran_in(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    env.update(FAKE_ROOT="1", SUDO_USER="alice")
+    workdir = tmp_path / "it's $HOME"
+    workdir.mkdir()
+    # The fake su starts in another directory, as su -l starts in the account's home.
+    (tmp_path / "bin/su").write_text('#!/bin/sh\nunset FAKE_ROOT\ncd "$HOME" && exec sh -c "$4"\n')
+    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True,
+                            start_new_session=True, cwd=workdir)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "args").read_text().splitlines()[1:] == [
+        "--backend-url", "https://relay.example.com", "--workspace", str(workdir)]
 
 
 def test_sudo_installs_for_the_invoking_user_not_root(tmp_path):
@@ -256,9 +275,7 @@ def test_token_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
             process.wait()
 
 
-def test_workspace_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
-    # Node's fs read of /dev/tty dies with EINTR under sudo's terminal relay, so
-    # the shell asks and hands the client --workspace.
+def _answer_workspace_prompt(tmp_path, answer: bytes):
     import os
     import select
     import sys
@@ -267,11 +284,13 @@ def test_workspace_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
     source, env = _shell_fixture(tmp_path)
     script = tmp_path / "installer.sh"
     script.write_text(source)
+    workdir = tmp_path / "the work dir"
+    workdir.mkdir()
     command = f"cat {shlex.quote(str(script))} | sh -s -- --foreground"
     argv = (["script", "-q", "/dev/null", "sh", "-c", command] if sys.platform == "darwin"
             else ["script", "-q", "-c", command, "/dev/null"])
     process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, env=env)
+                               stderr=subprocess.STDOUT, env=env, cwd=workdir)
 
     def read_until(marker: bytes, output: bytes) -> bytes:
         deadline = time.monotonic() + 10
@@ -286,20 +305,32 @@ def test_workspace_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
     try:
         assert process.stdout is not None and process.stdin is not None
         output = read_until(b"Local workspace directory", b"")
-        assert b"Local workspace directory" in output, output
-        process.stdin.write(b"~/my work\n")
+        assert f"Local workspace directory [{workdir}]".encode() in output, output
+        process.stdin.write(answer + b"\n")
         process.stdin.flush()
         output = read_until(b"INSTALL_STARTED", output)
         assert b"INSTALL_STARTED" in output, output
         tail, _ = process.communicate(timeout=10)
         assert process.returncode == 0, output + tail
-        assert (tmp_path / "args").read_text().splitlines()[1:] == [
-            "--backend-url", "https://relay.example.com", "--foreground",
-            "--workspace", f"{env['HOME']}/my work"]
+        return env, workdir, (tmp_path / "args").read_text().splitlines()[1:]
     finally:
         if process.poll() is None:
             process.kill()
             process.wait()
+
+
+def test_workspace_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
+    # Node's fs read of /dev/tty dies with EINTR under sudo's terminal relay, so
+    # the shell asks and hands the client --workspace.
+    env, _, args = _answer_workspace_prompt(tmp_path, b"~/my work")
+    assert args == ["--backend-url", "https://relay.example.com", "--foreground",
+                    "--workspace", f"{env['HOME']}/my work"]
+
+
+def test_empty_workspace_answer_keeps_the_current_directory(tmp_path):
+    _, workdir, args = _answer_workspace_prompt(tmp_path, b"")
+    assert args == ["--backend-url", "https://relay.example.com", "--foreground",
+                    "--workspace", str(workdir)]
 
 
 def test_installer_downloads_and_verifies_private_node_when_system_node_is_old(tmp_path):

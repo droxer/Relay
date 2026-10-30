@@ -968,7 +968,7 @@
     "device_approval_scope": "智能体将在此目录中工作，使用这台电脑上已安装的智能体工具，并以你的本机用户权限运行。",
     "device_error": "无法完成此连接请求。请重试，或在终端中重新运行安装。",
     "device_loading": "正在准备安装命令…",
-    "device_choose_directory": "在终端中选择本机工作区目录。",
+    "device_choose_directory": "在终端中选择本机工作区目录，或直接按回车使用当前目录。",
     "device_confirm_browser": "在打开的浏览器中确认电脑和目录。",
     "device_manual": "使用电脑令牌手动设置",
     "refresh_runtimes": "重新检测运行时",
