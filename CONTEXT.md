@@ -68,6 +68,15 @@ Placement. Its configuration is independent of the computer that executes it,
 and it does not own a workspace.
 _Avoid_: Executor, CLI
 
+**Agent Role**:
+The part a Logical Agent plays in a shared round. Stored and sent by id
+(`planner`, `implementer`, `reviewer`, `tester`, `fixer`), shown to people and
+agents by title: Architect, Software Engineer, Code Reviewer, QA Engineer, Bug
+Fixer. Each role carries a charter (`backend/relay/core/role_charters.py`)
+saying what it delivers and what it leaves to the others. A round's lead is a
+coordinator, not a role.
+_Avoid_: Tech Lead (for the planner), job, persona
+
 **Agent Runtime**:
 A capability on a Computer that can execute one implementation such as Claude,
 Codex, Pi, or Kimi. `Logical Agent.executorKind` selects the required runtime.

@@ -13,6 +13,8 @@ from relay.collaboration.work import (
     question_transition,
     predecessor_context,
 )
+from relay.core.role_charters import ROLE_CHARTERS
+from relay.teams.dispatch import team_member_assignments
 
 
 def assignments():
@@ -162,6 +164,38 @@ def test_lead_plan_is_bounded_and_preserves_required_review():
     for invalid in (plan[:1], [{**plan[0], "agentId": "outsider"}], plan * 9):
         with pytest.raises(ValueError):
             compile_proposed_plan(items, invalid, "round_1")
+
+
+@pytest.mark.parametrize("role", list(ROLE_CHARTERS))
+def test_lead_plan_delivers_specialist_charter_with_planned_objective(role):
+    items = team_member_assignments(
+        [
+            {"id": "lead", "executorKind": "codex", "defaultRole": "planner"},
+            {"id": "specialist", "executorKind": "codex", "defaultRole": role},
+        ],
+        team={"id": "team", "leadAgentId": "lead", "memberAgentIds": ["lead", "specialist"]},
+    )
+    for index, item in enumerate(items):
+        item["assignmentId"] = f"assignment-{index}"
+    original = compile_assignment_work_graph(
+        items, purpose="accomplish", team_snapshot=items[0]["teamSnapshot"]
+    )
+    before = deepcopy(original)
+    objective = "Inspect the changed API and report the result"
+    planned = compile_proposed_plan(original, [{
+        "agentId": "specialist",
+        "objective": objective,
+        "acceptanceCriteria": ["The API meets the goal"],
+        "expectedOutputs": ["Evidence report"],
+    }], "round_1")
+    delivered = compile_assignment_work_graph(
+        planned, purpose="accomplish", team_snapshot=items[0]["teamSnapshot"]
+    )[1]
+
+    assert objective in delivered["brief"]
+    assert ROLE_CHARTERS[role] in delivered["brief"]
+    assert delivered["workObjective"] == delivered["brief"]
+    assert original == before
 
 
 def test_teammate_question_returns_an_answer_then_resumes_requester():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.role_charters import COORDINATOR_CHARTER, role_charter
 from ..collaboration.styles import (
     LEAD_LED,
     resolve_collaboration_style,
@@ -409,18 +410,8 @@ def _member_brief(
             "including disagreements, risks, and the recommended next step."
         )
     if coordinator:
-        return "Coordinate the round, establish clear boundaries, and keep the shared work coherent."
-    if role == "planner":
-        return "Develop the plan, dependencies, risks, and open questions for the shared goal."
-    if role == "reviewer":
-        return "Review the accumulated workspace changes and synthesize blocking issues and missing tests."
-    if role == "tester":
-        return "Validate the accumulated implementation with focused tests and report reproducible failures."
-    if role == "fixer":
-        return "Fix confirmed defects in the accumulated implementation without duplicating completed work."
-    if role == "implementer":
-        return "Implement the part of the shared goal that fits your role and preserve earlier teammates' work."
-    return "Contribute a distinct part of the shared goal and avoid duplicating completed teammate work."
+        return COORDINATOR_CHARTER
+    return role_charter(role)
 
 
 def team_assignment_phase(

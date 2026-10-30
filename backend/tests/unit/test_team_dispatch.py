@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from relay.core.role_charters import COORDINATOR_CHARTER, ROLE_CHARTERS
 import pytest
 
 from relay.teams.dispatch import (
@@ -137,10 +138,7 @@ def test_team_member_assignments_sends_a_reviewer_to_review() -> None:
             "mode": "action",
             "phase": "execution",
             "coordinator": True,
-            "brief": (
-                "Coordinate the round, establish clear boundaries, and keep the "
-                "shared work coherent."
-            ),
+            "brief": COORDINATOR_CHARTER,
         },
         {
             "agentId": "support",
@@ -148,10 +146,7 @@ def test_team_member_assignments_sends_a_reviewer_to_review() -> None:
             "mode": "action",
             "phase": "review",
             "role": "reviewer",
-            "brief": (
-                "Review the accumulated workspace changes and synthesize "
-                "blocking issues and missing tests."
-            ),
+            "brief": ROLE_CHARTERS["reviewer"],
         },
     ]
 
