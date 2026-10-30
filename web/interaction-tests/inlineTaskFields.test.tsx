@@ -15,6 +15,7 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     { ...props, role: "menuitem", "aria-disabled": disabled ? "true" : undefined, onClick: disabled ? undefined : onClick },
     children,
   ),
+  DropdownMenuSeparator: () => createElement("hr"),
 }));
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: any) => createElement("div", null, children),
@@ -57,6 +58,31 @@ it("disables moves the workflow refuses and does not re-commit the current stage
   expect(item("backlog.statuses.backlog").getAttribute("data-current")).toBe("true");
   fireEvent.click(item("backlog.statuses.backlog"));
   expect(onChange).not.toHaveBeenCalled();
+});
+
+it("offers Block after the stages, and only when a hold handler is given", () => {
+  const onToggleHold = vi.fn();
+  const { unmount } = render(<InlineStatus task={base} onChange={vi.fn()} />);
+  expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "backlog.block" })).toBeNull();
+  unmount();
+  render(<InlineStatus task={base} onChange={vi.fn()} onToggleHold={onToggleHold} />);
+  fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "backlog.block" }));
+  expect(onToggleHold).toHaveBeenCalledOnce();
+});
+
+it("shows a blocked task in the stage it is held in, and offers Unblock", () => {
+  const blocked = { ...base, status: "blocked", workflowStage: "running" } as RelayTaskListItem;
+  render(<InlineStatus task={blocked} onChange={vi.fn()} onToggleHold={vi.fn()} labeled />);
+  const trigger = screen.getByRole("button", { name: "backlog.inline.status_label" });
+  expect(trigger.textContent).toBe("backlog.statuses.running · backlog.statuses.blocked");
+  expect(trigger.querySelector("[data-status]")?.getAttribute("data-status")).toBe("running");
+  expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "backlog.unblock" })).toBeTruthy();
+});
+
+it("offers no hold on a live run", () => {
+  render(<InlineStatus task={{ ...base, status: "running" }} onChange={vi.fn()} onToggleHold={vi.fn()} />);
+  const names = within(screen.getByRole("menu")).getAllByRole("menuitem").map((item) => item.textContent);
+  expect(names).not.toContain("backlog.block");
 });
 
 it("renders a plain status mark when read-only", () => {

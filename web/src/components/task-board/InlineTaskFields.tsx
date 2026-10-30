@@ -13,13 +13,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ActionCalendar, CheckIcon, ICON } from "../icons";
 import { PriorityBadge, PriorityGlyph } from "../PriorityBadge";
 import { TaskStatusIcon } from "../TaskStatusIcon";
 import { TASK_PRIORITIES, dueTone } from "../../lib/backlog";
-import { TASK_FLOW_STAGES } from "../../lib/taskFlow";
+import { TASK_FLOW_STAGES, taskHoldAction, taskWorkflowStage } from "../../lib/taskFlow";
 import { taskDropRejection } from "../../lib/taskDrag";
 import { formatDueDate } from "./BacklogChrome";
 import { TaskAssignee } from "../TaskAssignee";
@@ -41,21 +42,34 @@ import type { AgentTeam, UserAgent, ProjectRecord, RelayTaskListItem, TaskPriori
 
 const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN } as const;
 
+/**
+ * A task's status, read and changed the same way on every surface: the list
+ * row, the cross-project table, and the record band. It speaks the board's
+ * five stages — a blocked or waiting task shows the stage it is held in, with
+ * the hold named after it — and its menu offers exactly the moves a board
+ * drop would accept, plus Block / Unblock.
+ */
 export function InlineStatus({
   task,
   onChange,
+  onToggleHold,
   readOnly = false,
   labeled = false,
 }: {
   task: RelayTaskListItem;
   onChange: (status: TaskStatus) => void;
+  /** Omitted where holding is not offered; the menu then lists stages only. */
+  onToggleHold?: () => void;
   readOnly?: boolean;
-  /** Prints the status word beside the mark — for tables with a status column. */
+  /** Prints the status word beside the mark — for the record band. */
   labeled?: boolean;
 }) {
   const { t } = useTranslation();
-  const label = t(`backlog.statuses.${task.status}`);
-  const mark = <TaskStatusIcon status={task.status} />;
+  const stage = taskWorkflowStage(task);
+  const held = task.status !== stage ? t(`backlog.statuses.${task.status}`) : null;
+  const label = held ? `${t(`backlog.statuses.${stage}`)} · ${held}` : t(`backlog.statuses.${stage}`);
+  const mark = <TaskStatusIcon status={stage} />;
+  const holdAction = onToggleHold ? taskHoldAction(task) : null;
 
   if (readOnly) {
     return (
@@ -84,22 +98,31 @@ export function InlineStatus({
         }
       />
       <DropdownMenuContent>
-        {TASK_FLOW_STAGES.map((stage) => {
-          const rejection = taskDropRejection(task, stage);
+        {TASK_FLOW_STAGES.map((option) => {
+          const rejection = taskDropRejection(task, option);
           const current = rejection === "same_status";
           return (
             <DropdownMenuItem
-              key={stage}
+              key={option}
               data-current={current || undefined}
               disabled={rejection === "invalid_transition"}
-              onClick={() => { if (!current) onChange(stage); }}
+              onClick={() => { if (!current) onChange(option); }}
             >
-              <TaskStatusIcon status={stage} />
-              <span className="flex-1">{t(`backlog.statuses.${stage}`)}</span>
+              <TaskStatusIcon status={option} />
+              <span className="flex-1">{t(`backlog.statuses.${option}`)}</span>
               {current ? <CheckIcon size={ICON.sm} aria-hidden="true" /> : null}
             </DropdownMenuItem>
           );
         })}
+        {holdAction ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onToggleHold}>
+              <TaskStatusIcon status="blocked" />
+              <span className="flex-1">{t(`backlog.${holdAction}`)}</span>
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

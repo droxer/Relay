@@ -8,7 +8,7 @@ import {
   ViewBoard,
   ViewList,
 } from "../icons";
-import { TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "../../lib/backlog";
+import { TASK_PRIORITIES, type BacklogFilters } from "../../lib/backlog";
 import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { PHONE_QUERY } from "../MobileTopbarSlot";
@@ -18,6 +18,7 @@ import { tagFilterField } from "./tagFilterField";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { TaskStatusIcon } from "../TaskStatusIcon";
+import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../../lib/taskFlow";
 
 import { initialFilters, type BacklogView } from "./backlogVocabulary";
 
@@ -170,16 +171,20 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
   );
 }
 
-/** Same section navigation as Routines; the filter bar owns other dimensions. */
+/**
+ * The list's status sections are the board's lanes, so switching views never
+ * changes what "Running" means. A blocked or waiting task sits in the stage
+ * it is held in, as it does on the board; its row says what holds it.
+ */
 export function TaskStatusNav({ value, counts, onChange }: {
   value: "all" | TaskStatus;
-  counts: Record<TaskStatus, number>;
+  counts: Record<TaskWorkflowStage, number>;
   onChange: (status: "all" | TaskStatus) => void;
 }) {
   const { t } = useTranslation();
   const items: SectionNavItem<"all" | TaskStatus>[] = [
     { id: "all", label: t("backlog.title"), count: Object.values(counts).reduce((sum, count) => sum + count, 0) },
-    ...TASK_STATUSES.map((status) => ({
+    ...TASK_FLOW_STAGES.map((status) => ({
       id: status,
       label: t(`backlog.statuses.${status}`),
       mark: <TaskStatusIcon status={status} />,

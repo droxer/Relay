@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { describeTriggers, triggersOf } from "../../lib/automationTrigger";
 import { routineState } from "../../lib/routine";
 import { taskRef } from "../../lib/taskRef";
@@ -29,6 +30,8 @@ export function recordBandFacts(
   /** The assignee's resolved display name; without it the raw user id
       would stand where a person's name belongs. */
   assigneeName?: string,
+  /** The task's status control (`InlineStatus`); the plain mark otherwise. */
+  statusValue?: ReactNode,
 ): RecordFact[] {
   const facts: RecordFact[] = [];
   if (variant === "routine") {
@@ -48,7 +51,7 @@ export function recordBandFacts(
     facts.push({
       key: "status",
       label: t("backlog.status"),
-      value: (
+      value: statusValue ?? (
         <span className="record-band-inline">
           <TaskStatusIcon status={task.status} />
           {t(`backlog.statuses.${task.status}`)}

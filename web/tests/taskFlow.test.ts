@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { materializeTaskEvents, relayTaskEvent } from "../../packages/relay-core/src/task-store.js";
-import { taskFlowMetrics, taskWorkflowStage, compareTaskQueue, taskFlowErrorKey, manualTaskStatuses } from "../src/lib/taskFlow.js";
+import { taskFlowMetrics, taskWorkflowStage, compareTaskQueue, taskFlowErrorKey, taskHoldAction } from "../src/lib/taskFlow.js";
 
 function task(status: "running" | "review" | "blocked" | "done") {
   return materializeTaskEvents([
@@ -41,10 +41,12 @@ test("workflow errors give actionable messages and edits cannot claim execution"
   assert.equal(taskFlowErrorKey("task_wip_limit: no capacity"), "backlog.wip_wait");
   assert.equal(taskFlowErrorKey("task_state_changed: reload"), "backlog.error_changed");
   assert.equal(taskFlowErrorKey("unknown"), undefined);
-  assert.deepEqual(manualTaskStatuses("running", true), ["running"]);
-  assert.deepEqual(manualTaskStatuses("blocked", true), ["blocked"]);
-  assert.deepEqual(manualTaskStatuses("backlog", false), ["backlog", "assigned"]);
-  assert.ok(manualTaskStatuses("review", true).includes("done"));
+  assert.equal(taskHoldAction({ status: "assigned", isRoutine: false }), "block");
+  assert.equal(taskHoldAction({ status: "waiting_for_human", isRoutine: false }), "block");
+  assert.equal(taskHoldAction({ status: "blocked", isRoutine: false }), "unblock");
+  assert.equal(taskHoldAction({ status: "running", isRoutine: false }), null);
+  assert.equal(taskHoldAction({ status: "done", isRoutine: false }), null);
+  assert.equal(taskHoldAction({ status: "assigned", isRoutine: true }), null);
 });
 
 test("an admitted but not yet running execution stays in Ready", () => {

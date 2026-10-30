@@ -6,6 +6,7 @@ import type { RelayTaskListItem } from "../src/types";
 
 vi.mock("../src/hooks/useProjectLookup", () => ({ useProjectLookup: () => () => undefined }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
+vi.mock("../src/hooks/useInlineTaskEdits", () => ({ useInlineTaskEdits: () => null }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/components/task-record/RecordHistory", () => ({ RecordHistory: () => null }));
 vi.mock("../src/components/task-record/RecordResultLine", () => ({ RecordResultLine: () => null }));
@@ -22,7 +23,7 @@ it("changes a project record tab without changing the project tab or closing the
     currentUser={{ id: "u-1", username: "fei", role: "user", userId: "fei" }}
     runningRoutineIds={new Set()} busyAction={null} presentation="drawer" tabSearchKey="recordTab"
     onOpenThread={vi.fn()} onOpenRun={vi.fn()} onRun={vi.fn()} onCancel={vi.fn()}
-    onToggleBlock={vi.fn()} onDone={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()}
+    onDone={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()}
   />);
   fireEvent.click(screen.getByRole("tab", { name: "record.tab_definition" }));
   await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=definition"));

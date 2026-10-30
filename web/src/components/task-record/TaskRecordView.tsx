@@ -64,7 +64,7 @@ export function TaskRecordView({
   onDeleted: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const { announce, confirm, prompt } = useDialogs();
+  const { announce, confirm } = useDialogs();
   const { startTaskMutation, cancelRunMutation, deleteTaskMutation, updateTaskMutation, resumeAutomationMutation } = useRelayMutations();
   const [busyAction, setBusyAction] = useState<RecordAction | null>(null);
 
@@ -111,33 +111,6 @@ export function TaskRecordView({
     setBusyAction("cancel");
     try {
       await cancelRunMutation.mutateAsync({ sessionId });
-    } catch {
-      // Same: the toast is the report, the button comes back.
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  /* The state actions the retired peek drawer carried, with the same
-     mutation shapes the backlog rows use. */
-  async function toggleBlock(): Promise<void> {
-    if (busyAction || !task) return;
-    if (task.status === "blocked") {
-      setBusyAction("unblock");
-      try {
-        await updateTaskMutation.mutateAsync({ taskId: task.id, input: { action: "unblock" } });
-      } catch {
-        // The toast is the report, the button comes back.
-      } finally {
-        setBusyAction(null);
-      }
-      return;
-    }
-    const reason = await prompt({ title: t("backlog.block_reason"), message: t("backlog.block_reason_hint") });
-    if (!reason?.trim()) return;
-    setBusyAction("block");
-    try {
-      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { status: "blocked", blockerReason: reason.trim() } });
     } catch {
       // Same: the toast is the report, the button comes back.
     } finally {
@@ -220,7 +193,6 @@ export function TaskRecordView({
         onCancel={() => { void cancelRecord(); }}
         onEdit={() => onEdit(task)}
         onDelete={() => { void deleteRecord(); }}
-        onToggleBlock={() => { void toggleBlock(); }}
         onDone={() => { void markDone(); }}
         tasks={tasks}
         onOpenTask={(nextId) => onOpenRecord(nextId, null)}

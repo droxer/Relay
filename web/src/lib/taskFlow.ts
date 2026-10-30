@@ -2,6 +2,10 @@ import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
 export const TASK_FLOW_STAGES = ["backlog", "assigned", "running", "review", "done"] as const;
 export type TaskWorkflowStage = typeof TASK_FLOW_STAGES[number];
+
+export function isFlowStage(status: string): status is TaskWorkflowStage {
+  return (TASK_FLOW_STAGES as readonly string[]).includes(status);
+}
 const DAY = 86_400_000;
 
 export function taskWorkflowStage(task: RelayTaskListItem): TaskWorkflowStage {
@@ -45,12 +49,21 @@ export function taskFlowMetrics(tasks: RelayTaskListItem[], now = Date.now()) {
   };
 }
 
-/** Offered status edits never claim that an agent has started executing. */
-export function manualTaskStatuses(status: TaskStatus, started: boolean): TaskStatus[] {
-  if (status === "running" || status === "blocked") return [status];
-  const candidates: TaskStatus[] = started ? ["assigned", "review"] : ["backlog", "assigned"];
-  if (status === "review") candidates.push("done");
-  return [...new Set([status, ...candidates])];
+/** The stages a new task may start in: nothing has run yet. */
+export const NEW_TASK_STATUSES = ["backlog", "assigned"] as const satisfies readonly TaskStatus[];
+
+/**
+ * Blocked is a hold on a task, not a stage of its own: a blocked task keeps
+ * the lane it was blocked in. So holding and releasing sit beside the stage
+ * choices in the one status control, rather than as their own buttons.
+ * `null` where neither applies — finished work, a live run (cancel it
+ * instead), or an automation, which pauses rather than blocks.
+ */
+export function taskHoldAction(task: Pick<RelayTaskListItem, "status" | "isRoutine">): "block" | "unblock" | null {
+  if (task.isRoutine) return null;
+  if (task.status === "blocked") return "unblock";
+  if (task.status === "done" || task.status === "running") return null;
+  return "block";
 }
 
 export function taskFlowErrorKey(code?: string): string | undefined {

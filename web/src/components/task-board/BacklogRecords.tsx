@@ -284,6 +284,7 @@ export function BacklogTaskList({
           task={row.original}
           readOnly={!s.edits}
           onChange={(status) => s.edits?.changeStatus(row.original, status)}
+          onToggleHold={() => { void s.edits?.toggleHold(row.original); }}
         />
       )}</BacklogCells.Read>,
     },

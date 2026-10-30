@@ -10,11 +10,11 @@ import { runNowRefused } from "../../lib/routine.ts";
  * action is derived from the record's own state here rather than assembled
  * per surface, which is what kept Retry and Cancel from ever coexisting.
  *
- * Block/unblock and mark-done joined when the record drawer became the one
- * detail surface for both boards: the backlog's peek drawer carried them,
- * and retiring the peek could not retire the actions with it.
+ * Mark-done is the one status move kept as a button: accepting reviewed work
+ * is the next step a reader came for. Every other move, Block and Unblock
+ * included, is the band's status control — the same one the list row has.
  */
-export type RecordAction = "run" | "retry" | "resume" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
+export type RecordAction = "run" | "retry" | "resume" | "cancel" | "done" | "delete" | "triage";
 
 export function recordActions(
   task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId">,
@@ -37,7 +37,6 @@ export function recordActions(
   // A dispatch that was refused leaves the occurrence assigned and not
   // running — the state `784d23fa` made require a manual retry.
   else if (assigned && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
-  actions.push(task.status === "blocked" ? "unblock" : "block");
   if (task.status === "review") actions.push("done");
   return actions;
 }

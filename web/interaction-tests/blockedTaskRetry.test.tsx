@@ -16,7 +16,7 @@ const blockedTask = {
 it("offers an explicit retry for a blocked assigned task on the record", () => {
   const onRun = vi.fn();
   render(<TaskRecordActions task={blockedTask} variant="task" busyAction={null}
-    onRun={onRun} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onRun={onRun} onCancel={vi.fn()} onDone={vi.fn()}
     onEdit={vi.fn()} onDelete={vi.fn()} />);
   expect(onRun).not.toHaveBeenCalled();
   const retry = screen.getByRole("button", { name: "record.retry_run" });
@@ -30,7 +30,7 @@ it("offers an explicit retry for a blocked assigned task on the record", () => {
    project used to keep offering Retry, Block, Done, Edit and Delete. */
 it("offers nothing on a record whose project is closed for work", () => {
   render(<TaskRecordActions task={blockedTask} variant="task" readOnly busyAction={null}
-    onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onRun={vi.fn()} onCancel={vi.fn()} onDone={vi.fn()}
     onEdit={vi.fn()} onDelete={vi.fn()} />);
   expect(screen.queryByRole("button")).toBeNull();
 });
@@ -38,7 +38,7 @@ it("offers nothing on a record whose project is closed for work", () => {
 it("keeps delete behind the overflow menu and holds the menu while another action runs", () => {
   const onDelete = vi.fn();
   render(<TaskRecordActions task={blockedTask} variant="task" busyAction="retry"
-    onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onRun={vi.fn()} onCancel={vi.fn()} onDone={vi.fn()}
     onEdit={vi.fn()} onDelete={onDelete} />);
   // Delete is never a button of its own on the record header.
   expect(screen.queryByRole("button", { name: "record.delete" })).toBeNull();
