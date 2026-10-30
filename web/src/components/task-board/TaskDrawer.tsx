@@ -296,6 +296,44 @@ export function TaskDrawer({
         : undefined)
     : undefined;
 
+  const projectField = projectChoice !== "locked" ? (
+    <Field
+      label={t("project.project")}
+      labelId={projectLabelId}
+      wrapper="div"
+      hint={projectChoice === "optional"
+        ? t(form.variant === "routine" ? "routine.project_hint" : "issues.project_hint")
+        : undefined}
+      error={projectError ? t("project.required") : undefined}
+    >
+      <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {
+        if (!value) return;
+        const projectId = value === NO_PROJECT ? undefined : value;
+        onChange({
+          ...clearTaskAssignment(form),
+          ...(form.variant === "backlog" ? { status: projectId || form.status !== "assigned" ? form.status : "backlog" } : {}),
+          projectId,
+        });
+        setProjectError(false);
+      }}>
+        <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId} aria-invalid={projectError || undefined}>
+          <SelectValue>{() => project?.name ?? t(projectChoice === "optional" ? "issues.no_project" : "project.choose")}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {projectChoice === "optional" ? <SelectItem value={NO_PROJECT}>{t("issues.no_project")}</SelectItem> : null}
+          {availableProjects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create_action")}</Button> : null}
+    </Field>
+  ) : project ? (
+    /* Locked once saved, but still a field: labelled like every other
+       value in the form. */
+    <Field label={t("project.projects")} hint={t("project.locked_hint")} wrapper="div">
+      <p className="task-drawer-readonly-value">{project.name}</p>
+    </Field>
+  ) : null;
+
   return (
     <Drawer
       open={open}
@@ -313,43 +351,7 @@ export function TaskDrawer({
       layer={layer}
     >
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
-        {projectChoice !== "locked" ? (
-          <Field
-            label={t("project.project")}
-            labelId={projectLabelId}
-            wrapper="div"
-            hint={projectChoice === "optional"
-              ? t(form.variant === "routine" ? "routine.project_hint" : "issues.project_hint")
-              : undefined}
-            error={projectError ? t("project.required") : undefined}
-          >
-            <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {
-              if (!value) return;
-              const projectId = value === NO_PROJECT ? undefined : value;
-              onChange({
-                ...clearTaskAssignment(form),
-                ...(form.variant === "backlog" ? { status: projectId || form.status !== "assigned" ? form.status : "backlog" } : {}),
-                projectId,
-              });
-              setProjectError(false);
-            }}>
-              <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId} aria-invalid={projectError || undefined}>
-                <SelectValue>{() => project?.name ?? t(projectChoice === "optional" ? "issues.no_project" : "project.choose")}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {projectChoice === "optional" ? <SelectItem value={NO_PROJECT}>{t("issues.no_project")}</SelectItem> : null}
-                {availableProjects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create_action")}</Button> : null}
-          </Field>
-        ) : project ? (
-          /* Locked once saved, but still a field: labelled like every other
-             value in the form, not a stray line of grey text above the title. */
-          <Field label={t("project.projects")} hint={t("project.locked_hint")} wrapper="div">
-            <p className="task-drawer-readonly-value">{project.name}</p>
-          </Field>
-        ) : null}
+        {form.variant !== "routine" ? projectField : null}
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -374,6 +376,7 @@ export function TaskDrawer({
             onChange={(event) => updateBase({ description: event.target.value })}
           />
         </Field>
+        {form.variant === "routine" ? projectField : null}
         {/* Two-up pairs only — acceptance with priority, status with due — so
             no field is ever left alone in half a row. */}
         <div className="task-drawer-form-grid">
