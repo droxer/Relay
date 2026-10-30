@@ -48,7 +48,7 @@ import {
  *
  * Not `NodeCard`: that is a fleet-survey tile built to be scanned 40-at-a-time
  * by an admin, so it compresses a machine to a name, a truncated id, and four
- * unlabelled vendor glyphs. Here there are one or two machines and the reader
+ * runtime statuses. Here there are one or two machines and the reader
  * owns them, so the questions are different — "is anything running on it right
  * now", "which runtimes work", "where does my work land" — and the layout is a
  * record, not a tile.
@@ -248,28 +248,17 @@ function RuntimeRow({
   const disabled = Boolean(node.disabledAgents?.includes(agent));
   const agentStatus = node.agents[agent] ?? "unknown";
   const version = node.agentDetails?.[agent]?.version;
-  const tone = agentStatusTone(agentStatus, { disabled });
+  const tone = agentStatusTone(!isNodeOnline(node) && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
   const presence = nodeAgentPresence(node, agent);
   const stateLabel = runtimeStateLabel(node, agent, disabled, t);
   const detail = runtimeNotReadyDetail(node, agent, disabled);
 
-  // A chip, not a table row: a ready runtime is the expected case, so it is
-  // just its mark and name — the state is spoken only when it is something
-  // other than ready, and the version waits in the tooltip.
-  const ready = !disabled && agentStatus === "ready" && isNodeOnline(node);
   const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
 
   return (
     <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`} title={tooltip}>
-      <RuntimeMark
-        agent={agent}
-        presence={presence}
-        tone={tone}
-        variant="labeled"
-        disabled={disabled}
-      />
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
-      {ready ? null : <span className="computer-runtime-state">{stateLabel}</span>}
+      <RuntimeMark agent={agent} presence={presence} tone={tone} variant="labeled" role="img" aria-label={stateLabel} title={stateLabel} />
     </li>
   );
 }
