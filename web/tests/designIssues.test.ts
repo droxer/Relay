@@ -81,7 +81,8 @@ describe("reviewed design regressions", () => {
     );
     assert.deepEqual(
       activityChartMetrics([{ date: "2026-08-29", count: 7, completed: 0, failed: 0 }]),
-      { dataPeak: 7, scaleMax: 7 },
+      // The ceiling rounds up so four gridlines read 2/4/6/8; the peak stays 7.
+      { dataPeak: 7, scaleMax: 8 },
     );
   });
 

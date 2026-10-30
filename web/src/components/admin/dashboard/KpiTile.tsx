@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 interface KpiTileProps {
   eyebrow: string;
   value: ReactNode;
-  slot?: "sessions" | "nodes" | "users" | "tokens";
+  slot?: "sessions" | "success" | "nodes" | "users" | "tokens";
+  /** A small trend or share readout beside the numeral (sparkline, meter). */
+  visual?: ReactNode;
   delta?: {
     label: string;
     direction: "up" | "down" | "flat";
@@ -16,7 +18,7 @@ interface KpiTileProps {
   tone?: "bad" | "warn";
 }
 
-export function KpiTile({ eyebrow, value, slot, delta, hint, tone }: KpiTileProps) {
+export function KpiTile({ eyebrow, value, slot, visual, delta, hint, tone }: KpiTileProps) {
   const hasFoot = Boolean(delta || hint);
   const slotClass = slot ? ` adm-dash-tile--${slot}` : "";
   const toneClass = tone ? ` adm-dash-tile--toned tone-${tone}` : "";
@@ -24,8 +26,14 @@ export function KpiTile({ eyebrow, value, slot, delta, hint, tone }: KpiTileProp
     <div
       className={`adm-dash-tile${slotClass}${toneClass}`}
     >
-      <div className="adm-dash-tile-eyebrow">{eyebrow}</div>
-      <div className="adm-dash-tile-value tnum">{value}</div>
+      <div className="adm-dash-tile-eyebrow">
+        <i className="adm-dash-tile-key" aria-hidden="true" />
+        {eyebrow}
+      </div>
+      <div className="adm-dash-tile-reading">
+        <div className="adm-dash-tile-value tnum">{value}</div>
+        {visual ? <div className="adm-dash-tile-visual">{visual}</div> : null}
+      </div>
       {hasFoot ? (
         <div className="adm-dash-tile-foot">
           {/* A trend direction is not a status tone: "went up" carries no hue

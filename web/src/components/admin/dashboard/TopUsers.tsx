@@ -37,6 +37,7 @@ export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
       };
     });
   }, [ranked, users]);
+  const leader = Math.max(1, ...rows.map((row) => row.sessionCount));
 
   return (
     <Card render={<section />} className={className}>
@@ -55,9 +56,14 @@ export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
             <li key={row.id} className="adm-dash-top-row">
               <span className="adm-dash-top-rank tnum">{index + 1}</span>
               <UserAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
-              {/* One line per person: name and count. The computer count and
-                  the share meter under each row restated the rank. */}
-              <span className="adm-dash-top-name">{row.displayName}</span>
+              {/* Name over a share bar scaled to the leader, so the gap between
+                  ranks reads at a glance; the count stays the exact figure. */}
+              <span className="adm-dash-top-who">
+                <span className="adm-dash-top-name">{row.displayName}</span>
+                <span className="adm-dash-top-share" aria-hidden="true">
+                  <span style={{ width: `${(row.sessionCount / leader) * 100}%` }} />
+                </span>
+              </span>
               <span className="adm-dash-top-count tnum">{row.sessionCount}</span>
             </li>
           ))}

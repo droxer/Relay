@@ -1,10 +1,20 @@
 /* =====================================================================
    Admin Dashboard  (adm-dash-* namespace)
 
-   The control room, read as one instrument. The system's rules apply in
-   full: the page is neutral ink until something is working, and the live
-   blue (--live) marks nodes that are running an agent RIGHT NOW —
-   nowhere else. Ready is calm, completed is calm; only "in flight" glows.
+   The control room, read as one instrument. Chrome stays neutral ink; the
+   data carries colour, and each hue keeps one meaning:
+
+     --series-1  lagoon teal   volume, completed threads, output tokens
+     --series-2  sky           input tokens
+     --series-3  pale lagoon   cache writes — the bulk, kept quiet
+     --series-rest  grey       stopped or still-open threads
+     --err                     failed threads, failed computers
+     --live                    computers running an agent RIGHT NOW
+
+   Series hues come from the --tag-* data palette, never --action: an
+   orange bar beside an orange button reads as clickable, and the brand
+   orange stays in the mark. --live stays reserved for work in flight, so
+   no series may borrow the signal blue.
 
    Composition is a 2:1 editorial split rather than a uniform card grid:
    the wide column carries the two time-series, the rail carries the two
@@ -13,6 +23,10 @@
    ===================================================================== */
 
 .adm-dash {
+  --series-1: var(--tag-2);
+  --series-2: var(--tag-8);
+  --series-3: color-mix(in srgb, var(--tag-1) 40%, var(--surface-1));
+  --series-rest: color-mix(in srgb, var(--ink-4) 55%, var(--surface-1));
   display: flex;
   flex-direction: column;
   /* The dashboard is a stack of independent instruments — KPI rail, charts,
@@ -89,10 +103,76 @@
 .adm-dash-tile:last-child { border-right: none; }
 
 .adm-dash-tile-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1-5);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-4);
 }
+
+/* The swatch keys a tile to the series it summarises in the charts below.
+   Only the admin dashboard's slotted tiles carry one; a project dashboard's
+   unslotted tiles stay plain. */
+.adm-dash-tile-key { display: none; }
+
+.adm-dash-tile--sessions,
+.adm-dash-tile--success { --tile-key: var(--series-1); }
+.adm-dash-tile--nodes { --tile-key: var(--live); }
+.adm-dash-tile--tokens { --tile-key: var(--series-1); }
+
+.adm-dash-tile[class*="adm-dash-tile--"] .adm-dash-tile-key {
+  display: inline-block;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-1);
+  background: var(--tile-key);
+}
+
+.adm-dash-tile-reading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* The numeral never wraps ("1136.7万"); the visual gives up width first. */
+.adm-dash-tile-reading .adm-dash-tile-value { white-space: nowrap; }
+
+.adm-dash-tile-visual {
+  flex: 0 1 96px;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding-bottom: var(--sp-0-5);
+}
+
+/* The fleet mix beside the computer count: the fleet card's bar, at the
+   sparkline's width. */
+.adm-dash-bar.adm-dash-tile-meter {
+  width: 96px;
+  height: 6px;
+}
+
+.adm-spark {
+  display: block;
+  width: 100%;
+  max-width: 96px;
+  height: 32px;
+  overflow: visible;
+}
+.adm-spark-stop { stop-color: var(--series-1); }
+.adm-spark-line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke: var(--series-1);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.adm-spark-dot { fill: var(--series-1); }
 
 /* Every KPI and metric numeral reads --type-number (22px/500, tightened):
    the tile, the node-status stat, the channel metric. A number has one size
@@ -203,9 +283,6 @@
   margin-inline-start: auto;
 }
 
-.adm-dash-health-queued {
-  white-space: nowrap;
-}
 
 .adm-dash-panel .adm-dash-top-list,
 .adm-dash-panel .adm-dash-stat-grid {
@@ -226,7 +303,9 @@
 /* ── Charts ─────────────────────────────────────────────────────────
    No draw-in choreography: an operational chart renders settled. The data
    is the point, and a line that draws itself on every mount makes a
-   monitoring surface feel like a launch page. */
+   monitoring surface feel like a launch page.
+
+   The stacked-bar chart itself lives in admin-v2-charts.css. */
 .adm-dash-chart {
   width: 100%;
   height: auto;
@@ -235,76 +314,23 @@
   max-height: 220px;
 }
 
-.adm-dash-chart-axis {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-3) var(--sp-2) var(--sp-8);
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
-
 .adm-dash-chart--empty { opacity: var(--opacity-dormant); }
 
-/* Deliberately the shortest chart on the page. Token volume is supporting
-   evidence, not the headline — at full height its solid bars outweighed the
-   thread trend and the fleet readout combined. */
-.adm-dash-token-chart {
-  /* Chart geometry (no token rung). */
-  min-height: 110px;
-  max-height: 140px;
-}
-
-/* Token series read as a brightness ramp, stacked dimmest-at-the-base:
-   output is the product of the work and takes the brightest step, cache is
-   the bulk but the least interesting and sits underneath. None of them may
-   take --action — an action colour on a chart fill reads as "click me", and
-   it previously made Input the loudest mark on the entire page.
-
-   The hairline stroke is the fix from #58 and is kept: adjacent steps of a
-   brightness ramp merge into one flat band without it, so a segment boundary
-   must be drawn rather than inferred from the fills. It matters more here,
-   not less, because the ramp deliberately uses neighbouring ink steps. */
-.adm-token-seg {
-  stroke: var(--surface-1);
-  stroke-width: 1;
-}
-
-/* The ramp itself. Without these three rules every <rect> fell back to SVG's
-   default fill — pure black — so all three series rendered as one flat block
-   while the legend dots below advertised three distinct greys. The comment
-   above pointed here for the fills; they were never declared. */
-.adm-token-seg--output { fill: var(--ink-2); }
-.adm-token-seg--input { fill: var(--ink-3); }
-.adm-token-seg--cache { fill: var(--ink-4); }
-
-.adm-token-legend {
+/* Title left, legend right: the legend's totals answer "how many" before
+   the reader reaches the bars. */
+.adm-dash-chart-head {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--sp-2) var(--sp-4);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
 }
 
-.adm-token-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1-5);
+.adm-dash-chart-foot {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
 }
-
-/* A legend SWATCH, so square-ish rather than a status dot, at the --dot size. */
-.adm-token-dot {
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: var(--r-1);
-  display: inline-block;
-}
-
-.adm-token-dot--output { background: var(--ink-2); }
-.adm-token-dot--input { background: var(--ink-3); }
-.adm-token-dot--cache { background: var(--ink-4); }
 
 .adm-dash-empty {
   position: relative;
@@ -414,19 +440,90 @@
   );
 }
 
-.adm-dash-stat-grid {
+/* Ring beside its legend: the ring gives the mix at a glance, the list
+   gives exact counts. */
+.adm-dash-fleet {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-4) var(--sp-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+.adm-dash-ring {
+  position: relative;
+  /* Chart geometry (no token rung). */
+  width: 120px;
+  height: 120px;
+}
+
+.adm-dash-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.adm-dash-ring-track {
+  fill: none;
+  stroke: var(--line-1);
+}
+
+/* The arc is the datum, so it takes the state's tone as a fill — the same
+   data-viz exception the bar segments below document. */
+.adm-dash-ring-arc {
+  fill: none;
+  stroke: var(--tone, var(--ink-4));
+}
+
+.adm-dash-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-0-5);
+}
+
+.adm-dash-ring-value {
+  font: var(--type-number);
+  letter-spacing: var(--type-number-track);
+  line-height: var(--leading-none);
+  color: var(--ink-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-dash-ring-label {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-4);
+}
+
+.adm-dash-health-queued {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+.adm-dash-stat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
   margin: 0;
 }
 
 .adm-dash-stat {
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
   min-width: 0;
 }
+
+/* A state nobody is in stays listed — "0 failed" is news — but recedes. */
+.adm-dash-stat[data-empty] { opacity: var(--opacity-dormant); }
 
 .adm-dash-stat-label {
   display: inline-flex;
@@ -481,10 +578,12 @@
   box-shadow: inset 0 0 0 1px var(--tone);
 }
 
+/* A LIST count beside its label, so the name role with tabular figures;
+   the ring's centre carries the headline numeral. */
 .adm-dash-stat-value {
   margin: 0;
-  font: var(--type-number);
-  letter-spacing: var(--type-number-track);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   line-height: var(--leading-none);
   color: var(--ink-1);
   font-feature-settings: var(--font-features), "tnum" 1;
@@ -522,6 +621,29 @@
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-4);
+}
+
+.adm-dash-top-who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* Share of the leader's count, in the volume series colour. */
+.adm-dash-top-share {
+  display: block;
+  height: 4px;
+  border-radius: var(--r-1);
+  background: var(--line-2);
+  overflow: hidden;
+}
+
+.adm-dash-top-share > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--series-1);
 }
 
 .adm-dash-top-name {

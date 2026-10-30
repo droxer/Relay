@@ -288,9 +288,10 @@ describe("the brand where Relay introduces itself", () => {
 
 describe("the chart colour rule", () => {
   // Data never wears the action colour: an orange bar beside an orange button
-  // reads as clickable. Categories ride the ink ramp, --live marks only what is
-  // running, --err only what failed.
-  const DATA_MARK = /chart|token-seg|dash-bar|spark|meter|histogram/;
+  // reads as clickable. Categories ride the --tag-* data palette (the admin
+  // dashboard's --series-* hues), --live marks only what is running, --err
+  // only what failed.
+  const DATA_MARK = /chart|token-seg|dash-bar|spark|meter|histogram|adm-series|adm-swatch|dash-ring/;
   const ACTION_INK = /var\(--(action|action-hover|link-ink|link-ink-strong)\)/;
 
   it("keeps --action and --link-ink off every chart mark", () => {
@@ -313,6 +314,27 @@ describe("the chart colour rule", () => {
     const dir = path.join(repoRoot, "web", "src", "components", "admin", "dashboard");
     for (const file of readdirSync(dir).filter((name) => /Chart\.tsx$/.test(name))) {
       assert.ok(!ACTION_INK.test(read("web", "src", "components", "admin", "dashboard", file)), `${file} paints data with the action colour`);
+    }
+  });
+
+  it("draws dashboard series from the data palette, never brand or live", () => {
+    const css = readStyle("admin-v2-dashboard.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const root = css.match(/\.adm-dash \{([^}]*)\}/)?.[1] ?? "";
+    for (const name of ["--series-1", "--series-2", "--series-3"]) {
+      const value = root.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1];
+      assert.ok(value, `.adm-dash lost ${name}`);
+      assert.match(value, /var\(--tag-[1-8]\)/, `${name} must come from the --tag-* data palette`);
+      assert.doesNotMatch(value, /--(live|brand|action|err|ok|warn)/, `${name} borrows a reserved hue`);
+    }
+  });
+
+  it("keeps --err for failures and --live off every series", () => {
+    const css = readStyle("admin-v2-charts.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...css.matchAll(/([^{}]*\.adm-series--[^{}]*)\{([^{}]*)\}/g)];
+    assert.ok(rules.length >= 4, "the series vocabulary has gone missing");
+    for (const [, selector, body] of rules) {
+      assert.doesNotMatch(body, /var\(--live\)/, `${selector.trim()}: --live is reserved for running work`);
+      if (/var\(--err\)/.test(body)) assert.match(selector, /--failed/, `${selector.trim()}: --err means failed`);
     }
   });
 });
