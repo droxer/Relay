@@ -399,6 +399,14 @@
     min-height: 60vh;
     overflow: visible;
   }
+
+  /* The page scrolls here, not the record: grow to fill the pane but never
+     shrink under the content. The desktop `min-height: 0` let the record
+     (overflow: hidden) shrink to the pane and clip the members' last cards
+     with no scroll that could reach them. */
+  .teams-detail > .workspace-page {
+    flex: 1 0 auto;
+  }
 }
 
 @media (max-width: 820px) {
