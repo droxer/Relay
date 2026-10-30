@@ -5,7 +5,7 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "dashboard" | "members" | "tasks" | "workspace" | "settings";
+export type ProjectPageTab = "dashboard" | "members" | "tasks" | "automations" | "workspace" | "settings";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
@@ -15,7 +15,7 @@ type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "read
    it, so Settings sits last. Retired ids — "profile" (the old Agents tab) and
    "general" (folded into Members and Settings) — are unknown, so they land
    here. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "workspace", "members", "settings"];
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "automations", "workspace", "members", "settings"];
 export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */

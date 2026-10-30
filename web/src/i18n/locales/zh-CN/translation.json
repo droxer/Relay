@@ -293,6 +293,7 @@
     "dashboard_open_board": "打开任务",
     "dashboard_empty": "暂无任务",
     "dashboard_empty_hint": "项目有任务后，进度会显示在这里。",
+    "automations_subtitle": "创建和管理此项目的自动化。",
     "tasks_subtitle": "规划任务、跟踪进度并评审结果。",
     "project": "项目",
     "tasks_workspace_subtitle": "此项目产出的文件。",

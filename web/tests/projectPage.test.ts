@@ -80,7 +80,7 @@ describe("project page behavior", () => {
   });
 
   it("orders the strip from reading to managing, with settings last", () => {
-    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "tasks", "workspace", "members", "settings"]);
+    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "tasks", "automations", "workspace", "members", "settings"]);
   });
 
   it("lists the default tab first in the strip", () => {

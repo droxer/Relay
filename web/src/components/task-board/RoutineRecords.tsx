@@ -48,6 +48,7 @@ interface RoutineAssignment {
 
 /** The row's callbacks, resolved per task by the page that owns the mutations. */
 interface RoutineHandlers {
+  readOnly?: boolean;
   starting: boolean;
   /** Opens the routine's record. The title is a destination now, not a form. */
   onOpen: () => void;
@@ -208,6 +209,7 @@ export function RoutineTable({
         header: () => <RoutineCells.Read>{(s) => s.selectAll}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
+          if (s.handlersFor(task).readOnly) return null;
           const { t: say, selection: selected, onToggleSelect: toggle } = s;
           return (
             <TaskSelectCheckbox
@@ -326,7 +328,8 @@ export function RoutineTable({
         header: () => <RoutineCells.Read>{(s) => <span className="sr-only">{s.t("backlog.actions")}</span>}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
-          const { onAssign, onStart, starting } = s.handlersFor(task);
+          const { onAssign, onStart, starting, readOnly } = s.handlersFor(task);
+          if (readOnly) return null;
           const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || runNowRefused(task);
           return (
             <div className="backlog-action-group" role="group" aria-label={s.t("backlog.actions_dispatch")}>
