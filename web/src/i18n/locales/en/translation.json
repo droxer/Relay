@@ -2499,7 +2499,7 @@
     "action_failed": "Recovery failed. Try again. If it keeps failing, send this thread’s link to an administrator.",
     "retry_requested": "Recovery requested. The status will update shortly.",
     "gone_reported": "Reported. You can delete the thread now.",
-    "unblock_help": "Fix the cause, save your changes, then select Unblock on the task board. Unblock restores the previous stage without running the agent. Work that was running returns to Awaiting input, where you can resume it.",
+    "unblock_help": "Fix the cause, save your changes, then choose Unblock from the task's status menu. Unblock restores the previous stage without running the agent. Work that was running returns to Awaiting input, where you can resume it.",
     "finalization_failed": {
       "title": "Results could not be saved",
       "body": "Relay has the result but could not save it. Retry saving. If it fails again, ask an administrator to check backend storage. This does not rerun the agent."

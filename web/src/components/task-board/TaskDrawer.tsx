@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentTeam, UserAgent, ProjectRecord, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
-import { manualTaskStatuses } from "../../lib/taskFlow";
+import { NEW_TASK_STATUSES } from "../../lib/taskFlow";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
 import {
   NEW_TASK_ACCEPTANCE_POLICY,
@@ -103,6 +103,9 @@ function BacklogFields({ form, onChange, canRun }: {
   const dueLabelId = useId();
   return (
     <>
+      {/* A new task picks where it starts; after that, status changes through
+          the task's status control, the same one the list and board use. */}
+      {form.id ? null : (
       <Field label={t("backlog.status")} labelId={statusLabelId} hint={t("backlog.ready_policy")} wrapper="div">
         <Select
           value={form.status}
@@ -115,7 +118,7 @@ function BacklogFields({ form, onChange, canRun }: {
             <SelectValue>{(value: TaskStatus) => t(`backlog.statuses.${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {manualTaskStatuses(form.status, Boolean(form.startedAt))
+            {NEW_TASK_STATUSES
               .filter((status) => canRun || status !== "assigned" || status === form.status)
               .map((status) => (
               <SelectItem key={status} value={status} label={t(`backlog.statuses.${status}`)}>{t(`backlog.statuses.${status}`)}</SelectItem>
@@ -123,6 +126,7 @@ function BacklogFields({ form, onChange, canRun }: {
           </SelectContent>
         </Select>
       </Field>
+      )}
       <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
         <DatePicker
           labelId={dueLabelId}
@@ -429,7 +433,7 @@ export function TaskDrawer({
           onChange={(tags) => updateBase({ tags })}
         />
         {form.variant === "backlog" ? (
-          <div className="task-drawer-form-grid">
+          <div className={form.id ? undefined : "task-drawer-form-grid"}>
             <BacklogFields form={form} onChange={onChange} canRun={!intake} />
           </div>
         ) : null}

@@ -21,6 +21,8 @@ import { RecordResultLine } from "./RecordResultLine";
 import { RecordRuns } from "./RecordRuns";
 import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
+import { InlineStatus } from "../task-board/InlineTaskFields";
+import { useInlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { RecordPrerequisites } from "./RecordPrerequisites";
@@ -72,7 +74,6 @@ export function TaskRecordPage({
   onRun,
   onResume,
   onCancel,
-  onToggleBlock,
   onDone,
   onEdit,
   onDelete,
@@ -100,7 +101,6 @@ export function TaskRecordPage({
   onRun: () => void;
   onResume: () => void;
   onCancel: () => void;
-  onToggleBlock: () => void;
   onDone: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -124,6 +124,7 @@ export function TaskRecordPage({
   const project = projectOf(task.projectId);
   const projectName = project?.name;
   const readOnly = projectReadOnly(project);
+  const statusEdits = useInlineTaskEdits({ readOnly });
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
   const { teams } = useTeams(currentUser.userId);
@@ -142,6 +143,15 @@ export function TaskRecordPage({
     t,
     task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
     assigneeName,
+    /* The same control the list row carries: the board's stages, plus
+       Block / Unblock, so the record has no second way to change status. */
+    <InlineStatus
+      task={task}
+      labeled
+      readOnly={!statusEdits}
+      onChange={(status) => statusEdits?.changeStatus(task, status)}
+      onToggleHold={() => { void statusEdits?.toggleHold(task); }}
+    />,
   );
 
   const listPath = pathForAppState({
@@ -176,7 +186,6 @@ export function TaskRecordPage({
       busyAction={busyAction}
       onRun={onRun}
       onCancel={onCancel}
-      onToggleBlock={onToggleBlock}
       onDone={onDone}
       onEdit={onEdit}
       onDelete={onDelete}

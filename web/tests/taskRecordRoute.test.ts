@@ -226,11 +226,11 @@ describe("record actions", () => {
        legacy one that still carries an agent offers the way into a project,
        never Retry. A routine run is exempt: its routine names the crew. */
     const intake = { ...assigned, projectId: undefined };
-    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "assigned" }), ["triage", "block"]);
-    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "backlog" }), ["triage", "block"]);
+    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "assigned" }), ["triage"]);
+    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "backlog" }), ["triage"]);
     assert.deepEqual(
       recordActions({ ...intake, sourceRoutineId: "routine-1", isRoutine: false, status: "assigned" }),
-      ["retry", "block"],
+      ["retry"],
     );
   });
 
@@ -239,16 +239,15 @@ describe("record actions", () => {
     assert.deepEqual(recordActions({ ...assigned, isRoutine: true, status: "running" }), ["cancel"]);
   });
 
-  it("offers a refused dispatch a retry, and the state actions beside it", () => {
-    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "blocked" }), ["retry", "unblock"]);
-    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "assigned" }), ["retry", "block"]);
+  it("offers a refused dispatch a retry", () => {
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "blocked" }), ["retry"]);
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "assigned" }), ["retry"]);
   });
 
-  it("carries the retired peek's state actions", () => {
-    // Block/unblock and mark-done moved here when the record drawer became
-    // the backlog's one detail surface; a review record is the only one that
-    // can be marked done, and a finished one offers nothing.
-    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "review" }), ["block", "done"]);
+  it("keeps mark-done as the one status button", () => {
+    // Block and unblock live in the band's status control; a review record
+    // is the only one that can be marked done, and a finished one offers nothing.
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "review" }), ["done"]);
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "done" }), []);
   });
 
@@ -288,7 +287,8 @@ describe("record actions", () => {
   it("will not dispatch a record that has nobody to dispatch to", () => {
     const unassigned = { assignedAgentId: "", assignedTeamId: "", routineState: "active" as const, projectId: "project-1" };
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: true, status: "backlog" }), []);
-    assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), ["unblock"]);
+    // Unblocking is the status control's job; with nobody to run it there is no retry.
+    assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), []);
     // Run now works on a paused automation; only a rate-limit pause refuses it.
     assert.deepEqual(recordActions({ ...assigned, routineState: "paused", isRoutine: true, status: "backlog" }), ["run"]);
     assert.deepEqual(

@@ -21,7 +21,6 @@ export function TaskRecordActions({
   busyAction,
   onRun,
   onCancel,
-  onToggleBlock,
   onDone,
   onEdit,
   onDelete,
@@ -32,7 +31,6 @@ export function TaskRecordActions({
   busyAction: RecordAction | null;
   onRun: () => void;
   onCancel: () => void;
-  onToggleBlock: () => void;
   onDone: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -70,16 +68,6 @@ export function TaskRecordActions({
       {actions.includes("cancel") ? (
         <Button type="button" variant="outline" size="dense" loading={busyAction === "cancel"} onClick={onCancel}>
           {t("record.cancel_run")}
-        </Button>
-      ) : null}
-      {actions.includes("block") ? (
-        <Button type="button" variant="outline" size="dense" loading={busyAction === "block"} onClick={onToggleBlock}>
-          {t("backlog.block")}
-        </Button>
-      ) : null}
-      {actions.includes("unblock") ? (
-        <Button type="button" variant="outline" size="dense" loading={busyAction === "unblock"} onClick={onToggleBlock}>
-          {t("backlog.unblock")}
         </Button>
       ) : null}
       {actions.includes("done") ? (

@@ -1,7 +1,7 @@
 "use client";
 
 
-import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
+import { TASK_FLOW_STAGES, isFlowStage, taskWorkflowStage, type TaskWorkflowStage } from "../lib/taskFlow";
 
 import { useCallback, useEffect, useMemo, useState, useEffectEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,7 @@ import { useTeams } from "../hooks/useTeams";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus } from "../lib/backlog";
+import { agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { useLanePagination, usePagination } from "../hooks/usePagination";
@@ -139,11 +139,13 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
   /* The board's lanes are the status axis, so a status section only narrows
-     the list; on the board it would empty every lane but one. */
+     the list; on the board it would empty every lane but one. Sections are
+     stages, matched the way the lanes match; an older `?status=blocked`
+     link still narrows to the held tasks it names. */
   const statusFilter = view === "list" ? filters.status : "all";
   const filteredTasks = useMemo(
     () => applySort(filterTasks(backlogTasks, { ...filters, status: "all" })
-      .filter((task) => statusFilter === "all" || task.status === statusFilter), sortColumns, sort),
+      .filter((task) => statusFilter === "all" || (isFlowStage(statusFilter) ? taskWorkflowStage(task) : task.status) === statusFilter), sortColumns, sort),
     [backlogTasks, filters, statusFilter, sort, sortColumns],
   );
   const grouped = useMemo(() => tasksByStatus(filteredTasks), [filteredTasks]);
@@ -160,10 +162,8 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   /* Selection follows what is on screen in both views, so "select all" then
      Delete cannot reach a card or row on a lane page the reader never saw. */
   const sectionCounts = useMemo(() => {
-    const scope = filterTasks(backlogTasks, { ...filters, status: "all" });
-    return Object.fromEntries(TASK_STATUSES.map((status) => [
-      status, scope.filter((task) => task.status === status).length,
-    ])) as Record<TaskStatus, number>;
+    const scope = tasksByStatus(filterTasks(backlogTasks, { ...filters, status: "all" }));
+    return Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, scope[status].length])) as Record<TaskWorkflowStage, number>;
   }, [backlogTasks, filters]);
   const { page, setPage } = usePagination();
   /* A tag on a row, tile, or the record filters this list by that tag

@@ -170,6 +170,7 @@ export function IssuesTable({
                       labeled
                       readOnly={!rowEdits}
                       onChange={(status) => rowEdits?.changeStatus(task, status)}
+                      onToggleHold={() => { void rowEdits?.toggleHold(task); }}
                     />
                   </TableCell>
                 ) : null}
