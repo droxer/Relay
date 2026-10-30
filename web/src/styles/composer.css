@@ -275,6 +275,15 @@
     color var(--t-fast) var(--ease);
 }
 
+/* The selector above outranks a11y.css's touch floor, so restate it here.
+   Ghost chrome has no frame, so the taller box changes nothing you see. */
+@media (pointer: coarse) {
+  :is(.composer-targets, .composer-meta) [data-slot="select-trigger"] {
+    height: auto;
+    min-height: var(--touch-target);
+  }
+}
+
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"]:not(:disabled):hover,
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"][data-popup-open] {
   background: var(--control-fill);

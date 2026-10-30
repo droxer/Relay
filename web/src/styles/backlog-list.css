@@ -12,7 +12,15 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 0 var(--page-gutter) var(--sp-8);
+  padding: 0 var(--page-gutter);
+}
+
+/* The table's own wrapper is what scrolls (its overflow-x makes it a scroll
+   container, and the sticky header and bands stick inside it), so the room
+   after the last row belongs inside it. On .backlog-rows it was a fixed blank
+   band under the rows that never scrolled into view. */
+.backlog-rows > [data-slot="table-container"] {
+  padding-bottom: var(--sp-8);
 }
 
 /* Column tracks, declared once for every task table (backlog list, routine
@@ -727,6 +735,17 @@ tr[data-selected="true"] > td:first-child {
   .inline-field--icon:has(.priority-label) { gap: var(--sp-1); padding-inline: var(--sp-1); }
 
   .task-table .issue-col-project .issue-project--none { display: none; }
+
+  /* Likewise an unset due date: a dash on every undated row is noise on a
+     line this short, and the record is where a date gets set. */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-due:has([data-empty]) { display: none; }
+
+  /* The assignee is one fact on the meta line, so it speaks the line's type;
+     at label size "Unassigned" outweighed the real values beside it. */
+  .task-table .task-col-assignee .task-assignee-name {
+    font: inherit;
+    letter-spacing: inherit;
+  }
 
   .task-table .task-col-title .backlog-row-lead-main {
     flex-wrap: wrap;

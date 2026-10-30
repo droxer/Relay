@@ -182,8 +182,9 @@ export function ThreadListPanel({
         // says where the reader is, and the eyebrow cost every rail a line.
         layout="stacked"
         // On a phone the rail's create joins every other list's in the top
-        // bar; an open thread replaces this pane, so it stands down then.
-        topbarActions={selectedSessionId ? "inactive" : true}
+        // bar; an open thread or project replaces this pane, so it stands
+        // down then (the project page brings its own create).
+        topbarActions={selectedSessionId || selectedProjectId ? "inactive" : true}
         actions={(() => {
           // One plus for both modes — the shared list-header create
           // affordance, in its primary tier (.page-header-icon-action, shell.css).
