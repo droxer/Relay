@@ -48,8 +48,8 @@ interface CreateAgentDialogProps {
  * Explicit agent creation: computer -> runtime -> role. Mirrors the shape of
  * ConnectComputerDrawer / ManageExecutorsDrawer rather than inventing a new
  * form pattern. POST /agents is the only write; the computer/runtime
- * options come from the user-scoped GET /sandboxes already used
- * elsewhere in the app.
+ * options come from the GET /daemon-nodes roster used by My Computers,
+ * filtered to the current user.
  */
 export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAgentDialogProps) {
   const { t } = useTranslation();
