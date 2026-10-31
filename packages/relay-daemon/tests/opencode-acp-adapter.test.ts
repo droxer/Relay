@@ -132,7 +132,10 @@ describe("OpenCode ACP adapter", () => {
     assert.deepEqual(result.log[0], { answer: { outcome: { outcome: "selected", optionId: "reject" } } });
     assert.notEqual((result.log[0].answer as { outcome: { optionId: string } }).outcome.optionId, "always");
     const failed = events(result.stdout).find((line) => line.type === "tool_use");
-    assert.equal((failed?.part as { state: { status: string } }).state.status, "error");
+    const state = (failed?.part as { state: { status: string; error?: string; output?: string } }).state;
+    assert.equal(state.status, "error");
+    assert.equal(state.error, "denied");
+    assert.equal(state.output, undefined);
   });
 
   it("selects the pinned model before the prompt", async () => {

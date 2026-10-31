@@ -41,6 +41,7 @@ export function toolInput(value: unknown): Record<string, unknown> {
 const TOOL_TARGET_KEYS = [
   "command",
   "file_path",
+  "filePath",
   "path",
   "notebook_path",
   "pattern",
@@ -52,13 +53,19 @@ const TOOL_TARGET_KEYS = [
 
 export function toolTarget(input: Record<string, unknown>): string | undefined {
   for (const key of TOOL_TARGET_KEYS) {
-    const value = input[key];
-    if (typeof value === "string" && value.trim()) {
-      const oneLine = value.trim().split("\n")[0]!.trim();
-      return oneLine.length > 120 ? `${oneLine.slice(0, 119)}…` : oneLine;
-    }
+    const target = oneLineTarget(input[key]);
+    if (target) return target;
   }
   return undefined;
+}
+
+const TOOL_TARGET_MAX_CHARS = 120;
+
+/** The first line of a string, trimmed and capped for a tool line. */
+export function oneLineTarget(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const oneLine = value.trim().split("\n")[0]!.trim();
+  return oneLine.length > TOOL_TARGET_MAX_CHARS ? `${oneLine.slice(0, TOOL_TARGET_MAX_CHARS - 1)}…` : oneLine;
 }
 
 export function upsertSegmentById(
