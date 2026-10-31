@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AgentName = Literal["claude", "pi", "codex", "kimi"]
+AgentName = Literal["claude", "pi", "codex", "kimi", "opencode"]
 SessionStatus = Literal[
     "running", "waiting_for_human", "completed", "failed", "cancelled"
 ]
@@ -14,7 +14,7 @@ TaskStatus = Literal[
 ]
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
-AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi")
+AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi", "opencode")
 AGENT_ROLES: tuple[str, ...] = ("implementer", "reviewer", "planner", "tester", "fixer")
 # Version 2 adds ordered run.output.batch delivery. Keep version 1 accepted so
 # existing daemons can finish upgrading with their legacy run.output events.

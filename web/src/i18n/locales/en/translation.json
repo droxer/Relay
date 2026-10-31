@@ -1807,7 +1807,7 @@
     "request_access": "Request access",
     "theme_to_light": "Switch to light theme",
     "theme_to_dark": "Switch to dark theme",
-    "runtimes": "Works with Claude Code, Codex, Pi, and Kimi.",
+    "runtimes": "Works with Codex, Claude Code, Pi, OpenCode, and Kimi.",
     "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
     "lede": "Relay gives coding agents names, roles, and a shared record. Hand them threads, tasks, and automations, watch every command as it runs, and decide what ships.",
@@ -1841,7 +1841,7 @@
     "principle_record_title": "One shared record",
     "principle_record_body": "Review requests, runs, generated files, and token usage together in the thread history.",
     "principle_runtime_title": "Bring your runtimes",
-    "principle_runtime_body": "Claude Code, Codex, Pi, and Kimi run side by side. Pin a model per agent and let each computer report what it supports.",
+    "principle_runtime_body": "Codex, Claude Code, Pi, OpenCode, and Kimi run side by side. Pin a model per agent and let each computer report what it supports.",
     "github": "GitHub",
     "oss_title": "MIT licensed and self-hostable",
     "oss_body": "Relay is open source under MIT. Self-host the backend, connect your own computers, and follow development on GitHub.",
@@ -2074,6 +2074,9 @@
     },
     "kimi": {
       "blurb": "Runs via the Kimi CLI."
+    },
+    "opencode": {
+      "blurb": "Runs via the OpenCode CLI."
     }
   },
   "agents_page": {
@@ -2975,13 +2978,13 @@
       "connected": "{{name}} is connected. Ready to run: {{runtimes}}.",
       "waiting": "Waiting for your computer to connect…",
       "limit": "Your organization manages computers. Ask an admin to assign you one, and this step completes automatically.",
-      "no_runtime": "{{name}} is connected but has no agent CLI ready. Install Claude Code, Codex, Pi, or Kimi, then refresh its runtimes.",
+      "no_runtime": "{{name}} is connected but has no agent CLI ready. Install Codex, Claude Code, Pi, OpenCode, or Kimi, then refresh its runtimes.",
       "open_settings": "Open Computers"
     },
     "agent": {
       "label": "Create an agent",
       "title": "Create your first agent",
-      "body": "An agent is a named identity with its own role and instructions. It uses one runtime (Claude Code, Codex, Pi, or Kimi) on one of your computers.",
+      "body": "An agent is a named identity with its own role and instructions. It uses one runtime (Codex, Claude Code, Pi, OpenCode, or Kimi) on one of your computers.",
       "create": "Create agent"
     },
     "thread": {

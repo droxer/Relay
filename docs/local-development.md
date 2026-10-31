@@ -22,7 +22,7 @@ service commands, data layout, and test organization.
 | Backend | [FastAPI](https://github.com/fastapi/fastapi), [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy), [Pydantic](https://github.com/pydantic/pydantic), [Alembic](https://github.com/sqlalchemy/alembic), [uv](https://github.com/astral-sh/uv) |
 | Web | [Next.js](https://github.com/vercel/next.js), [React](https://github.com/facebook/react), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [TanStack Query](https://github.com/TanStack/query), [Zustand](https://github.com/pmndrs/zustand) |
 | Sandboxing | [BoxLite](https://github.com/boxlite-ai/boxlite) |
-| Agents | [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, Kimi |
+| Agents | Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, [OpenCode](https://opencode.ai), Kimi |
 
 ## Environment Files
 
@@ -90,7 +90,7 @@ MOONSHOT_API_KEY=...      # alternative Moonshot credential
 
 Local computers (`--sandbox none`) run the user's installed agent CLI from
 `PATH`, using its existing login, provider, model, and configuration. Log in and
-configure Claude, Codex, Pi, or Kimi directly with that CLI before connecting the
+configure Codex, Claude, Pi, OpenCode, or Kimi directly with that CLI before connecting the
 computer. Relay does not generate local agent credentials or provider config,
 translate Relay credential aliases, select a model/provider, or install shared
 skills into the user's agent directories. Native launch-environment settings,
@@ -99,8 +99,8 @@ including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and
 not override these local runtime settings.
 
 Local execution defaults to `--local-permission-policy native`: Relay does not
-add Codex's approval/sandbox bypass, Claude's `bypassPermissions`, or Kimi's
-`--auto`. The CLI's own policy still applies; this is not an OS sandbox, and
+add Codex's approval/sandbox bypass, Claude's `bypassPermissions`, or OpenCode's and
+Kimi's `--auto`. The CLI's own policy still applies; this is not an OS sandbox, and
 headless tasks needing interactive approval may fail or wait until cancelled.
 For an explicitly trusted computer, pass `--local-permission-policy trusted`
 (or set `RELAY_LOCAL_PERMISSION_POLICY=trusted`) to opt into those flags.
@@ -194,7 +194,7 @@ Setup saves a private `~/.relay/daemon-nodes/<id>/runtime-profile.json`. It
 preserves selected native configuration directories, PATH, proxy and certificate
 settings; the daemon loads it through `--runtime-profile <absolute-path>`.
 Preflight uses the same selected environment. Agent discovery honors the active
-Claude/Codex/Pi/Kimi configuration directories, including custom homes.
+Codex/Claude/Pi/OpenCode/Kimi configuration directories, including custom homes.
 
 Prefer each CLI's saved login for background services. If a runtime needs native
 environment credentials, place the required key/value pairs in a private JSON

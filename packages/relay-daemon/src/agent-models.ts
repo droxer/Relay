@@ -110,6 +110,8 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
     'else f="${KIMI_CODE_HOME:-$HOME/.kimi-code}/config.toml"; if [ -f "$f" ]; then emit config < "$f"; fi',
     "fi",
   ],
+  // `opencode models` prints one `provider/model` id per line.
+  opencode: ["if command -v opencode >/dev/null 2>&1; then opencode models 2>/dev/null | emit list; fi"],
 };
 
 export function buildModelDiscoveryScript(agent: AgentName): string {
@@ -197,7 +199,17 @@ export function parseAgentModels(
       return validModels(texts("list").flatMap(piListedModels));
     case "kimi":
       return validModels(kimiModels(texts("models"), texts("default"), texts("config")));
+    case "opencode":
+      return validModels(texts("list").flatMap(openCodeListedModels));
   }
+}
+
+/** The `provider/model` ids in `opencode models` output, one per line. */
+export function openCodeListedModels(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^[^\s/]+\/\S+$/.test(line));
 }
 
 function decodeRecords(stdout: string): Array<{ source: string; text: string }> {

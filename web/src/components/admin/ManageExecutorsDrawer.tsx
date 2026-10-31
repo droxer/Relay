@@ -14,7 +14,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Alert } from "@/components/ui/alert";
-import { visibleNodeAgentNames } from "./helpers";
+import { orderNodeAgentNames, visibleNodeAgentNames } from "./helpers";
 import { abbreviateNodeId } from "../../lib/computerNodes";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ManageAgentRow } from "./ManageAgentRow";
@@ -158,7 +158,7 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
   // The card's Runtimes list, in its order — plus anything switched off here,
   // so a hidden runtime the reader disabled can still be switched back on.
   const visible = visibleNodeAgentNames(node);
-  const agents = [...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && initialDisabled.has(agent))];
+  const agents = orderNodeAgentNames([...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && initialDisabled.has(agent))]);
   // Name the computer, not its id. An owner handle is only shown when the
   // caller resolved one (the admin console); never render a raw user id.
   const computerName = node.displayName?.trim() || abbreviateNodeId(node.id);

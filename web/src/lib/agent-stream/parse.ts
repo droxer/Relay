@@ -54,6 +54,8 @@ const AGENT_CHECKPOINT_TYPES: Record<AgentName, "each" | ReadonlySet<unknown>> =
   codex: new Set(["turn.completed", "turn.failed"]),
   pi: new Set(["turn_end"]),
   kimi: "each",
+  // `opencode run --format json` prints one whole event per line.
+  opencode: "each",
 };
 
 type AgentCheckpoint = { end: number; value: Record<string, unknown> };

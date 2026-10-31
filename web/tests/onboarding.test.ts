@@ -65,7 +65,7 @@ describe("onboarding progress", () => {
 
   it("holds the computer step while no runtime is ready", () => {
     const progress = onboardingProgress(inputs({
-      nodes: [node({ agents: { claude: "failed", codex: "unknown", pi: "unknown", kimi: "ready" }, disabledAgents: ["kimi"] })],
+      nodes: [node({ agents: { claude: "failed", codex: "unknown", pi: "unknown", kimi: "ready", opencode: "unknown" }, disabledAgents: ["kimi"] })],
     }));
     assert.equal(progress.step, "computer");
     assert.equal(progress.blocked, "no_ready_runtime");

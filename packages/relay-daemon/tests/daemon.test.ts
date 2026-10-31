@@ -1217,6 +1217,7 @@ test("relay daemon reports why each runtime is not ready", async () => {
       ensure: async (agent) => {
         if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
         if (agent === "kimi") throw new AgentUnresponsiveError("Kimi is not responding.");
+        if (agent === "opencode") throw new AgentNotInstalledError("OpenCode is not installed on this computer.");
         if (agent === "claude") throw new Error("Claude Code is not logged in.");
       },
     }),
@@ -1239,14 +1240,15 @@ test("relay daemon reports why each runtime is not ready", async () => {
   assert.deepEqual(first.supportedAgents, ["pi"]);
   assert.deepEqual(
     Object.fromEntries(Object.entries(first.agentHealth ?? {}).map(([agent, health]) => [agent, health?.status])),
-    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive" },
+    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive", opencode: "unavailable" },
   );
   assert.deepEqual(
     Object.fromEntries((first.executorCapabilities ?? []).map((item) => [item.executorKind, item.status])),
-    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive" },
+    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive", opencode: "unavailable" },
   );
   assert.deepEqual(logs.sort(), [
     "info codex agent not installed",
+    "info opencode agent not installed",
     "info pi agent capability ready",
     "warn claude agent capability failed",
     "warn kimi agent not responding",

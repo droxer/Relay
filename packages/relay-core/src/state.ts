@@ -3,7 +3,7 @@ import type { AgentOutputSink } from "./format.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
-export type AgentName = "claude" | "pi" | "codex" | "kimi";
+export type AgentName = "claude" | "pi" | "codex" | "kimi" | "opencode";
 export type { AgentOutputSink };
 
 export const AGENT_USER = "agent";

@@ -40,6 +40,8 @@ const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
   codex: { skillsDir: ".codex/skills", mcpJson: [".codex/mcp.json"], mcpToml: [".codex/config.toml"] },
   pi: { skillsDir: ".pi/skills", mcpJson: [".pi/mcp.json"] },
   kimi: { skillsDir: ".kimi-code/skills", mcpJson: [".kimi-code/mcp.json"] },
+  // OpenCode's skill and MCP locations are not verified yet; none are reported.
+  opencode: {},
 };
 
 const RECORD_SEPARATOR = "\t";
@@ -77,6 +79,7 @@ const CONFIG_HOMES: Record<AgentName, string> = {
   codex: '${CODEX_HOME:-$home/.codex}',
   pi: '${PI_CODING_AGENT_DIR:-$home/.pi}',
   kimi: '${KIMI_CODE_HOME:-$home/.kimi-code}',
+  opencode: '${XDG_CONFIG_HOME:-$home/.config}/opencode',
 };
 
 function buildInventoryScript(): string {

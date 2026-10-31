@@ -346,7 +346,7 @@ describe("permission adapter launch", () => {
       assert.equal(support.kind, "adapter", `${name} declares an adapter`);
       if (support.kind === "adapter") adapters.add(support.adapter);
     }
-    assert.deepEqual([...adapters].sort(), ["claude-mcp", "codex-app-server", "kimi-acp", "pi-extension"]);
+    assert.deepEqual([...adapters].sort(), ["claude-mcp", "codex-app-server", "kimi-acp", "opencode-acp", "pi-extension"]);
     for (const adapter of adapters) {
       const launch = permissionAdapterLaunch(adapter, { env });
       assert.equal(launch.adapter, adapter);

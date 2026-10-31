@@ -2,6 +2,7 @@ import {
   buildClaudeCommand,
   buildCodexCommand,
   buildKimiCommand,
+  buildOpenCodeCommand,
   buildPiCommand,
   buildPiPreflightCommand,
 } from "./commands.js";
@@ -10,6 +11,7 @@ import {
   ClaudeStreamRenderer,
   CodexStreamRenderer,
   KimiStreamRenderer,
+  OpenCodeStreamRenderer,
   PiStreamRenderer,
 } from "./renderers.js";
 import type { AgentName, AgentState } from "./state.js";
@@ -32,7 +34,7 @@ export type SkillDelivery =
  * extension (`--extension <script>`): the launch's script is handed to `pi`
  * rather than run by node.
  */
-export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "kimi-acp" | "pi-extension";
+export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "kimi-acp" | "opencode-acp" | "pi-extension";
 
 /** Whether a local, native-policy run of this runtime can ask a person before a tool use. */
 export type PermissionPromptSupport = { kind: "none" } | { kind: "adapter"; adapter: PermissionPromptAdapter };
@@ -143,6 +145,23 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     // Kimi asks over ACP `session/request_permission`.
     permissionPrompts: { kind: "adapter", adapter: "kimi-acp" },
     preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
+  },
+  opencode: {
+    name: "opencode",
+    displayName: "OpenCode",
+    initial: "O",
+    maxFailures: 2,
+    buildCommand: buildOpenCodeCommand,
+    createRenderer: () => new OpenCodeStreamRenderer(),
+    label: "OpenCode",
+    // OpenCode keeps its login in its own data directory; the run reads it
+    // from the native home, so no guest auth files are provisioned here.
+    needsGuestAuth: false,
+    skillDelivery: { kind: "prompt-paths" },
+    // OpenCode asks through `opencode acp`'s session/request_permission. Its
+    // `always` choice is never sent: the broker grants one approval at a time.
+    permissionPrompts: { kind: "adapter", adapter: "opencode-acp" },
+    preflight: { label: "OpenCode", command: () => runAsAgent("opencode --version && opencode auth list > /dev/null") },
   },
 };
 

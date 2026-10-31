@@ -1772,7 +1772,7 @@
     "request_access": "申请访问",
     "theme_to_light": "切换到浅色主题",
     "theme_to_dark": "切换到深色主题",
-    "runtimes": "支持 Claude Code、Codex、Pi 和 Kimi。",
+    "runtimes": "支持 Codex、Claude Code、Pi、OpenCode 和 Kimi。",
     "page_title": "Relay — 让 AI 智能体在你自己的电脑上工作",
     "headline": "让 AI 智能体在你自己的电脑上工作",
     "lede": "Relay 为编程智能体赋予名字、角色和共享记录。把对话、任务和自动化交给它们，实时查看每一条命令，由你决定最终交付什么。",
@@ -1806,7 +1806,7 @@
     "principle_record_title": "一份共享记录",
     "principle_record_body": "在对话历史中一起查看请求、运行、生成的文件和令牌用量。",
     "principle_runtime_title": "沿用你的运行时",
-    "principle_runtime_body": "Claude Code、Codex、Pi 和 Kimi 可以并行运行。为每个智能体固定模型，由每台电脑报告它支持的内容。",
+    "principle_runtime_body": "Codex、Claude Code、Pi、OpenCode 和 Kimi 可以并行运行。为每个智能体固定模型，由每台电脑报告它支持的内容。",
     "github": "GitHub",
     "oss_title": "MIT 许可，可自行部署",
     "oss_body": "Relay 基于 MIT 开源。自托管后端，接入你自己的电脑，并在 GitHub 上关注开发进展。",
@@ -2028,6 +2028,9 @@
     },
     "kimi": {
       "blurb": "通过 Kimi CLI 运行。"
+    },
+    "opencode": {
+      "blurb": "通过 OpenCode CLI 运行。"
     }
   },
   "agents_page": {
@@ -2912,13 +2915,13 @@
       "connected": "{{name}} 已连接。可运行：{{runtimes}}。",
       "waiting": "正在等待你的电脑连接…",
       "limit": "你的组织统一管理电脑。请联系管理员为你分配一台，此步骤会自动完成。",
-      "no_runtime": "{{name}} 已连接，但没有就绪的智能体 CLI。请安装 Claude Code、Codex、Pi 或 Kimi，然后刷新运行时。",
+      "no_runtime": "{{name}} 已连接，但没有就绪的智能体 CLI。请安装 Codex、Claude Code、Pi、OpenCode 或 Kimi，然后刷新运行时。",
       "open_settings": "打开电脑设置"
     },
     "agent": {
       "label": "创建智能体",
       "title": "创建你的第一个智能体",
-      "body": "智能体有自己的名称、角色和指令。它使用你的一台电脑上的一个运行时（Claude Code、Codex、Pi 或 Kimi）来工作。",
+      "body": "智能体有自己的名称、角色和指令。它使用你的一台电脑上的一个运行时（Codex、Claude Code、Pi、OpenCode 或 Kimi）来工作。",
       "create": "创建智能体"
     },
     "thread": {

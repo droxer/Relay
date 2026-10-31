@@ -215,6 +215,7 @@ export {
   claudeTaskPrompt,
   codexTaskPrompt,
   kimiTaskPrompt,
+  opencodeTaskPrompt,
   piTaskPrompt,
   roleTitle,
 } from "./prompts.js";
@@ -223,6 +224,7 @@ export {
   buildClaudeCommand,
   buildCodexCommand,
   buildKimiCommand,
+  buildOpenCodeCommand,
   buildPiCommand,
   buildPiPreflightCommand,
 } from "./commands.js";
@@ -232,12 +234,14 @@ export {
   CodexStreamRenderer,
   JsonLineRenderer,
   KimiStreamRenderer,
+  OpenCodeStreamRenderer,
   PiStreamRenderer,
   PlainTextStreamRenderer,
   StderrLineRenderer,
   formatClaudeJsonLine,
   formatCodexJsonLine,
   formatKimiJsonLine,
+  formatOpenCodeJsonLine,
   formatPiJsonLine,
 } from "./renderers.js";
 

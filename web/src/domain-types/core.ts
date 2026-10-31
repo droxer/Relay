@@ -70,7 +70,7 @@ export type {
  * can't pull node-only modules — see AGENTS.md). Update both when adding an
  * agent.
  */
-export const AGENT_NAMES: AgentName[] = ["claude", "pi", "codex", "kimi"];
+export const AGENT_NAMES: AgentName[] = ["claude", "pi", "codex", "kimi", "opencode"];
 
 /** Single tone vocabulary for every status surface (toasts, pills, dots, stream status, system rows). */
 export type Tone = "good" | "bad" | "warn" | "info" | "neutral";

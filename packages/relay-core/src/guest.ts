@@ -62,6 +62,7 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"],
   pi: ["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_PROVIDER", "PI_API"],
+  opencode: [],
   kimi: [
     "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
     "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
@@ -78,6 +79,7 @@ const NATIVE_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
   pi: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "KIMI_API_KEY"],
   kimi: AGENT_CREDENTIAL_ENV_NAMES.kimi.filter((key) => key.startsWith("KIMI_MODEL_") && key !== "KIMI_MODEL"),
+  opencode: [],
 };
 
 export function isLocalAgentExecution(): boolean {
@@ -129,6 +131,7 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
     }
     return env;
   },
+  opencode: () => [],
 };
 
 /** The credential/provider env a single agent run needs — nothing else. */
