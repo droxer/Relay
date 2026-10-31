@@ -3,6 +3,9 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUserAgents } from "../hooks/useUserAgents";
+import { SearchInput } from "@/components/ui/search-input";
+import { useUrlSearchState } from "../hooks/useUrlSearchState";
+import { agentMatchesQuery } from "../lib/agentSearch";
 import { groupAgentsByComputer } from "../lib/agentGroups";
 import type { CurrentUser, UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
@@ -124,13 +127,15 @@ function AgentsPageView({
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const { agents, isFetching, error, refetch } = useUserAgents(currentUser.userId);
+  const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
   const activeAgents = useMemo(
     () => agents.filter((agent) => !agent.deletedAt),
     [agents],
   );
 
   const visibleAgents = useMemo(() => {
-    return [...activeAgents]
+    return activeAgents
+      .filter((agent) => agentMatchesQuery(agent, t(`agent.${agent.executorKind}.blurb`), query))
       .sort((left, right) => {
         const rank = (agent: UserAgent) => {
           if (agent.availability === "ready") return 0;
@@ -142,7 +147,7 @@ function AgentsPageView({
         if (rankDelta !== 0) return rankDelta;
         return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
       });
-  }, [activeAgents]);
+  }, [activeAgents, query, t]);
 
   const agentGroups = useMemo(() => groupAgentsByComputer(visibleAgents), [visibleAgents]);
 
@@ -192,6 +197,18 @@ function AgentsPageView({
           }
         />
 
+        <div className="list-filter-bar">
+          <SearchInput
+            className="list-filter-search"
+            iconSize={ICON.sm}
+            label={t("agents_page.search_label")}
+            name="agents-query"
+            value={query}
+            placeholder={t("agents_page.search_placeholder")}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+
         {loading ? (
           <ListSkeleton label={t("admin.loading")} />
         ) : error && agents.length === 0 ? (
@@ -202,9 +219,9 @@ function AgentsPageView({
           />
         ) : visibleAgents.length === 0 ? (
           <RelayEmptyState feature="agents"
-            title={t("agents_page.empty_title")}
-            body={t("agents_page.empty_body")}
-            actions={currentUser.userId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
+            title={activeAgents.length === 0 ? t("agents_page.empty_title") : t("agents_page.empty_filtered_title")}
+            body={activeAgents.length === 0 ? t("agents_page.empty_body") : t("agents_page.empty_filtered_body")}
+            actions={activeAgents.length === 0 && currentUser.userId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
           />
         ) : (
           // Banded by the computer each agent runs on — the infrastructure is
