@@ -101,7 +101,8 @@ class TaskReadRows(TaskStoreState):
             ]
 
     def list_task_summaries(
-        self, *, user_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None,
+        task_ids: list[str] | None = None
     ) -> list[dict[str, Any]]:
         statement = (
             select(
@@ -120,6 +121,8 @@ class TaskReadRows(TaskStoreState):
                     self.tasks.c.assignee_user_id == user_id,
                 )
             )
+        if task_ids is not None:
+            statement = statement.where(self.tasks.c.id.in_(task_ids))
         if limit is not None:
             statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:

@@ -24,6 +24,7 @@ import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
 import { homeNeedsYouCount, homeQueue } from "./lib/homeQueue";
+import { useMinuteClock } from "./hooks/useMinuteClock";
 import { isoToday } from "./lib/routine";
 import { useHandoffStore } from "./lib/handoffStore";
 import { useComposerTargetStore } from "./lib/composerTargetStore";
@@ -137,6 +138,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     tasks,
     projects,
     projectsStatus,
+    homeStatus,
     tasksStatus,
     projectsError,
     isRefreshing,
@@ -159,6 +161,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => myThreadSessions(sessions, selectedUser),
     [sessions, selectedUser],
   );
+  const homeToday = isoToday(new Date(useMinuteClock()));
   // Home's queue, computed once: Home renders it and the rail badges it.
   const homeItems = useMemo(
     () => homeQueue({
@@ -166,10 +169,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       sessions,
       nodes: runtimeNodes,
       userId: selectedUser,
-      today: isoToday(),
+      today: homeToday,
       snoozes: user.homeSnoozes,
     }),
-    [runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
+    [homeToday, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
   );
   const homeNeedsYou = homeNeedsYouCount(homeItems);
   const onboarding = useOnboarding({
@@ -667,6 +670,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             tasks={tasks}
             sessions={sessions}
             homeItems={homeItems}
+            homeStatus={homeStatus}
             selectedUser={selectedUser}
             setUser={setUser}
             visibleNodes={visibleNodes}

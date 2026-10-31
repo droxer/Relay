@@ -68,6 +68,7 @@ interface WorkRoutePageProps {
   tasks: RelayTaskSummary[];
   sessions: RelaySession[];
   homeItems: HomeItem[];
+  homeStatus: ProjectCollectionStatus;
   /** The owner key tasks and threads carry. */
   selectedUser: string;
   setUser: (user: CurrentUser) => void;
@@ -136,6 +137,9 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       userId={props.selectedUser}
       setUser={props.setUser}
       items={props.homeItems}
+      dataStatus={props.homeStatus}
+      onRefresh={props.onRefresh}
+      onOpenRoutineRecord={props.onOpenRoutineRecord}
       tasks={props.tasks}
       sessions={props.sessions}
       projects={props.projects}
