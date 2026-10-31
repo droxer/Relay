@@ -132,45 +132,6 @@
   text-wrap: pretty;
 }
 
-.agent-personality-editor-guide ol {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  margin: var(--sp-4) 0 0;
-  padding: 0;
-  border-top: 0.5px solid var(--line-2);
-  list-style: none;
-}
-
-.agent-personality-editor-guide li {
-  display: grid;
-  grid-template-columns: 24px 1fr;
-  align-items: start;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-3) var(--sp-3) 0;
-  border-bottom: 0.5px solid var(--line-2);
-}
-
-.agent-personality-editor-guide li:nth-child(odd) {
-  margin-right: var(--sp-3);
-  border-right: 0.5px solid var(--line-2);
-}
-
-/* Ordinal markers — technical text (mono, quiet ink), not the action
-   color; they are labels, not links. */
-.agent-personality-editor-guide li > span {
-  color: var(--ink-4);
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
-  font-size: var(--fs-1);
-  line-height: var(--leading-loose);
-}
-
-.agent-personality-editor-guide li strong {
-  color: var(--ink-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-}
-
 .agent-personality-editor {
   position: relative;
   z-index: 1;
@@ -180,73 +141,6 @@
   padding-top: var(--sp-5);
   border-top: 0.5px solid var(--line-2);
 }
-
-.agent-profile-name-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.agent-personality-editor-guide {
-  padding: var(--sp-4);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-}
-
-.agent-personality-editor-guide > p {
-  margin: 0;
-  color: var(--ink-2);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-}
-
-.agent-personality-editor-guide li div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-}
-
-.agent-personality-editor-guide li small {
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  line-height: var(--leading-normal);
-}
-
-.agent-personality-editor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: var(--control-h-xs);
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-}
-
-.agent-personality-editor-toolbar button {
-  height: auto;
-  padding: var(--sp-0-5) 0;
-  border: 0;
-  background: transparent;
-  /* Color and hover come from the primitive: these are Button
-     variant="ghost", and forcing --action text onto them painted the
-     action accent onto a non-action control (and failed AA on the light
-     register, where that era's raw accent was fill-only). */
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-  text-transform: none;
-  cursor: pointer;
-}
-
-.agent-personality-editor-toolbar button:hover {
-  /* The rule above keeps the plate transparent (this layer outranks the
-     variant's hover wash), so the underline is the hover affordance —
-     ghost itself supplies none. */
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 
 .agent-personality-textarea {
   min-height: 320px;
@@ -259,22 +153,23 @@
   tab-size: 2;
 }
 
-.agent-personality-editor-foot {
+/* Name and role side by side; the model takes the full row, since its
+   hint and long ids would wrap in half the width. */
+.agent-profile-fields {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.agent-profile-fields-wide {
+  grid-column: 1 / -1;
+}
+
+.agent-personality-editor-foot {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sp-3);
-}
-
-.agent-personality-count,
-.agent-personality-save-hint {
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-}
-
-.agent-personality-save-hint {
-  text-align: right;
 }
 
 .agent-personality-actions {
@@ -296,21 +191,8 @@
     align-self: flex-start;
   }
 
-  .agent-personality-editor-guide ol {
+  .agent-profile-fields {
     grid-template-columns: 1fr;
-  }
-
-  .agent-personality-editor-guide li:nth-child(odd) {
-    margin-right: 0;
-    border-right: 0;
-  }
-
-  .agent-personality-editor-foot {
-    grid-template-columns: 1fr auto;
-  }
-
-  .agent-personality-save-hint {
-    display: none;
   }
 }
 
@@ -338,7 +220,6 @@
   border-color: var(--line-1);
   background: var(--surface-1);
 }
-
 
 .workspace-dossier-icon-btn:disabled {
   opacity: var(--opacity-disabled);
@@ -417,7 +298,6 @@
   margin: var(--sp-3) 0 var(--sp-4);
   color: var(--ink-2);
 }
-
 
 /* ---- responsive ----------------------------------------------------- */
 

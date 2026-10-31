@@ -18,11 +18,15 @@ describe("agent profile editor", () => {
     }
   });
 
-  it("edits name and personality together as one form", async () => {
+  it("edits name, role, model, and personality together as one form", async () => {
     const editorSource = await readFile(resolve("web/src/components/AgentProfileEditor.tsx"), "utf8");
     assert.match(editorSource, /export function AgentProfileEditor/);
-    assert.match(editorSource, /nameDraft: string;/);
-    assert.match(editorSource, /onNameDraftChange: \(value: string\) => void;/);
+    assert.match(editorSource, /draft: AgentProfileDraft;/);
+    assert.match(editorSource, /onDraftChange: \(draft: AgentProfileDraft\) => void;/);
+    assert.match(editorSource, /<AgentRoleSelect/);
+    assert.match(editorSource, /<AgentModelField/);
+    // One Save: the role and model no longer save on their own.
+    assert.equal(editorSource.match(/type="submit"/g)?.length, 1);
     assert.match(editorSource, /agents_page\.save_profile/);
     assert.match(editorSource, /agents_page\.edit_profile/);
     assert.match(editorSource, /agents_page\.write_profile/);
@@ -36,6 +40,7 @@ describe("agent profile editor", () => {
     assert.match(panelSource, /const \[editingProfile, setEditingProfile\] = useState\(false\);/);
     assert.match(panelSource, /function startEditProfile\(\)/);
     assert.match(panelSource, /async function handleProfileSave\(\)/);
+    assert.doesNotMatch(panelSource, /handleRoleSave|handleModelSave|AgentModelSetting/);
     assert.match(panelSource, /<AgentProfileEditor/);
     assert.doesNotMatch(panelSource, /workspace-dossier-rename/);
     assert.doesNotMatch(panelSource, /workspace-dossier-name-row/);

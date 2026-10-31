@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,11 +19,9 @@ import {
   updateUserAgent,
   updateOwnUserAgent,
 } from "../api";
-import { AGENT_ROLE_OPTIONS } from "../types";
-import type { AgentPlacement, AgentRole, ControlPanelDaemonNodeRecord, UserAgent } from "../types";
+import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent } from "../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ADMIN_AGENTS_KEY } from "../lib/adminHelpers";
 import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
@@ -34,8 +32,7 @@ import { PlacementList } from "./PlacementList";
 import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPlacements";
 import { ProfileImagePicker } from "./ProfileImagePicker";
 import { Alert } from "@/components/ui/alert";
-import { AgentModelSetting } from "./agents/AgentModelSetting";
-import { agentModel, modelPolicyFor } from "../lib/agentModels.ts";
+import { profileDraftDirty, profileDraftOf, profileDraftPatch, type AgentProfileDraft } from "../lib/agentProfileDraft.ts";
 
 interface AgentProfilePanelProps {
   agent: UserAgent;
@@ -61,26 +58,21 @@ export function AgentProfilePanel({
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const canEditProfile = canManage || canEditMeta;
-  const modelLabelId = useId();
-  const savedModel = agentModel(agent);
+  const savedDraft = profileDraftOf(agent);
 
-  const [nameDraft, setNameDraft] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
-  const [personalityDraft, setPersonalityDraft] = useState("");
+  const [draft, setDraft] = useState<AgentProfileDraft>(savedDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingPlacementId, setPendingPlacementId] = useState<string | null>(null);
 
-  const dirtyDraft = editingProfile && (
-    nameDraft.trim() !== agent.displayName.trim()
-    || personalityDraft.trim() !== (agent.instructions ?? "").trim()
-  );
+  const dirtyDraft = editingProfile && profileDraftDirty(savedDraft, draft);
   const dirtyDraftRef = useRef(false);
   useLayoutEffect(() => { dirtyDraftRef.current = dirtyDraft; }, [dirtyDraft]);
 
-  function reportDraftDirty(name: string, personality: string, editing = true) {
-    onDirtyChange?.(editing && (name.trim() !== agent.displayName.trim()
-      || personality.trim() !== (agent.instructions ?? "").trim()));
+  function changeDraft(next: AgentProfileDraft) {
+    setDraft(next);
+    onDirtyChange?.(profileDraftDirty(savedDraft, next));
   }
 
   const previousAgentIdRef = useRef(agent.id);
@@ -143,19 +135,15 @@ export function AgentProfilePanel({
   }
 
   function startEditProfile() {
-    setNameDraft(agent.displayName);
-    setPersonalityDraft(agent.instructions ?? "");
+    setDraft(savedDraft);
     setEditingProfile(true);
     onDirtyChange?.(false);
     setError(null);
   }
 
   async function handleProfileSave() {
-    const trimmedName = nameDraft.trim();
-    const trimmedPersonality = personalityDraft.trim();
-    const nameChanged = trimmedName !== agent.displayName.trim();
-    const personalityChanged = trimmedPersonality !== (agent.instructions ?? "").trim();
-    if (!nameChanged && !personalityChanged) {
+    const patch = profileDraftPatch(savedDraft, draft);
+    if (Object.keys(patch).length === 0) {
       setEditingProfile(false);
       onDirtyChange?.(false);
       return;
@@ -163,43 +151,11 @@ export function AgentProfilePanel({
     setSaving(true);
     setError(null);
     try {
-      const result = await patchAgent({
-        ...(nameChanged ? { displayName: trimmedName } : {}),
-        ...(personalityChanged ? { instructions: trimmedPersonality } : {}),
-      });
+      const result = await patchAgent(patch);
       if (!result) return;
       applyAgentUpdate(result.agent);
       setEditingProfile(false);
       onDirtyChange?.(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleRoleSave(role: AgentRole) {
-    if (role === agent.defaultRole) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const result = await patchAgent({ defaultRole: role });
-      if (!result) return;
-      applyAgentUpdate(result.agent);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleModelSave(model: string) {
-    setSaving(true);
-    setError(null);
-    try {
-      const result = await patchAgent({ modelPolicy: modelPolicyFor(model) });
-      if (!result) return;
-      applyAgentUpdate(result.agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -311,7 +267,7 @@ export function AgentProfilePanel({
   const placementDescriptions = describeAgentPlacements(agent.placements);
 
   /* The profile tab carries only what you can CHANGE about the record —
-     portrait, name, role, instructions. Runtime, computer, availability,
+     portrait, name, role, model, instructions. Runtime, computer, availability,
      and id are printed once by the RecordBand above every tab, and the
      page header owns the agent's name, so identity here shrinks to one
      portrait + role row above the document. A rail restating the name
@@ -331,66 +287,20 @@ export function AgentProfilePanel({
           presets={{ kind: "agents", onSelect: handleImagePreset }}
         />
         <div className="agent-dossier-identity-meta">
-          <div className="workspace-dossier-field">
-            <span className="workspace-dossier-field-label" id="agent-default-role-label">
-              {t("admin.v2.agent_role_label")}
-            </span>
-            {/* The agent's own role, editable with the rest of the profile.
-                A team keeps its own role for the member, so changing this
-                does not rewrite a team the agent already belongs to. */}
-            {canEditProfile && editingProfile ? (
-              <Select
-                value={agent.defaultRole ?? null}
-                disabled={saving}
-                onValueChange={(value) => {
-                  if (value) void handleRoleSave(value as AgentRole);
-                }}
-              >
-                <SelectTrigger className="w-full" aria-labelledby="agent-default-role-label">
-                  <SelectValue placeholder={t("agents_page.create_role_placeholder")}>
-                    {(value: string | null) => value
-                      ? t(`admin.v2.agent_role.${value}`, { defaultValue: value })
-                      : t("agents_page.create_role_placeholder")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {AGENT_ROLE_OPTIONS.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {t(`admin.v2.agent_role.${role}`, { defaultValue: role })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
+          {/* The role reads here; while editing, the profile form below
+              owns it with the name, model, and instructions. */}
+          {editingProfile ? null : (
+            <div className="workspace-dossier-field">
+              <span className="workspace-dossier-field-label" id="agent-default-role-label">
+                {t("admin.v2.agent_role_label")}
+              </span>
               <span className="workspace-dossier-field-value" aria-labelledby="agent-default-role-label">
                 {agent.defaultRole
                   ? t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole })
                   : t("admin.v2.agent_role_none")}
               </span>
-            )}
-          </div>
-          {/* The record band prints the model; the field that changes it
-              appears only while the profile is being edited, so the read
-              view is not an open form. An empty field says "Runtime
-              default" in its placeholder. */}
-          {canEditProfile && editingProfile ? (
-            <div className="workspace-dossier-field">
-              <span className="workspace-dossier-field-label" id={modelLabelId}>
-                {t("agents_page.model_label")}
-              </span>
-              <AgentModelSetting
-                key={`${agent.id}:${savedModel}`}
-                executorKind={agent.executorKind}
-                savedModel={savedModel}
-                labelId={modelLabelId}
-                saving={saving}
-                canSelectModel={agent.canSelectModel !== false}
-                models={agent.availableModels}
-                customEndpoint={agent.customModelEndpoint === true}
-                onSave={handleModelSave}
-              />
             </div>
-          ) : null}
+          )}
           <p className="workspace-dossier-stamp">
             {t("admin.v2.agent_meta_created", { time: formatRelativeTime(agent.createdAt, t) })}
             {" · "}
@@ -401,16 +311,19 @@ export function AgentProfilePanel({
 
       <div className="workspace-dossier-doc">
         <AgentProfileEditor
-          name={agent.displayName}
-          nameDraft={nameDraft}
-          personality={agent.instructions ?? ""}
-          personalityDraft={personalityDraft}
+          saved={savedDraft}
+          draft={draft}
+          modelContext={{
+            executorKind: agent.executorKind,
+            canSelectModel: agent.canSelectModel !== false,
+            models: agent.availableModels,
+            customEndpoint: agent.customModelEndpoint === true,
+          }}
           editing={editingProfile}
           editable={canEditProfile}
           saving={saving}
           onStartEdit={startEditProfile}
-          onNameDraftChange={(value) => { setNameDraft(value); reportDraftDirty(value, personalityDraft); }}
-          onPersonalityDraftChange={(value) => { setPersonalityDraft(value); reportDraftDirty(nameDraft, value); }}
+          onDraftChange={changeDraft}
           onCancel={() => { setEditingProfile(false); onDirtyChange?.(false); }}
           onSave={() => void handleProfileSave()}
         />

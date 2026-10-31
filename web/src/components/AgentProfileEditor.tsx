@@ -8,66 +8,81 @@ import {
 } from "./icons";
 import { Markdown } from "./LazyMarkdown";
 import { Button } from "@/components/ui/button";
-import { FieldError } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { AgentRoleSelect } from "./agents/AgentRoleSelect";
+import { AgentModelField } from "./agents/AgentModelField";
+import { modelHintKey, modelIdProblem } from "../lib/agentModels.ts";
+import { profileDraftDirty, type AgentProfileDraft } from "../lib/agentProfileDraft.ts";
+import type { AgentName } from "../types";
+
+/** What the agent's computer lets the model field offer. */
+export interface AgentProfileModelContext {
+  executorKind: AgentName;
+  /** False when the agent's daemon cannot pass a model on; resetting stays allowed. */
+  canSelectModel: boolean;
+  models?: readonly string[];
+  customEndpoint: boolean;
+}
 
 interface AgentProfileEditorProps {
-  name: string;
-  nameDraft: string;
-  personality: string;
-  personalityDraft: string;
+  saved: AgentProfileDraft;
+  draft: AgentProfileDraft;
+  modelContext: AgentProfileModelContext;
   editing: boolean;
   editable: boolean;
   saving: boolean;
   onStartEdit: () => void;
-  onNameDraftChange: (value: string) => void;
-  onPersonalityDraftChange: (value: string) => void;
+  onDraftChange: (draft: AgentProfileDraft) => void;
   onCancel: () => void;
   onSave: () => void;
 }
 
+/**
+ * The agent's profile document, and — in edit mode — the one form that
+ * changes it: name, role, model, and instructions, saved together.
+ */
 export function AgentProfileEditor({
-  name,
-  nameDraft,
-  personality,
-  personalityDraft,
+  saved,
+  draft,
+  modelContext,
   editing,
   editable,
   saving,
   onStartEdit,
-  onNameDraftChange,
-  onPersonalityDraftChange,
+  onDraftChange,
   onCancel,
   onSave,
 }: AgentProfileEditorProps) {
   const { t } = useTranslation();
-  const savedPersonality = personality.trim();
-  const draftPersonality = personalityDraft.trim();
-  const nameChanged = nameDraft.trim() !== name.trim();
-  const personalityChanged = draftPersonality !== savedPersonality;
-  const dirty = nameChanged || personalityChanged;
-  const canSave = dirty && nameDraft.trim().length > 0;
-  const nameError = nameDraft.trim().length === 0
-    ? t("admin.v2.edit_user_name_required")
-    : null;
+  const savedPersonality = saved.instructions.trim();
   const hasCustomPersonality = savedPersonality.length > 0;
+  const dirty = profileDraftDirty(saved, draft);
+  const nameError = draft.name.trim().length === 0 ? t("admin.v2.edit_user_name_required") : null;
+  const modelProblem = modelIdProblem(draft.model);
+  const canSave = dirty && !nameError && !modelProblem;
+  // With nothing pinned there is nothing to change on an outdated daemon; a
+  // pinned model stays editable so the owner can reset it to the default.
+  const modelLocked = !modelContext.canSelectModel && !saved.model;
+  const modelHint = modelContext.canSelectModel
+    ? t(modelHintKey(modelContext.executorKind, { customEndpoint: modelContext.customEndpoint }))
+    : t(saved.model ? "agents_page.model_daemon_outdated_pinned" : "agents_page.model_daemon_outdated");
+
   const titleId = useId();
   const helpId = useId();
-  const nameFieldId = useId();
+  const roleLabelId = useId();
+  const modelLabelId = useId();
   const nameErrorId = useId();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modelErrorId = useId();
+  const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editing && window.matchMedia("(pointer: fine)").matches) {
-      textareaRef.current?.focus();
+      nameRef.current?.focus();
     }
   }, [editing]);
-
-  function useStarter() {
-    onPersonalityDraftChange(t("agents_page.personality_starter"));
-  }
 
   // Same discard guard as CreateAgentDialog: confirm before throwing away a
   // dirty draft, stay instant when there is nothing to lose.
@@ -76,6 +91,10 @@ export function AgentProfileEditor({
   async function requestCancel() {
     if (saving) return;
     if (await confirmDiscardChanges()) onCancel();
+  }
+
+  function update(patch: Partial<AgentProfileDraft>) {
+    onDraftChange({ ...draft, ...patch });
   }
 
   return (
@@ -118,48 +137,65 @@ export function AgentProfileEditor({
       </div>
 
       {editing ? (
-        <div className="agent-personality-editor">
-          <div className="agent-profile-name-field">
-            <label className="workspace-dossier-field-label" htmlFor={nameFieldId}>
-              {t("admin.v2.agent_name")}
-            </label>
-            <Input
-              id={nameFieldId}
-              name="agent-profile-name"
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={64}
-              value={nameDraft}
-              onChange={(event) => onNameDraftChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") void requestCancel();
-              }}
-              aria-invalid={Boolean(nameError) || undefined}
-              aria-describedby={nameError ? nameErrorId : undefined}
-              disabled={saving}
-            />
-            {nameError ? <FieldError id={nameErrorId}>{nameError}</FieldError> : null}
-          </div>
-          <div className="agent-personality-editor-guide">
-            <p>{t("agents_page.personality_editor_intro")}</p>
-            <ol aria-label={t("agents_page.personality_framework")}>
-              <li><span>01</span><div><strong>{t("agents_page.personality_purpose")}</strong><small>{t("agents_page.personality_purpose_help")}</small></div></li>
-              <li><span>02</span><div><strong>{t("agents_page.personality_truths")}</strong><small>{t("agents_page.personality_truths_help")}</small></div></li>
-              <li><span>03</span><div><strong>{t("agents_page.personality_voice")}</strong><small>{t("agents_page.personality_voice_help")}</small></div></li>
-              <li><span>04</span><div><strong>{t("agents_page.personality_boundaries")}</strong><small>{t("agents_page.personality_boundaries_help")}</small></div></li>
-            </ol>
-          </div>
-          <div className="agent-personality-editor-toolbar">
-            <span>{t("agents_page.personality_editor_label")}</span>
-            {!draftPersonality ? (
-              <Button variant="ghost" type="button" className="h-auto" onClick={useStarter} disabled={saving}>
-                {t("agents_page.personality_starter_action")}
-              </Button>
-            ) : null}
+        <form
+          className="agent-personality-editor"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (canSave) onSave();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") void requestCancel();
+          }}
+        >
+          <div className="agent-profile-fields">
+            <Field label={t("admin.v2.agent_name")} error={nameError ?? undefined} errorId={nameErrorId}>
+              <Input
+                ref={nameRef}
+                name="agent-profile-name"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={64}
+                value={draft.name}
+                onChange={(event) => update({ name: event.target.value })}
+                aria-invalid={Boolean(nameError) || undefined}
+                aria-describedby={nameError ? nameErrorId : undefined}
+                disabled={saving}
+              />
+            </Field>
+            {/* A team keeps its own role for the member, so changing this
+                does not rewrite a team the agent already belongs to. */}
+            <Field label={t("admin.v2.agent_role_label")} labelId={roleLabelId} wrapper="div">
+              <AgentRoleSelect
+                value={draft.role}
+                onChange={(role) => update({ role })}
+                labelledBy={roleLabelId}
+                disabled={saving}
+              />
+            </Field>
+            <Field
+              className="agent-profile-fields-wide"
+              label={t("agents_page.model_label")}
+              labelId={modelLabelId}
+              wrapper="div"
+              hint={modelHint}
+              error={modelProblem ? t(`agents_page.model_error_${modelProblem}`) : undefined}
+              errorId={modelErrorId}
+            >
+              <AgentModelField
+                value={draft.model}
+                onChange={(model) => update({ model })}
+                models={modelContext.models}
+                customEndpoint={modelContext.customEndpoint}
+                labelId={modelLabelId}
+                disabled={saving || modelLocked}
+                error={Boolean(modelProblem)}
+                errorId={modelErrorId}
+              />
+            </Field>
           </div>
           <Textarea
-            ref={textareaRef}
             className="agent-personality-textarea"
             name="agent-personality"
             aria-label={t("agents_page.personality_title")}
@@ -167,44 +203,45 @@ export function AgentProfileEditor({
             rows={14}
             autoComplete="off"
             spellCheck
-            value={personalityDraft}
-            onChange={(event) => onPersonalityDraftChange(event.target.value)}
+            value={draft.instructions}
+            onChange={(event) => update({ instructions: event.target.value })}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canSave) {
                 event.preventDefault();
                 onSave();
               }
-              if (event.key === "Escape") void requestCancel();
             }}
             disabled={saving}
             placeholder={t("agents_page.personality_placeholder")}
           />
           <div className="agent-personality-editor-foot">
-            <span className="agent-personality-count tnum">
-              {t("agents_page.personality_characters", { count: personalityDraft.length })}
-            </span>
-            <span className="agent-personality-save-hint">{t("agents_page.personality_save_hint")}</span>
+            {!draft.instructions.trim() ? (
+              <Button
+                variant="ghost"
+                size="dense"
+                type="button"
+                onClick={() => update({ instructions: t("agents_page.personality_starter") })}
+                disabled={saving}
+              >
+                {t("agents_page.personality_starter_action")}
+              </Button>
+            ) : <span />}
             <div className="agent-personality-actions">
               <Button type="button" variant="ghost" size="dense" onClick={() => { void requestCancel(); }} disabled={saving}>
                 {t("admin.v2.cancel")}
               </Button>
-              <Button type="button" size="dense" onClick={onSave} disabled={!canSave} loading={saving} loadingLabel={t("admin.v2.saving")}>
+              <Button type="submit" size="dense" disabled={!canSave} loading={saving} loadingLabel={t("admin.v2.saving")}>
                 {t("agents_page.save_profile")}
               </Button>
             </div>
           </div>
-        </div>
+        </form>
       ) : hasCustomPersonality ? (
         <article className="agent-personality-document">
           <Markdown text={savedPersonality} variant="document" />
         </article>
       ) : (
         <div className="agent-personality-empty">
-          {/* One line. The pill above already says "Default" and the section
-              help already says what a personality is, so a heading repeating
-              the pill and a paragraph repeating the help made this section
-              state one fact four times. What is left is the only part the
-              reader cannot get anywhere else: what to do about it. */}
           <p className="agent-personality-empty-lede">{t("agents_page.personality_empty_help")}</p>
         </div>
       )}

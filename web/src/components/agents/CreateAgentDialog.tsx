@@ -12,22 +12,15 @@ import { ComputerOptionsFeedback } from "../computer/ComputerOptionsFeedback";
 import { ComputerSelect } from "../ComputerSelect";
 import { USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
 import { agentLabel } from "../../lib/plan";
-import { AGENT_NAMES, AGENT_ROLE_OPTIONS } from "../../types";
+import { AGENT_NAMES } from "../../types";
 import type { AgentName, AgentRole, UserAgent } from "../../types";
 import { AgentMark } from "../AgentMark";
-import { PresetAvatarGrid } from "../PresetAvatarGrid";
+import { AgentRoleSelect } from "./AgentRoleSelect";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Drawer } from "@/components/ui/Drawer";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   ICON,
@@ -45,7 +38,8 @@ interface CreateAgentDialogProps {
 }
 
 /**
- * Explicit agent creation: computer -> runtime -> role. Mirrors the shape of
+ * Explicit agent creation, one flat form: computer -> runtime -> model ->
+ * role -> name. The avatar is a random preset; the profile changes it. Mirrors the shape of
  * ConnectComputerDrawer / ManageExecutorsDrawer rather than inventing a new
  * form pattern. POST /agents is the only write; the computer/runtime
  * options come from the GET /daemon-nodes roster used by My Computers,
@@ -58,9 +52,6 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
   const runtimeLabelId = useId();
   const roleLabelId = useId();
   const modelLabelId = useId();
-  const avatarLabelId = useId();
-  const placementHeadingId = useId();
-  const identityHeadingId = useId();
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
   const runtimeTriggerRef = useRef<HTMLButtonElement>(null);
   const roleTriggerRef = useRef<HTMLButtonElement>(null);
@@ -208,182 +199,140 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
       bodyClassName="adm-drawer-body--column"
     >
       <form className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
-        <section className="adm-provision-section" aria-labelledby={placementHeadingId}>
-          <header className="adm-provision-section-head">
-            <h3 id={placementHeadingId} className="adm-provision-section-title">
-              {t("agents_page.create_section_placement")}
-            </h3>
-          </header>
-          <Field
-            label={t("agents_page.create_computer_label")}
-            labelId={computerLabelId}
-            wrapper="div"
-            error={fieldErrors.computerId}
+        <Field
+          label={t("agents_page.create_computer_label")}
+          labelId={computerLabelId}
+          wrapper="div"
+          error={fieldErrors.computerId}
+          errorId="create-agent-computer-error"
+        >
+          <ComputerSelect
+            ref={computerTriggerRef}
+            initialFocus
+            options={computerOptions}
+            value={computerId}
+            onChange={(value) => {
+              setComputerId(value);
+              clearFieldError("computerId");
+            }}
+            placeholder={computerPlaceholder}
+            disabled={isBusy || computers.isLoading || computerOptions.length === 0}
+            labelledBy={computerLabelId}
+            error={Boolean(fieldErrors.computerId)}
             errorId="create-agent-computer-error"
-          >
-            <ComputerSelect
-              ref={computerTriggerRef}
-              initialFocus
-              options={computerOptions}
-              value={computerId}
-              onChange={(value) => {
-                setComputerId(value);
-                clearFieldError("computerId");
-              }}
-              placeholder={computerPlaceholder}
-              disabled={isBusy || computers.isLoading || computerOptions.length === 0}
-              labelledBy={computerLabelId}
-              error={Boolean(fieldErrors.computerId)}
-              errorId="create-agent-computer-error"
-            />
-            <ComputerOptionsFeedback {...computers} empty={computerOptions.length === 0} />
-          </Field>
+          />
+          <ComputerOptionsFeedback {...computers} empty={computerOptions.length === 0} />
+        </Field>
 
-          <Field
-            label={t("agents_page.create_runtime_label")}
-            labelId={runtimeLabelId}
-            wrapper="div"
-            error={fieldErrors.executorKind}
-            errorId="create-agent-runtime-error"
+        <Field
+          label={t("agents_page.create_runtime_label")}
+          labelId={runtimeLabelId}
+          wrapper="div"
+          error={fieldErrors.executorKind}
+          errorId="create-agent-runtime-error"
+        >
+          {/* Roving tabindex, arrow keys, and Home/End used to be written
+              out here — the sixth copy of the radio pattern in this app.
+              The shared group owns all of it; what is left is the card. */}
+          <RadioGroup
+            className="create-agent-runtime-picker"
+            aria-labelledby={runtimeLabelId}
+            aria-invalid={Boolean(fieldErrors.executorKind) || undefined}
+            aria-describedby={fieldErrors.executorKind ? "create-agent-runtime-error" : undefined}
+            disabled={isBusy || !computerId || runtimeOptions.length === 0}
+            value={executorKind || null}
+            onValueChange={(value) => selectRuntime(value as AgentName)}
           >
-            {/* Roving tabindex, arrow keys, and Home/End used to be written
-                out here — the sixth copy of the radio pattern in this app.
-                The shared group owns all of it; what is left is the card. */}
-            <RadioGroup
-              className="create-agent-runtime-picker"
-              aria-labelledby={runtimeLabelId}
-              aria-invalid={Boolean(fieldErrors.executorKind) || undefined}
-              aria-describedby={fieldErrors.executorKind ? "create-agent-runtime-error" : undefined}
-              disabled={isBusy || !computerId || runtimeOptions.length === 0}
-              value={executorKind || null}
-              onValueChange={(value) => selectRuntime(value as AgentName)}
-            >
-              {runtimeOptions.map((kind, index) => {
-                const selected = executorKind === kind;
-                return (
-                  <RadioGroupChoice
-                    key={kind}
-                    ref={selected || (!executorKind && index === 0) ? runtimeTriggerRef : undefined}
-                    value={kind}
-                    className={`create-agent-runtime-option${selected ? " is-selected" : ""}`}
-                    aria-label={agentLabel(kind)}
-                  >
-                    <span className="create-agent-runtime-mark" aria-hidden="true">
-                      <AgentMark agent={kind} size={ICON.xl} />
-                    </span>
-                    <span className="create-agent-runtime-option-copy">
-                      <span className="create-agent-runtime-option-name" translate="no">{agentLabel(kind)}</span>
-                      <span className="create-agent-runtime-option-meta">{t("agents_page.create_runtime_ready")}</span>
-                    </span>
-                    <span className="create-agent-runtime-check" aria-hidden="true" />
-                  </RadioGroupChoice>
-                );
-              })}
-            </RadioGroup>
-            {/* Without a computer the group has no options, so the label
-                would stand over nothing; say what unlocks it. */}
-            {!computerId ? (
-              <p className="adm-form-hint">{t("agents_page.create_runtime_pending")}</p>
-            ) : runtimeOptions.length === 0 ? (
-              <p className="adm-form-hint">{t("agents_page.create_runtime_empty")}</p>
-            ) : null}
-          </Field>
-
-          {executorKind ? (
-            <Field
-              label={t("agents_page.model_label")}
-              labelId={modelLabelId}
-              wrapper="div"
-              hint={canSelectModel ? t(modelHintKey(executorKind, { customEndpoint })) : t("agents_page.model_daemon_outdated")}
-              error={fieldErrors.model}
-              errorId="create-agent-model-error"
-            >
-              <AgentModelField
-                key={executorKind}
-                models={reportedModels}
-                customEndpoint={customEndpoint}
-                value={model}
-                onChange={(next) => {
-                  setModelPick({ kind: executorKind, model: next });
-                  clearFieldError("model");
-                }}
-                labelId={modelLabelId}
-                inputRef={modelInputRef}
-                disabled={isBusy || !canSelectModel}
-                error={Boolean(fieldErrors.model)}
-                errorId="create-agent-model-error"
-              />
-            </Field>
+            {runtimeOptions.map((kind, index) => {
+              const selected = executorKind === kind;
+              return (
+                <RadioGroupChoice
+                  key={kind}
+                  ref={selected || (!executorKind && index === 0) ? runtimeTriggerRef : undefined}
+                  value={kind}
+                  className={`create-agent-runtime-option${selected ? " is-selected" : ""}`}
+                  aria-label={agentLabel(kind)}
+                >
+                  <span className="create-agent-runtime-mark" aria-hidden="true">
+                    <AgentMark agent={kind} size={ICON.xl} />
+                  </span>
+                  {/* Only ready runtimes are offered, so a "Ready" line under
+                      every card said nothing; the name is the whole card. */}
+                  <span className="create-agent-runtime-option-name" translate="no">{agentLabel(kind)}</span>
+                  <span className="create-agent-runtime-check" aria-hidden="true" />
+                </RadioGroupChoice>
+              );
+            })}
+          </RadioGroup>
+          {/* Without a computer the group has no options, so the label
+              would stand over nothing; say what unlocks it. */}
+          {!computerId ? (
+            <p className="adm-form-hint">{t("agents_page.create_runtime_pending")}</p>
+          ) : runtimeOptions.length === 0 ? (
+            <p className="adm-form-hint">{t("agents_page.create_runtime_empty")}</p>
           ) : null}
-        </section>
+        </Field>
 
-        <section className="adm-provision-section" aria-labelledby={identityHeadingId}>
-          <header className="adm-provision-section-head">
-            <h3 id={identityHeadingId} className="adm-provision-section-title">
-              {t("agents_page.create_section_identity")}
-            </h3>
-          </header>
+        {executorKind ? (
           <Field
-            label={t("admin.v2.agent_role_label")}
-            labelId={roleLabelId}
+            label={t("agents_page.model_label")}
+            labelId={modelLabelId}
             wrapper="div"
-            error={fieldErrors.defaultRole}
-            errorId="create-agent-role-error"
+            hint={canSelectModel ? t(modelHintKey(executorKind, { customEndpoint })) : t("agents_page.model_daemon_outdated")}
+            error={fieldErrors.model}
+            errorId="create-agent-model-error"
           >
-            <Select
-              value={defaultRole || null}
-              onValueChange={(value) => {
-                setDefaultRole((value ?? "") as AgentRole);
-                clearFieldError("defaultRole");
+            <AgentModelField
+              key={executorKind}
+              models={reportedModels}
+              customEndpoint={customEndpoint}
+              value={model}
+              onChange={(next) => {
+                setModelPick({ kind: executorKind, model: next });
+                clearFieldError("model");
               }}
-              disabled={isBusy}
-            >
-              <SelectTrigger
-                ref={roleTriggerRef}
-                className="w-full"
-                aria-labelledby={roleLabelId}
-                aria-invalid={Boolean(fieldErrors.defaultRole) || undefined}
-                aria-describedby={fieldErrors.defaultRole ? "create-agent-role-error" : undefined}
-              >
-                <SelectValue placeholder={t("agents_page.create_role_placeholder")}>
-                  {(value: string | null) => value
-                    ? t(`admin.v2.agent_role.${value}`, { defaultValue: value })
-                    : t("agents_page.create_role_placeholder")}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {AGENT_ROLE_OPTIONS.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {t(`admin.v2.agent_role.${role}`, { defaultValue: role })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label={t("agents_page.create_avatar_label")} labelId={avatarLabelId} wrapper="div">
-            <PresetAvatarGrid
-              kind="agents"
-              value={profileImageUrl}
-              onChange={setProfileImageUrl}
-              labelledBy={avatarLabelId}
-              disabled={isBusy}
+              labelId={modelLabelId}
+              inputRef={modelInputRef}
+              disabled={isBusy || !canSelectModel}
+              error={Boolean(fieldErrors.model)}
+              errorId="create-agent-model-error"
             />
           </Field>
+        ) : null}
 
-          <Field label={t("agents_page.create_name_label")} optional={t("admin.v2.optional")}>
-            <Input
-              name="create-agent-display-name"
-              autoComplete="off"
-              spellCheck={false}
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={t("agents_page.create_name_placeholder")}
-              maxLength={64}
-              disabled={isBusy}
-            />
-          </Field>
-        </section>
+        <Field
+          label={t("admin.v2.agent_role_label")}
+          labelId={roleLabelId}
+          wrapper="div"
+          error={fieldErrors.defaultRole}
+          errorId="create-agent-role-error"
+        >
+          <AgentRoleSelect
+            value={defaultRole}
+            onChange={(role) => {
+              setDefaultRole(role);
+              clearFieldError("defaultRole");
+            }}
+            labelledBy={roleLabelId}
+            triggerRef={roleTriggerRef}
+            disabled={isBusy}
+            error={Boolean(fieldErrors.defaultRole)}
+            errorId="create-agent-role-error"
+          />
+        </Field>
+
+        <Field label={t("agents_page.create_name_label")} optional={t("admin.v2.optional")}>
+          <Input
+            name="create-agent-display-name"
+            autoComplete="off"
+            spellCheck={false}
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder={t("agents_page.create_name_placeholder")}
+            maxLength={64}
+            disabled={isBusy}
+          />
+        </Field>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
 
