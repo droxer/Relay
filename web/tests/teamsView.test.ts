@@ -62,7 +62,9 @@ describe("Agent team management", () => {
     // Creating a team must remain available from a selected team's detail
     // view; the dialog state itself is the sole authority for its visibility.
     assert.match(teamsSource, /open=\{addTeam\}/);
-    assert.doesNotMatch(agentsSource, /RosterFilterBar|FiltersBar|useUrlSearchState|agentMatchesQuery/);
+    assert.doesNotMatch(agentsSource, /RosterFilterBar|FiltersBar|AvailabilityFilter|setAvailability/);
+    assert.match(agentsSource, /<SearchInput/);
+    assert.match(agentsSource, /agentMatchesQuery/);
     assert.doesNotMatch(agentsSource, /isDetailRoute/);
     assert.doesNotMatch(teamsSource, /editTeam/);
     assert.doesNotMatch(teamsSource, /onEdit=/);
