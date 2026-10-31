@@ -1,12 +1,8 @@
-/* Home — the "what needs me" dashboard (components/home/). A ranked queue on
-   the left, where work stands on the right; one column under 900px. Every
-   value is a token. Like the admin console, neutral surfaces frame colored
-   data: teal completed work, sky assignments, blue live work, gold review.
-   Attention states use the shared semantic tints, never action colors. */
+/* Home — a ranked queue beside a quiet work summary. Open lists reduce
+   chrome; semantic color is reserved for attention and completion. */
 
 .home-page {
   --home-completed: var(--tag-2);
-  --home-assigned: var(--tag-8);
   --home-review: var(--warn);
   display: flex;
   min-width: 0;
@@ -38,8 +34,7 @@
 .home-brief-status[data-tone="live"] { --tone: var(--live); }
 .home-brief-status[data-tone="ok"] { --tone: var(--ok); }
 
-.home-brief-status > i,
-.home-count-key {
+.home-brief-status > i {
   flex-shrink: 0;
   width: var(--dot-sm);
   height: var(--dot-sm);
@@ -47,12 +42,9 @@
   background: var(--tone);
 }
 
-/* One stage key shared by the readings, project segments and legend. */
+/* Completion and review share their colors across project and result rows. */
 .home-page [data-stage="done"] { --home-stage: var(--home-completed); }
 .home-page [data-stage="review"] { --home-stage: var(--home-review); }
-.home-page [data-stage="running"] { --home-stage: var(--live); }
-.home-page [data-stage="assigned"] { --home-stage: var(--home-assigned); }
-.home-page [data-stage="backlog"] { --home-stage: var(--ink-4); }
 
 /* The greeting belongs to the scrollable canvas, above its two columns. */
 .home-body > .page-header {
@@ -133,9 +125,7 @@
   padding: 0;
   list-style: none;
   overflow: hidden;
-  border: var(--sp-hairline) solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
+  border-top: var(--sp-hairline) solid var(--line-1);
 }
 
 .home-panel > li + li {
@@ -196,12 +186,6 @@
   letter-spacing: var(--type-micro-track);
 }
 
-.home-band-title::after {
-  content: "";
-  flex: 1;
-  border-top: var(--sp-hairline) solid var(--line-2);
-}
-
 .home-items {
   margin: 0;
   padding: 0;
@@ -238,8 +222,6 @@
   place-items: center;
   width: var(--control-h-xs);
   height: var(--control-h-xs);
-  border-radius: var(--r-2);
-  background: var(--tone-tint);
   color: var(--tone);
 }
 
@@ -287,13 +269,6 @@
 }
 
 .home-item-kind {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--chip-h);
-  padding-inline: var(--sp-1-5);
-  border: var(--sp-hairline) solid var(--tone-line);
-  border-radius: var(--r-1);
-  background: var(--tone-tint);
   color: var(--tone);
 }
 
@@ -330,6 +305,10 @@
   align-items: center;
 }
 
+.home-snooze-label {
+  display: none;
+}
+
 .home-item-trail .home-snooze {
   gap: var(--sp-1-5);
   padding-inline: var(--sp-2);
@@ -361,7 +340,7 @@
 
 .home-panel-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
@@ -436,7 +415,7 @@
 }
 
 .home-count-number {
-  color: var(--home-stage);
+  color: var(--ink-1);
   font: var(--type-number);
   letter-spacing: var(--type-number-track);
 }
@@ -445,17 +424,6 @@
   color: var(--ink-3);
   font: var(--type-meta);
   overflow-wrap: anywhere;
-}
-
-.home-count-key {
-  --tone: var(--home-stage);
-  display: inline-block;
-  margin-right: var(--sp-1);
-  vertical-align: middle;
-}
-
-.home-counts [data-empty] {
-  --home-stage: var(--ink-3);
 }
 
 /* ── Projects ────────────────────────────────────────────────────────── */
@@ -497,15 +465,13 @@
 
 .home-project-bar {
   display: flex;
-  gap: 1px;
-  height: 6px;
+  height: var(--sp-1);
   overflow: hidden;
   border-radius: var(--r-1);
   background: var(--surface-2);
 }
 
-.home-project-seg,
-.home-legend-swatch {
+.home-project-seg {
   background: var(--home-stage);
 }
 
@@ -524,24 +490,6 @@
   color: var(--ink-2);
   font: var(--type-body-sm);
   overflow-wrap: anywhere;
-}
-
-.home-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1) var(--sp-3);
-  margin: var(--sp-2) 0 0;
-  color: var(--ink-3);
-  font: var(--type-meta);
-}
-
-.home-legend-swatch {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: var(--sp-1);
-  border: var(--sp-hairline) solid var(--line-1);
-  border-radius: 2px;
 }
 
 /* ── Recently finished ───────────────────────────────────────────────── */
@@ -609,10 +557,6 @@
     padding-inline: var(--sp-3);
   }
 
-  .home-snooze-label {
-    display: none;
-  }
-
   .home-item-trail .home-snooze {
     min-width: var(--touch-target);
     min-height: var(--touch-target);
@@ -649,12 +593,10 @@
   }
 }
 
-/* The primary recommendation gets one clearly bounded region. Its actions
-   are the same row controls as the queue, never another copy of the item. */
+/* A quiet frame keeps the recommendation distinct from the open lists. */
 .home-focus {
-  --tone: var(--live);
   margin-bottom: var(--sp-5);
-  border: var(--sp-hairline) solid var(--tone-line);
+  border: var(--sp-hairline) solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
   overflow: hidden;
@@ -666,14 +608,14 @@
   align-items: baseline;
   gap: var(--sp-1) var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
-  background: var(--tone-tint);
+  border-bottom: var(--sp-hairline) solid var(--line-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
 }
 
 .home-focus-heading h3 {
   margin: 0;
-  color: var(--live);
+  color: var(--ink-1);
   font: var(--type-label-strong);
 }
 
@@ -808,7 +750,6 @@
     gap: var(--sp-2) var(--sp-4);
     margin-bottom: var(--sp-4);
     padding-block: var(--sp-2);
-    border-block: var(--sp-hairline) solid var(--line-1);
   }
 
   .home-mobile-context a {
@@ -818,13 +759,8 @@
     gap: var(--sp-2);
     color: var(--live);
     font: var(--type-label);
-    text-decoration: underline;
+    text-decoration: none;
     text-underline-offset: var(--sp-1);
-  }
-
-  .home-mobile-context a span {
-    color: var(--ink-3);
-    font: var(--type-meta);
   }
 
   .home-page button {

@@ -45,7 +45,6 @@ export function MyTasksPanel({ counts }: {
             <div className="home-count">
               <span className="home-count-number tnum">{counts[cell]}</span>
               <span className="home-count-label">
-                <i className="home-count-key" aria-hidden="true" />
                 {t(`home.count.${cell}`)}
               </span>
             </div>
@@ -96,9 +95,7 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
                   role="img"
                   aria-label={TASK_FLOW_STAGES.map((stage) => `${row.stages[stage]} ${t(`home.stage.${stage}`)}`).join(", ")}
                 >
-                  {[...TASK_FLOW_STAGES].reverse().map((stage) => (row.stages[stage]
-                    ? <span key={stage} className="home-project-seg" data-stage={stage} style={{ flexGrow: row.stages[stage] }} />
-                    : null))}
+                  <span className="home-project-seg" data-stage="done" style={{ width: `${done}%` }} />
                 </span>
                 <span className="home-project-facts">
                   <span>{t("home.task_count", { count: row.total })}</span>
@@ -112,11 +109,6 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
           );
         })}
       </ul>
-      <p className="home-legend" aria-hidden="true">
-        {[...TASK_FLOW_STAGES].reverse().map((stage) => (
-          <span key={stage}><i className="home-legend-swatch" data-stage={stage} />{t(`home.stage.${stage}`)}</span>
-        ))}
-      </p>
     </section>
   );
 }

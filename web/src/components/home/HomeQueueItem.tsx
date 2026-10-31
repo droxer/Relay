@@ -35,6 +35,8 @@ export interface HomeQueueItemProps {
   since: string;
   href: string;
   onOpen: () => void;
+  /** The Start here recommendation opens the record for its full context. */
+  navigationOnly?: boolean;
   /** Called once the row's own action landed, so it can leave the list. */
   onResolved: () => void;
 }
@@ -42,7 +44,7 @@ export interface HomeQueueItemProps {
 /** One "Up next" row: what it is, why it wants the person, and the actions
  *  that settle it in place. Open is always offered — the record holds the
  *  whole story when a one-click answer is not enough. */
-export function HomeQueueItem({ item, actions, agentName, projectName, since, href, onOpen, onResolved }: HomeQueueItemProps) {
+export function HomeQueueItem({ item, actions, agentName, projectName, since, href, onOpen, onResolved, navigationOnly = false }: HomeQueueItemProps) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<boolean>) => {
@@ -72,7 +74,13 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
           {agent ? <span>{agent}</span> : null}
           <span>{since}</span>
         </p>
-        <ItemControls item={item} actions={actions} busy={busy} run={run} onOpen={onOpen} />
+        {navigationOnly ? (
+          <Controls>
+            <Button type="button" size="dense" onClick={onOpen}>
+              {t(item.kind === "permission" || item.kind === "suggested" || (item.kind === "wait" && item.awaiting.sessionId) ? "home.open_thread" : "home.open")}
+            </Button>
+          </Controls>
+        ) : <ItemControls item={item} actions={actions} busy={busy} run={run} onOpen={onOpen} />}
       </div>
       <div className="home-item-trail">
         <Button

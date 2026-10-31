@@ -124,14 +124,10 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   }, [hrefFor, onOpenTaskRecord, onOpenThread]);
 
   const needs = homeNeedsYouCount(items);
-  const paused = items.filter((item) => item.tier === "paused").length;
-  const stuck = items.filter((item) => item.tier === "stuck").length;
   const name = greetingName(user);
   const summary = [
     { tone: needs ? "warn" : "ok", text: needs ? t("home.brief.needs", { count: needs }) : t("home.brief.clear") },
-    ...(paused ? [{ tone: "err", text: t("home.brief.paused", { count: paused }) }] : []),
     { tone: running.length ? "live" : "neutral", text: t("home.brief.running", { count: running.length }) },
-    ...(stuck ? [{ tone: "err", text: t("home.brief.stuck", { count: stuck }) }] : []),
   ];
 
   const nextLabel = (row: HomeProjectRow): string => {
@@ -171,7 +167,7 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               items={items}
               contextLinks={<nav className="home-mobile-context" aria-label={t("home.plan.jump_to")}>
                 {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", {count:running.length})}</a> : null}
-                <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", {count:upcoming.length})}{upcoming[0] ? <span>{upcoming[0].day}</span> : null}</a>
+                <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", {count:upcoming.length})}</a>
                 {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", {count:blockers.length})}</a> : null}
               </nav>}
               readyFocus={readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
@@ -185,14 +181,14 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               onOpenAllTasks={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
             />
             <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
-            <section className="home-section" aria-labelledby="home-ready-title">
+            {readyRest.length ? <section className="home-section" aria-labelledby="home-ready-title">
               <header className="home-section-header"><h2 id="home-ready-title" className="home-section-title">{t("home.plan.ready_work")}</h2><span className="home-section-count tnum">{readyRest.length}</span></header>
               <div className="home-panel">
-                {readyRest.length ? (readyExpanded ? readyRest : readyRest.slice(0,3)).map(task => <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />) : <p className="home-plan-empty">{t(readyFocus ? "home.plan.no_more_ready" : "home.plan.none_ready")}</p>}
+                {(readyExpanded ? readyRest : readyRest.slice(0,3)).map(task => <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />)}
                 {readyRest.length > 3 ? <Button variant="ghost" size="dense" onClick={() => setReadyExpanded(!readyExpanded)}>{t(readyExpanded ? "home.plan.show_less" : "home.plan.show_all", {count:readyRest.length})}</Button> : null}
-                <div className="home-panel-footer"><span>{t("home.plan.ready_note")}</span><a className="home-link" href={tasksPath()} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigateToAppPath(tasksPath()); } }}>{t("home.all_tasks")}</a></div>
+                <div className="home-panel-footer"><a className="home-link" href={tasksPath()} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigateToAppPath(tasksPath()); } }}>{t("home.all_tasks")}</a></div>
               </div>
-            </section>
+            </section> : null}
           </div>
           <div className="home-column">
             <MyTasksPanel

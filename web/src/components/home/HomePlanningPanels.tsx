@@ -33,7 +33,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
     }
   };
   return <div className={focus ? "home-focus" : "home-ready-row"}>
-    {focus ? <div className="home-focus-heading"><h3>{t("home.plan.start_here")}</h3><span>{t("home.plan.ready_reason")}</span></div> : null}
+    {focus ? <div className="home-focus-heading"><h3>{t("home.plan.start_here")}</h3></div> : null}
     <div className="home-plan-row">
       <div className="home-plan-copy">
         <HomeLink href={href} onOpen={onOpen} className="home-item-title"><span className="home-item-ref">{taskRef(task)}</span>{task.title}</HomeLink>
