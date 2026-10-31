@@ -1,3 +1,5 @@
+import { AGENT_RUNTIME_DISPLAY_ORDER } from "./agentRuntimeOrder.ts";
+
 /**
  * Pure option-derivation helpers for the create-agent form: grouping a
  * user's daemon nodes into computers, and listing the runtimes actually
@@ -64,7 +66,13 @@ export function runtimesForComputer(nodes: NodeLike[], target: string): string[]
     for (const kind of node.supportedAgents ?? []) supported.add(kind);
     for (const kind of node.disabledAgents ?? []) disabled.add(kind);
   }
-  return [...supported].filter((kind) => !disabled.has(kind));
+  const available = [...supported].filter((kind) => !disabled.has(kind));
+  const displayOrder: readonly string[] = AGENT_RUNTIME_DISPLAY_ORDER;
+  const rank = (kind: string) => {
+    const index = displayOrder.indexOf(kind);
+    return index < 0 ? displayOrder.length : index;
+  };
+  return available.sort((left, right) => rank(left) - rank(right));
 }
 
 /**
