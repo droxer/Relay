@@ -20,7 +20,7 @@ from ..events import daemon_event
 from ...core.ids import now_iso
 from ..engine import publish_database_notification, store_transaction
 from .rules import completed_cancel_record, daemon_command_queue_limit
-from ...core.daemon_records import DISPATCH_CLAIM_ID_STATE_KEY, TERMINAL_DAEMON_STATUSES
+from ...core.daemon_records import DISPATCH_CLAIM_ID_STATE_KEY, TERMINAL_DAEMON_STATUSES, NODE_POLL_DRAINED_AT
 from .rows import (
     command_to_row,
     daemon_event_to_row,
@@ -308,7 +308,17 @@ class CommandQueueRows(DaemonStoreState):
         now = now_iso()
         now_dt = parse_db_time(now)
         with store_transaction(self.engine) as conn:
-            node_pk = self._node_pk(conn, node_id)
+            # A drain racing the registry's initial observation must fence
+            # leasing too. Heartbeats and this node-row lock serialize in SQL.
+            node = conn.execute(select(
+                self.nodes.c.id,
+                (self.nodes.c.last_poll_at == require_db_time(NODE_POLL_DRAINED_AT)).label("drained"),
+            ).where(self.nodes.c.id == node_id).with_for_update()).mappings().first()
+            if node is None:
+                raise KeyError(node_id)
+            if node["drained"]:
+                return []
+            node_pk = node["id"]
             available_condition = (self.commands.c.status == "queued") | (
                 (self.commands.c.status == "dispatched")
                 & (self.commands.c.type != "run.start")

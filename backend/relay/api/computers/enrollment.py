@@ -4,7 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ...computer.limits import assert_local_computer_allowed
+from ...computer.limits import assert_local_computer_allowed, local_computer_enrollment_scope
+from ...computer.access import actor_may_manage_computer
 from ...computer.names import (
     normalize_computer_display_name,
     present_computer,
@@ -12,7 +13,6 @@ from ...computer.names import (
 from ...daemon_registry.records import public_sandbox_record
 from ...security.actor import Actor
 from ..actors import (
-    actor_can_access_sandbox,
     request_actor,
 )
 from ..bodies import JsonBodyDep, string_field
@@ -66,7 +66,7 @@ def create_local_device_enrollment(
     # presence does not answer this; the probe has to run, and it shares the
     # provision's (reentrant) lock so a second enrollment cannot land between
     # the two and report a new computer as adopted.
-    with ctx.registry.dispatch_lock:
+    with local_computer_enrollment_scope(ctx, actor["userId"]):
         reused = (
             ctx.registry.find_by_user(actor["userId"], workspace_path)
             is not None
@@ -115,7 +115,7 @@ def _owned_live_node(actor: Actor, ctx: AppContextDep, sandbox_id: str) -> dict[
     node = ctx.registry.get(sandbox_id)
     if not node:
         raise HTTPException(404, "Daemon node not found.")
-    if not actor_can_access_sandbox(actor, node):
+    if not actor_may_manage_computer(actor, node):
         raise HTTPException(403, "Daemon node access denied.")
     if node.get("managedNodeId"):
         # Supervisor-provisioned hardware cycles credentials through the

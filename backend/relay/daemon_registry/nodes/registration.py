@@ -292,7 +292,11 @@ class NodeRegistrationMixin(RegistryState):
         # collides with them on uq_daemon_nodes_computer.
         if not retired_at:
             self._retire_superseded_incarnations(sandbox)
-        self.daemon_store.register_node(sandbox)
+        persisted = self.daemon_store.register_node(sandbox, preserve_settings=True)
+        for field in ("disabledAgents", "agentRoleDefaults", "agentRoleOverrides"):
+            sandbox.pop(field, None)
+            if field in persisted:
+                sandbox[field] = persisted[field]
         for command in payload.get("runtimeRefreshCommands") or []:
             self.daemon_store.complete_runtime_refresh(sandbox["id"], command)
         if not retired_at:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 from sqlalchemy import (
+    case,
     delete,
     func,
     insert,
@@ -130,7 +131,7 @@ class NodeRows(DaemonStoreState):
             _node_agent_identity(item) for item in node_agent_rows(node, node_pk)
         ]
 
-    def register_node(self, sandbox: dict[str, Any]) -> dict[str, Any]:
+    def register_node(self, sandbox: dict[str, Any], *, preserve_settings: bool = False) -> dict[str, Any]:
         node = _node_for_storage(sandbox)
         with store_transaction(self.engine) as conn:
             row = (
@@ -143,6 +144,16 @@ class NodeRows(DaemonStoreState):
                 .first()
             )
             previous = row_to_node(row) if row else None
+            if previous and preserve_settings:
+                # Daemon registration reports runtime observations, never a
+                # configuration decision. Read settings after locking the row
+                # so a concurrent clear cannot be overwritten by a stale copy.
+                agents = self._node_agents_by_node(conn, [str(row["id"])])
+                configured = apply_node_agents(previous, agents.get(str(row["id"]), []))
+                for field in ("disabledAgents", "agentRoleDefaults", "agentRoleOverrides"):
+                    node.pop(field, None)
+                    if field in configured:
+                        node[field] = configured[field]
             node = preserve_node_retirement(previous, node)
             node = preserve_node_poll(previous, node)
             changed = self._node_state_changed(conn, node)
@@ -255,7 +266,10 @@ class NodeRows(DaemonStoreState):
         """
         now = require_db_time(now_iso())
         poll_values = (
-            {"last_poll_at": now}
+            {"last_poll_at": case(
+                (self.nodes.c.last_poll_at == require_db_time(NODE_POLL_DRAINED_AT), self.nodes.c.last_poll_at),
+                else_=now,
+            )}
             if polled
             else {"last_poll_at": require_db_time(NODE_POLL_DRAINED_AT)}
             if polled is False

@@ -7,6 +7,7 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 from __future__ import annotations
 
 import time
+from functools import partial
 from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ...core.ids import now_iso
@@ -14,6 +15,7 @@ from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ...tasks.execution import request_execution_owner
 from ...persistence.events import relay_event
 from ...persistence.events import relay_task_event
+from ...persistence.engine import after_store_commit
 from .. import config
 from ..records import CommandEventMismatchError
 from ..state import RegistryState
@@ -153,7 +155,25 @@ class EventIngestMixin(RegistryState):
             self.active_commands[event["commandId"]] = active
         self._assert_event_matches_active(sandbox_id, event, active)
         handler_name = self._EVENT_HANDLERS.get(event["type"], "_handle_run_terminal")
-        getattr(self, handler_name)(sandbox_id, command, event, late_output)
+        handler = getattr(self, handler_name)
+        if event["type"] not in self._STREAMED_EVENT_TYPES:
+            handler(sandbox_id, command, event, late_output)
+            return
+        # Thread -> command matches admission's durable lock order. The
+        # cursor and event commit together, independent of which replica
+        # handles a retry. Cache only the cursor read inside this transaction.
+        try:
+            with self.store.mutation_scope(event["sessionId"]), self.daemon_store.output_sequence_scope(
+                event["commandId"],
+                lambda: self._session_output_sequences(event["sessionId"], event["runId"]),
+            ) as seen:
+                self.output_sequences[event["runId"]] = seen
+                self.output_sequences_hydrated.add(event["runId"])
+                handler(sandbox_id, command, event, late_output)
+        except Exception:
+            self.output_sequences.pop(event["runId"], None)
+            self.output_sequences_hydrated.discard(event["runId"])
+            raise
 
     @staticmethod
     def _log_no_active_command(sandbox_id: str, event: dict[str, Any]) -> None:
@@ -353,7 +373,7 @@ class EventIngestMixin(RegistryState):
             hydrate_events=False,
         )
         seen[event["stream"]] = event["sequence"]
-        self._append_run_output(event["runId"], event["text"])
+        after_store_commit(self.daemon_store.engine, lambda: self._append_run_output(event["runId"], event["text"]))
         if not late_output:
             self._note_run_progress(command)
 
@@ -386,7 +406,10 @@ class EventIngestMixin(RegistryState):
         )
         seen.update(candidate_seen)
         for entry in accepted_entries:
-            self._append_run_output(event["runId"], entry["text"])
+            after_store_commit(
+                self.daemon_store.engine,
+                partial(self._append_run_output, event["runId"], entry["text"]),
+            )
         if not late_output:
             self._note_run_progress(command)
 

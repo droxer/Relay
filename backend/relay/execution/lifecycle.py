@@ -246,12 +246,27 @@ class ExecutionLifecycleService:
             status = self.status(session)
             if not status["canReportGone"]:
                 return None
-            return self._reconcile_locked(session, user_id, status["blockingReason"])
+            return self._reconcile_locked(session, user_id)
 
     def _reconcile_locked(
+        self, session: dict[str, Any], user_id: str
+    ) -> dict[str, Any] | None:
+        """Recheck and settle under the same durable thread lock as admission.
+
+        The first eligibility observation may predate a replacement admitted
+        on another replica. Never apply that old assertion to the replacement.
+        """
+        with self.registry.store.mutation_scope(session["id"]):
+            session = self.registry.store.get_session(session["id"])
+            status = self.status(session)
+            if not status["canReportGone"]:
+                return None
+            return self._reconcile_execution(session, user_id, status["blockingReason"])
+
+    def _reconcile_execution(
         self, session: dict[str, Any], user_id: str, blocking_reason: str | None
     ) -> dict[str, Any]:
-        """Release a blocked execution by assertion. Caller holds the locks."""
+        """Apply the assertion while the thread's admission lock is held."""
         session_id = session["id"]
         request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
         session = self.registry.store.append_event(session_id, relay_event(
@@ -384,10 +399,11 @@ class ExecutionLifecycleService:
             # deletion pends forever. The person's delete IS that
             # assertion — apply the same transitions the reconcile
             # endpoint records instead of making them find a second button.
-            status = self._reconcile_locked(session, user_id, status["blockingReason"])
+            reconciled = self._reconcile_locked(session, user_id)
             # The reconcile appended events; the tombstone and the in-flight
             # guard must see the settled record, not the stale one.
             session = self.registry.store.get_session(session_id)
+            status = reconciled if reconciled is not None else self.status(session)
         return session, status
 
     def tick(self) -> None:

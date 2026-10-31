@@ -17,6 +17,7 @@ from .commands import CommandQueueRows
 from .run_requests import RunRequestRows
 from .workspace_responses import WorkspaceResponseRows
 from .maintenance import DaemonRecordMaintenance
+from .output import CommandOutputRows
 from ..listeners import ChangeListener
 
 
@@ -27,6 +28,7 @@ class DatabaseDaemonStore(
     RunRequestRows,
     WorkspaceResponseRows,
     DaemonRecordMaintenance,
+    CommandOutputRows,
 ):
     metadata = shared_metadata
 

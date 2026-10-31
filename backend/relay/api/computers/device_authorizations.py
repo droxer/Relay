@@ -124,7 +124,7 @@ def authorization_details(code: str, request: Request, ctx: AppContextDep, respo
 def approve_authorization(code: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = _human(request, ctx)
     _consume_auth_attempt(request, _auth_rate_key(request, "computer-approve", actor["userId"]))
-    with store_transaction(_grants_engine(ctx)) as conn:
+    with ctx.registry.dispatch_lock, store_transaction(_grants_engine(ctx)) as conn:
         row = _current(conn, code)
         if row["status"] != "pending":
             raise HTTPException(409, "This connection request has already been approved.")

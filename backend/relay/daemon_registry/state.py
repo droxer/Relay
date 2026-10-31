@@ -161,7 +161,7 @@ class RegistryState:
         def _record_skipped_skills(self, command: dict[str, Any], daemon_skips: Any) -> None:
             ...
 
-        def _refresh_persisted_liveness(self, sandbox_id: str | None=None) -> None:
+        def _refresh_persisted_liveness(self, sandbox_id: str | None=None, *, force: bool=False) -> None:
             ...
 
         def _remember_control_panel_node_token(self, sandbox: dict[str, Any], token: str | None) -> None:

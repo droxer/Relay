@@ -1335,7 +1335,7 @@ def test_daemon_output_batch_is_persisted_in_order_and_deduplicated_after_restar
     asyncio.run(run_flow())
 
 
-def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
+def test_daemon_output_dedupe_uses_durable_sequences_after_restart(
     monkeypatch,
 ) -> None:
     async def run_flow() -> None:
@@ -1460,7 +1460,7 @@ def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
                 if event.get("type") == "agent.output"
             ]
             assert outputs == ["first", "stderr-first", "second"]
-            assert scan_count == 1
+            assert scan_count == 0
 
     asyncio.run(run_flow())
 
@@ -6140,7 +6140,7 @@ def test_registry_restart_does_not_recover_plaintext_node_token(store_factory) -
         session_store = make_session_store(root)
         registry = DaemonNodeRegistry(session_store, store_factory(root))
         _sandbox, _ui_token, node_token = registry.provision_pending(
-            "alice", "/workspace/alice"
+            "alice", "/workspace/alice", node_location=None
         )
 
         assert registry.control_panel_nodes()[0]["nodeToken"] == node_token
@@ -6722,6 +6722,7 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
             "status": "stopped",
             "lastSeenAt": "2020-01-01T00:00:00.000Z",
         }
+        daemon_store.register_node(registry.sandboxes[node_id])
 
         heartbeat = registry.heartbeat(node_id, "node_token")
 
