@@ -120,13 +120,13 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
 
   return (
     <section id="home-panel" className="home-page" aria-labelledby="home-title" tabIndex={-1}>
-      <PageHeader
-        title={<span id="home-title">{t(`transcript.welcome_greeting_${greetingPeriod(new Date(now).getHours())}`, { name })}</span>}
-        topbarTitle={t("nav.home")}
-        titleVariant="title"
-        subtitle={<span className="home-brief">{summary}</span>}
-      />
       <div className="home-body">
+        <PageHeader
+          title={<span id="home-title">{t(`transcript.welcome_greeting_${greetingPeriod(new Date(now).getHours())}`, { name })}</span>}
+          titleVariant="display"
+          layout="stacked"
+          subtitle={<span className="home-brief">{summary}</span>}
+        />
         <div className="home-grid">
           <div className="home-column">
             <HomeQueue
@@ -140,6 +140,11 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               allTasksHref={tasksPath("?queue=needs_me")}
               onOpenAllTasks={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
             />
+          </div>
+          <div className="home-column">
+            <MyTasksPanel
+              counts={counts}
+            />
             <RunningPanel
               rows={running}
               title={runTitle}
@@ -150,11 +155,6 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               onOpen={(row) => onOpenThread(row.session.id)}
               allHref={hrefForRoute("main")}
               onOpenAll={() => void navigateToAppPath(hrefForRoute("main"))}
-            />
-          </div>
-          <div className="home-column">
-            <MyTasksPanel
-              counts={counts}
             />
             <ProjectsPanel
               rows={projectRows}

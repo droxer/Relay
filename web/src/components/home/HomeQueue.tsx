@@ -43,6 +43,7 @@ export function HomeQueue({ items, actions, agentName, projectName, sinceLabel, 
     <section className="home-section home-queue" aria-labelledby="home-queue-title">
       <header className="home-section-header">
         <h2 id="home-queue-title" className="home-section-title">{t("home.up_next")}</h2>
+        <span className="home-section-count tnum">{live.length}</span>
       </header>
       <div className="home-panel">
         <div className="home-filters" role="group" aria-label={t("home.filter_label")}>

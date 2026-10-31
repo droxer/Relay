@@ -43,7 +43,7 @@ export function MyTasksPanel({ counts }: {
         {COUNT_CELLS.map((cell) => (
           <li key={cell}>
             <div className="home-count">
-              <span className="home-count-number tnum">{counts[cell]}</span>
+              <span className="home-count-number tnum" data-hot={cell === "review" && counts.review > 0 ? "" : undefined}>{counts[cell]}</span>
               <span className="home-count-label" data-hot={cell === "review" && counts.review > 0 ? "" : undefined}>
                 {t(`home.count.${cell}`)}
               </span>
