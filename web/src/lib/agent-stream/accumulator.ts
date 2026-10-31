@@ -2,6 +2,7 @@ import type { AgentName } from "../../types.ts";
 import { sameRenderedText } from "./builders.ts";
 import { agentCheckpointId, agentCheckpoints, parseAgentStream } from "./parse.ts";
 import type { AgentSegment } from "./segments.ts";
+import { OpenCodeStreamParser } from "./opencode.ts";
 
 /**
  * Keeps completed agent turns as parsed checkpoints and reparses only the
@@ -22,6 +23,7 @@ export class AgentStreamAccumulator {
   // Set once Claude's `result` frame is seen; from then on the log is parsed
   // canonically as a whole (see update).
   private settled = false;
+  private openCode = new OpenCodeStreamParser();
 
   constructor(private readonly agent: AgentName) {}
 
@@ -33,6 +35,7 @@ export class AgentStreamAccumulator {
       this.seenCheckpointIds.clear();
       this.turnTextSignatures.clear();
       this.settled = false;
+      this.openCode = new OpenCodeStreamParser();
     }
     this.raw = raw;
 
@@ -40,6 +43,18 @@ export class AgentStreamAccumulator {
     // suffix can hold a new frame — rescanning the whole log here made each
     // streamed delta cost the length of the run.
     const checkpoints = this.settled ? [] : agentCheckpoints(this.agent, raw, this.stableOffset);
+
+    if (this.agent === "opencode") {
+      // Commit complete records once, retaining the open text segment across
+      // checkpoints so ACP deltas extend it instead of mounting new paragraphs.
+      const checkpoint = checkpoints.at(-1);
+      if (checkpoint) {
+        this.openCode.append(raw.slice(this.stableOffset, checkpoint.end));
+        this.stableOffset = checkpoint.end;
+      }
+      this.segments = this.openCode.preview(raw.slice(this.stableOffset));
+      return this.segments;
+    }
 
     // A completed Claude transcript is small enough to parse canonically once.
     // More importantly, the full parse can reconcile replayed assistant frames

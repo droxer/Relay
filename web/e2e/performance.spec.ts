@@ -37,6 +37,66 @@ function session(id: string, index: number, turns = 0) {
 const THREADS = Array.from({ length: 400 }, (_, index) => session(`s-${index}`, index));
 const LONG_THREAD = session("s-0", 0, 150);
 
+for (const width of [1280, 390]) {
+  test(`OpenCode text streams into one Markdown block before completion (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.addInitScript(() => {
+      class Source {
+        static CLOSED = 2;
+        readyState = 1;
+        onmessage?: (event: { data: string }) => void;
+        onopen?: () => void;
+        constructor() {
+          Object.assign(window, { __openCodeSource: this });
+          queueMicrotask(() => this.onopen?.());
+        }
+        addEventListener() {}
+        close() {}
+      }
+      Object.assign(window, { EventSource: Source });
+    });
+    const thread = { ...session("opencode", 0), status: "running", phase: "running" };
+    const base = { sessionId: thread.id, runId: "run-opencode", agent: "opencode", timestamp: hoursAgo(0) };
+    thread.events.push({ ...base, id: "start", type: "agent.started" });
+    thread.agentRuns.push({ id: base.runId, agent: "opencode", status: "running", startedAt: base.timestamp, artifactIds: [] });
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
+        : path.endsWith("/threads/opencode") ? thread
+          : { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto("/threads/opencode");
+    await expect(page.locator(".agent-stream-activity")).toBeVisible();
+    const emit = async (event: unknown) => page.evaluate((value) => {
+      const source = (window as unknown as { __openCodeSource: { onmessage: (event: { data: string }) => void } }).__openCodeSource;
+      source.onmessage({ data: JSON.stringify(value) });
+    }, event);
+    let index = 0;
+    const chunk = async (text: string) => emit({
+      ...base, id: `output-${++index}`, type: "agent.output", stream: "stdout",
+      text: `${JSON.stringify({ type: "text", delta: true, part: { type: "text", text } })}\n`,
+    });
+    await chunk("Reviewing");
+    await expect(page.locator(".agent-stream .agent-prose")).toHaveText("Reviewing");
+    await chunk(" the ");
+    await chunk("**streaming** output.\n\n```ts\n");
+    await chunk("  const ready = true;\n```");
+    const prose = page.locator(".agent-stream .agent-prose");
+    await expect(prose).toHaveCount(1);
+    await expect(prose.locator("strong")).toHaveText("streaming");
+    await expect(prose.locator("code")).toContainText("const ready = true;");
+    await expect(page.locator(".agent-text.is-live")).toHaveCount(1);
+    expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `/tmp/relay-opencode-stream-${width}.png` });
+    await emit({ ...base, id: "complete", type: "agent.completed", status: "completed", exitCode: 0 });
+    await expect(page.locator(".agent-text.is-live")).toHaveCount(0);
+    await expect(prose.locator("p")).toHaveText("Reviewing the streaming output.");
+    await expect(prose.locator("code")).toContainText("const ready = true;");
+  });
+}
+
 async function mockApi(page: Page) {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;

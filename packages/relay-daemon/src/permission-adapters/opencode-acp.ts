@@ -1,7 +1,7 @@
 // OpenCode adapter: runs one prompt through `opencode acp` (Agent Client
 // Protocol, JSON-RPC over stdio) so OpenCode's permission requests reach a
-// person, and prints the NDJSON `opencode run --format json` prints, so
-// OpenCodeStreamRenderer and the run's log parsing need no second format.
+// person, and prints run-format NDJSON. Text events carry `delta: true` so
+// renderers append ACP chunks immediately rather than waiting for a whole part.
 //
 // Verified against opencode 2.2.0. `opencode acp` takes no --cwd: the working
 // directory rides `session/new`. An ask arrives as `session/request_permission`
@@ -44,30 +44,20 @@ interface ToolState {
   title?: string;
 }
 
-/** Prints `opencode run --format json` events. Assistant text is buffered until a tool call or the end of the turn. */
+/** Prints run-format events, forwarding assistant chunks as append-only text deltas. */
 export class RunJsonWriter {
-  private assistantText = "";
-
   constructor(private readonly out: { write(text: string): unknown }) {}
 
   assistantDelta(delta: string): void {
-    this.assistantText += delta;
+    if (delta) this.line({ type: "text", delta: true, part: { type: "text", text: delta } });
   }
 
   toolUse(tool: string, state: ToolState): void {
-    this.flush();
     this.line({ type: "tool_use", part: { tool, state } });
   }
 
   error(message: string): void {
-    this.flush();
     this.line({ type: "error", error: { message } });
-  }
-
-  flush(): void {
-    if (this.assistantText.length === 0) return;
-    this.line({ type: "text", part: { type: "text", text: this.assistantText } });
-    this.assistantText = "";
   }
 
   private line(event: Record<string, unknown>): void {
@@ -199,14 +189,12 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
       async (connection) => {
         try {
           const stopReason = await runPrompt(connection, options);
-          writer.flush();
           if (stopReason !== "end_turn") {
             reportFailure(io, writer, `OpenCode stopped the turn (${stopReason}).`);
             return 1;
           }
           return 0;
         } catch (error) {
-          writer.flush();
           reportFailure(io, writer, error instanceof Error ? error.message : String(error));
           return io.signal?.aborted ? 130 : 1;
         }

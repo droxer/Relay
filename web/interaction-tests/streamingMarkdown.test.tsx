@@ -66,3 +66,47 @@ it("parses settled text as one document", async () => {
   view.rerender(renderStream(piDeltas(text), false));
   expect(await blockTexts(1)).toEqual([text]);
 });
+
+it("keeps OpenCode chunks in the same live paragraph and re-parses only the tail", async () => {
+  const delta = (text: string) => `${JSON.stringify({ type: "text", delta: true, part: { type: "text", text } })}\n`;
+  const stream = (stdout: string, streaming = true) => createElement(AgentStream, {
+    agent: "opencode", stdout, stderr: "", streaming, collaborations: [],
+  });
+  let stdout = delta("# Plan\n\n") + delta("Hello");
+  const view = render(stream(stdout));
+  expect(await blockTexts(2)).toEqual(["# Plan\n\n", "Hello"]);
+  const paragraph = screen.getAllByTestId("md-block")[1];
+  const parsedBefore = parses.length;
+  stdout += delta(" ") + delta("**world**.");
+  view.rerender(stream(stdout));
+  expect(await blockTexts(2)).toEqual(["# Plan\n\n", "Hello **world**."]);
+  expect(screen.getAllByTestId("md-block")[1]).toBe(paragraph);
+  expect(parses.slice(parsedBefore)).toEqual(["Hello **world**."]);
+  view.rerender(stream(stdout, false));
+  expect(await blockTexts(1)).toEqual(["# Plan\n\nHello **world**."]);
+});
+
+it("reveals OpenCode bursts progressively and flushes the full answer on completion", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  const delta = (text: string) => `${JSON.stringify({ type: "text", delta: true, part: { text } })}\n`;
+  const stream = (stdout: string, streaming = true) => createElement(AgentStream, {
+    agent: "opencode", stdout, stderr: "", streaming, collaborations: [],
+  });
+  const first = "A smoothly streamed answer. ".repeat(12);
+  const view = render(stream(delta(first)));
+  await act(async () => { vi.advanceTimersByTime(80); });
+  const visible = view.container.querySelector(".agent-prose")!.textContent!;
+  expect(visible.length).toBeGreaterThan(0);
+  expect(visible.length).toBeLessThan(first.length);
+  expect(first.startsWith(visible)).toBe(true);
+
+  const second = "More words arrive while the first burst is revealing.";
+  view.rerender(stream(delta(first) + delta(second)));
+  expect(view.container.querySelector(".agent-prose")!.textContent).toBe(visible);
+  await act(async () => { vi.advanceTimersByTime(80); });
+  expect(view.container.querySelector(".agent-prose")!.textContent!.length).toBeGreaterThan(visible.length);
+  view.rerender(stream(delta(first) + delta(second), false));
+  await act(async () => {});
+  expect(view.container.querySelector(".agent-prose")!.textContent).toBe(first + second);
+});
