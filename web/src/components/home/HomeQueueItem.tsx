@@ -8,6 +8,7 @@ import {
   ActionCalendar,
   ActionPrompt,
   ActionRoute,
+  ActionSnooze,
   AdminInbox,
   AdminLocked,
   ICON,
@@ -78,11 +79,14 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
           type="button"
           variant="ghost"
           size="dense"
+          className="home-snooze"
           disabled={busy}
           onClick={() => void run(() => actions.snooze(item))}
           title={t("home.snooze_hint")}
+          aria-label={t("home.snooze")}
         >
-          {t("home.snooze")}
+          <ActionSnooze size={ICON.sm} aria-hidden="true" />
+          <span className="home-snooze-label">{t("home.snooze")}</span>
         </Button>
       </div>
     </li>
