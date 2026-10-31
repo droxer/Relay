@@ -17,9 +17,13 @@
 }
 
 .adm-users-tabs .sec-nav {
-  padding: 0;
+  /* Leave room inside the scroller for the shared outward focus ring, then
+     cancel it on every side so labels keep the gutter and the active
+     underline still sits on the hairline below. */
+  padding: var(--sp-1-5);
+  margin: calc(-1 * var(--sp-1-5));
   overflow-x: auto;
-  scroll-padding-inline: 0;
+  scroll-padding-inline: var(--sp-1-5);
   scrollbar-width: none;
 }
 
@@ -50,11 +54,6 @@
 
 .adm-users-tabs .sec-nav-btn[data-active="true"] {
   border-bottom-color: var(--ink-1);
-}
-
-.adm-users-tabs .sec-nav-btn:focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: calc(-1 * var(--focus-w));
 }
 
 @media (max-width: 820px) {

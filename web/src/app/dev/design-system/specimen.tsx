@@ -2,6 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { NumberInput } from "@/components/ui/number-input";
+import { SectionNav } from "@/components/SectionNav";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -79,6 +82,9 @@ const BUTTON_SIZES = ["xs", "dense", "sm", "default", "lg", "cta"] as const;
 const ICON_SIZES = ["icon-xs", "icon-dense", "icon-sm", "icon", "icon-lg"] as const;
 
 export function DesignSystemSpecimen() {
+  const [day, setDay] = useState("2026-10-31");
+  const [quantity, setQuantity] = useState("3");
+  const [adminTab, setAdminTab] = useState<"users" | "invitations">("users");
   const [drawer, setDrawer] = useState(false);
   const [tab, setTab] = useState("first");
   const [view, setView] = useState<"preview" | "source">("preview");
@@ -209,6 +215,30 @@ export function DesignSystemSpecimen() {
           <Label>Standalone label</Label>
           <FieldError>Standalone field error</FieldError>
         </div>
+      </div>
+    </Section>
+
+    <Section title="Compound fields">
+      <div className="flex w-full min-w-0 flex-col gap-4">
+        <Field label="Run date" wrapper="div" labelId="specimen-date-label">
+          <DatePicker labelId="specimen-date-label" name="run-date" value={day} onValueChange={setDay} />
+        </Field>
+        <Field label="Quantity" wrapper="div" htmlFor="specimen-quantity">
+          <NumberInput id="specimen-quantity" value={quantity} onValueChange={setQuantity} min={0} max={10} />
+        </Field>
+      </div>
+    </Section>
+    <Section title="Admin tabs">
+      {/* The same SectionNav the admin Users page renders, so the specimen
+          carries the real tabs-variant markup. */}
+      <div className="adm-users-tabs w-full">
+        <SectionNav
+          variant="tabs"
+          label="Example admin sections"
+          value={adminTab}
+          onChange={setAdminTab}
+          items={[{ id: "users", label: "Users" }, { id: "invitations", label: "Invitations" }]}
+        />
       </div>
     </Section>
 

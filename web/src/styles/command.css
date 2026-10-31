@@ -25,6 +25,8 @@
 }
 
 .command-menu {
+  --focus-outline: 1px solid var(--link);
+  --focus-offset: 0px;
   width: min(560px, 100%);
   display: flex;
   flex-direction: column;

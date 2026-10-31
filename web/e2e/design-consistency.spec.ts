@@ -82,6 +82,59 @@ for (const theme of ["light", "dark"] as const) {
       }
     });
 
+    test("compound fields grow with text and remain operable", async ({ page }) => {
+      await page.evaluate(() => { document.documentElement.style.fontSize = "175%"; });
+      const date = page.getByRole("button", { name: /Run date/ });
+      const number = page.getByRole("textbox", { name: "Quantity", exact: true });
+      for (const control of [date, number]) {
+        const box = await control.evaluate((element) => {
+          const cs = getComputedStyle(element);
+          return {
+            height: element.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+            line: parseFloat(cs.lineHeight),
+            parentHeight: element.parentElement!.clientHeight,
+            controlHeight: element.getBoundingClientRect().height,
+          };
+        });
+        expect(box.height).toBeGreaterThanOrEqual(Math.floor(box.line));
+        expect(box.parentHeight).toBeGreaterThanOrEqual(Math.floor(box.controlHeight));
+      }
+      await number.focus();
+      await page.keyboard.press("ArrowUp");
+      await expect(number).toHaveValue("4");
+      await expect(number.locator("..")).toHaveCSS("outline", await tokenStyle(number, "outline", "var(--focus-outline)"));
+      await expect(number).toHaveCSS("outline-style", "none");
+      await date.click();
+      await expect(page.locator("[data-slot=popover-content]")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(date).toBeFocused();
+    });
+
+    test("admin tabs leave space for the shared focus ring", async ({ page }) => {
+      const tab = page.getByRole("button", { name: "Users", exact: true });
+      await page.keyboard.press("Tab");
+      await tab.focus();
+      const geometry = await tab.evaluate(element => {
+        const cs = getComputedStyle(element);
+        const nav = element.closest("nav")!.getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        const extent = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
+        const frame = element.closest(".adm-users-tabs")!;
+        const rule = frame.getBoundingClientRect().bottom - parseFloat(getComputedStyle(frame).borderBottomWidth);
+        return {
+          top: box.top - extent - nav.top,
+          bottom: nav.bottom - box.bottom - extent,
+          offset: parseFloat(cs.outlineOffset),
+          underlineGap: rule - box.bottom,
+        };
+      });
+      // The ring's breathing room must not lift the underline off the hairline.
+      expect(Math.abs(geometry.underlineGap)).toBeLessThanOrEqual(0.5);
+      expect(geometry.offset).toBeGreaterThan(0);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeGreaterThanOrEqual(0);
+    });
+
     test("select and checked switch retain their control chrome", async ({ page }) => {
       const select = page.getByRole("combobox", { name: "Page select", exact: true });
       await expect(select).toHaveCSS("border-top-style", "solid");
@@ -222,6 +275,7 @@ for (const theme of ["light", "dark"] as const) {
       // Flat elevation: the hairline ring, never a blurred drop shadow.
       expect(shadow.replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "")).toBe(ring);
       await expect(menu).toHaveCSS("background-color", await tokenStyle(menu, "background-color", "var(--popover)"));
+      await expect(menu).toHaveCSS("border-radius", await tokenStyle(menu, "border-radius", "var(--r-3)"));
     });
 
     /* The highlighted row has to be visible against the popup it sits in, and

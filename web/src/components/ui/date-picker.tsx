@@ -67,6 +67,7 @@ function DatePicker({
     <div className={cn("relative flex w-full items-center", className)} data-slot="date-picker">
       <Popover open={open && !readOnly} onOpenChange={(next) => setOpen(readOnly ? false : next)}>
         <PopoverTrigger
+          data-slot="date-picker-trigger"
           ref={triggerRef}
           aria-labelledby={`${labelId} ${valueId}`}
           aria-disabled={readOnly || undefined}
