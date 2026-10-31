@@ -221,7 +221,7 @@ function describe(item: HomeItem, t: T): { Icon: ComponentType<GlyphProps>; tone
       if (item.awaiting.kind === "question") return { Icon: ActionPrompt, tone: "warn", kindLabel: t("home.kind.question") };
       return { Icon: StatusWarn, tone: "warn", kindLabel: t(`home.kind.${item.awaiting.kind}`) };
     case "review":
-      return { Icon: StatusOk, tone: "live", kindLabel: t("home.kind.review") };
+      return { Icon: StatusOk, tone: "warn", kindLabel: t("home.kind.review") };
     case "blocked":
       return { Icon: StatusError, tone: "err", kindLabel: t("home.kind.blocked") };
     case "offline":

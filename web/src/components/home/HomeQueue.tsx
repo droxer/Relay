@@ -67,7 +67,7 @@ export function HomeQueue({ items, actions, agentName, projectName, sinceLabel, 
           </div>
         ) : (
           bands.map(({ tier, members }) => (
-            <div key={tier} className="home-band" role="group" aria-labelledby={`home-band-${tier}`}>
+            <div key={tier} className="home-band" data-tier={tier} role="group" aria-labelledby={`home-band-${tier}`}>
               <h3 id={`home-band-${tier}`} className="home-band-title">{t(`home.tier.${tier}`)}</h3>
               <ul className="home-items">
                 {members.map((item) => (

@@ -1,9 +1,13 @@
 /* Home — the "what needs me" dashboard (components/home/). A ranked queue on
    the left, where work stands on the right; one column under 900px. Every
-   value is a token; status hue lives only in glyphs, kind labels, and the
-   project bar's running segment, never in a fill behind text. */
+   value is a token. Like the admin console, neutral surfaces frame colored
+   data: teal completed work, sky assignments, blue live work, gold review.
+   Attention states use the shared semantic tints, never action colors. */
 
 .home-page {
+  --home-completed: var(--tag-2);
+  --home-assigned: var(--tag-8);
+  --home-review: var(--warn);
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -13,10 +17,42 @@
 }
 
 .home-brief {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
+
+.home-brief-status {
+  --tone: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  color: var(--tone);
+}
+
+.home-brief-status[data-tone="warn"] { --tone: var(--warn); }
+.home-brief-status[data-tone="err"] { --tone: var(--err); }
+.home-brief-status[data-tone="live"] { --tone: var(--live); }
+.home-brief-status[data-tone="ok"] { --tone: var(--ok); }
+
+.home-brief-status > i,
+.home-count-key {
+  flex-shrink: 0;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-1);
+  background: var(--tone);
+}
+
+/* One stage key shared by the readings, project segments and legend. */
+.home-page [data-stage="done"] { --home-stage: var(--home-completed); }
+.home-page [data-stage="review"] { --home-stage: var(--home-review); }
+.home-page [data-stage="running"] { --home-stage: var(--live); }
+.home-page [data-stage="assigned"] { --home-stage: var(--home-assigned); }
+.home-page [data-stage="backlog"] { --home-stage: var(--ink-4); }
 
 /* The greeting belongs to the scrollable canvas, above its two columns. */
 .home-body > .page-header {
@@ -144,13 +180,18 @@
   font: var(--type-meta);
 }
 
+.home-band { --tone: var(--ink-3); }
+.home-band[data-tier="paused"] { --tone: var(--err); }
+.home-band[data-tier="needs_you"] { --tone: var(--warn); }
+.home-band[data-tier="stuck"] { --tone: var(--err); }
+
 .home-band-title {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   margin: 0;
   padding: var(--sp-4) var(--sp-5) var(--sp-1);
-  color: var(--ink-3);
+  color: var(--tone);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -170,7 +211,7 @@
 .home-item {
   --tone: var(--ink-3);
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: var(--control-h-xs) minmax(0, 1fr) auto;
   gap: var(--sp-3);
   align-items: start;
   padding: var(--sp-4) var(--sp-5);
@@ -195,8 +236,10 @@
 .home-item-glyph {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  border-radius: var(--r-2);
+  background: var(--tone-tint);
   color: var(--tone);
 }
 
@@ -246,7 +289,11 @@
 .home-item-kind {
   display: inline-flex;
   align-items: center;
-  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding-inline: var(--sp-1-5);
+  border: var(--sp-hairline) solid var(--tone-line);
+  border-radius: var(--r-1);
+  background: var(--tone-tint);
   color: var(--tone);
 }
 
@@ -389,7 +436,7 @@
 }
 
 .home-count-number {
-  color: var(--ink-1);
+  color: var(--home-stage);
   font: var(--type-number);
   letter-spacing: var(--type-number-track);
 }
@@ -400,12 +447,15 @@
   overflow-wrap: anywhere;
 }
 
-.home-count-label[data-hot] {
-  color: var(--ink-1);
+.home-count-key {
+  --tone: var(--home-stage);
+  display: inline-block;
+  margin-right: var(--sp-1);
+  vertical-align: middle;
 }
 
-.home-count-number[data-hot] {
-  color: var(--live);
+.home-counts [data-empty] {
+  --home-stage: var(--ink-3);
 }
 
 /* ── Projects ────────────────────────────────────────────────────────── */
@@ -456,17 +506,8 @@
 
 .home-project-seg,
 .home-legend-swatch {
-  background: transparent;
+  background: var(--home-stage);
 }
-
-.home-project-seg[data-stage="done"],
-.home-legend-swatch[data-stage="done"] { background: var(--ink-1); }
-.home-project-seg[data-stage="review"],
-.home-legend-swatch[data-stage="review"] { background: color-mix(in srgb, var(--ink-1) 55%, transparent); }
-.home-project-seg[data-stage="running"],
-.home-legend-swatch[data-stage="running"] { background: var(--live); }
-.home-project-seg[data-stage="assigned"],
-.home-legend-swatch[data-stage="assigned"] { background: color-mix(in srgb, var(--ink-1) 22%, transparent); }
 
 .home-project-facts {
   display: flex;
@@ -523,11 +564,11 @@
 .home-finished-glyph {
   display: grid;
   place-items: center;
-  color: var(--ok);
+  color: var(--home-completed);
 }
 
 .home-finished-glyph[data-status="review"] {
-  color: var(--live);
+  color: var(--home-review);
 }
 
 .home-finished-title {

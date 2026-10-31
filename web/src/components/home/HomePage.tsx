@@ -99,11 +99,11 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   const stuck = items.filter((item) => item.tier === "stuck").length;
   const name = greetingName(user);
   const summary = [
-    needs ? t("home.brief.needs", { count: needs }) : t("home.brief.clear"),
-    ...(paused ? [t("home.brief.paused", { count: paused })] : []),
-    t("home.brief.running", { count: running.length }),
-    ...(stuck ? [t("home.brief.stuck", { count: stuck })] : []),
-  ].join(" · ");
+    { tone: needs ? "warn" : "ok", text: needs ? t("home.brief.needs", { count: needs }) : t("home.brief.clear") },
+    ...(paused ? [{ tone: "err", text: t("home.brief.paused", { count: paused }) }] : []),
+    { tone: running.length ? "live" : "neutral", text: t("home.brief.running", { count: running.length }) },
+    ...(stuck ? [{ tone: "err", text: t("home.brief.stuck", { count: stuck }) }] : []),
+  ];
 
   const nextLabel = (row: HomeProjectRow): string => {
     if (row.next) return t("home.project_next", { what: nextSummary(row.next, t) });
@@ -125,7 +125,11 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
           title={<span id="home-title">{t(`transcript.welcome_greeting_${greetingPeriod(new Date(now).getHours())}`, { name })}</span>}
           titleVariant="display"
           layout="stacked"
-          subtitle={<span className="home-brief">{summary}</span>}
+          subtitle={<span className="home-brief">{summary.map(({ tone, text }) => (
+            <span key={text} className="home-brief-status" data-tone={tone}>
+              <i aria-hidden="true" />{text}
+            </span>
+          ))}</span>}
         />
         <div className="home-grid">
           <div className="home-column">
