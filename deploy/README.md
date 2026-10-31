@@ -38,6 +38,18 @@ needed.
 
 ## Running it
 
+After initial setup, trigger a deployment manually from the repository root:
+
+```bash
+./deploy/deploy.sh release
+```
+
+Merging a PR or pushing a commit must not trigger a deployment. The manual
+release disables all existing target-service autodeploy triggers before any
+build starts. Existing Railway connections adopt this policy on the first
+manual release using this script; local code changes alone do not alter live
+Railway settings.
+
 ```bash
 deploy/deploy.sh up          # everything below, in order
 deploy/deploy.sh railway     # project, Postgres, API/worker services, variables, custom domains
@@ -56,9 +68,10 @@ all services. It also changes an existing backend's start command to
 `relay serve`, creates `relay-worker` if missing, and sets its start command
 to `relay worker`, so this upgrade needs no separate `railway` phase.
 For private repositories configure Git credentials, or set
-`RAILWAY_DEPLOY_COMMIT` to a full 40-character SHA. Railway also autodeploys
-pushes to the connected branch; changing the branch on an existing service
-requires updating its source settings in Railway.
+`RAILWAY_DEPLOY_COMMIT` to a full 40-character SHA. Releases remove automatic
+deployment triggers for each target service in the selected environment, so
+later pushes and merged PRs do not deploy independently. `GITHUB_BRANCH` is
+used only to resolve a SHA when no explicit commit is supplied.
 
 The first `railway` run prints the generated `RELAY_ADMIN_TOKEN` once. Keep
 it: it seeds the admin bearer token on the backend's first boot. Later runs
@@ -87,7 +100,8 @@ afterward. For a current read against an accessible database, run
 and the remote source never runs on this machine) while Railway builds the
 backend. Once the backend deployment succeeds, it uploads the export through
 the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
-holds are skipped) together with `workers/worker.js` and `workers/_headers`,
+holds are skipped) together with `deploy/workers/worker.js` and
+`deploy/workers/_headers` read from that same commit,
 then routes `get-relay.cc/*` to the Worker. A failed backend leaves the
 previous UI in place. The Worker redirects `/install.sh` to the API origin
 (its `RELAY_API_ORIGIN` binding), so the published
@@ -113,9 +127,10 @@ and worker stay always-on. No `railway.json` or `railway.toml` is used.
 Railway's CLI IaC is an alternative management workflow; this script uses the
 public API directly and does not evaluate `.railway/railway.ts`.
 
-Connecting a repository may trigger an automatic deployment. The release phase
-also requests an explicit deployment pinned to the intended SHA and waits for
-that ID; it does not assume an implicit build is the requested release.
+The release phase sets repository sources through `serviceInstanceUpdate`,
+avoiding `serviceConnect`, which can start a branch-head build and create an
+automatic deployment trigger. It removes existing triggers before requesting
+an explicit deployment pinned to the intended SHA and waits for that ID.
 
 The backend's single pre-deploy command runs `/bin/sh -c` to apply Relay's
 Alembic migrations and then initialize the Procrastinate schema
@@ -134,9 +149,9 @@ The release waits for the API's migrations and health check before connecting
 or deploying the worker. A failed API release leaves the previous worker
 deployment running. A failed worker release stops publication of the
 Cloudflare-hosted UI. With `WEB_HOSTING=railway`, the UI builds alongside the
-API and the release reports failures from all attempted services. Connected
-GitHub services can also autodeploy independently; the ordering above applies
-to the explicit scripted release.
+API and the release reports failures from all attempted services.
+The script disables GitHub autodeploy triggers on its target services so they
+follow this release ordering.
 
 The worker has no HTTP listener, healthcheck, public domain, or volume. Railway
 restarts either service independently on failure. A successful worker deployment

@@ -11,6 +11,7 @@ python3 "$TESTS_DIR/source.py"
 python3 "$TESTS_DIR/workers.py"
 node "$TESTS_DIR/worker.mjs"
 bash "$TESTS_DIR/release.sh"
+bash "$TESTS_DIR/workers-source.sh"
 DEPLOY=$TESTS_DIR/../deploy.sh
 WORK=$(mktemp -d)
 REAL_GIT=$(command -v git)
@@ -21,7 +22,7 @@ from pathlib import Path
 import shutil
 import sys
 source, target = map(Path, sys.argv[1:])
-for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py"]:
+for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py", "deploy/workers/worker.js", "deploy/workers/_headers"]:
     (target / name).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / name, target / name)
 PY_SOURCE
@@ -170,7 +171,7 @@ check "one project named relay" '.projects | length == 1 and ([.[] | .name] == [
 check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-worker"]'
 
 check "backend Dockerfile, migrations, queue schema, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve\" and .preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
-check "backend tracks droxer/Relay@main" "$BACKEND | .repo == \"droxer/Relay\" and .branch == \"main\""
+check "backend uses manual releases from droxer/Relay" "$BACKEND | .repo == \"droxer/Relay\" and .triggers == []"
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
 check "separate worker uses the backend image without HTTP or schema setup" "$WORKER | .config | .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay worker\" and .preDeployCommand == [] and .healthcheckPath == null and .sleepApplication == false and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}}"
@@ -232,14 +233,26 @@ check "DNS records are not duplicated" '(.a.dns | length) == (.b.dns | length)'
 check "backend deployed again" ".b | $BACKEND | .deployments | length == 2"
 check "Worker republished" '.b.calls["cf.workers.script"] == 2'
 
+echo "--- manual release disables every legacy branch trigger before building"
+for name in relay-backend relay-worker; do
+  SERVICE_ID=$(state | jq -r --arg name "$name" '.projects[].services | to_entries[] | select(.value.name == $name) | .key')
+  curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+    "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$SERVICE_ID" \
+    '{query: "mutation Connect { serviceConnect }", variables: {id: $id, input: {repo: "droxer/Relay", branch: "main"}}}')" >/dev/null
+done
+deploy release 2>"$WORK/manual-release.log" || { cat "$WORK/manual-release.log"; exit 1; }
+STATE=$(state)
+check "manual release removes all legacy branch triggers" "[$BACKEND, $WORKER] | all(.triggers == [] and .deployments[0].commitSha == \"$SOURCE_COMMIT\")"
+
 echo "--- a failed backend release does not publish the web UI"
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" -d '{"relay-backend":"FAILED"}' >/dev/null
 BEFORE=$(state | jq '.calls["cf.workers.script"]')
+BEFORE_WORKER_DEPLOYMENTS=$(state | jq -c "$WORKER | .deployments")
 expect_failure "backend failure stops the release" "the web UI was not published" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
 check "no Worker upload after a failed backend" '.before == .after'
 STATE=$(state)
-check "API failure leaves the previous worker deployment running" "$WORKER | .deployments | length == 2"
+check "API failure leaves the previous worker deployment running" "$WORKER | .deployments == $BEFORE_WORKER_DEPLOYMENTS"
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" -d '{"relay-worker":"CRASHED"}' >/dev/null
 expect_failure "worker failure stops the release" "worker deployment failed" deploy release
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
@@ -252,6 +265,10 @@ write_config
 deploy railway 2>/dev/null
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__remove_service" -d '{"name":"relay-worker"}' >/dev/null
 LEGACY_BACKEND_ID=$(state | jq -r '.projects[].services | to_entries[] | select(.value.name == "relay-backend") | .key')
+# Simulate an existing branch-connected service with autodeploy enabled.
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" \
+  '{query: "mutation Connect { serviceConnect }", variables: {id: $id, input: {repo: "droxer/Relay", branch: "main"}}}')" >/dev/null
 LEGACY_CONFIG=$(state | jq -c "$BACKEND | .config | .startCommand = \"relay\" | .preDeployCommand = [\"alembic -c backend/alembic.ini upgrade head\"]")
 curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
   "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_BACKEND_ID" --argjson config "$LEGACY_CONFIG" \
@@ -264,6 +281,7 @@ STATE=$(state)
 check "release installs API-only startup and queue setup" "$BACKEND | .config.startCommand == \"relay serve\" and .config.preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"]"
 check "release enables external mode without replacing custom variables" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.CUSTOM_RUNTIME_SETTING == \"keep-me\""
 check "release preserves a longer configured drain period" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"90\""
+check "release disables legacy autodeploy and pins the selected commit" "$BACKEND | .triggers == [] and .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "release creates a missing worker" "$WORKER | .config.startCommand == \"relay worker\" and .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "custom scheduler configuration follows the API" "$WORKER | .variables.RELAY_TASK_SCHEDULER_INTERVAL_SECONDS == \"\${{relay-backend.RELAY_TASK_SCHEDULER_INTERVAL_SECONDS}}\""
 check "worker does not inherit API listener or platform settings" "$WORKER | .variables | (has(\"PORT\") or has(\"RAILWAY_RUN_UID\")) | not"
@@ -330,7 +348,7 @@ run_phases 2>"$WORK/railway.log" || { cat "$WORK/railway.log"; exit 1; }
 STATE=$(state)
 check "four services" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-web", "relay-worker"]'
 check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"web/Dockerfile\" and .healthcheckPath == \"/healthz\" and .preDeployCommand == []"
-check "all services track droxer/Relay@main" "[$BACKEND, $WORKER, $WEB] | all(.repo == \"droxer/Relay\" and .branch == \"main\")"
+check "all services use manual releases from droxer/Relay" "[$BACKEND, $WORKER, $WEB] | all(.repo == \"droxer/Relay\" and .triggers == [])"
 check "all deployments pin the requested commit" "[$BACKEND, $WORKER, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
 check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
 check "web build declares its public address" "$WEB | .variables.NEXT_PUBLIC_RELAY_SITE_URL == \"https://get-relay.cc\""

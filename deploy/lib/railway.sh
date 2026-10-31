@@ -306,17 +306,47 @@ railway_failure_logs() {
   fi
 }
 
-# Connect on first release, then explicitly deploy RELEASE_COMMIT.
-# Return the deployment ID so an implicit connect build cannot satisfy the wait.
+# Remove every automatic deployment trigger in this service/environment before
+# releasing. Collect all pages first so deletion cannot disturb pagination.
+railway_disable_autodeploy() {
+  local service_id=$1 after= data ids= id
+  while :; do
+    data=$(gql 'query DeploymentTriggers($p: String!, $e: String!, $s: String!, $after: String) {
+      deploymentTriggers(projectId: $p, environmentId: $e, serviceId: $s, first: 100, after: $after) {
+        edges { node { id } } pageInfo { hasNextPage endCursor }
+      }
+    }' "$(jq -nc --arg p "$PROJECT_ID" --arg e "$ENVIRONMENT_ID" --arg s "$service_id" --arg a "$after" \
+      '{p: $p, e: $e, s: $s, after: (if $a == "" then null else $a end)}')") || return 1
+    ids="$ids
+$(jq -r '.deploymentTriggers.edges[].node.id' <<<"$data")"
+    [ "$(jq -r '.deploymentTriggers.pageInfo.hasNextPage' <<<"$data")" = true ] || break
+    after=$(jq -r '.deploymentTriggers.pageInfo.endCursor // empty' <<<"$data")
+    [ -n "$after" ] || die "Railway returned no autodeploy pagination cursor"
+  done
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    data=$(gql 'mutation DisableAutodeploy($id: String!) { deploymentTriggerDelete(id: $id) }' \
+      "$(jq -nc --arg id "$id" '{id: $id}')") || return 1
+    jq -e '.deploymentTriggerDelete == true' >/dev/null <<<"$data" \
+      || die "could not disable Railway autodeploy trigger $id"
+  done <<<"$ids"
+}
+
+# Set the source without serviceConnect, which creates a branch-head deployment
+# and autodeploy trigger. Only the explicit RELEASE_COMMIT deployment may run.
 railway_deploy_service() {
   local name=$1 service_id=$2 data deployment_id
   local repo
   repo=$(railway_service_repo "$service_id") || return 1
   [ -z "$repo" ] || [ "$repo" = "$GITHUB_REPO" ] || die "$name is connected to $repo, expected $GITHUB_REPO"
+  railway_disable_autodeploy "$service_id" || return 1
   if [ -z "$repo" ]; then
-    gql 'mutation Connect($id: String!, $input: ServiceConnectInput!) { serviceConnect(id: $id, input: $input) { id } }' \
-      "$(jq -nc --arg id "$service_id" --arg r "$GITHUB_REPO" --arg b "$GITHUB_BRANCH" '{id: $id, input: {repo: $r, branch: $b}}')" >/dev/null || return 1
-    info "connected $name to $GITHUB_REPO@$GITHUB_BRANCH"
+    data=$(gql 'mutation ReleaseSource($s: String!, $e: String!, $input: ServiceInstanceUpdateInput!) {
+      serviceInstanceUpdate(serviceId: $s, environmentId: $e, input: $input)
+    }' "$(jq -nc --arg s "$service_id" --arg e "$ENVIRONMENT_ID" --arg r "$GITHUB_REPO" \
+      '{s: $s, e: $e, input: {source: {repo: $r}}}')") || return 1
+    jq -e '.serviceInstanceUpdate == true' >/dev/null <<<"$data" || die "could not set release source for $name"
+    info "set $name source to $GITHUB_REPO (manual releases only)"
   fi
   # Callers run this in a command substitution, which does not inherit errexit:
   # every failure must return explicitly or the caller gets an empty ID.

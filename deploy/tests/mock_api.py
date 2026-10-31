@@ -106,6 +106,7 @@ def add_service(name, deployed=False):
         "config": {},
         "repo": None,
         "branch": None,
+        "triggers": [],
         "variables": {},
         "domains": [],
         # Configured regions; each deployment snapshots them, as Railway's
@@ -211,15 +212,36 @@ def railway(op, v):
     if op == "Instance":
         repo = service(v["s"])["repo"]
         return {"serviceInstance": {"source": {"repo": repo} if repo else None}}
+    if op == "DeploymentTriggers":
+        svc = service(v["s"])
+        return {"deploymentTriggers": {**edges([{"id": t} for t in svc["triggers"]]),
+                                      "pageInfo": {"hasNextPage": False, "endCursor": None}}}
+    if op == "DisableAutodeploy":
+        for svc in project()["services"].values():
+            if v["id"] in svc["triggers"]:
+                svc["triggers"].remove(v["id"])
+                return {"deploymentTriggerDelete": True}
+        raise ValueError("unknown trigger")
+    if op == "ReleaseSource":
+        svc = service(v["s"])
+        assert set(v["input"]) == {"source"}
+        svc["repo"] = v["input"]["source"]["repo"]
+        return {"serviceInstanceUpdate": True}
     if op == "Connect":
         svc = service(v["id"])
         assert svc["config"], "repo connected before the config-as-code path was set"
         assert svc["variables"], "repo connected before variables were set"
         svc["repo"], svc["branch"] = v["input"]["repo"], v["input"]["branch"]
+        svc["triggers"].append(new_id("trigger"))
+        add_deployment(svc, commitSha="branch-head")
         return {"serviceConnect": {"id": v["id"]}}
     if op == "Deploy":
         svc = service(v["s"])
+        targets = (s for s in project()["services"].values()
+                   if s["name"] in {"relay-backend", "relay-worker", "relay-web"})
+        assert all(not s["triggers"] for s in targets), "disable every service's autodeploy before starting a release"
         assert svc["repo"], "deploy before the repo was connected"
+        assert not svc["triggers"], "autodeploy must be disabled before releasing"
         assert re.fullmatch(r"[0-9a-f]{40}", v.get("commitSha", "")), "release must pin a commit"
         if svc["config"].get("startCommand") == "relay worker":
             backend = next(s for s in project()["services"].values() if s["config"].get("startCommand") == "relay serve")

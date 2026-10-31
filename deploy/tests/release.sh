@@ -50,16 +50,79 @@ echo 'ok    timeout reports the exact deployment and returns failure'
 # slip through and the release waited on whatever deployment was newest.
 GITHUB_REPO=droxer/Relay
 railway_service_repo() { printf '%s' "$GITHUB_REPO"; }
-gql() { die 'Railway API: Deploys have been paused due to an upstream issue'; }
+gql() {
+  case $1 in
+    *'query DeploymentTriggers'*) printf '{"deploymentTriggers":{"edges":[],"pageInfo":{"hasNextPage":false}}}' ;;
+    *) die 'Railway API: Deploys have been paused due to an upstream issue' ;;
+  esac
+}
 if id=$(railway_deploy_service backend backend-service 2> "$WORK/error"); then
   echo "FAIL refused deploy returned success with ID '$id'" >&2
   exit 1
 fi
 grep -q 'Deploys have been paused' "$WORK/error"
-gql() { printf '{"serviceInstanceDeployV2":null}'; }
+gql() {
+  case $1 in
+    *'query DeploymentTriggers'*) printf '{"deploymentTriggers":{"edges":[],"pageInfo":{"hasNextPage":false}}}' ;;
+    *) printf '{"serviceInstanceDeployV2":null}' ;;
+  esac
+}
 if id=$(railway_deploy_service backend backend-service 2> "$WORK/error"); then
   echo "FAIL deploy without an ID returned success with ID '$id'" >&2
   exit 1
 fi
 grep -q 'returned no deployment ID' "$WORK/error"
 echo 'ok    a refused deploy stops the release instead of waiting on another deployment'
+
+# Existing automatic triggers are removed before the explicit deploy. Pagination
+# must not leave a later trigger enabled; failures must stop the release.
+railway_service_repo() { printf '%s' "$GITHUB_REPO"; }
+: > "$WORK/disabled"
+gql() {
+  case $1 in
+    *'query DeploymentTriggers'*)
+      if jq -e '.after == "next"' >/dev/null <<<"$2"; then
+        printf '{"deploymentTriggers":{"edges":[{"node":{"id":"trigger-2"}}],"pageInfo":{"hasNextPage":false,"endCursor":"last"}}}'
+      else
+        printf '{"deploymentTriggers":{"edges":[{"node":{"id":"trigger-1"}}],"pageInfo":{"hasNextPage":true,"endCursor":"next"}}}'
+      fi ;;
+    *'mutation DisableAutodeploy'*) jq -r '.id' <<<"$2" >> "$WORK/disabled"; printf '{"deploymentTriggerDelete":true}' ;;
+    *'mutation Deploy('*)
+      [ "$(wc -l < "$WORK/disabled")" -eq 2 ] || return 1
+      printf '{"serviceInstanceDeployV2":"pinned"}' ;;
+    *) return 1 ;;
+  esac
+}
+id=$(railway_deploy_service backend backend-service)
+[ "$id" = pinned ]
+printf 'trigger-1\ntrigger-2\n' > "$WORK/expected"
+cmp "$WORK/disabled" "$WORK/expected"
+echo 'ok    all autodeploy triggers are removed before a pinned deployment'
+
+gql() {
+  case $1 in
+    *'query DeploymentTriggers'*) printf '{"deploymentTriggers":{"edges":[{"node":{"id":"trigger"}}],"pageInfo":{"hasNextPage":false}}}' ;;
+    *'mutation DisableAutodeploy'*) printf '{"deploymentTriggerDelete":false}' ;;
+    *) echo 'unexpected deploy after failed trigger removal' >&2; return 1 ;;
+  esac
+}
+if id=$(railway_deploy_service backend backend-service 2> "$WORK/error"); then
+  echo 'FAIL trigger removal failure allowed a deploy' >&2; exit 1
+fi
+echo 'ok    unsuccessful trigger removal stops the release'
+
+# A new source uses serviceInstanceUpdate, not serviceConnect (which starts a
+# branch-head build and creates an automatic trigger).
+railway_service_repo() { :; }
+gql() {
+  case $1 in
+    *'query DeploymentTriggers'*) printf '{"deploymentTriggers":{"edges":[],"pageInfo":{"hasNextPage":false}}}' ;;
+    *'mutation ReleaseSource'*)
+      jq -e --arg r "$GITHUB_REPO" '.input == {source: {repo: $r}}' >/dev/null <<<"$2" || return 1
+      printf '{"serviceInstanceUpdate":true}' ;;
+    *'mutation Deploy('*) printf '{"serviceInstanceDeployV2":"pinned"}' ;;
+    *) echo 'unexpected connection mutation' >&2; return 1 ;;
+  esac
+}
+[ "$(railway_deploy_service backend backend-service)" = pinned ]
+echo 'ok    new sources do not create branch-head builds or autodeploy triggers'

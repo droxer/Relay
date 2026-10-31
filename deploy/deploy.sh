@@ -255,6 +255,14 @@ phase_release() {
     [ -z "$service_repo" ] || [ "$service_repo" = "$GITHUB_REPO" ] \
       || die "$name is connected to $service_repo, expected $GITHUB_REPO"
   done
+  # Disable every target before any build starts: a merge while the API is
+  # building must not independently deploy the worker or Railway-hosted UI.
+  for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+    if [ "$name" = "$WEB_SERVICE" ] && workers_enabled; then continue; fi
+    service_id=$(railway_service_id "$name")
+    [ -n "$service_id" ] || continue
+    railway_disable_autodeploy "$service_id" || die "could not disable autodeploy for $name"
+  done
   postgres_id=$(railway_service_id "$POSTGRES_SERVICE")
   [ -n "$postgres_id" ] || die "service $POSTGRES_SERVICE not found — run 'deploy.sh railway' first"
   railway_wait_deployment "$POSTGRES_SERVICE" "$postgres_id"
@@ -281,16 +289,15 @@ release_backend_and_worker() {
   # shellcheck disable=SC2064
   trap "rm -rf '$build'" EXIT
   info "building $BACKEND_SERVICE on Railway and the web export locally (this takes a few minutes)"
-  workers_build_export "$build/out"
+  workers_build_export "$build/out" "$build/runtime"
   railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment" \
     || die "backend deployment failed for commit $RELEASE_COMMIT ($backend_deployment); the web UI was not published"
-  # Connect only after the API's migrations and queue schema have succeeded:
-  # connecting a repository can itself trigger an automatic deployment.
+  # Start the worker only after the API's migrations and queue schema succeed.
   worker_deployment=$(railway_deploy_service "$WORKER_SERVICE" "$WORKER_ID")
   railway_wait_deployment "$WORKER_SERVICE" "$WORKER_ID" "$worker_deployment" \
     || die "worker deployment failed for commit $RELEASE_COMMIT ($worker_deployment); the web UI was not published"
   info "publishing the web UI to Worker $WORKERS_SCRIPT"
-  workers_publish "$zone" "$build/out"
+  workers_publish "$zone" "$build/out" "$build/runtime"
 }
 
 release_backend_and_web_service() {
