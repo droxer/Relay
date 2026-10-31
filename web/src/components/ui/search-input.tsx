@@ -21,7 +21,7 @@ function SearchInput({
   label: string
 }) {
   return (
-    <div className={className}>
+    <div data-slot="search" className={className}>
       <ActionSearch size={iconSize} aria-hidden="true" />
       <input
         type="search"
