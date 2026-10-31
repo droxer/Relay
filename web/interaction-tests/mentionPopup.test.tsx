@@ -10,7 +10,7 @@ import type { MentionCandidate } from "../src/lib/mentions";
 /* The mention popup moved onto base-ui's Combobox, which means the composer's
    TEXTAREA is now a `Combobox.Input`. That is the risky part of the change:
    the textarea is the app's most-used control and it has three keyboard jobs
-   the combobox knows nothing about — Cmd/Ctrl+Enter sends, a bare Enter
+   the combobox knows nothing about — Enter sends, Shift+Enter
    inserts a newline, and the arrows move the caret between lines. Every one of
    those has to survive the popup being closed, and the send has to survive it
    being open.
@@ -40,7 +40,15 @@ function Harness({ matches, onPick, onSend }: {
         value={text}
         onChange={(e: any) => setText(e.target.value)}
         onKeyDown={(e: any) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+            e.preventBaseUIHandler();
+            return;
+          }
+          if (e.key === "Enter" && e.shiftKey) {
+            e.preventBaseUIHandler();
+            return;
+          }
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey || matches.length === 0)) {
             e.preventDefault();
             onSend();
           }
@@ -103,19 +111,19 @@ it("still sends on Cmd+Enter while the popup is open", async () => {
   expect(onPick).not.toHaveBeenCalled();
 });
 
-it("still sends on Ctrl+Enter while the popup is closed", async () => {
+it("sends on Enter while the popup is closed", async () => {
   const user = userEvent.setup();
   const { onSend, field } = setup([]);
   field.focus();
-  await user.keyboard("{Control>}{Enter}{/Control}");
+  await user.keyboard("{Enter}");
   expect(onSend).toHaveBeenCalledTimes(1);
 });
 
-it("leaves a bare Enter to the textarea when the popup is closed", async () => {
+it("inserts a newline on Shift+Enter when the popup is closed", async () => {
   const user = userEvent.setup();
   const { onSend, onPick, field } = setup([]);
   field.focus();
-  await user.type(field, "one{Enter}two");
+  await user.type(field, "one{Shift>}{Enter}{/Shift}two");
   expect(onSend).not.toHaveBeenCalled();
   expect(onPick).not.toHaveBeenCalled();
   // The newline reached the value rather than being swallowed as a selection.
