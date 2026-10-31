@@ -77,6 +77,10 @@ class RpcPeer {
         process.stderr.write(`relay codex adapter: unreadable app-server line\n`);
         return;
       }
+      if (!message || typeof message !== "object" || Array.isArray(message)) {
+        process.stderr.write(`relay codex adapter: invalid app-server message\n`);
+        return;
+      }
       const id = message.id as number | string | undefined;
       const method = typeof message.method === "string" ? message.method : undefined;
       if (method && id !== undefined) {

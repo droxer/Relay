@@ -33,6 +33,9 @@ process.on("SIGTERM", () => { log({ signal: "SIGTERM" }); process.exit(0); });
 async function playTurn() {
   note("turn/started", { threadId: thread, turn: { id: turn, status: "inProgress", items: [] } });
   if (mode === "hang") return;
+  if (mode === "invalid_frames") {
+    for (const value of [null, [], "noise", 42]) send(value);
+  }
   if (mode === "crash") {
     // The runtime dies while a person has not answered yet.
     send({ id: "srv_crash", method: "item/commandExecution/requestApproval", params: { ...T, itemId: "c9", kind: "command", command: "make", cwd: "/w" } });
@@ -168,6 +171,13 @@ describe("Codex app-server adapter", () => {
     assert.deepEqual(file, {
       secret: SECRET, kind: "file_change", toolName: "apply_patch", input: { changes: [{ path: "/outside/a.txt", kind: "add" }], diff: "+hi" }, toolUseId: "f1",
     });
+  });
+
+  it("ignores non-object JSON frames and finishes the turn", async () => {
+    const result = await run(["--cwd", directory, "--", "go"], { FAKE_MODE: "invalid_frames" });
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout.at(-1)?.type, "turn.completed");
+    assert.ok(result.log.some((entry) => entry.signal === "SIGTERM"));
   });
 
   it("resumes the given thread instead of starting one", async () => {

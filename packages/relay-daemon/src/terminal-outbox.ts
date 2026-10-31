@@ -3,6 +3,7 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, re
 import { open, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { syncDirectory, syncDirectoryAsync } from "./sync-directory.js";
+import { sendTerminalEvent, terminalEventPayload } from "./terminal-event-payload.js";
 
 // Timeout and rate limiting are transient even though they are 4xx.
 const permanentlyRejected = (status: number) => status >= 400 && status < 500 && status !== 408 && status !== 429;
@@ -65,6 +66,7 @@ export class TerminalOutbox {
   }
 
   retain(event: Record<string, unknown>): TerminalRecord {
+    if (terminalTypes.has(String(event.type))) event = terminalEventPayload(event);
     const output = outputTypes.has(String(event.type));
     const identity = [event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])];
     const key = createHash("sha256").update(JSON.stringify(identity)).digest("hex");
@@ -162,7 +164,9 @@ export class TerminalOutbox {
           init = { ...init, body: JSON.stringify(event) };
         }
       }
-      const response = await send(input, init);
+      const response = record && terminalTypes.has(String(record.event.type))
+        ? await sendTerminalEvent(send, input, init!, record.event)
+        : await send(input, init);
       if (record && (response.ok || permanentlyRejected(response.status))) this.acknowledge(record.key);
       return response;
     };
@@ -193,10 +197,13 @@ export class TerminalOutbox {
         attempts++;
         try {
           const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
-          const response = await send(eventUrl, {
+          const init = {
             method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify(event), signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)]),
-          });
+          };
+          const response = terminalTypes.has(String(event.type))
+            ? await sendTerminalEvent(send, eventUrl, init, event)
+            : await send(eventUrl, init);
           await response.body?.cancel();
           if (!response.ok && !permanentlyRejected(response.status)) { outputBlocked = true; continue; }
           this.acknowledge(record.key);

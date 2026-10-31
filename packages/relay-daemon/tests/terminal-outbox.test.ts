@@ -222,3 +222,75 @@ test("failed output writes remain replayable and do not block subsequent live ou
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+
+test("large successful completions fit the backend body limit without losing artifact metadata", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-large-completion-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const files = Array.from({ length: 3 }, (_, index) => ({
+    relativePath: `report-${index}.txt`, bytes: 1_100_000,
+    contentBase64: Buffer.alloc(1_100_000, 65).toString("base64"),
+  }));
+  const event = { type: "run.completed", commandId: "cmd", exitCode: 0, generatedFiles: files };
+  const send = outbox.wrapFetch(async (_url, init) => {
+    assert.ok(Buffer.byteLength(String(init?.body)) < 4 * 1024 * 1024);
+    const received = JSON.parse(String(init?.body));
+    assert.equal(received.type, "run.completed");
+    assert.equal(received.exitCode, 0);
+    assert.deepEqual(received.generatedFiles.map((file: { relativePath: string }) => file.relativePath), files.map(file => file.relativePath));
+    assert.ok(received.generatedFiles.some((file: { snapshotSkipped?: string }) => file.snapshotSkipped === "too-large"));
+    return new Response("{}", { status: 202 });
+  });
+  await send("http://backend/events", { method: "POST", body: JSON.stringify(event) });
+  assert.equal(outbox.pending().length, 0);
+  assert.ok(files.every(file => file.contentBase64), "the caller's evidence is not mutated");
+});
+
+for (const delivery of ["live", "replay"]) {
+  test(`${delivery} completion retries HTTP 413 without inline attachments and keeps its outcome`, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-small-body-limit-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    const event = { type: "run.completed", commandId: "cmd", exitCode: 0, agentLog: "Done",
+      generatedFiles: [{ relativePath: "report.txt", bytes: 100, contentBase64: "YQ==" }] };
+    let attempts = 0;
+    const backend: typeof fetch = async (_url, init) => {
+      attempts++;
+      const received = JSON.parse(String(init?.body));
+      if (received.generatedFiles[0].contentBase64) return new Response("too big", { status: 413 });
+      assert.equal(received.type, "run.completed");
+      assert.equal(received.exitCode, 0);
+      assert.equal(received.generatedFiles[0].relativePath, "report.txt");
+      return new Response("{}", { status: 202 });
+    };
+    if (delivery === "live") await outbox.wrapFetch(backend)("http://backend/events", { method: "POST", body: JSON.stringify(event) });
+    else { outbox.retain(event); await outbox.replay(backend, "http://backend/events", "token"); }
+    assert.equal(attempts, 2);
+    assert.equal(outbox.pending().length, 0);
+  });
+}
+
+for (const delivery of ["live", "replay"]) {
+  test(`${delivery} preserves exit evidence when even the compact terminal payload is rejected`, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-terminal-rejected-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    const event = { type: "run.completed", commandId: "cmd", exitCode: 0, agentLog: "Done" };
+    const reject: typeof fetch = async () => new Response("too big", { status: 413 });
+    if (delivery === "live") {
+      const response = await outbox.wrapFetch(reject)("http://backend/events", { method: "POST", body: JSON.stringify(event) });
+      assert.equal(response.status, 503, "the producer must retry instead of reporting a different outcome");
+    } else {
+      outbox.retain(event);
+      await outbox.replay(reject, "http://backend/events", "token");
+    }
+    const restarted = new TerminalOutbox(root);
+    assert.equal(restarted.pending().length, 1);
+    await restarted.replay(async (_url, init) => {
+      assert.deepEqual(JSON.parse(String(init?.body)), event);
+      return new Response("{}", { status: 202 });
+    }, "http://backend/events", "token");
+    assert.equal(restarted.pending().length, 0);
+  });
+}
