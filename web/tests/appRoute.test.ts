@@ -11,6 +11,7 @@ import {
   isLandingPath,
   parseAppPath,
   pathForAppState,
+  APP_HOME_PATH,
   pathKeepsThreadSpaceParams,
   validatedReturnTo,
 } from "../src/lib/appRoute.js";
@@ -28,6 +29,7 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/teams/team%201"), { route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: "team 1" });
 
     const routes = {
+      "/home": "home",
       "/backlog": "backlog",
       "/routines": "routine",
       "/automations": "routine",
@@ -162,10 +164,17 @@ describe("app pathname routes", () => {
 
   it("accepts only recognized same-origin authentication return paths", () => {
     assert.equal(validatedReturnTo("/threads/ses_1?tab=activity"), "/threads/ses_1");
-    assert.equal(validatedReturnTo("https://evil.example/threads"), "/threads");
-    assert.equal(validatedReturnTo("//evil.example/threads"), "/threads");
-    assert.equal(validatedReturnTo("/missing"), "/threads");
-    assert.equal(validatedReturnTo("/login"), "/threads");
+    assert.equal(validatedReturnTo("https://evil.example/threads"), "/home");
+    assert.equal(validatedReturnTo("//evil.example/threads"), "/home");
+    assert.equal(validatedReturnTo("/missing"), "/home");
+    assert.equal(validatedReturnTo("/login"), "/home");
+  });
+
+  it("lands a signed-in visitor on Home", () => {
+    assert.equal(APP_HOME_PATH, "/home");
+    assert.equal(parseAppPath("/").route, "home");
+    assert.equal(hrefForRoute("home"), "/home");
+    assert.equal(validatedReturnTo("/home"), "/home");
   });
 
   it("keeps only query parameters owned by the route and selected tab", () => {

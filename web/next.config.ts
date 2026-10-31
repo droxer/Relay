@@ -21,6 +21,7 @@ const CLIENT_ROUTES = [
   // Forgotten password; an emailed reset link hard-loads /reset-password.
   "/forgot-password",
   "/reset-password",
+  "/home",
   "/threads",
   "/threads/:path*",
   "/tasks",

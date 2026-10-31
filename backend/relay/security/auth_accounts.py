@@ -21,6 +21,7 @@ from .auth_rows import database_account_to_row, public_account, row_to_database_
 from .auth_state import AuthStoreState
 from .credentials import hash_password, verify_password
 from .entity_ids import USER_ENTITY_KIND, database_id_for_reference, normalize_database_id
+from .home_snoozes import apply_home_snoozes_patch
 from .onboarding import apply_onboarding_patch
 from .passwords import validate_password
 from ..core.ids import new_database_id
@@ -122,6 +123,7 @@ class AuthAccounts(AuthStoreState):
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
         onboarding: dict[str, Any] | None = None,
+        home_snoozes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _validate_user_preferences(theme=theme, language=language)
         now = datetime.now(UTC)
@@ -148,6 +150,15 @@ class AuthAccounts(AuthStoreState):
                     update(self.accounts)
                     .where(self.accounts.c.id == account_id)
                     .values(onboarding=merged)
+                )
+            if home_snoozes is not None:
+                stored = conn.execute(
+                    select(self.accounts.c.home_snoozes).where(self.accounts.c.id == account_id)
+                ).scalar_one()
+                conn.execute(
+                    update(self.accounts)
+                    .where(self.accounts.c.id == account_id)
+                    .values(home_snoozes=apply_home_snoozes_patch(stored, home_snoozes) or None)
                 )
             row = (
                 conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))

@@ -53,7 +53,7 @@ describe("password reset routes", () => {
   });
 
   it("never returns a signed-in user to a reset page", () => {
-    assert.equal(validatedReturnTo("/forgot-password"), "/threads");
-    assert.equal(validatedReturnTo("/reset-password"), "/threads");
+    assert.equal(validatedReturnTo("/forgot-password"), "/home");
+    assert.equal(validatedReturnTo("/reset-password"), "/home");
   });
 });

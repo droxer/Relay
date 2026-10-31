@@ -71,6 +71,19 @@ and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
 truncate either projection.
 
+The thread list (`GET /api/v1/threads`) is a summary projection too. Beside a
+thread's open `permissionRequests` it carries `nextSteps` — up to three short
+follow-ups a finished turn suggested, empty once anything else happens — so
+Home can offer them without opening each thread.
+
+`PATCH /api/v1/auth/preferences` takes any of `theme`, `language`,
+`onboarding`, and `homeSnoozes`, and answers `{user}`. `homeSnoozes` is
+`{"snooze": [{"key", "stamp"}], "unsnooze": ["key"]}`: Home hides an item
+while its current stamp equals the stored one, so a snooze lasts until the
+item changes. Keys and stamps are opaque strings of at most 512 characters;
+the newest 200 entries are kept, one per key. The account reads them back as
+`user.homeSnoozes`.
+
 Automations are stored as routine tasks; the routine* field names are the wire names.
 
 An automation carries `routineTriggers`, 0 to 5 triggers that are OR-ed (an

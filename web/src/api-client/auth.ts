@@ -1,6 +1,6 @@
 import type { Language, Theme } from "../lib/appStorage.ts";
 import type { OnboardingPatch } from "../lib/onboarding.ts";
-import type { CurrentUser } from "../types.ts";
+import type { CurrentUser, HomeSnoozesPatch } from "../types.ts";
 import { takeEarlyAuthProbe } from "../lib/earlyAuthProbe.ts";
 import { apiJson, readApiResponse } from "./client.ts";
 
@@ -36,7 +36,7 @@ export async function getMe(signal?: AbortSignal): Promise<MeResponse> {
   return apiJson<MeResponse>("/auth/me", { signal });
 }
 
-export function updateUserPreferences(input: { theme?: Theme; language?: Language; onboarding?: OnboardingPatch }): Promise<{ user: CurrentUser }> {
+export function updateUserPreferences(input: { theme?: Theme; language?: Language; onboarding?: OnboardingPatch; homeSnoozes?: HomeSnoozesPatch }): Promise<{ user: CurrentUser }> {
   return apiJson<{ user: CurrentUser }>("/auth/preferences", {
     method: "PATCH",
     body: input,

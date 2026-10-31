@@ -5,6 +5,7 @@ import type { AppRoute } from "./viewTypes.ts";
    in one chunk, so a prefetch here is the chunk the page then renders from.
    The threads surface (`main`, `projects`) is part of the app chunk already. */
 const ROUTE_CHUNKS: Partial<Record<AppRoute, () => Promise<unknown>>> = {
+  home: () => import("../components/home/HomePage"),
   admin: () => import("../components/AdminPage"),
   backlog: () => import("../components/TasksWorkspace"),
   channels: () => import("../components/ChannelsPage"),

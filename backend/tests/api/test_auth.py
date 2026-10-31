@@ -169,6 +169,28 @@ def test_onboarding_preference_is_server_stamped_and_validated(monkeypatch) -> N
         assert client.get("/api/v1/auth/me").json()["user"]["onboarding"] == onboarding
 
 
+def test_home_snoozes_preference_round_trips_and_is_validated(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        assert client.get("/api/v1/auth/me").json()["user"]["homeSnoozes"] == []
+
+        response = client.patch("/api/v1/auth/preferences", json={
+            "homeSnoozes": {"snooze": [{"key": "task:t1", "stamp": "2026-10-31T10:00:00Z"}]},
+        })
+
+        assert response.status_code == 200
+        snoozes = [{"key": "task:t1", "stamp": "2026-10-31T10:00:00Z"}]
+        assert response.json()["user"]["homeSnoozes"] == snoozes
+        for body in ({"homeSnoozes": []}, {"homeSnoozes": {"snooze": [{"key": "x"}]}}):
+            assert client.patch("/api/v1/auth/preferences", json=body).status_code == 400
+        assert client.get("/api/v1/auth/me").json()["user"]["homeSnoozes"] == snoozes
+
+        cleared = client.patch("/api/v1/auth/preferences", json={"homeSnoozes": {"unsnooze": ["task:t1"]}})
+        assert cleared.json()["user"]["homeSnoozes"] == []
+
+
 def test_login_and_session_cookie(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

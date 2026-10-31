@@ -10,6 +10,7 @@
    ===================================================================== */
 
 .messenger-shell[data-task-workspace="true"],
+.messenger-shell[data-route="home"],
 .messenger-shell[data-route="channels"],
 .messenger-shell[data-route="workspace"],
 .messenger-shell[data-route="mcp"],
@@ -26,6 +27,8 @@
 @media (max-width: 820px) {
   .messenger-shell[data-task-workspace="true"],
   .messenger-shell[data-task-workspace="true"][data-sidenav="open"],
+  .messenger-shell[data-route="home"],
+  .messenger-shell[data-route="home"][data-sidenav="open"],
   .messenger-shell[data-route="channels"],
   .messenger-shell[data-route="workspace"],
   .messenger-shell[data-route="mcp"],

@@ -78,6 +78,9 @@ accounts = Table(
     # The onboarding wizard's stored choices (security/onboarding.py);
     # NULL until the person first acts on the wizard.
     Column("onboarding", json_type(), nullable=True),
+    # Home queue items the person snoozed (security/home_snoozes.py);
+    # NULL until the first snooze.
+    Column("home_snoozes", json_type(), nullable=True),
     Column("password_hash", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),

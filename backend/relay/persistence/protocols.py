@@ -337,6 +337,7 @@ class AuthStore(Protocol):
         theme: Any = ...,
         language: Any = ...,
         onboarding: dict[str, Any] | None = ...,
+        home_snoozes: dict[str, Any] | None = ...,
     ) -> dict[str, Any]: ...
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None: ...
     def bootstrap_with_token(

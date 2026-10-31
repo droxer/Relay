@@ -75,14 +75,18 @@ def update_auth_preferences(
     onboarding = body.get("onboarding")
     if "onboarding" in body and not isinstance(onboarding, dict):
         raise HTTPException(400, "onboarding must be an object.")
-    if theme is None and language is None and onboarding is None:
-        raise HTTPException(400, "theme, language, or onboarding is required.")
+    home_snoozes = body.get("homeSnoozes")
+    if "homeSnoozes" in body and not isinstance(home_snoozes, dict):
+        raise HTTPException(400, "homeSnoozes must be an object.")
+    if theme is None and language is None and onboarding is None and home_snoozes is None:
+        raise HTTPException(400, "theme, language, onboarding, or homeSnoozes is required.")
     try:
         updated = ctx.auth_store.update_user_preferences(
             account["id"],
             theme=theme,
             language=language,
             onboarding=onboarding,
+            home_snoozes=home_snoozes,
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error

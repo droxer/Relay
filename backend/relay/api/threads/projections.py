@@ -85,6 +85,9 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "currentAgent": session.get("currentAgent"),
         "pendingDecision": session.get("pendingDecision"),
         "permissionRequests": session.get("permissionRequests") or [],
+        # A finished turn's suggestions, so Home can offer them without
+        # opening each thread; bounded to three short lines by the reducer.
+        "nextSteps": session.get("nextSteps") or [],
         "archived": session.get("archived", False),
         "artifactCount": session.get(
             "artifactCount", len(workspace_artifacts(session))

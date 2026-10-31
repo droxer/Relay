@@ -1,5 +1,5 @@
 export type MobileView = "threads" | "chat";
-export type AppRoute = "main" | "projects" | "backlog" | "routine" | "agents" | "teams" | "computers" | "skills" | "settings" | "channels" | "admin";
+export type AppRoute = "home" | "main" | "projects" | "backlog" | "routine" | "agents" | "teams" | "computers" | "skills" | "settings" | "channels" | "admin";
 
 /* Personal settings sections: what the app tells a person about, and how it
    looks and speaks — the same rail-of-sections shape the control panel uses.

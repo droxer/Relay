@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .credentials import hash_session_token
+from .home_snoozes import normalize_home_snoozes
 from .onboarding import normalize_onboarding
 from .user_handles import slugify_handle
 from ..persistence.db_time import format_db_time, parse_db_time
@@ -38,6 +39,7 @@ def public_account(account: dict[str, Any]) -> dict[str, Any]:
         "theme": account.get("theme", DEFAULT_USER_THEME),
         "language": normalize_user_language(account.get("language")),
         "onboarding": normalize_onboarding(account.get("onboarding")),
+        "homeSnoozes": normalize_home_snoozes(account.get("homeSnoozes")),
         "createdAt": account["createdAt"],
     }
 
@@ -57,6 +59,7 @@ def database_account_to_row(
         "theme": account.get("theme", DEFAULT_USER_THEME),
         "language": normalize_user_language(account.get("language")),
         "onboarding": normalize_onboarding(account.get("onboarding")) or None,
+        "home_snoozes": normalize_home_snoozes(account.get("homeSnoozes")) or None,
         "password_hash": account["passwordHash"],
         "created_at": parse_db_time(account["createdAt"]),
         "updated_at": parse_db_time(account["updatedAt"]),
@@ -145,6 +148,7 @@ def row_to_database_account(row: Any) -> dict[str, Any]:
         "theme": row["theme"],
         "language": normalize_user_language(row["language"]),
         "onboarding": normalize_onboarding(row["onboarding"]),
+        "homeSnoozes": normalize_home_snoozes(row["home_snoozes"]),
         "passwordHash": row["password_hash"],
         "createdAt": format_db_time(row["created_at"]),
         "updatedAt": format_db_time(row["updated_at"]),
