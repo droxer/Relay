@@ -46,7 +46,7 @@ describe("buildCommands", () => {
     const navigate = userCommands.filter((command) => command.group === "navigate");
     assert.deepEqual(
       navigate.map((command) => command.id),
-      ["go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:computers", "go:skills", "go:settings"],
+      ["go:home", "go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:computers", "go:skills", "go:settings"],
     );
     for (const command of navigate) {
       assert.match(command.hint ?? "", /^G [A-Z]$/, `${command.id} lost its go-to hint`);

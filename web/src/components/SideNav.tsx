@@ -8,6 +8,7 @@ import {
   NavAgents,
   NavBacklog,
   NavComputer,
+  NavHome,
   NavLogout,
   NavMore,
   NavPreferences,
@@ -54,7 +55,7 @@ const MORE_ROUTES: readonly {
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
-export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding, notifications }: {
+export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding, notifications, homeNeedsYou = 0 }: {
   sidenavExpanded: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
   width: number;
@@ -70,6 +71,8 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   onboarding?: { done: number; total: number } | null;
   onOpenOnboarding?: () => void;
   notifications?: NotificationBellBinding;
+  /** Home's "needs you" count; zero draws no badge. */
+  homeNeedsYou?: number;
 }) {
   const { t } = useTranslation();
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -135,6 +138,22 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
       </div>
       <nav className="sidenav-nav" aria-label={t("nav.workspace_label")}>
         <div className="sidenav-group" role="group">
+          <a
+            className={`sidenav-btn ${route === "home" ? "active" : ""}`}
+            data-nav="home"
+            href={hrefForRoute("home")}
+            aria-label={homeNeedsYou ? t("nav.home_needs_you", { count: homeNeedsYou }) : t("nav.home")}
+            aria-current={route === "home" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "home")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.home"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.home"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavHome size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.home")}</span>
+            {homeNeedsYou ? <span className="sidenav-count tnum" aria-hidden="true">{homeNeedsYou > 99 ? "99+" : homeNeedsYou}</span> : null}
+          </a>
           <a
             className={`sidenav-btn ${route === "main" ? "active" : ""}`}
             data-nav="threads"

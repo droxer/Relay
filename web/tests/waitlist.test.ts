@@ -195,8 +195,8 @@ describe("waitlist routes", () => {
 
   it("keeps utm_source on /waitlist and never returns a signed-in user to a public page", () => {
     assert.equal(canonicalBrowserUrl("/waitlist", "?utm_source=hn&x=1"), "/waitlist?utm_source=hn");
-    assert.equal(validatedReturnTo("/waitlist"), "/threads");
-    assert.equal(validatedReturnTo("/join"), "/threads");
+    assert.equal(validatedReturnTo("/waitlist"), "/home");
+    assert.equal(validatedReturnTo("/join"), "/home");
   });
 
   it("addresses the admin Waitlist section and keeps its lane cursor", () => {

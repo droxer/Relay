@@ -97,6 +97,9 @@ export interface CurrentUser {
   /** The onboarding wizard's stored choices; progress itself is derived
       (lib/onboarding.ts). */
   onboarding?: OnboardingPrefs;
+  /** Home queue items this person snoozed, each held while its stamp is
+   *  unchanged (`backend/relay/security/home_snoozes.py`). */
+  homeSnoozes?: HomeSnooze[];
 }
 
 export type OnboardingCard = "tasks" | "projects" | "teams" | "automations";
@@ -106,4 +109,15 @@ export interface OnboardingPrefs {
   introSeenAt?: string;
   dismissedAt?: string;
   closedCards?: readonly OnboardingCard[];
+}
+
+export interface HomeSnooze {
+  key: string;
+  stamp: string;
+}
+
+/** A change to the snoozed set; the server keeps the newest entries. */
+export interface HomeSnoozesPatch {
+  snooze?: HomeSnooze[];
+  unsnooze?: string[];
 }

@@ -30,6 +30,7 @@ import {
   Rows3,
   Forward,
   Hash,
+  House,
   Inbox,
   ImagePlus,
   Play,
@@ -237,6 +238,8 @@ function identityGlyph(kind: "agent" | "team", displayName: string) {
 // bubble offset behind the first, and at the rail's 18px the offset is ~2px:
 // the two outlines converge into a thick smudge along one corner and the
 // glyph reads as a blot rather than a bubble. Plurality is the label's job.
+// Home: the "what needs me" dashboard every sign-in lands on.
+export const NavHome = withStandardStroke(House, "NavHome");
 export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
 // The org console, not a user's settings. `UserCog` put a SECOND gear in the
 // rail — directly above Preferences' `Settings` gear in the footer — and

@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
 
 const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
+  home: "nav.home",
   backlog: "nav.backlog",
   routine: "nav.routine",
   agents: "nav.agents",
@@ -77,6 +78,8 @@ type AppShellProps = {
   /** Opens the onboarding wizard, reopening it if it was dismissed. */
   onOpenOnboarding: () => void;
   notifications: NotificationBellBinding;
+  /** Home's "needs you" count, badged on its rail entry. */
+  homeNeedsYou?: number;
   children: ReactNode;
   /** The theme lives here for the `toggle-theme` command only; the settings
    *  route owns the full appearance and language controls. */
@@ -121,6 +124,7 @@ export function AppShell({
   onboarding,
   onOpenOnboarding,
   notifications,
+  homeNeedsYou = 0,
   children,
   theme,
   onThemeChange,
@@ -312,6 +316,7 @@ export function AppShell({
         onboarding={onboarding}
         onOpenOnboarding={onOpenOnboarding}
         notifications={notifications}
+        homeNeedsYou={homeNeedsYou}
       />
 
       {/* display:contents (owned by shell.css, .messenger-shell > main) keeps

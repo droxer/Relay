@@ -466,3 +466,27 @@
 .sidenav-resize:active::after {
   background: var(--line-strong);
 }
+
+/* Home's "needs you" count. On the collapsed rail it sits on the icon's
+   corner; on the expanded rail it trails the label like a row count. Ink, not
+   a status hue — the queue on the page says which items are urgent. */
+.sidenav-count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--ink-1);
+  color: var(--surface-0);
+  font: 600 10px/16px var(--font-sans);
+  text-align: center;
+  pointer-events: none;
+}
+
+.sidenav-panel[data-expanded="true"] .sidenav-count {
+  top: 50%;
+  right: var(--sp-2);
+  transform: translateY(-50%);
+}

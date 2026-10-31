@@ -14,6 +14,7 @@ import {
 } from "./viewTypes.ts";
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
+  home: "/home",
   backlog: "/tasks",
   routine: "/automations",
   agents: "/agents",
@@ -56,6 +57,10 @@ WORK_ROUTES.set("/issues", "backlog");
 WORK_ROUTES.set("/routines", "routine");
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
+
+/** Where a signed-in person lands: Home, the "what needs me" dashboard. The
+    bare origin, a finished sign-in, and any unusable return path all go here. */
+export const APP_HOME_PATH = WORK_PATHS.home;
 
 export type AppLocationState = {
   route: AppRoute;
@@ -114,7 +119,7 @@ function pathSegments(pathname: string): string[] {
 }
 
 export function parseAppPath(pathname: string): AppLocationState {
-  const normalized = pathname === "/" ? "/threads" : `/${pathSegments(pathname).join("/")}`;
+  const normalized = pathname === "/" ? APP_HOME_PATH : `/${pathSegments(pathname).join("/")}`;
   const [head, second, ...rest] = pathSegments(normalized);
   const base = { mobileView: "chat" as const, sessionId: null };
 
@@ -622,15 +627,15 @@ export function pathKeepsThreadSpaceParams(pathname: string): boolean {
 }
 
 export function validatedReturnTo(value: string | null, origin = "http://relay.local"): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/threads";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return APP_HOME_PATH;
   try {
     const candidate = new URL(value, origin);
-    if (candidate.origin !== origin) return "/threads";
+    if (candidate.origin !== origin) return APP_HOME_PATH;
     const state = parseAppPath(candidate.pathname);
-    if (state.notFound || state.login || state.publicPage) return "/threads";
+    if (state.notFound || state.login || state.publicPage) return APP_HOME_PATH;
     return canonicalBrowserUrl(candidate.pathname, candidate.search);
   } catch {
-    return "/threads";
+    return APP_HOME_PATH;
   }
 }
 

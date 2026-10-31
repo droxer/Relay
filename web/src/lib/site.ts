@@ -23,6 +23,7 @@ export const PRIVATE_PATHS: readonly string[] = [
   "/join",
   "/forgot-password",
   "/reset-password",
+  "/home",
   "/threads",
   "/tasks",
   "/issues",

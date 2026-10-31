@@ -28,7 +28,8 @@ export type CommandItem = {
 };
 
 const NAV_COMMANDS: readonly { route: AppRoute; labelKey: string; hint: string; keywords: string[] }[] = [
-  { route: "main", labelKey: "nav.threads", hint: "G T", keywords: ["threads", "chat", "home"] },
+  { route: "home", labelKey: "nav.home", hint: "G O", keywords: ["home", "dashboard", "inbox", "up next", "needs me"] },
+  { route: "main", labelKey: "nav.threads", hint: "G T", keywords: ["threads", "chat"] },
   { route: "projects", labelKey: "project.projects", hint: "G P", keywords: ["projects", "project details"] },
   { route: "backlog", labelKey: "nav.backlog", hint: "G B", keywords: ["backlog", "tasks", "board", "projects"] },
   { route: "routine", labelKey: "nav.routine", hint: "G R", keywords: ["routines", "schedule"] },

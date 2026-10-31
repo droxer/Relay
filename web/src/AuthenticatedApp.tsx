@@ -23,6 +23,8 @@ import { projectRoomAgentIds } from "./lib/taskAssignment";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
+import { homeNeedsYouCount, homeQueue } from "./lib/homeQueue";
+import { isoToday } from "./lib/routine";
 import { useHandoffStore } from "./lib/handoffStore";
 import { useComposerTargetStore } from "./lib/composerTargetStore";
 import { useThreadSendStore } from "./lib/threadSendStore";
@@ -157,6 +159,19 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => myThreadSessions(sessions, selectedUser),
     [sessions, selectedUser],
   );
+  // Home's queue, computed once: Home renders it and the rail badges it.
+  const homeItems = useMemo(
+    () => homeQueue({
+      tasks,
+      sessions,
+      nodes: runtimeNodes,
+      userId: selectedUser,
+      today: isoToday(),
+      snoozes: user.homeSnoozes,
+    }),
+    [runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
+  );
+  const homeNeedsYou = homeNeedsYouCount(homeItems);
   const onboarding = useOnboarding({
     user,
     setUser,
@@ -593,7 +608,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // useThreadNavigation hands back plain closures; the memoized work page
   // needs one identity for the life of the shell.
   const onOpenThread = useStableEvent(openThread);
-  const onGoHome = useStableEvent(() => navigateToRoute("main"));
+  const onGoHome = useStableEvent(() => navigateToRoute("home"));
   const onboardingBadge = useMemo(
     () => (onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null),
     [onboarding.progress.completedCount, onboarding.progress.visible],
@@ -633,6 +648,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       onLogout={onLogout}
       onNewThread={startNewThread}
       onboarding={onboardingBadge}
+      homeNeedsYou={homeNeedsYou}
       onOpenOnboarding={openOnboarding}
       notifications={notificationBell}
       onNewTask={onNewTask}
@@ -649,6 +665,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             projects={projects}
             projectsStatus={projectsStatus}
             tasks={tasks}
+            sessions={sessions}
+            homeItems={homeItems}
+            selectedUser={selectedUser}
+            setUser={setUser}
             visibleNodes={visibleNodes}
             runtimeNodes={runtimeNodes}
             isRefreshing={isRefreshing}

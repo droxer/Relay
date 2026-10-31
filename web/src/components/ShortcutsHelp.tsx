@@ -28,6 +28,7 @@ const GLOBAL_ROWS: ShortcutRow[] = [
 ];
 
 const NAVIGATE_ROWS: ShortcutRow[] = [
+  { keys: "G O", labelKey: "nav.home" },
   { keys: "G T", labelKey: "nav.threads" },
   { keys: "G P", labelKey: "project.projects" },
   { keys: "G B", labelKey: "nav.backlog" },

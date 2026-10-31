@@ -4,11 +4,13 @@ import { lazy, memo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { RelayEmptyState } from "./RelayEmptyState";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskSummary, UserAgent } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, UserAgent } from "../types";
+import type { HomeItem } from "../lib/homeQueue";
 import type { Language, Theme } from "../lib/appStorage";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import type { AdminSection, AppRoute, MobileView, SettingsSection } from "../lib/viewTypes";
 
+const HomePage = lazy(() => import("./home/HomePage").then((m) => ({ default: m.HomePage })));
 const AdminPage = lazy(() => import("./AdminPage").then((m) => ({ default: m.AdminPage })));
 const TasksWorkspace = lazy(() => import("./TasksWorkspace").then((m) => ({ default: m.TasksWorkspace })));
 const ChannelsPage = lazy(() => import("./ChannelsPage").then((m) => ({ default: m.ChannelsPage })));
@@ -20,6 +22,7 @@ const SkillsPage = lazy(() => import("./SkillsPage").then((m) => ({ default: m.S
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 
 const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
+  home: "home-panel",
   backlog: "backlog-panel",
   routine: "routine-panel",
   agents: "agents-panel",
@@ -63,6 +66,11 @@ interface WorkRoutePageProps {
   projects: ProjectRecord[];
   projectsStatus: ProjectCollectionStatus;
   tasks: RelayTaskSummary[];
+  sessions: RelaySession[];
+  homeItems: HomeItem[];
+  /** The owner key tasks and threads carry. */
+  selectedUser: string;
+  setUser: (user: CurrentUser) => void;
   visibleNodes: DaemonNodeMonitorRecord[];
   runtimeNodes: DaemonNodeMonitorRecord[];
   isRefreshing: boolean;
@@ -122,7 +130,20 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       </div>
     );
   }
-  return route === "admin" ? (
+  return route === "home" ? (
+    <HomePage
+      user={user}
+      userId={props.selectedUser}
+      setUser={props.setUser}
+      items={props.homeItems}
+      tasks={props.tasks}
+      sessions={props.sessions}
+      projects={props.projects}
+      nodes={props.runtimeNodes}
+      onOpenThread={onOpenThread}
+      onOpenTaskRecord={props.onOpenTaskRecord}
+    />
+  ) : route === "admin" ? (
     <AdminPage
       currentUser={user}
       section={props.adminSection}

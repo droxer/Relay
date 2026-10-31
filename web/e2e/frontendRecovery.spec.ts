@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
     if (path.endsWith("/threads/review-thread")) body = session;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/");
+  await page.goto("/threads");
 });
 
 test("rename prompt accepts a full replacement with the real input primitive", async ({ page }) => {

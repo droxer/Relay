@@ -130,6 +130,7 @@ class SessionReadRows(SessionStoreState):
             "currentAgent",
             "pendingDecision",
             "permissionRequests",
+            "nextSteps",
             "archived",
             "deletionRequestedAt",
             "title",

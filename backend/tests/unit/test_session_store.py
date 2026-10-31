@@ -52,6 +52,20 @@ def test_work_outcome_survives_database_snapshot_and_summary():
         assert session_brief_item(summary)["workOutcome"] == "unfinished"
 
 
+def test_session_summary_carries_next_steps():
+    """Home offers a finished turn's suggestions from the thread list alone."""
+    from relay.api.threads.projections import session_brief_item
+
+    with TemporaryDirectory() as root:
+        store = DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True)
+        session = store.create_session({"workspacePath": "/workspace", "taskGoal": "Ship"})
+        store.append_event(session["id"], relay_event("session.completed", session["id"], {
+            "outcome": "Shipped", "nextSteps": ["Add an alert"],
+        }))
+        [summary] = store.list_session_summaries()
+        assert session_brief_item(summary)["nextSteps"] == ["Add an alert"]
+
+
 def test_session_summary_carries_participant_agents():
     """The thread rail draws every row's agents from the summary list, not
     only the selected thread's full snapshot."""

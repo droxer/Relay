@@ -23,10 +23,12 @@ type ShortcutEventShape = {
 };
 
 /* Go-to chords. The letter mnemonic bends where a route's initial is taken:
-   threads owns T, projects owns P, so teams takes E; channels takes H; admin takes D
+   threads owns T, projects owns P, so teams takes E; channels takes H, so
+   Home takes O; admin takes D
    (dashboard). Computers take C and Skills take K (S is Settings').
    The channels chord exists only in a build that enables the feature. */
 export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
+  o: "home",
   t: "main",
   p: "projects",
   b: "backlog",

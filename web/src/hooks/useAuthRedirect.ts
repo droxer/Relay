@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { isLandingPath, parseAppPath, validatedReturnTo } from "../lib/appRoute";
+import { APP_HOME_PATH, isLandingPath, parseAppPath, validatedReturnTo } from "../lib/appRoute";
 
 interface AuthRedirectInput {
   /** Mounted and the auth check has answered. */
@@ -39,7 +39,7 @@ export function useAuthRedirect({ ready, signedIn, pathname }: AuthRedirectInput
     }
     if (signedIn && (location.login || onPublicPage || onLanding)) {
       const returnTo = onPublicPage || onLanding
-        ? "/threads"
+        ? APP_HOME_PATH
         : validatedReturnTo(new URL(window.location.href).searchParams.get("returnTo"), window.location.origin);
       window.history.replaceState(window.history.state, "", returnTo);
       window.dispatchEvent(new PopStateEvent("popstate"));
