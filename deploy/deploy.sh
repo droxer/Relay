@@ -66,6 +66,11 @@ backend_process_variables() {
   }' <<<"$1"
 }
 
+configure_web_variables() {
+  railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" \
+    '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}')"
+}
+
 # Reference the API's effective variables so custom scheduler settings, mail,
 # database credentials and R2 settings stay consistent without copying secrets.
 # Platform variables and listener settings belong to each service separately.
@@ -189,8 +194,7 @@ phase_railway() {
   else
     railway_ensure_service "$WEB_SERVICE" web
     WEB_ID=$(railway_service_id "$WEB_SERVICE")
-    railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" \
-      '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}')"
+    configure_web_variables
     info "web variables set"
   fi
   info "R2 holds skill bundles and artifact snapshots; existing volumes are left attached"
@@ -270,6 +274,7 @@ phase_release() {
   # release is run without a separate provisioning phase.
   railway_ensure_service "$BACKEND_SERVICE" backend
   railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
+  reconcile_mail_variables
   configure_worker_service
   if workers_enabled; then
     release_backend_and_worker
@@ -278,18 +283,18 @@ phase_release() {
   fi
 }
 
-# The UI builds locally (in Docker) while Railway builds the backend, and is
-# published only once the backend it calls is live.
+# Build the UI before deploying the API: a failed local build must not leave
+# a newly split API running without its background worker.
 release_backend_and_worker() {
   local backend_deployment worker_deployment zone build
   require_cmd docker python3
   zone=$(cf_zone_id)
-  backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
   build=$(mktemp -d)
   # shellcheck disable=SC2064
   trap "rm -rf '$build'" EXIT
-  info "building $BACKEND_SERVICE on Railway and the web export locally (this takes a few minutes)"
+  info "building the web export locally before deploying $BACKEND_SERVICE (this takes a few minutes)"
   workers_build_export "$build/out" "$build/runtime"
+  backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
   railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment" \
     || die "backend deployment failed for commit $RELEASE_COMMIT ($backend_deployment); the web UI was not published"
   # Start the worker only after the API's migrations and queue schema succeed.
@@ -302,6 +307,7 @@ release_backend_and_worker() {
 
 release_backend_and_web_service() {
   local backend_deployment web_deployment worker_deployment=skipped failures=0
+  configure_web_variables
   backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
   web_deployment=$(railway_deploy_service "$WEB_SERVICE" "$WEB_ID")
   info "building $BACKEND_SERVICE and $WEB_SERVICE (this takes a few minutes)"

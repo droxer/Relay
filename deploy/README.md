@@ -73,6 +73,10 @@ deployment triggers for each target service in the selected environment, so
 later pushes and merged PRs do not deploy independently. `GITHUB_BRANCH` is
 used only to resolve a SHA when no explicit commit is supplied.
 
+`release` also removes explicitly blanked email settings before reconciling the
+worker's references. With `WEB_HOSTING=railway`, it refreshes the web service's
+API and site build origins from the config before deploying it.
+
 The first `railway` run prints the generated `RELAY_ADMIN_TOKEN` once. Keep
 it: it seeds the admin bearer token on the backend's first boot. Later runs
 read secrets back from Railway and never rotate them.
@@ -95,10 +99,11 @@ afterward. For a current read against an accessible database, run
 
 ## The web UI Worker
 
-`release` builds the export of the release commit in Docker (`web/Dockerfile`'s
+`release` first builds the export of the release commit in Docker (`web/Dockerfile`'s
 `build` stage, fed by `git archive`, so nothing from the working tree is used
-and the remote source never runs on this machine) while Railway builds the
-backend. Once the backend deployment succeeds, it uploads the export through
+and the remote source never runs on this machine). A failed local build starts
+no API deployment. It then deploys the API and background worker. Once both
+deployments succeed, it uploads the export through
 the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
 holds are skipped) together with `deploy/workers/worker.js` and
 `deploy/workers/_headers` read from that same commit,

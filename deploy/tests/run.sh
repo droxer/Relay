@@ -11,6 +11,7 @@ python3 "$TESTS_DIR/source.py"
 python3 "$TESTS_DIR/workers.py"
 node "$TESTS_DIR/worker.mjs"
 bash "$TESTS_DIR/release.sh"
+python3 "$TESTS_DIR/release-config.py"
 bash "$TESTS_DIR/workers-source.sh"
 DEPLOY=$TESTS_DIR/../deploy.sh
 WORK=$(mktemp -d)
