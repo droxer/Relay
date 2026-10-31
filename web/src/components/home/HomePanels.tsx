@@ -41,10 +41,11 @@ export function MyTasksPanel({ counts }: {
       <SectionHeader id="home-mine-title" title={t("home.my_tasks")} />
       <ul className="home-panel home-counts">
         {COUNT_CELLS.map((cell) => (
-          <li key={cell}>
+          <li key={cell} data-stage={cell === "doneThisWeek" ? "done" : cell} data-empty={counts[cell] === 0 ? "" : undefined}>
             <div className="home-count">
-              <span className="home-count-number tnum" data-hot={cell === "review" && counts.review > 0 ? "" : undefined}>{counts[cell]}</span>
-              <span className="home-count-label" data-hot={cell === "review" && counts.review > 0 ? "" : undefined}>
+              <span className="home-count-number tnum">{counts[cell]}</span>
+              <span className="home-count-label">
+                <i className="home-count-key" aria-hidden="true" />
                 {t(`home.count.${cell}`)}
               </span>
             </div>
