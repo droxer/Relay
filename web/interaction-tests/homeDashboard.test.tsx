@@ -2,9 +2,28 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { HomeQueueItem } from "../src/components/home/HomeQueueItem";
+import { HomeQueue } from "../src/components/home/HomeQueue";
 import { MyTasksPanel } from "../src/components/home/HomePanels";
 import type { HomeItem } from "../src/lib/homeQueue";
 import type { HomeActions } from "../src/components/home/useHomeActions";
+
+it("opens the Start here thread without composing or sending a reply", async () => {
+  const answerWait = vi.fn();
+  const onOpen = vi.fn();
+  const item = {
+    kind: "wait", key: "task:t", stamp: "now", tier: "needs_you", since: "now",
+    task: { id: "t", title: "Choose a plan" },
+    awaiting: { kind: "question", questionId: "q", sessionId: "s", text: "Which plan?", options: ["Annual", "Monthly"], notes: [], resumable: true },
+  } as HomeItem;
+  render(<HomeQueue items={[item]} actions={{ answerWait } as unknown as HomeActions}
+    agentName={() => null} projectName={() => null} sinceLabel={() => "now"}
+    hrefFor={() => "/threads/s"} onOpen={onOpen} allTasksHref="/tasks" onOpenAllTasks={vi.fn()} />);
+  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Annual" })).toBeNull();
+  await userEvent.setup().click(screen.getByRole("button", { name: "home.open_thread" }));
+  expect(onOpen).toHaveBeenCalledWith(item);
+  expect(answerWait).not.toHaveBeenCalled();
+});
 
 it("keeps a failed answer for retry and clears it after success", async () => {
   const answerWait = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);

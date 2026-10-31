@@ -56,10 +56,9 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
         <div className="home-focus">
           <div className="home-focus-heading">
             <h3>{t("home.plan.start_here")}</h3>
-            <span>{t(`home.plan.focus_${focus.kind}`)}</span>
           </div>
           <ul className="home-items"><HomeQueueItem
-            item={focus} actions={actions} agentName={agentName} projectName={projectName}
+            item={focus} navigationOnly actions={actions} agentName={agentName} projectName={projectName}
             since={sinceLabel(focus.since)} href={hrefFor(focus)} onOpen={() => onOpen(focus)}
             onResolved={() => setResolved(current => new Set([...current, `${focus.key}@${focus.stamp}`]))}
           /></ul>
@@ -84,7 +83,7 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
         {bands.length === 0 ? (
           <div className="home-clear" role="status">
             <p className="home-clear-title">{t(filter === "all" ? focus || readyFocus ? "home.plan.no_other_items" : "home.clear_title" : "home.clear_filtered")}</p>
-            <p className="home-clear-body">{t(focus || readyFocus ? "home.plan.focus_remains" : "home.clear_body")}</p>
+            {focus || readyFocus ? null : <p className="home-clear-body">{t("home.clear_body")}</p>}
           </div>
         ) : (
           bands.map(({ tier, members }) => (
@@ -110,7 +109,6 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
         )}
         {shown.length > 5 ? <Button variant="ghost" size="dense" onClick={() => setExpanded(!expanded)}>{t(expanded ? "home.plan.show_less" : "home.plan.show_all", { count: shown.length })}</Button> : null}
         <footer className="home-panel-footer">
-          <span>{t("home.ranked_hint")}</span>
           <a
             className="home-link"
             href={allTasksHref}

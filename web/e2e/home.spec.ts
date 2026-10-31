@@ -55,7 +55,7 @@ const tasks = [
   task("t-load", 16, { title: "Load-test invoice export", status: "blocked", updatedAt: ago(1440), blockerReason: "Waiting on #14 to land first.", waitingOn:["upstream"], waitingOnSummaries:[{id:"upstream",number:14,title:"Complete the billing schema",status:"running",ownerUserId:"sam",responsibleName:"Sam Lee",canOpen:false}] }),
   task("t-soc2", 5, { title: "Quarterly SOC2 evidence pull", projectId: "p-compliance", dueDate: isoDay(yesterday) }),
   task("t-intake", 21, { title: "Look into flaky login", projectId: undefined, status: "backlog" }),
-  task("t-sdk", 18, { title: "Generate SDK types", status: "running", updatedAt: ago(5) }),
+  task("t-sdk", 18, { title: "Generate SDK types", status: "running", linkedSessionIds: ["s-migrate"], updatedAt: ago(5) }),
   task("t-done", 3, { title: "Accessibility pass on checkout", status: "done", projectId: "p-site", finishedAt: ago(1500), updatedAt: ago(1500) }),
 ];
 const project = (id: string, name: string) => ({
@@ -122,15 +122,15 @@ for (const theme of ["dark", "light"] as const) {
   });
 }
 
-test("answers a paused run's permission prompt in place", async ({ page }) => {
+test("opens the recommended thread before answering a paused run", async ({ page }) => {
   const wire = await serve(page, "dark");
   await page.goto("/home");
 
   const row = queue(page).locator(".home-item").filter({ hasText: "Migrate billing tables" });
-  await row.getByRole("button", { name: "Allow", exact: true }).click();
-
-  await expect.poll(() => wire.find((call) => call.path.endsWith("/permission-requests/req-1"))?.body).toEqual({ decision: "allow" });
-  await expect(row).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
+  await row.getByRole("button", { name: "Open thread", exact: true }).click();
+  await expect(page).toHaveURL(/s-migrate/);
+  expect(wire.filter((call) => call.path.endsWith("/permission-requests/req-1"))).toHaveLength(0);
 });
 
 test("answers a question with one of the agent's options, naming the question", async ({ page }) => {
