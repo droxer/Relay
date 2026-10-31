@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from relay.core.agent_names import AGENT_NAME_POOL, generate_agent_name
+from relay.core.models import AGENT_NAMES, AgentName
 from relay.persistence.agent.store import DatabaseAgentStore
 from store_fixtures import make_agent_store
 
@@ -131,3 +133,7 @@ def test_create_agent_rejects_a_non_string_display_name(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="displayName must be a string"):
         store.create_agent("alice", {"displayName": 42, "executorKind": "claude"})
+
+
+def test_agent_name_literal_matches_agent_names_tuple() -> None:
+    assert set(get_args(AgentName)) == set(AGENT_NAMES)

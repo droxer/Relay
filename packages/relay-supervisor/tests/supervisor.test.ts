@@ -24,7 +24,7 @@ function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string; userI
     userId: input.userId,
     workspacePath: input.workspacePath,
     status: input.status ?? "provisioning",
-    agents: input.agents ?? { claude: "unknown", pi: "unknown", codex: "unknown", kimi: "unknown" },
+    agents: input.agents ?? { claude: "unknown", pi: "unknown", codex: "unknown", kimi: "unknown", opencode: "unknown" },
     createdAt: input.createdAt ?? "2026-01-01T00:00:00.000Z",
     updatedAt: input.updatedAt ?? "2026-01-01T00:00:00.000Z",
     queuedCommandCount: input.queuedCommandCount ?? 0,

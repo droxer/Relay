@@ -13,7 +13,7 @@
 
 Relay helps users work with AI agents across threads, tasks, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
 
-Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on user or managed computers. Each daemon runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
+Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on user or managed computers. Each daemon runs Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, OpenCode, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
 <p align="center">
   <img src="docs/images/relay-threads.png" alt="A Relay thread: one agent has fixed a bug and handed it to a second agent, whose review is streaming live" width="960">

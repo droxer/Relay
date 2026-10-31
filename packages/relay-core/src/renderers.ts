@@ -402,6 +402,50 @@ export class KimiStreamRenderer {
   }
 }
 
+/**
+ * Renders `opencode run --format json`, and the ACP adapter that prints the
+ * same lines: one NDJSON event per line. A text part is the assistant's
+ * words, a tool_use part a tool call with its state, an error event a failed
+ * turn. Step bookkeeping stays off the screen.
+ */
+export class OpenCodeStreamRenderer {
+  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
+  private readonly plain = new PlainTextStreamRenderer("OpenCode", ansi.live);
+  private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
+
+  feed(chunk: string): string {
+    return this.lines.feed(chunk);
+  }
+
+  private formatLine(line: string): string {
+    const event = parseJsonObject(line);
+    if (!event) return this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
+
+    if (event.type === "error") {
+      const error = asRecord(event.error);
+      return `\n${status("error", `OpenCode error: ${String(error.message ?? "unknown error")}`)}\n`;
+    }
+    const part = asRecord(event.part);
+    if (event.type === "text") {
+      const text = typeof part.text === "string" ? part.text.trim() : "";
+      if (!text) return "";
+      this.text.resetBlock();
+      return `\n${this.text.feed(`${text}\n`)}`;
+    }
+    if (event.type === "tool_use") {
+      const state = asRecord(part.state);
+      if (state.status !== "completed" && state.status !== "error") return "";
+      const target = typeof state.title === "string" && state.title ? state.title : String(part.tool ?? "tool");
+      return toolLine("tool", target);
+    }
+    return "";
+  }
+}
+
+export function formatOpenCodeJsonLine(line: string): string {
+  return new OpenCodeStreamRenderer().feed(`${line}\n`);
+}
+
 export function formatKimiJsonLine(line: string): string {
   return new KimiStreamRenderer().feed(`${line}\n`);
 }

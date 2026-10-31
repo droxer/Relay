@@ -17,14 +17,23 @@ export function stableNodeOrder(
   ));
 }
 
-const DEFAULT_NODE_AGENT_NAMES: AgentName[] = ["claude", "codex", "kimi"];
+/** The one display order for runtimes on node surfaces. */
+const NODE_AGENT_ORDER: readonly AgentName[] = ["codex", "claude", "pi", "opencode", "kimi"];
+/** Runtimes listed only once a computer reports them installed. */
+const OPT_IN_NODE_AGENT_NAMES: ReadonlySet<AgentName> = new Set(["pi", "opencode"]);
 
-/** Agent executors shown on admin node surfaces (Pi only when the daemon reports it). */
+/** `names` in the node-surface display order. */
+export function orderNodeAgentNames(names: readonly AgentName[]): AgentName[] {
+  return NODE_AGENT_ORDER.filter((name) => names.includes(name));
+}
+
+/** Agent executors shown on admin node surfaces (opt-in runtimes only when the daemon reports them). */
 export function visibleNodeAgentNames(node: Pick<ControlPanelDaemonNodeRecord, "agents">): AgentName[] {
-  const names: AgentName[] = [...DEFAULT_NODE_AGENT_NAMES];
-  // Pi is opt-in: list it only once the computer reports it installed.
-  if (node.agents.pi && node.agents.pi !== "unknown" && node.agents.pi !== "unavailable") names.push("pi");
-  return names;
+  return NODE_AGENT_ORDER.filter((name) => {
+    if (!OPT_IN_NODE_AGENT_NAMES.has(name)) return true;
+    const status = node.agents[name];
+    return Boolean(status) && status !== "unknown" && status !== "unavailable";
+  });
 }
 
 function shellQuote(value: string): string {

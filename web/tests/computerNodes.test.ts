@@ -12,7 +12,7 @@ import type { DaemonNodeMonitorRecord } from "../src/types.js";
 function node(overrides: Partial<DaemonNodeMonitorRecord> & { id: string }): DaemonNodeMonitorRecord {
   return {
     status: "ready",
-    agents: { claude: "unknown", pi: "unknown", codex: "unknown", kimi: "unknown" },
+    agents: { claude: "unknown", pi: "unknown", codex: "unknown", kimi: "unknown", opencode: "unknown" },
     online: true,
     stale: false,
     queuedCommandCount: 0,

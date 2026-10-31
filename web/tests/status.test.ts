@@ -27,7 +27,7 @@ import type {
 function daemonNode(input: Partial<DaemonNodeMonitorRecord> & { id: string; userId?: string }): DaemonNodeMonitorRecord {
   return {
     status: "ready",
-    agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
+    agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
     createdAt: "2026-06-12T00:00:00.000Z",
     updatedAt: "2026-06-12T00:00:00.000Z",
     queuedCommandCount: 0,
@@ -64,7 +64,7 @@ describe("Relay web thread status", () => {
         id: "sbx_alice",
         userId: "alice",
         status: "ready",
-        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
+        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z",
         queuedCommandCount: 0,
@@ -82,7 +82,7 @@ describe("Relay web thread status", () => {
         id: "sbx_alice",
         userId: "alice",
         status: "ready",
-        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
+        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z",
         queuedCommandCount: 0,

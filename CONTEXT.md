@@ -78,8 +78,8 @@ coordinator, not a role.
 _Avoid_: Tech Lead (for the planner), job, persona
 
 **Agent Runtime**:
-A capability on a Computer that can execute one implementation such as Claude,
-Codex, Pi, or Kimi. `Logical Agent.executorKind` selects the required runtime.
+A capability on a Computer that can execute one implementation such as Codex,
+Claude, Pi, OpenCode, or Kimi. `Logical Agent.executorKind` selects the required runtime.
 A runtime is not an Agent and never creates one by registering. A connecting
 Computer *offers* a **Default Agent** per ready runtime — an ordinary Logical
 Agent named after the runtime — and its User accepts or declines each, once

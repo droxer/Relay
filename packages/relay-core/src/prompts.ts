@@ -239,6 +239,10 @@ export function kimiTaskPrompt(state: AgentState): string {
   return agentTaskPrompt(state);
 }
 
+export function opencodeTaskPrompt(state: AgentState): string {
+  return agentTaskPrompt(state);
+}
+
 /**
  * A setup round drafts the project instead of doing its work: the owner
  * reviews the proposal and applies it, so the agent must not start the work

@@ -74,6 +74,17 @@ function codexStdout(message: string): string {
   });
 }
 
+/**
+ * OpenCode never runs headless on a native local run: its tools would wait on
+ * an approval nobody can give. Without its ACP adapter, which these generic
+ * loops do not attach, that run is refused, so they skip it.
+ */
+function refusedWithoutAdapter(agent: AgentName): boolean {
+  return agent === "opencode"
+    && process.env.RELAY_RUN_AS_CURRENT_USER === "1"
+    && (process.env.RELAY_LOCAL_PERMISSION_POLICY ?? "native") === "native";
+}
+
 function state(overrides: Partial<AgentState> = {}): AgentState {
   return {
     task_goal: "task",
@@ -138,6 +149,7 @@ function writeFakePi(path: string): void {
 describe("adaptive agent execution", () => {
   it("runs every registered agent", async () => {
     for (const agent of AGENT_NAMES) {
+      if (refusedWithoutAdapter(agent)) continue;
       const stdout = agent === "codex"
         ? `${codexStdout("Blocking issue found.")}\n`
         : "Blocking issue found.\n";
@@ -160,6 +172,7 @@ describe("adaptive agent execution", () => {
 
   it("asks every agent CLI for unbuffered output so it streams over a pipe", async () => {
     for (const agent of AGENT_NAMES) {
+      if (refusedWithoutAdapter(agent)) continue;
       let env: Record<string, string> | undefined;
       await runAgentNode(agent, state({ task_goal: "Fix auth" }), {
         sink: () => undefined,
@@ -175,6 +188,7 @@ describe("adaptive agent execution", () => {
 
   it("marks a non-zero exit as a failure for every agent", async () => {
     for (const agent of AGENT_NAMES) {
+      if (refusedWithoutAdapter(agent)) continue;
       const patch = await runAgentNode(agent, state({ task_goal: "Fix auth" }), {
         sink: () => undefined,
         execStream: async () => ({ exit_code: 1, stdout: "", stderr: "boom" }),
@@ -2117,9 +2131,9 @@ describe("agent registry", () => {
     assert.equal(isAgentName(42), false);
   });
 
-  it("includes the four registered agents in a stable order", () => {
-    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "kimi"]);
-    assert.equal(agentNameList(), "claude, pi, codex, kimi");
+  it("includes the five registered agents in a stable order", () => {
+    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "kimi", "opencode"]);
+    assert.equal(agentNameList(), "claude, pi, codex, kimi, opencode");
   });
 
   it("exposes one adaptive command for every agent", () => {

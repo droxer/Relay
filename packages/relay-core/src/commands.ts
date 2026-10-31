@@ -4,6 +4,7 @@ import {
   claudeTaskPrompt,
   codexTaskPrompt,
   kimiTaskPrompt,
+  opencodeTaskPrompt,
   piTaskPrompt,
 } from "./prompts.js";
 import { kimiApiKey, kimiModel, localRuntimeEnvironment } from "./env.js";
@@ -307,6 +308,44 @@ function withSkillEnv(command: string, state: AgentState, allowedKey: string): s
   if (isLocalAgentExecution()) return command;
   const value = state.skill_env?.[allowedKey];
   return value === undefined ? command : `export ${allowedKey}=${shellQuote(value)} && ${command}`;
+}
+
+// OpenCode CLI. `opencode run --format json` prints the NDJSON stream that
+// OpenCodeStreamRenderer reads; the ACP adapter prints the same lines.
+export function buildOpenCodeCommand(state: AgentState, workspacePath?: string): string {
+  const prompt = nativeSkillPrompt(opencodeTaskPrompt(state), state);
+  const launch = permissionPromptLaunch(state, "opencode-acp");
+  if (launch) return buildOpenCodeAcpInvocation(launch, prompt, workspacePath, state.agent_model);
+  // `opencode run` never waits for an answer: a tool that needs approval
+  // hangs the run. A native local run must reach the adapter, so without one
+  // the run is refused here rather than started headless.
+  if (!trustedExecution()) {
+    throw new Error("OpenCode cannot ask a person on this run: its permission adapter is not attached.");
+  }
+  return buildOpenCodeRunInvocation(prompt, workspacePath, state.agent_model);
+}
+
+/** Trusted runs only: `--auto` approves every tool that is not explicitly denied. */
+function buildOpenCodeRunInvocation(prompt: string, workspacePath?: string, pinnedModel?: string): string {
+  const argv = [...agentArgv("opencode"), "run", "--format", "json", "--auto"];
+  const model = runtimeModel(pinnedModel, () => undefined);
+  if (model) argv.push("--model", model);
+  argv.push("--", prompt);
+  return runAsAgent(shellCommand(argv), workspacePath);
+}
+
+/** A native run that asks a person drives `opencode acp` through the OpenCode adapter. */
+function buildOpenCodeAcpInvocation(
+  launch: PermissionPromptLaunch,
+  prompt: string,
+  workspacePath?: string,
+  pinnedModel?: string,
+): string {
+  const argv = [launch.command, ...launch.args, "--cwd", workspacePath ?? agentWorkspacePath()];
+  const model = runtimeModel(pinnedModel, () => undefined);
+  if (model) argv.push("--model", model);
+  argv.push("--prompt", prompt);
+  return runAsAgent([...envExports(launch.env), shellCommand(argv)].join(" && "), workspacePath);
 }
 
 export function buildPiPreflightCommand(): string {

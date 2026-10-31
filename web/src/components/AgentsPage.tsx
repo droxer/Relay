@@ -56,6 +56,7 @@ Record<AgentName, { blurb: string }> {
     pi: { blurb: t("agent.pi.blurb") },
     codex: { blurb: t("agent.codex.blurb") },
     kimi: { blurb: t("agent.kimi.blurb") },
+    opencode: { blurb: t("agent.opencode.blurb") },
   };
 }
 

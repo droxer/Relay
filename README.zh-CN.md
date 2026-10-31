@@ -13,7 +13,7 @@
 
 Relay 帮助用户通过对话、议题、例行任务和项目与 AI 智能体协作。你可以为智能体命名、配置角色和技能，选择运行位置，并与团队共享需求、运行过程和结果。
 
-Relay 采用本地优先架构：后端协调工作，守护进程在用户计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 [Claude Code](https://github.com/anthropics/claude-code)、Codex、Pi 或 Kimi。
+Relay 采用本地优先架构：后端协调工作，守护进程在用户计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 或 Kimi。
 
 <p align="center">
   <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 对话：一个智能体修复缺陷后交接给另一个智能体，后者的评审正在实时输出" width="960">

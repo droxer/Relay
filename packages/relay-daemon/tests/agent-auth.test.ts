@@ -126,12 +126,14 @@ console.log('saved user-model');
 test("all local runtimes launch from PATH using their existing custom auth directories", async () => {
   const home = mkdtempSync(join(tmpdir(), "relay-native-clis-"));
   const previous = process.env;
-  const homes = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME", pi: "PI_CODING_AGENT_DIR", kimi: "KIMI_CODE_HOME" };
+  const homes = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME", pi: "PI_CODING_AGENT_DIR", kimi: "KIMI_CODE_HOME", opencode: "XDG_DATA_HOME" };
   const bin = join(home, "bin");
   mkdirSync(bin);
   process.env = { PATH: `${bin}:/usr/bin:/bin`, RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: home, RELAY_AGENT_WORKSPACE: home, OPENAI_MODEL: "relay-model", PI_PROVIDER: "relay-provider", KIMI_MODEL: "relay-model" };
   try {
-    for (const agent of AGENT_NAMES) {
+    // OpenCode runs a native local turn only through its ACP adapter, which
+    // this launch-from-PATH check does not attach; its refusal is tested in relay-core.
+    for (const agent of AGENT_NAMES.filter((name) => name !== "opencode")) {
       const nativeHome = join(home, `native-${agent}`);
       mkdirSync(nativeHome);
       writeFileSync(join(nativeHome, "login"), "existing-user-login");

@@ -20,6 +20,7 @@ def test_registration_keeps_why_a_runtime_is_not_ready() -> None:
         "pi": "ready",
         "codex": "unavailable",
         "kimi": "unresponsive",
+        "opencode": "unknown",
     }
     assert details["codex"]["detail"] == "Codex is not installed."
 

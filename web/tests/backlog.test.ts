@@ -195,7 +195,7 @@ describe("discussionAgentsForTask", () => {
 
     assert.deepEqual(discussionAgentsForTask(backlogTask, [
       node({ id: "n1", userId: "bob" }),
-      node({ id: "n2", userId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", kimi: "unknown" }, disabledAgents: ["codex"] }),
+      node({ id: "n2", userId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", kimi: "unknown", opencode: "unknown" }, disabledAgents: ["codex"] }),
     ]), []);
   });
 });
