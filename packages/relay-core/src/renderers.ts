@@ -405,10 +405,11 @@ export class KimiStreamRenderer {
 /**
  * Renders `opencode run --format json`, and the ACP adapter that prints the
  * same lines: one NDJSON event per line. A text part is the assistant's
- * words, a tool_use part a tool call with its state, an error event a failed
- * turn. Step bookkeeping stays off the screen.
+ * words (`delta: true` appends an ACP chunk), a tool_use part a tool call with
+ * its state, an error event a failed turn. Step bookkeeping stays off screen.
  */
 export class OpenCodeStreamRenderer {
+  private streamingText = false;
   private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
   private readonly plain = new PlainTextStreamRenderer("OpenCode", ansi.live);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
@@ -422,17 +423,28 @@ export class OpenCodeStreamRenderer {
     if (!event) return this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
 
     if (event.type === "error") {
+      this.streamingText = false;
       const error = asRecord(event.error);
       return `\n${status("error", `OpenCode error: ${String(error.message ?? "unknown error")}`)}\n`;
     }
     const part = asRecord(event.part);
     if (event.type === "text") {
+      if (event.delta === true) {
+        const text = typeof part.text === "string" ? part.text : "";
+        if (!text) return "";
+        if (this.streamingText) return this.text.feed(text);
+        this.streamingText = true;
+        this.text.resetBlock();
+        return `\n${this.text.feed(text)}`;
+      }
+      this.streamingText = false;
       const text = typeof part.text === "string" ? part.text.trim() : "";
       if (!text) return "";
       this.text.resetBlock();
       return `\n${this.text.feed(`${text}\n`)}`;
     }
     if (event.type === "tool_use") {
+      this.streamingText = false;
       const state = asRecord(part.state);
       if (state.status !== "completed" && state.status !== "error") return "";
       const target = typeof state.title === "string" && state.title ? state.title : String(part.tool ?? "tool");

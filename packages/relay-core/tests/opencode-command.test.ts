@@ -60,6 +60,15 @@ describe("buildOpenCodeCommand", () => {
 });
 
 describe("OpenCodeStreamRenderer", () => {
+  it("streams deltas as one block with whitespace intact", () => {
+    const renderer = new OpenCodeStreamRenderer();
+    const output = ["Hello", " ", "world."]
+      .map((text) => renderer.feed(`${JSON.stringify({ type: "text", delta: true, part: { type: "text", text } })}\n`))
+      .join("").replace(/\x1b\[[0-9;]*m/g, "");
+    assert.match(output, /Hello world\./);
+    assert.equal(output.split("●").length - 1, 1);
+  });
+
   it("renders assistant text and completed tool calls without printing raw JSON", () => {
     const renderer = new OpenCodeStreamRenderer();
     const output = [

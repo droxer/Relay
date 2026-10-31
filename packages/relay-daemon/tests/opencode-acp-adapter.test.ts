@@ -119,10 +119,10 @@ describe("OpenCode ACP adapter", () => {
     });
     assert.deepEqual(result.log[0], { answer: { outcome: { outcome: "selected", optionId: "once" } } });
     const lines = events(result.stdout);
-    assert.deepEqual(lines[0], { type: "text", part: { type: "text", text: "Working." } });
+    assert.deepEqual(lines[0], { type: "text", delta: true, part: { type: "text", text: "Working." } });
     assert.equal((lines[1].part as { tool: string }).tool, "shell");
     assert.equal((lines[1].part as { state: { status: string } }).state.status, "completed");
-    assert.deepEqual(lines[2], { type: "text", part: { type: "text", text: "Done." } });
+    assert.deepEqual(lines[2], { type: "text", delta: true, part: { type: "text", text: "Done." } });
   });
 
   it("denies with reject and never selects the always option", async () => {
@@ -154,6 +154,18 @@ describe("OpenCode ACP adapter", () => {
 });
 
 describe("OpenCode ACP adapter helpers", () => {
+  it("writes each assistant chunk before a tool or turn completion", () => {
+    let stdout = "";
+    const writer = new RunJsonWriter({ write: (text) => { stdout += text; } });
+    const translator = new SessionUpdateTranslator(writer);
+    for (const text of ["Hello", " ", "**world**\n"]) {
+      translator.apply({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
+      assert.ok(stdout, "an incoming text chunk must be emitted immediately");
+      assert.equal(events(stdout).at(-1)?.delta, true);
+      assert.equal((events(stdout).at(-1)?.part as { text: string }).text, text);
+    }
+  });
+
   it("maps ACP tool kinds onto the broker's question kinds", () => {
     assert.equal(questionKind("execute"), "command");
     assert.equal(questionKind("edit"), "file_change");

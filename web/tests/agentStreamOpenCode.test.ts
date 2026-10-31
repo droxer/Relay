@@ -8,6 +8,45 @@ const text = { type: "text", part: { type: "text", text: reply } };
 const ndjson = (...events: unknown[]) => events.map((event) => JSON.stringify(event)).join("\n") + "\n";
 
 describe("OpenCode transcript parsing", () => {
+  it("grows one text block across deltas without trimming Markdown whitespace", () => {
+    const accumulator = new AgentStreamAccumulator("opencode");
+    let raw = "";
+    let expected = "";
+    for (const chunk of ["Hello", " ", "**world**", "\n\n", "```ts\n", "  const x = 1;\n", "```", " 👨‍👩‍👧‍👦"]) {
+      raw += ndjson({ type: "text", delta: true, part: { type: "text", text: chunk } });
+      expected += chunk;
+      assert.deepEqual(parseAgentStream("opencode", raw), [{ kind: "text", text: expected }]);
+      assert.deepEqual(accumulator.update(raw), [{ kind: "text", text: expected }]);
+    }
+    const before = accumulator.update(raw)[0];
+    raw += ndjson(tool, { type: "text", delta: true, part: { type: "text", text: "Done." } });
+    assert.deepEqual(accumulator.update(raw), [
+      { kind: "text", text: expected }, { kind: "tool", name: "tool" }, { kind: "text", text: "Done." },
+    ]);
+    assert.equal(accumulator.update(raw)[0], before);
+    assert.deepEqual(accumulator.update(ndjson(text)), [{ kind: "text", text: reply }]);
+  });
+
+  it("handles fragmented delta records, repeated updates, and replaced logs", () => {
+    const raw = ndjson(
+      { type: "text", delta: true, part: { text: "Hello " } },
+      { type: "text", delta: true, part: { text: "世界\n\n" } },
+      tool,
+      { type: "text", delta: true, part: { text: "Done." } },
+    );
+    const accumulator = new AgentStreamAccumulator("opencode");
+    for (let end = 1; end <= raw.length; end++) {
+      const prefix = raw.slice(0, end);
+      const segments = accumulator.update(prefix);
+      assert.deepEqual(segments, parseAgentStream("opencode", prefix));
+      assert.equal(accumulator.update(prefix), segments);
+    }
+    assert.deepEqual(accumulator.update(ndjson({ type: "text", delta: true, part: { text: "New run" } })), [
+      { kind: "text", text: "New run" },
+    ]);
+    assert.deepEqual(accumulator.update(""), []);
+  });
+
   it("renders tool calls and Markdown text from the reported NDJSON", () => {
     assert.deepEqual(parseAgentStream("opencode", ndjson(tool, text)), [
       { kind: "tool", name: "tool" },
