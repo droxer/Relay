@@ -338,6 +338,23 @@ def _ordered_accomplish_agents(
     ]
 
 
+def _has_work_contract(team: dict[str, Any], members: list[dict[str, Any]]) -> bool:
+    """Whether the team asks more of its members than their own roles.
+
+    Every member config records a team role; one that only repeats the
+    agent's own role is no contract, so a team without briefs, flags, or
+    criteria dispatches as it did before roles were recorded."""
+    if team.get("acceptanceCriteria"):
+        return True
+    own_roles = {member["id"]: member.get("defaultRole") for member in members}
+    for agent_id, config in (team.get("memberConfigs") or {}).items():
+        if set(config) - {"role"}:
+            return True
+        if "role" in config and config["role"] != own_roles.get(agent_id):
+            return True
+    return False
+
+
 def team_runtime_snapshot(
     team: dict[str, Any],
     members: list[dict[str, Any]],
@@ -348,7 +365,7 @@ def team_runtime_snapshot(
     """Capture the roster, revision, and collaboration style a round used."""
     return {
         "teamId": team["id"],
-        **({"workContractVersion": 1} if team.get("memberConfigs") or team.get("acceptanceCriteria") else {}),
+        **({"workContractVersion": 1} if _has_work_contract(team, members) else {}),
         "teamRevision": team.get("updatedAt") or team.get("createdAt"),
         "memberAgentIds": [member["id"] for member in members],
         "leadAgentId": team.get("leadAgentId"),

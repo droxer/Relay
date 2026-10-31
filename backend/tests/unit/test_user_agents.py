@@ -236,8 +236,9 @@ def test_default_role_must_be_a_known_role(tmp_path) -> None:
 
 
 def test_birth_certificate_fields_cannot_be_patched(tmp_path) -> None:
-    """computerId / executorKind / defaultRole are the birth certificate;
-    changing them is like swapping in a different coworker."""
+    """computerId / executorKind are the birth certificate; changing them is
+    like swapping in a different coworker. The role is not: it stays editable,
+    but only to a known role."""
     from store_fixtures import make_agent_store
 
     store = make_agent_store(tmp_path)
@@ -253,10 +254,12 @@ def test_birth_certificate_fields_cannot_be_patched(tmp_path) -> None:
     for field, value in (
         ("computerId", "device:alice:machine-b"),
         ("executorKind", "codex"),
-        ("defaultRole", "reviewer"),
+        ("defaultRole", "wizard"),
+        ("defaultRole", None),
     ):
         with pytest.raises(ValueError):
             store.update_agent(agent["id"], {field: value})
+    assert store.update_agent(agent["id"], {"defaultRole": "reviewer"})["defaultRole"] == "reviewer"
 
 
 def test_personality_fields_remain_patchable(tmp_path) -> None:

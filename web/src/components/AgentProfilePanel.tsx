@@ -19,9 +19,11 @@ import {
   updateUserAgent,
   updateOwnUserAgent,
 } from "../api";
-import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent } from "../types";
+import { AGENT_ROLE_OPTIONS } from "../types";
+import type { AgentPlacement, AgentRole, ControlPanelDaemonNodeRecord, UserAgent } from "../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ADMIN_AGENTS_KEY } from "../lib/adminHelpers";
 import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
@@ -118,6 +120,7 @@ export function AgentProfilePanel({
       ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
       ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}),
       ...(patch.modelPolicy !== undefined ? { modelPolicy: patch.modelPolicy } : {}),
+      ...(patch.defaultRole !== undefined ? { defaultRole: patch.defaultRole } : {}),
     });
   }
 
@@ -168,6 +171,21 @@ export function AgentProfilePanel({
       applyAgentUpdate(result.agent);
       setEditingProfile(false);
       onDirtyChange?.(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRoleSave(role: AgentRole) {
+    if (role === agent.defaultRole) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await patchAgent({ defaultRole: role });
+      if (!result) return;
+      applyAgentUpdate(result.agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -317,13 +335,39 @@ export function AgentProfilePanel({
             <span className="workspace-dossier-field-label" id="agent-default-role-label">
               {t("admin.v2.agent_role_label")}
             </span>
-            {/* Role is set at creation and immutable thereafter (birth
-                certificate field) — always render read-only, never editable. */}
-            <span className="workspace-dossier-field-value" aria-labelledby="agent-default-role-label">
-              {agent.defaultRole
-                ? t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole })
-                : t("admin.v2.agent_role_none")}
-            </span>
+            {/* The agent's own role, editable with the rest of the profile.
+                A team keeps its own role for the member, so changing this
+                does not rewrite a team the agent already belongs to. */}
+            {canEditProfile && editingProfile ? (
+              <Select
+                value={agent.defaultRole ?? null}
+                disabled={saving}
+                onValueChange={(value) => {
+                  if (value) void handleRoleSave(value as AgentRole);
+                }}
+              >
+                <SelectTrigger className="w-full" aria-labelledby="agent-default-role-label">
+                  <SelectValue placeholder={t("agents_page.create_role_placeholder")}>
+                    {(value: string | null) => value
+                      ? t(`admin.v2.agent_role.${value}`, { defaultValue: value })
+                      : t("agents_page.create_role_placeholder")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENT_ROLE_OPTIONS.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {t(`admin.v2.agent_role.${role}`, { defaultValue: role })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="workspace-dossier-field-value" aria-labelledby="agent-default-role-label">
+                {agent.defaultRole
+                  ? t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole })
+                  : t("admin.v2.agent_role_none")}
+              </span>
+            )}
           </div>
           {/* The record band prints the model; the field that changes it
               appears only while the profile is being edited, so the read

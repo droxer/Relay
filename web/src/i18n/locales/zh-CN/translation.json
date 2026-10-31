@@ -2378,7 +2378,6 @@
     "responsibilities": "角色与职责",
     "help": "明确工作归属。团队完成前，所有必需贡献都必须通过验收。",
     "role": "团队角色",
-    "role_inherit": "使用智能体默认角色",
     "role_planner": "架构师",
     "role_implementer": "软件工程师",
     "role_tester": "测试工程师",

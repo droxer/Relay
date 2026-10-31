@@ -75,7 +75,9 @@ it("makes on-request participation optional in the saved payload", async () => {
     name: "Team", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], enabled: true,
     memberConfigs: { builder: saved[0] }, acceptanceCriteria: ["No reusable reset token", ""],
   });
-  expect(payload.memberConfigs?.builder).toEqual({ responsibility: "Own the reset API", participation: "on_request", required: false });
+  // A member with no team role of its own and no agent role saves as an
+  // implementer: every save records the role the member plays.
+  expect(payload.memberConfigs?.builder).toEqual({ role: "implementer", responsibility: "Own the reset API", participation: "on_request", required: false });
   expect(payload.acceptanceCriteria).toEqual(["No reusable reset token"]);
 });
 
@@ -102,10 +104,13 @@ it("reads as a summary and edits one member in place", async () => {
   expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
 
   fireEvent.click(pencil());
+  // The role select opens on the agent's own role; there is no inherit choice.
+  expect(screen.getByRole("combobox", { name: "team_work.role" }).textContent).toContain("team_work.role_reviewer");
   fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Review auth changes" } });
   fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
   await screen.findByText("Review auth changes");
-  expect(saved).toEqual([{ responsibility: "Review auth changes", expectedOutputs: ["Findings list"] }]);
+  // The team role starts from the agent's own role and is saved with the card.
+  expect(saved).toEqual([{ role: "reviewer", responsibility: "Review auth changes", expectedOutputs: ["Findings list"] }]);
   expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
 });
 

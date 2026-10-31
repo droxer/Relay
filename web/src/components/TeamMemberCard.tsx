@@ -2,6 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { AGENT_ROLE_OPTIONS } from "../types";
 import type { AgentName, AgentPlacement, LogicalAgentAvailability, TeamMemberConfig } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
@@ -14,8 +15,6 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const ROLES = ["inherit", "planner", "implementer", "tester", "reviewer", "fixer"] as const;
-
 type TeamCardMember = {
   id: string;
   displayName: string;
@@ -27,8 +26,16 @@ type TeamCardMember = {
   placements?: AgentPlacement[];
 };
 
+/* A member's team role. Every save records one; a team saved before roles
+   were recorded still plays the agent's own role until it is next saved. */
 function effectiveRoleOf(member: TeamCardMember, config: TeamMemberConfig) {
   return config.role ?? member.defaultRole;
+}
+
+function withTeamRole(member: TeamCardMember, config: TeamMemberConfig): TeamMemberConfig {
+  if (config.role) return config;
+  const role = AGENT_ROLE_OPTIONS.find((option) => option === member.defaultRole) ?? "implementer";
+  return { ...config, role };
 }
 
 /** Required unless on-request; an unset flag falls back to the team default,
@@ -38,8 +45,8 @@ function isRequired(config: TeamMemberConfig) {
   return config.required ?? true;
 }
 
-/* Who the member is: avatar with readiness pip; name with the role they will
-   actually play (so an inherited role is visible without opening the select)
+/* Who the member is: avatar with readiness pip; name with the team role they
+   play
    and the lead star; then the shared <AgentMetaLine> — runtime and the
    computers it runs on, the one meta line every agent surface renders. Same
    head grammar as the project crew tiles. */
@@ -95,21 +102,19 @@ function TeamMemberContractFields({ config, lead, idBase, disabled, onChange }: 
     <>
       <Field label={t("team_work.role")} labelId={`${idBase}-role`} wrapper="div">
         <Select
-          value={config.role ?? "inherit"}
+          value={config.role ?? null}
           disabled={disabled}
           onValueChange={(value) => {
-            if (value) {
-              update({ role: value === "inherit" ? undefined : (value as TeamMemberConfig["role"]) });
-            }
+            if (value) update({ role: value as TeamMemberConfig["role"] });
           }}
         >
           <SelectTrigger className="w-full" aria-labelledby={`${idBase}-role`}>
-            {/* A bare <SelectValue/> renders the stored value ("inherit"),
-                not the role's copy. */}
+            {/* A bare <SelectValue/> renders the stored value, not the
+                role's copy. */}
             <SelectValue>{(value: string) => t(`team_work.role_${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {ROLES.map((role) => (
+            {AGENT_ROLE_OPTIONS.map((role) => (
               <SelectItem key={role} value={role}>{t(`team_work.role_${role}`)}</SelectItem>
             ))}
           </SelectContent>
@@ -226,7 +231,7 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
       className="team-work-member-edit"
       tooltip={t("team_work.edit_member", { name: member.displayName })}
       disabled={!canEdit}
-      onClick={() => setEditing({ ...config })}
+      onClick={() => setEditing(withTeamRole(member, config))}
     >
       <ActionEdit size={ICON.sm} aria-hidden="true" />
     </Button>

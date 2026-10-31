@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session
 from ...teams.computer import resolve_team_computer
+from ...teams.membership import with_member_roles
 from .agents import _agent_views, _user_exists
 from ..deps import AppContextDep
 from ..actors import request_actor
@@ -71,14 +72,33 @@ def _validated_roster(
 
 
 def _team_patch(
-    body: dict[str, Any], lead: str | None, members: list[str], computer: dict[str, Any]
+    ctx: AppContextDep,
+    current: dict[str, Any],
+    body: dict[str, Any],
+    roster: tuple[str | None, list[str], dict[str, Any]],
 ) -> dict[str, Any]:
+    lead, members, computer = roster
     patch = dict(body)
     if "leadAgentId" in body:
         patch["leadAgentId"] = lead
     if "memberAgentIds" in body:
         patch["memberAgentIds"] = members
+    if "memberAgentIds" in body or "memberConfigs" in body:
+        configs = body.get("memberConfigs", current.get("memberConfigs") or {})
+        if isinstance(configs, dict):
+            kept = {key: value for key, value in configs.items() if key in members}
+            patch["memberConfigs"] = with_member_roles(ctx.agent_store, members, kept)
     return {**patch, **computer}
+
+
+def _member_configs(
+    ctx: AppContextDep, body: dict[str, Any], members: list[str]
+) -> Any:
+    """A new team's member configs, each member carrying a team role."""
+    configs = body.get("memberConfigs", {})
+    if not isinstance(configs, dict):
+        return configs  # the store rejects it with its own message
+    return with_member_roles(ctx.agent_store, members, configs)
 
 
 def _member_views(
@@ -156,7 +176,13 @@ def create_team(
         lead, members, computer = _validated_roster(ctx, actor["userId"], body)
         team = ctx.team_store.create_team(
             actor["userId"],
-            {**body, "leadAgentId": lead, "memberAgentIds": members, **computer},
+            {
+                **body,
+                "leadAgentId": lead,
+                "memberAgentIds": members,
+                "memberConfigs": _member_configs(ctx, body, members),
+                **computer,
+            },
         )
     except ValueError as error:
         raise _team_error(error) from error
@@ -171,11 +197,9 @@ def update_team(
     current = _owned_team(ctx, team_id, actor["userId"])
     body = _request_body
     try:
-        lead, members, computer = _validated_roster(
-            ctx, actor["userId"], body, current=current
-        )
+        roster = _validated_roster(ctx, actor["userId"], body, current=current)
         team = ctx.team_store.update_team(
-            team_id, _team_patch(body, lead, members, computer)
+            team_id, _team_patch(ctx, current, body, roster)
         )
     except ValueError as error:
         raise _team_error(error) from error
@@ -217,7 +241,7 @@ def create_control_panel_team(
                 "name": body.get("name"),
                 "profileImageUrl": body.get("profileImageUrl"),
                 "enabled": body.get("enabled", True),
-                "memberConfigs": body.get("memberConfigs", {}),
+                "memberConfigs": _member_configs(ctx, body, members),
                 "acceptanceCriteria": body.get("acceptanceCriteria", []),
                 "collaborationStyle": body.get("collaborationStyle"),
                 "humanApproval": body.get("humanApproval"),
@@ -247,11 +271,9 @@ def update_control_panel_team(
     current = _active_team(ctx, team_id)
     body = _request_body
     try:
-        lead, members, computer = _validated_roster(
-            ctx, current["ownerUserId"], body, current=current
-        )
+        roster = _validated_roster(ctx, current["ownerUserId"], body, current=current)
         team = ctx.team_store.update_team(
-            team_id, _team_patch(body, lead, members, computer)
+            team_id, _team_patch(ctx, current, body, roster)
         )
     except ValueError as error:
         raise _team_error(error) from error

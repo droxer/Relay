@@ -2431,7 +2431,6 @@
     "responsibilities": "Roles and responsibilities",
     "help": "Assign clear ownership. Required contributions must pass before the team can finish.",
     "role": "Team role",
-    "role_inherit": "Use agent default",
     "role_planner": "Architect",
     "role_implementer": "Software Engineer",
     "role_tester": "QA Engineer",

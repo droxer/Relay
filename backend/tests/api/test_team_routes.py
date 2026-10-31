@@ -312,6 +312,46 @@ def _login(client: TestClient, user_id: str) -> None:
     )
 
 
+def test_team_member_role_starts_from_agent_role_and_is_the_teams(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap(client)
+        _user(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex", role="planner")
+        builder = _agent(client, "alice", "Builder", "claude")
+        checker = _agent(client, "alice", "Checker", "codex", role="reviewer")
+        _login(client, "alice")
+        created = client.post("/api/v1/teams", json={
+            "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"]],
+            "memberConfigs": {builder["id"]: {"role": "tester", "responsibility": "Tests"}},
+        })
+        assert created.status_code == 201, created.text
+        team = created.json()["team"]
+        # A member joins with its own role unless the team names another.
+        assert team["memberConfigs"][lead["id"]] == {"role": "planner"}
+        assert team["memberConfigs"][builder["id"]] == {"role": "tester", "responsibility": "Tests"}
+
+        added = client.patch(f"/api/v1/teams/{team['id']}", json={
+            "memberAgentIds": [lead["id"], builder["id"], checker["id"]],
+        })
+        assert added.status_code == 200, added.text
+        configs = added.json()["team"]["memberConfigs"]
+        assert configs[checker["id"]] == {"role": "reviewer"}
+        assert configs[builder["id"]]["role"] == "tester"
+
+        # Changing the agent's own role leaves the team's choice alone.
+        assert client.patch(
+            f"/api/v1/agents/{checker['id']}", json={"defaultRole": "fixer"}
+        ).status_code == 200
+        again = next(
+            item for item in client.get("/api/v1/teams").json()["teams"]
+            if item["id"] == team["id"]
+        )
+        assert again["memberConfigs"][checker["id"]]["role"] == "reviewer"
+
+
 def test_admin_and_user_manage_teams(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

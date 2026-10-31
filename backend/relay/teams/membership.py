@@ -39,3 +39,23 @@ def reconcile_team_memberships(
         if stale_members:
             updated.append(current)
     return updated
+
+
+def with_member_roles(
+    agent_store: Any, members: list[str], configs: dict[str, Any]
+) -> dict[str, Any]:
+    """Every member's config with a team role, a missing one taken from the
+    agent's own role. The team role is the team's from then on: changing the
+    agent's role later does not rewrite a team it already belongs to."""
+    result = dict(configs)
+    for agent_id in members:
+        config = result.get(agent_id)
+        if isinstance(config, dict) and config.get("role"):
+            continue
+        agent = agent_store.get_agent(agent_id)
+        role = agent.get("defaultRole") if agent else None
+        if not role:
+            continue
+        base = config if isinstance(config, dict) else {}
+        result[agent_id] = {**base, "role": role}
+    return result

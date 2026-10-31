@@ -2834,13 +2834,10 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
         assert client.get(f"/api/v1/threads/{session_id}").json()["status"] == "failed"
 
 
-def test_agent_role_is_visible_but_not_patchable(monkeypatch) -> None:
-    """defaultRole is part of the birth certificate: it decides what an agent
-    is for, so changing it is indistinguishable from swapping in a different
-    colleague. It has to be readable everywhere the agent is rendered, but
-    neither the admin route nor the user's own route may PATCH it —
-    both reach the same store-level rejection.
-    """
+def test_agent_role_is_visible_and_patchable(monkeypatch) -> None:
+    """defaultRole is the agent's own role: readable everywhere the agent is
+    rendered, and editable by the admin and by the agent's owner, but only to
+    one of the known roles — it can never be cleared."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2876,9 +2873,6 @@ def test_agent_role_is_visible_but_not_patchable(monkeypatch) -> None:
             == "reviewer"
         )
 
-        # defaultRole is no longer a patchable field at all: clearing it and
-        # setting an invalid value both fail the same way, as an unsupported
-        # field rather than an invalid enum value.
         cleared = client.patch(
             f"/api/v1/admin/agents/{agent['id']}", json={"defaultRole": None}
         )
@@ -2891,9 +2885,12 @@ def test_agent_role_is_visible_but_not_patchable(monkeypatch) -> None:
         assert invalid.status_code == 400
         assert "defaultRole" in invalid.text
 
-        # The supervisor's own route rejects it identically — the role isn't
-        # personality, so it doesn't belong on the picker the supervisor uses
-        # to tune their agent.
+        by_admin = client.patch(
+            f"/api/v1/admin/agents/{agent['id']}", json={"defaultRole": "tester"}
+        )
+        assert by_admin.status_code == 200
+        assert by_admin.json()["agent"]["defaultRole"] == "tester"
+
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert (
             client.post(
@@ -2905,16 +2902,14 @@ def test_agent_role_is_visible_but_not_patchable(monkeypatch) -> None:
         owned = client.patch(
             f"/api/v1/agents/{agent['id']}", json={"defaultRole": "planner"}
         )
-        assert owned.status_code == 400
-        assert "defaultRole" in owned.text
-
-        # The role itself is untouched by the rejected attempts.
-        still_alice = client.get("/api/v1/agents").json()["agents"]
+        assert owned.status_code == 200
+        assert owned.json()["agent"]["defaultRole"] == "planner"
+        listed_by_owner = client.get("/api/v1/agents").json()["agents"]
         assert (
-            next(item for item in still_alice if item["id"] == agent["id"])[
+            next(item for item in listed_by_owner if item["id"] == agent["id"])[
                 "defaultRole"
             ]
-            == "reviewer"
+            == "planner"
         )
 
 
@@ -3024,7 +3019,7 @@ def test_creation_is_allowed_while_the_computer_is_offline(
     assert response.status_code == 201
 
 
-def test_role_cannot_be_patched_after_creation(client_with_node) -> None:
+def test_owner_patches_their_agents_role(client_with_node) -> None:
     client, node = client_with_node
     agent = client.post(
         "/api/v1/agents",
@@ -3037,7 +3032,8 @@ def test_role_cannot_be_patched_after_creation(client_with_node) -> None:
     response = client.patch(
         f"/api/v1/agents/{agent['id']}", json={"defaultRole": "reviewer"}
     )
-    assert response.status_code == 400
+    assert response.status_code == 200, response.text
+    assert response.json()["agent"]["defaultRole"] == "reviewer"
 
 
 def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(

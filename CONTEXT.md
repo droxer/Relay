@@ -74,7 +74,10 @@ The part a Logical Agent plays in a shared round. Stored and sent by id
 agents by title: Architect, Software Engineer, Code Reviewer, QA Engineer, Bug
 Fixer. Each role carries a charter (`backend/relay/core/role_charters.py`)
 saying what it delivers and what it leaves to the others. A round's lead is a
-coordinator, not a role.
+coordinator, not a role. An agent has its own role, chosen at setup and
+editable on its profile; a Team records a role for each member, starting from
+the agent's own when it joins, and plays that one — changing the agent's role
+later leaves the team's choice alone.
 _Avoid_: Tech Lead (for the planner), job, persona
 
 **Agent Runtime**:

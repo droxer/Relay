@@ -450,3 +450,16 @@ def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, 
     assert [item["agentId"] for item in assignments] == expected
     assert all(item["teamSnapshot"]["collaborationStyle"] == (task_style or "pipeline")
                for item in assignments)
+
+
+def test_a_role_that_repeats_the_agents_own_is_no_work_contract() -> None:
+    from relay.teams.dispatch import team_runtime_snapshot
+
+    members = [{"id": "a", "defaultRole": "implementer"}, {"id": "b", "defaultRole": "reviewer"}]
+    base = {"id": "t", "leadAgentId": "a", "memberAgentIds": ["a", "b"]}
+    same = {**base, "memberConfigs": {"a": {"role": "implementer"}, "b": {"role": "reviewer"}}}
+    assert "workContractVersion" not in team_runtime_snapshot(same, members)
+    changed = {**base, "memberConfigs": {"a": {"role": "implementer"}, "b": {"role": "tester"}}}
+    assert team_runtime_snapshot(changed, members)["workContractVersion"] == 1
+    briefed = {**base, "memberConfigs": {"a": {"role": "implementer", "responsibility": "API"}}}
+    assert team_runtime_snapshot(briefed, members)["workContractVersion"] == 1
