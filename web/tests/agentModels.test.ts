@@ -76,8 +76,10 @@ describe("agent model on the agent record", () => {
 
   it("keeps the profile's model row for editing only, so readers don't see it twice", async () => {
     const profile = await readFile(resolve("web/src/components/AgentProfilePanel.tsx"), "utf8");
-    // The band prints the model; the field appears only while editing.
-    assert.match(profile, /\{canEditProfile && editingProfile \? \(\s*<div className="workspace-dossier-field">\s*<span[^>]*id=\{modelLabelId\}/);
+    const editor = await readFile(resolve("web/src/components/AgentProfileEditor.tsx"), "utf8");
+    // The band prints the model; the field lives in the edit form only.
+    assert.doesNotMatch(profile, /<AgentModelField|<AgentModelSetting/);
+    assert.ok(editor.indexOf("{editing ? (") < editor.indexOf("<AgentModelField"), "model field must sit inside the edit form");
     assert.doesNotMatch(profile, /savedModel \|\| t\("agents_page\.model_default"\)/);
   });
 });

@@ -36,7 +36,7 @@ vi.mock("@/components/ui/select", () => {
   };
 });
 
-it("lets the owner change the agent's own role while editing the profile", async () => {
+it("saves the agent's own role with the rest of the profile form", async () => {
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
   const agent = { id: "r", displayName: "Rue", instructions: "Check things", enabled: true, executorKind: "codex", defaultRole: "implementer", placements: [] } as unknown as UserAgent;
   vi.mocked(updateOwnUserAgent).mockResolvedValue({ agent: { ...agent, defaultRole: "reviewer" } } as never);
@@ -50,6 +50,9 @@ it("lets the owner change the agent's own role while editing the profile", async
   fireEvent.click(screen.getByRole("button", { name: "agents_page.edit_profile" }));
   expect(screen.getByRole("combobox", { name: "admin.v2.agent_role_label" })).toBeTruthy();
   fireEvent.click(screen.getByRole("option", { name: "admin.v2.agent_role.reviewer" }));
+  // Picking a role is a draft like every other field; nothing saves until Save.
+  expect(updateOwnUserAgent).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.save_profile" }));
 
   await waitFor(() => expect(updateOwnUserAgent).toHaveBeenCalledWith("r", { defaultRole: "reviewer" }));
   client.clear();

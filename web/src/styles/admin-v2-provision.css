@@ -147,7 +147,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 70px;
+  min-height: 56px;
   padding: var(--sp-3);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
@@ -197,25 +197,13 @@
   color: var(--action);
 }
 
-.create-agent-runtime-option-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--sp-1-5);
-}
-
 .create-agent-runtime-option-name {
+  min-width: 0;
   font: var(--type-name);
   letter-spacing: var(--type-name-track);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.create-agent-runtime-option-meta {
-  color: var(--ink-3);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
 }
 
 /* A radio indicator drawn as a ring, on the --dot-lg rung. */
