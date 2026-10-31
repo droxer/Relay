@@ -2,19 +2,15 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listSandboxes } from "../api";
+import { listDaemonNodes } from "../api";
+import { nodesAssignedToUser } from "../lib/computerNodes";
 import {
   computersForUser,
   computerName,
   type ComputerOwnership,
   type NodeLike,
 } from "../lib/createAgent";
-import type { SandboxRecord } from "../types";
-
-/** GET /sandboxes carries workspaceId (the host machine id) alongside the
- *  fields relay-core's SandboxRecord already types — see
- *  core/computer_identity.py's computer_id() on the backend. */
-type SandboxWithWorkspace = SandboxRecord & { workspaceId?: string };
+import type { DaemonNodeMonitorRecord } from "../types";
 
 export interface ComputerOption {
   /** Stable computer identity — what agents and teams record. */
@@ -24,32 +20,32 @@ export interface ComputerOption {
 }
 
 /** Maps a daemon node onto the identity shape createAgent.ts operates on.
- *  `sandbox.agents` is a status-dict keyed by every possible runtime kind
+ *  `node.agents` is a status-dict keyed by every possible runtime kind
  *  (ready/failed/unknown), not a list of what's installed, so only
  *  `status === "ready"` entries are surfaced as supportedAgents. */
-function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
-  const readyRuntimes = Object.entries(sandbox.agents ?? {})
+function toNodeLike(node: DaemonNodeMonitorRecord): NodeLike {
+  const readyRuntimes = Object.entries(node.agents ?? {})
     .filter(([, status]) => status === "ready")
     .map(([kind]) => kind);
   return {
-    id: sandbox.id,
-    userId: sandbox.userId,
-    workspaceId: sandbox.workspaceId,
-    managedNodeId: sandbox.managedNodeId,
+    id: node.id,
+    userId: node.userId,
+    workspaceId: node.workspaceId,
+    managedNodeId: node.managedNodeId,
     supportedAgents: readyRuntimes,
-    disabledAgents: sandbox.disabledAgents,
-    capabilities: sandbox.capabilities,
-    customModelEndpoints: sandbox.customModelEndpoints,
-    agentModels: sandbox.agentModels,
-    status: sandbox.status,
+    disabledAgents: node.disabledAgents,
+    capabilities: node.capabilities,
+    customModelEndpoints: node.customModelEndpoints,
+    agentModels: node.agentModels,
+    status: node.status,
   };
 }
 
 /**
  * The user's computers, grouped by stable identity — one option per
  * machine however many runtime nodes it has had. Agent creation and team
- * setup both pick from this list, so the two always name computers the same
- * way.
+ * setup use the same roster and preferred daemon as My Computers. The legacy
+ * sandbox list also includes retired records that must not become options.
  */
 export function useComputerOptions(userId: string, enabled: boolean): {
   options: ComputerOption[];
@@ -60,25 +56,25 @@ export function useComputerOptions(userId: string, enabled: boolean): {
   retry: () => void;
 } {
   const query = useQuery({
-    queryKey: ["computer-options", "sandboxes"],
-    queryFn: ({ signal }: { signal: AbortSignal }) => listSandboxes(undefined, signal),
+    queryKey: ["computer-options", "daemon-nodes", userId],
+    queryFn: ({ signal }: { signal: AbortSignal }) => listDaemonNodes(undefined, signal),
     enabled,
   });
-  const sandboxes = useMemo(
-    () => (query.data?.sandboxes ?? []) as SandboxWithWorkspace[],
-    [query.data],
+  const nodes = useMemo(
+    () => nodesAssignedToUser(query.data?.nodes ?? [], userId),
+    [query.data, userId],
   );
-  const nodeLikes = useMemo(() => sandboxes.map(toNodeLike), [sandboxes]);
+  const nodeLikes = useMemo(() => nodes.map(toNodeLike), [nodes]);
   const options = useMemo(
     () => computersForUser(nodeLikes, userId).map((group) => {
-      const primary = sandboxes.find((sandbox) => group.nodes.some((node) => node.id === sandbox.id));
+      const primary = nodes.find((candidate) => group.nodes.some((node) => node.id === candidate.id));
       return {
         computerId: group.computerId,
         ownership: group.ownership,
         label: primary ? computerName(primary) : group.computerId,
       };
     }),
-    [nodeLikes, sandboxes, userId],
+    [nodeLikes, nodes, userId],
   );
   return { options, nodeLikes, isLoading: query.isLoading, isError: query.isError, isFetching: query.isFetching, retry: () => { void query.refetch(); } };
 }
