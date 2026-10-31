@@ -46,7 +46,9 @@ After initial setup, trigger a deployment manually from the repository root:
 
 Merging a PR or pushing a commit must not trigger a deployment. The manual
 release disables all existing target-service autodeploy triggers before any
-build starts. Existing Railway connections adopt this policy on the first
+build starts, including a retained `relay-web` service when Cloudflare hosts
+the UI. It leaves that service available for rollback without deploying it.
+Existing Railway connections adopt this policy on the first
 manual release using this script; local code changes alone do not alter live
 Railway settings.
 

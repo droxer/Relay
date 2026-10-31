@@ -321,6 +321,10 @@ echo "--- moving an existing Railway-hosted UI to Workers"
 start_mock
 write_config 'WEB_HOSTING=railway'
 deploy railway 2>/dev/null && deploy cloudflare 2>/dev/null
+LEGACY_WEB_ID=$(state | jq -r '.projects[].services | to_entries[] | select(.value.name == "relay-web") | .key')
+curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer test-railway-token' \
+  "http://127.0.0.1:$PORT/graphql/v2" --data-binary "$(jq -nc --arg id "$LEGACY_WEB_ID" \
+  '{query: "mutation Connect { serviceConnect }", variables: {id: $id, input: {repo: "droxer/Relay", branch: "main"}}}')" >/dev/null
 write_config
 run_phases 2>"$WORK/move.log" || { cat "$WORK/move.log"; exit 1; }
 STATE=$(state)
@@ -333,6 +337,7 @@ else
   FAILURES=$((FAILURES + 1))
 fi
 check "the old web service is left in place" "[$WEB] | length == 1"
+check "the retained Railway UI cannot autodeploy on merged PRs" "$WEB | .triggers == [] and (.deployments | length == 1)"
 
 echo "--- a route held by another Worker is never taken over"
 start_mock

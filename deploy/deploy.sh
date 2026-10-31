@@ -252,17 +252,16 @@ phase_release() {
   railway_validate_release
   resolve_services
   for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
-    if [ "$name" = "$WEB_SERVICE" ] && workers_enabled; then continue; fi
     service_id=$(railway_service_id "$name")
     [ -n "$service_id" ] || continue
     service_repo=$(railway_service_repo "$service_id")
     [ -z "$service_repo" ] || [ "$service_repo" = "$GITHUB_REPO" ] \
       || die "$name is connected to $service_repo, expected $GITHUB_REPO"
   done
-  # Disable every target before any build starts: a merge while the API is
-  # building must not independently deploy the worker or Railway-hosted UI.
+  # Include a retained Railway UI even when Cloudflare hosts the web UI:
+  # leaving its branch trigger enabled still creates builds for merged PRs.
+  # Disable every target before any build starts.
   for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
-    if [ "$name" = "$WEB_SERVICE" ] && workers_enabled; then continue; fi
     service_id=$(railway_service_id "$name")
     [ -n "$service_id" ] || continue
     railway_disable_autodeploy "$service_id" || die "could not disable autodeploy for $name"
