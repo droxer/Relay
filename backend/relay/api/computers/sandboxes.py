@@ -11,6 +11,7 @@ from ...daemon_registry.records import provisioned_sandbox_record, public_sandbo
 from ...daemon_registry.credentials import sandbox_ui_auth_error, sandbox_ui_token_matches
 from ...persistence.agent.placements import create_node_placement
 from ...computer.names import present_computer
+from ...computer.limits import assert_local_computer_allowed, local_computer_enrollment_scope
 from ..deps import AppContextDep
 from ..actors import actor_can_access_sandbox, bearer_token, request_actor_or_none
 from ...security.actor import Actor
@@ -78,17 +79,25 @@ def provision_sandbox(
     if not actor["isAdmin"] and user_id != actor["userId"]:
         raise HTTPException(403, "Sandbox access denied.")
     try:
-        sandbox = ctx.backend.provision(
-            {
-                "userId": user_id,
-                "sandboxId": string_field(body, "sandboxId") or None,
-                "workspacePath": string_field(body, "workspacePath") or None,
-                "token": bearer_token(request),
-                "nodeToken": string_field(body, "nodeToken") or None,
-                "actorUserId": actor["userId"],
-                "actorIsAdmin": actor["isAdmin"],
-            }
-        )
+        with local_computer_enrollment_scope(ctx, user_id):
+            existing = (
+                ctx.registry.get(string_field(body, "sandboxId"))
+                if string_field(body, "sandboxId")
+                else ctx.registry.find_by_user(user_id, string_field(body, "workspacePath") or None)
+            )
+            if not existing:
+                assert_local_computer_allowed(ctx, user_id)
+            sandbox = ctx.backend.provision(
+                {
+                    "userId": user_id,
+                    "sandboxId": string_field(body, "sandboxId") or None,
+                    "workspacePath": string_field(body, "workspacePath") or None,
+                    "token": bearer_token(request),
+                    "nodeToken": string_field(body, "nodeToken") or None,
+                    "actorUserId": actor["userId"],
+                    "actorIsAdmin": actor["isAdmin"],
+                }
+            )
         logger.info(
             "Sandbox provisioned", sandbox_id=sandbox["id"], user_id=user_id
         )

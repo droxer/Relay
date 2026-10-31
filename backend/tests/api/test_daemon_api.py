@@ -1145,7 +1145,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
         assert response.status_code == 400
         response = client.get("/api/v1/admin/daemon-nodes")
         assert response.status_code == 200
-        assert response.json()["nodes"][0].get("nodeToken") == "node_token"
+        assert "nodeToken" not in response.json()["nodes"][0]
 
 
 def test_explicit_run_lease_expiry_retains_ownership_until_exit(
@@ -1800,7 +1800,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
 
         admin = client.get("/api/v1/admin/daemon-nodes")
         assert admin.status_code == 200
-        assert admin.json()["nodes"][0]["nodeToken"] == "node_token"
+        assert "nodeToken" not in admin.json()["nodes"][0]
 
         run = client.post(
             "/api/v1/sandboxes/sbx_alice/runs",
@@ -4575,7 +4575,9 @@ def test_daemon_auth_check_is_read_only_and_requires_node_token(monkeypatch) -> 
         node = registry.get("doctor-node")
         assert node is not None
         node["uiTokenHash"] = hash_daemon_node_token("ui-token")
-        before = deepcopy(node)
+        registry.daemon_store.register_node(node)
+        registry._hydrate_node("doctor-node")
+        before = deepcopy(registry.get("doctor-node"))
 
         def forbid_seen(*_args):
             raise AssertionError("doctor must not renew liveness")

@@ -161,6 +161,8 @@ def _poll_observation(
     node: dict[str, Any], now: str, polled: bool | None
 ) -> dict[str, Any]:
     """The `lastPollAt` a liveness write carries: advanced, kept, or (False) drained."""
+    if node.get("lastPollAt") == NODE_POLL_DRAINED_AT:
+        return {"lastPollAt": NODE_POLL_DRAINED_AT}
     if polled:
         return {"lastPollAt": now}
     if polled is False:

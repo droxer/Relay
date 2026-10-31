@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from ...computer.access import PERSONAL_COMPUTER_READ_ONLY, admin_may_manage_computer
-from ...computer.limits import assert_local_computer_allowed
+from ...computer.limits import assert_local_computer_allowed, local_computer_enrollment_scope
 from ...computer.names import normalize_computer_display_name, present_computer
 from ...computer.node_agents import (
     assert_node_agent_runs_drained,
@@ -236,7 +236,7 @@ def create_control_panel_daemon_node(
         # provision share the (reentrant) lock so two concurrent creates cannot
         # both pass a limit with one slot left. Adopting a workspace the
         # user already enrolled is not a new computer, so it is exempt.
-        with ctx.registry.dispatch_lock:
+        with local_computer_enrollment_scope(ctx, user_id):
             if not ctx.registry.find_by_user(user_id, workspace_path):
                 assert_local_computer_allowed(ctx, user_id)
             node = ctx.backend.provision_daemon_node(provision_payload)

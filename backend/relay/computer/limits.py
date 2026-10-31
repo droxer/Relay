@@ -9,12 +9,26 @@ user over the line keeps working and is simply refused the next one.
 from __future__ import annotations
 
 from typing import Any
+from contextlib import contextmanager
+from collections.abc import Iterator
 
 from fastapi import HTTPException
 
 from ..persistence.org.settings import DEFAULT_MAX_LOCAL_COMPUTERS
+from ..persistence.resource_lock import resource_transaction
 
 USER_DEVICE_LOCATION = "user-device"
+
+
+@contextmanager
+def local_computer_enrollment_scope(ctx: Any, user_id: str) -> Iterator[None]:
+    """Serialize count-and-create across every enrollment route and replica."""
+    with ctx.registry.dispatch_lock, resource_transaction(
+        ctx.registry.daemon_store.engine, f"personal-computers:{user_id}"
+    ):
+        # Another replica may have filled the last slot while we waited.
+        ctx.registry._refresh_persisted_liveness(force=True)
+        yield
 
 
 def global_max_local_computers(ctx: Any) -> int:

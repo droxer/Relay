@@ -49,6 +49,50 @@ def _newest(key: str, *records: dict[str, Any]) -> dict[str, Any]:
     return {key: max(dated)[1]}
 
 
+def merge_node_observation(
+    current: dict[str, Any] | None, persisted: dict[str, Any]
+) -> dict[str, Any]:
+    """Keep local heartbeat precision; configuration and drains come from storage.
+
+    Missing optional settings mean cleared, so the persisted record replaces
+    them. A drain is a control decision, not an older poll timestamp, and a
+    registration clearing the poll also supersedes observations before it.
+    """
+    if not current:
+        return dict(persisted)
+    # Inventory is reported in-process at registration; it has no table
+    # projection. Persisted optional settings below still replace clears.
+    inventory: dict[str, Any] = {key: current[key] for key in (
+        "agentInventory", "executorCapabilities", "customModelEndpoints", "agentModels"
+    ) if key in current}
+    refreshed = {
+        **inventory,
+        **persisted,
+        **_newest("lastSeenAt", persisted, current),
+        **_newest("updatedAt", persisted, current),
+    }
+    if persisted.get("lastPollAt") == NODE_POLL_DRAINED_AT:
+        refreshed["lastPollAt"] = NODE_POLL_DRAINED_AT
+    elif persisted.get("lastPollAt"):
+        refreshed.update(_newest("lastPollAt", persisted, current))
+    elif (iso_epoch_ms(current.get("lastPollAt")) or 0) > (iso_epoch_ms(persisted.get("updatedAt")) or 0):
+        refreshed["lastPollAt"] = current["lastPollAt"]
+    if current.get("retiredAt") or persisted.get("retiredAt"):
+        refreshed["retiredAt"] = persisted.get("retiredAt") or current["retiredAt"]
+        refreshed["status"] = persisted["status"] if persisted.get("retiredAt") else "stopped"
+        refreshed["agents"] = current.get("agents", refreshed.get("agents"))
+        return refreshed
+    if not persisted.get("retiredAt") and (
+        (iso_epoch_ms(current.get("lastSeenAt")) or 0) >= (iso_epoch_ms(persisted.get("lastSeenAt")) or 0)
+    ):
+        refreshed["status"] = current.get("status", persisted.get("status"))
+        if current.get("lastError"):
+            refreshed["lastError"] = current["lastError"]
+        else:
+            refreshed.pop("lastError", None)
+    return refreshed
+
+
 class NodeLivenessMixin(RegistryState):
     def get(self, sandbox_id: str) -> dict[str, Any] | None:
         if sandbox_id not in self.sandboxes:
@@ -146,7 +190,7 @@ class NodeLivenessMixin(RegistryState):
         nodes = self.monitor_nodes()
         for node in nodes:
             plain = self.plain_node_tokens.get(node["id"])
-            if plain:
+            if plain and not (node.get("nodeLocation") == "user-device" and node.get("userId")):
                 node["nodeToken"] = plain
         return nodes
 
@@ -252,8 +296,12 @@ class NodeLivenessMixin(RegistryState):
 
     def _hydrate_node(self, sandbox_id: str) -> None:
         """Load cross-replica state before entering an authenticated node scope."""
-        if sandbox_id not in self.sandboxes:
-            self._refresh_persisted_liveness(sandbox_id)
+        with self.dispatch_scope([sandbox_id]):
+            persisted = self.daemon_store.get_node(sandbox_id)
+            if persisted:
+                self.sandboxes[sandbox_id] = merge_node_observation(
+                    self.sandboxes.get(sandbox_id), persisted
+                )
 
     def _assert_authorized(self, sandbox_id: str, token: str | None) -> None:
         sandbox = self.sandboxes.get(sandbox_id)
@@ -340,7 +388,9 @@ class NodeLivenessMixin(RegistryState):
                 or polled is False
                 or self._should_persist_seen(sandbox_id, polled=bool(polled))
             ):
-                self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
+                persisted = self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
+                if persisted:
+                    self.sandboxes[sandbox_id] = merge_node_observation(updated, persisted)
             if revived:
                 logger.info(
                     "Daemon node came online",
@@ -393,7 +443,7 @@ class NodeLivenessMixin(RegistryState):
         for run in active_runs:
             self.active_commands[run["commandId"]] = {**run, "sandboxId": run["nodeId"]}
 
-    def _refresh_persisted_liveness(self, sandbox_id: str | None = None) -> None:
+    def _refresh_persisted_liveness(self, sandbox_id: str | None = None, *, force: bool = False) -> None:
         """Merge newer durable lease observations from another backend replica.
 
         The fleet-wide form (no id) is throttled to one store read per persist
@@ -404,11 +454,11 @@ class NodeLivenessMixin(RegistryState):
         # The throttle is read before taking the global lock so a request that
         # has nothing to refresh never queues behind dispatch; the check is
         # repeated under the lock because two requests can pass it together.
-        if sandbox_id is None and not self._fleet_liveness_refresh_due():
+        if sandbox_id is None and not force and not self._fleet_liveness_refresh_due():
             return
         with self.dispatch_lock:
             if sandbox_id is None:
-                if not self._fleet_liveness_refresh_due():
+                if not force and not self._fleet_liveness_refresh_due():
                     return
                 self._last_fleet_liveness_refresh_at = time.monotonic()
             persisted_nodes = (
@@ -431,25 +481,7 @@ class NodeLivenessMixin(RegistryState):
                         },
                     }
                     continue
-                refreshed = {
-                    **current,
-                    **persisted,
-                    **_newest("lastSeenAt", persisted, current),
-                    **_newest("updatedAt", persisted, current),
-                    **_newest("lastPollAt", persisted, current),
-                }
-                if persisted.get("retiredAt"):
-                    refreshed["agents"] = current.get("agents", refreshed.get("agents"))
-                current_is_newer = (iso_epoch_ms(current.get("lastSeenAt")) or 0) >= (
-                    iso_epoch_ms(persisted.get("lastSeenAt")) or 0
-                )
-                if current_is_newer and not persisted.get("retiredAt"):
-                    refreshed["status"] = current.get("status", persisted.get("status"))
-                    if current.get("lastError"):
-                        refreshed["lastError"] = current["lastError"]
-                    else:
-                        refreshed.pop("lastError", None)
-                self.sandboxes[persisted["id"]] = refreshed
+                self.sandboxes[persisted["id"]] = merge_node_observation(current, persisted)
 
     def _fleet_liveness_refresh_due(self) -> bool:
         return (
