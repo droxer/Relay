@@ -51,8 +51,13 @@ export class AcpConnection {
     private readonly onRequest: (message: JsonRpcMessage) => Promise<unknown>,
     private readonly onNotification: (message: JsonRpcMessage) => void,
   ) {
-    createInterface({ input: child.stdout, crlfDelay: Infinity }).on("line", (line) => this.receive(line));
-    child.stdin.on("error", () => {});
+    createInterface({ input: child.stdout, crlfDelay: Infinity })
+      .on("line", (line) => this.receive(line))
+      .on("error", (error) => this.close(error))
+      .on("close", () => this.close(new Error("The ACP runtime closed its output stream.")));
+    child.stdout.on("error", (error) => this.close(error));
+    child.stdin.on("error", (error) => this.close(error));
+    child.stdin.on("close", () => this.close(new Error("The ACP runtime closed its input stream.")));
   }
 
   request(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -75,8 +80,15 @@ export class AcpConnection {
   }
 
   private send(message: Record<string, unknown>): void {
-    if (!this.child.stdin.writable) return;
-    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    if (!this.child.stdin.writable) {
+      this.close(new Error("The ACP runtime closed its input stream."));
+      return;
+    }
+    try {
+      this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    } catch (error) {
+      this.close(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   private receive(line: string): void {

@@ -607,6 +607,13 @@ a content snapshot returns 404; live workspace browsing remains available throug
 the owning daemon. Older daemons must report generated files and their content to
 make new downloadable snapshots available.
 
+The daemon budgets inline snapshots against a 3 MiB serialized completion
+payload, including Base64 expansion. Files omitted to meet that budget keep
+their metadata with `snapshotSkipped: "too-large"`. If a server returns 413,
+the daemon retries the same outcome without inline snapshots or the fallback
+transcript. If that is still too large, it retains the durable completion for
+retry rather than replacing a successful run with a failure.
+
 Daemon nodes expose the same workspace-read shape used by projects:
 
 ```text
