@@ -9,7 +9,11 @@ from ...core.models import AGENT_NAMES
 from ...core.permission_requests import PERMISSION_DECISIONS, PERMISSION_NOTE_MAX_CHARS
 from ...core.validation import valid_agent
 from ...sessions.controller import SessionController
-from ...sessions.task_scope import thread_task_scope
+from ...sessions.task_scope import (
+    IN_FLIGHT_TASK_STATUSES,
+    MARK_DONE_TASK_STATUSES,
+    thread_task_scope,
+)
 from ..actors import (
     get_session_for_actor,
     request_actor_or_sandbox,
@@ -90,7 +94,11 @@ def decision(
         )
         # Resolved before cancelling, which ends the request's task authority.
         task_id, task_owner = thread_task_scope(
-            session, run_request, ctx.task_store, ctx.registry.daemon_store
+            session, run_request, ctx.task_store, ctx.registry.daemon_store,
+            statuses=(
+                MARK_DONE_TASK_STATUSES if kind == "mark_done"
+                else IN_FLIGHT_TASK_STATUSES
+            ),
         )
     controller = SessionController(
         ctx.session_store,

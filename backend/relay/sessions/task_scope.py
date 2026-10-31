@@ -14,6 +14,9 @@ from ..collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
 from ..tasks.execution import request_execution_owner
 
 IN_FLIGHT_TASK_STATUSES = frozenset({"assigned", "running", "waiting_for_human"})
+# A person's mark done is their acceptance, so it also settles the round's
+# task after the round closed on it: awaiting review, or blocked by a failure.
+MARK_DONE_TASK_STATUSES = IN_FLIGHT_TASK_STATUSES | {"review", "blocked"}
 
 
 def thread_task_scope(
@@ -21,6 +24,8 @@ def thread_task_scope(
     run_request: dict[str, Any] | None,
     task_store: Any,
     daemon_store: Any = None,
+    *,
+    statuses: frozenset[str] = IN_FLIGHT_TASK_STATUSES,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Return ``(task_id, execution_owner)`` for the thread's executing task."""
     if run_request and run_request.get("taskId"):
@@ -45,7 +50,7 @@ def thread_task_scope(
     if (
         task.get("deletedAt")
         or task.get("isRoutine")
-        or task.get("status") not in IN_FLIGHT_TASK_STATUSES
+        or task.get("status") not in statuses
     ):
         return None, None
     owner = active_round.get("taskExecutionOwner")
