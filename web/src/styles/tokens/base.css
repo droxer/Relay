@@ -143,8 +143,14 @@ button[data-slot="button"] {
 }
 
 [data-slot="input"],
-[data-slot="select-trigger"] {
+[data-slot="select-trigger"],
+[data-slot="date-picker-trigger"],
+[data-slot="number-field-input"] {
   min-height: calc(1lh + var(--sp-2) + var(--sp-0-5));
+}
+
+[data-slot="cascader-chips"] {
+  min-height: max(var(--control-h), calc(1lh + var(--sp-2) + var(--sp-0-5)));
 }
 
 button,
@@ -198,7 +204,8 @@ summary:focus-visible,
    while being identical everywhere, and a change here would have been
    reverted 29 times over. Matching the attribute makes the contract cover
    what it always claimed to. */
-[tabindex]:focus-visible {
+[tabindex]:focus-visible,
+[data-slot="number-field-group"]:has(input:focus-visible) {
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
 }
@@ -210,7 +217,9 @@ summary:focus-visible,
    contract, so the primitives no longer need to restate either ring. */
 button[data-variant="destructive"]:focus-visible,
 button[data-danger]:focus-visible,
-[aria-invalid="true"]:focus-visible {
+[aria-invalid="true"]:focus-visible,
+[data-slot="number-field-group"]:has(input[aria-invalid="true"]:focus-visible),
+[data-slot="number-field-group"][aria-invalid="true"]:has(input:focus-visible) {
   outline: var(--focus-outline-danger);
   outline-offset: var(--focus-offset);
 }
@@ -226,10 +235,17 @@ button[data-danger]:focus-visible,
   textarea:focus-visible,
   select:focus-visible,
   summary:focus-visible,
-  [tabindex]:focus-visible {
+  [tabindex]:focus-visible,
+  [data-slot="number-field-group"]:has(input:focus-visible) {
     outline: var(--focus-w) solid CanvasText;
     outline-offset: var(--focus-offset);
   }
+}
+
+/* Compound numeric fields expose one ring around the complete field. Scoped
+   to the group so a standalone input never loses its ring. */
+[data-slot="number-field-group"] [data-slot="number-field-input"]:focus-visible {
+  outline: none;
 }
 
 /* Two utilities, deliberately separate — the old single `.mono` name promised

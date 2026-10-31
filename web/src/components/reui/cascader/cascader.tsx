@@ -2285,7 +2285,7 @@ const TRIGGER_ICON_FALLBACK_CLASS =
 
 /** The chips field: a form-control surface, so it carries the invalid states. */
 const CHIPS_CLASS =
-  "flex flex-wrap items-center border bg-clip-padding border-input focus-within:border-ring has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40 has-aria-invalid:border-destructive dark:has-aria-invalid:border-destructive/50 bg-transparent px-2.5 text-sm has-aria-invalid:ring-3 min-h-8 gap-1 rounded-md py-1 transition-colors has-data-[slot=combobox-chip]:px-1"
+  "flex flex-wrap items-center gap-1 rounded-md border border-field bg-background bg-clip-padding px-3 py-1 text-sm text-foreground transition-[color,background-color,border-color] hover:border-field-hover focus-within:border-ring aria-invalid:border-destructive has-aria-invalid:border-destructive has-data-[slot=combobox-chip]:px-1"
 
 const CHIP_CLASS =
   "text-foreground flex w-fit items-center justify-center gap-1 font-medium whitespace-nowrap bg-muted rounded-sm px-1.5 text-xs has-data-[slot=combobox-chip-remove]:pr-0 h-(--control-h-2xs)"
@@ -2406,8 +2406,9 @@ function CascaderChips({
       data-slot="cascader-chips"
       /* An unnamed `role="toolbar"` announces as just "toolbar". */
       aria-label={labels.chipsLabel}
-      /* Conditional spread: the error treatment is keyed on
-         `has-aria-invalid:`, so the attribute must be absent, not empty. */
+      /* Conditional spread: the error treatment is keyed on `aria-invalid:` /
+         `has-aria-invalid:`, so the attribute must be absent, not empty.
+         The minimum height lives in base.css beside the other fields. */
       {...(invalid ? { "aria-invalid": true, "data-invalid": "" } : null)}
       className={cn(CHIPS_CLASS, className)}
       {...props}

@@ -61,13 +61,14 @@ and Phosphor.
   `--link-ink-strong`, `#ffffff` / `#000000`), reserved for wayfinding —
   anchors in prose and the focus ring. A link is told apart by its underline,
   never by a hue.
-- **Status is chromatic, and still dot / border / text — never fills.**
+- **Status is chromatic: dots, text, and quiet badge tints.**
   `--ok` `--warn` `--err` carry the source system's success / warning / critical
   hues. The published values are *badge fill* colours (white text on a
   saturated pill); Relay renders status as ink far more often than as a fill,
   so each tone is deepened or lifted until it **clears AA as small text**
-  against the worst plane it can land on. The hue family is the source
-  system's; the lightness is ours. `--info` is not a separate value: it aliases `--ink-3`.
+  against the worst plane it can land on. Semantic badges use an 8% tint
+  with a transparent border; standalone status marks and text stay unfilled.
+  The hue family is the source system's; the lightness is ours. `--info` is not a separate value: it aliases `--ink-3`.
 - **Every ink tier that can carry text clears 4.5:1.** The bar is the worst
   plane a tier can land on — `--surface-3` in dark, `--surface-2` in light —
   because meta text sits on drawers and inset wells too. This is why the light
@@ -121,7 +122,7 @@ Tailwind `@theme` machinery:
    registry comment. This is the *only* file allowed to originate a color —
    enforced by `web/.stylelintrc.json`.
 2. **`roles.css`** — the composites: the `--type-*` roles and their paired
-   `--type-*-track` tokens, `--shadow-1` / `--shadow-2`, the focus contract
+   `--type-*-track` tokens, `--shadow-2`, the focus contract
    (`--focus-outline` / `--focus-outline-danger` / `--focus-w` /
    `--focus-offset`), `--link` / `--link-hover`, the `--info` alias, and the
    interaction roles (`--row-hover`, `--line-strong` / `--line-drag`,
@@ -141,7 +142,7 @@ Tailwind `@theme` machinery:
 
    The `text-*` utilities map one name per rung: `text-xs` → `--fs-1`
    (12px), `text-sm` → `--fs-2` (14px), `text-dense` → `--fs-3`,
-   `text-base` → `--fs-4`, `text-lg` → `--fs-heading` (15px), `text-xl` →
+   `text-base` → `--fs-4`, `text-lg` → `--fs-heading` (16px), `text-xl` →
    `--fs-title` (16px), `text-2xl` → `--fs-5` (22px), `text-3xl`/`4xl` →
    `--fs-6` (28px). `--fs-3` and `--fs-4` are both 14px today (the compact
    reading size), so `text-base` is 14px, not Tailwind's 16px. `text-dense`
@@ -371,36 +372,35 @@ introduces visual rest.
 
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
-| `--type-display` | 500 28/1.17 | `--track-display` (−0.05em) | hero headline (login), admin metric values |
-| `--type-page` | 500 22/1.25 | `--track-display` (−0.05em) | page h1 — one rung above the 17px h2 |
-| `--type-title` | 500 17/1.25 | `--track-display` (−0.05em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
-| `--type-heading` | 700 15/1.44 | `--track-0` | section heads, list labels |
-| `--type-title-content` | 400 16/1.25 | `--track-display` (−0.05em) | titles whose text comes from a user or agent |
+| `--type-display` | 500 28/1.17 | `--track-display` (−0.03em) | hero headline (login), admin metric values |
+| `--type-page` | 500 22/1.25 | `--track-display` (−0.03em) | page h1 — one rung above the 16px h2 |
+| `--type-title` | 500 16/1.25 | `--track-title` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
+| `--type-heading` | 700 16/1.43 | `--track-0` | section heads, list labels |
+| `--type-title-content` | 400 16/1.25 | `--track-title` (−0.02em) | titles whose text comes from a user or agent |
 | `--type-body` | 400 14/1.5 | `--track-body` (0) | prose, message bodies, inputs |
 | `--type-name` | 500 14/1.5 | `--track-body` (0) | the identity of the thing a row or card is about — leads by `--ink-1` against `--ink-3` meta, not by weight |
-| `--type-body-sm` | 400 12/1.43 | `--track-body-sm` (0) | supporting text, captions |
-| `--type-label` | 500 12/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
-| `--type-label-strong` | 700 12/1.43 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
-| `--type-micro` | 500 12/1.33 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
-| `--type-meta` | 500 12/1.33 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
-| `--type-number` | 500 22/1.28 | `--track-display` (−0.05em) | metrics |
+| `--type-body-sm` | 400 12/1.5 | `--track-body-sm` (0) | supporting text, captions |
+| `--type-label` | 500 14/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
+| `--type-label-strong` | 700 14/1.43 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
+| `--type-micro` | 500 12/1.5 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
+| `--type-meta` | 500 12/1.5 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
+| `--type-number` | 500 22/1.25 | `--track-display` (−0.03em) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
 
 **Heading ladders.** Chrome headings map one size per level: page h1 =
 `--type-page` (22/500); every fixed-noun h2 — list rails (thread list,
 rosters, `.sec-rail`), section headers, drawers, dialogs — = `--type-title`
-(17/500); section head h3 = `--type-heading` (15/700). Record titles
+(16/500); section head h3 = `--type-heading` (16/700). Record titles
 (user/agent-authored) take `--type-title-content` (16/400). Content headings
-(`.md-body`, `.doc-prose`) run one six-rung ladder under the 17px chrome h2 —
-h1 16/700, h2 15/700, h3 14/700, h4 14/500, h5 12/700, h6 12/500 — weight
-splitting the shared sizes, so a content heading never rivals chrome.
+(`.md-body`, `.doc-prose`) use the reading hierarchy: h1/h2 16/700, h3 14/700, h4/h5 14/500,
+and h6 14/500 italic. Weight and emphasis distinguish the shared sizes.
 
 **Every role ships a paired `--type-<role>-track`.** The `font:` shorthand
 cannot carry `letter-spacing`, so a role applied as `font: var(--type-title)`
 silently loses its tracking unless the call site remembers a second
 declaration — pairing the tokens by name makes the omission greppable. Every
 call site pairs them, even where the track is 0, so a role nested in a
-display-tier parent never inherits −0.05em; `typographyTokens.test.ts` enforces
+display-tier parent never inherits −0.03em; `typographyTokens.test.ts` enforces
 the pairing on display-tier rules. A role may take a different
 `--leading-*` token at its call site (looser prose in a caption-sized box);
 it may not take a different size or weight — that is a different role.
@@ -522,7 +522,7 @@ stacks.
   `--opacity-underlay` 0.92. Opacity never dims text: a quieter label is an
   `--ink-*` tier (`paletteTokens.test.ts` fails a rule that sets `color` and
   opacity < 1).
-- **Elevation:** flat. `--shadow-1` is `none`; `--shadow-2` is a 0.5px
+- **Elevation:** flat. `--shadow-2` is a 0.5px
   `--line-1` ring without blur. Cards separate by surface and border;
   floating dialogs, drawers, menus, tooltips, and toasts share the ring.
   Blurless `inset` box-shadows are rings, not elevation, and are allowed for
@@ -763,7 +763,7 @@ into one flat band without it.
 Fleet-health bars double-encode: the ink ramp alone cannot separate five
 values in an 8px bar, so each segment's fill is its tone — running `--live`,
 failed `--err`, stale a `--warn` hatch, ready `--ok`, unknown `--ink-4` — a
-deliberate data-viz exception to "status is never a fill". `--live` also
+deliberate data-viz use of saturated status fills. `--live` also
 marks the running node count, so the card's accent density is a utilisation
 readout: live-carrying elements when work is in flight, none when idle.
 
@@ -774,9 +774,17 @@ readout: live-carrying elements when work is in flight, none when idle.
 - Slotted primitives own their border, fill, disabled, focus, and invalid
   states. Native element resets must exclude all `data-slot` controls; the
   `relay` layer follows Tailwind utilities and otherwise overrides them.
-- Overlay inputs keep the shared control boundary (`--control-border`). Only
-  their fill changes to `--field-on-overlay`; structural hairlines are not
-  field boundaries. Error borders remain `--err`.
+- Text fields, including overlay inputs, use `--field-border` and
+  `--field-border-hover`; the quieter `--control-border` belongs to outline
+  buttons. Overlay field fills use `--field-on-overlay`; structural hairlines
+  are not field boundaries. Error borders remain `--err`.
+- Date triggers and numeric inputs share the text-growth floor with Input
+  and Select. Numeric groups keep a minimum height and grow with their input;
+  the group owns the border and keyboard outline, including invalid and
+  forced-color states. Coarse pointers use the shared touch and type floors.
+- Floating shells (selects, menus and submenus, popovers, tooltips) use
+  `--r-3` (8px / `rounded-lg`) and the shared `--shadow-2` ring. Their inner
+  rows retain `--r-1`; triggers retain the `--r-2` control radius.
 - `--tone-line` resolves on each element and pseudo-element from its local
   `--tone`. Defining this composite only on the root would freeze the neutral
   fallback before a badge or alert supplies its tone.
@@ -795,7 +803,7 @@ readout: live-carrying elements when work is in flight, none when idle.
 | Default | `--control-h` | 36px | `default`, `icon`, `cta` | `default` |
 | Large | `--control-h-lg` | 40px | `lg`, `icon-lg` | — |
 
-Button labels are 12px/500 (`text-xs font-medium`) at every size; height and
+Button labels are 14px/500 (`text-sm font-medium`) at every size; height and
 padding separate the tiers. `dimensionScales.test.ts` keeps the primitive's
 sizes on the ladder. Touch controls increase to the shared target floor;
 compact visual controls use separate hit areas. Do not change row density as
@@ -895,8 +903,8 @@ explains it is in parentheses.
    Tailwind `ring-*`, and only through the base or primitive contract — or a
    composite's `:focus-within` wrapper, with the inner field's ring
    suppressed. One ring per control. (Geometry)
-10. **Elevation.** No offset or blurred shadow other than `--shadow-1` /
-    `--shadow-2`; blurless inset rings are allowed. (Geometry)
+10. **Elevation.** No offset or blurred shadows. Floating shells use the
+    `--shadow-2` hairline ring; blurless inset rings are allowed. (Geometry)
 11. **Motion.** Durations, loops, and delays from `--t-*` and `--ease`;
     entrances use `rise`; liveness changes are checked under
     `prefers-reduced-motion`. (Geometry)
@@ -1080,7 +1088,7 @@ the pill is not a control shape here.
 | 1 (subtle) | `rgba(0,0,0,0.2) 1px 1px 0 0` | Pill-tab activation indicator |
 | 2 (sticky panel) | `rgba(20,22,26,0.3) 0 1px 4px 0` | PDP purchase summary, sticky mobile checkout bar |
 
-Relay wires level 0 to `--shadow-1` (`none`) and level 2 to `--shadow-2`, a
+Relay leaves level 0 without a shadow and adapts level 2 to `--shadow-2`, a
 0.5px `--line-1` ring with no blur. Level 1 has no Relay consumer — its job
 is a pill-tab active state, which Relay signals with an underline or the
 selection wash instead.
@@ -1255,8 +1263,8 @@ A second addition covers *status proportions*, which the source system's
 data-viz vocabulary has no grammar for. Fleet utilisation bars
 (`admin-v2-dashboard.css`) therefore paint their segments in solid status
 tones — `--live`, `--err`, `--ok`, a `--warn` hatch — because a bar segment IS
-the datum, not canvas chrome; the "status is text/dot only, never fills" rule
-still holds everywhere else. The artifact diff viewer (`artifact.css`) makes
+the datum, not canvas chrome. Outside data displays, status uses text,
+marks, borders, and the shared semantic badges’ quiet 8% tints. The artifact diff viewer (`artifact.css`) makes
 the same kind of content-display exception: add/del rows carry 16%
 `--ok`/`--err` background washes, the universal diff grammar no token rule
 needed to invent.

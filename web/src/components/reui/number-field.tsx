@@ -16,16 +16,14 @@ const NumberFieldContext = createContext<{
 } | null>(null)
 
 const numberFieldGroupVariants = cva(
-  "relative flex w-full justify-between border border-input data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive focus-within:has-aria-invalid:border-destructive focus-within:has-aria-invalid:ring-destructive/20 dark:focus-within:has-aria-invalid:ring-destructive/40 rounded-md bg-transparent transition-colors focus-within:border-ring",
+  "relative flex w-full justify-between rounded-md border border-field bg-background text-sm text-foreground transition-[color,background-color,border-color] hover:border-field-hover focus-within:border-ring aria-invalid:border-destructive has-aria-invalid:border-destructive data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled)",
   {
     variants: {
-      // Ladders restored from the pre-rename source. Rhea was added after they
-      // were written, so its rungs are new: rhea tracks nova here because
-      // .cn-input is h-8 px-2.5 in both sheets, where luma is h-9 px-3.
+      // Minimum heights follow the shared ladder and grow with their input.
       size: {
-        sm: "h-7 text-sm",
-        default: "h-8 text-sm",
-        lg: "h-9 text-sm",
+        sm: "min-h-(--control-h-sm)",
+        default: "min-h-(--control-h)",
+        lg: "min-h-(--control-h-lg)",
       },
     },
     defaultVariants: {
@@ -35,14 +33,14 @@ const numberFieldGroupVariants = cva(
 )
 
 const numberFieldButtonVariants = cva(
-  "relative flex shrink-0 cursor-pointer items-center justify-center transition-colors pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 hover:bg-accent",
+  "relative flex shrink-0 cursor-pointer items-center justify-center transition-colors pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-(--touch-target) pointer-coarse:after:min-w-(--touch-target) hover:bg-accent",
   {
     variants: {
       size: {
-        sm: ["px-1.5", "[&_svg:not([class*='size-'])]:size-3.5"],
+        sm: ["px-2", "[&_svg:not([class*='size-'])]:size-(--icon-sm)"],
         default:
           ["px-2", "[&_svg:not([class*='size-'])]:size-4"],
-        lg: ["px-2.5", "[&_svg:not([class*='size-'])]:size-4"],
+        lg: ["px-3", "[&_svg:not([class*='size-'])]:size-4"],
       },
     },
     defaultVariants: {
@@ -52,13 +50,13 @@ const numberFieldButtonVariants = cva(
 )
 
 const numberFieldInputVariants = cva(
-  "w-full min-w-0 flex-1 bg-transparent text-center tabular-nums outline-none",
+  "w-full min-w-0 flex-1 bg-transparent text-center text-sm tabular-nums outline-none",
   {
     variants: {
       size: {
-        sm: "px-2 py-0.5",
-        default: "px-2.5 py-1",
-        lg: "px-2.5 py-1.5",
+        sm: "px-2 py-1",
+        default: "px-3 py-1",
+        lg: "px-4 py-1",
       },
     },
     defaultVariants: {

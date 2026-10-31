@@ -4,8 +4,7 @@
    used by other controls. Set it on both the wrapper and input so standalone
    fields and bare rail searches share the same treatment. */
 [data-slot="search"],
-[data-slot="search"] input,
-.command-menu {
+[data-slot="search"] input {
   --focus-outline: 1px solid var(--link);
   --focus-offset: 0px;
 }

@@ -285,6 +285,9 @@
    dialog's answer to the same question. */
 .adm-drawer [data-slot="input"],
 .adm-drawer [data-slot="select-trigger"],
+.adm-drawer [data-slot="date-picker-trigger"]:not([data-readonly]),
+.adm-drawer [data-slot="number-field-group"],
+.adm-drawer [data-slot="cascader-chips"],
 .adm-drawer [data-slot="textarea"] {
   background: var(--field-on-overlay);
   /* Border, text, focus and invalid states remain owned by the primitive. */

@@ -15,10 +15,9 @@ import {
 
 /* An integer field with step buttons, over ReUI's number-field.
 
-   The INPUT is the control's box — border, height, radius, invalid state —
-   and the step buttons sit inside its padding. So base.css's single
-   `input:focus-visible` ring outlines the whole control, keyboard-only, with
-   forced-colors coverage, and nothing here restates it.
+   The group owns the field border, growing height and shared focus ring.
+   The input and inset step buttons use the same NumberField primitives as
+   standalone numeric controls.
 
    The step buttons are out of the tab order (base-ui's default); Arrow
    Up/Down on the input steps the value.
@@ -72,14 +71,14 @@ function NumberInput({
       disabled={disabled}
       className={cn("gap-0", className)}
     >
-      <NumberFieldGroup className="h-(--control-h) rounded-none border-0 bg-transparent focus-within:ring-0 dark:bg-transparent">
+      <NumberFieldGroup>
         <NumberFieldDecrement aria-label={t("number_field.decrease")} className={cn(stepButton, "start-0")} />
         <NumberFieldInput
           ref={inputRef}
           placeholder={placeholder}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
-          className="h-full rounded-md border border-field bg-background px-9 hover:border-field-hover text-base text-foreground placeholder:text-muted-foreground aria-invalid:border-destructive disabled:cursor-not-allowed"
+          className="px-9 placeholder:text-muted-foreground disabled:cursor-not-allowed"
         />
         <NumberFieldIncrement aria-label={t("number_field.increase")} className={cn(stepButton, "end-0")} />
       </NumberFieldGroup>
