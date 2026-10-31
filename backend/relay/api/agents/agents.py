@@ -33,12 +33,12 @@ from ...skills.grants import read_grants
 router = APIRouter()
 
 
-# Users can adjust their agent's personality and model at any time; the
-# birth certificate (computerId / executorKind / defaultRole) is fixed at
-# creation — changing the role is like swapping in a different coworker, so it
-# should be a new agent, not an edit. The model is tuning within the runtime
-# the agent was born with, not a different coworker.
-AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy"})
+# Users can adjust their agent's personality, model, and role at any time; the
+# birth certificate (computerId / executorKind) is fixed at creation — a
+# different computer or runtime is a different coworker, so it should be a new
+# agent, not an edit. The role is the agent's own default; a team may assign
+# its member a different one.
+AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole"})
 
 
 @router.get("/agents")

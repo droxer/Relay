@@ -30,6 +30,7 @@ AGENT_PATCH_FIELDS = frozenset(
         "skillPolicy",
         "toolPolicy",
         "modelPolicy",
+        "defaultRole",
         "enabled",
         "compatibilityKey",
     }
@@ -489,6 +490,11 @@ def _normalize_agent_identity_patch(
 
 def _normalize_agent_runtime_patch(patch: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
+    if "defaultRole" in patch:
+        role = patch["defaultRole"]
+        if not isinstance(role, str) or role.strip() not in AGENT_ROLES:
+            raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
+        normalized["defaultRole"] = role.strip()
     if "instructions" in patch:
         normalized["instructions"] = (
             patch["instructions"].strip()

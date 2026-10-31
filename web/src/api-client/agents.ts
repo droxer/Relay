@@ -53,8 +53,8 @@ export type UserAgentMetaPatch = {
   instructions?: string;
   /** `{}` returns the agent to its runtime's default model. */
   modelPolicy?: { model?: string };
-  /** null clears the role, so an agent can go back to no specialization. */
-  defaultRole?: AgentRole | null;
+  /** The agent's own role; a team may assign its member a different one. */
+  defaultRole?: AgentRole;
 };
 
 export type UserAgentAdminPatch = UserAgentMetaPatch & {
