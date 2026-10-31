@@ -13,7 +13,7 @@ describe("reviewed design regressions", () => {
 
     // The shared hiding rule must have lower specificity than route overrides.
     // Merely finding a later `position: static` does not prove it wins.
-    assert.match(responsive, /\.messenger-shell:where\(\[data-route\]:not\(\[data-route="main"\]\)\) \.page-header-lead\s*\{/);
+    assert.match(responsive, /\.messenger-shell:where\(\[data-route\]:not\(\[data-route="main"\], \[data-route="home"\]\)\) \.page-header-lead\s*\{/);
     assert.doesNotMatch(responsive, /\.messenger-shell\[data-route\]:not\(\[data-route="main"\]\) \.page-header-lead\s*\{/);
 
     for (const route of ["agents", "teams", "projects"]) {

@@ -8,6 +8,7 @@ import {
   ActionCalendar,
   ActionPrompt,
   ActionRoute,
+  ActionSnooze,
   AdminInbox,
   AdminLocked,
   ICON,
@@ -78,11 +79,14 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
           type="button"
           variant="ghost"
           size="dense"
+          className="home-snooze"
           disabled={busy}
           onClick={() => void run(() => actions.snooze(item))}
           title={t("home.snooze_hint")}
+          aria-label={t("home.snooze")}
         >
-          {t("home.snooze")}
+          <ActionSnooze size={ICON.sm} aria-hidden="true" />
+          <span className="home-snooze-label">{t("home.snooze")}</span>
         </Button>
       </div>
     </li>
@@ -217,7 +221,7 @@ function describe(item: HomeItem, t: T): { Icon: ComponentType<GlyphProps>; tone
       if (item.awaiting.kind === "question") return { Icon: ActionPrompt, tone: "warn", kindLabel: t("home.kind.question") };
       return { Icon: StatusWarn, tone: "warn", kindLabel: t(`home.kind.${item.awaiting.kind}`) };
     case "review":
-      return { Icon: StatusOk, tone: "live", kindLabel: t("home.kind.review") };
+      return { Icon: StatusOk, tone: "warn", kindLabel: t("home.kind.review") };
     case "blocked":
       return { Icon: StatusError, tone: "err", kindLabel: t("home.kind.blocked") };
     case "offline":

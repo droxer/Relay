@@ -62,7 +62,7 @@ describe("task board review regressions", () => {
     // guarantee is asserted on the routine board, which keeps row actions.
     assert.match(routinesPage, /startTaskMutation\.isPending/);
     assert.match(routinesPage, /startTaskMutation\.variables\?\.taskId/);
-    assert.match(routinesPage, /if \(startInFlight\.current\) return/);
+    assert.match(routinesPage, /if \(readOnly \|\| startInFlight\.current\) return/);
     assert.match(routineRecords, /loading=\{starting\}/);
   });
 

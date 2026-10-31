@@ -6,14 +6,16 @@ import { updateUserPreferences } from "../../api-client/auth";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useMutationError } from "../../hooks/useMutationError";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
+import { taskStartMutationInput } from "../../lib/taskBoardForm";
 import type { HomeItem } from "../../lib/homeQueue";
-import type { CurrentUser, RelaySession, RelayTaskListItem } from "../../types";
+import type { CurrentUser, RelaySession, RelayTaskListItem, StartTaskResponse } from "../../types";
 
 /** What a Home row can do without leaving the page. Each one is the same
  *  call the thread or task record makes, so Home adds no write path of its
  *  own; anything richer (a written denial note, a multi-question prompt)
  *  opens the record instead. Every action resolves true when it landed. */
 export interface HomeActions {
+  startTask: (task: RelayTaskListItem) => Promise<StartTaskResponse>;
   answerPermission: (session: RelaySession, requestId: string, decision: "allow" | "deny", always?: boolean) => Promise<boolean>;
   answerWait: (sessionId: string, questionId: string | null, text: string, approve?: boolean) => Promise<boolean>;
   acceptReview: (task: RelayTaskListItem) => Promise<boolean>;
@@ -25,7 +27,7 @@ export function useHomeActions(setUser: (user: CurrentUser) => void): HomeAction
   const { t } = useTranslation();
   const { announce } = useDialogs();
   const { reportMutationError } = useMutationError();
-  const { answerPermissionMutation, submitThreadMessageMutation, updateTaskMutation } = useRelayMutations();
+  const { answerPermissionMutation, submitThreadMessageMutation, updateTaskMutation, startTaskMutation } = useRelayMutations();
 
   const attempt = useCallback(async (run: () => Promise<unknown>, done: string, failed: string): Promise<boolean> => {
     try {
@@ -87,5 +89,8 @@ export function useHomeActions(setUser: (user: CurrentUser) => void): HomeAction
       "home.errors.snooze",
     ), [attempt, setUser, t]);
 
-  return { answerPermission, answerWait, acceptReview, sendStep, snooze };
+  const startTask = useCallback<HomeActions["startTask"]>((task) =>
+    startTaskMutation.mutateAsync(taskStartMutationInput(task)), [startTaskMutation]);
+
+  return { answerPermission, answerWait, acceptReview, sendStep, snooze, startTask };
 }

@@ -122,3 +122,26 @@ def test_pickup_and_claim_refuse_a_waiting_task(project_context):
 
     assert (pickup.status_code, pickup.json()["detail"]) == (409, "task_prerequisites_open")
     assert store.claim_task_for_dispatch(second["id"], "codex") is None
+
+
+def test_list_dependency_summary_respects_project_access(project_context, monkeypatch):
+    app, client, project = project_context
+    store = app.state.task_store
+    bob = app.state.auth_store.ensure_user("bob", display_name="Sam Lee")
+    upstream = store.create_task({"title": "Bob's upstream work", "description": "private evidence", "ownerUserId": bob["id"], "assigneeUserId": bob["id"], "projectId": project["id"]})
+    dependent = _task(client, project, "Alice's dependent work")
+    assert _set(client, dependent, [upstream["id"]]).status_code == 200
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert upstream["id"] not in rows
+    [summary] = rows[dependent["id"]]["waitingOnSummaries"]
+    assert summary["title"] == "Bob's upstream work"
+    assert summary["ownerUserId"] == bob["id"]
+    assert summary["responsibleName"] == "Sam Lee"
+    assert summary["canOpen"] is False
+    assert "description" not in summary and "events" not in summary
+    assert client.get(f"/api/v1/tasks/{upstream['id']}").status_code == 403
+
+    # An accessible task alone does not grant the project's private metadata.
+    monkeypatch.setattr(app.state.project_store, "get_project", lambda _id: {**project, "ownerUserId": "bob"})
+    hidden_rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert hidden_rows[dependent["id"]]["waitingOnSummaries"] == []

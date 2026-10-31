@@ -190,6 +190,18 @@ export interface RelayTask {
   /** API-only, derived: the prerequisites not yet done. The scheduler holds
    *  the task while this is non-empty; it is never a status. */
   waitingOn?: string[];
+  /** API-only, permission-checked metadata for direct unfinished prerequisites.
+   * Missing entries stay private; this never grants access to the full task. */
+  waitingOnSummaries?: Array<{
+    id: string;
+    number?: number;
+    title: string;
+    status: TaskStatus;
+    ownerUserId?: string;
+    assigneeUserId?: string;
+    canOpen: boolean;
+    responsibleName?: string;
+  }>;
   /** API-only, on a single-task read: the tasks that name this one as a
    *  prerequisite. */
   unblocks?: string[];

@@ -156,12 +156,9 @@ describe("the handoff mark", () => {
     });
   }
 
-  it("lets favicon.svg follow the viewer's scheme into the light register", () => {
-    const light = read("web", "public", "favicon.svg").split("prefers-color-scheme: light")[1] ?? "";
-    for (const name of ["--surface-0", "--line-1", "--brand-lead", "--live"]) {
-      assert.ok(light.includes(tokenIn(registers.light, name)), `favicon.svg's light scheme is missing ${name}`);
-    }
-  });
+  // The favicon intentionally uses one fixed tile in either viewer scheme.
+  // faviconState.test.ts covers shipped/runtime parity and contrast; a
+  // light-register media-query assertion would contradict that contract.
 
   it("colours the wordmark's chevrons from both registers", () => {
     const svg = read("web", "public", "brand", "relay-logo.svg");

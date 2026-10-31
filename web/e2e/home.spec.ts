@@ -44,12 +44,15 @@ const task = (id: string, number: number, extra: Record<string, unknown>) => ({
   ownerUserId: "u", projectId: "p-billing", createdAt: ago(5000), updatedAt: ago(300), ...extra,
 });
 const tasks = [
+  task("t-ready", 27, {title:"Ship the customer export", assignedAgentId:"agt_atlas", priority:"high", waitingOn:[]}),
+  task("t-due", 28, {title:"Review the release checklist", dueDate:isoDay(new Date(now+86400000))}),
+  task("routine-report", 29, {title:"Weekly delivery report", isRoutine:true, routineState:"active", routineNextRunAt:ago(-1440)}),
   task("t-pricing", 9, {
     title: "Pricing page copy refresh", status: "waiting_for_human", projectId: "p-site", updatedAt: ago(38), assignedAgentId: "agt_atlas",
     awaiting: { questionId: "w-9", kind: "question", text: "Should the annual plan show the monthly equivalent or the yearly total?", options: ["Monthly equivalent", "Yearly total"], notes: [], sessionId: "s-pricing", resumable: true },
   }),
   task("t-retry", 7, { title: "Add retry budget to webhook sender", status: "review", updatedAt: ago(180), finishedAt: ago(180), assignedAgentId: "agt_atlas" }),
-  task("t-load", 16, { title: "Load-test invoice export", status: "blocked", updatedAt: ago(1440), blockerReason: "Waiting on #14 to land first." }),
+  task("t-load", 16, { title: "Load-test invoice export", status: "blocked", updatedAt: ago(1440), blockerReason: "Waiting on #14 to land first.", waitingOn:["upstream"], waitingOnSummaries:[{id:"upstream",number:14,title:"Complete the billing schema",status:"running",ownerUserId:"sam",responsibleName:"Sam Lee",canOpen:false}] }),
   task("t-soc2", 5, { title: "Quarterly SOC2 evidence pull", projectId: "p-compliance", dueDate: isoDay(yesterday) }),
   task("t-intake", 21, { title: "Look into flaky login", projectId: undefined, status: "backlog" }),
   task("t-sdk", 18, { title: "Generate SDK types", status: "running", updatedAt: ago(5) }),
@@ -106,8 +109,11 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByRole("link", { name: "Home, 3 things need you" })).toBeVisible();
 
     await expect(queue(page).locator(".home-band-title")).toHaveText([
-      "Needs you · a run is paused", "Needs you", "Stuck", "Worth doing",
+      "Needs you", "Stuck", "Worth doing",
     ]);
+    await expect(queue(page).getByRole("heading", {name:"Start here"})).toBeVisible();
+    await expect(queue(page).locator(".home-item-title").filter({hasText:"Migrate billing tables"})).toHaveCount(1);
+    await expect(page.getByRole("region", {name:"Upcoming"})).toContainText("Review the release checklist");
     await expect(queue(page).locator(".home-item-title").first()).toContainText("Migrate billing tables");
     await expect(queue(page).locator(".home-item-why").first()).toContainText("psql -f migrations/0042_split_invoices.sql");
     await expect(page.getByRole("region", { name: "Projects" })).toContainText("Billing v2");
@@ -149,7 +155,7 @@ test("accepts finished work and snoozes the rest until it changes", async ({ pag
   const blocked = queue(page).locator(".home-item").filter({ hasText: "Load-test invoice export" });
   await blocked.getByRole("button", { name: "Snooze" }).click();
   await expect.poll(() => wire.find((call) => call.path.endsWith("/auth/preferences"))?.body).toEqual({
-    homeSnoozes: { snooze: [{ key: "task:t-load", stamp: tasks[2].updatedAt }] },
+    homeSnoozes: { snooze: [{ key: "task:t-load", stamp: tasks.find(task => task.id === "t-load")!.updatedAt }] },
   });
   await expect(blocked).toHaveCount(0);
 });
@@ -163,4 +169,63 @@ test("stacks into one column on a phone", async ({ page }, testInfo) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   await page.screenshot({ path: testInfo.outputPath("home-phone.png"), fullPage: true });
+});
+
+
+test("recommends ready work when urgent items are clear and preserves queued outcomes", async ({page}) => {
+ await serve(page,"light");
+ const ready=tasks.find(task=>task.id==="t-ready")!;
+ await page.route("**/api/v1/tasks?*",route=>route.fulfill({json:{tasks:[ready]}}));
+ await page.route("**/api/v1/threads?*",route=>route.fulfill({json:{sessions:[]}}));
+ await page.route("**/api/v1/tasks/t-ready/runs",route=>route.fulfill({json:{task:{...ready,events:[],activity:[]},session:null,dispatch:{state:"queued"}}}));
+ await page.goto("/home");
+ const focus=page.locator(".home-focus");
+ await expect(focus).toContainText("Ship the customer export");
+ await expect(page.locator(".home-item-title").filter({hasText:"Ship the customer export"})).toHaveCount(1);
+ await focus.getByRole("button",{name:"Start",exact:true}).click();
+ await expect(focus.getByRole("status")).toContainText("Queued");
+ await expect(focus.getByRole("status")).not.toContainText("Work started");
+});
+
+test("shows a failed source instead of claiming the queue is clear", async ({page}) => {
+ await serve(page,"light");
+ await page.route("**/api/v1/tasks?*",route=>route.fulfill({status:503,json:{detail:"Unavailable"}}));
+ await page.goto("/home");
+ await expect(page.locator(".home-data-state")).toBeVisible();
+ await expect(page.locator(".home-clear")).toHaveCount(0);
+ await expect(page.locator(".home-data-state").getByRole("button",{name:"Retry"})).toBeVisible({timeout:20000});
+});
+
+test("a focused decision does not produce a false all-clear message", async ({page}) => {
+ await serve(page,"light");
+ await page.route("**/api/v1/tasks?*",route=>route.fulfill({json:{tasks:[]}}));
+ await page.route("**/api/v1/threads?*",route=>route.fulfill({json:{sessions:[migrate]}}));
+ await page.goto("/home");
+ await expect(page.locator(".home-focus")).toContainText("Migrate billing tables");
+ await expect(queue(page)).toContainText("No other items need you");
+ await expect(queue(page)).not.toContainText("Nothing needs you right now");
+});
+
+test("reveals all ready work without leaving Home", async ({page}) => {
+ await serve(page,"light");
+ const ready=tasks.find(task=>task.id==="t-ready")!;
+ const many=Array.from({length:5},(_,i)=>({...ready,id:`ready-${i}`,title:`Ready item ${i}`}));
+ await page.route("**/api/v1/tasks?*",route=>route.fulfill({json:{tasks:many}}));
+ await page.route("**/api/v1/threads?*",route=>route.fulfill({json:{sessions:[]}}));
+ await page.goto("/home");
+ const panel=page.getByRole("region",{name:"Ready to start"});
+ await expect(panel.locator(".home-ready-row")).toHaveCount(3);
+ await panel.getByRole("button",{name:"Show all 4"}).click();
+ await expect(panel.locator(".home-ready-row")).toHaveCount(4);
+ await panel.getByRole("button",{name:"Show less"}).click();
+ await expect(panel.locator(".home-ready-row")).toHaveCount(3);
+});
+
+test("phone users can jump to Upcoming immediately after the recommendation", async ({page}) => {
+ await serve(page,"dark");await page.setViewportSize({width:375,height:812});await page.goto("/home");
+ const link=page.getByRole("navigation",{name:"Jump to your work"}).getByRole("link",{name:/Upcoming/});
+ await expect(link).toBeVisible();
+ const height=await link.evaluate(el=>el.getBoundingClientRect().height);expect(height).toBeGreaterThanOrEqual(44);
+ await link.click();
+ await expect(page.getByRole("heading",{name:"Upcoming",exact:true})).toBeInViewport();
 });

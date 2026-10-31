@@ -27,6 +27,7 @@ type RelayDataResult = {
   sessions: RelaySession[];
   tasks: RelayTaskSummary[];
   projects: ProjectRecord[];
+  homeStatus: ProjectCollectionStatus;
   projectsStatus: ProjectCollectionStatus;
   tasksStatus: ProjectCollectionStatus;
   projectsError: string;
@@ -38,7 +39,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError"
+  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
 /* The only fields the app reads off the five polls, folded into one value.
@@ -61,6 +62,8 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
     sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
     tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
     projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
+    homeStatus: [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => q.isError)
+      ? "error" : [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => !q.isSuccess) ? "loading" : "ready",
     projectsStatus: queryCollectionStatus(projectsQuery),
     tasksStatus: queryCollectionStatus(tasksQuery),
     projectsError: projectsQuery.error instanceof Error
@@ -98,7 +101,7 @@ export function useRelayData(
   // sessions interval at once instead of after the next poll.
   const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
 
-  const { sandboxes, nodes, nodesReady, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
+  const { sandboxes, nodes, nodesReady, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
       {
@@ -236,6 +239,7 @@ export function useRelayData(
     projectsStatus,
     tasksStatus,
     projectsError,
+    homeStatus,
     isRefreshing: manualRefreshPending,
     refresh,
     setSandboxes,

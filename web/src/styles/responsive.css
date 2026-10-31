@@ -327,7 +327,7 @@
   /* With its actions in the top bar, a list header whose title is hidden
      (the top bar names the route) holds nothing: drop the band. Record
      routes keep theirs — their lead carries the record's tabs. */
-  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="agents"], [data-route="teams"], [data-route="projects"])) .page-header:not(:has(.page-header-actions, .page-header-toolbar)):not(#task-record-panel .page-header) {
+  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="home"], [data-route="agents"], [data-route="teams"], [data-route="projects"])) .page-header:not(:has(.page-header-actions, .page-header-toolbar)):not(#task-record-panel .page-header) {
     display: none;
   }
 
@@ -364,8 +364,9 @@
   }
 
   /* Work routes — mobile topbar already names the page; drop the in-page
-     title band and keep a compact actions toolbar. */
-  .messenger-shell:where([data-route]:not([data-route="main"])) .page-header-lead {
+     title band and keep a compact actions toolbar. Home keeps its personal
+     greeting and live status summary, which add context beyond the route. */
+  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="home"])) .page-header-lead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -377,7 +378,7 @@
     border: 0;
   }
 
-  .messenger-shell:where([data-route]:not([data-route="main"])) .page-header {
+  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="home"])) .page-header {
     min-height: 0;
     justify-content: flex-end;
     border-bottom-color: var(--line-2);

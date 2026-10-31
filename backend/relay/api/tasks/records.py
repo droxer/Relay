@@ -43,7 +43,7 @@ from ..schemas import (
     TaskPatchBodyDep,
     openapi_body,
 )
-from .prerequisites import task_with_prerequisite_view, with_waiting_on
+from .prerequisites import task_with_prerequisite_view, with_waiting_on, with_dependency_summaries
 from .payloads import (
     project_move_target,
     public_task,
@@ -84,7 +84,7 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=limit,
         )
     return {
-        "tasks": with_waiting_on(ctx, [public_task(task) for task in tasks]),
+        "tasks": with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in tasks])),
         "flowPolicy": {"wipLimit": wip_limit(), "scope": "user"},
     }
 

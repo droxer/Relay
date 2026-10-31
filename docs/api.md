@@ -71,6 +71,21 @@ and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
 truncate either projection.
 
+Task lists include `waitingOnSummaries` alongside the authoritative `waitingOn`
+IDs. These summaries contain only a direct unfinished prerequisite's id, number,
+title, status, responsible user ids/name, and `canOpen`. They are supplied only
+when the prerequisite belongs to the same live project and the caller owns that
+project or is an administrator. A summary never grants access to the full task;
+`canOpen` follows the existing task owner/assignee rule. Missing summaries mean
+private or unavailable details, not a resolved dependency.
+
+Home's seven-day Upcoming list uses local calendar dates for task deadlines,
+already scheduled occurrences, and each active automation's next known run. It
+is not a forecast of every repeat or event/webhook trigger. Ready-work suggestions
+require an assigned routable agent/team, a writable project, an online Computer,
+and no outstanding prerequisites; the existing task-start endpoint remains the
+final authority and may answer started, queued, or rejected.
+
 The thread list (`GET /api/v1/threads`) is a summary projection too. Beside a
 thread's open `permissionRequests` it carries `nextSteps` — up to three short
 follow-ups a finished turn suggested, empty once anything else happens — so

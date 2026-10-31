@@ -17,6 +17,7 @@ import {
   Coins,
   Copy,
   CalendarDays,
+  Clock3,
   Cloud,
   Columns3,
   CircleDashed,
@@ -336,6 +337,7 @@ export const ActionRemove = withStandardStroke(X, "ActionRemove");
 export const NavBack = withStandardStroke(ArrowLeft, "NavBack");
 export const ActionSearch = withStandardStroke(Search, "ActionSearch");
 export const ActionCalendar = withStandardStroke(CalendarDays, "ActionCalendar");
+export const ActionSnooze = withStandardStroke(Clock3, "ActionSnooze");
 // A file is a blank sheet wherever it appears — the workspace tree and the
 // artifact strip must not picture the same object two ways. `FileText`
 // (ruled lines) is reserved for written prose, i.e. the summary artifact.
