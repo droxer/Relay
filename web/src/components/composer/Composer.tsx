@@ -163,7 +163,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // One answer to "can this draft be sent?", read by both the button's
   // `disabled` and the keyboard path. They were written separately and had
   // already drifted: the button also refused a staged thread with no computer
-  // picked, but `triggerSend` did not, so ⌘-Enter dispatched a round with no
+  // picked, but `triggerSend` did not, so the keyboard shortcut dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
   const cannotSendAsWritten = readOnly
     || !composerText.trim()
@@ -345,13 +345,26 @@ const ComposerView = forwardRef<ComposerHandle, {
               onFocus={mentions.focus}
               onBlur={mentions.blur}
               onKeyDown={(e) => {
-                // The popup gets first refusal on navigation keys; the send
-                // shortcut is untouched because the popup never claims it.
+                // Enter confirms IME composition without sending or picking.
+                if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+                  e.preventBaseUIHandler();
+                  return;
+                }
+                // Shift+Enter always keeps the textarea's native newline.
+                if (e.key === "Enter" && e.shiftKey) {
+                  e.preventBaseUIHandler();
+                  return;
+                }
+                // The popup gets first refusal on navigation keys.
                 if (!(e.metaKey || e.ctrlKey) && mentions.handleKey(e.key)) {
                   e.preventDefault();
                   return;
                 }
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); triggerSend(); }
+                // An open mention accepts Enter before the message is sent.
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey || mentions.matches.length === 0)) {
+                  e.preventDefault();
+                  triggerSend();
+                }
               }}
               onScroll={(e) => {
                 // A tall draft scrolls inside the textarea; the mirror has to
