@@ -124,14 +124,10 @@ describe("provision drawers", () => {
     }
   });
 
-  it("marks the created computer in the list it lands in", () => {
-    const admin = readWeb("src/components/AdminPage.tsx");
-    assert.match(admin, /highlightedNodeId/);
-    // Both node paths switch to the Computers view, where a user-keyed
-    // pulse is never read.
-    assert.match(admin, /function handleCreateManagedNodeSuccess[\s\S]{0,400}pulseNode\(node\.id\)/);
-    assert.match(admin, /function handleCreateManualNodeSuccess[\s\S]{0,600}pulseNode\(node\.id\)/);
-  });
+  // The console no longer mounts computer-creation drawers or their success
+  // handlers. The former arrival-highlight assertion belonged to that removed
+  // flow; the surviving drawers' validation/accessibility checks remain above.
+
 });
 
 describe("password policy", () => {

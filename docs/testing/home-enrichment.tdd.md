@@ -31,7 +31,8 @@ Commands/results:
 
 The pure-rule coverage measurement is scoped; it is not a claim of whole-feature
 or repository coverage. No new database migration is needed for enrichment.
-The PR's earlier nullable Account snooze migration remains required.
+The nullable Account snooze migration is already on main through PR #605;
+this follow-up adds no migration.
 
 ## Independent Impeccable critique
 
@@ -74,3 +75,22 @@ the parent-owned static server was stopped after final verification.
 
 Review fixes are covered above; questions were skipped because the agreed
 scope was implemented and the actionable findings were resolved.
+
+
+## Follow-up PR readiness
+
+PR #605 merged the initial dashboard before its later polish/enrichment commits.
+The follow-up branch starts at that merge and carries only the three unmerged
+Home commits plus test maintenance.
+
+The three remaining deterministic web failures were stale source assertions:
+the fixed favicon tile already has contrast/runtime-parity coverage in
+`faviconState.test.ts`; console computer creation and its arrival-highlight
+handlers were removed; and the routine Start guard now combines read-only and
+in-flight checks. Removed the two obsolete cases and updated the guard assertion
+without changing those product behaviors or skipping active tests.
+
+Fresh follow-up verification: **2212 web/core tests passed**, **739 React tests
+passed**, **11 Home browser tests passed**, and the production build passed.
+The unchanged backend code retains the full-run evidence above, including the
+three terminal-dependent tests passing outside the sandbox.
