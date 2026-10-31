@@ -3,6 +3,7 @@ import { backendPublicOrigin } from "./apiOrigin.ts";
 import { byNumber, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
 import { formatThreadStamp } from "./threadStamp.ts";
+import { AGENT_RUNTIME_DISPLAY_ORDER } from "./agentRuntimeOrder.ts";
 
 export const ADMIN_AGENTS_KEY = ["admin", "agents"] as const;
 
@@ -17,19 +18,17 @@ export function stableNodeOrder(
   ));
 }
 
-/** The one display order for runtimes on node surfaces. */
-const NODE_AGENT_ORDER: readonly AgentName[] = ["codex", "claude", "pi", "opencode", "kimi"];
 /** Runtimes listed only once a computer reports them installed. */
 const OPT_IN_NODE_AGENT_NAMES: ReadonlySet<AgentName> = new Set(["pi", "opencode"]);
 
 /** `names` in the node-surface display order. */
 export function orderNodeAgentNames(names: readonly AgentName[]): AgentName[] {
-  return NODE_AGENT_ORDER.filter((name) => names.includes(name));
+  return AGENT_RUNTIME_DISPLAY_ORDER.filter((name) => names.includes(name));
 }
 
 /** Agent executors shown on admin node surfaces (opt-in runtimes only when the daemon reports them). */
 export function visibleNodeAgentNames(node: Pick<ControlPanelDaemonNodeRecord, "agents">): AgentName[] {
-  return NODE_AGENT_ORDER.filter((name) => {
+  return AGENT_RUNTIME_DISPLAY_ORDER.filter((name) => {
     if (!OPT_IN_NODE_AGENT_NAMES.has(name)) return true;
     const status = node.agents[name];
     return Boolean(status) && status !== "unknown" && status !== "unavailable";

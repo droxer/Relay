@@ -2,8 +2,23 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { computerCanSelectModel, computerName, computerReportedModels, computerUsesCustomModelEndpoint, runtimesForComputer, computersForUser } from "../src/lib/createAgent.js";
+import { visibleNodeAgentNames } from "../src/lib/adminHelpers.js";
 
 describe("create agent options", () => {
+  it("orders ready runtimes like Manage Agent Runtimes regardless of API order", () => {
+    const agents = { pi: "ready", kimi: "ready", claude: "ready", codex: "ready", opencode: "ready" } as const;
+    const nodes = [{ id: "n1", userId: "alice", workspaceId: "mac", supportedAgents: Object.keys(agents) }];
+
+    assert.deepEqual(
+      runtimesForComputer(nodes, "device:alice:mac"),
+      visibleNodeAgentNames({ agents }),
+    );
+    assert.deepEqual(
+      runtimesForComputer([{ ...nodes[0], disabledAgents: ["claude", "kimi", "opencode"] }], "device:alice:mac"),
+      ["codex", "pi"],
+    );
+  });
+
   it("shows the computer name and never substitutes its workspace path", () => {
     const named = { id: "node-1", displayName: "Build Cloud", workspacePath: "/workspace/build" };
     const unnamed = { id: "node-2", workspacePath: "/Users/alice/private-project" };
