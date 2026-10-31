@@ -1,5 +1,15 @@
 /* ============================ search / inputs ============================ */
 
+/* Search fields keep a visible focus cue without the spaced, heavy ring
+   used by other controls. Set it on both the wrapper and input so standalone
+   fields and bare rail searches share the same treatment. */
+[data-slot="search"],
+[data-slot="search"] input,
+.command-menu {
+  --focus-outline: 1px solid var(--link);
+  --focus-offset: 0px;
+}
+
 /* Shared search field — thread connect, admin roster filters, etc. */
 .relay-search,
 .adm-search {

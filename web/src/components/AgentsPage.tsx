@@ -4,9 +4,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { groupAgentsByComputer } from "../lib/agentGroups";
-import { agentMatchesQuery } from "../lib/agentSearch";
-import { useUrlSearchState } from "../hooks/useUrlSearchState";
-import type { AgentName, CurrentUser, UserAgent, LogicalAgentAvailability } from "../types";
+import type { CurrentUser, UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
@@ -20,7 +18,6 @@ import { MobileTopbarBack } from "./MobileTopbarSlot";
 import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
-import { FiltersBar, type FilterBarField } from "./FiltersBar";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
 import { ListSkeleton } from "./ListSkeleton";
 
@@ -31,71 +28,6 @@ interface AgentsPageProps {
   onOpenAgent: (agent: UserAgent) => void;
   onBackToAgents: () => void;
   onOpenThread: (sessionId: string) => void;
-}
-
-type AvailabilityFilter = "all" | LogicalAgentAvailability;
-
-const AVAILABILITY_FILTERS: readonly AvailabilityFilter[] = [
-  "all",
-  "ready",
-  "busy",
-  "pending",
-  "offline",
-];
-
-function parseAvailabilityFilter(value: string | null): AvailabilityFilter {
-  return AVAILABILITY_FILTERS.includes(value as AvailabilityFilter)
-    ? value as AvailabilityFilter
-    : "all";
-}
-
-function agentDescriptors(t: ReturnType<typeof useTranslation>["t"]):
-Record<AgentName, { blurb: string }> {
-  return {
-    claude: { blurb: t("agent.claude.blurb") },
-    pi: { blurb: t("agent.pi.blurb") },
-    codex: { blurb: t("agent.codex.blurb") },
-    kimi: { blurb: t("agent.kimi.blurb") },
-    opencode: { blurb: t("agent.opencode.blurb") },
-  };
-}
-
-function RosterFilterBar({
-  query,
-  availability,
-  onQueryChange,
-  onAvailabilityChange,
-}: {
-  query: string;
-  availability: AvailabilityFilter;
-  onQueryChange: (value: string) => void;
-  onAvailabilityChange: (value: AvailabilityFilter) => void;
-}) {
-  const { t } = useTranslation();
-
-  const fields = useMemo<FilterBarField[]>(() => [{
-    id: "availability",
-    label: t("agents_page.availability"),
-    kind: "select",
-    options: AVAILABILITY_FILTERS.filter((filter) => filter !== "all")
-      .map((filter) => ({ value: filter, label: t(`agents_page.filter_${filter}`) })),
-  }], [t]);
-
-  return (
-    <FiltersBar
-      variant="rail"
-      ariaLabel={t("agents_page.filters")}
-      searchName="agents-query"
-      searchLabel={t("agents_page.search_label")}
-      searchPlaceholder={t("agents_page.search_placeholder")}
-      query={query}
-      onQueryChange={onQueryChange}
-      fields={fields}
-      selections={{ availability: availability === "all" ? "" : availability }}
-      onSelectionsChange={(next) => onAvailabilityChange(parseAvailabilityFilter(next.availability || "all"))}
-      onClear={() => onAvailabilityChange("all")}
-    />
-  );
 }
 
 /** "available" is the healthy default and stays silent — only the three
@@ -192,23 +124,13 @@ function AgentsPageView({
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const { agents, isFetching, error, refetch } = useUserAgents(currentUser.userId);
-  const descriptors = useMemo(() => agentDescriptors(t), [t]);
-  const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
-  const [availability, setAvailability] = useUrlSearchState(
-    "availability",
-    "all" as AvailabilityFilter,
-    parseAvailabilityFilter,
-    (value) => value === "all" ? null : value,
-  );
   const activeAgents = useMemo(
     () => agents.filter((agent) => !agent.deletedAt),
     [agents],
   );
 
   const visibleAgents = useMemo(() => {
-    return activeAgents
-      .filter((agent) => availability === "all" || agent.availability === availability)
-      .filter((agent) => agentMatchesQuery(agent, descriptors[agent.executorKind].blurb, query))
+    return [...activeAgents]
       .sort((left, right) => {
         const rank = (agent: UserAgent) => {
           if (agent.availability === "ready") return 0;
@@ -220,7 +142,7 @@ function AgentsPageView({
         if (rankDelta !== 0) return rankDelta;
         return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
       });
-  }, [activeAgents, availability, descriptors, query]);
+  }, [activeAgents]);
 
   const agentGroups = useMemo(() => groupAgentsByComputer(visibleAgents), [visibleAgents]);
 
@@ -270,13 +192,6 @@ function AgentsPageView({
           }
         />
 
-        <RosterFilterBar
-          query={query}
-          availability={availability}
-          onQueryChange={setQuery}
-          onAvailabilityChange={setAvailability}
-        />
-
         {loading ? (
           <ListSkeleton label={t("admin.loading")} />
         ) : error && agents.length === 0 ? (
@@ -287,9 +202,9 @@ function AgentsPageView({
           />
         ) : visibleAgents.length === 0 ? (
           <RelayEmptyState feature="agents"
-            title={activeAgents.length === 0 ? t("agents_page.empty_title") : t("agents_page.empty_filtered_title")}
-            body={activeAgents.length === 0 ? t("agents_page.empty_body") : t("agents_page.empty_filtered_body")}
-            actions={activeAgents.length === 0 && currentUser.userId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
+            title={t("agents_page.empty_title")}
+            body={t("agents_page.empty_body")}
+            actions={currentUser.userId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
           />
         ) : (
           // Banded by the computer each agent runs on — the infrastructure is
