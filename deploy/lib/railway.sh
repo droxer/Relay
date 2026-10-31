@@ -405,7 +405,12 @@ railway_wait_deployment() {
     esac
     if [ "$waited" -ge "$DEPLOY_TIMEOUT_SECONDS" ]; then
       warn "$name deployment $observed_id still $status after ${DEPLOY_TIMEOUT_SECONDS}s"
-      railway_failure_logs "$observed_id"
+      if [ "$status" = QUEUED ]; then
+        warn "Railway has not started the build; no build logs are available yet. Check the deployment in Railway and https://status.railway.com for queue delays."
+      else
+        railway_failure_logs "$observed_id"
+      fi
+      warn "Stopped waiting locally; deployment $observed_id was not cancelled and may still proceed. Check its status before starting another release."
       return 1
     fi
     sleep "$DEPLOY_POLL_SECONDS"

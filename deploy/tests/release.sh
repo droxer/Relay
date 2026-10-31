@@ -45,6 +45,23 @@ if (railway_wait_deployment backend backend-service backend-dep) > "$WORK/out" 2
 grep -q 'still BUILDING after 0s' "$WORK/error"
 echo 'ok    timeout reports the exact deployment and returns failure'
 
+# A queued deployment has no associated build yet. Its timeout should explain
+# that state without issuing a log query that obscures it with an API error.
+gql() {
+  case $1 in
+    *'query Deployments'*) printf '{"deployments":{"edges":[{"node":{"id":"backend-dep","status":"QUEUED"}}]}}' ;;
+    *) die 'Deployment does not have an associated build' ;;
+  esac
+}
+if (railway_wait_deployment backend backend-service backend-dep) > "$WORK/out" 2> "$WORK/error"; then exit 1; fi
+grep -q 'still QUEUED after 0s' "$WORK/error"
+if grep -q 'does not have an associated build' "$WORK/error"; then
+  echo 'FAIL queued timeout requested nonexistent build logs' >&2
+  exit 1
+fi
+grep -q 'may still proceed' "$WORK/error"
+echo 'ok    queued timeout explains the pending deployment without requesting build logs'
+
 # A refused deploy mutation (e.g. Railway pausing deploys) must fail the call;
 # a command substitution does not inherit errexit, so an empty ID used to
 # slip through and the release waited on whatever deployment was newest.

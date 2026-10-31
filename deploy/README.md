@@ -318,3 +318,14 @@ whose working tree is already fixed. The mock rejects deprecated Config as Code,
 and checks foreign DNS conflicts. The API field shapes were checked against
 Railway's live GraphQL schema, but no real account deployment is validated by
 these tests. The first real `up` still needs end-to-end verification.
+
+### Deployment queue timeouts
+
+If a release reports `still QUEUED after 1200s`, Railway has not started the
+build within the local wait limit. There are no build logs yet. Check the
+specific deployment in Railway and [Railway status](https://status.railway.com/)
+for queue delays. A timeout stops the local release and blocks web publication;
+it does not cancel the Railway deployment, which may still proceed. Check its
+status before starting another release. `DEPLOY_TIMEOUT_SECONDS` in the deploy
+config controls how long the script waits; increasing it does not unblock a
+Railway queue.
