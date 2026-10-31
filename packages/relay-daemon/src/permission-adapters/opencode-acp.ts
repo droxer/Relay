@@ -40,6 +40,7 @@ interface ToolState {
   status: "completed" | "error";
   input?: unknown;
   output?: string;
+  error?: string;
   title?: string;
 }
 
@@ -120,10 +121,12 @@ export class SessionUpdateTranslator {
     if (update.status !== "completed" && update.status !== "failed") return;
     call.done = true;
     const output = outputText(update);
+    const failed = update.status === "failed";
+    // `opencode run` names a failed tool's message `error`, not `output`.
     this.writer.toolUse(call.name, {
-      status: update.status === "completed" ? "completed" : "error",
+      status: failed ? "error" : "completed",
       ...(call.rawInput !== undefined ? { input: call.rawInput } : {}),
-      ...(output ? { output } : {}),
+      ...(output ? (failed ? { error: output } : { output }) : {}),
       ...(call.title ? { title: call.title } : {}),
     });
   }

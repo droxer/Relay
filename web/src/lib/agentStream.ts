@@ -1,5 +1,5 @@
 /* Agent CLI stream parsing and display, split under `agent-stream/`:
-   `records` frames the raw log, `claude`/`codex`/`pi`/`kimi` parse each CLI's
+   `records` frames the raw log, `claude`/`codex`/`pi`/`kimi`/`opencode` parse each CLI's
    events into segments, `accumulator` reparses only the growing suffix, and
    `display` decides what the transcript shows. This barrel is the public
    surface; the per-module helpers stay internal to the directory. */

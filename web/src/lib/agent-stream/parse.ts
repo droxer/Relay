@@ -2,6 +2,7 @@ import type { AgentName } from "../../types.ts";
 import { claudeAssistantFrameId, parseClaude } from "./claude.ts";
 import { parseCodex } from "./codex.ts";
 import { parseKimi } from "./kimi.ts";
+import { parseOpenCode } from "./opencode.ts";
 import { parsePi } from "./pi.ts";
 import {
   isClaudeConnectorNotice,
@@ -18,6 +19,7 @@ export function parseAgentStream(agent: AgentName, raw: string): AgentSegment[] 
   if (agent === "codex") return parseCodex(raw);
   if (agent === "pi") return parsePi(raw);
   if (agent === "kimi") return parseKimi(raw);
+  if (agent === "opencode") return parseOpenCode(raw);
   return parsePlain(raw);
 }
 
