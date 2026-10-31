@@ -34,3 +34,24 @@ it("shows personal stage counts without misleading drill-down links", () => {
   expect(screen.getByText("home.count.running")).toBeTruthy();
   expect(screen.queryAllByRole("link")).toHaveLength(0);
 });
+
+it("keeps Start available after a network failure and prevents duplicate submissions", async () => {
+  const { ReadyTask } = await import("../src/components/home/HomePlanningPanels");
+  const task = { id: "ready", title: "Ready work", priority: "high" } as import("../src/types").RelayTaskListItem;
+  let finish!: (value: import("../src/types").StartTaskResponse) => void;
+  const pending = new Promise<import("../src/types").StartTaskResponse>(resolve => { finish = resolve; });
+  const onStart = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockReturnValueOnce(pending);
+  render(<ReadyTask task={task} href="/tasks/ready" onOpen={vi.fn()} onStart={onStart} />);
+  const user = userEvent.setup();
+  const start = screen.getByRole("button", { name: "home.plan.start" }) as HTMLButtonElement;
+  await user.click(start);
+  expect(screen.getByRole("status").textContent).toContain("home.plan.start_error");
+  expect(start.disabled).toBe(false);
+  await user.dblClick(start);
+  expect(onStart).toHaveBeenCalledTimes(2);
+  expect(start.disabled).toBe(true);
+  const { act } = await import("@testing-library/react");
+  await act(async () => { finish({ task, session: null, dispatch: {state: "queued"} } as import("../src/types").StartTaskResponse); });
+  expect(screen.getByRole("status").textContent).toContain("home.plan.start_queued");
+  expect(start.disabled).toBe(true);
+});

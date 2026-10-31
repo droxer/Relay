@@ -143,7 +143,10 @@ class AuthUsers(AuthStoreState):
         SESSION_ACCOUNTS.invalidate_all()
         return row_to_user(updated)
 
-    def list_users(self) -> list[dict[str, Any]]:
+    def list_users(self, *, user_ids: list[str] | None = None) -> list[dict[str, Any]]:
+        statement = select(self.users).where(self.users.c.deleted_at.is_(None))
+        if user_ids is not None:
+            statement = statement.where(self.users.c.id.in_(user_ids))
         with store_transaction(self.engine) as conn:
             department_rows = conn.execute(select(self.departments)).mappings().all()
             departments = {
@@ -151,9 +154,7 @@ class AuthUsers(AuthStoreState):
             }
             rows = (
                 conn.execute(
-                    select(self.users)
-                    .where(self.users.c.deleted_at.is_(None))
-                    .order_by(self.users.c.created_at, self.users.c.id)
+                    statement.order_by(self.users.c.created_at, self.users.c.id)
                 )
                 .mappings()
                 .all()
