@@ -2,6 +2,7 @@ import type {
   UserAgent,
   ProjectMember,
   ProjectRecord,
+  RelayTaskListItem,
   WorkspaceBriefResponse,
 } from "../types.js";
 
@@ -130,6 +131,17 @@ export function scopeProjectActivities(
     sessions,
     tasks: brief.tasks.filter((task) => task.projectId === projectId),
   };
+}
+
+/* The project's Tasks board and Dashboard hold the work people asked for.
+   Automations and the runs they produce live on the Automations tab, so a
+   daily automation cannot bury the board in its own occurrences. */
+export function projectBoardTasks<T extends Pick<RelayTaskListItem, "projectId" | "isRoutine" | "sourceRoutineId" | "deletedAt">>(
+  tasks: readonly T[],
+  projectId: string,
+): T[] {
+  return tasks.filter((task) => task.projectId === projectId
+    && !task.deletedAt && !task.isRoutine && !task.sourceRoutineId);
 }
 
 /** Whether a polled collection query is loading, failed, or settled.

@@ -60,6 +60,7 @@ export function BacklogFiltersBar({
   agents,
   teams,
   tags = [],
+  showSource = true,
   onChange,
 }: {
   filters: BacklogFilters;
@@ -67,6 +68,8 @@ export function BacklogFiltersBar({
   teams: AgentTeam[];
   /** Every tag on the page's tasks; the tag filter offers these. */
   tags?: readonly string[];
+  /** Whether to offer the direct/automation source filter; a project board, which never lists automation runs, turns it off. */
+  showSource?: boolean;
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */
   sortMenu?: ReactNode;
@@ -94,11 +97,11 @@ export function BacklogFiltersBar({
       { value: "unassigned", label: t("backlog.without_assignment") },
     ] },
     { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
-    { id: "source", label: t("backlog.source"), kind: "select", options: [
+    ...(showSource ? [{ id: "source", label: t("backlog.source"), kind: "select" as const, options: [
       { value: "direct", label: t("backlog.source_direct") },
       { value: "routine", label: t("backlog.source_routine") },
-    ] },
-  ], [agents, teams, tags, filters.tag, t, extraFilterField]);
+    ] }] : []),
+  ], [agents, teams, tags, filters.tag, t, extraFilterField, showSource]);
   const selections = {
     ...(extraField ? { [extraField.field.id]: extraField.value } : {}),
     ...selectionsFromState(filters, BACKLOG_BAR_KEYS),

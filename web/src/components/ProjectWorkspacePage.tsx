@@ -7,6 +7,7 @@ import { computerId as stableComputerId } from "../lib/createAgent";
 import {
   DEFAULT_PROJECT_PAGE_TAB,
   parseProjectPageTab,
+  projectBoardTasks,
   projectReadOnly,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
@@ -119,6 +120,7 @@ export function ProjectWorkspacePage({
     () => tasks.filter((task) => task.projectId === project.id && !task.deletedAt),
     [tasks, project.id],
   );
+  const boardTasks = useMemo(() => projectBoardTasks(tasks, project.id), [tasks, project.id]);
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
@@ -199,7 +201,7 @@ export function ProjectWorkspacePage({
             />
           ) : null}
           <ProjectDashboard
-            tasks={projectTasks}
+            tasks={boardTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
             onOpenBoard={() => setPageTab("tasks")}
           />
@@ -219,7 +221,7 @@ export function ProjectWorkspacePage({
             readOnly={membersReadOnly}
             projectId={project.id}
             projects={[project]}
-            tasks={projectTasks}
+            tasks={boardTasks}
             nodes={computers}
             currentUser={currentUser}
             recordTaskId={recordTaskId}
