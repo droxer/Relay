@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ICON, StatusOk } from "../icons";
 import { StateMark } from "../StateMark";
-import type { HomeProjectRow, MyTaskCounts, RunningRow } from "../../lib/homeSummary";
+import { PROJECT_PROGRESS, type HomeProjectRow, type MyTaskCounts, type RunningRow } from "../../lib/homeSummary";
+import type { IssueQueue } from "../../lib/issueQueues";
 import { taskRef } from "../../lib/taskRef";
-import { TASK_FLOW_STAGES } from "../../lib/taskFlow";
 import type { RelayTaskListItem } from "../../types";
 
 /** An in-app link: a real href for new tabs, client navigation otherwise. */
@@ -30,26 +30,41 @@ function SectionHeader({ id, title, count, more }: { id: string; title: string; 
   );
 }
 
-const COUNT_CELLS = ["backlog", "assigned", "running", "review", "doneThisWeek"] as const;
+/** A cell links only to a Tasks queue holding exactly the tasks it counts
+ *  (narrowed to the person). No queue holds just this week's finished work,
+ *  so that count stays plain text rather than open a longer list. */
+const COUNT_CELLS: readonly { cell: keyof MyTaskCounts; queue?: IssueQueue }[] = [
+  { cell: "open", queue: "open" },
+  { cell: "running", queue: "running" },
+  { cell: "blocked", queue: "blocked" },
+  { cell: "doneThisWeek" },
+];
 
-export function MyTasksPanel({ counts }: {
+export function MyTasksPanel({ counts, hrefFor, onOpen }: {
   counts: MyTaskCounts;
+  hrefFor: (queue: IssueQueue) => string;
+  onOpen: (queue: IssueQueue) => void;
 }) {
   const { t } = useTranslation();
   return (
     <section className="home-section" aria-labelledby="home-mine-title">
       <SectionHeader id="home-mine-title" title={t("home.my_tasks")} />
       <ul className="home-panel home-counts">
-        {COUNT_CELLS.map((cell) => (
-          <li key={cell} data-stage={cell === "doneThisWeek" ? "done" : cell} data-empty={counts[cell] === 0 ? "" : undefined}>
-            <div className="home-count">
+        {COUNT_CELLS.map(({ cell, queue }) => {
+          const content = (
+            <>
               <span className="home-count-number tnum">{counts[cell]}</span>
-              <span className="home-count-label">
-                {t(`home.count.${cell}`)}
-              </span>
-            </div>
-          </li>
-        ))}
+              <span className="home-count-label">{t(`home.count.${cell}`)}</span>
+            </>
+          );
+          return (
+            <li key={cell} data-cell={cell} data-empty={counts[cell] === 0 ? "" : undefined}>
+              {queue
+                ? <HomeLink className="home-count" href={hrefFor(queue)} onOpen={() => onOpen(queue)}>{content}</HomeLink>
+                : <div className="home-count">{content}</div>}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -82,7 +97,8 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
       <SectionHeader id="home-projects-title" title={t("home.projects")} count={rows.length} more={more} />
       <ul className="home-panel home-projects">
         {rows.map((row) => {
-          const done = row.total ? Math.round((row.stages.done / row.total) * 100) : 0;
+          const share = (count: number) => (row.total ? (count / row.total) * 100 : 0);
+          const done = Math.round(share(row.progress.done));
           return (
             <li key={row.project.id}>
               <HomeLink className="home-project" href={hrefFor(row)} onOpen={() => onOpen(row)}>
@@ -93,15 +109,20 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
                 <span
                   className="home-project-bar"
                   role="img"
-                  aria-label={TASK_FLOW_STAGES.map((stage) => `${row.stages[stage]} ${t(`home.stage.${stage}`)}`).join(", ")}
+                  aria-label={[
+                    t("home.task_count", { count: row.total }),
+                    ...PROJECT_PROGRESS.map((status) => `${row.progress[status]} ${t(`home.stage.${status}`)}`),
+                  ].join(", ")}
                 >
-                  <span className="home-project-seg" data-stage="done" style={{ width: `${done}%` }} />
+                  {PROJECT_PROGRESS.map((status) => (row.progress[status]
+                    ? <span key={status} className="home-project-seg" data-stage={status} style={{ width: `${share(row.progress[status])}%` }} />
+                    : null))}
                 </span>
                 <span className="home-project-facts">
                   <span>{t("home.task_count", { count: row.total })}</span>
-                  {row.stages.running ? <span>{t("home.running_count", { count: row.stages.running })}</span> : null}
+                  {row.progress.running ? <span data-tone="live">{t("home.running_count", { count: row.progress.running })}</span> : null}
                   {row.waitingOnYou ? <span data-tone="warn">{t("home.waiting_count", { count: row.waitingOnYou })}</span> : null}
-                  {row.blocked ? <span data-tone="err">{t("home.blocked_count", { count: row.blocked })}</span> : null}
+                  {row.progress.blocked ? <span data-tone="err">{t("home.blocked_count", { count: row.progress.blocked })}</span> : null}
                 </span>
                 <span className="home-project-next">{nextLabel(row)}</span>
               </HomeLink>
@@ -137,6 +158,7 @@ export function RunningPanel({ rows, title, agentName, computerName, elapsed, hr
           return (
             <li key={row.session.id}>
               <HomeLink className="home-run" href={hrefFor(row)} onOpen={() => onOpen(row)}>
+                {/* A paused run wants its person: the same warn tone the queue gives a prompt. */}
                 <StateMark className="home-run-mark" tone={row.paused ? "warn" : "live"} />
                 <span className="home-run-body">
                   <span className="home-run-title">{title(row)}</span>
@@ -170,17 +192,14 @@ export function FinishedPanel({ tasks, sinceLabel, hrefFor, onOpen }: {
         {tasks.map((task) => (
           <li key={task.id}>
             <HomeLink className="home-finished-row" href={hrefFor(task)} onOpen={() => onOpen(task)}>
-              <span className="home-finished-glyph" data-status={task.status} aria-hidden="true">
+              <span className="home-finished-glyph" aria-hidden="true">
                 <StatusOk size={ICON.sm} />
               </span>
               <span className="home-finished-title">
                 <span className="home-item-ref">{taskRef(task)}</span>
                 {task.title}
               </span>
-              <span className="home-finished-meta">
-                {task.status === "review" ? `${t("home.in_review")} · ` : ""}
-                {sinceLabel(task.finishedAt ?? task.updatedAt)}
-              </span>
+              <span className="home-finished-meta">{sinceLabel(task.finishedAt ?? task.updatedAt)}</span>
             </HomeLink>
           </li>
         ))}

@@ -25,3 +25,9 @@ it("keeps unresolvable blocked work out of Start here but retains human decision
  assert.equal(homeFocusItem([blocked,overdue])?.key,"o");
  assert.equal(homeFocusItem([blocked]),null);
 });
+it("leaves a blocked dependent to the queue's Stuck band instead of listing it twice", () => {
+ const summaries=[{id:"shared",title:"Shared",status:"running",ownerUserId:"other",canOpen:false}] as RelayTaskListItem["waitingOnSummaries"];
+ const rows=homeBlockers([task("failed",{status:"blocked",waitingOn:["shared"],waitingOnSummaries:summaries}),task("waits",{waitingOn:["shared"],waitingOnSummaries:summaries})],"me");
+ assert.deepEqual(rows.map(row=>row.dependents.map(dep=>dep.id)),[["waits"]]);
+ assert.deepEqual(homeBlockers([task("failed",{status:"blocked",waitingOn:["shared"],waitingOnSummaries:summaries})],"me"),[]);
+});

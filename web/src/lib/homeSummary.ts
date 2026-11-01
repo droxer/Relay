@@ -6,25 +6,29 @@
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../types.js";
 import type { HomeItem } from "./homeQueue.ts";
 import { openPermissionRequests } from "./permissionRequests.ts";
-import { TASK_FLOW_STAGES, taskWorkflowStage, type TaskWorkflowStage } from "./taskFlow.ts";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const HOME_PROJECT_LIMIT = 6;
 export const HOME_FINISHED_LIMIT = 5;
 
+/** Each count reads a task's own status, the way the Tasks queue of the same
+ *  name does, so a count and the list it links to always agree. Work flow
+ *  stages are not used: they file blocked and waiting work under "running". */
 export interface MyTaskCounts {
-  backlog: number;
-  assigned: number;
+  open: number;
   running: number;
-  review: number;
+  blocked: number;
   doneThisWeek: number;
 }
+
+/** The statuses a project's progress bar draws, in the order it draws them. */
+export const PROJECT_PROGRESS = ["done", "review", "running", "blocked"] as const;
+export type ProjectProgress = Record<(typeof PROJECT_PROGRESS)[number], number>;
 
 export interface HomeProjectRow {
   project: ProjectRecord;
   total: number;
-  stages: Record<TaskWorkflowStage, number>;
-  blocked: number;
+  progress: ProjectProgress;
   waitingOnYou: number;
   /** The first queue item in this project — what to do there next. */
   next: HomeItem | null;
@@ -44,18 +48,23 @@ const isIssue = (task: RelayTaskListItem) => !task.isRoutine && !task.deletedAt;
 const isMine = (task: RelayTaskListItem, userId: string) => (task.assigneeUserId ?? task.ownerUserId) === userId;
 const finishedAt = (task: RelayTaskListItem) => task.finishedAt ?? task.updatedAt;
 
-export function myTaskCounts(tasks: readonly RelayTaskListItem[], userId: string, now = Date.now()): MyTaskCounts {
-  const counts: MyTaskCounts = { backlog: 0, assigned: 0, running: 0, review: 0, doneThisWeek: 0 };
-  for (const task of tasks) {
-    if (!isIssue(task) || !isMine(task, userId)) continue;
-    const stage = taskWorkflowStage(task);
-    if (stage !== "done") {
-      counts[stage] += 1;
-    } else if (now - Date.parse(finishedAt(task)) <= WEEK_MS) {
-      counts.doneThisWeek += 1;
-    }
-  }
-  return counts;
+/** Work in an archived project leaves the Tasks page, so it leaves these
+ *  counts too; otherwise a count would open a list shorter than itself. */
+export function myTaskCounts(
+  tasks: readonly RelayTaskListItem[],
+  userId: string,
+  now = Date.now(),
+  archivedProjectIds: ReadonlySet<string> = new Set(),
+): MyTaskCounts {
+  const mine = tasks.filter((task) => isIssue(task) && isMine(task, userId)
+    && !(task.projectId && archivedProjectIds.has(task.projectId)));
+  const withStatus = (status: RelayTaskListItem["status"]) => mine.filter((task) => task.status === status).length;
+  return {
+    open: mine.filter((task) => task.status !== "done").length,
+    running: withStatus("running"),
+    blocked: withStatus("blocked"),
+    doneThisWeek: mine.filter((task) => task.status === "done" && now - Date.parse(finishedAt(task)) <= WEEK_MS).length,
+  };
 }
 
 /** Live projects, the ones with something for the person first (in queue
@@ -71,13 +80,13 @@ export function homeProjects(
     .map((project): HomeProjectRow => {
       const issues = tasks.filter((task) => isIssue(task) && task.projectId === project.id);
       const items = queue.filter((item) => item.projectId === project.id);
-      const stages = Object.fromEntries(TASK_FLOW_STAGES.map((stage) => [stage, 0])) as Record<TaskWorkflowStage, number>;
-      for (const task of issues) stages[taskWorkflowStage(task)] += 1;
+      const progress = Object.fromEntries(
+        PROJECT_PROGRESS.map((status) => [status, issues.filter((task) => task.status === status).length]),
+      ) as ProjectProgress;
       return {
         project,
         total: issues.length,
-        stages,
-        blocked: issues.filter((task) => task.status === "blocked").length,
+        progress,
         waitingOnYou: items.filter((item) => item.tier === "paused" || item.tier === "needs_you").length,
         next: items[0] ?? null,
       };
@@ -96,13 +105,15 @@ function latest(projectUpdatedAt: string, tasks: readonly RelayTaskListItem[], p
   );
 }
 
+/** Done work only: a task in review still wants the person, so it stays in
+ *  the queue rather than reading as finished twice. */
 export function recentlyFinished(
   tasks: readonly RelayTaskListItem[],
   userId: string,
   limit = HOME_FINISHED_LIMIT,
 ): RelayTaskListItem[] {
   return tasks
-    .filter((task) => isIssue(task) && isMine(task, userId) && (task.status === "done" || task.status === "review"))
+    .filter((task) => isIssue(task) && isMine(task, userId) && task.status === "done")
     .sort((left, right) => finishedAt(right).localeCompare(finishedAt(left)))
     .slice(0, limit);
 }
@@ -116,7 +127,7 @@ export function runningNow(
     nodes.flatMap((node) => (node.activeRuns ?? []).map((run) => [run.sessionId, { run, computerId: node.id }] as const)),
   );
   return sessions
-    .filter((session) => session.status === "running" && !session.archived && (!session.ownerUserId || session.ownerUserId === userId))
+    .filter((session) => (!session.ownerUserId || session.ownerUserId === userId) && isRunning(session, runs.has(session.id)))
     .map((session): RunningRow => {
       const active = runs.get(session.id);
       return {
@@ -128,4 +139,14 @@ export function runningNow(
       };
     })
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
+}
+
+/** The thread rail's rule (`groupThreads`): the backend-derived execution
+ *  phase decides, and a session without one runs only while a computer
+ *  reports its run. A bare `status: "running"` is not enough — a thread from
+ *  before execution tracking keeps that status forever after its run ended. */
+function isRunning(session: RelaySession, hasActiveRun: boolean): boolean {
+  if (session.archived || session.deletionRequestedAt) return false;
+  if (session.execution) return session.execution.phase !== "terminal";
+  return hasActiveRun;
 }

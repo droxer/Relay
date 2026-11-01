@@ -37,6 +37,9 @@ const migrate = thread("s-migrate", {
   }],
 });
 const pricing = thread("s-pricing", { title: "Pricing page copy", projectId: "p-site" });
+// A thread from before execution tracking: its status still says running, but
+// the backend reads its execution as over, as the thread rail does.
+const orphan = thread("s-orphan", { title: "Orphaned import", status: "running", phase: "assigned", updatedAt: ago(60000), execution: { phase: "terminal" } });
 const webhook = thread("s-webhook", { title: "Webhook retries", projectId: "p-billing", nextSteps: ["Add an alert when retries exceed the budget"] });
 
 const task = (id: string, number: number, extra: Record<string, unknown>) => ({
@@ -80,7 +83,7 @@ async function serve(page: Page, theme: Theme) {
       return;
     }
     let body: unknown = {
-      sessions: [migrate, pricing, webhook], agents: [agent], teams: [], tasks, nodes: [node, darkNode], projects, sandboxes: [], skills: [],
+      sessions: [migrate, pricing, webhook, orphan], agents: [agent], teams: [], tasks, nodes: [node, darkNode], projects, sandboxes: [], skills: [],
     };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: user() };
     if (path.endsWith("/auth/preferences")) {
@@ -118,6 +121,23 @@ for (const theme of ["dark", "light"] as const) {
     await expect(queue(page).locator(".home-item-why").first()).toContainText("psql -f migrations/0042_split_invoices.sql");
     await expect(page.getByRole("region", { name: "Projects" })).toContainText("Billing v2");
     await expect(page.getByRole("region", { name: "Running now" })).toContainText("paused for permission");
+    await expect(page.getByRole("region", { name: "Running now" })).not.toContainText("Orphaned import");
+    await expect(page.locator(".home-brief")).toContainText("1 thread running");
+    // The tabs count the Start here item too, so they agree with the header and the brief.
+    await expect(queue(page).locator(".home-section-count").first()).toHaveText("8");
+    await expect(queue(page).getByRole("button", { name: /^All/ })).toContainText("8");
+    await expect(queue(page).getByRole("button", { name: /^Needs you/ })).toContainText("3");
+    // My tasks counts statuses, never a blocked task as running, and opens the matching queue.
+    const mine = page.getByRole("region", { name: "My tasks" });
+    await expect(mine.getByRole("link", { name: /Running/ })).toHaveText(/^1\s*Running$/);
+    await expect(mine.getByRole("link", { name: /Blocked/ })).toHaveAttribute("href", /queue=blocked&assignee=u$/);
+    // Your setup counts computers and agents, naming only what cannot work.
+    const setup = page.getByRole("region", { name: "Your setup" });
+    await expect(setup.getByRole("link", { name: /1 of 2 computers online/ })).toHaveAttribute("href", "/computers");
+    await expect(setup).toContainText("studio-linux offline");
+    await expect(setup.getByRole("link", { name: /1 of 1 agents ready/ })).not.toContainText("unavailable");
+    // Review work stays in the queue, not also under Recently finished.
+    await expect(page.getByRole("region", { name: "Recently finished" })).not.toContainText("Add retry budget");
     await page.screenshot({ path: testInfo.outputPath(`home-${theme}.png`), fullPage: true });
   });
 }

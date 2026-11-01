@@ -3117,7 +3117,7 @@
     "filter": {
       "all": "All",
       "needs_you": "Needs you",
-      "other": "Stuck & suggested"
+      "other": "Everything else"
     },
     "tier": {
       "paused": "Needs you · a run is paused",
@@ -3194,29 +3194,27 @@
     "clear_filtered": "Nothing here right now",
     "clear_body": "Questions, approvals, and finished work from your agents collect here.",
     "ranked_hint": "Ranked by what holds work up the longest",
-    "all_tasks": "All in Tasks",
-    "all_threads": "Threads",
+    "all_tasks": "All tasks",
+    "all_threads": "All threads",
     "all_projects": "All projects",
     "running_now": "Running now",
     "paused_for_permission": "paused for permission",
     "my_tasks": "My tasks",
     "count": {
-      "backlog": "Backlog",
-      "assigned": "Assigned",
+      "open": "Open",
       "running": "Running",
-      "review": "Review",
-      "doneThisWeek": "Done 7d"
+      "blocked": "Blocked",
+      "doneThisWeek": "Done this week"
     },
     "projects": "Projects",
     "no_projects": "No projects yet.",
     "new_project": "New project",
     "percent_done": "{{percent}}% done",
     "stage": {
-      "backlog": "Backlog",
-      "assigned": "Assigned",
-      "running": "Running",
-      "review": "Review",
-      "done": "Done"
+      "done": "done",
+      "review": "in review",
+      "running": "running",
+      "blocked": "blocked"
     },
     "task_count_one": "{{count}} task",
     "task_count_other": "{{count}} tasks",
@@ -3232,15 +3230,14 @@
     "project_running_other": "Nothing needs you. {{count}} tasks are running.",
     "project_quiet": "Nothing needs you here.",
     "recently_finished": "Recently finished",
-    "in_review": "In review",
     "brief": {
       "needs_one": "{{count}} thing needs you",
       "needs_other": "{{count}} things need you",
       "clear": "You're all caught up",
       "paused_one": "{{count}} paused run",
       "paused_other": "{{count}} paused runs",
-      "running_one": "{{count}} running",
-      "running_other": "{{count}} running",
+      "running_one": "{{count}} thread running",
+      "running_other": "{{count}} threads running",
       "stuck_one": "{{count}} stuck",
       "stuck_other": "{{count}} stuck"
     },
@@ -3280,7 +3277,7 @@
       "nothing_upcoming": "No deadlines or scheduled work in the next seven days.",
       "show_less": "Show less",
       "show_all": "Show all {{count}}",
-      "schedule_note": "Local time · Next automation run only",
+      "schedule_note": "Times are local",
       "shared_blockers": "Shared blockers",
       "private_dependency": "Private prerequisite",
       "details_private": "This prerequisite’s details are not available to you.",
@@ -3301,7 +3298,22 @@
       "jump_to": "Jump to your work",
       "running_jump": "Running · {{count}}",
       "upcoming_jump": "Upcoming · {{count}}",
-      "blockers_jump": "Shared blockers · {{count}}"
+      "blockers_jump": "Shared blockers · {{count}}",
+      "ready_jump": "Ready · {{count}}"
+    },
+    "all_needs_me": "All that need me",
+    "running_for": "Running {{duration}}",
+    "setup": {
+      "title": "Your setup",
+      "computers_label": "Computers online",
+      "agents_label": "Agents ready",
+      "computers_spoken": "{{ready}} of {{total}} computers online",
+      "agents_spoken": "{{ready}} of {{total}} agents ready",
+      "offline": "{{names}} offline",
+      "unavailable": "{{names}} unavailable",
+      "and_more": "{{names}} and {{count}} more",
+      "no_computers": "Connect a computer to run agents",
+      "no_agents": "Create an agent to take work"
     }
   }
 }
