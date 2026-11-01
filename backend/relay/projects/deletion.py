@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, UTC
 from typing import Any, NamedTuple
 
 from loguru import logger
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, update
 
 from ..core.ids import new_database_id
 from ..daemon_registry.records import WORKSPACE_DELETE_COMMAND
@@ -17,6 +18,12 @@ from ..persistence.project.store import ProjectVersionConflict
 from ..core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from ..persistence.resource_lock import resource_transaction
 from ..persistence.engine import store_transaction
+from ..persistence.tables.automations import (
+    automation_outbox,
+    automation_state,
+    automation_webhook_secrets,
+)
+from ..persistence.tables.notifications import notifications
 from ..tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from ..sessions.controller import SessionController
 from ..sessions.errors import SessionRunInFlightError
@@ -305,13 +312,43 @@ def _delete_records(
             ) from error
     for table in (tasks.task_sessions, tasks.events):
         conn.execute(delete(table).where(table.c.task_id.in_(task_ids)))
+    conn.execute(delete(tasks.task_prerequisites).where(or_(
+        tasks.task_prerequisites.c.task_id.in_(task_ids),
+        tasks.task_prerequisites.c.prerequisite_task_id.in_(task_ids),
+    )))
     conn.execute(delete(tasks.tasks).where(tasks.tasks.c.id.in_(task_ids)))
+    conn.execute(delete(tasks.number_counters).where(
+        tasks.number_counters.c.scope == f"project:{project_id}"
+    ))
+    routine_ids = [task["id"] for task in project_tasks if task.get("isRoutine")]
+    # Automation state belongs to the same transaction: a failed cleanup must
+    # roll back the project too, and queued events must not outlive its work.
+    for table in (automation_state, automation_webhook_secrets):
+        conn.execute(delete(table).where(table.c.routine_id.in_(routine_ids)))
+    conn.execute(delete(automation_outbox).where(or_(
+        automation_outbox.c.target_routine_id.in_(routine_ids),
+        automation_outbox.c.origin_automation_id.in_(routine_ids),
+        (automation_outbox.c.source_type == "task")
+        & automation_outbox.c.source_id.in_(task_ids),
+        (automation_outbox.c.source_type == "session")
+        & automation_outbox.c.source_id.in_(session_ids),
+    )))
+    # Keep the cleared rows as deduplication tombstones, just like clearing
+    # the inbox, so replayed notices cannot bring back links to deleted work.
+    conn.execute(update(notifications).where(
+        notifications.c.cleared_at.is_(None),
+        or_(
+            notifications.c.data["projectId"].as_string() == project_id,
+            notifications.c.data["taskId"].as_string().in_(task_ids),
+            notifications.c.data["sessionId"].as_string().in_(session_ids),
+        ),
+    ).values(cleared_at=datetime.now(UTC)))
     for table in (projects.members, projects.events_table):
         conn.execute(delete(table).where(table.c.project_id == project_id))
     conn.execute(delete(projects.projects).where(projects.projects.c.id == project_id))
     return {
         "sessionIds": session_ids,
-        "routineIds": [task["id"] for task in project_tasks if task.get("isRoutine")],
+        "routineIds": routine_ids,
         "detachedTaskIds": detached,
     }
 

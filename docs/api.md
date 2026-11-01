@@ -480,6 +480,11 @@ Deletion requires the project owner and its current `expectedVersion`, including
 for an archived project. It removes the project, roster, tasks (including routines
 and occurrences), threads, their event histories and stored artifacts. Links from
 other tasks and chat conversation bindings to the deleted threads are removed.
+Task prerequisite links, project task-number counters, automation state, webhook
+secrets, and queued events for the deleted work are removed in the same database
+transaction. Related notifications are cleared from the inbox. Both full and
+summary task lists exclude legacy tasks whose project no longer exists, before
+applying their limit.
 Shared agents and the Computer remain. Normal thread-deletion audit records and
 historical usage accounting retain their existing retention policy.
 
