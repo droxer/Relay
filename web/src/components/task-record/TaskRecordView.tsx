@@ -35,6 +35,7 @@ export function TaskRecordView({
   drawer,
   originLabel,
   tabSearchKey,
+  hrefForRecord,
   onEdit,
   onOpenThread,
   onOpenRecord,
@@ -58,6 +59,7 @@ export function TaskRecordView({
    *  a record riding over a project must not claim the backlog as its origin. */
   originLabel?: string;
   tabSearchKey?: "tab" | "recordTab";
+  hrefForRecord?: (taskId: string, runId?: string | null) => string;
   onEdit: (task: RelayTaskListItem) => void;
   onOpenThread: (sessionId: string) => void;
   onOpenRecord: (taskId: string, runId?: string | null) => void;
@@ -182,6 +184,7 @@ export function TaskRecordView({
         busyAction={busyAction}
         presentation={drawer ? "drawer" : "page"}
         tabSearchKey={tabSearchKey}
+        hrefForRun={hrefForRecord ? (runId) => hrefForRecord(taskId, runId) : undefined}
         onOpenThread={onOpenThread}
         onOpenRun={(nextId) => {
           // The breadcrumb passes the routine's own id; a row passes a run's.
@@ -208,7 +211,7 @@ export function TaskRecordView({
   const kicker = parentRoutine ? (
     <a
       className="record-back"
-      href={pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: parentRoutine.id })}
+      href={hrefForRecord?.(parentRoutine.id) ?? pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: parentRoutine.id })}
       onClick={(event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
         event.preventDefault();

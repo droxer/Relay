@@ -18,7 +18,7 @@ describe("routine section rail", () => {
   it("is the shared rail-and-content shell, not a private layout", async () => {
     const source = await read("src/components/RoutinesPage.tsx");
 
-    assert.match(source, /className="routine-page sec-shell"/);
+    assert.match(source, /projectId \? "routine-page--project" : "sec-shell"/);
     assert.match(source, /className="sec-rail"/);
     assert.match(source, /className="sec-main"/);
     assert.match(source, /<RoutineStateNav\b/);

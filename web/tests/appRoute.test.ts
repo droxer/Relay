@@ -531,3 +531,12 @@ describe("isLandingPath", () => {
     }
   });
 });
+
+it("keeps project automation records, run tabs and list filters within the project", () => {
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=automations&automation=a&recordTab=definition&q=weekly"),
+    "/projects/p?tab=automations&q=weekly&automation=a&recordTab=definition");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=automations&automation=a&run=r&recordTab=artifacts"),
+    "/projects/p?tab=automations&automation=a&run=r&recordTab=artifacts");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=automations&run=r&recordTab=artifacts"), "/projects/p?tab=automations");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members&automation=a&run=r"), "/projects/p?tab=members");
+});

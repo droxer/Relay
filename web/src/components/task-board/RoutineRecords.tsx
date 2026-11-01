@@ -119,6 +119,7 @@ interface RoutineCellState {
   stateFor: (task: RelayTaskListItem) => RoutineListState;
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
+  hrefForRecord: (taskId: string) => string;
   projectNameFor: (task: RelayTaskListItem) => string | undefined;
 }
 
@@ -151,6 +152,7 @@ export function RoutineTable({
   assignmentFor,
   handlersFor,
   projectNameFor = noProjectName,
+  hrefForRecord = hrefForRoutineRecord,
 }: {
   /** The already-sorted, already-paged records — pagination stays outside. */
   rows: RelayTaskListItem[];
@@ -165,14 +167,15 @@ export function RoutineTable({
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
   /** The name of the project an automation is bound to, if any. */
+  hrefForRecord?: (taskId: string) => string;
   projectNameFor?: (task: RelayTaskListItem) => string | undefined;
 }) {
   const { t } = useTranslation();
   // Values that change under the stable column defs; cells read them
   // through RoutineCells (see lib/cellState).
   const cellState = useMemo<RoutineCellState>(
-    () => ({ t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor }),
-    [t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor],
+    () => ({ t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor, hrefForRecord }),
+    [t, selectAll, selection, onToggleSelect, onSort, stateFor, assignmentFor, handlersFor, projectNameFor, hrefForRecord],
   );
   const sorting = useMemo<SortingState>(
     () => (sort ? [{ id: sort.key, desc: sort.direction === "desc" }] : []),
@@ -245,7 +248,7 @@ export function RoutineTable({
         meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
         header: () => <RoutineCells.Read>{(s) => s.t("backlog.col_ref")}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => (
-          <TaskRefLink task={row.original} href={hrefForRoutineRecord(row.original.id)} onOpen={() => s.handlersFor(row.original).onOpen()} />
+          <TaskRefLink task={row.original} href={s.hrefForRecord(row.original.id)} onOpen={() => s.handlersFor(row.original).onOpen()} />
         )}</RoutineCells.Read>,
       },
       {
@@ -261,7 +264,7 @@ export function RoutineTable({
             <div className="backlog-row-lead-main">
               <a
                 className="backlog-row-title"
-                href={hrefForRoutineRecord(task.id)}
+                href={s.hrefForRecord(task.id)}
                 onClick={(event) => {
                   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
                   event.preventDefault();

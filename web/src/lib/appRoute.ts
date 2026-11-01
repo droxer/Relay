@@ -504,6 +504,14 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
       copyFilterParams("routines", source, target);
       copySortParams("routines", source, target);
       copyPageParams("routines", source, target);
+      copyParam(source, target, "automation");
+      if (target.has("automation")) {
+        copyParam(source, target, "run");
+        const tabs = target.has("run") ? TASK_RECORD_TABS : ROUTINE_RECORD_TABS;
+        const fallback = target.has("run") ? "activity" : "runs";
+        const recordTab = recordTabParam(source.get("recordTab"), target.has("run") ? TASK_RECORD_TAB_ALIASES : ROUTINE_RECORD_TAB_ALIASES);
+        if (recordTab && recordTab !== fallback && tabs.has(recordTab)) target.set("recordTab", recordTab);
+      }
     }
     if (tab === "workspace") {
       copyParam(source, target, "path");

@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
-import { canonicalBrowserUrl, navigateToAppPath, pathForAppState } from "../lib/appRoute";
+import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
@@ -102,6 +102,18 @@ export function ProjectWorkspacePage({
     (value) => value,
     "push",
   );
+  const [automationId] = useUrlSearchState<string | null>("automation", null, (value) => value || null, (value) => value);
+  const [automationRunId] = useUrlSearchState<string | null>("run", null, (value) => value || null, (value) => value);
+  const openAutomationRecord = (taskId: string | null, runId?: string | null) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", "automations");
+    url.searchParams.delete("recordTab");
+    if (taskId) url.searchParams.set("automation", taskId);
+    else url.searchParams.delete("automation");
+    if (taskId && runId) url.searchParams.set("run", runId);
+    else url.searchParams.delete("run");
+    void navigateToAppPath(canonicalBrowserUrl(url.pathname, url.search));
+  };
   const pageTab: ProjectPageTab = recordTaskId ? "tasks" : urlTab;
   /* Opening or closing a record is one write that pins the Tasks tab, so
      closing it returns to the board rather than to the default tab, and the
@@ -238,11 +250,9 @@ export function ProjectWorkspacePage({
             tasks={projectTasks}
             nodes={computers}
             currentUser={currentUser}
-            onOpenRecord={(taskId, runId) => {
-              if (taskId) void navigateToAppPath(pathForAppState({
-                route: "routine", mobileView: "chat", sessionId: null, taskId, runId,
-              }));
-            }}
+            recordTaskId={automationId}
+            recordRunId={automationRunId}
+            onOpenRecord={openAutomationRecord}
             onOpenThread={onOpenThread}
           />
         </TabsContent>

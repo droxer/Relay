@@ -46,6 +46,7 @@ import {
 import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
+import { projectAutomationHref } from "../lib/projectAutomationRoute";
 import { taskRef } from "../lib/taskRef";
 import { TagFilterContext, useTagFilters } from "./tagFilter";
 
@@ -68,6 +69,9 @@ interface RoutinesPageProps {
 }
 
 export function RoutinesPage({ projectId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+  const hrefForRecord = useMemo(() => projectId
+    ? (taskId: string, runId?: string | null) => projectAutomationHref(projectId, taskId, runId)
+    : undefined, [projectId]);
   const tasks = useMemo(() => allTasks.filter((task) => !task.deletedAt && (!projectId || task.projectId === projectId)), [allTasks, projectId]);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
@@ -342,11 +346,10 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
 
   return (
     <TagFilterContext value={tagFilters.list}>
-      <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
-        {/* The rail names the surface and lists its sections; the board's own
-            header names the section being read. Same rail-and-content shape as
-            the control panel and personal settings — see section-rail.css. */}
-        <div className="sec-rail">
+      <section id="routine-panel" className={`routine-page ${projectId ? "routine-page--project" : "sec-shell"}`} aria-label={t("routine.title")} tabIndex={-1}>
+        {/* Projects already supply navigation. Only the standalone board
+            needs a rail; project lists expose state in their filter bar. */}
+        {!projectId ? <div className="sec-rail">
           {/* Title + count, like every other rail in the app. No "Workspace"
               kicker: the sidebar group already says where the reader is. */}
           <PageHeader
@@ -362,15 +365,15 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
             total={sectionTotal}
             onChange={(state) => setFilters({ ...filters, state })}
           />
-        </div>
+        </div> : null}
 
         <div className="sec-main">
           <PageHeader
-            title={sectionLabel}
+            title={projectId ? t("routine.title") : sectionLabel}
             titleAs="h2"
             titleVariant="title"
             topbarActions
-            count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
+            count={projectId || sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
             actions={
               <TaskBoardHeaderActions
                 refreshLabel={t("nav.refresh")}
@@ -384,6 +387,7 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
 
           <RoutineFiltersBar
             filters={filters}
+            includeState={Boolean(projectId)}
             agents={logicalAgents}
             tags={tagOptions}
             onChange={setFilters}
@@ -433,7 +437,8 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
                   stateFor={(task) => routineState(task, runningIds)}
                   assignmentFor={taskAssignmentDisplay}
                   handlersFor={routineHandlers}
-                  projectNameFor={projectNameFor}
+                  projectNameFor={projectId ? undefined : projectNameFor}
+                  hrefForRecord={hrefForRecord}
                 />
               </div>
               <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
@@ -484,6 +489,9 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
           <TagFilterContext value={tagFilters.record}>
             <TaskRecordView
               taskId={drawerRecord.taskId}
+              tabSearchKey={projectId ? "recordTab" : "tab"}
+              originLabel={projectId ? projects.find((project) => project.id === projectId)?.name : undefined}
+              hrefForRecord={hrefForRecord}
               currentUser={currentUser}
               runId={drawerRecord.runId}
               tasks={tasks}
