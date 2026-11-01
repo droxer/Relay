@@ -53,13 +53,12 @@ export function TaskBoardHeaderActions({
       {onCreate ? <Button
         type="button"
         variant="ghost"
-        // A visible label on desktop; the phone top bar keeps a named icon.
-        className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
+        // A bare plus everywhere; the tooltip names it (and is its aria-label).
+        className="page-header-icon-action page-header-icon-action--primary"
         tooltip={createLabel}
         onClick={onCreate}
       >
         <ActionAdd size={ICON.md} />
-        <span className="page-header-create-label">{createLabel}</span>
       </Button> : null}
     </>
   );
