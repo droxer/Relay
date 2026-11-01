@@ -114,7 +114,7 @@ async function collectionHeader(page: Page, rail: string) {
       iconX: icon ? Math.round(icon.getBoundingClientRect().x) : null,
       fieldHeight: field ? Math.round(field.getBoundingClientRect().height * 100) / 100 : null,
       count: header.querySelector(".page-header-count")?.textContent ?? "",
-      create: header.querySelector(".page-header-create-label")?.textContent ?? "",
+      create: header.querySelector(".page-header-icon-action--primary")?.getAttribute("aria-label") ?? "",
     };
   });
 }
