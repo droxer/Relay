@@ -33,7 +33,10 @@ function renderPage(record: ProjectRecord) {
       <DialogProvider>
         <ProjectWorkspacePage
           project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
-          tasks={[task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02")]}
+          tasks={[
+            task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02"),
+            { ...task("run", "p"), sourceRoutineId: "auto" },
+          ]}
           onOpenThread={vi.fn()} onDeleted={vi.fn()} onBack={vi.fn()}
         />
       </DialogProvider>
@@ -98,7 +101,7 @@ it("hides member management on a closed project's Members tab", () => {
   expect(screen.queryByRole("button", { name: /project\.member_add/ })).toBeNull();
 });
 
-it("renders the backlog board on Tasks, scoped to this project's live tasks", async () => {
+it("renders the backlog board on Tasks, scoped to this project's live tasks, without automation runs", async () => {
   renderPage(project());
   fireEvent.click(screen.getByRole("tab", { name: "project.tasks_tab" }));
   await waitFor(() => expect(screen.getByTestId("backlog-board")).toBeTruthy());
@@ -134,13 +137,13 @@ it("hands a closed project's board over read-only", () => {
   expect(board.props).toMatchObject({ readOnly: true });
 });
 
-it("offers project-scoped automations directly inside a project", () => {
+it("offers project-scoped automations, with their runs, directly inside a project", () => {
   window.history.replaceState({}, "", "/projects/p?tab=automations");
   renderPage(project());
   expect(screen.getByRole("tab", { name: "routine.title", selected: true })).toBeTruthy();
   expect(screen.getByTestId("project-automations")).toBeTruthy();
   expect(automations.props).toMatchObject({ projectId: "p", readOnly: false });
-  expect((automations.props?.tasks as RelayTaskListItem[]).map((item) => item.id)).toEqual(["mine"]);
+  expect((automations.props?.tasks as RelayTaskListItem[]).map((item) => item.id)).toEqual(["mine", "run"]);
 });
 
 it("keeps a closed project's automations read-only", () => {

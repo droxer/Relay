@@ -14,7 +14,7 @@ import { useTeams } from "../hooks/useTeams";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus } from "../lib/backlog";
+import { agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus, type BacklogFilters } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { useLanePagination, usePagination } from "../hooks/usePagination";
@@ -98,7 +98,11 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const phone = useMediaQuery(PHONE_QUERY);
   // The filters live in the query string, so a filtered board survives
   // opening a record and coming back, and it is a link somebody can paste.
-  const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
+  const [urlFilters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
+  /* Automation runs never reach a project board (projectBoardTasks), so the
+     source filter has nothing to split here; a pasted `?source=` is ignored
+     rather than emptying the board. */
+  const filters = useMemo<BacklogFilters>(() => ({ ...urlFilters, source: "all" }), [urlFilters]);
   const [view, setView] = useState<BacklogView>("list");
   /* The form is a shared controller, not this board's own: the project board
      opens the same record drawer and edits through the same form. */
@@ -309,6 +313,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
           <>
             <BacklogFiltersBar
               filters={filters}
+              showSource={false}
               agents={logicalAgents}
               teams={teams}
               tags={tagOptions}

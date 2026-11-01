@@ -6,6 +6,7 @@ import {
   PROJECT_PAGE_TABS,
   orderedProjectMembers,
   parseProjectPageTab,
+  projectBoardTasks,
   projectActivitiesState,
   scopeProjectActivities,
   projectMemberState,
@@ -19,6 +20,7 @@ import type {
   UserAgent,
   ProjectMember,
   ProjectRecord,
+  RelayTaskListItem,
   WorkspaceBriefResponse,
 } from "../src/types.js";
 
@@ -272,5 +274,22 @@ describe("projectReadOnly", () => {
   it("treats a task with no project as open", () => {
     assert.equal(projectReadOnly(undefined), false);
     assert.equal(projectReadOnly(null), false);
+  });
+});
+
+describe("projectBoardTasks", () => {
+  const task = (id: string, overrides: Partial<RelayTaskListItem> = {}) =>
+    ({ id, projectId: "project-1", ...overrides }) as RelayTaskListItem;
+
+  it("keeps automation runs and automations off the project's task board", () => {
+    const tasks = [
+      task("direct"),
+      task("automation", { isRoutine: true }),
+      task("run", { sourceRoutineId: "automation" }),
+      task("deleted", { deletedAt: "2026-10-01T00:00:00Z" }),
+      task("elsewhere", { projectId: "project-2" }),
+    ];
+
+    assert.deepEqual(projectBoardTasks(tasks, "project-1").map((item) => item.id), ["direct"]);
   });
 });
