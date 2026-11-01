@@ -524,7 +524,10 @@ exclusive.
 Projects and Tasks are separate browser destinations. `/projects` opens the
 project directory; `/projects/{id}` opens Dashboard, and `?tab=tasks` opens the
 project's Tasks tab with its board/list views. `?tab=automations` lists the
-project's automations and creates new ones with that project fixed. Archived
+project's automations and creates new ones with that project fixed.
+`?tab=automations&automation={automationId}` opens its record within the project;
+`&run={runId}` opens an occurrence, and `recordTab` selects the record section.
+Closing a record returns to the project list with its filters preserved. Archived
 or disabled projects offer no automation creation or dispatch actions. `?task={taskId}` opens a task
 record over that project; `recordTab` selects a section of that record.
 

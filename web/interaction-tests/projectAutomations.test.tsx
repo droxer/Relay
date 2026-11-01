@@ -57,3 +57,11 @@ it("keeps the project draft available when saving fails", async () => {
   expect(screen.getByRole("form").dataset.project).toBe("p");
   expect((screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement).value).toBe("Retry me");
 });
+
+it("uses one content column and project destinations for records", () => {
+  const routine = { id: "auto", projectId: "p", isRoutine: true, title: "Weekly review", tags: [], routineTriggers: [] } as unknown as RelayTaskListItem;
+  page(false, [routine]);
+  expect(document.querySelector(".sec-rail")).toBeNull();
+  expect(table.mock.lastCall?.[0].hrefForRecord("auto")).toBe("/projects/p?tab=automations&automation=auto");
+  expect(table.mock.lastCall?.[0].projectNameFor).toBeUndefined();
+});

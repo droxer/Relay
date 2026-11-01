@@ -800,3 +800,14 @@
 .adm-form-actions .project-setup-mode {
   margin-right: auto;
 }
+
+/* The project supplies navigation; its automations need only one list. */
+.routine-page--project {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.routine-page--project > .sec-main {
+  height: 100%;
+}

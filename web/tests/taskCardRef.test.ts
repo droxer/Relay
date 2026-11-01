@@ -10,7 +10,7 @@ describe("issue refs", () => {
       readFile(resolve("web/src/components/issues/IssuesTable.tsx"), "utf8"),
       readFile(resolve("web/src/components/task-board/BacklogRecords.tsx"), "utf8"),
     ]);
-    assert.match(routineRecords, /<TaskRefLink task=\{row\.original\} href=\{hrefForRoutineRecord/);
+    assert.match(routineRecords, /<TaskRefLink task=\{row\.original\} href=\{s\.hrefForRecord/);
     assert.match(routineRecords, /backlog\.col_ref/);
     assert.match(issuesTable, /<TaskRefLink task=\{task\} href=\{hrefForTaskRecord\(task\.id\)\}/);
     assert.match(backlogRecords, /<TaskRefLink task=\{task\} href=\{hrefForTaskRecord\(task\.id\)\} onOpen=\{onOpen\}/);

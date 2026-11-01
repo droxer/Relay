@@ -69,6 +69,7 @@ export function TaskRecordPage({
   busyAction,
   presentation = "page",
   tabSearchKey = "tab",
+  hrefForRun,
   onOpenThread,
   onOpenRun,
   onRun,
@@ -96,6 +97,7 @@ export function TaskRecordPage({
   /** "drawer" drops the page header; the surrounding drawer carries it. */
   presentation?: "page" | "drawer";
   tabSearchKey?: "tab" | "recordTab";
+  hrefForRun?: (runId: string) => string;
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
@@ -251,13 +253,13 @@ export function TaskRecordPage({
             />
             <RecordRuns
               taskId={task.id}
-              hrefForRun={(runTaskId) => pathForAppState({
+              hrefForRun={hrefForRun ?? ((runTaskId) => pathForAppState({
                 route: "routine",
                 mobileView: "chat",
                 sessionId: null,
                 taskId: task.id,
                 runId: runTaskId,
-              })}
+              }))}
               onOpenRun={onOpenRun}
               onOpenThread={onOpenThread}
             />

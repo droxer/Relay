@@ -89,16 +89,19 @@ export function formatNextRunDate(value: string): string {
 
 const ROUTINE_BAR_KEYS = ["trigger", "tag", "agent", "assignee"] as const;
 
-export function RoutineFiltersBar({ filters, agents, tags = [], onChange, sortMenu }: { filters: RoutineFilters; agents: UserAgent[]; tags?: readonly string[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
+export function RoutineFiltersBar({ filters, agents, tags = [], onChange, sortMenu, includeState = false }: { includeState?: boolean; filters: RoutineFilters; agents: UserAgent[]; tags?: readonly string[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
+  const keys: readonly (keyof RoutineFilters)[] = includeState ? ["state", ...ROUTINE_BAR_KEYS] : ROUTINE_BAR_KEYS;
   const fields = useMemo<FilterBarField[]>(() => [
+    ...(includeState ? [{ id: "state", label: t("routine.state"), kind: "select" as const,
+      options: ROUTINE_STATE_ORDER.map((state) => ({ value: state, label: t(`routine.states.${state}`) })) }] : []),
     { id: "trigger", label: t("automation.trigger"), kind: "select",
       options: TRIGGER_FILTER_VALUES.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
     ...[tagFilterField(tags, filters.tag, t("tags.label"))].filter((field) => field !== null),
     { id: "agent", label: t("backlog.agent"), kind: "select",
       options: agents.map((agent) => ({ value: agent.id, label: agent.displayName, icon: <RosterAgentMark agent={agent} /> })) },
     { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
-  ], [agents, tags, filters.tag, t]);
+  ], [agents, tags, filters.tag, t, includeState]);
 
   return (
     <FiltersBar
@@ -108,11 +111,11 @@ export function RoutineFiltersBar({ filters, agents, tags = [], onChange, sortMe
       query={filters.query}
       onQueryChange={(query) => onChange({ ...filters, query })}
       fields={fields}
-      selections={selectionsFromState(filters, ROUTINE_BAR_KEYS)}
-      onSelectionsChange={(next) => onChange({ ...filters, ...stateFromSelections(next, ROUTINE_BAR_KEYS, ["assignee"]) } as RoutineFilters)}
-      /* The rail owns `state`, so clearing the BAR must not move the reader
-         to another section — that control is not in this bar to be cleared. */
-      onClear={() => onChange({ ...initialRoutineFilters, state: filters.state })}
+      selections={selectionsFromState(filters, keys)}
+      onSelectionsChange={(next) => onChange({ ...filters, ...stateFromSelections(next, keys, ["assignee"]) } as RoutineFilters)}
+      /* Project lists own state here; standalone boards keep the section
+         selected in their rail when the other filters are cleared. */
+      onClear={() => onChange({ ...initialRoutineFilters, state: includeState ? "all" : filters.state })}
       trailing={sortMenu}
     />
   );

@@ -151,3 +151,18 @@ it("keeps a closed project's automations read-only", () => {
   renderPage(project({ archivedAt: "2026-10-01" }));
   expect(automations.props).toMatchObject({ projectId: "p", readOnly: true });
 });
+
+it("opens automations and their runs without leaving the project", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=automations&q=weekly");
+  renderPage(project());
+  const open = () => automations.props?.onOpenRecord as (id: string | null, runId?: string | null) => void;
+  open()("auto");
+  await waitFor(() => expect(automations.props).toMatchObject({ recordTaskId: "auto" }));
+  expect(window.location.pathname).toBe("/projects/p");
+  expect(new URLSearchParams(window.location.search).get("q")).toBe("weekly");
+  open()("auto", "run");
+  await waitFor(() => expect(automations.props).toMatchObject({ recordTaskId: "auto", recordRunId: "run" }));
+  open()(null);
+  await waitFor(() => expect(new URLSearchParams(window.location.search).has("automation")).toBe(false));
+  expect(screen.getByRole("tab", { name: "routine.title", selected: true })).toBeTruthy();
+});
