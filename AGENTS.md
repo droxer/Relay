@@ -335,7 +335,12 @@ migration.
   - `backend/relay/chat/integrations.py` — chat provider integration glue.
   - `backend/relay/migrations_runtime/startup.py` — idempotent record repairs
     run at boot (`RELAY_STARTUP_REPAIRS=0` skips them); schema changes belong
-    in Alembic.
+    in Alembic. `abandoned_sessions.py` settles a thread an older flow opened
+    and never dispatched (still `running`, no agent run, no run reservation,
+    idle a week — `sessions/abandoned.py`) with a `session.status` cancel
+    whose `reason` is `never_dispatched`. A session is born `running`, so
+    clients judge a live run by the derived `execution` phase, never
+    `status` alone.
   - Database migrations live under `backend/migrations/` (Alembic); run with
     `make backend-migrate`.
 - **`relay-daemon`** — Execution plane. The daemon service that connects
