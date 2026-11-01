@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     findutils \
     grep \
     git \
+    git-lfs \
     passwd \
     && rm -rf /var/lib/apt/lists/*
 
