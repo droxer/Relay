@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { onboardingProgress, type OnboardingInputs } from "../src/lib/onboarding.js";
+import { homeSetupProgressOf, onboardingProgress, type OnboardingInputs } from "../src/lib/onboarding.js";
 import type { DaemonNodeMonitorRecord, RelaySession, UserAgent } from "../src/types.js";
 
 const USER = "user-1";
@@ -170,5 +170,29 @@ describe("onboarding progress", () => {
       threads: [FINISHED_THREAD],
     }));
     assert.equal(progress.visible, false);
+  });
+});
+
+describe("home setup progress", () => {
+  it("names the first unfinished step for a brand-new account, intro unread", () => {
+    const progress = onboardingProgress(inputs({ user: { userId: USER } }));
+    assert.deepEqual(homeSetupProgressOf(progress), { step: "computer", done: 0, total: 3 });
+  });
+
+  it("moves to the next step as setup progresses", () => {
+    const progress = onboardingProgress(inputs({ nodes: [node()] }));
+    assert.deepEqual(homeSetupProgressOf(progress), { step: "agent", done: 1, total: 3 });
+  });
+
+  it("steps aside once every setup step is done", () => {
+    const progress = onboardingProgress(inputs({ nodes: [node()], agents: [READY_AGENT], threads: [FINISHED_THREAD] }));
+    assert.equal(homeSetupProgressOf(progress), null);
+  });
+
+  it("steps aside when the person hid the wizard", () => {
+    const progress = onboardingProgress(inputs({
+      user: { userId: USER, onboarding: { introSeenAt: "2026-10-16T00:00:00.000Z", dismissedAt: "2026-10-17T00:00:00.000Z" } },
+    }));
+    assert.equal(homeSetupProgressOf(progress), null);
   });
 });

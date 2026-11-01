@@ -205,7 +205,12 @@ describe("Relay web layout storage", () => {
     delete (globalThis as { window?: Window }).window;
   });
 
-  it("defaults the side nav to collapsed when nothing is stored", () => {
+  it("defaults the side nav to expanded when nothing is stored", () => {
+    assert.equal(readSidenavExpanded(), true);
+  });
+
+  it("keeps the side nav collapsed once the person collapses it", () => {
+    writeSidenavExpanded(false);
     assert.equal(readSidenavExpanded(), false);
   });
 
@@ -218,7 +223,7 @@ describe("Relay web layout storage", () => {
 
   it("ignores unrecognised side nav values", () => {
     storage.set("relay-web.sidenavExpanded", "yes");
-    assert.equal(readSidenavExpanded(), false);
+    assert.equal(readSidenavExpanded(), true);
   });
 
   it("defaults the thread list to hidden beside the space panel", () => {
@@ -255,7 +260,7 @@ describe("Relay web layout storage", () => {
       getItem: () => { throw new Error("SecurityError"); },
       setItem: () => { throw new Error("QuotaExceededError"); },
     });
-    assert.equal(readSidenavExpanded(), false);
+    assert.equal(readSidenavExpanded(), true);
     assert.equal(readSidenavWidth(), null);
     assert.equal(readThreadListBesideSpace(), false);
     assert.doesNotThrow(() => writeSidenavExpanded(true));
@@ -265,7 +270,7 @@ describe("Relay web layout storage", () => {
 
   it("is inert off the DOM", () => {
     delete (globalThis as { window?: Window }).window;
-    assert.equal(readSidenavExpanded(), false);
+    assert.equal(readSidenavExpanded(), true);
     assert.doesNotThrow(() => writeSidenavExpanded(true));
     assert.equal(storage.size, 0);
   });

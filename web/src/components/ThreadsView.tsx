@@ -523,7 +523,11 @@ export function ThreadsView({
             <div className="transcript-inner">{onboardingPanel}</div>
           </div>
         ) : (
-        <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="polite" aria-atomic="false">
+        /* A log by role, but silent: streamed output re-renders on every
+           frame, and a polite log announced each tool line on top of the
+           turn's own debounced status. Turn status (Working…, the debounced
+           answer) speaks through its own role="status" regions instead. */
+        <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="off">
           <div className="transcript-inner">
             {activeSession || pendingUserMessage ? (
               <>

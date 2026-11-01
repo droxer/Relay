@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RelayEmptyState } from "./RelayEmptyState";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, UserAgent } from "../types";
 import type { HomeItem } from "../lib/homeQueue";
+import type { HomeSetupProgress } from "../lib/onboarding";
 import type { Language, Theme } from "../lib/appStorage";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import type { AdminSection, AppRoute, MobileView, SettingsSection } from "../lib/viewTypes";
@@ -69,6 +70,10 @@ interface WorkRoutePageProps {
   sessions: RelaySession[];
   homeItems: HomeItem[];
   homeStatus: ProjectCollectionStatus;
+  /** Setup the person has not finished, or null once it is done or hidden. */
+  homeSetupProgress: HomeSetupProgress | null;
+  /** Opens the onboarding wizard (a fresh thread). */
+  onOpenOnboarding: () => void;
   /** The owner key tasks and threads carry. */
   selectedUser: string;
   setUser: (user: CurrentUser) => void;
@@ -138,6 +143,8 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       setUser={props.setUser}
       items={props.homeItems}
       dataStatus={props.homeStatus}
+      setupProgress={props.homeSetupProgress}
+      onOpenOnboarding={props.onOpenOnboarding}
       onRefresh={props.onRefresh}
       onOpenRoutineRecord={props.onOpenRoutineRecord}
       tasks={props.tasks}

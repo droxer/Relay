@@ -56,7 +56,7 @@ import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
 import { DefaultAgentsPrompt } from "./components/computer/DefaultAgentsPrompt";
 import { useOnboarding } from "./hooks/useOnboarding";
-import { SETUP_STEPS } from "./lib/onboarding";
+import { SETUP_STEPS, homeSetupProgressOf } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
 import { resolveNewThreadComputer, threadOwnAgentId } from "./lib/threadRuntime";
@@ -612,6 +612,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // needs one identity for the life of the shell.
   const onOpenThread = useStableEvent(openThread);
   const onGoHome = useStableEvent(() => navigateToRoute("home"));
+  // Rebuilt only when what Home shows changes, so the memoized route page
+  // keeps its props across streamed frames.
+  const setupNext = homeSetupProgressOf(onboarding.progress);
+  const setupStep = setupNext?.step;
+  const setupDone = setupNext?.done ?? 0;
+  const homeSetupProgress = useMemo(
+    () => (setupStep ? { step: setupStep, done: setupDone, total: SETUP_STEPS.length } : null),
+    [setupDone, setupStep],
+  );
   const onboardingBadge = useMemo(
     () => (onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null),
     [onboarding.progress.completedCount, onboarding.progress.visible],
@@ -671,6 +680,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             sessions={sessions}
             homeItems={homeItems}
             homeStatus={homeStatus}
+            homeSetupProgress={homeSetupProgress}
+            onOpenOnboarding={openOnboarding}
             selectedUser={selectedUser}
             setUser={setUser}
             visibleNodes={visibleNodes}

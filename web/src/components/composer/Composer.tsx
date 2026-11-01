@@ -117,6 +117,15 @@ const ComposerView = forwardRef<ComposerHandle, {
   // A mention names one member, so it narrows a project round away from the
   // roster exactly the way picking that member in the footer would.
   const roomSelected = projectRoomSelected && !addressedLogicalAgentId;
+  // Who this message reaches, resolved the way the footer picker names it,
+  // so the field's placeholder and accessible name never disagree with it.
+  const addressedName = addressedLogicalAgentId
+    ? logicalAgents.find((agent) => agent.id === addressedLogicalAgentId)?.displayName
+    : undefined;
+  const targetTeam = projectName ? undefined : teams?.find((team) => team.id === activeTeamId && !team.deletedAt);
+  const targetName = addressedName
+    ?? targetTeam?.name
+    ?? (roomSelected && projectRoom?.agentIds.length ? t("composer.target_room") : activeAgentDisplayName);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const mentions = useMentionAutocomplete({
     text: composerText,
@@ -328,14 +337,16 @@ const ComposerView = forwardRef<ComposerHandle, {
               type={undefined}
               className="composer-textarea"
               aria-label={selectedUser
-                ? t("composer.aria_label", { user: selectedUser, agent: activeAgentDisplayName })
-                : t("composer.aria_label_no_user", { agent: activeAgentDisplayName })}
+                ? t("composer.aria_label", { user: selectedUser, agent: targetName })
+                : t("composer.aria_label_no_user", { agent: targetName })}
               autoComplete="off"
               disabled={readOnly}
               name="message"
-              placeholder={placeholder ?? (selectedUser
-                ? t("composer.placeholder")
-                : t("composer.placeholder_no_user"))}
+              placeholder={placeholder ?? (!selectedUser
+                ? t("composer.placeholder_no_user")
+                : targetName
+                  ? t("composer.placeholder_named", { target: targetName })
+                  : t("composer.placeholder"))}
               value={composerText}
               onChange={(e) => {
                 setComposerText(e.target.value);
@@ -403,7 +414,10 @@ const ComposerView = forwardRef<ComposerHandle, {
               ) : null}
             </div>
             {/* One mounted element for send↔stop so keyboard focus survives
-                the run starting; the glyph cross-fades instead. */}
+                the run starting. Send is a bare disc; Stop says its word,
+                because a square glyph alone read as decoration under a live
+                run. While running, the visible word is the accessible name
+                (no aria-label to disagree with it). */}
             {/* Button's default size carries h-(--control-h) and px-6, which
                 would stretch the plate into a wide oval; the size overrides
                 ride the same className so tailwind-merge drops the defaults
@@ -411,12 +425,12 @@ const ComposerView = forwardRef<ComposerHandle, {
             <Button variant="default"
               type={running ? "button" : "submit"}
               className={running
-                ? "send-button send-button-cancel h-(--control-h-sm) w-(--control-h-sm) px-0"
+                ? "send-button send-button-cancel h-(--control-h-sm) w-auto px-3"
                 : "send-button h-(--control-h-sm) w-(--control-h-sm) px-0"}
               disabled={!running && (sendPending || cannotSend)}
               onClick={running ? onCancelRun : undefined}
               aria-busy={sendPending || undefined}
-              aria-label={running ? t("composer.cancel_run") : sendPending ? t("composer.sending") : t("composer.send")}
+              aria-label={running ? undefined : sendPending ? t("composer.sending") : t("composer.send")}
               tooltip={running
                 ? t("composer.cancel_run")
                 : parsed.blocked
@@ -426,6 +440,7 @@ const ComposerView = forwardRef<ComposerHandle, {
               <span className="send-button-icon" key={running ? "stop" : "send"}>
                 {running ? <ComposerStop size={ICON.sm} /> : <ActionSend size={ICON.md} />}
               </span>
+              {running ? <span className="send-button-label">{t("composer.stop")}</span> : null}
             </Button>
           </div>
         </div>
