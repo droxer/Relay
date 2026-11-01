@@ -22,7 +22,6 @@ document.
 - [`api.md`](api.md) — current browser-route and HTTP API contract.
 - [`../AGENTS.md`](../AGENTS.md) — the single agent guide (Codex, Claude Code,
   and others): commands, architecture, invariants, and verification guidance.
-  [`../CLAUDE.md`](../CLAUDE.md) only imports it.
 - [`../CONTEXT.md`](../CONTEXT.md) — short canonical product terminology.
 - [`CODEX-NAVIGATION-GUIDE.md`](CODEX-NAVIGATION-GUIDE.md) — where behavior
   lives, which neighboring surfaces move with it, and what a review diff

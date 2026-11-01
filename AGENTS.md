@@ -5,8 +5,7 @@ client. The host backend/control plane is now Python-first and lives at the
 repository root in `backend/` with `pyproject.toml`; keep new backend runtime code in Python unless a
 compatibility shim must remain in TypeScript during migration.
 
-This file is the single source of agent instructions; `CLAUDE.md` only imports
-it.
+This file is the single source of agent instructions.
 
 ## Domain Language
 
