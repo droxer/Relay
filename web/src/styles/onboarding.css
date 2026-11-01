@@ -292,6 +292,9 @@ button.onboarding-starter {
 .sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn.sidenav-onboarding {
   order: -1;
   flex: 1 0 100%;
+  /* The row caps every square at --control-h-xs (sidenav.css); a labelled
+     row has to lift that cap or its words spill over the squares beside it. */
+  max-width: none;
   justify-content: space-between;
   padding-inline: var(--sp-2);
 }

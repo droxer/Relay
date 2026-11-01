@@ -137,9 +137,11 @@ function writeLayoutFlag(key: string, value: boolean): void {
   writeLayoutValue(key, value ? "true" : "false");
 }
 
-/** Whether the side rail was left expanded. Defaults to collapsed. */
+/** Whether the side rail was left expanded. Defaults to expanded: a new
+ *  person reads the destinations by name until they choose the icon rail,
+ *  and that first collapse is remembered like any other. */
 export function readSidenavExpanded(): boolean {
-  return readLayoutFlag(sidenavExpandedKey);
+  return readLayoutValue(sidenavExpandedKey) !== "false";
 }
 
 export function writeSidenavExpanded(expanded: boolean): void {

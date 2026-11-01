@@ -1,7 +1,9 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import type { HomeSetup } from "../../lib/homeSetup";
+import type { HomeSetupProgress } from "../../lib/onboarding";
 import { HomeLink } from "./HomePanels";
 
 const NAMED_LIMIT = 2;
@@ -75,5 +77,27 @@ export function HomeSetupPanel({ setup, computersHref, agentsHref, onOpenCompute
         ))}
       </ul>
     </section>
+  );
+}
+
+/** Start here while setup is unfinished: the next step and a way into the
+ *  wizard, so a new account is never told it is "all caught up". */
+export function HomeSetupFocus({ progress, onOpen }: { progress: HomeSetupProgress; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const { step, done, total } = progress;
+  return (
+    <div className="home-focus" data-focus="setup">
+      <div className="home-focus-heading">
+        <h3>{t("home.plan.start_here")}</h3>
+        <span className="tnum">{t("onboarding.count", { done, total })}</span>
+      </div>
+      <div className="home-plan-row">
+        <div className="home-plan-copy">
+          <span className="home-item-title">{t(`onboarding.${step}.label`)}</span>
+          <p className="home-plan-meta">{t(`onboarding.${step}.body`)}</p>
+        </div>
+        <Button size="dense" onClick={onOpen}>{done === 0 ? t("onboarding.eyebrow") : t("onboarding.next")}</Button>
+      </div>
+    </div>
   );
 }

@@ -33,12 +33,13 @@ import { activityCounts, groupActivity, type ActivityEntry, type ActivityItem } 
 import { placePermissionAudits } from "../lib/permissionAudits";
 import type { PermissionAudit } from "../lib/projectMessages";
 
-// "Working…" breathes on the shared live blink: plain words that dim and
-// return, not a gradient sweep across them.
+// "Working…" wears the live dot every running thing in Relay shares, so a
+// turn still at work never reads as the finished one above it.
 function StreamActivity({ label }: { label: string }) {
   return (
     <div className="agent-stream-activity" role="status">
-      <span className="agent-stream-live-label">{label}</span>
+      <i className="agent-stream-live-dot" aria-hidden="true" />
+      <span>{label}</span>
     </div>
   );
 }

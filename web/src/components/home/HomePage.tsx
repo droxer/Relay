@@ -28,7 +28,8 @@ import type { AgentName } from "relay-core";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../../types";
 import { HomeQueue } from "./HomeQueue";
 import { FinishedPanel, HomeLink, MyTasksPanel, ProjectsPanel, RunningPanel } from "./HomePanels";
-import { HomeSetupPanel } from "./HomeSetupPanel";
+import { HomeSetupFocus, HomeSetupPanel } from "./HomeSetupPanel";
+import type { HomeSetupProgress } from "../../lib/onboarding";
 import { homeSetup } from "../../lib/homeSetup";
 import { useHomeActions } from "./useHomeActions";
 
@@ -39,6 +40,9 @@ export interface HomePageProps {
   setUser: (user: CurrentUser) => void;
   items: readonly HomeItem[];
   dataStatus: ProjectCollectionStatus;
+  /** Unfinished setup, or null once there is nothing left to set up. */
+  setupProgress: HomeSetupProgress | null;
+  onOpenOnboarding: () => void;
   onRefresh: () => Promise<void>;
   onOpenRoutineRecord: (id: string, runId?: string) => void;
   tasks: readonly RelayTaskListItem[];
@@ -59,7 +63,7 @@ const MINUTE_MS = 60_000;
 /** Home: what needs the signed-in person, ranked, beside where their work
  *  stands. The queue is computed once by the app shell (it also feeds the
  *  rail's badge) and arrives here as `items`. */
-export function HomePage({ user, userId, setUser, items, tasks, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, onRefresh, onOpenRoutineRecord }: HomePageProps) {
+export function HomePage({ user, userId, setUser, items, tasks, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
   const { t, i18n } = useTranslation();
   const now = useMinuteClock();
   const actions = useHomeActions(setUser);
@@ -79,7 +83,8 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
     const agent = agents.find(a => a.id === task.assignedAgentId);
     return Boolean(agent && isUserAgentRoutable(agent) && agentOnComputer(agent, project.computerId));
   }), [tasks, projects, userId, nodes, agents, teams]);
-  const readyFocus = !homeFocusItem(items) ? ready[0] : undefined;
+  // Unfinished setup takes the Start here slot; ready work then stays listed.
+  const readyFocus = !homeFocusItem(items) && !setupProgress ? ready[0] : undefined;
   const readyRest = ready.filter(t => t.id !== readyFocus?.id);
 
 
@@ -145,8 +150,14 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
 
   const needs = homeNeedsYouCount(items);
   const name = greetingName(user);
+  // An account still setting up has nothing to be caught up on yet.
+  const first = needs
+    ? { tone: "warn", text: t("home.brief.needs", { count: needs }) }
+    : setupProgress
+      ? { tone: "neutral", text: t("home.brief.setup", { done: setupProgress.done, total: setupProgress.total }) }
+      : { tone: "ok", text: t("home.brief.clear") };
   const summary = [
-    { tone: needs ? "warn" : "ok", text: needs ? t("home.brief.needs", { count: needs }) : t("home.brief.clear") },
+    first,
     { tone: running.length ? "live" : "neutral", text: t("home.brief.running", { count: running.length }) },
   ];
   const readyVisible = readyExpanded ? readyRest : readyRest.slice(0, READY_PREVIEW);
@@ -196,7 +207,9 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
                 <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", { count: upcoming.length })}</a>
                 {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", { count: blockers.length })}</a> : null}
               </nav>}
-              readyFocus={readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
+              readyFocus={setupProgress
+                ? <HomeSetupFocus progress={setupProgress} onOpen={onOpenOnboarding} />
+                : readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
               actions={actions}
               agentName={agentName}
               projectName={projectName}

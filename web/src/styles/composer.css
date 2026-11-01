@@ -513,11 +513,19 @@
   opacity: 1;
 }
 
-/* Stop keeps the send plate — the send↔stop transition is only a glyph
-   swap, so the composer's primary control never changes silhouette. The
-   only stop-specific chrome is the danger focus ring. It stays here: the
-   button keeps variant="default" (so the plate never changes), and base.css
-   draws the danger ring only for variant="destructive" and aria-invalid. */
+/* Stop keeps the send plate's fill and height but says its word: a control
+   with a label, so it takes the control radius (--r-full is for true
+   circles only). The danger focus ring stays here: the button keeps
+   variant="default" (so the plate never changes fill), and base.css draws
+   the danger ring only for variant="destructive" and aria-invalid. */
+.send-button.send-button-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  border-radius: var(--r-2);
+  font: var(--type-label-strong);
+}
+
 .send-button.send-button-cancel:focus-visible {
   outline: var(--focus-outline-danger);
   outline-offset: var(--focus-offset);

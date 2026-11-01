@@ -70,10 +70,13 @@ const projects = [project("p-billing", "Billing v2"), project("p-site", "Website
 type Theme = "light" | "dark";
 type Wire = { method: string; path: string; body: unknown };
 
-async function serve(page: Page, theme: Theme) {
+// Most tests model a set-up account; a first run passes its own onboarding.
+const SET_UP = { introSeenAt: ago(9000), dismissedAt: ago(9000) };
+
+async function serve(page: Page, theme: Theme, onboarding: Record<string, string> = SET_UP) {
   const wire: Wire[] = [];
   let snoozes: unknown[] = [];
-  const user = () => ({ id: "u", userId: "u", username: "fei", displayName: "Fei He", role: "user", theme, language: "en", homeSnoozes: snoozes });
+  const user = () => ({ id: "u", userId: "u", username: "fei", displayName: "Fei He", role: "user", theme, language: "en", homeSnoozes: snoozes, onboarding });
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -248,4 +251,19 @@ test("phone users can jump to Upcoming immediately after the recommendation", as
  const height=await link.evaluate(el=>el.getBoundingClientRect().height);expect(height).toBeGreaterThanOrEqual(44);
  await link.click();
  await expect(page.getByRole("heading",{name:"Upcoming",exact:true})).toBeInViewport();
+});
+
+test("a first-run account is pointed at setup, not told it is caught up", async ({page}) => {
+ await serve(page,"light",{});
+ await page.route("**/api/v1/tasks?*",route=>route.fulfill({json:{tasks:[]}}));
+ await page.route("**/api/v1/threads?*",route=>route.fulfill({json:{sessions:[]}}));
+ await page.goto("/home");
+ const focus=page.locator('.home-focus[data-focus="setup"]');
+ // No run has finished, so whichever step the fixture reaches, setup is open.
+ await expect(focus).toContainText(/\d of 3 done/);
+ await expect(page.locator(".home-brief")).toContainText(/Setup: \d of 3 done/);
+ await expect(page.locator(".home-brief")).not.toContainText("caught up");
+ await expect(queue(page)).not.toContainText("Nothing needs you right now");
+ await focus.getByRole("button",{name:/Get started|Continue/}).click();
+ await expect(page).toHaveURL(/\/threads/);
 });

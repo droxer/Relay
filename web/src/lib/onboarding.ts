@@ -122,3 +122,15 @@ export function onboardingProgress({ user, nodes, agents, threads }: OnboardingI
     && !(step === "explore" && openCards.length === 0);
   return { step, done, completedCount, blocked, computer, agent, openCards, visible };
 }
+
+/** What Home says about unfinished setup: the next step and the count. */
+export type HomeSetupProgress = { step: SetupStep; done: number; total: number };
+
+/** Null once setup is finished or the person hid the wizard, so Home only
+ *  steps in while there is something to set up. */
+export function homeSetupProgressOf(progress: OnboardingProgress): HomeSetupProgress | null {
+  const step = SETUP_STEPS.find((name) => !progress.done[name]);
+  return progress.visible && step
+    ? { step, done: progress.completedCount, total: SETUP_STEPS.length }
+    : null;
+}

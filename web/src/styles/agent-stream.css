@@ -517,26 +517,44 @@
   animation: blink var(--t-tick) steps(1, end) infinite reverse;
 }
 
-/* Live-run footer — a pulsing dot when the agent is still working but the
-   last visible segment is not streaming text (tool runs, status, silence). */
+/* Live-run footer — shown while the agent is still working but the last
+   visible segment is not streaming text (tool runs, status, silence). A
+   grouped continuation has no header of its own, so this line sits right
+   under the previous turn's "Done" receipt: it has to read as live, not as
+   one more meta line. Hence body ink, not meta, and the live dot. */
 .agent-stream-activity {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   align-self: flex-start;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
 }
 
-/* The live label breathes on the shared blink: the words dim and return on
-   the live cadence, legible at every frame. Gradient text swept across the
-   words was the stock "AI is thinking" tell; Relay's liveness is the blink
-   and the live ring, nothing else. Reduced motion rests it at full ink
-   (a11y.css cuts it to one instant iteration). */
-.agent-stream-live-label {
-  --blink-from: 0.45;
-  animation: blink var(--t-pulse) var(--ease-breathe, ease-in-out) infinite;
+/* The shared live dot: --live fill plus the live-ring (tokens/base.css), on
+   transform/opacity only. Reduced motion rests the ring at its settled halo,
+   so "working" is still told by shape. The words stay steady: one motion
+   per live thing, and the ring is it. */
+.agent-stream-live-dot {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  background: var(--live);
+}
+
+.agent-stream-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--live);
+  border-radius: var(--r-full);
+  opacity: 0.4;
+  transform: scale(1.6);
+  animation: live-ring var(--t-pulse) var(--ease) infinite;
+  pointer-events: none;
 }
 
 .attachment-list {

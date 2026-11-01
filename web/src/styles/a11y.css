@@ -143,6 +143,12 @@
     height: var(--touch-target);
   }
 
+  /* Stop carries a word, so it grows to fit it rather than to a square. */
+  .send-button.send-button-cancel {
+    width: auto;
+    min-width: var(--touch-target);
+  }
+
   /* The search box is a fixed-height frame around its input (backlog.css), so
      the frame has to rise to the floor with it — or the 44px input spills
      out of a 40px box — and it stays level with the Filters chip beside it. */
