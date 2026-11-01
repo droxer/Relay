@@ -119,6 +119,10 @@ def test_delete_project_rejects_active_execution_without_partial_cleanup(project
 
 def test_delete_project_rolls_back_if_cleanup_cannot_be_queued(project_env, monkeypatch):
     app, client, node, agent, project, task, routine, session = project_env
+    automations = app.state.automation_store
+    automations.set_webhook_secret(routine["id"])
+    automations.mark_pending(routine["id"], {"kind": "manual"}, datetime.now(UTC))
+    automations.enqueue_manual(routine["id"])
     def fail(*args, **kwargs):
         raise ValueError("queue full")
     monkeypatch.setattr(app.state.daemon_store, "enqueue_command", fail)
@@ -128,6 +132,10 @@ def test_delete_project_rolls_back_if_cleanup_cannot_be_queued(project_env, monk
     assert app.state.project_store.get_project(project["id"])
     assert app.state.task_store.get_task(task["id"])["linkedSessionIds"] == [session["id"]]
     assert app.state.session_store.get_session(session["id"])
+    assert automations.has_webhook_secret(routine["id"])
+    assert [state["routine_id"] for state in automations.list_pending_states()] == [routine["id"]]
+    pending = automations.claim_outbox(100, datetime.now(UTC))
+    assert any(row["target_routine_id"] == routine["id"] for row in pending)
 
 
 def test_delete_archived_project_and_acknowledge_cleanup(project_env):
@@ -309,6 +317,74 @@ def test_delete_project_forgets_automation_state(project_env):
     assert response.status_code == 200, response.text
     assert not automations.has_webhook_secret(routine["id"])
     assert automations.list_pending_states() == []
+
+
+def test_delete_project_removes_prerequisites_counters_and_pending_events(project_env):
+    from relay.persistence.tables.automations import automation_outbox
+
+    app, client, node, agent, project, task, routine, session = project_env
+    tasks = app.state.task_store
+    dependent = tasks.create_task({
+        "title": "Dependent", "ownerUserId": ALICE, "projectId": project["id"],
+        "prerequisiteTaskIds": [task["id"]],
+    })
+    app.state.automation_store.enqueue_manual(routine["id"])
+    app.state.automation_store.enqueue_webhook(routine["id"], {"event": "queued"})
+    keep = tasks.create_task({"title": "Keep", "ownerUserId": ALICE})
+    removed_ids = {task["id"], routine["id"], dependent["id"]}
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 200, response.text
+    with tasks.engine.connect() as conn:
+        assert conn.execute(select(tasks.task_prerequisites)).first() is None
+        assert conn.execute(select(tasks.number_counters).where(
+            tasks.number_counters.c.scope == f"project:{project['id']}"
+        )).first() is None
+        remaining = conn.execute(select(automation_outbox)).mappings().all()
+        assert all(row["source_id"] not in removed_ids | {session["id"]}
+                   and row["target_routine_id"] not in removed_ids
+                   and row["origin_automation_id"] not in removed_ids for row in remaining)
+        assert any(row["source_id"] == keep["id"] for row in remaining)
+    for view in ("", "?view=summary"):
+        listed = client.get(f"/api/v1/tasks{view}")
+        assert listed.status_code == 200
+        assert {item["id"] for item in listed.json()["tasks"]} == {keep["id"]}
+
+
+@pytest.mark.parametrize("view", ["", "summary"])
+def test_task_list_excludes_legacy_tasks_with_a_missing_project(project_env, view):
+    from uuid import uuid4
+
+    app, client, node, agent, project, task, routine, session = project_env
+    if app.state.task_store.engine.dialect.name != "sqlite":
+        pytest.skip("Legacy orphan rows cannot be inserted with PostgreSQL foreign keys")
+    # Old or imported data can predate the atomic project deletion cascade.
+    orphan = app.state.task_store.create_task({
+        "title": "Deleted project's task", "ownerUserId": ALICE, "projectId": str(uuid4()),
+    })
+    response = client.get(f"/api/v1/tasks?view={view}&limit=1")
+    assert response.status_code == 200
+    listed = response.json()["tasks"]
+    assert len(listed) == 1
+    assert listed[0]["id"] != orphan["id"]
+
+
+def test_delete_project_clears_related_notifications(project_env):
+    app, client, node, agent, project, task, routine, session = project_env
+    notices = app.state.notification_store
+    notices.add([
+        {"user_id": ALICE, "kind": "task.completed", "data": data}
+        for data in (
+            {"projectId": project["id"]},
+            {"taskId": task["id"]},
+            {"sessionId": session["id"]},
+            {"computerId": node["id"]},
+        )
+    ])
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 200, response.text
+    assert [notice["data"] for notice in notices.list_for_user(ALICE)["notifications"]] == [
+        {"computerId": node["id"]}
+    ]
 
 
 def test_delete_project_succeeds_when_chat_cleanup_fails(project_env, monkeypatch):

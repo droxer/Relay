@@ -15,6 +15,7 @@ from sqlalchemy import (
 from .reducer import materialize_task_events
 from ..engine import store_transaction
 from ..sql import names_no_uuid_row
+from ..tables.projects import projects
 from .rows import (
     compact_task_summary,
 )
@@ -48,6 +49,11 @@ class TaskReadRows(TaskStoreState):
         statement = (
             select(self.tasks.c.id, self.tasks.c.snapshot)
             .where(self.tasks.c.deleted_at.is_(None))
+            # Legacy/imported orphans must be excluded before pagination.
+            .where(or_(
+                self.tasks.c.project_id.is_(None),
+                select(projects.c.id).where(projects.c.id == self.tasks.c.project_id).exists(),
+            ))
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
         if user_id is not None:
@@ -110,6 +116,11 @@ class TaskReadRows(TaskStoreState):
                 self.tasks.c.version,
             )
             .where(self.tasks.c.deleted_at.is_(None))
+            # Match the full-list contract, including legacy orphan filtering.
+            .where(or_(
+                self.tasks.c.project_id.is_(None),
+                select(projects.c.id).where(projects.c.id == self.tasks.c.project_id).exists(),
+            ))
             # The id tiebreaker keeps a page stable when two tasks share an
             # instant; ``ix_tasks_live_recency`` serves this order directly.
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
