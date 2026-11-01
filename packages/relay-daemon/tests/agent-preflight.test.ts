@@ -4,12 +4,40 @@ import test from "node:test";
 import {
   AgentNotInstalledError,
   AgentUnresponsiveError,
+  agentPreflightError,
   agentPreflightTimeoutMs,
   runBoundedPreflight,
 } from "../src/agent-preflight.js";
 
 const hangUntilAborted = (signal: AbortSignal) => new Promise<{ exit_code: number }>((resolve) => {
   signal.addEventListener("abort", () => resolve({ exit_code: 143 }), { once: true });
+});
+
+test("a failed check preserves diagnostics from every output channel", () => {
+  const error = agentPreflightError("claude", {
+    exit_code: 1,
+    stderr: "Warning: using custom config",
+    stdout: "Not logged in",
+    error_message: "Process exited with code 1",
+  });
+  assert.match(error.message, /Claude Code auth check failed \(exit code 1\)/);
+  assert.match(error.message, /Warning: using custom config/);
+  assert.match(error.message, /Not logged in/);
+  assert.match(error.message, /Process exited with code 1/);
+});
+
+test("blank stderr does not hide the actual failure", () => {
+  const error = agentPreflightError("codex", { exit_code: 1, stderr: " \n", stdout: "Not logged in" });
+  assert.match(error.message, /Not logged in/);
+});
+
+test("a failed check without output still reports its exit code", () => {
+  assert.match(agentPreflightError("codex", { exit_code: 2 }).message, /check failed \(exit code 2\)/);
+});
+
+test("repeated diagnostics are shown once", () => {
+  const error = agentPreflightError("codex", { exit_code: 1, stdout: "Not logged in", stderr: "Not logged in" });
+  assert.equal(error.message.split("Not logged in").length, 2);
 });
 
 test("a passing check resolves", async () => {

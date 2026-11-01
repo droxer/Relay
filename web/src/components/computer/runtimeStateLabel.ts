@@ -7,15 +7,15 @@ import { isNodeOnline, runtimeStatusLabel } from "../admin/helpers";
  * the computer card's Runtimes list, the Manage agents drawer, and the fleet
  * marks' titles so they never disagree about the same runtime.
  *
- * Each non-ready status names what the reader has to do: a runtime that can't
- * connect needs signing in, one that is not installed needs installing, one
+ * Each non-ready status names what the check established: a failed check
+ * needs its diagnostic inspected, a missing CLI needs installing, and one
  * that stopped responding needs a look at the computer. "Unknown" is accurate
  * and unhelpful, so it says there is no signal yet.
  *
  * On a computer that has gone dark, the daemon's last "ready" (or "not
  * responding") is a memory, not an offer — the row says Offline rather than
- * repeating a state the machine can no longer vouch for. A runtime that can't
- * connect, or was never installed, outlives the machine being off — it is
+ * repeating a state the machine can no longer vouch for. A failed check,
+ * or a missing installation, outlives the machine being off — it is
  * still what the reader has to fix when they power it back on.
  */
 export function runtimeStateLabel(

@@ -1021,7 +1021,7 @@
     "fact_id": "Computer ID",
     "fact_unset": "Not reported",
     "runtime_no_signal": "Status unavailable",
-    "runtime_failed": "Can’t connect",
+    "runtime_failed": "Check failed",
     "runtime_unavailable": "Not installed",
     "runtime_unresponsive": "Not responding",
     "options_failed": "Could not load computers. Try again before choosing one.",

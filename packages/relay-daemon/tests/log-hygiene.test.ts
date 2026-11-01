@@ -33,5 +33,5 @@ test("a missing agent CLI is reported as not installed, not as an auth failure",
 test("a present but failing agent CLI keeps its preflight detail", () => {
   const error = agentPreflightError("codex", { exit_code: 1, stderr: "Not logged in" });
   assert.equal(error instanceof AgentNotInstalledError, false);
-  assert.equal(error.message, "Codex auth preflight failed. Not logged in");
+  assert.equal(error.message, "Codex auth check failed (exit code 1).\nNot logged in");
 });

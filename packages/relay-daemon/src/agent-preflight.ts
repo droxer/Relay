@@ -51,14 +51,16 @@ function missingCommand(detail: string): string | undefined {
 /** Converts a failed preflight into the error a person can act on. */
 export function agentPreflightError(agent: AgentName, result: PreflightResult): Error {
   const def = getAgent(agent);
-  const detail = (result.stderr || result.stdout || result.error_message || "").trim();
+  const detail = [...new Set([result.stderr, result.stdout, result.error_message]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value)))].join("\n");
   const command = missingCommand(detail);
   if (command || result.exit_code === COMMAND_NOT_FOUND_EXIT) {
     return new AgentNotInstalledError(
       `${def.displayName} is not installed on this computer${command ? ` (\`${command}\` was not found on PATH)` : ""}.`,
     );
   }
-  return new Error(`${def.preflight.label} preflight failed.${detail ? ` ${detail}` : ""}`);
+  return new Error(`${def.preflight.label} check failed (exit code ${result.exit_code}).${detail ? `\n${detail}` : ""}`);
 }
 
 /**

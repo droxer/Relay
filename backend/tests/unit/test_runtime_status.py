@@ -51,7 +51,7 @@ def test_not_ready_message_names_the_reason() -> None:
     assert executor_not_ready_message("kimi", "unresponsive", prefix="Executor ") == (
         "Executor kimi is not ready on this runtime node: it stopped responding."
     )
-    assert executor_not_ready_message("claude", "failed").endswith("it failed to connect.")
+    assert executor_not_ready_message("claude", "failed").endswith("its readiness check failed.")
     assert executor_not_ready_message("claude", "unknown") == (
         "claude is not ready on this runtime node."
     )

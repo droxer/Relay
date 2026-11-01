@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 import {
@@ -130,7 +131,15 @@ describe("nodeAgentPresence", () => {
 describe("runtime status", () => {
   const t = ((key: string) => key) as never;
 
-  it("tells a runtime that can't connect from one that is not installed or not responding", () => {
+  it("describes a failed check without assuming a connection problem", async () => {
+    for (const [locale, expected] of [["en", "Check failed"], ["zh-CN", "检查失败"]]) {
+      const strings = JSON.parse(await readFile(`web/src/i18n/locales/${locale}/translation.json`, "utf8"));
+      const translate = ((key: string) => key.split(".").reduce((value, part) => value[part], strings)) as never;
+      assert.equal(runtimeStatusLabel("failed", translate), expected);
+    }
+  });
+
+  it("distinguishes a failed check from a runtime that is not installed or not responding", () => {
     assert.equal(runtimeStatusLabel("ready", t), "status.ready");
     assert.equal(runtimeStatusLabel("failed", t), "computer.runtime_failed");
     assert.equal(runtimeStatusLabel("unavailable", t), "computer.runtime_unavailable");
