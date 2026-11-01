@@ -48,10 +48,17 @@ it("keeps a failed answer for retry and clears it after success", async () => {
   expect(onResolved).toHaveBeenCalledOnce();
 });
 
-it("shows personal stage counts without misleading drill-down links", () => {
-  render(<MyTasksPanel counts={{ backlog: 1, assigned: 2, running: 3, review: 4, doneThisWeek: 5 }} />);
-  expect(screen.getByText("home.count.running")).toBeTruthy();
-  expect(screen.queryAllByRole("link")).toHaveLength(0);
+it("links each status count to the Tasks queue that lists exactly those tasks", () => {
+  const hrefFor = (queue: string) => `/tasks?queue=${queue}&assignee=me`;
+  render(<MyTasksPanel counts={{ open: 4, running: 1, blocked: 2, doneThisWeek: 5 }} hrefFor={hrefFor} onOpen={vi.fn()} />);
+  const links = screen.getAllByRole("link");
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "/tasks?queue=open&assignee=me",
+    "/tasks?queue=running&assignee=me",
+    "/tasks?queue=blocked&assignee=me",
+  ]);
+  // No queue holds only this week's finished work, so that count opens nothing.
+  expect(screen.getByText("home.count.doneThisWeek").closest("a")).toBeNull();
 });
 
 it("keeps Start available after a network failure and prevents duplicate submissions", async () => {

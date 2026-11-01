@@ -3053,7 +3053,7 @@
     "filter": {
       "all": "全部",
       "needs_you": "需要你",
-      "other": "卡住与建议"
+      "other": "其他"
     },
     "tier": {
       "paused": "需要你 · 有运行已暂停",
@@ -3130,29 +3130,27 @@
     "clear_filtered": "这里暂时没有内容",
     "clear_body": "智能体的提问、审批和完成的工作会汇集在这里。",
     "ranked_hint": "按阻塞工作的时间排序",
-    "all_tasks": "在任务中查看全部",
-    "all_threads": "对话",
+    "all_tasks": "全部任务",
+    "all_threads": "全部对话",
     "all_projects": "全部项目",
     "running_now": "正在运行",
     "paused_for_permission": "等待权限而暂停",
     "my_tasks": "我的任务",
     "count": {
-      "backlog": "待办",
-      "assigned": "已分配",
+      "open": "未完成",
       "running": "运行中",
-      "review": "待验收",
-      "doneThisWeek": "7 天内完成"
+      "blocked": "已阻塞",
+      "doneThisWeek": "本周完成"
     },
     "projects": "项目",
     "no_projects": "还没有项目。",
     "new_project": "新建项目",
     "percent_done": "已完成 {{percent}}%",
     "stage": {
-      "backlog": "待办",
-      "assigned": "已分配",
-      "running": "运行中",
+      "done": "已完成",
       "review": "待验收",
-      "done": "已完成"
+      "running": "运行中",
+      "blocked": "已阻塞"
     },
     "task_count_one": "{{count}} 个任务",
     "task_count_other": "{{count}} 个任务",
@@ -3168,15 +3166,14 @@
     "project_running_other": "没有需要你处理的事。{{count}} 个任务正在运行。",
     "project_quiet": "这里没有需要你处理的事。",
     "recently_finished": "最近完成",
-    "in_review": "待验收",
     "brief": {
       "needs_one": "{{count}} 项需要你处理",
       "needs_other": "{{count}} 项需要你处理",
       "clear": "你已处理完所有事项",
       "paused_one": "{{count}} 个运行已暂停",
       "paused_other": "{{count}} 个运行已暂停",
-      "running_one": "{{count}} 个运行中",
-      "running_other": "{{count}} 个运行中",
+      "running_one": "{{count}} 个对话运行中",
+      "running_other": "{{count}} 个对话运行中",
       "stuck_one": "{{count}} 个卡住",
       "stuck_other": "{{count}} 个卡住"
     },
@@ -3216,7 +3213,7 @@
       "nothing_upcoming": "未来七天没有截止日期或已计划的工作。",
       "show_less": "收起",
       "show_all": "查看全部 {{count}} 项",
-      "schedule_note": "本地时间 · 自动化仅显示下次执行",
+      "schedule_note": "时间为本地时间",
       "shared_blockers": "协作阻塞",
       "private_dependency": "私密前置任务",
       "details_private": "你无权查看此前置任务的详情。",
@@ -3237,7 +3234,22 @@
       "jump_to": "跳转到工作区域",
       "running_jump": "执行中 · {{count}}",
       "upcoming_jump": "即将到来 · {{count}}",
-      "blockers_jump": "协作阻塞 · {{count}}"
+      "blockers_jump": "协作阻塞 · {{count}}",
+      "ready_jump": "可开始 · {{count}}"
+    },
+    "all_needs_me": "全部待我处理",
+    "running_for": "已运行 {{duration}}",
+    "setup": {
+      "title": "你的设置",
+      "computers_label": "在线电脑",
+      "agents_label": "就绪智能体",
+      "computers_spoken": "{{total}} 台电脑中 {{ready}} 台在线",
+      "agents_spoken": "{{total}} 个智能体中 {{ready}} 个就绪",
+      "offline": "{{names}} 离线",
+      "unavailable": "{{names}} 不可用",
+      "and_more": "{{names}} 等另外 {{count}} 个",
+      "no_computers": "连接一台电脑以运行智能体",
+      "no_agents": "创建一个智能体来接手工作"
     }
   }
 }

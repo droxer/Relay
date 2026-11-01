@@ -211,6 +211,21 @@ class SessionReadRows(SessionStoreState):
             for row in rows
         ]
 
+    def list_open_sessions_idle_since(self, cutoff: datetime) -> list[dict[str, Any]]:
+        """Open (``running``) threads untouched since ``cutoff``, as snapshots.
+
+        Filtered in SQL on the materialized status and ``updated_at``, so the
+        boot repair that settles abandoned threads never reads every log.
+        """
+        statement = (
+            select(self.sessions.c.snapshot)
+            .where(self.sessions.c.status == "running", self.sessions.c.updated_at < cutoff)
+            .order_by(self.sessions.c.updated_at, self.sessions.c.id)
+        )
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+        return [row["snapshot"] or {} for row in rows]
+
     def list_token_usage(self) -> list[dict[str, Any]]:
         return self._read_token_usage(None)
 

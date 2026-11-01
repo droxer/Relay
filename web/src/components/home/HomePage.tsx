@@ -9,7 +9,10 @@ import { agentOnComputer, teamOnComputer, isTeamRoutable } from "../../lib/taskA
 import { isoToday } from "../../lib/routine";
 import { homeUpcoming, readyHomeTasks, homeBlockers, homeFocusItem } from "../../lib/homePlan";
 import type { ProjectCollectionStatus } from "../../lib/projectPage";
-import { ReadyTask, UpcomingPanel, BlockersPanel } from "./HomePlanningPanels";
+import { ReadyTask, ShowAllToggle, UpcomingPanel, BlockersPanel } from "./HomePlanningPanels";
+import { ListSkeleton } from "../ListSkeleton";
+import type { IssueQueue } from "../../lib/issueQueues";
+import { formatRunDuration } from "../../lib/taskRuns";
 import { PageHeader } from "../PageHeader";
 import { useMinuteClock } from "../../hooks/useMinuteClock";
 import { useUserAgents } from "../../hooks/useUserAgents";
@@ -24,7 +27,9 @@ import { greetingName, greetingPeriod } from "../../lib/welcomeRecap";
 import type { AgentName } from "relay-core";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../../types";
 import { HomeQueue } from "./HomeQueue";
-import { FinishedPanel, MyTasksPanel, ProjectsPanel, RunningPanel } from "./HomePanels";
+import { FinishedPanel, HomeLink, MyTasksPanel, ProjectsPanel, RunningPanel } from "./HomePanels";
+import { HomeSetupPanel } from "./HomeSetupPanel";
+import { homeSetup } from "../../lib/homeSetup";
 import { useHomeActions } from "./useHomeActions";
 
 export interface HomePageProps {
@@ -48,6 +53,8 @@ const threadPath = (sessionId: string) => hrefForRoute("main", sessionId);
 const taskPath = (taskId: string) => pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
 const projectPath = (projectId: string) => pathForAppState({ route: "projects", mobileView: "threads", sessionId: null, projectId });
 const tasksPath = (search = "") => `${hrefForRoute("backlog")}${search}`;
+const READY_PREVIEW = 3;
+const MINUTE_MS = 60_000;
 
 /** Home: what needs the signed-in person, ranked, beside where their work
  *  stands. The queue is computed once by the app shell (it also feeds the
@@ -79,13 +86,26 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  const counts = useMemo(() => myTaskCounts(tasks, userId, now), [now, tasks, userId]);
+  const archivedProjectIds = useMemo(
+    () => new Set(projects.filter((project) => project.archivedAt).map((project) => project.id)),
+    [projects],
+  );
+  const counts = useMemo(() => myTaskCounts(tasks, userId, now, archivedProjectIds), [archivedProjectIds, now, tasks, userId]);
   const projectRows = useMemo(() => homeProjects(projects, tasks, items), [items, projects, tasks]);
   const running = useMemo(() => runningNow(sessions, nodes, userId), [nodes, sessions, userId]);
+  const setup = useMemo(() => homeSetup(nodes, agents, userId), [agents, nodes, userId]);
   const finished = useMemo(() => recentlyFinished(tasks, userId), [tasks, userId]);
 
   const locale = i18n.resolvedLanguage ?? "en";
   const sinceLabel = useCallback((iso: string) => formatThreadStamp(iso, locale, now), [locale, now]);
+  // Whole minutes: the clock ticks once a minute, so seconds would sit stale.
+  const runningFor = useCallback((iso: string) => t("home.running_for", {
+    duration: formatRunDuration(Math.max(1, Math.floor((now - Date.parse(iso)) / MINUTE_MS)) * MINUTE_MS),
+  }), [now, t]);
+  const queuePath = useCallback(
+    (queue: IssueQueue) => tasksPath(`?queue=${queue}&assignee=${encodeURIComponent(userId)}`),
+    [userId],
+  );
   const agentName = useCallback((agentId: string | undefined, executor?: string) => {
     const named = agentId ? agentNames.get(agentId) : undefined;
     if (named) return named;
@@ -129,11 +149,12 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
     { tone: needs ? "warn" : "ok", text: needs ? t("home.brief.needs", { count: needs }) : t("home.brief.clear") },
     { tone: running.length ? "live" : "neutral", text: t("home.brief.running", { count: running.length }) },
   ];
+  const readyVisible = readyExpanded ? readyRest : readyRest.slice(0, READY_PREVIEW);
 
   const nextLabel = (row: HomeProjectRow): string => {
     if (row.next) return t("home.project_next", { what: nextSummary(row.next, t) });
-    if (row.total > 0 && row.stages.done === row.total) return t("home.project_all_done");
-    if (row.stages.running) return t("home.project_running", { count: row.stages.running });
+    if (row.total > 0 && row.progress.done === row.total) return t("home.project_all_done");
+    if (row.progress.running) return t("home.project_running", { count: row.progress.running });
     return t("home.project_quiet");
   };
   const runTitle = (row: RunningRow) => row.session.title || row.session.taskGoal || t("home.untitled_thread");
@@ -156,19 +177,24 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
             </span>
           ))}</span>}
         />
-        {dataStatus !== "ready" ? (
-          <div className="home-data-state" role={dataStatus === "error" ? "alert" : "status"}>
-            <p>{t(dataStatus === "error" ? "home.plan.error_detail" : "home.plan.loading_detail")}</p>
-            {dataStatus === "error" ? <Button variant="outline" onClick={() => void onRefresh()}>{t("home.plan.retry")}</Button> : <div className="home-loading-lines" aria-hidden="true"><i /><i /><i /></div>}
+        {dataStatus === "error" ? (
+          <div className="home-data-state" role="alert">
+            <p>{t("home.plan.error_detail")}</p>
+            <Button variant="outline" onClick={() => void onRefresh()}>{t("home.plan.retry")}</Button>
+          </div>
+        ) : dataStatus === "loading" ? (
+          <div className="home-data-state home-data-loading">
+            <ListSkeleton label={t("home.plan.loading_detail")} rows={4} />
           </div>
         ) : <div className="home-grid">
           <div className="home-column">
             <HomeQueue
               items={items}
               contextLinks={<nav className="home-mobile-context" aria-label={t("home.plan.jump_to")}>
-                {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", {count:running.length})}</a> : null}
-                <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", {count:upcoming.length})}</a>
-                {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", {count:blockers.length})}</a> : null}
+                {readyRest.length ? <a href="#home-ready-title">{t("home.plan.ready_jump", { count: readyRest.length })}</a> : null}
+                {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", { count: running.length })}</a> : null}
+                <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", { count: upcoming.length })}</a>
+                {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", { count: blockers.length })}</a> : null}
               </nav>}
               readyFocus={readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
               actions={actions}
@@ -177,29 +203,47 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               sinceLabel={sinceLabel}
               hrefFor={hrefFor}
               onOpen={openItem}
-              allTasksHref={tasksPath("?queue=needs_me")}
-              onOpenAllTasks={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
+              needsMeHref={tasksPath("?queue=needs_me")}
+              onOpenNeedsMe={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
             />
-            <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
+            {/* Startable work sits right under what needs the person, before
+                anything they can only watch. */}
             {readyRest.length ? <section className="home-section" aria-labelledby="home-ready-title">
-              <header className="home-section-header"><h2 id="home-ready-title" className="home-section-title">{t("home.plan.ready_work")}</h2><span className="home-section-count tnum">{readyRest.length}</span></header>
+              <header className="home-section-header">
+                <h2 id="home-ready-title" className="home-section-title">{t("home.plan.ready_work")}</h2>
+                <span className="home-section-count tnum">{readyRest.length}</span>
+              </header>
               <div className="home-panel">
-                {(readyExpanded ? readyRest : readyRest.slice(0,3)).map(task => <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />)}
-                {readyRest.length > 3 ? <Button variant="ghost" size="dense" onClick={() => setReadyExpanded(!readyExpanded)}>{t(readyExpanded ? "home.plan.show_less" : "home.plan.show_all", {count:readyRest.length})}</Button> : null}
-                <div className="home-panel-footer"><a className="home-link" href={tasksPath()} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigateToAppPath(tasksPath()); } }}>{t("home.all_tasks")}</a></div>
+                {readyVisible.map((task) => <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />)}
+                {readyRest.length > READY_PREVIEW
+                  ? <ShowAllToggle count={readyRest.length} expanded={readyExpanded} onToggle={() => setReadyExpanded(!readyExpanded)} />
+                  : null}
+                <div className="home-panel-footer">
+                  <HomeLink className="home-link" href={tasksPath()} onOpen={() => void navigateToAppPath(tasksPath())}>{t("home.all_tasks")}</HomeLink>
+                </div>
               </div>
             </section> : null}
+            <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
           </div>
           <div className="home-column">
             <MyTasksPanel
               counts={counts}
+              hrefFor={queuePath}
+              onOpen={(queue) => void navigateToAppPath(queuePath(queue))}
+            />
+            <HomeSetupPanel
+              setup={setup}
+              computersHref={hrefForRoute("computers")}
+              agentsHref={hrefForRoute("agents")}
+              onOpenComputers={() => void navigateToAppPath(hrefForRoute("computers"))}
+              onOpenAgents={() => void navigateToAppPath(hrefForRoute("agents"))}
             />
             <RunningPanel
               rows={running}
               title={runTitle}
               agentName={runAgent}
               computerName={runComputer}
-              elapsed={sinceLabel}
+              elapsed={runningFor}
               hrefFor={(row) => threadPath(row.session.id)}
               onOpen={(row) => onOpenThread(row.session.id)}
               allHref={hrefForRoute("main")}

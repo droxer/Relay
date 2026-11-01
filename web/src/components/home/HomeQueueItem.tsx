@@ -223,7 +223,8 @@ type T = (key: string, options?: Record<string, unknown>) => string;
 function describe(item: HomeItem, t: T): { Icon: ComponentType<GlyphProps>; tone: Tone; kindLabel: string } {
   switch (item.kind) {
     case "permission":
-      return { Icon: AdminLocked, tone: "err", kindLabel: t("home.kind.permission") };
+      // Asking is not failing: a prompt wants its person, like every needs-you item.
+      return { Icon: AdminLocked, tone: "warn", kindLabel: t("home.kind.permission") };
     case "wait":
       if (item.awaiting.kind === "approval") return { Icon: ActionApprove, tone: "warn", kindLabel: t("home.kind.approval") };
       if (item.awaiting.kind === "question") return { Icon: ActionPrompt, tone: "warn", kindLabel: t("home.kind.question") };
@@ -233,7 +234,7 @@ function describe(item: HomeItem, t: T): { Icon: ComponentType<GlyphProps>; tone
     case "blocked":
       return { Icon: StatusError, tone: "err", kindLabel: t("home.kind.blocked") };
     case "offline":
-      return { Icon: NodeOffline, tone: "warn", kindLabel: t("home.kind.offline") };
+      return { Icon: NodeOffline, tone: "err", kindLabel: t("home.kind.offline") };
     case "overdue":
       return { Icon: ActionCalendar, tone: "warn", kindLabel: t("home.kind.overdue") };
     case "untriaged":

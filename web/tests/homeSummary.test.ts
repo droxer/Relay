@@ -29,7 +29,7 @@ function project(id: string, name: string, extra: Partial<ProjectRecord> = {}): 
 }
 
 describe("myTaskCounts", () => {
-  it("counts my tasks by stage and only this week's finished ones", () => {
+  it("counts my tasks by their own status, matching the Tasks queues", () => {
     const tasks = [
       task({ id: "a", status: "backlog" }),
       task({ id: "b", status: "assigned" }),
@@ -41,7 +41,15 @@ describe("myTaskCounts", () => {
       task({ id: "h", status: "assigned", isRoutine: true }),
     ];
 
-    assert.deepEqual(myTaskCounts(tasks, ME, NOW), { backlog: 1, assigned: 1, running: 1, review: 1, doneThisWeek: 1 });
+    // A blocked task the server files under the running stage is still blocked:
+    // Home never calls work running that is not.
+    assert.deepEqual(myTaskCounts(tasks, ME, NOW), { open: 4, running: 0, blocked: 1, doneThisWeek: 1 });
+  });
+
+  it("leaves out work in archived projects, as the Tasks page does", () => {
+    const tasks = [task({ id: "live", status: "running" }), task({ id: "shelved", status: "running", projectId: "old" })];
+
+    assert.equal(myTaskCounts(tasks, ME, NOW, new Set(["old"])).running, 1);
   });
 });
 
@@ -60,7 +68,7 @@ describe("homeProjects", () => {
     assert.equal(rows[0].waitingOnYou, 1);
     assert.equal(rows[0].next?.key, "task:r");
     assert.equal(rows[1].next, null);
-    assert.deepEqual(rows[1].stages, { backlog: 0, assigned: 0, running: 1, review: 0, done: 1 });
+    assert.deepEqual(rows[1].progress, { done: 1, review: 0, running: 1, blocked: 0 });
   });
 
   it("leaves out archived projects", () => {
@@ -71,10 +79,11 @@ describe("homeProjects", () => {
 });
 
 describe("recentlyFinished", () => {
-  it("lists my newest finished or reviewable work", () => {
+  it("lists my newest done work and leaves review to the queue", () => {
     const tasks = [
       task({ id: "old", status: "done", finishedAt: "2026-10-01T00:00:00.000Z" }),
-      task({ id: "new", status: "review", finishedAt: "2026-10-31T00:00:00.000Z" }),
+      task({ id: "new", status: "done", finishedAt: "2026-10-31T00:00:00.000Z" }),
+      task({ id: "review", status: "review", finishedAt: "2026-10-31T06:00:00.000Z" }),
       task({ id: "open", status: "running" }),
     ];
 
@@ -101,5 +110,18 @@ describe("runningNow", () => {
     assert.equal(row.agentId, "agent-1");
     assert.equal(row.computerId, "n1");
     assert.equal(row.paused, true);
+  });
+
+  it("trusts the execution phase over a stale running status, as the thread rail does", () => {
+    const sessions = [
+      // An orphan from before execution tracking: the list reads it terminal.
+      { id: "orphan", status: "running", ownerUserId: ME, updatedAt: "2026-09-16T00:00:00.000Z", execution: { phase: "terminal" } },
+      { id: "queued", status: "completed", ownerUserId: ME, updatedAt: "2026-10-31T11:00:00.000Z", execution: { phase: "queued" } },
+      // No execution record and no run on any computer: nothing proves it runs.
+      { id: "legacy", status: "running", ownerUserId: ME, updatedAt: "2026-10-31T11:00:00.000Z" },
+      { id: "deleting", status: "running", ownerUserId: ME, updatedAt: "2026-10-31T11:00:00.000Z", deletionRequestedAt: "2026-10-31T11:30:00.000Z", execution: { phase: "stopping" } },
+    ] as unknown as RelaySession[];
+
+    assert.deepEqual(runningNow(sessions, [], ME).map((row) => row.session.id), ["queued"]);
   });
 });

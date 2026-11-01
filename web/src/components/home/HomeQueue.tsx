@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import type { HomeItem, HomeTier } from "../../lib/homeQueue";
 import { HomeQueueItem, type HomeQueueItemProps } from "./HomeQueueItem";
 import { homeFocusItem } from "../../lib/homePlan";
+import { HomeLink } from "./HomePanels";
+import { ShowAllToggle } from "./HomePlanningPanels";
 import type { HomeActions } from "./useHomeActions";
 
 const FILTERS = ["all", "needs_you", "other"] as const;
@@ -28,14 +29,18 @@ export interface HomeQueueProps {
   sinceLabel: (iso: string) => string;
   hrefFor: (item: HomeItem) => string;
   onOpen: (item: HomeItem) => void;
-  allTasksHref: string;
-  onOpenAllTasks: () => void;
+  /** Tasks' `needs_me` queue: the list this one is drawn from. */
+  needsMeHref: string;
+  onOpenNeedsMe: () => void;
 }
+
+const PREVIEW = 5;
 
 /** "Up next": the ranked queue, banded by tier, with a filter for the
  *  items that hold someone's work up. A row whose own action landed leaves at
- *  once; the next data refresh confirms it. */
-export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName, projectName, sinceLabel, hrefFor, onOpen, allTasksHref, onOpenAllTasks }: HomeQueueProps) {
+ *  once; the next data refresh confirms it. Every count includes the Start
+ *  here item, so the header, the tabs, the brief, and the rail badge agree. */
+export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName, projectName, sinceLabel, hrefFor, onOpen, needsMeHref, onOpenNeedsMe }: HomeQueueProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<QueueFilter>("all");
@@ -44,7 +49,13 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
   const focus = homeFocusItem(live);
   const remaining = live.filter(item => item.key !== focus?.key);
   const shown = remaining.filter(MATCHES[filter]);
-  const bands = bandsOf(expanded ? shown : shown.slice(0,5));
+  // A tab whose only match is Start here counts it, so it says "nothing
+  // else" rather than "nothing" beside a count of one.
+  const focusMatches = Boolean(focus && MATCHES[filter](focus));
+  const emptyTitle = filter === "all"
+    ? (focus || readyFocus ? "home.plan.no_other_items" : "home.clear_title")
+    : (focusMatches ? "home.plan.no_other_items" : "home.clear_filtered");
+  const bands = bandsOf(expanded ? shown : shown.slice(0, PREVIEW));
 
   return (
     <section className="home-section home-queue" aria-labelledby="home-queue-title">
@@ -76,13 +87,13 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
               onClick={() => setFilter(value)}
             >
               {t(`home.filter.${value}`)}
-              <span className="home-filter-count tnum">{remaining.filter(MATCHES[value]).length}</span>
+              <span className="home-filter-count tnum">{live.filter(MATCHES[value]).length}</span>
             </button>
           ))}
         </div>
         {bands.length === 0 ? (
           <div className="home-clear" role="status">
-            <p className="home-clear-title">{t(filter === "all" ? focus || readyFocus ? "home.plan.no_other_items" : "home.clear_title" : "home.clear_filtered")}</p>
+            <p className="home-clear-title">{t(emptyTitle)}</p>
             {focus || readyFocus ? null : <p className="home-clear-body">{t("home.clear_body")}</p>}
           </div>
         ) : (
@@ -107,19 +118,9 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
             </div>
           ))
         )}
-        {shown.length > 5 ? <Button variant="ghost" size="dense" onClick={() => setExpanded(!expanded)}>{t(expanded ? "home.plan.show_less" : "home.plan.show_all", { count: shown.length })}</Button> : null}
+        {shown.length > PREVIEW ? <ShowAllToggle count={shown.length} expanded={expanded} onToggle={() => setExpanded(!expanded)} /> : null}
         <footer className="home-panel-footer">
-          <a
-            className="home-link"
-            href={allTasksHref}
-            onClick={(event) => {
-              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              event.preventDefault();
-              onOpenAllTasks();
-            }}
-          >
-            {t("home.all_tasks")}
-          </a>
+          <HomeLink className="home-link" href={needsMeHref} onOpen={onOpenNeedsMe}>{t("home.all_needs_me")}</HomeLink>
         </footer>
       </div>
     </section>

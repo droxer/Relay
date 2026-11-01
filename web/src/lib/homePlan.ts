@@ -35,7 +35,8 @@ export interface HomeBlocker { id: string; summary?: NonNullable<RelayTaskListIt
 export function homeBlockers(tasks: readonly RelayTaskListItem[], userId: string): HomeBlocker[] {
   const rows = new Map<string, HomeBlocker>();
   for (const task of tasks) {
-    if (!personal(task, userId) || !live(task) || task.isRoutine) continue;
+    // A blocked task already sits in the queue's Stuck band with its reason.
+    if (!personal(task, userId) || !live(task) || task.isRoutine || task.status === "blocked") continue;
     for (const id of task.waitingOn ?? []) {
       const summary = task.waitingOnSummaries?.find(s => s.id === id);
       // Personal blockers already have a task row in the action queue.
