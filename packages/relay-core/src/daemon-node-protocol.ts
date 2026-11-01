@@ -9,8 +9,8 @@ export type DaemonAgentAdapter = "cli" | "service";
 /**
  * What one runtime's readiness check found on a computer.
  * - `ready`: the check passed; the runtime can take work.
- * - `failed`: the CLI is installed but its check failed — it could not
- *   connect to its account or provider (not signed in, bad key, no network).
+ * - `failed`: its readiness check failed (for example, authentication,
+ *   configuration, connectivity, or a CLI error); detail carries the reason.
  * - `unavailable`: the CLI is not installed. A fact about the computer, not a
  *   fault.
  * - `unresponsive`: the check did not finish in time; the CLI hung.

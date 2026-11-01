@@ -208,16 +208,16 @@ test("discovery re-probes a guest's cached runtime so a stopped one is reported"
   assert.equal(skillInstalls, 1);
 
   loggedIn = false;
-  await assert.rejects(environment.ensureAgentReady("codex"), /Codex auth preflight failed/);
+  await assert.rejects(environment.ensureAgentReady("codex"), /Codex auth check failed/);
   // The stopped runtime is no longer trusted by the next run either.
-  await assert.rejects(run.ensureAgentReady("codex"), /Codex auth preflight failed/);
+  await assert.rejects(run.ensureAgentReady("codex"), /Codex auth check failed/);
 
   loggedIn = true;
   await environment.ensureAgentReady("codex");
   run.release();
 });
 
-test("a cloud computer's probes tell not installed, can't connect, not responding, and a dead sandbox apart", async (t) => {
+test("a cloud computer's probes tell not installed, check failed, not responding, and a dead sandbox apart", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "relay-runtime-status-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, "runtime");
