@@ -22,10 +22,10 @@ it("says what Relay is and shows the real product", () => {
   render(<LandingScreen />);
   expect(screen.getByRole("heading", { level: 1, name: en.landing.headline })).toBeTruthy();
   const hero = screen.getByRole("img", { name: en.landing.hero_alt }) as HTMLImageElement;
-  expect(hero.getAttribute("src")).toBe("/landing/threads.webp");
+  expect(hero.getAttribute("src")).toBe("/landing/home.webp");
   expect(screen.getByRole("heading", { name: en.landing.how_title })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: en.landing.tour_home_title })).toBeTruthy();
-  expect(screen.getByRole("img", { name: en.landing.tour_home_alt }).getAttribute("src")).toBe("/landing/home.webp");
+  expect(screen.getByRole("heading", { name: en.landing.tour_threads_title })).toBeTruthy();
+  expect(screen.getByRole("img", { name: en.landing.tour_threads_alt }).getAttribute("src")).toBe("/landing/threads.webp");
   expect(screen.getByRole("heading", { name: en.landing.tour_automations_title })).toBeTruthy();
 });
 
@@ -71,7 +71,7 @@ it("shows the screenshots cut for the active theme", () => {
   document.documentElement.setAttribute("data-theme", "light");
   render(<LandingScreen />);
   const hero = screen.getByRole("img", { name: en.landing.hero_alt });
-  expect(hero.getAttribute("src")).toBe("/landing/threads-light.webp");
+  expect(hero.getAttribute("src")).toBe("/landing/home-light.webp");
 });
 
 it("flips the theme from the bar", () => {
