@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import en from "../src/i18n/locales/en/translation.json";
+import en from "../src/i18n/locales/en/public.json";
 import { LandingScreen } from "../src/components/landing/LandingScreen";
 import { useWaitlistEnabled } from "../src/hooks/useAuthStatus";
 
@@ -24,6 +24,8 @@ it("says what Relay is and shows the real product", () => {
   const hero = screen.getByRole("img", { name: en.landing.hero_alt }) as HTMLImageElement;
   expect(hero.getAttribute("src")).toBe("/landing/threads.webp");
   expect(screen.getByRole("heading", { name: en.landing.how_title })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: en.landing.tour_home_title })).toBeTruthy();
+  expect(screen.getByRole("img", { name: en.landing.tour_home_alt }).getAttribute("src")).toBe("/landing/home.webp");
   expect(screen.getByRole("heading", { name: en.landing.tour_automations_title })).toBeTruthy();
 });
 

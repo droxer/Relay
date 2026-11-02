@@ -49,6 +49,7 @@ async function openBoard(page) {
  *  interaction needed to reach the state worth showing. Tables and the
  *  board get the collapsed navigation rail so every column fits the frame. */
 const SHOTS = [
+  { name: "home", path: "/home", ready: ".home-page .home-panel" },
   { name: "threads", path: `/threads/${HERO_ID}`, ready: ".transcript .msg" },
   { name: "issues", path: "/tasks", ready: ".backlog-filter-search-wrap", sidenav: false },
   { name: "routines", path: "/automations", ready: ".backlog-filter-search-wrap", sidenav: false },

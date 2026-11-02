@@ -647,7 +647,7 @@ const byId = (items, id) => items.find((item) => item.id === id);
 export function currentUser(language, theme = "dark") {
   return {
     id: "user_ada", username: "ada", displayName: "Ada Chen", email: "ada@acme.example", role: "admin",
-    userId: USER, theme, language, effectiveMaxLocalComputers: 3, localComputerCount: 1,
+    userId: USER, theme, language, onboarding: { introSeenAt: ago(40 * DAY), dismissedAt: ago(40 * DAY) }, effectiveMaxLocalComputers: 3, localComputerCount: 1,
   };
 }
 

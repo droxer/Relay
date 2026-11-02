@@ -21,6 +21,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 
 ## Features
 
+- **Home** — Start your day with a ranked queue of approvals, questions, reviews, and blockers. Start ready tasks, follow running work, see upcoming due dates and automations, and use setup guidance to get your first agent working.
 - **Threads** — Work with an agent, a team, or a project on the computer you choose. Follow streamed reasoning, commands, and tool calls. Stop, retry, or hand off work as needed.
 - **Tasks** — Assign work to an agent or team, set priorities and due dates, and track it from backlog to done. Keep run history and output files with each task.
 - **Automations** — Schedule recurring work daily, weekly, or monthly; Relay dispatches each run to its assignee.
@@ -31,6 +32,12 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 - **Administration** — Manage users, computers, activity, and token usage from one Admin Console.
 
 ## Product tour
+
+<p align="center">
+  <img src="docs/images/relay-home.png" alt="Relay Home: Up next queue, task counts, running work, and upcoming dates" width="960">
+</p>
+
+**Home** brings what needs your attention and where your work stands into one daily starting point. Open a thread or task, answer a question, review a result, or snooze an item for later.
 
 <table>
   <tr>
