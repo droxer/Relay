@@ -45,8 +45,8 @@ it("shows the machine, directory, and account and requires an explicit click", a
   expect(screen.getByRole("link", { name: "computer.device_open_computers" }).getAttribute("href")).toBe("/computers");
 });
 
-it("reads a request approved elsewhere (409) as connected", async () => {
-  vi.mocked(getComputerAuthorization).mockResolvedValue(pending);
+it.each(["approved", "consumed"])("verifies a request already %s elsewhere after a 409", async (status) => {
+  vi.mocked(getComputerAuthorization).mockResolvedValueOnce(pending).mockResolvedValueOnce({ ...pending, status });
   vi.mocked(approveComputerAuthorization).mockRejectedValue(new RelayApiError("already approved", 409));
   renderApproval();
   fireEvent.click(await screen.findByRole("button", { name: "computer.device_approve" }));
@@ -77,4 +77,33 @@ it("keeps the request open and shows an error when approval fails", async () => 
   fireEvent.click(await screen.findByRole("button", { name: "computer.device_approve" }));
   expect((await screen.findByRole("alert")).textContent).toBe("computer.device_error");
   expect(screen.getByRole("button", { name: "computer.device_approve" })).toBeTruthy();
+});
+
+
+it("shows a computer limit conflict without claiming approval", async () => {
+  const message = "This user already has 3 of 3 allowed personal computers. Disconnect one, or raise the limit in admin settings.";
+  vi.mocked(getComputerAuthorization).mockResolvedValue(pending);
+  vi.mocked(approveComputerAuthorization).mockRejectedValue(new RelayApiError(message, 409));
+  renderApproval();
+  fireEvent.click(await screen.findByRole("button", { name: "computer.device_approve" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(message);
+  expect(screen.queryByRole("heading", { name: "computer.device_approved_title" })).toBeNull();
+  expect(screen.getByRole("button", { name: "computer.device_approve" })).toBeTruthy();
+});
+
+it("does not claim approval when conflict verification fails", async () => {
+  vi.mocked(getComputerAuthorization).mockResolvedValueOnce(pending).mockRejectedValueOnce(new RelayApiError("unavailable", 500));
+  vi.mocked(approveComputerAuthorization).mockRejectedValue(new RelayApiError("conflict", 409));
+  renderApproval();
+  fireEvent.click(await screen.findByRole("button", { name: "computer.device_approve" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "computer.device_approved_title" })).toBeNull();
+});
+
+it("shows expiry when approval has expired", async () => {
+  vi.mocked(getComputerAuthorization).mockResolvedValue(pending);
+  vi.mocked(approveComputerAuthorization).mockRejectedValue(new RelayApiError("expired", 410));
+  renderApproval();
+  fireEvent.click(await screen.findByRole("button", { name: "computer.device_approve" }));
+  expect(await screen.findByRole("heading", { name: "computer.device_expired_title" })).toBeTruthy();
 });
