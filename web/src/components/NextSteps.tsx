@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActionSend, ICON } from "./icons";
+import { ActionFollowUp, ActionSend, ICON } from "./icons";
 
 /**
  * What the agent suggests asking next, under its finished turn.
@@ -44,6 +44,7 @@ export function NextSteps({ steps, onSend }: {
               aria-busy={sending === step || undefined}
               onClick={() => void send(step)}
             >
+              <ActionFollowUp className="next-steps-mark" size={ICON.sm} aria-hidden="true" />
               <span className="next-steps-label">{step}</span>
               <ActionSend className="next-steps-send" size={ICON.sm} aria-hidden="true" />
             </button>
