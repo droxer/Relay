@@ -38,12 +38,18 @@ LOCAL_ENROLLMENT_SANDBOX_MODE = USER_DEVICE_SANDBOX_MODE
 def create_local_device_enrollment(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
+    return enroll_local_device(request, ctx, _request_body)
+
+
+def enroll_local_device(
+    request: Request, ctx: AppContextDep, body: dict[str, Any], *,
+    workspace_id: str | None = None, authorization_id: str | None = None,
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     # Enrolling a machine is a signed-in human action; a chat-service actor
     # carries no device to connect. Matches the rename route's gate.
     if not actor.get("account"):
         raise HTTPException(401, "Authentication required.")
-    body = _request_body
     workspace_path = string_field(body, "workspacePath")
     # A user's own machine runs its agents directly, against the agent
     # installs already on it. BoxLite isolation belongs to hardware an admin
@@ -68,9 +74,9 @@ def create_local_device_enrollment(
     # the two and report a new computer as adopted.
     with local_computer_enrollment_scope(ctx, actor["userId"]):
         reused = (
-            ctx.registry.find_by_user(actor["userId"], workspace_path)
+            ctx.registry.find_by_user(actor["userId"], workspace_path, workspace_id=workspace_id)
             is not None
-        )
+        ) if workspace_id or not authorization_id else False
         # Only a genuinely new computer consumes a slot. A user at their
         # limit must still be able to re-enroll a machine they already have,
         # or they could never restart their own daemon.
@@ -83,6 +89,8 @@ def create_local_device_enrollment(
                 "workspacePath": workspace_path,
                 "sandboxMode": sandbox_mode,
                 "nodeLocation": "user-device",
+                **({"workspaceId": workspace_id} if workspace_id else {}),
+                **({"authorizationId": authorization_id} if authorization_id else {}),
             }
         )
         # A concurrent backend replica may have won the durable claim after

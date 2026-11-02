@@ -13,6 +13,7 @@ computer_authorizations = Table(
     Column("expires_at", DateTime(timezone=True), nullable=False),
     Column("status", Text, nullable=False),
     Column("workspace_path", Text, nullable=False),
+    Column("workspace_id", Text, nullable=True),
     Column("display_name", Text, nullable=False),
     Column("node_id", Text, nullable=True),
     Column("user_id", Text, nullable=True),

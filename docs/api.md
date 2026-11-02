@@ -1074,6 +1074,16 @@ forwards `/install.sh` to the backend:
 curl -fsSL https://relay.example.com/install.sh | bash
 ```
 
+The installer starts `POST /api/v1/computer-authorizations` with `workspacePath`,
+`displayName`, and `workspaceId` (the stable host identity also reported at daemon
+registration). Approval reuses a node only when its owner, host identity, and
+workspace match. Two hosts with the same directory path enroll separately;
+installers that omit `workspaceId` receive a separate node for each authorization
+request. The identity survives browser approval and backend restarts. Approval
+can return 409 either because another tab approved the request or because the
+computer limit was reached; clients must read the grant status before treating
+a conflict as success.
+
 `POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
 the same pipeline with shell-quoted arguments scoped to the enrolled computer
 (`… | bash -s -- --sandbox-id … --user-id … --workspace …`). It

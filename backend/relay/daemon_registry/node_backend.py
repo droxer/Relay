@@ -169,6 +169,8 @@ class ServerDaemonNodeBackend(
             payload.get("sandboxMode") or "boxlite",
             payload.get("nodeLocation"),
             payload.get("displayName"),
+            workspace_id=payload.get("workspaceId"),
+            enrollment_id=payload.get("authorizationId"),
         )
         return {
             **sandbox,

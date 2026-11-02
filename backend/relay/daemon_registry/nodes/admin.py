@@ -358,16 +358,27 @@ class NodeAdministrationMixin(RegistryState):
         sandbox_mode: str = "boxlite",
         node_location: str | None = "user-device",
         display_name: str | None = None,
+        workspace_id: str | None = None,
+        enrollment_id: str | None = None,
     ) -> tuple[dict[str, Any], str | None, str | None]:
         if sandbox_mode not in DAEMON_SANDBOX_MODES:
             sandbox_mode = "boxlite"
+        identity = None
+        if workspace_id:
+            identity = f"machine:{workspace_id}"
+        elif enrollment_id:
+            identity = f"authorization:{enrollment_id}"
         enrollment_key = (
-            local_enrollment_key(user_id, workspace_path)
+            local_enrollment_key(user_id, workspace_path, identity)
             if node_location == "user-device"
             else None
         )
         if user_id:
-            existing = self.find_by_user(user_id, workspace_path)
+            # Browser requests without a host identity cannot safely adopt a
+            # computer just because another host has the same directory name.
+            existing = self.find_by_user(user_id, workspace_path, workspace_id=workspace_id) if (
+                workspace_id or not enrollment_id
+            ) else None
             if existing:
                 node_token = self.plain_node_tokens.get(existing["id"])
                 updates: dict[str, Any] = {}
@@ -421,6 +432,7 @@ class NodeAdministrationMixin(RegistryState):
             "id": sandbox_id,
             **({"userId": user_id} if user_id else {}),
             **({"workspacePath": workspace_path} if workspace_path else {}),
+            **({"workspaceId": workspace_id} if workspace_id else {}),
             **({"enrollmentKey": enrollment_key} if enrollment_key else {}),
             **({"displayName": display_name} if display_name else {}),
             "sandboxMode": sandbox_mode,

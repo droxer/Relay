@@ -211,7 +211,7 @@ class NodeLivenessMixin(RegistryState):
         )
 
     def find_by_user(
-        self, user_id: str, workspace_path: str | None = None
+        self, user_id: str, workspace_path: str | None = None, *, workspace_id: str | None = None
     ) -> dict[str, Any] | None:
         self._refresh_persisted_liveness()
         matches = [
@@ -219,6 +219,9 @@ class NodeLivenessMixin(RegistryState):
             for sandbox in self.sandboxes.values()
             if sandbox.get("userId") == user_id
             and sandbox.get("status") != DAEMON_NODE_DELETED_STATUS
+            and (workspace_id is None or (
+                sandbox.get("workspaceId") == workspace_id and not sandbox.get("managedNodeId")
+            ))
             and (
                 not workspace_path
                 or not sandbox.get("workspacePath")

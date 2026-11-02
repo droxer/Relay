@@ -28,6 +28,7 @@ export function DeviceApproval({ code, user }: { code: string; user: CurrentUser
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<ApprovalOutcome>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const request = useQuery({
     queryKey: ["computer-authorization", code],
@@ -38,15 +39,32 @@ export function DeviceApproval({ code, user }: { code: string; user: CurrentUser
   const details = request.data;
   const lookupExpired = request.error instanceof RelayApiError && request.error.status === 410;
   const expired = lookupExpired || outcome === "expired";
-  const approved = outcome === "approved" || (details !== undefined && details.status !== "pending");
+  const approved = outcome === "approved" || authorizationApproved(details);
 
   async function approve() {
     setBusy(true);
     setOutcome(null);
+    setApprovalError(null);
     try {
       await approveComputerAuthorization(code);
       setOutcome("approved");
     } catch (err) {
+      if (err instanceof RelayApiError && err.status === 409) {
+        // A conflict may mean the computer limit was reached. Verify the
+        // grant before interpreting it as another tab's successful approval.
+        try {
+          if (authorizationApproved(await getComputerAuthorization(code))) {
+            setOutcome("approved");
+            return;
+          }
+        } catch (lookupError) {
+          if (lookupError instanceof RelayApiError && lookupError.status === 410) {
+            setOutcome("expired");
+            return;
+          }
+        }
+        setApprovalError(err.message);
+      }
       setOutcome(approvalFailure(err));
     } finally {
       setBusy(false);
@@ -93,7 +111,7 @@ export function DeviceApproval({ code, user }: { code: string; user: CurrentUser
       ) : (
         <>
           <p className="login-note">{t("computer.device_approval_scope")}</p>
-          {outcome === "failed" ? <p className="login-error" role="alert">{t("computer.device_error")}</p> : null}
+          {outcome === "failed" ? <p className="login-error" role="alert">{approvalError ?? t("computer.device_error")}</p> : null}
           <Button type="button" className="login-submit w-full" size="lg" loading={busy}
             onClick={() => void approve()}>
             {t("computer.device_approve")}
@@ -141,8 +159,10 @@ function ComputersLink() {
 
 function approvalFailure(err: unknown): ApprovalOutcome {
   if (!(err instanceof RelayApiError)) return "failed";
-  // 409: another tab or a double click already approved this request.
-  if (err.status === 409) return "approved";
   if (err.status === 410) return "expired";
   return "failed";
+}
+
+function authorizationApproved(details: ComputerAuthorizationDetails | undefined): boolean {
+  return details?.status === "approved" || details?.status === "consumed";
 }

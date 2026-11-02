@@ -39,6 +39,8 @@ _Avoid_: Recovery token, reset code, magic link
 
 **Computer**:
 The product-facing execution host on which agents are placed and collaborate.
+Personal Computer enrollment uses its stable host identity, scoped to its User;
+a workspace directory path alone cannot identify a Computer across hosts.
 _Avoid_: Machine, worker
 
 **Daemon Node**:

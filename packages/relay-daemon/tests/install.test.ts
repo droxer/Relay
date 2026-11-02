@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseInstallArgs, serviceDefinition } from '../src/install.js';
-import { brandForBackend, RELAY_BRAND, RELAY_DEV_BRAND } from '../src/control.js';
+import { brandForBackend, RELAY_BRAND, RELAY_DEV_BRAND, serviceArguments } from '../src/control.js';
 
 const args = ['--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--user-id', 'alice', '--workspace', '/tmp/a project'];
 test('installer requires scoped settings and rejects unsupported origins and identifiers', () => {
@@ -95,6 +95,7 @@ test('installer verifies authentication and writes a service using the real pack
       response.setHeader('Content-Type', 'application/json');
       if (request.url === '/api/v1/computer-authorizations') {
         assert.equal(JSON.parse(body).workspacePath, realpathSync.native(workspace));
+        assert.equal(JSON.parse(body).workspaceId, readFileSync(join(home, '.relay/machine-id'), 'utf8').trim());
         // The fixture backend is loopback, so this is a local dev install.
         assert.equal(JSON.parse(body).displayName, 'Relay Dev');
         response.statusCode = 201;
@@ -125,7 +126,7 @@ test('installer verifies authentication and writes a service using the real pack
       '--backend-url', `http://127.0.0.1:${address.port}`, '--sandbox-id', 'node-install-test',
       '--user-id', 'alice', '--workspace', workspace];
     const { stdout, stderr } = await exec(process.execPath, command, {
-      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token', RELAY_DAEMON_STATE_DIR: join(root, 'unrelated-state') },
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token', RELAY_DAEMON_STATE_DIR: join(root, 'unrelated-state'), RELAY_WORKSPACE_ID: 'unrelated-shell-identity' },
       timeout: 30_000,
     });
     assert.equal(registrations.length, 0);
@@ -163,6 +164,8 @@ test('installer verifies authentication and writes a service using the real pack
       ? join(home, 'Library/LaunchAgents/build.relay.computer.node-install-test.plist')
       : join(home, '.config/systemd/user/build.relay.computer.node-install-test.service');
     const content = readFileSync(service, 'utf8');
+    const serviceArgv = serviceArguments(process.platform, content);
+    assert.equal(serviceArgv[serviceArgv.indexOf('--workspace-id') + 1], readFileSync(join(home, '.relay/machine-id'), 'utf8').trim());
     assert.doesNotMatch(content, /fixture-token|RELAY_DAEMON_NODE_TOKEN/);
     assert.match(content, /workspace with spaces/);
     assert.doesNotMatch(content, /unrelated-state/);
