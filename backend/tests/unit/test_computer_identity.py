@@ -76,3 +76,12 @@ def test_local_enrollment_key_is_scoped_to_the_user() -> None:
     assert local_enrollment_key("alice", "/workspace") != local_enrollment_key(
         "bob", "/workspace"
     )
+
+
+def test_local_enrollment_key_distinguishes_hosts_and_legacy_requests() -> None:
+    laptop = local_enrollment_key("alice", "/home/alice/work", "machine:laptop")
+    assert laptop == local_enrollment_key("alice", "/home/alice/./work", "machine:laptop")
+    assert laptop != local_enrollment_key("alice", "/home/alice/work", "machine:desktop")
+    assert laptop != local_enrollment_key("bob", "/home/alice/work", "machine:laptop")
+    assert laptop != local_enrollment_key("alice", "/home/alice/work")
+    assert laptop != local_enrollment_key("alice", "/home/alice/work", "authorization:laptop")

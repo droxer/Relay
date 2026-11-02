@@ -204,7 +204,7 @@ class RegistryState:
         def enqueue(self, sandbox_id: str, command: dict[str, Any]) -> None:
             ...
 
-        def find_by_user(self, user_id: str, workspace_path: str | None=None) -> dict[str, Any] | None:
+        def find_by_user(self, user_id: str, workspace_path: str | None=None, *, workspace_id: str | None=None) -> dict[str, Any] | None:
             ...
 
         def monitor_nodes(self) -> list[dict[str, Any]]:

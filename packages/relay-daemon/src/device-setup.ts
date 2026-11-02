@@ -12,6 +12,7 @@ export async function authorizeComputer(options: {
   backendUrl: string;
   workspace: string;
   displayName: string;
+  workspaceId?: string;
   openBrowser: (url: string) => void;
   fetchFn?: typeof fetch;
   signal?: AbortSignal;
@@ -23,7 +24,7 @@ export async function authorizeComputer(options: {
   const requestSignal = () => AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
   const started = await send(relayApiUrl(options.backendUrl, "/computer-authorizations"), {
     method: "POST", headers: { "Content-Type": "application/json" }, signal: requestSignal(),
-    body: JSON.stringify({ workspacePath: options.workspace, displayName: options.displayName }),
+    body: JSON.stringify({ workspacePath: options.workspace, displayName: options.displayName, workspaceId: options.workspaceId }),
   });
   if (!started.ok) throw new Error(`Could not request computer authorization (${started.status}).`);
   const grant = await started.json() as { deviceCode?: string; verificationUrl?: string };

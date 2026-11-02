@@ -47,18 +47,20 @@ def is_provisional_computer_id(value: Any) -> bool:
     return isinstance(value, str) and value.startswith("node:")
 
 
-def local_enrollment_key(user_id: Any, workspace_path: Any) -> str | None:
+def local_enrollment_key(user_id: Any, workspace_path: Any, identity: str | None = None) -> str | None:
     """Return the provisional identity used before a device reports machine-id.
 
-    The stable machine identity is unavailable until the daemon starts. During
-    that gap, enrollment retries are the same request when both the user
-    and normalized workspace path match. Hashing keeps the indexed value fixed
-    length without treating the workspace path as a secret.
+    Current installers supply a machine identity before approval; older browser
+    installers are scoped to their authorization request so another host's path
+    cannot claim an existing computer. Legacy manual enrollment keeps its key.
     """
     user = _clean(user_id)
     workspace = _clean(workspace_path)
     if not user or not workspace:
         return None
     normalized_workspace = os.path.normcase(os.path.abspath(workspace))
-    digest = hashlib.sha256(f"{user}\0{normalized_workspace}".encode()).hexdigest()
+    scope = f"{user}\0{normalized_workspace}"
+    if identity is not None:
+        scope += f"\0{identity}"
+    digest = hashlib.sha256(scope.encode()).hexdigest()
     return f"sha256:{digest}"

@@ -15,7 +15,7 @@ from ...persistence.engine import store_transaction
 from ...persistence.tables.device_authorizations import computer_authorizations as grants
 from ..accounts.auth import _consume_auth_attempt, _auth_rate_key
 from .installer import computer_setup_command, computer_windows_setup_command
-from .enrollment import create_local_device_enrollment
+from .enrollment import enroll_local_device
 from ..deps import AppContext, AppContextDep
 from ..actors import request_actor
 from ...security.actor import Actor
@@ -63,6 +63,12 @@ def start_authorization(request: Request, ctx: AppContextDep, response: Response
     _consume_auth_attempt(request, _auth_rate_key(request, "computer-start"))
     path = _request_body.get("workspacePath")
     name = _request_body.get("displayName")
+    workspace_id = _request_body.get("workspaceId")
+    if "workspaceId" in _request_body and (
+        not isinstance(workspace_id, str) or not workspace_id.strip() or len(workspace_id) > 128
+        or any(ord(c) < 32 or ord(c) == 127 for c in workspace_id)
+    ):
+        raise HTTPException(400, "A computer identity of at most 128 characters is required.")
     if not isinstance(path, str) or len(path) > 4096 or any(ord(c) < 32 for c in path) or not valid_user_workspace_path(path):
         raise HTTPException(400, "An absolute local workspace path is required.")
     if not isinstance(name, str) or not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
@@ -73,7 +79,7 @@ def start_authorization(request: Request, ctx: AppContextDep, response: Response
         conn.execute(delete(grants).where(grants.c.expires_at <= now))
         conn.execute(insert(grants).values(device_hash=hashlib.sha256(device_code.encode()).hexdigest(),
             user_code=user_code, expires_at=now + timedelta(seconds=TTL_SECONDS), status="pending",
-            workspace_path=path, display_name=name.strip()))
+            workspace_path=path, display_name=name.strip(), workspace_id=workspace_id))
     response.headers["Cache-Control"] = "no-store"
     return {"deviceCode": device_code, "userCode": user_code, "expiresIn": TTL_SECONDS,
             "verificationUrl": f"{backend_base_url(request)}/computers?connect={quote(user_code)}"}
@@ -132,8 +138,9 @@ def approve_authorization(code: str, request: Request, ctx: AppContextDep) -> di
             grants.c.status == "pending").values(status="approved"))
         if claimed.rowcount != 1:
             raise HTTPException(409, "This connection request has already been approved.")
-        enrolled = create_local_device_enrollment(request, ctx, _request_body={
-            "workspacePath": row["workspace_path"], "displayName": row["display_name"], "sandboxMode": "none"})
+        enrolled = enroll_local_device(request, ctx, {
+            "workspacePath": row["workspace_path"], "displayName": row["display_name"], "sandboxMode": "none"},
+            workspace_id=row["workspace_id"], authorization_id=row["user_code"])
         conn.execute(update(grants).where(grants.c.device_hash == row["device_hash"]).values(
             node_id=enrolled["node"]["id"], user_id=actor["userId"]))
     return {"status": "approved"}

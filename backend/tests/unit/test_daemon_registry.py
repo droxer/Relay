@@ -353,8 +353,9 @@ def test_provisioned_daemon_nodes_use_uuid_ids(daemon_store_factory) -> None:
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("workspace_id", [None, "host-id"])
 def test_concurrent_local_enrollment_is_idempotent_across_registries(
-    daemon_store_factory,
+    daemon_store_factory, workspace_id,
 ) -> None:
     """Two backend replicas must issue one launchable pending computer."""
     with TemporaryDirectory() as root:
@@ -370,9 +371,10 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
                 user_id: str,
                 workspace_path: str | None = None,
                 *,
+                workspace_id: str | None = None,
                 _find=original_find,
             ) -> dict[str, Any] | None:
-                result = _find(user_id, workspace_path)
+                result = _find(user_id, workspace_path, workspace_id=workspace_id)
                 both_checked_for_an_existing_node.wait(timeout=5)
                 return result
 
@@ -386,6 +388,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
                         "/Users/alice/project",
                         "none",
                         "user-device",
+                        workspace_id=workspace_id,
                     ),
                     registries,
                 )

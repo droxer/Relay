@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
-import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
+import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, ensureMachineId, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { bootoutLaunchdService, installedComputers, removeService, sameComputer, serviceArguments, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { installedServices } from './control.js';
@@ -263,6 +263,9 @@ async function install(): Promise<void> {
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
   }
   const brand = brandForBackend(options.backendUrl);
+  // Use one host identity for browser enrollment and every installed launch,
+  // including a foreground run whose shell has RELAY_WORKSPACE_ID set.
+  const workspaceId = ensureMachineId().machineId;
   const installed = installedComputers(process.platform, homedir());
   if (options.deviceSetup) {
     // install.sh prompts for it (reading /dev/tty from Node dies on EINTR under sudo);
@@ -279,6 +282,7 @@ async function install(): Promise<void> {
   } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
       backendUrl: options.backendUrl, workspace: options.workspace, displayName: brand === RELAY_DEV_BRAND ? brand.product : hostname().slice(0, 80),
+      workspaceId,
       openBrowser,
     });
     options.sandboxId = authorized.sandboxId;
@@ -325,6 +329,7 @@ async function install(): Promise<void> {
   delete process.env.RELAY_DAEMON_TOKEN;
   const cli = join(dirname(fileURLToPath(import.meta.url)), 'cli.js');
   const argv = [process.execPath, cli, '--backend-url', options.backendUrl, '--sandbox-id', options.sandboxId,
+    '--workspace-id', workspaceId,
     '--user-id', options.userId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
     '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
   const binDir = join(homedir(), '.local', 'bin');
