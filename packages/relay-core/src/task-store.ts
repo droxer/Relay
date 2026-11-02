@@ -279,6 +279,8 @@ export type RelayTaskEvent =
   | {
       id: string;
       type: "task.updated";
+      /** The recorded review revision accepted by a person, when supplied. */
+      reviewRevision?: string;
       collaborationStyle?: CollaborationStyle | "" | null;
       taskId: string;
       timestamp: string;

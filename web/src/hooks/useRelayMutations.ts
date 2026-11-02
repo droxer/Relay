@@ -196,6 +196,9 @@ export function useRelayMutations() {
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => updateTask(taskId, input),
     onMutate: async ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => {
+      // Keep the reviewed work visible until acceptance actually commits;
+      // an optimistic done would unmount the brief before a stale refusal.
+      if (input.reviewRevision) return { previous: undefined };
       const { status, priority, dueDate, assignedAgentId, assignedTeamId } = input;
       const assignmentChanged = assignedAgentId !== undefined || assignedTeamId !== undefined;
       if (!status && !priority && dueDate === undefined && !assignmentChanged) return { previous: undefined };

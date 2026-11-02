@@ -30,6 +30,7 @@ from .assignment import (
     validate_trigger_scope,
 )
 from .deletion import task_has_active_linked_session
+from .review import checked_review
 from .requests import (
     TaskRequestError,
     TaskRequestReader,
@@ -131,6 +132,7 @@ def update_task(
         "actorUserId": actor["userId"],
         "expectedStatus": current["status"],
         "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
+        **({"reviewRevision": body["reviewRevision"]} if "reviewRevision" in body else {}),
         "dueDate": fields.due_date,
         "assigneeUserId": assignment.assignee,
         **({"projectId": move_project["id"]} if move_project else {}),
@@ -418,7 +420,9 @@ def _write_update(
     """Write the patch; answer the task it was judged against and the result."""
     task_id = current["id"]
     # Resuming here shares the resume route's state reset (prepare_resume).
-    with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
+    with (ctx.registry.dispatch_lock,
+          store_transaction(ctx.task_store.engine) as conn,
+          checked_review(ctx, current, request.body)):
         if routine:
             # The scheduler can pause it after the initial request validation.
             # Read again under its lock before judging or writing automation state.

@@ -3236,5 +3236,37 @@
       "no_computers": "连接一台电脑以运行智能体",
       "no_agents": "创建一个智能体来接手工作"
     }
+  },
+  "task_review": {
+    "title": "审阅结果",
+    "loading": "正在加载已记录的结果…",
+    "outcome": "预期目标",
+    "criteria": "验收标准",
+    "criteria_missing": "未记录结构化验收标准。请对照你的请求审阅结果。",
+    "delivered": "智能体报告",
+    "reports_missing": "此轮未记录智能体报告。",
+    "unknown_agent": "智能体",
+    "exit_code": "CLI 退出码 {{code}}",
+    "summary_missing": "未记录交付摘要。",
+    "claims": "智能体报告的证据",
+    "evidence_missing": "智能体未提供支持证据。",
+    "issues": "已报告的问题",
+    "unfinished": "智能体报告工作尚未完成：{{status}}。",
+    "truncated": "记录的输出已截断，可能缺少部分上下文。",
+    "validation": "已记录的验证",
+    "verification_missing": "Relay 没有此审阅结果的独立检查记录。以上证据由智能体报告；CLI 成功退出并不证明工作通过了检查。",
+    "outputs": "已记录的交付物",
+    "artifacts_missing": "未记录交付物快照。更改可能仅保存在工作空间或对话中。",
+    "snapshot_notice": "这些链接打开已记录的交付物版本。验收针对这份记录的结果，并不验证工作空间当前的内容。",
+    "round": "执行轮次：{{id}}",
+    "changed": "审阅打开后工作已发生变化。请刷新并审阅更新后的结果，再进行验收。",
+    "accept_failed": "验收未完成。请刷新结果后重试。",
+    "load_failed": "无法加载结果，请刷新重试。",
+    "refresh": "刷新审阅",
+    "run_completed": "已完成",
+    "run_failed": "失败",
+    "run_cancelled": "已取消",
+    "run_running": "执行中",
+    "snapshot_missing": "无可用快照"
   }
 }

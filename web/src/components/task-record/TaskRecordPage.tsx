@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
 import { RecordResultLine } from "./RecordResultLine";
+import { TaskReviewPanel } from "./TaskReviewPanel";
 import { RecordRuns } from "./RecordRuns";
 import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
@@ -151,7 +152,14 @@ export function TaskRecordPage({
       task={task}
       labeled
       readOnly={!statusEdits}
-      onChange={(status) => statusEdits?.changeStatus(task, status)}
+      onChange={(status) => {
+        if (status === "done" && task.status === "review") {
+          const summary = document.querySelector<HTMLDetailsElement>("#task-record-panel .task-review details");
+          if (summary) { summary.open = true; summary.scrollIntoView({ block: "nearest" }); }
+          return;
+        }
+        statusEdits?.changeStatus(task, status);
+      }}
       onToggleHold={() => { void statusEdits?.toggleHold(task); }}
     />,
   );
@@ -242,6 +250,13 @@ export function TaskRecordPage({
 
       <RecordLayout facts={facts} label={t("record.record_label")}>
       <div className="workspace-body">
+        {task.status === "review" && !task.isRoutine ? <TaskReviewPanel
+          key={task.id}
+          taskId={task.id}
+          readOnly={readOnly}
+          onOpenThread={onOpenThread}
+          onRequestChanges={() => { const threadId = task.linkedSessionIds.at(-1); if (threadId) onOpenThread(threadId); }}
+        /> : null}
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
             <AutomationPauseBanner
@@ -268,7 +283,7 @@ export function TaskRecordPage({
           <TabsContent value="activity">
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
-            <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} />
+            {task.status !== "review" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
             <RecordResultLine taskId={task.id} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
             <RecordHistory taskId={task.id} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
           </TabsContent>

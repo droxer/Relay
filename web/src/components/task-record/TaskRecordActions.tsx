@@ -21,7 +21,6 @@ export function TaskRecordActions({
   busyAction,
   onRun,
   onCancel,
-  onDone,
   onEdit,
   onDelete,
 }: {
@@ -68,11 +67,6 @@ export function TaskRecordActions({
       {actions.includes("cancel") ? (
         <Button type="button" variant="outline" size="dense" loading={busyAction === "cancel"} onClick={onCancel}>
           {t("record.cancel_run")}
-        </Button>
-      ) : null}
-      {actions.includes("done") ? (
-        <Button type="button" variant="outline" size="dense" loading={busyAction === "done"} onClick={onDone}>
-          {t("backlog.done")}
         </Button>
       ) : null}
       {/* Edit stays a button beside the state action; delete folds into one
