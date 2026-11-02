@@ -102,3 +102,10 @@ limit. The completed shards reported 3,370 passes, 10 skips, and two failures:
 No production changes followed the independent review; the follow-up only updates
 that concurrency regression and this evidence. Repository hooks passed for the
 fix using the existing development environment without syncing its dependencies.
+
+Before opening the PR, merged `origin/main` at `5cf8ff5c` (native Windows
+execution and task review briefs). The merge was conflict-free. Recompiled the
+core and daemon packages and TypeScript tests, then reran the affected checks:
+23 backend enrollment/identity/migration tests, 24 daemon installer/device-setup/
+native-Windows tests, and all 9 approval interaction tests passed. Rebuilt the
+installer bundle from the integrated sources.

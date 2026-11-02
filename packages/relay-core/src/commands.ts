@@ -1,3 +1,4 @@
+import { chainCommands, environmentCommand, nativeWindowsExecution } from "./command-execution.js";
 import { anthropicModel, openaiModel, piModel, piProvider } from "./env.js";
 import { agentWorkspacePath, codexCliConfigOverrides, isLocalAgentExecution, runAsAgent } from "./guest.js";
 import {
@@ -60,11 +61,11 @@ function codexAppServerCommand(
   if (model) argv.push("--model", model);
   if (resume) argv.push("--resume", resume);
   argv.push("--", prompt);
-  return [...envExports(launch.env), shellCommand(argv)].join(" && ");
+  return chainCommands([...envExports(launch.env), shellCommand(argv)]);
 }
 
 function envExports(env: Record<string, string>): string[] {
-  return Object.entries(env).map(([key, value]) => `export ${key}=${shellQuote(value)}`);
+  return Object.entries(env).map(([key, value]) => environmentCommand(key, value, shellQuote));
 }
 
 function codexBaseArgv({ workspacePath, model: pinned, resume }: { workspacePath?: string; model?: string; resume?: string } = {}): string[] {
@@ -214,9 +215,14 @@ function buildPiInvocation(
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])--mode([=,[:space:]]|$)'";
   const supportsStreamingPrint =
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])(-P|--print-streaming)([=,[:space:]]|$)'";
-  const invocation = `if ${supportsJsonMode}; then ${jsonCommand}; elif ${supportsStreamingPrint}; then ${streamingCommand}; else ${printCommand}; fi`;
+  const invocation = nativeWindowsExecution()
+    ? `const help = await relayRun(["pi", "--help"], { capture: true, allowFailure: true });
+       if (/(^|\\s)--mode([=,\\s]|$)/m.test(help.stdout + help.stderr)) { ${jsonCommand}; }
+       else if (/(^|\\s)(-P|--print-streaming)([=,\\s]|$)/m.test(help.stdout + help.stderr)) { ${streamingCommand}; }
+       else { ${printCommand}; }`
+    : `if ${supportsJsonMode}; then ${jsonCommand}; elif ${supportsStreamingPrint}; then ${streamingCommand}; else ${printCommand}; fi`;
   return runAsAgent(
-    launch ? [...envExports(launch.env), invocation].join(" && ") : invocation,
+    launch ? chainCommands([...envExports(launch.env), invocation]) : invocation,
     workspacePath,
   );
 }
@@ -247,7 +253,7 @@ function buildKimiInvocation(
   argv.push("--output-format", "stream-json", "--prompt", prompt);
   const command = shellCommand(argv);
   return runAsAgent(
-    envModel ? `export KIMI_MODEL_NAME=${shellQuote(envModel)} && ${command}` : command,
+    envModel ? chainCommands([environmentCommand("KIMI_MODEL_NAME", envModel, shellQuote), command]) : command,
     workspacePath,
   );
 }
@@ -267,8 +273,8 @@ function buildKimiAcpInvocation(
   const { model, envModel } = kimiModelSelection(pinnedModel);
   if (model) argv.push("--model", model);
   argv.push("--prompt", prompt);
-  const exports = [...envExports(launch.env), ...(envModel ? [`export KIMI_MODEL_NAME=${shellQuote(envModel)}`] : [])];
-  return runAsAgent([...exports, shellCommand(argv)].join(" && "), workspacePath);
+  const exports = [...envExports(launch.env), ...(envModel ? [environmentCommand("KIMI_MODEL_NAME", envModel, shellQuote)] : [])];
+  return runAsAgent(chainCommands([...exports, shellCommand(argv)]), workspacePath);
 }
 
 /**
@@ -345,10 +351,16 @@ function buildOpenCodeAcpInvocation(
   const model = runtimeModel(pinnedModel, () => undefined);
   if (model) argv.push("--model", model);
   argv.push("--prompt", prompt);
-  return runAsAgent([...envExports(launch.env), shellCommand(argv)].join(" && "), workspacePath);
+  return runAsAgent(chainCommands([...envExports(launch.env), shellCommand(argv)]), workspacePath);
 }
 
 export function buildPiPreflightCommand(): string {
+  if (nativeWindowsExecution()) return runAsAgent(`
+    await relayRun(["node", "--version"]);
+    await relayRun(["pi", "--version"]);
+    const models = await relayRun(["pi", "--list-models"], { capture: true });
+    if (/^No models available/m.test(models.stdout + models.stderr)) throw Error((models.stdout + models.stderr).trim());
+  `);
   const listModelsArgv = ["pi", "--list-models"];
   const provider = isLocalAgentExecution() ? undefined : piProvider();
   const model = isLocalAgentExecution() ? undefined : piModel();

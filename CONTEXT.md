@@ -235,3 +235,12 @@ permission policy produces one; every runtime asks through its own adapter
 on one broker.
 _Avoid_: approval request, pending approval (both read as a turn decision),
 Wait
+
+**Task Review**:
+A view of the newest linked Thread's recorded work for one Task: the requested
+outcome, available acceptance criteria, attributed Agent reports, and exact
+Artifact versions. Agent-reported evidence remains a claim; a CLI exit code
+records execution, not verification of the outcome. Accepting from this view
+names its `reviewRevision`; a changed Task, Thread, or Artifact record requires
+the person to refresh and review again. It does not assert that the Computer's
+current workspace still matches the recorded Artifacts.

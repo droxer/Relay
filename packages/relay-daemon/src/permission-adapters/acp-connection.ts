@@ -1,3 +1,4 @@
+import { nativeCommand } from "../native-command.js";
 // Agent Client Protocol plumbing shared by the runtime ACP adapters (Kimi,
 // OpenCode): JSON-RPC over the child's stdio, child shutdown, and the
 // permission option helpers. Nothing here knows a runtime's tool names.
@@ -174,12 +175,12 @@ export interface AcpChildOptions {
  * reaps it. An abort closes the connection and stops the child at once.
  */
 export async function withAcpChild<T>(options: AcpChildOptions, body: (connection: AcpConnection) => Promise<T>): Promise<T> {
-  const child = spawn(options.command, options.args, {
+  const invocation = nativeCommand(options.command, options.args, options.env);
+  const child = spawn(invocation.command, invocation.args, {
     cwd: options.cwd,
     env: options.env,
     stdio: ["pipe", "pipe", "pipe"],
-    // A `.cmd` shim on Windows only starts through a shell.
-    shell: process.platform === "win32",
+    windowsHide: true,
   });
   child.stderr.on("data", (chunk: Buffer) => options.stderr.write(chunk.toString("utf8")));
   const connection = new AcpConnection(child, options.onRequest, options.onNotification);

@@ -1,3 +1,4 @@
+import { nativeWindowsExecution } from "./command-execution.js";
 import { Buffer } from "node:buffer";
 
 import {
@@ -338,6 +339,14 @@ function pushEnv(env: Array<[string, string]>, key: string, value: string | unde
 export function runAsAgent(command: string, workspacePath?: string): string {
   const workspace = workspacePath ?? agentWorkspacePath();
   const home = agentHomePath();
+  if (nativeWindowsExecution()) {
+    return [
+      ...sessionGuestEnv.map(([key, value]) => `process.env[${JSON.stringify(key)}] = ${JSON.stringify(value)}`),
+      `process.env.HOME = ${JSON.stringify(home)}`,
+      `process.chdir(${JSON.stringify(workspace)})`,
+      command,
+    ].join(";\n");
+  }
   const infrastructureExports = guestEnvExports();
   if (process.env.RELAY_RUN_AS_CURRENT_USER === "1") {
     return [

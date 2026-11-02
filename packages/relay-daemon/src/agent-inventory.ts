@@ -1,3 +1,5 @@
+import { commandExecution, nativeWindowsExecution } from "relay-core";
+import { nativeInventoryScript } from "./native-discovery.js";
 import {
   AGENT_NAMES,
   isAgentName,
@@ -63,7 +65,8 @@ export async function discoverAgentInventory(
     : timeoutSignal;
   let result: Awaited<ReturnType<ExecLike>>;
   try {
-    result = await execStream("bash", ["-c", buildInventoryScript()], { signal: discoverySignal });
+    const invocation = commandExecution(buildInventoryScript());
+    result = await execStream(invocation.command, invocation.args, { signal: discoverySignal });
   } catch {
     return {};
   }
@@ -83,6 +86,7 @@ const CONFIG_HOMES: Record<AgentName, string> = {
 };
 
 function buildInventoryScript(): string {
+  if (nativeWindowsExecution()) return nativeInventoryScript(AGENT_INVENTORY_SOURCES);
   const lines = ["set -u", "sep=$(printf '\\t')", 'home="${HOME:-/home/agent}"'];
   for (const agent of AGENT_NAMES) {
     const source = AGENT_INVENTORY_SOURCES[agent];

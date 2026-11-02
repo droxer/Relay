@@ -419,9 +419,16 @@ calls the backend origin directly with `credentials: "include"`.
    `& ([scriptblock]::Create((irm '<origin>/install.ps1'))) '--sandbox-id' …`.
    It needs no administrator window and installs under `%LOCALAPPDATA%\Relay`
    with the same SHA-256 checks (the private Node.js runtime is the `win-*.zip`
-   build). Git for Windows is required: every agent command runs as a bash
-   script, so the daemon uses Git Bash (`RELAY_BASH_PATH` overrides discovery;
-   WSL's `bash.exe` is never used). The background service is a Task Scheduler
+   build). Relay launches agents and readiness checks natively with Node, so
+   connecting and running a computer does not require Git Bash or WSL. Installed
+   agent CLIs may have their own prerequisites. Native executables and npm's
+   `.cmd` launchers are supported; npm launchers resolve to their Node entrypoint
+   without passing prompts through `cmd.exe`. Arbitrary batch wrappers are
+   rejected with an actionable error. Node-based CLIs receive arguments through
+   a private preload file, allowing long prompts and preserving quotes, Unicode
+   and shell metacharacters. The same execution supervisor streams output and
+   tracks the run's process tree. Windows model and skill/MCP discovery use Node
+   filesystem and HTTP APIs. The background service is a Task Scheduler
    logon task for the installing account that starts a hidden PowerShell, which
    runs `windows-service-host.js`; that host appends to `service.log` and
    restarts the daemon 10 seconds after a crash, matching launchd and systemd.

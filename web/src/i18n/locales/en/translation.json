@@ -3300,5 +3300,37 @@
       "no_computers": "Connect a computer to run agents",
       "no_agents": "Create an agent to take work"
     }
+  },
+  "task_review": {
+    "title": "Review result",
+    "loading": "Loading the recorded result…",
+    "outcome": "Requested outcome",
+    "criteria": "Acceptance criteria",
+    "criteria_missing": "No structured acceptance criteria were recorded. Compare the result with your request.",
+    "delivered": "Agent reports",
+    "reports_missing": "No agent report was recorded for this round.",
+    "unknown_agent": "Agent",
+    "exit_code": "CLI exit code {{code}}",
+    "summary_missing": "No delivery summary was recorded.",
+    "claims": "Agent-reported evidence",
+    "evidence_missing": "No supporting evidence was reported.",
+    "issues": "Reported issues",
+    "unfinished": "The agent reported unfinished work: {{status}}.",
+    "truncated": "The recorded output was truncated. Some context may be missing.",
+    "validation": "Recorded verification",
+    "verification_missing": "Relay has no independently recorded check results for this review. Agent evidence above is a claim; a successful CLI exit does not prove the work passed its checks.",
+    "outputs": "Recorded outputs",
+    "artifacts_missing": "No output snapshots were recorded. Changes may exist only in the workspace or thread.",
+    "snapshot_notice": "These links open recorded artifact versions. Acceptance applies to this recorded result; it does not verify the current workspace contents.",
+    "round": "Round: {{id}}",
+    "changed": "The work changed since you opened this review. Refresh and review the updated result before accepting.",
+    "accept_failed": "Acceptance did not complete. Refresh the result and try again.",
+    "load_failed": "The result could not be loaded. Refresh to try again.",
+    "refresh": "Refresh review",
+    "run_completed": "Completed",
+    "run_failed": "Failed",
+    "run_cancelled": "Cancelled",
+    "run_running": "Running",
+    "snapshot_missing": "Snapshot unavailable"
   }
 }

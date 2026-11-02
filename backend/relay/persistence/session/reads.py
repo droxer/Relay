@@ -46,18 +46,21 @@ class SessionReadRows(SessionStoreState):
             events = self._events_for_session(conn, row["id"])
         return hydrate_session_logs(row["snapshot"] or {}, events)
 
-    def get_session_header(self, session_id: str) -> dict[str, Any]:
-        """Read authorization and list fields without loading the event log."""
+    def get_session_header(self, session_id: str, *, for_update: bool = False) -> dict[str, Any]:
+        """Read snapshot fields without loading the event log.
+
+        ``for_update`` holds the row until an enclosing store transaction
+        commits; Task review uses it to serialize acceptance with late output.
+        """
         # A thread id that is not a UUID names no thread; on Postgres the
         # uuid column would otherwise reject the bind with a DataError (500).
         session_pk = _canonical_database_session_id(session_id)
         with store_transaction(self.engine) as conn:
+            statement = select(self.sessions.c.snapshot, self.sessions.c.version).where(
+                self.sessions.c.id == session_pk
+            )
             row = (
-                conn.execute(
-                    select(self.sessions.c.snapshot, self.sessions.c.version).where(
-                        self.sessions.c.id == session_pk
-                    )
-                )
+                conn.execute(statement.with_for_update() if for_update else statement)
                 .mappings()
                 .first()
             )

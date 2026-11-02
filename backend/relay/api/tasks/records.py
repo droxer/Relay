@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
 from ...tasks.flow import wip_limit
+from ...tasks.review import task_review
 from ...security.actor import Actor
 from ...tasks.assignment import (
     logical_agent_for_assignment,
@@ -158,6 +159,13 @@ def update_task(
             ),
         )
     return public_task(task)
+
+
+@router.get("/tasks/{task_id}/review")
+def review_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    return task_review(ctx, task)
 
 
 @router.delete("/tasks/{task_id}")

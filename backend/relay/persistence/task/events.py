@@ -189,6 +189,7 @@ def task_update_events(
         "routineNextRunAt",
         "expectedStatus",
         "expectedExecutionRevision",
+        "reviewRevision",
     ):
         if field in payload:
             updated[field] = payload[field]

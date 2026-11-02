@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
 
-import { answerServerRequest, cmdQuote, parseCodexAdapterArgs, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
+import { answerServerRequest, parseCodexAdapterArgs, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
 import { CodexExecEventTranslator } from "../src/permission-adapters/codex-exec-events.js";
 import type { PermissionQuestion } from "../src/permission-adapters/protocol.js";
 
@@ -259,13 +259,6 @@ describe("Codex app-server adapter", () => {
     // A skipped prompt answers nothing, and a malformed one never asks.
     assert.deepEqual(await answerServerRequest("item/tool/requestUserInput", params, async () => ({ behavior: "deny" })), { answers: {} });
     assert.deepEqual(await answerServerRequest("item/tool/requestUserInput", { questions: "?" }, async () => { throw new Error("never"); }), { answers: {} });
-  });
-
-  it("quotes app-server arguments for cmd.exe only when they need it", () => {
-    assert.equal(cmdQuote("app-server"), "app-server");
-    assert.equal(cmdQuote("model_reasoning_effort=high"), "model_reasoning_effort=high");
-    assert.equal(cmdQuote('notify=["say","done"]'), '"notify=[\\"say\\",\\"done\\"]"');
-    assert.equal(cmdQuote("a b"), '"a b"');
   });
 
   it("maps legacy and permission approvals without ever granting a session", async () => {

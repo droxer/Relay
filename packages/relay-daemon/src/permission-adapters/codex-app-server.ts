@@ -1,3 +1,4 @@
+import { nativeCommand } from "../native-command.js";
 // Codex adapter. `codex exec` never asks for approval, so a run that asks a
 // person drives `codex app-server` (JSON-RPC over stdio) instead: it starts or
 // resumes a thread with approvals on request inside the workspace-write
@@ -138,16 +139,12 @@ export async function runCodexTurn(
   const translator = new CodexExecEventTranslator();
   const fileChanges = new Map<string, Json>();
   const emitAll = (events: ExecEvent[]): void => events.forEach(io.emit);
-  // A `.cmd` shim on Windows only starts through a shell, which joins the
-  // arguments itself, so each one is quoted for it there.
-  const shell = process.platform === "win32";
-  const argv = ["app-server", ...options.config.flatMap((entry) => ["-c", entry])];
-  const codexBin = io.codexBin ?? "codex";
-  const child = spawn(shell ? cmdQuote(codexBin) : codexBin, shell ? argv.map(cmdQuote) : argv, {
+  const invocation = nativeCommand(io.codexBin ?? "codex", ["app-server", ...options.config.flatMap((entry) => ["-c", entry])], runtimeEnv());
+  const child = spawn(invocation.command, invocation.args, {
     cwd: options.cwd,
     env: runtimeEnv(),
     stdio: ["pipe", "pipe", "pipe"],
-    shell,
+    windowsHide: true,
   });
   // A write racing the app-server's exit must not crash the adapter.
   child.stdin.on("error", () => {});
@@ -388,11 +385,6 @@ export function userInputQuestions(value: unknown): PermissionQuestionItem[] | u
 export function userInputAnswers(answer: PermissionAnswer): Record<string, { answers: string[] }> {
   const answers: PermissionAnswers = answer.behavior === "allow" && answer.answers ? answer.answers : {};
   return Object.fromEntries(Object.entries(answers).map(([id, picks]) => [id, { answers: picks }]));
-}
-
-/** One argument as cmd.exe will hand it back whole. */
-export function cmdQuote(argument: string): string {
-  return /[\s"&|<>^()]/.test(argument) ? `"${argument.replace(/"/g, '\\"')}"` : argument;
 }
 
 /** Grant what was asked: the requested profile minus its absent parts. */
