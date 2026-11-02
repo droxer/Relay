@@ -327,3 +327,5 @@ export type {
   SandboxStatus,
   AgentRuntimeStatus,
 } from "./daemon-protocol.js";
+
+export { commandExecution, nativeWindowsExecution } from "./command-execution.js";

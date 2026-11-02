@@ -1,3 +1,4 @@
+import { nativeWindowsExecution } from "./command-execution.js";
 import {
   buildClaudeCommand,
   buildCodexCommand,
@@ -47,6 +48,7 @@ export interface AgentDefinition {
   initial: string;
   /** Consecutive-failure budget before the workflow halts retries for this agent. */
   maxFailures: number;
+  /** Script for commandExecution(): native Node on local Windows, Bash elsewhere. */
   buildCommand(state: AgentState, workspacePath?: string): string;
   createRenderer(): StreamRenderer;
   /** Label shown for the run artifact/log header. */
@@ -81,7 +83,9 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     preflight: {
       label: "Claude Code auth",
       command: () => runAsAgent(
-        'if [ -n "${ANTHROPIC_API_KEY:-}" ]; then claude --version; else claude auth status; fi',
+        nativeWindowsExecution()
+          ? 'await relayRun(process.env.ANTHROPIC_API_KEY ? ["claude", "--version"] : ["claude", "auth", "status"]);'
+          : 'if [ -n "${ANTHROPIC_API_KEY:-}" ]; then claude --version; else claude auth status; fi',
       ),
     },
   },
@@ -127,7 +131,9 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     preflight: {
       label: "Codex auth",
       command: () => runAsAgent(
-        'if [ -n "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" ]; then codex --version; else codex login status; fi',
+        nativeWindowsExecution()
+          ? 'await relayRun(process.env.OPENAI_API_KEY || process.env.CODEX_API_KEY ? ["codex", "--version"] : ["codex", "login", "status"]);'
+          : 'if [ -n "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" ]; then codex --version; else codex login status; fi',
       ),
     },
   },
@@ -144,7 +150,7 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     skillDelivery: { kind: "skills-dir-flag", flag: "--skills-dir" },
     // Kimi asks over ACP `session/request_permission`.
     permissionPrompts: { kind: "adapter", adapter: "kimi-acp" },
-    preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
+    preflight: { label: "Kimi", command: () => runAsAgent(nativeWindowsExecution() ? 'await relayRun(["kimi", "--version"]); await relayRun(["kimi", "doctor"]); await relayRun(["kimi", "provider", "list", "--json"], { capture: true, discardStdout: true });' : "kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
   },
   opencode: {
     name: "opencode",
@@ -161,7 +167,7 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     // OpenCode asks through `opencode acp`'s session/request_permission. Its
     // `always` choice is never sent: the broker grants one approval at a time.
     permissionPrompts: { kind: "adapter", adapter: "opencode-acp" },
-    preflight: { label: "OpenCode", command: () => runAsAgent("opencode --version && opencode auth list > /dev/null") },
+    preflight: { label: "OpenCode", command: () => runAsAgent(nativeWindowsExecution() ? 'await relayRun(["opencode", "--version"]); await relayRun(["opencode", "auth", "list"], { capture: true, discardStdout: true });' : "opencode --version && opencode auth list > /dev/null") },
   },
 };
 

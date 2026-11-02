@@ -356,7 +356,8 @@ migration.
     daemon's current host environment, using that user's existing agent home
     by default). The host environment may be a user workstation or an
     already-isolated agent box. A Windows computer runs in `none` mode only:
-    host commands go through Git Bash (`local-shell.ts`, never WSL) and the
+    host commands use native Node execution (`native-command.ts`), with no Relay
+    dependency on Git Bash or WSL, and the
     installer registers a Task Scheduler logon task (`windows-service.ts`,
     `windows-service-host.ts`) in place of a LaunchAgent or systemd unit.
   - `box.ts` / `execution.ts` / `sandbox-session.ts` — BoxLite VM setup,

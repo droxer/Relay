@@ -1,3 +1,5 @@
+import { commandExecution, nativeWindowsExecution } from "relay-core";
+import { nativeModelDiscoveryScript } from "./native-discovery.js";
 import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentName } from "relay-core";
 
 // ── Agent model discovery ───────────────────────────────────────────────────
@@ -115,6 +117,7 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
 };
 
 export function buildModelDiscoveryScript(agent: AgentName): string {
+  if (nativeWindowsExecution()) return nativeModelDiscoveryScript(agent);
   return [EMIT, ...MODEL_SOURCES[agent], "exit 0"].join("\n");
 }
 
@@ -143,7 +146,8 @@ export async function discoverAgentModels(
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const discoverySignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     try {
-      const result = await execStream("bash", ["-c", runAsAgent(buildModelDiscoveryScript(agent))], {
+      const invocation = commandExecution(runAsAgent(buildModelDiscoveryScript(agent)));
+      const result = await execStream(invocation.command, invocation.args, {
         signal: discoverySignal,
         env: Object.fromEntries(agentCredentialEnv(agent)),
       });
