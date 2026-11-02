@@ -320,6 +320,9 @@ export const ActionSend = withStandardStroke(ArrowUp, "ActionSend");
 // Starter-prompt chip affordance — the arrow reads as "drop this into the
 // composer" without reusing the send glyph's meaning.
 export const ActionPrompt = withStandardStroke(ArrowUpRight, "ActionPrompt");
+// A suggested follow-up under a finished turn — the reply hook reads as
+// "continue from here" and stays distinct from the send glyph it pairs with.
+export const ActionFollowUp = withStandardStroke(CornerDownRight, "ActionFollowUp");
 export const ActionApprove = withStandardStroke(Check, "ActionApprove");
 export const ActionHandoff = withStandardStroke(Forward, "ActionHandoff");
 // Routing a turn to another agent — the two-way arrows read as "pass along",
