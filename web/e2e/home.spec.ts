@@ -156,24 +156,25 @@ test("opens the recommended thread before answering a paused run", async ({ page
   expect(wire.filter((call) => call.path.endsWith("/permission-requests/req-1"))).toHaveLength(0);
 });
 
-test("answers a question with one of the agent's options, naming the question", async ({ page }) => {
+test("takes a waiting question to its thread instead of answering from Home", async ({ page }) => {
   const wire = await serve(page, "dark");
   await page.goto("/home");
 
-  await queue(page).getByRole("button", { name: "Yearly total" }).click();
-
-  await expect.poll(() => wire.find((call) => call.path.endsWith("/threads/s-pricing/messages"))?.body).toMatchObject({
-    text: "Yearly total", intent: "accomplish", questionId: "w-9",
-  });
+  const row = queue(page).locator(".home-item").filter({ hasText: "Should the annual plan" });
+  await expect(row.getByRole("button", { name: "Yearly total" })).toHaveCount(0);
+  await expect(row.getByRole("textbox")).toHaveCount(0);
+  await row.getByRole("button", { name: "Open thread", exact: true }).click();
+  // A project thread opens in its project room.
+  await expect(page).toHaveURL(/projects\/p-site|s-pricing/);
+  expect(wire.filter((call) => call.path.endsWith("/threads/s-pricing/messages"))).toHaveLength(0);
 });
 
-test("accepts finished work and snoozes the rest until it changes", async ({ page }) => {
+test("opens finished work for review and snoozes the rest until it changes", async ({ page }) => {
   const wire = await serve(page, "dark");
   await page.goto("/home");
 
   const review = queue(page).locator(".home-item").filter({ hasText: "Add retry budget" });
-  await review.getByRole("button", { name: "Accept" }).click();
-  await expect.poll(() => wire.find((call) => call.path.endsWith("/tasks/t-retry"))?.body).toEqual({ status: "done" });
+  await expect(review.getByRole("button", { name: "Accept" })).toHaveCount(0);
 
   const blocked = queue(page).locator(".home-item").filter({ hasText: "Load-test invoice export" });
   await blocked.getByRole("button", { name: "Snooze" }).click();
@@ -181,6 +182,10 @@ test("accepts finished work and snoozes the rest until it changes", async ({ pag
     homeSnoozes: { snooze: [{ key: "task:t-load", stamp: tasks.find(task => task.id === "t-load")!.updatedAt }] },
   });
   await expect(blocked).toHaveCount(0);
+
+  await review.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL(/t-retry/);
+  expect(wire.filter((call) => call.path.endsWith("/tasks/t-retry"))).toHaveLength(0);
 });
 
 test("stacks into one column on a phone", async ({ page }, testInfo) => {

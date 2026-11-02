@@ -25,27 +25,22 @@ it("opens the Start here thread without composing or sending a reply", async () 
   expect(answerWait).not.toHaveBeenCalled();
 });
 
-it("keeps a failed answer for retry and clears it after success", async () => {
-  const answerWait = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-  const onResolved = vi.fn();
+it("takes every Up next row to its thread instead of acting from Home", async () => {
+  const answerPermission = vi.fn();
+  const onOpen = vi.fn();
   const item = {
-    kind: "wait", key: "task:t", stamp: "now", tier: "needs_you", since: "now",
-    task: { id: "t", title: "Choose a plan" },
-    awaiting: { kind: "question", questionId: "q", sessionId: "s", text: "Which plan?", options: [], notes: [], resumable: true },
-  } as HomeItem;
-  render(<HomeQueueItem item={item} actions={{ answerWait } as unknown as HomeActions}
-    agentName={() => null} projectName={() => null} since="now" href="/tasks/t"
-    onOpen={vi.fn()} onResolved={onResolved} />);
-  const user = userEvent.setup();
-  const input = screen.getByRole("textbox");
-  await user.type(input, "Use the annual plan");
-  await user.click(screen.getByRole("button", { name: "home.send" }));
-  expect((input as HTMLInputElement).value).toBe("Use the annual plan");
-  expect(onResolved).not.toHaveBeenCalled();
-  await user.click(screen.getByRole("button", { name: "home.send" }));
-  expect(answerWait).toHaveBeenNthCalledWith(2, "s", "q", "Use the annual plan", undefined);
-  expect((input as HTMLInputElement).value).toBe("");
-  expect(onResolved).toHaveBeenCalledOnce();
+    kind: "permission", key: "permission:s:r", stamp: "now", tier: "paused", since: "now",
+    session: { id: "s", title: "Migrate billing" },
+    request: { id: "r", toolName: "Bash", input: "rm -rf build", agent: "claude" },
+  } as unknown as HomeItem;
+  render(<HomeQueueItem item={item} actions={{ answerPermission } as unknown as HomeActions}
+    agentName={() => null} projectName={() => null} since="now" href="/threads/s"
+    onOpen={onOpen} onResolved={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "home.allow" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "home.deny" })).toBeNull();
+  await userEvent.setup().click(screen.getByRole("button", { name: "home.open_thread" }));
+  expect(onOpen).toHaveBeenCalledOnce();
+  expect(answerPermission).not.toHaveBeenCalled();
 });
 
 it("links each status count to the Tasks queue that lists exactly those tasks", () => {

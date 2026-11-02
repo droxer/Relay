@@ -3176,21 +3176,9 @@
     "untriaged_title_one": "{{count}} task has no project",
     "untriaged_title_other": "{{count}} tasks have no project",
     "open": "Open",
-    "answer_in_thread": "Answer in thread",
     "open_thread": "Open thread",
-    "review_first": "Review first",
-    "allow": "Allow",
-    "always_allow": "Always allow",
-    "deny": "Deny",
-    "approve": "Approve",
-    "accept": "Accept",
-    "send": "Send",
-    "send_step": "Send",
     "view_computer": "View computer",
     "triage": "Triage",
-    "options_label": "Answers the agent offered",
-    "answer_placeholder": "Or write an answer…",
-    "answer_label": "Your answer",
     "snooze": "Snooze",
     "snooze_hint": "Hide this until it changes",
     "clear_title": "Nothing needs you right now",
@@ -3246,16 +3234,9 @@
       "stuck_other": "{{count}} stuck"
     },
     "done": {
-      "allowed": "Allowed",
-      "denied": "Denied",
-      "approved": "Approved. The team picks it up.",
-      "answered": "Answer sent",
-      "accepted": "Accepted as done",
-      "sent": "Sent",
       "snoozed": "Snoozed until it changes"
     },
     "errors": {
-      "send": "Couldn't send that. Try again from the thread.",
       "snooze": "Couldn't snooze that. Try again."
     },
     "plan": {
