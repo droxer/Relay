@@ -1,3 +1,4 @@
+import { commandExecution } from "./command-execution.js";
 import { extractRuntimeSessionId, RuntimeSessionStream } from "./runtime-session.js";
 import { getAgent } from "./agents.js";
 import { StderrLineRenderer } from "./renderers.js";
@@ -51,7 +52,8 @@ export async function runAgentNode(
   const cwd = options.workspacePath ?? agentWorkspacePath();
   const run = async (runState: AgentState) => {
     const sessionStream = new RuntimeSessionStream(agent);
-    const result = await execute("bash", ["-c", def.buildCommand(runState, options.workspacePath)], {
+    const invocation = commandExecution(def.buildCommand(runState, options.workspacePath));
+    const result = await execute(invocation.command, invocation.args, {
       cwd,
       stdoutRenderer: (chunk) => {
         sessionStream.feed(chunk);

@@ -1,3 +1,5 @@
+import { nativeWindowsExecution } from "./command-execution.js";
+
 export function shellQuote(value: string): string {
   if (value === "") return "''";
   if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
@@ -5,6 +7,7 @@ export function shellQuote(value: string): string {
 }
 
 export function shellCommand(argv: string[]): string {
+  if (nativeWindowsExecution()) return `await relayRun(${JSON.stringify(argv)})`;
   return `${argv.map(shellQuote).join(" ")} < /dev/null`;
 }
 

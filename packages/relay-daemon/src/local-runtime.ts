@@ -1,11 +1,11 @@
 import { join } from "node:path";
-import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, type AgentName } from "relay-core";
+import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName } from "relay-core";
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { localExitProven, windowsExitProven } from "./exit-proof.js";
 import { listWindowsProcesses } from "./windows-process-tree.js";
-import { localBash } from "./local-shell.js";
+import { runNativeScript, nativeCommand } from "./native-command.js";
 import { AgentNotInstalledError, runBoundedPreflight } from "./agent-preflight.js";
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
@@ -56,11 +56,18 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
 }
 
 export const localProcessExecStream: typeof superviseLocalProcess = async (cmd, args = [], options = {}) => {
-  let program = cmd;
-  // Agent scripts are written for bash; on Windows that is Git Bash, never WSL.
-  try { if (cmd === "bash") program = localBash(); }
-  catch (error) { return { exit_code: -1, stdout: "", stderr: "", error_message: (error as Error).message }; }
-  return superviseLocalProcess(program, args, { ...options, env: { ...localAgentSubprocessEnv(), ...options.env } as Record<string, string> });
+  const selected = { ...options, env: { ...localAgentSubprocessEnv(), ...options.env } as Record<string, string> };
+  if (cmd === "relay-native") return runNativeScript(args[0] ?? "", selected);
+  if (process.platform === "win32" && (cmd === "node" || cmd === process.execPath) && ["-e", "--eval"].includes(args[0] ?? "")) {
+    return runNativeScript(`await relayRun(${JSON.stringify([process.execPath, ...args])});`, selected);
+  }
+  try {
+    const invocation = nativeCommand(cmd, args, selected.env);
+    return await superviseLocalProcess(invocation.command, invocation.args, selected);
+  } catch (error) {
+    return { exit_code: typeof (error as { code?: unknown }).code === "number" ? (error as { code: number }).code : -1,
+      stdout: "", stderr: "", error_message: (error as Error).message };
+  }
 };
 
 /** Kimi's config check; a no-op for every other agent. */
@@ -81,7 +88,8 @@ async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Pr
     configError = error;
   }
   try {
-    await runBoundedPreflight(agent, signal, (bounded) => localProcessExecStream("bash", ["-c", def.preflight.command()], {
+    const invocation = commandExecution(def.preflight.command());
+    await runBoundedPreflight(agent, signal, (bounded) => localProcessExecStream(invocation.command, invocation.args, {
       signal: bounded,
       env: Object.fromEntries(agentCredentialEnv(agent)),
     }));

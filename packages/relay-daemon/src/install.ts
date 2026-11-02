@@ -15,7 +15,6 @@ import { isOnPath, launchdBootstrapError, lingerNotice, macProtectedFolder, macP
 import { installRootOf, pruneInstallDirectories } from './install-pruning.js';
 import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, withCurrentPath, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
-import { localBash } from './local-shell.js';
 import { err, out } from './terminal-style.js';
 import { decodeServiceFile, encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
@@ -259,8 +258,6 @@ async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
   const savedProfile = options.runtimeProfile ? readRuntimeProfile(options.runtimeProfile) : undefined;
   if (!['darwin', 'linux', 'win32'].includes(process.platform)) throw new Error('Only macOS, Linux and Windows are supported.');
-  // Agent scripts run in bash; fail before authorizing a computer that could never run one.
-  if (process.platform === 'win32') localBash();
   if (!options.foreground && process.platform === 'linux') {
     const probe = spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' });
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
