@@ -110,17 +110,17 @@ for (const mobile of [false, true]) {
     await board.getByRole("link", { name: "Write the release brief", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef$/);
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "Workspace", exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=workspace$/);
+    await page.getByRole("tab", { name: "Files", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=artifacts$/);
     // The modal drawer hides the page beneath it; the board's tab stays chosen.
     await expect(page.getByRole("tab", { name: "Tasks", exact: true, includeHidden: true })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: `test-results/project-task-record-${mobile ? "mobile" : "desktop"}.png` });
 
     // A deep link to a record's tab lands on the same drawer; the retired
-    // "files" id still resolves to the Workspace tab.
-    await page.goto("/projects/launch?task=task_0abcdef&recordTab=files");
-    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=workspace$/);
-    await expect(page.getByRole("tab", { name: "Workspace", exact: true })).toHaveAttribute("aria-selected", "true");
+    // "workspace" id resolves to the Files tab.
+    await page.goto("/projects/launch?task=task_0abcdef&recordTab=workspace");
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=artifacts$/);
+    await expect(page.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 }
 

@@ -809,6 +809,8 @@
     "workspace_refresh": "Refresh files",
     "artifacts_versions": "Show all versions",
     "artifacts_latest": "Show latest versions",
+    "files_count_one": "{{count}} file",
+    "files_count_other": "{{count}} files",
     "workspace_waiting": "Waiting for another task in this workspace to finish.",
     "workspace_open_active": "Open active thread",
     "block_reason": "What is blocking this task?",

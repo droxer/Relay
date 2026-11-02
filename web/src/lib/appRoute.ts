@@ -258,13 +258,13 @@ const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 /* The record surface's tabs, by vocabulary. Registered here for the same
    reason the agent's are: a tab id this table does not list is stripped on
    arrival, so the control toggles and lands back where it started. */
-const TASK_RECORD_TABS = new Set(["activity", "definition", "workspace", "artifacts"]);
+const TASK_RECORD_TABS = new Set(["activity", "definition", "artifacts"]);
 const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "artifacts"]);
-/* Retired record tab ids, rewritten rather than stripped: "files" split into
-   Workspace and Artifacts, and an old link should still open the workspace —
-   or, on a routine, the Runs tab its runs' folders now live in.
+/* Retired record tab ids, rewritten rather than stripped: a task's "files"
+   and "workspace" tabs folded into Files (the artifacts tab), and on a
+   routine both lead to the Runs tab its runs' folders now live in.
    Mirrors LEGACY_RECORD_TABS in task-record/recordVocabulary.ts. */
-const TASK_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "workspace" };
+const TASK_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "artifacts", workspace: "artifacts" };
 const ROUTINE_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "runs", workspace: "runs" };
 
 function recordTabParam(value: string | null, aliases = TASK_RECORD_TAB_ALIASES): string | null {
