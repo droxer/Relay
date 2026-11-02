@@ -91,3 +91,11 @@ export interface PasswordResetLink {
   username: string;
   expiresAt: string;
 }
+
+export function updateAccountProfile(input: { displayName: string }): Promise<{ user: CurrentUser }> {
+  return apiJson("/auth/profile", { method: "PATCH", body: input });
+}
+
+export function changePassword(input: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {
+  return apiJson("/auth/password", { method: "POST", body: input });
+}

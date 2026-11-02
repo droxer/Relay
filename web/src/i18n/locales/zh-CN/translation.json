@@ -3272,5 +3272,24 @@
     "run_cancelled": "已取消",
     "run_running": "执行中",
     "snapshot_missing": "无可用快照"
+  },
+  "account": {
+    "title": "账户",
+    "profile": "个人资料",
+    "profile_hint": "设置你在 Relay 中显示的名称。",
+    "username": "用户名",
+    "display_name": "显示名称",
+    "save_name": "保存显示名称",
+    "name_saved": "显示名称已保存。",
+    "change_password": "修改密码",
+    "password_hint": "至少 {{min}} 个字符，请避免使用姓名或常见密码。",
+    "current_password": "当前密码",
+    "new_password": "新密码",
+    "confirm_password": "确认新密码",
+    "sessions_hint": "其他会话将退出登录，当前会话保持登录。",
+    "password_saved": "密码已修改。",
+    "password_mismatch": "两次输入的密码不一致，请重新输入。",
+    "password_same": "新密码不能与当前密码相同。",
+    "save_error": "保存失败，请重试。"
   }
 }

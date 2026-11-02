@@ -16,3 +16,55 @@
 .settings-page .sec-section-body > * {
   max-width: 44rem;
 }
+
+.account-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+
+.account-settings-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-4);
+  max-width: 30rem;
+}
+
+.account-settings-form + .account-settings-form {
+  padding-top: var(--sp-8);
+  border-top: 1px solid var(--line-1);
+}
+
+.account-settings-form h3 {
+  margin: 0 0 var(--sp-2);
+  color: var(--ink-1);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.account-settings-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.account-settings-error {
+  margin: 0;
+  color: var(--err);
+  font-size: var(--text-sm);
+}
+
+.account-settings-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.account-settings-actions p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
