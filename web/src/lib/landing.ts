@@ -14,7 +14,7 @@ export const RELAY_CLONE_COMMAND = `git clone ${RELAY_GITHUB_URL}.git`;
     Each ships English and zh-CN cuts in both themes. */
 export type LandingShot = "home" | "threads" | "projects" | "issues" | "routines" | "teams";
 
-export const LANDING_HERO_SHOT: LandingShot = "threads";
+export const LANDING_HERO_SHOT: LandingShot = "home";
 
 /** Intrinsic size of every shot, so the browser reserves the box before the
     image arrives and nothing below it jumps. */
@@ -69,9 +69,9 @@ export interface LandingTourItem {
 }
 
 /** The product tour: one surface per row, each shown as it really renders.
-    Threads is the hero's picture, so the tour opens on Home, the daily starting point. */
+    Home is the hero's picture, so the tour opens on Threads, where agents do the work. */
 export const LANDING_TOUR: readonly LandingTourItem[] = [
-  { shot: "home", titleKey: "landing.tour_home_title", bodyKey: "landing.tour_home_body", altKey: "landing.tour_home_alt" },
+  { shot: "threads", titleKey: "landing.tour_threads_title", bodyKey: "landing.tour_threads_body", altKey: "landing.tour_threads_alt" },
   { shot: "projects", titleKey: "landing.tour_projects_title", bodyKey: "landing.tour_projects_body", altKey: "landing.tour_projects_alt" },
   { shot: "issues", titleKey: "landing.tour_tasks_title", bodyKey: "landing.tour_tasks_body", altKey: "landing.tour_tasks_alt" },
   { shot: "routines", titleKey: "landing.tour_automations_title", bodyKey: "landing.tour_automations_body", altKey: "landing.tour_automations_alt" },
