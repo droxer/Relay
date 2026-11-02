@@ -11,7 +11,6 @@ vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [
 vi.mock("../src/components/task-record/RecordHistory", () => ({ RecordHistory: () => null }));
 vi.mock("../src/components/task-record/RecordResultLine", () => ({ RecordResultLine: () => null }));
 vi.mock("../src/components/task-record/RecordArtifacts", () => ({ RecordArtifacts: () => null }));
-vi.mock("../src/components/task-record/RecordWorkspace", () => ({ RecordWorkspace: () => null }));
 vi.mock("../src/components/ExecutionRecoveryPanel", () => ({ TaskRecoveryPanel: () => null }));
 vi.mock("../src/components/task-record/TaskRecordActions", () => ({ TaskRecordActions: () => null }));
 vi.mock("../src/components/task-record/TaskRecordDefinition", () => ({ TaskRecordDefinition: () => null }));
@@ -27,8 +26,7 @@ it("changes a project record tab without changing the project tab or closing the
   />);
   fireEvent.click(screen.getByRole("tab", { name: "record.tab_definition" }));
   await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=definition"));
-  fireEvent.click(screen.getByRole("tab", { name: "record.tab_workspace" }));
-  await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=workspace"));
+  expect(screen.queryByRole("tab", { name: "record.tab_workspace" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "record.tab_artifacts" }));
   await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=artifacts"));
   fireEvent.click(screen.getByRole("tab", { name: "record.tab_activity" }));
@@ -39,4 +37,5 @@ it("drops drawer tabs when the project record is absent or the tab is invalid", 
   expect(canonicalBrowserUrl("/projects/p", "?recordTab=workspace")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?tab=dashboard&task=t&recordTab=workspace")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=invalid")).toBe("/projects/p?task=t");
+  expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=workspace")).toBe("/projects/p?task=t&recordTab=artifacts");
 });

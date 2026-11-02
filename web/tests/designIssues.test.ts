@@ -271,12 +271,26 @@ describe("reviewed design regressions", () => {
     // No second heading over the explorer, and no bordered card around it.
     assert.doesNotMatch(record, /record-panel-title/);
     assert.doesNotMatch(styles, /\.record-workspace-files\s*\{[^}]*border:/);
-    // Workspace is its own tab, flush, and gives the explorer the drawer's
-    // height; the durable artifacts list is a separate tab beside it.
+    // A task record has no Workspace tab: its project page (or, for an
+    // automation run, the routine's Runs tab) browses the live folder.
     const page = readWeb("src/components/task-record/TaskRecordPage.tsx");
-    // A leading JSX comment is allowed; nothing else may sit before the explorer.
-    assert.match(page, /<TabsContent value="workspace" className="record-workspace-panel">\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<RecordWorkspace/);
-    assert.match(page, /<TabsContent value="artifacts">\s*<RecordArtifacts/);
-    assert.match(styles, /\.record-drawer \.workspace-body > \.record-workspace-panel\s*\{[^}]*padding:\s*0/);
+    assert.doesNotMatch(page, /<RecordWorkspace\b/);
+    assert.doesNotMatch(page, /<TabsContent value="workspace"/);
+  });
+
+  it("reads a task's files in place beside their list, not in a second drawer", () => {
+    const list = readWeb("src/components/task-record/RecordArtifacts.tsx");
+    const preview = readWeb("src/components/task-record/RecordArtifactPreview.tsx");
+    const page = readWeb("src/components/task-record/TaskRecordPage.tsx");
+    const styles = readWeb("src/styles/task-record.css") + readWeb("src/styles/record-panels.css");
+    assert.doesNotMatch(list, /useArtifactViewer/, "picking a file must not stack the artifact drawer over the record");
+    assert.match(list, /lazy\(\(\) => import\("\.\/RecordArtifactPreview"\)/, "the viewers load with the first file, not the record");
+    // One set of file controls, the artifact drawer's header and body.
+    assert.match(preview, /<ArtifactPreviewHeader[\s\S]*?onBack=\{onBack\}/);
+    assert.match(preview, /<ArtifactBody\b/);
+    assert.match(page, /<TabsContent value="artifacts" className="record-artifacts-panel">\s*<RecordArtifacts/);
+    // Flush like the Runs split, folding to one pane by its own width.
+    assert.match(styles, /\.record-drawer \.workspace-body > \.record-artifacts-panel\s*\{[^}]*padding:\s*0/);
+    assert.match(styles, /@container record-artifacts \(max-width: 640px\)/);
   });
 });

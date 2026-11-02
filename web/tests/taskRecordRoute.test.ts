@@ -62,7 +62,7 @@ describe("task record routes", () => {
      makes the control toggle and land back where it started — a dead control
      that renders correctly. Every tab the record offers must survive here. */
   it("carries every record tab through canonicalization", () => {
-    for (const tab of ["definition", "workspace", "artifacts"]) {
+    for (const tab of ["definition", "artifacts"]) {
       assert.equal(
         canonicalBrowserUrl("/backlog/T-1001", `?tab=${tab}`),
         `/backlog/T-1001?tab=${tab}`,
@@ -83,14 +83,16 @@ describe("task record routes", () => {
     );
   });
 
-  /* Files split into Workspace and Artifacts. A link minted before the split
-     still opens the live workspace it used to lead with. */
-  it("lands a pre-split ?tab=files link on the workspace tab", () => {
-    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=files"), "/backlog/T-1001?tab=workspace");
+  /* A task's Files and Workspace tabs folded into one Files tab. A link
+     minted before either change still opens the task's files. */
+  it("lands a retired ?tab=files or ?tab=workspace link on the Files tab", () => {
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=files"), "/backlog/T-1001?tab=artifacts");
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=workspace"), "/backlog/T-1001?tab=artifacts");
     // A routine's folders are its runs' folders, browsed from the Runs tab.
     assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=files"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=workspace"), "/automations/R-42");
-    assert.equal(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files"), "/projects/p?task=t&recordTab=workspace");
+    assert.equal(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files"), "/projects/p?task=t&recordTab=artifacts");
+    assert.equal(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=workspace"), "/projects/p?task=t&recordTab=artifacts");
   });
 
   it("does not advertise a tab the reader did not choose, or one that does not exist", () => {
@@ -125,7 +127,7 @@ describe("record vocabulary", () => {
     assert.equal(recordVariant({ isRoutine: true }), "routine");
     assert.equal(recordVariant({ isRoutine: false }), "task");
     assert.deepEqual(recordTabs("routine"), ["runs", "definition", "artifacts"]);
-    assert.deepEqual(recordTabs("task"), ["activity", "definition", "workspace", "artifacts"]);
+    assert.deepEqual(recordTabs("task"), ["activity", "definition", "artifacts"]);
     assert.equal(defaultRecordTab("routine"), "runs");
     assert.equal(defaultRecordTab("task"), "activity");
   });
@@ -135,8 +137,9 @@ describe("record vocabulary", () => {
     assert.equal(parseRecordTab("activity", "routine"), "runs");
     assert.equal(parseRecordTab(null, "routine"), "runs");
     assert.equal(parseRecordTab("artifacts", "task"), "artifacts");
-    // The pre-split id still means the live workspace.
-    assert.equal(parseRecordTab("files", "task"), "workspace");
+    // Retired ids still mean the task's files.
+    assert.equal(parseRecordTab("files", "task"), "artifacts");
+    assert.equal(parseRecordTab("workspace", "task"), "artifacts");
     // A routine has no workspace of its own; its runs' folders live under Runs.
     assert.equal(parseRecordTab("files", "routine"), "runs");
     assert.equal(parseRecordTab("workspace", "routine"), "runs");

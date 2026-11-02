@@ -422,14 +422,14 @@
   overscroll-behavior: contain;
 }
 
-/* Each section carries the gutter the flush body gave up — except
-   Workspace, whose explorer runs edge to edge exactly as the project's
-   Workspace tab does, and fills what is left of the drawer. */
+/* Each section carries the gutter the flush body gave up — except Files,
+   whose list and preview run edge to edge like the Runs tab's split and
+   fill what is left of the drawer. */
 .record-drawer .workspace-body > [role="tabpanel"] {
   padding: var(--sp-6) var(--sp-7) var(--sp-7);
 }
 
-.record-drawer .workspace-body > .record-workspace-panel {
+.record-drawer .workspace-body > .record-artifacts-panel {
   display: flex;
   flex: 1 0 auto;
   flex-direction: column;
@@ -437,7 +437,7 @@
 }
 
 /* Runs: the ledger beside the selected run's folder. Flush like the
-   Workspace tab, so the explorer runs to the drawer's edges and takes its
+   Files tab, so the explorer runs to the drawer's edges and takes its
    full height; the ledger scrolls on its own. */
 .record-drawer .workspace-body > .record-runs-panel {
   display: flex;
@@ -512,7 +512,7 @@
     padding: var(--sp-4);
   }
 
-  .record-drawer .workspace-body > .record-workspace-panel,
+  .record-drawer .workspace-body > .record-artifacts-panel,
   .record-drawer .workspace-body > .record-runs-panel {
     padding: 0;
   }

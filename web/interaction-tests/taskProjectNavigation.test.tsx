@@ -26,7 +26,7 @@ it("redirects legacy project Activities tabs to tasks while preserving task deta
 
 it("preserves project scope and filters through task record navigation", () => {
   expect(canonicalBrowserUrl("/tasks", "?project=p&q=ship")).toBe("/tasks?project=p&q=ship");
-  expect(canonicalBrowserUrl("/tasks/t", "?project=p&q=ship&tab=workspace")).toBe("/tasks/t?tab=workspace&project=p&q=ship");
+  expect(canonicalBrowserUrl("/tasks/t", "?project=p&q=ship&tab=definition")).toBe("/tasks/t?tab=definition&project=p&q=ship");
 });
 
 it("preserves automation filters on a project's Automations tab", () => {

@@ -103,59 +103,163 @@
   letter-spacing: var(--type-body-track);
 }
 
-.record-file-list {
+/* Files: the run outputs on the left, the picked one read in place on the
+   right — the routine Runs tab's split, so a file never opens a second
+   drawer over the record it belongs to. The panel is the query container,
+   so the split folds by the pane's width, not the viewport's. */
+.record-artifacts-panel {
+  container: record-artifacts / inline-size;
+}
+
+.record-artifacts {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(17rem, 0.75fr) minmax(0, 1.6fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 360px;
+}
+
+.record-artifacts.is-message {
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: var(--sp-6) var(--sp-7);
+}
+
+.record-artifacts-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 0.5px solid var(--line-1);
+}
+
+/* The list's own bar: how many files, and whether older versions show. */
+.record-artifacts-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-2) 0 var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
+  background: var(--surface-1);
+}
+
+.record-artifacts-count {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-artifacts-rows {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.record-file {
-  display: flex;
+/* The explorer's row grammar (.workspace-pick): glyph, then the name over
+   where it lives, how big it is, and when it was made. */
+.record-artifact-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.record-file-main {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-  padding: var(--sp-1) var(--sp-2);
-  border: 0.5px solid transparent;
-  /* List row, not a card: the 6px control rung, same call .adm-assign-node
-     makes for the same shape. */
-  border-radius: var(--r-2);
-  background: none;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  border-bottom: 0.5px solid var(--line-2);
+  background: transparent;
   color: var(--ink-1);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
   text-align: left;
   cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
 }
 
-.record-file-main:hover {
-  border-color: var(--line-1);
-  background: var(--control-fill-hover);
+.record-artifact-row:hover {
+  background: var(--row-hover);
 }
 
-.record-file-name {
-  flex: 1;
+.record-artifact-row[aria-current="true"] {
+  background: var(--action-soft);
+}
+
+.record-artifact-icon {
+  display: inline-flex;
+  color: var(--ink-3);
+}
+
+.record-artifact-row[aria-current="true"] .record-artifact-icon {
+  color: var(--ink-1);
+}
+
+.record-artifact-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.record-artifact-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+}
+
+.record-artifact-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-artifact-meta-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.record-file-meta {
-  flex: none;
-  color: var(--ink-3);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+.record-artifacts-preview {
+  min-height: 0;
+}
+
+/* Side by side there is nothing to go back to. */
+.record-artifacts-preview .file-pane-back {
+  display: none;
+}
+
+/* Too narrow for two panes: the list, or the file picked from it — and the
+   file's back control returns to the list. */
+@container record-artifacts (max-width: 640px) {
+  .record-artifacts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .record-artifacts-list {
+    border-right: 0;
+  }
+
+  .record-artifacts:not(.is-reading) > :not(.record-artifacts-list),
+  .record-artifacts.is-reading > .record-artifacts-list {
+    display: none;
+  }
+
+  .record-artifacts-preview .file-pane-back {
+    display: inline-flex;
+  }
 }
 
 .record-inline-action {

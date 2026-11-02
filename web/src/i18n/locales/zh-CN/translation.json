@@ -794,6 +794,7 @@
     "workspace_refresh": "刷新文件",
     "artifacts_versions": "显示所有版本",
     "artifacts_latest": "显示最新版本",
+    "files_count": "{{count}} 个文件",
     "workspace_waiting": "正在等待此工作区中的其他任务完成。",
     "workspace_open_active": "打开正在运行的对话",
     "block_reason": "任务被什么阻塞？",

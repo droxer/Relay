@@ -13,20 +13,21 @@ import type { RelayTaskListItem } from "../../types.js";
  */
 export type RecordVariant = "task" | "routine";
 
-/* "workspace" is the live directory, browsed with the project's explorer;
-   "artifacts" is the durable record of what runs produced. They shared one
-   "files" tab, stacked, until the explorer needed the tab's full height.
+/* A task has no Workspace tab: a project task shares its project's
+   directory, browsed on the project page, and an automation run's folder is
+   browsed from its routine's Runs tab. Files is the durable record of what
+   the task's runs produced, previewed in place.
 
-   A routine has no Workspace tab: it never runs, and each of its runs owns a
-   folder of its own, so its folders are browsed run by run in the Runs tab. */
-export type RecordTab = "runs" | "activity" | "definition" | "workspace" | "artifacts";
+   A routine has no Workspace tab either: it never runs, and each of its runs
+   owns a folder of its own, browsed run by run in the Runs tab. */
+export type RecordTab = "runs" | "activity" | "definition" | "artifacts";
 
-export const TASK_RECORD_TABS: readonly RecordTab[] = ["activity", "definition", "workspace", "artifacts"];
+export const TASK_RECORD_TABS: readonly RecordTab[] = ["activity", "definition", "artifacts"];
 export const ROUTINE_RECORD_TABS: readonly RecordTab[] = ["runs", "definition", "artifacts"];
 
 /** Retired tab ids and where a link that still carries one should land. */
 export const LEGACY_RECORD_TABS: Readonly<Record<RecordVariant, Readonly<Record<string, RecordTab>>>> = {
-  task: { files: "workspace" },
+  task: { files: "artifacts", workspace: "artifacts" },
   routine: { files: "runs", workspace: "runs" },
 };
 

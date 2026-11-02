@@ -20,7 +20,6 @@ import { RecordHistory } from "./RecordHistory";
 import { RecordResultLine } from "./RecordResultLine";
 import { TaskReviewPanel } from "./TaskReviewPanel";
 import { RecordRuns } from "./RecordRuns";
-import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
 import { InlineStatus } from "../task-board/InlineTaskFields";
 import { useInlineTaskEdits } from "../../hooks/useInlineTaskEdits";
@@ -294,16 +293,11 @@ export function TaskRecordPage({
             <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
           ) : null}
         </TabsContent>
-        {/* What is in the workspace now — the project's explorer, given the
-            whole tab — and, beside it, the durable record of what runs
-            produced, which outlives the computer being online. */}
-        <TabsContent value="workspace" className="record-workspace-panel">
-          {/* Keyed by the deliverables folder: a queued task predicts it, and the
-              binding written at dispatch may differ, so the browser reopens there. */}
-          <RecordWorkspace key={task.workspaceArtifactsDir ?? ""} taskId={task.id} artifactsDir={task.workspaceArtifactsDir} />
-        </TabsContent>
-        <TabsContent value="artifacts">
-          <RecordArtifacts taskId={task.id} />
+        {/* What the task's runs produced, listed beside a preview of the
+            picked file — flush, like the routine's Runs tab, so the preview
+            gets the drawer's full height. */}
+        <TabsContent value="artifacts" className="record-artifacts-panel">
+          <RecordArtifacts taskId={task.id} artifactsDir={task.workspaceArtifactsDir} />
         </TabsContent>
       </div>
       </RecordLayout>
