@@ -1227,3 +1227,18 @@ the page sends it only in a POST body. A link expires after
 `RELAY_PASSWORD_RESET_TTL_MINUTES` (default 30); one account is sent at most
 one link per `RELAY_PASSWORD_RESET_COOLDOWN_SECONDS` (default 60) and
 `RELAY_PASSWORD_RESET_MAX_PER_HOUR` (default 5).
+
+### Personal account settings
+
+`PATCH /api/v1/auth/profile` accepts `{ "displayName": "Ada Lovelace" }` for
+only the signed-in user's linked profile. The trimmed name must contain 1–100
+characters. It returns `{ "user": ... }` with the same decorated account shape
+as `/auth/me`.
+
+`POST /api/v1/auth/password` accepts `currentPassword` and `newPassword` for
+only the signed-in account. It requires the current password, applies the shared
+password policy, and rejects an unchanged password. Success returns
+`{ "ok": true }`, invalidates outstanding password reset links, and revokes all
+other login sessions while keeping the calling session. Attempts are rate
+limited. Both endpoints require a session cookie; invalid values return 400.
+The browser exposes both forms at `/settings/account`.

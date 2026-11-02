@@ -19,6 +19,9 @@ class AuthStoreState:
 
     if TYPE_CHECKING:
         # Methods one mixin calls on another, declared so each type-checks alone.
+        def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
+            ...
+
         def _account_pk(self, conn: Any, account_id: str) -> str:
             ...
 

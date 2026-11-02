@@ -342,6 +342,9 @@ class AuthStore(Protocol):
         onboarding: dict[str, Any] | None = ...,
         home_snoozes: dict[str, Any] | None = ...,
     ) -> dict[str, Any]: ...
+    def change_password(
+        self, account_id: str, current_password: str, new_password: str, session_token: str
+    ) -> None: ...
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None: ...
     def bootstrap_with_token(
         self, token: str, username: str, password: str

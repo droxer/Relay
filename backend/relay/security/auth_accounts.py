@@ -8,6 +8,7 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import (
+    delete,
     insert,
     select,
     text,
@@ -19,7 +20,7 @@ from .admin_token import admin_token_configured, verify_admin_token
 from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import database_account_to_row, public_account, row_to_database_account
 from .auth_state import AuthStoreState
-from .credentials import hash_password, verify_password
+from .credentials import hash_password, hash_session_token, verify_password
 from .entity_ids import USER_ENTITY_KIND, database_id_for_reference, normalize_database_id
 from .home_snoozes import apply_home_snoozes_patch
 from .onboarding import apply_onboarding_patch
@@ -114,7 +115,7 @@ class AuthAccounts(AuthStoreState):
         except IntegrityError as error:
             raise ValueError("username already exists.") from error
         logger.info("Account created", account_id=account["id"], username=username, role=role)
-        return public_account(account)
+        return public_account({**account, "displayName": display_name})
 
     def update_user_preferences(
         self,
@@ -160,13 +161,39 @@ class AuthAccounts(AuthStoreState):
                     .where(self.accounts.c.id == account_id)
                     .values(home_snoozes=apply_home_snoozes_patch(stored, home_snoozes) or None)
                 )
-            row = (
-                conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))
-                .mappings()
-                .one()
-            )
         SESSION_ACCOUNTS.invalidate_all()
-        return public_account(row_to_database_account(row))
+        account = self.get_account_by_id(account_id)
+        assert account is not None
+        return public_account(account)
+
+    def change_password(
+        self, account_id: str, current_password: str, new_password: str, session_token: str
+    ) -> None:
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(
+                select(self.accounts).where(self.accounts.c.id == account_id).with_for_update()
+            ).mappings().one()
+            if len(current_password) > 256 or not verify_password(current_password, row["password_hash"]):
+                raise ValueError("Current password is incorrect.")
+            user = conn.execute(
+                select(self.users).where(self.users.c.id == row["user_id"])
+            ).mappings().first()
+            validate_password(new_password, identifiers=(
+                row["username"], row["email"],
+                user["handle"] if user else None, user["display_name"] if user else None,
+            ))
+            if current_password == new_password:
+                raise ValueError("Choose a different password from your current password.")
+            conn.execute(update(self.accounts).where(self.accounts.c.id == account_id).values(
+                password_hash=hash_password(new_password), updated_at=datetime.now(UTC)
+            ))
+            conn.execute(delete(self.sessions).where(
+                self.sessions.c.account_id == account_id,
+                self.sessions.c.token_hash != hash_session_token(session_token),
+            ))
+            # Previously issued reset links cannot overwrite the new password.
+            conn.execute(delete(self.password_resets).where(self.password_resets.c.account_id == account_id))
+        SESSION_ACCOUNTS.invalidate_all()
 
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
         username = username.strip().lower()
@@ -191,7 +218,7 @@ class AuthAccounts(AuthStoreState):
                     else None
                 )
                 if not user_id or (user and not user.get("deleted_at")):
-                    return account
+                    return {**account, "displayName": user["display_name"] if user else None}
         return None
 
     def bootstrap_with_token(
@@ -232,7 +259,7 @@ class AuthAccounts(AuthStoreState):
                 .mappings()
                 .first()
             )
-            return account if user and not user.get("deleted_at") else None
+            return {**account, "displayName": user["display_name"]} if user and not user.get("deleted_at") else None
 
     def list_accounts(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

@@ -207,6 +207,8 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
     <SkillsPage currentUser={user} />
   ) : route === "settings" ? (
     <SettingsPage
+      user={user}
+      onUserChange={props.setUser}
       section={props.settingsSection}
       onSelectSection={props.onSelectSettingsSection}
       theme={props.theme}

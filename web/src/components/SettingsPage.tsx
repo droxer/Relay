@@ -5,8 +5,11 @@ import { PageHeader } from "./PageHeader";
 import { SectionNav, type SectionNavItem } from "./SectionNav";
 import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
+import type { CurrentUser } from "../types";
+import { AccountSection } from "./settings/AccountSection";
 import { NotificationsSection } from "./settings/NotificationsSection";
 import {
+  IdentityUser,
   NavNotifications,
   PrefAppearance,
   PrefLanguage,
@@ -15,6 +18,8 @@ import type { Language, Theme } from "../lib/appStorage";
 import type { SettingsSection } from "../lib/viewTypes";
 
 type SettingsPageProps = {
+  user: CurrentUser;
+  onUserChange: (user: CurrentUser) => void;
   section: SettingsSection;
   onSelectSection: (section: SettingsSection) => void;
   theme: Theme;
@@ -32,6 +37,8 @@ type SettingsPageProps = {
  * of their own now (`/computers`, `/skills`).
  */
 export function SettingsPage({
+  user,
+  onUserChange,
   section,
   onSelectSection,
   theme,
@@ -42,6 +49,7 @@ export function SettingsPage({
   const { t } = useTranslation();
 
   const items: SectionNavItem<SettingsSection>[] = [
+    { id: "account", label: t("account.title"), Icon: IdentityUser, href: hrefForSettingsSection("account") },
     { id: "notifications", label: t("notifications.title"), Icon: NavNotifications, href: hrefForSettingsSection("notifications") },
     { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
     { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
@@ -76,7 +84,9 @@ export function SettingsPage({
       <div className="sec-main">
         <PageHeader title={sectionLabel} titleAs="h2" titleVariant="title" />
         <div className="sec-section-body">
-          {section === "notifications" ? (
+          {section === "account" ? (
+            <AccountSection key={user.id} user={user} onUserChange={onUserChange} />
+          ) : section === "notifications" ? (
             <NotificationsSection />
           ) : section === "appearance" ? (
             <AppearanceSection theme={theme} onThemeChange={onThemeChange} />

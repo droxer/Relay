@@ -96,6 +96,40 @@ def update_auth_preferences(
     return {"user": decorate_account_limits(ctx, updated)}
 
 
+@router.patch("/auth/profile")
+def update_auth_profile(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    account = require_user_session(request, ctx.auth_store)
+    name = string_field(_request_body, "displayName").strip()
+    if not name or len(name) > 100:
+        raise HTTPException(400, "Display name must be between 1 and 100 characters.")
+    if not account.get("userId"):
+        raise HTTPException(409, "This account has no linked user.")
+    ctx.auth_store.update_user(account["userId"], display_name=name)
+    updated = ctx.auth_store.get_account_by_id(account["id"])
+    assert updated is not None
+    return {"user": decorate_account_limits(ctx, public_account(updated))}
+
+
+@router.post("/auth/password")
+def change_auth_password(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, bool]:
+    account = require_user_session(request, ctx.auth_store)
+    rate_key = _auth_rate_key(request, "change-password", account["id"])
+    _consume_auth_attempt(request, rate_key)
+    try:
+        ctx.auth_store.change_password(
+            account["id"], string_field(_request_body, "currentPassword"),
+            string_field(_request_body, "newPassword"),
+            user_session_token_from_request(request) or "",
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    return {"ok": True}
+
+
 @router.post("/auth/bootstrap")
 def auth_bootstrap(
     request: Request,

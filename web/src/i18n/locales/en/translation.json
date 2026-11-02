@@ -3337,5 +3337,24 @@
     "run_cancelled": "Cancelled",
     "run_running": "Running",
     "snapshot_missing": "Snapshot unavailable"
+  },
+  "account": {
+    "title": "Account",
+    "profile": "Profile",
+    "profile_hint": "Choose the name people see in Relay.",
+    "username": "Username",
+    "display_name": "Display name",
+    "save_name": "Save display name",
+    "name_saved": "Display name saved.",
+    "change_password": "Change password",
+    "password_hint": "Use at least {{min}} characters. Avoid your name and common passwords.",
+    "current_password": "Current password",
+    "new_password": "New password",
+    "confirm_password": "Confirm new password",
+    "sessions_hint": "Your other sessions will be signed out. You’ll stay signed in here.",
+    "password_saved": "Password changed.",
+    "password_mismatch": "The passwords don’t match. Enter the new password again.",
+    "password_same": "Choose a different password from your current password.",
+    "save_error": "Couldn’t save your changes. Try again."
   }
 }
