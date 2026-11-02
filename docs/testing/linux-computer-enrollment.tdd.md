@@ -71,3 +71,34 @@ service commands on the current macOS host. Backend coverage tooling is absent
 from the reused environment, so no backend coverage percentage is claimed.
 Deploy the new database migration before serving the updated backend; rebuild
 the computer bundle for distribution. No external deployment or push was made.
+
+## Full verification and review
+
+The user selected `9bc498e5678696b4945ee09072db685c5cb71f34` as the review
+baseline. Independent Standards and Spec reviews of the fix found no documented
+standard violations or actionable Spec defects. Standards recorded one optional
+Duplication smell: the adoption condition is repeated in enrollment admission and
+registry provisioning.
+
+`npm test` built the production web export and passed all 2,871 Node tests. The
+React suite passed 745 tests and timed out on the unchanged composer roster
+keyboard test (`rosterTabs.test.tsx`); the timeout reproduced in isolation.
+`make test-e2e` passed 103 tests, including computer approval and every performance
+budget, and failed on the unchanged roster availability chip and team
+responsibility editing surfaces.
+
+The complete Python suite was exercised in four file shards with
+`PYTHONPATH=backend` and the existing development environment. An initial shard
+exhausted its file-descriptor limit; it completed after raising that process's
+limit. The completed shards reported 3,370 passes, 10 skips, and two failures:
+
+- The real Postgres backup test overlapped schema-changing tests. It passed in
+  isolation once those tests finished.
+- The existing concurrent enrollment test replaced `find_by_user` with a shim
+  that did not accept its new `workspace_id` keyword. Updating the shim and
+  parametrizing both legacy and identified hosts fixed it; the entire registry
+  test module then passed all 272 tests (including the new parameter case).
+
+No production changes followed the independent review; the follow-up only updates
+that concurrency regression and this evidence. Repository hooks passed for the
+fix using the existing development environment without syncing its dependencies.
