@@ -37,7 +37,7 @@ export interface HomeQueueProps {
 const PREVIEW = 5;
 
 /** "Up next": the ranked queue, banded by tier, with a filter for the
- *  items that hold someone's work up. A row whose own action landed leaves at
+ *  items that hold someone's work up. A row the person snoozed leaves at
  *  once; the next data refresh confirms it. Every count includes the Start
  *  here item, so the header, the tabs, the brief, and the rail badge agree. */
 export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName, projectName, sinceLabel, hrefFor, onOpen, needsMeHref, onOpenNeedsMe }: HomeQueueProps) {
@@ -69,7 +69,7 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
             <h3>{t("home.plan.start_here")}</h3>
           </div>
           <ul className="home-items"><HomeQueueItem
-            item={focus} navigationOnly actions={actions} agentName={agentName} projectName={projectName}
+            item={focus} primary actions={actions} agentName={agentName} projectName={projectName}
             since={sinceLabel(focus.since)} href={hrefFor(focus)} onOpen={() => onOpen(focus)}
             onResolved={() => setResolved(current => new Set([...current, `${focus.key}@${focus.stamp}`]))}
           /></ul>

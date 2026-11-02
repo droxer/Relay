@@ -3112,21 +3112,9 @@
     "untriaged_title_one": "{{count}} 个任务没有项目",
     "untriaged_title_other": "{{count}} 个任务没有项目",
     "open": "打开",
-    "answer_in_thread": "在对话中回答",
     "open_thread": "打开对话",
-    "review_first": "先查看",
-    "allow": "允许",
-    "always_allow": "始终允许",
-    "deny": "拒绝",
-    "approve": "批准",
-    "accept": "验收",
-    "send": "发送",
-    "send_step": "发送",
     "view_computer": "查看电脑",
     "triage": "分拣",
-    "options_label": "智能体提供的答案",
-    "answer_placeholder": "或者写下你的回答…",
-    "answer_label": "你的回答",
     "snooze": "稍后",
     "snooze_hint": "在它变化之前隐藏",
     "clear_title": "目前没有需要你处理的事",
@@ -3182,16 +3170,9 @@
       "stuck_other": "{{count}} 个卡住"
     },
     "done": {
-      "allowed": "已允许",
-      "denied": "已拒绝",
-      "approved": "已批准，团队会继续。",
-      "answered": "回答已发送",
-      "accepted": "已验收为完成",
-      "sent": "已发送",
       "snoozed": "已隐藏，变化后会重新出现"
     },
     "errors": {
-      "send": "发送失败，请在对话中重试。",
       "snooze": "暂时隐藏失败，请重试。"
     },
     "plan": {

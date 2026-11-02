@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ import {
 } from "../icons";
 import { computerName } from "../../lib/createAgent";
 import type { HomeItem } from "../../lib/homeQueue";
-import { isQuestionPrompt, mayAllowAlways, permissionInputSummary } from "../../lib/permissionRequests";
+import { permissionInputSummary } from "../../lib/permissionRequests";
 import { taskRef } from "../../lib/taskRef";
 import type { HomeActions } from "./useHomeActions";
 
@@ -35,16 +35,15 @@ export interface HomeQueueItemProps {
   since: string;
   href: string;
   onOpen: () => void;
-  /** The Start here recommendation opens the record for its full context. */
-  navigationOnly?: boolean;
-  /** Called once the row's own action landed, so it can leave the list. */
+  /** The Start here recommendation gets the filled button. */
+  primary?: boolean;
+  /** Called once the row's snooze landed, so it can leave the list. */
   onResolved: () => void;
 }
 
-/** One "Up next" row: what it is, why it wants the person, and the actions
- *  that settle it in place. Open is always offered — the record holds the
- *  whole story when a one-click answer is not enough. */
-export function HomeQueueItem({ item, actions, agentName, projectName, since, href, onOpen, onResolved, navigationOnly = false }: HomeQueueItemProps) {
+/** One "Up next" row: what it is, why it wants the person, and a way to the
+ *  thread or record where it is settled. Only snoozing happens in place. */
+export function HomeQueueItem({ item, actions, agentName, projectName, since, href, onOpen, onResolved, primary = false }: HomeQueueItemProps) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<boolean>) => {
@@ -74,13 +73,11 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
           {agent ? <span>{agent}</span> : null}
           <span>{since}</span>
         </p>
-        {navigationOnly ? (
-          <Controls>
-            <Button type="button" size="dense" onClick={onOpen}>
-              {t(item.kind === "permission" || item.kind === "suggested" || (item.kind === "wait" && item.awaiting.sessionId) ? "home.open_thread" : "home.open")}
-            </Button>
-          </Controls>
-        ) : <ItemControls item={item} actions={actions} busy={busy} run={run} onOpen={onOpen} />}
+        <div className="home-item-actions" role="group">
+          <Button type="button" size="dense" variant={primary ? "default" : "outline"} disabled={busy} onClick={onOpen}>
+            {t(openLabel(item))}
+          </Button>
+        </div>
       </div>
       <div className="home-item-trail">
         <Button
@@ -101,117 +98,23 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
   );
 }
 
-function ItemControls({ item, actions, busy, run, onOpen }: {
-  item: HomeItem;
-  actions: HomeActions;
-  busy: boolean;
-  run: (action: () => Promise<boolean>) => Promise<boolean>;
-  onOpen: () => void;
-}) {
-  const { t } = useTranslation();
-  const open = (label = t("home.open")) => (
-    <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onOpen}>{label}</Button>
-  );
+/** The one control a row offers: where its answer is given. A row never
+ *  answers, approves, or sends from Home; the thread or record it opens
+ *  shows the whole story before the person acts. */
+function openLabel(item: HomeItem): string {
   switch (item.kind) {
-    case "permission": {
-      // A runtime question wants written answers per question; its card in
-      // the thread is where those are composed.
-      if (isQuestionPrompt(item.request)) return <Controls>{open(t("home.answer_in_thread"))}</Controls>;
-      const answer = (decision: "allow" | "deny", always?: boolean) =>
-        void run(() => actions.answerPermission(item.session, item.request.id, decision, always));
-      return (
-        <Controls>
-          <Button type="button" size="dense" disabled={busy} onClick={() => answer("allow")}>{t("home.allow")}</Button>
-          {mayAllowAlways(item.request)
-            ? <Button type="button" variant="outline" size="dense" disabled={busy} onClick={() => answer("allow", true)}>{t("home.always_allow")}</Button>
-            : null}
-          <Button type="button" variant="outline" size="dense" disabled={busy} onClick={() => answer("deny")}>{t("home.deny")}</Button>
-        </Controls>
-      );
-    }
-    case "wait": {
-      const { awaiting } = item;
-      const sessionId = awaiting.sessionId;
-      if (!sessionId) return <Controls>{open()}</Controls>;
-      const send = (text: string, approve?: boolean) =>
-        run(() => actions.answerWait(sessionId, awaiting.questionId, text, approve));
-      if (awaiting.kind === "approval") {
-        return (
-          <Controls>
-            <Button type="button" size="dense" disabled={busy} onClick={() => void send(t("awaiting.choice_approve_reply"), true)}>
-              {t("home.approve")}
-            </Button>
-            {open(t("home.review_first"))}
-          </Controls>
-        );
-      }
-      return (
-        <>
-          {awaiting.options.length ? (
-            <Controls label={t("home.options_label")}>
-              {awaiting.options.map((option) => (
-                <Button key={option} type="button" variant="outline" size="dense" disabled={busy} onClick={() => void send(option)}>
-                  {option}
-                </Button>
-              ))}
-            </Controls>
-          ) : null}
-          <AnswerForm busy={busy} onSend={send} />
-        </>
-      );
-    }
-    case "review":
-      return (
-        <Controls>
-          <Button type="button" size="dense" disabled={busy} onClick={() => void run(() => actions.acceptReview(item.task))}>
-            {t("home.accept")}
-          </Button>
-          {open(t("home.review_first"))}
-        </Controls>
-      );
+    case "permission":
     case "suggested":
-      return (
-        <Controls>
-          <Button type="button" variant="outline" size="dense" disabled={busy} onClick={() => void run(() => actions.sendStep(item.session, item.step))}>
-            {t("home.send_step")}
-          </Button>
-        </Controls>
-      );
+      return "home.open_thread";
+    case "wait":
+      return item.awaiting.sessionId ? "home.open_thread" : "home.open";
     case "offline":
-      return <Controls>{open(t("home.view_computer"))}</Controls>;
+      return "home.view_computer";
     case "untriaged":
-      return <Controls>{open(t("home.triage"))}</Controls>;
+      return "home.triage";
     default:
-      return <Controls>{open()}</Controls>;
+      return "home.open";
   }
-}
-
-function Controls({ children, label }: { children: ReactNode; label?: string }) {
-  return <div className="home-item-actions" role="group" aria-label={label}>{children}</div>;
-}
-
-function AnswerForm({ busy, onSend }: { busy: boolean; onSend: (text: string) => Promise<boolean> }) {
-  const { t } = useTranslation();
-  const [text, setText] = useState("");
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const answer = text.trim();
-    if (!answer) return;
-    if (await onSend(answer)) setText("");
-  };
-  return (
-    <form className="home-item-answer" onSubmit={(event) => void submit(event)}>
-      <input
-        className="home-item-answer-input"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder={t("home.answer_placeholder")}
-        aria-label={t("home.answer_label")}
-        disabled={busy}
-      />
-      <Button type="submit" size="dense" disabled={busy || !text.trim()}>{t("home.send")}</Button>
-    </form>
-  );
 }
 
 function isPlainClick(event: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
