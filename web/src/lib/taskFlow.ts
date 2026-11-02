@@ -70,6 +70,7 @@ export function taskFlowErrorKey(code?: string): string | undefined {
   const keys: Record<string, string> = {
     task_wip_limit: "backlog.wip_wait",
     task_execution_active: "backlog.error_active",
+    task_review_changed: "task_review.changed",
     task_state_changed: "backlog.error_changed",
     task_transition_requires_execution: "backlog.error_start",
     task_review_requires_work: "backlog.error_review",

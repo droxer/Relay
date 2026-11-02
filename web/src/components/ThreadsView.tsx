@@ -35,6 +35,7 @@ import { useTaskThreadLifecycle, type OpenTaskRecord } from "../hooks/useTaskThr
 import { useTaskStatusActions } from "../hooks/useTaskStatusActions";
 import { TaskStatusTimeline } from "./TaskStatusTimeline";
 import { TaskActionBar, taskNeedsAction } from "./TaskActionBar";
+import { TaskReviewPanel } from "./task-record/TaskReviewPanel";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { parseAutomationOpening } from "../lib/automationOpening";
@@ -330,9 +331,9 @@ export function ThreadsView({
       variant={actionTask.status === "review" ? "default" : "outline"}
       disabled={taskStatusActions.busy !== null}
       loading={taskStatusActions.busy !== null}
-      onClick={() => void (actionTask.status === "review" ? taskStatusActions.accept() : taskStatusActions.unblock())}
+      onClick={() => void (actionTask.status === "review" ? actionTask.onOpen() : taskStatusActions.unblock())}
     >
-      {t(actionTask.status === "review" ? "thread.lifecycle.accept" : "thread.lifecycle.unblock")}
+      {t(actionTask.status === "review" ? "task_review.title" : "thread.lifecycle.unblock")}
     </Button>
   ) : null;
   const sendAnswering = useCallback<typeof onSend>(
@@ -665,6 +666,14 @@ export function ThreadsView({
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
               onMarkDone={() => sendDecision("mark_done")}
+            />
+          ) : actionTask?.status === "review" && !running ? (
+            <TaskReviewPanel
+              key={actionTask.id}
+              taskId={actionTask.id}
+              compact
+              deferPrimary={awaitingDecision}
+              onRequestChanges={() => composerRef.current?.focus()}
             />
           ) : actionTask && !running ? (
             <TaskActionBar

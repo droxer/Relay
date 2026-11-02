@@ -202,6 +202,7 @@ class TaskPatchBody(_TaskFields):
 
     action: TrimmedStr = None
     blocker_reason: TrimmedStr = Field(None, alias="blockerReason")
+    review_revision: CheckedStr = Field(None, alias="reviewRevision")
 
 
 class TaskStartBody(RequestSchema):

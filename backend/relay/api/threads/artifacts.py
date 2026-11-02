@@ -30,7 +30,8 @@ router = APIRouter()
 
 @router.get("/threads/{session_id}/artifacts/{artifact_id}")
 async def read_artifact(
-    session_id: str, artifact_id: str, request: Request, ctx: AppContextDep
+    session_id: str, artifact_id: str, request: Request, ctx: AppContextDep,
+    snapshot: bool = False,
 ) -> Any:
     actor = await run_in_threadpool(
         request_actor_or_sandbox, request, ctx.auth_store, ctx.registry
@@ -49,6 +50,8 @@ async def read_artifact(
             else None
         )
         if content is None:
+            if snapshot:
+                raise HTTPException(404, "artifact_snapshot_unavailable")
             # The daemon snapshots only small document types; every other file
             # it reports is read back from the computer that wrote it.
             content = await _live_artifact_content(ctx, session, artifact)

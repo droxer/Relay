@@ -11,9 +11,10 @@ import type {
   TaskRunAssignment,
   TaskRunsResponse,
   TasksResponse,
+  TaskReview,
 } from "../types.ts";
 import { apiJson } from "./client.ts";
-import { taskGuard, tasksGuard } from "./responseShape.ts";
+import { taskGuard, tasksGuard, taskReviewGuard } from "./responseShape.ts";
 
 export function listTasks(signal?: AbortSignal): Promise<TasksResponse> {
   return apiJson<TasksResponse>("/tasks?view=summary", { signal, guard: tasksGuard });
@@ -32,6 +33,10 @@ export function createTask(input: CreateTaskInput): Promise<RelayTask> {
  *  occurrence may sit outside whatever the list is showing. */
 export function getTask(taskId: string, signal?: AbortSignal): Promise<RelayTask> {
   return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}`, { signal, guard: taskGuard });
+}
+
+export function getTaskReview(taskId: string, signal?: AbortSignal): Promise<TaskReview> {
+  return apiJson<TaskReview>(`/tasks/${encodeURIComponent(taskId)}/review`, { signal, guard: taskReviewGuard });
 }
 
 export function updateTask(taskId: string, input: TaskMutationInput): Promise<RelayTask> {

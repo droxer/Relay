@@ -11,7 +11,7 @@ import type {
   TaskPriority,
   TaskStatus,
 } from "relay-core";
-import type { ProducedFile } from "./artifacts.ts";
+import type { ArtifactIndexItem, ProducedFile } from "./artifacts.ts";
 import type { RunInput } from "./sessions.ts";
 import type { WorkspaceFileEntry } from "./workspace.ts";
 
@@ -87,6 +87,8 @@ export type TaskRunAssignment = Omit<RunInput["assignments"][number], "agent"> &
 };
 
 export interface TaskMutationInput {
+  /** Accept only the recorded work shown in this review revision. */
+  reviewRevision?: string;
   collaborationStyle?: CollaborationStyle | "" | null;
   acceptancePolicy?: "human" | "automatic";
   blockerReason?: string;
@@ -107,6 +109,38 @@ export interface TaskMutationInput {
   /** Triage: moves an intake issue (one with no project) into a project.
       One way only — the server refuses it for a task that already has one. */
   projectId?: string;
+}
+
+export interface TaskReviewReport {
+  runId: string;
+  agent: AgentName | null;
+  agentId: string | null;
+  agentName?: string | null;
+  role: string | null;
+  status: string;
+  exitCode: number | null;
+  completedAt: string | null;
+  workStatus: string | null;
+  note: string;
+  evidence: string[];
+  findings: string[];
+  outputTruncated: boolean;
+}
+
+export interface TaskReview {
+  taskId: string;
+  revision: string;
+  status: TaskStatus;
+  canAccept: boolean;
+  goal: string;
+  description: string;
+  sessionId: string | null;
+  roundId: string | null;
+  criteria: string[];
+  reports: TaskReviewReport[];
+  artifacts: (ArtifactIndexItem & { snapshotSkipped?: string | null })[];
+  verification: "not_recorded";
+  missing: string[];
 }
 
 export interface CreateTaskInput extends TaskMutationInput {

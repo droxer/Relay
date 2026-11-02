@@ -45,6 +45,12 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
       const current = tasks.find((item) => item.id === record.id)!;
       body = { ...current, events: new Array(current.eventCount).fill({}), activity: [] };
     }
+    const reviewed = tasks.find((item) => decodeURIComponent(path).endsWith(`/tasks/${item.id}/review`));
+    if (reviewed) body = {
+      taskId: reviewed.id, revision: "a".repeat(64), status: reviewed.status, canAccept: reviewed.status === "review",
+      goal: reviewed.title, description: "", sessionId: null, roundId: null, criteria: [], reports: [], artifacts: [],
+      verification: "not_recorded", missing: ["thread", "criteria", "reports", "artifacts", "verification"],
+    };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await openBoard(page);
@@ -66,19 +72,19 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   await expect(guidance).toContainText("Need approval");
   await expect(guidance).toContainText("Unblock restores the previous stage");
   // Review cannot be accepted while it is blocked.
-  await expect(drawer.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
   // Unblocking is a choice in the record's status menu — the same control a
   // list row carries — and the band names the stage the task is held in.
   const status = drawer.getByRole("button", { name: /^Status: Review · Blocked\./ });
   await status.click();
   await page.getByRole("menuitem", { name: "Unblock", exact: true }).click();
-  await drawer.getByRole("button", { name: "Done", exact: true }).click();
-  await expect.poll(() => writes.map((item) => item.body)).toEqual([{ action: "unblock" }, { status: "done" }]);
+  await drawer.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect.poll(() => writes.map((item) => item.body)).toEqual([{ action: "unblock" }, { status: "done", reviewRevision: "a".repeat(64) }]);
   await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
   await expect(page.locator('.backlog-lane[data-status="done"]')).toContainText("Blocked review");
   // A Ready task was never in review, so it offers no acceptance either.
   await page.locator('.backlog-lane[data-status="assigned"] article').getByRole("link", { name: "Queued delivery", exact: true }).click();
-  await expect(drawer.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
   await drawer.getByRole("button", { name: /^Status: Ready\./ }).click();
   await expect(page.getByRole("menuitem", { name: "Block", exact: true })).toBeVisible();
 });

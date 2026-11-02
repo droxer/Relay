@@ -862,6 +862,39 @@ to retry execution. Dispatch can return
 consume a failure retry. See [the task lifecycle](task-kanban-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
 
+### Task review
+
+`GET /tasks/{id}/review` uses the same Task access rule as its detail route.
+It returns a derived review of the newest linked Thread: `taskId`, `revision`,
+`status`, `canAccept`, `goal`, `description`, `sessionId`, `roundId`, `criteria`,
+`reports`, `artifacts`, `verification`, and `missing`.
+
+Reports retain stable run/agent ids, CLI status and exit code, agent-reported
+notes/evidence/findings, and output-truncation warnings. For manifested work,
+only assignments in the latest round scoped to this Task are included; the
+latest attempt supplies each assignment's report. Artifacts retain their exact
+ids and source Thread. Continuity records are excluded. Legacy Threads without
+manifests have no invented round attribution. A deleted latest Thread is shown
+as missing instead of silently falling back to older work.
+
+`verification: "not_recorded"` explicitly means the existing protocol does not
+provide independently recorded acceptance-check results. Evidence prose and
+successful CLI exit codes are never promoted to verified checks.
+
+Conditional acceptance sends only `{ "status": "done", "reviewRevision":
+"<revision displayed to the person>" }` to `PATCH /tasks/{id}`. The backend
+locks the Task and source Thread in the write transaction, reconstructs the
+review, and refuses a changed revision with `409 task_review_changed`. The
+accepted revision is retained on the `task.updated` event. Invalid revisions
+and combining conditional acceptance with other edits answer 400. Existing
+PATCH clients may still omit `reviewRevision` for compatibility; the task review
+controls always supply it. No database migration or new agent execution is
+required. This contract binds recorded work, not mutable live workspace files.
+Review output links add `?snapshot=1` to the Thread artifact read route. A
+missing snapshot answers `404 artifact_snapshot_unavailable`; this mode never
+falls back to current workspace bytes. Reads without it keep their existing
+live fallback for compatibility.
+
 ### Thread execution and deferred deletion
 
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included

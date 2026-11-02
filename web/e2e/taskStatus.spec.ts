@@ -41,7 +41,7 @@ const taskEvents = [
 
 type Theme = "light" | "dark";
 
-async function serve(page: Page, theme: Theme, status: "done" | "review") {
+async function serve(page: Page, theme: Theme, status: "done" | "review", staleFirst = false) {
   const current = { ...task, status };
   const events = status === "done" ? taskEvents : taskEvents.slice(0, 3);
   const patches: unknown[] = [];
@@ -56,9 +56,23 @@ async function serve(page: Page, theme: Theme, status: "done" | "review") {
       return;
     }
     if (path.endsWith(`/tasks/${task.id}`)) {
-      if (request.method() === "PATCH") patches.push(JSON.parse(request.postData() ?? "{}"));
+      if (request.method() === "PATCH") {
+        patches.push(JSON.parse(request.postData() ?? "{}"));
+        if (staleFirst && patches.length === 1) {
+          await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "task_review_changed" }) });
+          return;
+        }
+      }
       body = current;
     }
+    if (path.endsWith(`/tasks/${task.id}/review`)) body = {
+      taskId: task.id, revision: (patches.length ? "b" : "a").repeat(64), status: "review", canAccept: true,
+      goal: task.title, description: "Explain the tools, context, permissions, and checks.", sessionId: session.id, roundId: "round-1",
+      criteria: ["Explain the role of checks"], verification: "not_recorded", missing: ["verification"],
+      reports: [{ runId: "run-1", agent: "claude", agentId: agent.id, role: "implementer", status: "completed", exitCode: 0,
+        completedAt: at(55), workStatus: "done", note: "Delivered the explanation.", evidence: ["Reviewed the explanation for completeness."], findings: [], outputTruncated: false }],
+      artifacts: [],
+    };
     if (path.endsWith("/runs")) body = { taskId: task.id, runs: [] };
     if (path.endsWith(`/tasks/${task.id}/events`)) body = { events };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -93,18 +107,53 @@ for (const theme of ["dark", "light"] as const) {
   });
 }
 
-test("work in review docks an accept bar on the composer", async ({ page }, testInfo) => {
+test("work in review docks a revision-bound review on the composer", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const patches = await serve(page, "dark", "review");
   await page.goto(`/threads/${session.id}`);
 
-  const bar = page.locator(".task-action-bar");
-  await expect(bar).toContainText("#3 is ready for your review.");
+  const bar = page.getByRole("region", { name: "Review result" });
+  await expect(bar).toContainText("Review result");
+  await bar.locator("summary").click();
+  await expect(bar).toContainText("Agent-reported evidence");
+  await expect(bar).toContainText("no independently recorded check results");
   await bar.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
   await page.screenshot({ path: testInfo.outputPath("task-action-bar-review.png") });
 
   await bar.getByRole("button", { name: "Request changes" }).click();
   await expect(page.getByRole("textbox").first()).toBeFocused();
   await bar.getByRole("button", { name: "Accept" }).click();
-  await expect.poll(() => patches).toEqual([{ status: "done" }]);
+  await expect.poll(() => patches).toEqual([{ status: "done", reviewRevision: "a".repeat(64) }]);
 });
+
+test("a changed review requires explicit refresh before acceptance", async ({ page }) => {
+  const patches = await serve(page, "dark", "review", true);
+  await page.goto(`/threads/${session.id}`);
+  const review = page.getByRole("region", { name: "Review result" });
+  await review.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(review.getByRole("alert")).toContainText("The work changed");
+  await expect(review.getByRole("button", { name: "Accept", exact: true })).toBeDisabled();
+  await review.getByRole("button", { name: "Refresh review" }).click();
+  await expect(review.getByRole("button", { name: "Accept", exact: true })).toBeEnabled();
+  await review.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect.poll(() => patches).toEqual([
+    { status: "done", reviewRevision: "a".repeat(64) },
+    { status: "done", reviewRevision: "b".repeat(64) },
+  ]);
+});
+
+for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
+  test(`task record exposes the review and output uncertainty (${theme}, ${width})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await serve(page, theme, "review");
+    await page.goto(`/tasks/${task.id}`);
+    const review = page.getByRole("region", { name: "Review result" });
+    await expect(review.getByText("Delivered the explanation.")).toBeVisible();
+    await expect(review.getByText("Agent-reported evidence")).toBeVisible();
+    await expect(review.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
+    await expect(review.getByText(/No output snapshots/)).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator("#task-record-panel").evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+    await page.screenshot({ path: testInfo.outputPath(`task-review-${theme}-${width}.png`), fullPage: true });
+  });
+}

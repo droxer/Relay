@@ -8,7 +8,7 @@
    freely, and over-validating would turn each of those additions into an
    outage. A guard narrows nothing — it returns the same object, typed. */
 
-import type { RelaySession, RelayTask, SessionSummariesResponse, TasksResponse } from "../types.ts";
+import type { RelaySession, RelayTask, SessionSummariesResponse, TasksResponse, TaskReview } from "../types.ts";
 
 /** One place a body departed from the shape the UI relies on. `apiJson`
  *  turns it into a `RelayApiShapeError` naming the endpoint. */
@@ -102,4 +102,19 @@ export const tasksGuard: ResponseGuard<TasksResponse> = (value) => {
 export const taskGuard: ResponseGuard<RelayTask> = (value) => {
   checkTask(value, ROOT);
   return value as RelayTask;
+};
+
+export const taskReviewGuard: ResponseGuard<TaskReview> = (value) => {
+  const body = expectRecord(value, ROOT);
+  expectStrings(body, ["taskId", "revision", "goal", "description", "status"], ROOT);
+  if (typeof body.canAccept !== "boolean" || !/^[a-f0-9]{64}$/.test(body.revision as string)) {
+    throw new ResponseShapeIssue(ROOT, "a revision-bound task review", describeValue(value));
+  }
+  for (const key of ["criteria", "artifacts", "missing"]) expectArray(body, key, ROOT);
+  checkEach(expectArray(body, "reports", ROOT), "reports", (report, path) => {
+    const record = expectRecord(report, path);
+    expectStrings(record, ["runId", "status", "note"], path);
+    for (const key of ["evidence", "findings"]) expectArray(record, key, path);
+  });
+  return body as unknown as TaskReview;
 };
