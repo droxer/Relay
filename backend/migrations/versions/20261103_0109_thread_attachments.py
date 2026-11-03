@@ -1,15 +1,15 @@
 """Private Thread image uploads.
 
-Revision ID: 20261103_0107
-Revises: 20261102_0106
+Revision ID: 20261103_0109
+Revises: 20261103_0108
 """
 
 from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261103_0107"
-down_revision = "20261102_0106"
+revision = "20261103_0109"
+down_revision = "20261103_0108"
 branch_labels = None
 depends_on = None
 

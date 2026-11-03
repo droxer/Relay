@@ -36,7 +36,7 @@ class DatabaseSessionStore(
     SessionAttachmentRows,
     SessionReadRows,
 ):
-    REQUIRED_SCHEMA_REVISION = "20261103_0107"
+    REQUIRED_SCHEMA_REVISION = "20261103_0109"
     metadata = shared_metadata
 
     sessions = sessions_tables.sessions

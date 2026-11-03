@@ -1345,7 +1345,7 @@ the configured model must support image input. The most recent image-bearing
 message remains visual context for subsequent turns and recovery.
 
 Hosted installs reuse `RELAY_BLOB_STORE=r2`; without it, bytes remain in the
-existing database-backed deployment mode. Apply Alembic revision `20261103_0107`
+existing database-backed deployment mode. Apply Alembic revision `20261103_0109`
 before starting the new backend and rebuild the Computer bundle. Thread deletion
 removes bound upload rows and schedules R2 object deletion after commit. Each
 upload also prunes up to 100 abandoned uploads older than 24 hours; a quiet

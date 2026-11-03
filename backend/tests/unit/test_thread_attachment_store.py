@@ -86,7 +86,7 @@ def test_upload_that_fails_after_storing_bytes_is_compensated(tmp_path):
 
 
 def test_attachment_migration_upgrades_and_downgrades():
-    path = Path(__file__).parents[2] / "migrations/versions/20261103_0107_thread_attachments.py"
+    path = Path(__file__).parents[2] / "migrations/versions/20261103_0109_thread_attachments.py"
     spec = importlib.util.spec_from_file_location("thread_attachments_migration", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

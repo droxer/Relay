@@ -73,7 +73,7 @@ successfully produced the final static export.
 
 ## Rollout and limits
 
-Apply migration `20261103_0107` before starting the backend. Hosted installs use
+Apply migration `20261103_0109` before starting the backend. Hosted installs use
 the existing `RELAY_BLOB_STORE=r2` configuration; update Computer clients to the
 rebuilt bundle. The selected Codex/Claude model must support image input.
 No deployment, credentials, or third-party resources were changed.
@@ -83,3 +83,23 @@ R2 credentials, a real multimodal model call, Windows, a running BoxLite guest,
 and PostgreSQL schema drift were not exercised. Abandoned uploads are pruned
 on subsequent uploads after 24 hours (100 per request). Object deletion is best
 effort; interrupted daemon processes may also leave temporary workspace files.
+
+## PR preparation against current main
+
+Rebased onto current `main` and renumbered the attachment migration to
+`20261103_0109`, following the newly merged `20261103_0108`. `alembic heads`
+reports one head. The attachment/storage, layering, module-size, and route-auth
+checks passed again (27 tests); mypy reports zero errors across 401 modules.
+
+The required npm audit against the public registry reports 33 advisories
+(1 low, 25 moderate, 7 high) in the existing dependency lockfile. This change
+does not modify dependencies. The normal `make test-e2e` build encountered the
+same Turbopack worker-port restriction; the rebased webpack export succeeded.
+
+The required browser suite was then run against that export with installed
+Chrome (`npm --ignore-scripts run test:e2e -w web -- --workers=4`): **108 passed,
+2 failed**. The failures are in unchanged agent-roster filter and team-responsibility
+checks (`filterChips.spec.ts:67`, `teamCollaboration.spec.ts:3`); the latter expects
+responsibility-only configuration while the editor includes the member's role.
+Thread/composer, recovery, layout, and performance checks passed. These failures
+were recorded without changing those unrelated surfaces.
