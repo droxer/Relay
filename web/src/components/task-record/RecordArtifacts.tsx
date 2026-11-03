@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 import { listTaskArtifacts } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
-import { artifactFileName, artifactShowsKind, formatArtifactDate } from "../../lib/artifactPreview";
-import { formatBytes, parentPath } from "../../lib/workspaceFormat";
+import { artifactFileName, artifactRowFolder, artifactShowsKind, formatArtifactDate } from "../../lib/artifactPreview";
+import { formatBytes } from "../../lib/workspaceFormat";
 import { ArtifactKindIcon } from "../artifact/ArtifactIndexStrip";
 import { ICON } from "../icons";
 import type { ArtifactIndexItem } from "../../types";
@@ -94,8 +94,10 @@ export function RecordArtifacts({ taskId, artifactsDir }: {
         <ul ref={listRef} className="record-artifacts-rows" onKeyDown={handleListKeyDown}>
           {artifacts.map((artifact) => {
             const fileName = artifactFileName(artifact);
-            const folder = artifact.kind === "workspace_file" ? folderBeyond(parentPath(fileName), artifactsDir) : "";
-            const meta = [folder, formatBytes(artifact.bytes, i18n.language), formatArtifactDate(artifact.createdAt, i18n.language)]
+            const folder = artifact.kind === "workspace_file" ? artifactRowFolder(fileName, artifactsDir) : "";
+            /* When it was made leads: an automation's files share a stem and
+               differ by run, so the date is what tells two rows apart. */
+            const meta = [formatArtifactDate(artifact.createdAt, i18n.language), formatBytes(artifact.bytes, i18n.language), folder]
               .filter(Boolean)
               .join(" · ");
             const isSelected = artifact.id === selected?.id;
@@ -137,13 +139,4 @@ export function RecordArtifacts({ taskId, artifactsDir }: {
       ) : null}
     </section>
   );
-}
-
-/** A file's folder relative to the deliverables folder ("" when it sits
- *  directly in it). */
-function folderBeyond(folder: string, root: string | null | undefined): string {
-  const base = root?.replace(/\/+$/, "");
-  if (!base) return folder;
-  if (folder === base) return "";
-  return folder.startsWith(`${base}/`) ? folder.slice(base.length + 1) : folder;
 }

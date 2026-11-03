@@ -9,6 +9,7 @@ import {
   artifactPreviewMode,
   artifactRawHref,
   artifactRenderMode,
+  artifactRowFolder,
   artifactShowsKind,
   formatArtifactDate,
   workspaceFilePreviewMode,
@@ -179,5 +180,26 @@ describe("formatArtifactDate", () => {
   it("returns empty for a missing value and the raw input when unparseable", () => {
     assert.equal(formatArtifactDate(undefined, "en"), "");
     assert.equal(formatArtifactDate("not a date", "en"), "not a date");
+  });
+});
+
+describe("artifactRowFolder", () => {
+  const run = "a6d390f3-f523-4fbc-a5dc-afe0e1a2b3c4";
+
+  it("names nothing for a file directly in the deliverables folder", () => {
+    assert.equal(artifactRowFolder("artifacts/report.md", "artifacts"), "");
+  });
+
+  it("names the folder beyond the deliverables folder", () => {
+    assert.equal(artifactRowFolder("artifacts/charts/q3.png", "artifacts/"), "charts");
+  });
+
+  it("drops an automation run's id folder, which tells a reader nothing", () => {
+    assert.equal(artifactRowFolder(`artifacts/${run}/ai-daily.md`, "artifacts"), "");
+    assert.equal(artifactRowFolder(`artifacts/${run}/data/raw.csv`, "artifacts"), "data");
+  });
+
+  it("keeps the whole folder when there is no deliverables folder", () => {
+    assert.equal(artifactRowFolder("notes/today.md", null), "notes");
   });
 });
