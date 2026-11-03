@@ -19,7 +19,18 @@ const COVER_POINTS = ["login.do_assign", "login.do_watch", "login.do_control"] a
  * and redeem an invite all stand on it, so the brand moment is the same
  * whichever door a visitor came through — only the gate changes.
  */
-export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "join" | "forgot-password" | "reset-password" | "connect-computer"; children: ReactNode }) {
+type AuthCanvasMode = "login" | "waitlist" | "join" | "forgot-password" | "reset-password" | "connect-computer";
+
+/** A screen's own story for the cover: a headline, its lede, and a figure in
+    place of the three points. Only the waitlist tells one today — a visitor
+    asking for access needs to see what they are waiting for. */
+export interface AuthCover {
+  headline: string;
+  lede: string;
+  figure: ReactNode;
+}
+
+export function AuthCanvas({ mode, cover, children }: { mode: AuthCanvasMode; cover?: AuthCover; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <main className="login-screen" data-mode={mode}>
@@ -41,18 +52,20 @@ export function AuthCanvas({ mode, children }: { mode: "login" | "waitlist" | "j
 
         <div className="login-intro">
           <h1 id="login-headline" className="login-headline">
-            {t("login.cover_headline")}
+            {cover?.headline ?? t("login.cover_headline")}
           </h1>
-          <p className="login-lede">{t("login.lede")}</p>
+          <p className="login-lede">{cover?.lede ?? t("login.lede")}</p>
         </div>
 
-        <ul className="login-points">
-          {COVER_POINTS.map((key) => (
-            <li className="login-point" key={key}>
-              {t(key)}
-            </li>
-          ))}
-        </ul>
+        {cover ? cover.figure : (
+          <ul className="login-points">
+            {COVER_POINTS.map((key) => (
+              <li className="login-point" key={key}>
+                {t(key)}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* Right half: the gate. One column, one action. */}

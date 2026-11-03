@@ -453,6 +453,186 @@
   margin: -1px;
 }
 
+/* ---------- Waitlist cover: the vignette ------------------------------ */
+
+/* What a visitor is waiting for, drawn as the product draws it: a small
+   ledger of work, one row per task, each led by the task's own status ring.
+   It sits on the elevated tier with the panel's hairline so it reads as a
+   piece of the app set on the cover, not as a marketing card. Colour stays
+   semantic — blue for the run in progress, gold for the one that needs you,
+   the review green for the one that finished. */
+.login-vignette {
+  margin: 0;
+  max-width: 30rem;
+  border: 0.5px solid var(--lg-hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--lg-elevated);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lg-ink) 6%, transparent);
+  overflow: hidden;
+}
+
+.login-vignette-head {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 0.5px solid var(--lg-hairline-soft);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--lg-muted);
+}
+
+.login-vignette-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.login-vignette-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon title"
+    ".    meta";
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-0-5);
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.login-vignette-row + .login-vignette-row {
+  border-top: 0.5px solid var(--lg-hairline-soft);
+}
+
+.login-vignette-icon {
+  grid-area: icon;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-4);
+}
+
+.login-vignette-row[data-status="done"] .login-vignette-icon { color: var(--ok); }
+.login-vignette-row[data-status="running"] .login-vignette-icon { color: var(--live); }
+.login-vignette-row[data-status="waiting_for_human"] .login-vignette-icon { color: var(--warn); }
+
+.login-vignette-title {
+  grid-area: title;
+  min-width: 0;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--lg-ink);
+}
+
+/* The finished row has stepped back: its work is done, so its title dims
+   and the eye lands on the run and the question below it. */
+.login-vignette-row[data-status="done"] .login-vignette-title {
+  color: var(--lg-muted);
+}
+
+.login-vignette-meta {
+  grid-area: meta;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--lg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.login-vignette-row[data-status="waiting_for_human"] .login-vignette-meta {
+  color: var(--warn);
+}
+
+/* ---------- Waitlist gate: ideas and what happens next ---------------- */
+
+/* Starting points under the open question: quiet outline chips that write
+   into the field, so the blank box never has to be faced alone. */
+.login-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: calc(var(--sp-2) * -1);
+}
+
+.login-ideas-label {
+  flex-basis: 100%;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--lg-muted);
+}
+
+.login-idea {
+  min-height: 28px;
+  padding: var(--sp-1) var(--sp-3);
+  border: 0.5px solid var(--lg-hairline);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--lg-ink);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+}
+
+.login-idea:hover {
+  border-color: var(--field-border-hover);
+  background: color-mix(in srgb, var(--lg-ink) 4%, transparent);
+}
+
+.login-idea:active {
+  background: color-mix(in srgb, var(--lg-ink) 8%, transparent);
+}
+
+/* The confirmation's ledger: three numbered steps that end on the first
+   handoff, so being on the list reads as the start of something. */
+.login-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-5);
+  border-top: 0.5px solid var(--lg-hairline-soft);
+}
+
+.login-next-title {
+  margin: 0;
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--lg-muted);
+}
+
+.login-next-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: login-next;
+}
+
+.login-next-steps > li {
+  counter-increment: login-next;
+  display: grid;
+  grid-template-columns: var(--icon-lg) minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: baseline;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--lg-ink);
+}
+
+.login-next-steps > li::before {
+  content: counter(login-next);
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border: 0.5px solid var(--lg-hairline);
+  border-radius: var(--r-full);
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--lg-muted);
+  translate: 0 -1px;
+}
+
 /* ---------- Foot ------------------------------------------------------ */
 
 /* A direct grid child, so the split canvas seats it under the cover column
@@ -492,13 +672,22 @@
 
   .login-cover > header { animation-delay: calc(var(--t-stagger) * 1); }
   .login-cover > .login-intro { animation-delay: calc(var(--t-stagger) * 2); }
-  .login-cover > .login-points { animation-delay: calc(var(--t-stagger) * 3); }
+  .login-cover > .login-points,
+  .login-cover > .login-vignette { animation-delay: calc(var(--t-stagger) * 3); }
   .login-panel-inner { animation-delay: calc(var(--t-stagger) * 3); }
   .login-foot { animation-delay: calc(var(--t-stagger) * 4); }
 
-  .login-error {
+  .login-error,
+  .login-next {
     --rise-from: var(--rise-sm);
     animation: rise var(--t-slow) var(--ease);
+  }
+
+  /* The running row breathes like every running ring in the app. */
+  .login-vignette-row[data-status="running"] .task-status-fill {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: breathe var(--t-pulse) var(--ease-breathe) infinite;
   }
 }
 

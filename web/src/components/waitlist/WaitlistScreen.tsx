@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { joinWaitlist } from "../../api";
 import { AuthCanvas } from "../AuthCanvas";
 import { PublicLink } from "./PublicLink";
+import { WaitlistVignette } from "./WaitlistVignette";
 import { publicRequestError } from "./waitlistErrors";
 import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   waitlistJoinInput,
   waitlistLocale,
   waitlistSource,
+  withUseCaseIdea,
   type WaitlistField,
   type WaitlistFields,
 } from "../../lib/waitlist";
@@ -42,8 +44,14 @@ export function WaitlistScreen() {
   const enabled = useWaitlistEnabled();
   const [submitted, setSubmitted] = useState(false);
 
+  const cover = {
+    headline: t("waitlist.cover_headline"),
+    lede: t("waitlist.cover_lede"),
+    figure: <WaitlistVignette />,
+  };
+
   return (
-    <AuthCanvas mode="waitlist">
+    <AuthCanvas mode="waitlist" cover={cover}>
       <div className="login-panel-head">
         <h2 className="login-panel-title" id="waitlist-title">
           {submitted ? t("waitlist.confirm_title") : t("waitlist.title")}
@@ -56,6 +64,7 @@ export function WaitlistScreen() {
           <p className="login-note">{t("waitlist.lede")}</p>
         )}
       </div>
+      {submitted ? <NextSteps /> : null}
       {submitted || enabled === false ? null : <WaitlistForm onSubmitted={() => setSubmitted(true)} />}
       <p className="login-alt">
         {t("waitlist.have_account")} <PublicLink href="/login">{t("login.sign_in")}</PublicLink>
@@ -63,6 +72,26 @@ export function WaitlistScreen() {
     </AuthCanvas>
   );
 }
+
+const NEXT_STEPS = ["waitlist.next_invite", "waitlist.next_account", "waitlist.next_handoff"] as const;
+
+/** What the wait is for, in order, so the confirmation ends on the first
+    handoff rather than on a dead end. */
+function NextSteps() {
+  const { t } = useTranslation();
+  return (
+    <section className="login-next" aria-labelledby="waitlist-next-title">
+      <h3 className="login-next-title" id="waitlist-next-title">{t("waitlist.next_title")}</h3>
+      <ol className="login-next-steps">
+        {NEXT_STEPS.map((key) => <li key={key}>{t(key)}</li>)}
+      </ol>
+    </section>
+  );
+}
+
+/* Starting points for the one open question, offered because a blank box
+   asking what you would hand off is the hardest field on the page. */
+const USE_CASE_IDEAS = ["waitlist.idea_triage", "waitlist.idea_release", "waitlist.idea_tests"] as const;
 
 const OPTIONAL_FIELDS = [
   { field: "name", label: "waitlist.name", autoComplete: "name" },
@@ -159,6 +188,19 @@ function WaitlistForm({ onSubmitted }: { onSubmitted: () => void }) {
           aria-describedby={problems.useCase ? "waitlist-useCase-error" : undefined}
         />
       </Field>
+      <div className="login-ideas" role="group" aria-labelledby="waitlist-ideas-label">
+        <span className="login-ideas-label" id="waitlist-ideas-label">{t("waitlist.ideas_label")}</span>
+        {USE_CASE_IDEAS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className="login-idea"
+            onClick={() => update("useCase", withUseCaseIdea(fields.useCase, t(key)))}
+          >
+            {t(key)}
+          </button>
+        ))}
+      </div>
       {/* The honeypot. Hidden from people and assistive tech alike, out of
           the tab order, and never autofilled — so anything in it was typed
           by something that reads the markup rather than the page. */}
