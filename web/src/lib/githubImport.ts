@@ -8,6 +8,7 @@ import type { GitHubImportResponse, GitHubIssuePreview } from "../types.ts";
  *  as the generic failure. */
 export const GITHUB_ERROR_CODES = [
   "github_repository_required",
+  "github_public_repositories_only",
   "github_repository_invalid",
   "github_repository_moved",
   "github_token_invalid",

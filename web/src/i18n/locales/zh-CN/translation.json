@@ -3316,7 +3316,7 @@
     "into_intake": "议题将成为未归属项目的收件任务",
     "close": "关闭",
     "repository": "仓库",
-    "repository_hint": "owner/repository，或仓库的 github.com 地址。",
+    "repository_hint": "仅支持 GitHub 公开仓库：输入 owner/repository 或 github.com 仓库链接。",
     "token": "访问令牌",
     "token_hint": "私有仓库或更高的速率限制需要令牌。仅用于本次导入，不会保存。",
     "optional": "可选",
@@ -3354,15 +3354,16 @@
       "github_repository_moved": "该仓库已重命名或迁移，请使用新名称。",
       "github_token_invalid": "访问令牌格式不正确。",
       "github_token_rejected": "GitHub 授权已失效，请重新连接 GitHub 后重试。",
-      "github_not_found": "未找到仓库。私有仓库需要访问令牌。",
+      "github_not_found": "未找到公开仓库或 Issue，暂不支持私有仓库。",
       "github_issues_disabled": "该仓库已关闭议题功能。",
-      "github_forbidden": "该访问令牌无权读取此仓库的议题。",
-      "github_rate_limited": "已达到 GitHub 速率限制。请添加访问令牌或稍后再试。",
+      "github_forbidden": "GitHub 拒绝访问，目前仅支持公开仓库。",
+      "github_rate_limited": "已达到 GitHub 公开 API 的速率限制，请稍后重试。",
       "github_timeout": "GitHub 响应超时，请重试。",
       "github_unreachable": "无法连接 GitHub，请重试。",
       "github_unavailable": "GitHub 返回了错误，请重试。",
       "github_import_too_large": "每次最多导入 50 个议题。",
-      "github_reconnect_required": "GitHub 授权需要更新，请重新连接以继续。"
+      "github_reconnect_required": "GitHub 授权需要更新，请重新连接以继续。",
+      "github_public_repositories_only": "目前仅支持 GitHub 公开仓库，私有仓库连接即将推出。"
     }
   },
   "github_connection": {
@@ -3382,6 +3383,8 @@
     "cancelled": "已取消 GitHub 连接，你可以重新尝试。",
     "success": "GitHub 已连接，现在可以导入所选仓库的 Issue。",
     "reconnect_hint": "GitHub 授权需要更新，请重新连接以继续。",
-    "permissions_error": "Relay 的 GitHub App 需要只读 Issue 权限，请联系管理员检查配置。"
+    "permissions_error": "Relay 的 GitHub App 需要只读 Issue 权限，请联系管理员检查配置。",
+    "coming_soon": "即将推出",
+    "public_only": "目前支持导入公开仓库的 Issue。用于私有仓库的 GitHub 连接即将推出。"
   }
 }

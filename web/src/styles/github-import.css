@@ -25,6 +25,7 @@
 
 .github-connection-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
   margin: 0;
@@ -36,17 +37,7 @@
 .github-connection-title svg { width: 1.125rem; height: 1.125rem; }
 .github-connection p { margin: 0; font: var(--type-body-sm); }
 .github-connection-hint { color: var(--ink-3); }
-.github-connection-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-}
-.github-connection-actions a {
-  color: var(--link);
-  font: var(--type-body-sm);
-  text-underline-offset: 0.2em;
-}
+
 
 .github-import-filters {
   display: grid;

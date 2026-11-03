@@ -3,9 +3,8 @@
 The import only ever reads, and only from ``api.github.com``: the host is
 fixed, redirects are not followed, and a repository is named by validated
 ``owner``/``name`` segments, so a request can never be pointed elsewhere.
-A token is optional (public repositories read without one, within GitHub's
-anonymous rate limit); it rides only in this request's ``Authorization``
-header and is never stored or logged.
+Every request is anonymous, and the repository's visibility is checked before
+its issues are previewed or imported.
 
 Pull requests share the issues endpoint; they are flagged so the import can
 leave them out.
@@ -26,12 +25,10 @@ TIMEOUT_SECONDS = 15.0
 PAGE_SIZE = 50
 MAX_PAGE = 100
 ISSUE_STATES = ("open", "closed", "all")
-MAX_TOKEN_CHARS = 255
 MAX_LABEL_FILTER_CHARS = 200
 
 _OWNER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 _NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
-_TOKEN = re.compile(r"^[\x21-\x7e]+$")
 
 # Tests swap in an ``httpx.MockTransport``; production uses the default.
 transport: httpx.BaseTransport | None = None
@@ -75,13 +72,6 @@ def parse_repository(value: Any) -> Repository:
     return Repository(owner, name)
 
 
-def parse_token(value: Any) -> str | None:
-    if value is None or value == "":
-        return None
-    if not isinstance(value, str) or len(value) > MAX_TOKEN_CHARS or not _TOKEN.match(value.strip()):
-        raise GitHubError(400, "github_token_invalid")
-    return value.strip()
-
 
 @dataclass(frozen=True)
 class IssuePage:
@@ -90,14 +80,12 @@ class IssuePage:
 
 
 class GitHubIssueClient:
-    def __init__(self, token: str | None = None):
+    def __init__(self):
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
             "User-Agent": "relay-issue-import",
         }
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.Client(
             base_url=API_ROOT,
             headers=headers,
@@ -111,6 +99,14 @@ class GitHubIssueClient:
 
     def __exit__(self, *_exc: object) -> None:
         self._client.close()
+
+    def require_public_repository(self, repo: Repository) -> None:
+        response = self._get(f"/repos/{repo.owner}/{repo.name}", None)
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise GitHubError(502, "github_unexpected_response")
+        if payload.get("private") is not False or payload.get("visibility") != "public":
+            raise GitHubError(403, "github_public_repositories_only")
 
     def list_issues(
         self, repo: Repository, *, state: str = "open", labels: str = "", page: int = 1
@@ -153,7 +149,7 @@ def _error_for(response: httpx.Response) -> GitHubError:
         return GitHubError(429, "github_rate_limited")
     if status == 401:
         # Never answer 401: the web client reads that as its own sign-out.
-        return GitHubError(422, "github_token_rejected")
+        return GitHubError(403, "github_forbidden")
     if status == 404:
         return GitHubError(404, "github_not_found")
     if status in (301, 302, 307, 308):

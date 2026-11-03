@@ -26,7 +26,6 @@ from ..persistence.account.waitlist import DatabaseWaitlistStore
 from ..persistence.notification.store import DatabaseNotificationStore
 from ..accounts.waitlist import WaitlistService, waitlist_config_from_env
 from ..accounts.github_connection import GitHubConnectionService
-from ..core.github_connection import github_config_from_env
 from ..persistence.account.github import DatabaseGitHubConnectionStore
 from ..notifications.mailer import Mailer
 from ..persistence.automation.store import DatabaseAutomationStore
@@ -163,9 +162,10 @@ def notification_store_from_env() -> DatabaseNotificationStore:
 
 
 def github_connection_service_from_env() -> GitHubConnectionService:
-    config = github_config_from_env()
+    # Connection setup is coming soon. Keep the store for credential cleanup,
+    # and ignore App settings so they cannot enable authorization implicitly.
     url = database_url_from_env(setting="database-only GitHub connections")
-    return GitHubConnectionService(DatabaseGitHubConnectionStore(url), config)
+    return GitHubConnectionService(DatabaseGitHubConnectionStore(url), None)
 
 
 def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:

@@ -29,7 +29,6 @@ const STATES: GitHubIssueState[] = ["open", "closed", "all"];
 const NO_PROJECT = "__intake__";
 
 interface GitHubImportDrawerProps {
-  accountId: string;
   open: boolean;
   onClose: () => void;
   /** The board's own project: the destination is fixed to it. */
@@ -55,10 +54,10 @@ function errorCode(error: unknown): string | undefined {
 /**
  * Brings a GitHub repository's issues in as backlog tasks: name the
  * repository, load a page of issues, tick the ones to bring in. Issues the
- * destination already holds are shown but cannot be picked again. The token
- * is supplied by the account's server-side GitHub connection.
+ * destination already holds are shown but cannot be picked again. Only public
+ * repositories are supported; requests never use GitHub credentials.
  */
-export function GitHubImportDrawer({ accountId, open, onClose, lockedProject, projects = [], initialProjectId, onOpenTask }: GitHubImportDrawerProps) {
+export function GitHubImportDrawer({ open, onClose, lockedProject, projects = [], initialProjectId, onOpenTask }: GitHubImportDrawerProps) {
   const { t } = useTranslation();
   const { announce } = useDialogs();
   const queryClient = useQueryClient();
@@ -150,7 +149,7 @@ export function GitHubImportDrawer({ accountId, open, onClose, lockedProject, pr
       closeLabel={t("github_import.close")}
       bodyClassName="github-import"
     >
-      <GitHubConnectionPanel accountId={accountId} fromImport />
+      <GitHubConnectionPanel />
       <form className="github-import-query" onSubmit={submit}>
         <Field label={t("github_import.repository")} required hint={t("github_import.repository_hint")}>
           <Input

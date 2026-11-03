@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
@@ -41,15 +40,18 @@ class FakeGitHub:
         self.issues = {issue["number"]: issue for issue in issues}
         self.requests: list[httpx.Request] = []
         self.status: int | None = None
+        self.visibility = "public"
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         assert request.url.host == "api.github.com"
+        parts = request.url.path.strip("/").split("/")
+        if [part.lower() for part in parts[:3]] != ["repos", "octo", "hello"]:
+            return httpx.Response(404, json={"message": "Not Found"})
+        if len(parts) == 3:
+            return httpx.Response(200, json={"private": self.visibility == "private", "visibility": self.visibility})
         if self.status:
             return httpx.Response(self.status, json={}, headers={"x-ratelimit-remaining": "0"})
-        parts = request.url.path.strip("/").split("/")
-        if parts[:3] != ["repos", "octo", "hello"]:
-            return httpx.Response(404, json={"message": "Not Found"})
         if len(parts) == 4:
             return httpx.Response(200, json=list(self.issues.values()), headers={"link": '<x>; rel="next"'})
         issue = self.issues.get(int(parts[4]))
@@ -93,7 +95,7 @@ def test_preview_lists_issues_without_pull_requests(context, github):
     assert body["issues"][0]["url"] == "https://github.com/octo/hello/issues/1"
     assert body["issues"][0]["importedTaskId"] is None
     assert "body" not in body["issues"][0]
-    assert github.requests[0].url.params["state"] == "open"
+    assert github.requests[-1].url.params["state"] == "open"
 
 
 def test_import_creates_backlog_tasks_in_the_project_and_skips_repeats(context, github):
@@ -160,27 +162,28 @@ def test_rate_limit_stops_the_import(context, github):
         {"number": 1, "reason": "github_rate_limited"},
         {"number": 2, "reason": "github_rate_limited"},
     ]
-    assert len(github.requests) == 1
+    assert len(github.requests) == 2
     preview = client.post("/api/v1/tasks/github/issues", json={"repository": "octo/hello"})
     assert preview.status_code == 429
     assert preview.json()["detail"] == "github_rate_limited"
 
 
-def test_token_is_sent_to_github_and_not_kept(context, github):
-    app, client, project = context
-    client.post("/api/v1/tasks/github/import", json={
+@pytest.mark.parametrize("route", ["issues", "import"])
+def test_token_authentication_is_rejected(context, github, route):
+    _app, client, project = context
+    response = client.post(f"/api/v1/tasks/github/{route}", json={
         "repository": "octo/hello", "projectId": project["id"], "numbers": [1], "token": "ghp_secret123",
     })
-    assert github.requests[0].headers["authorization"] == "Bearer ghp_secret123"
-    [task] = app.state.task_store.find_tasks_by_external_refs(["github:octo/hello#1"])
-    assert "ghp_secret123" not in json.dumps(task)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "github_public_repositories_only"
+    assert github.requests == []
 
 
 @pytest.mark.parametrize(("payload", "detail"), [
     ({"repository": ""}, "github_repository_required"),
     ({"repository": "https://evil.example/octo/hello"}, "github_repository_invalid"),
     ({"repository": "octo/../x"}, "github_repository_invalid"),
-    ({"repository": "octo/hello", "token": "has space"}, "github_token_invalid"),
+    ({"repository": "octo/hello", "token": "has space"}, "github_public_repositories_only"),
     ({"repository": "octo/hello", "numbers": []}, "github_issue_numbers_required"),
     ({"repository": "octo/hello", "numbers": [0]}, "github_issue_numbers_invalid"),
     ({"repository": "octo/hello", "numbers": list(range(1, 52))}, "github_import_too_large"),
@@ -229,7 +232,8 @@ def test_concurrent_imports_create_only_one_task(context, github, monkeypatch, i
 
     def handler(request):
         # Both requests have completed their preview-time duplicate check.
-        barrier.wait(timeout=10)
+        if request.url.path.endswith("/issues/1"):
+            barrier.wait(timeout=10)
         return original(request)
 
     monkeypatch.setattr(github_issues, "transport", httpx.MockTransport(handler))
@@ -245,3 +249,26 @@ def test_concurrent_imports_create_only_one_task(context, github, monkeypatch, i
     assert len(created) == 1
     assert skipped == [{"number": 1, "reason": "already_imported", "taskId": created[0]["id"]}]
     assert len(app.state.task_store.find_tasks_by_external_refs(["github:octo/hello#1"])) == 1
+
+
+@pytest.mark.parametrize("visibility", ["private", "internal", None])
+def test_only_public_repositories_can_be_previewed_or_imported(context, github, visibility):
+    _app, client, _project = context
+    github.visibility = visibility
+    for route in ("issues", "import"):
+        response = client.post(f"/api/v1/tasks/github/{route}", json={"repository": "octo/hello", "numbers": [1]})
+        assert response.status_code == 403
+        assert response.json()["detail"] == "github_public_repositories_only"
+    assert all(request.url.path == "/repos/octo/hello" for request in github.requests)
+
+
+def test_public_import_never_uses_a_saved_connection(context, github, monkeypatch):
+    app, client, _project = context
+
+    def saved_token(_account_id):
+        raise AssertionError("Public imports must not read saved credentials")
+
+    monkeypatch.setattr(app.state.github_connection, "token_for", saved_token)
+    response = client.post("/api/v1/tasks/github/import", json={"repository": "octo/hello", "numbers": [1]})
+    assert response.status_code == 201, response.text
+    assert all("authorization" not in request.headers for request in github.requests)
