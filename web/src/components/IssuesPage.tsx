@@ -58,6 +58,7 @@ import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { TaskDrawer } from "./task-board/TaskDrawer";
+import { GitHubImportDrawer } from "./task-board/GitHubImportDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
 import { BacklogBoard } from "./task-board/BacklogBoard";
@@ -154,10 +155,14 @@ function IssuesPageView({
   const tagFilters = useTagFilters(filters.tag, applyTagFilter, closeRecord);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
   const [view, setView] = useState<BacklogView>("list");
+  const [importOpen, setImportOpen] = useState(false);
   // Deterministic first render; the stored preference is browser-only.
   const mounted = useClientMounted();
   useKeyChange(mounted, (isMounted) => {
-    if (isMounted) setView(parseBacklogView(null, ISSUES_VIEW_STORAGE_KEY));
+    if (isMounted) {
+      setView(parseBacklogView(null, ISSUES_VIEW_STORAGE_KEY));
+      if (new URLSearchParams(window.location.search).get("githubImport") === "1") setImportOpen(true);
+    }
   }, { from: false });
   const board = view === "board";
 
@@ -348,6 +353,8 @@ function IssuesPageView({
                 isRefreshing={isRefreshing}
                 onRefresh={onRefresh ? () => void onRefresh() : undefined}
                 onCreate={openCreate}
+                importLabel={t("github_import.action")}
+                onImport={() => setImportOpen(true)}
               />
             )}
           />
@@ -480,6 +487,17 @@ function IssuesPageView({
               onDeleted={() => onOpenRecord(null)}
             />
         </TagFilterContext>
+        ) : null}
+
+        {importOpen ? (
+          <GitHubImportDrawer
+            accountId={currentUser.id}
+            open
+            projects={projects}
+            initialProjectId={projectFilter ?? undefined}
+            onClose={() => setImportOpen(false)}
+            onOpenTask={(taskId) => { setImportOpen(false); onOpenRecord(taskId); }}
+          />
         ) : null}
 
         {form ? (

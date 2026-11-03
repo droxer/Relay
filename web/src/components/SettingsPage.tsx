@@ -7,6 +7,7 @@ import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
 import type { CurrentUser } from "../types";
 import { AccountSection } from "./settings/AccountSection";
+import { GitHubConnectionPanel } from "./settings/GitHubConnectionPanel";
 import { NotificationsSection } from "./settings/NotificationsSection";
 import {
   IdentityUser,
@@ -85,7 +86,7 @@ export function SettingsPage({
         <PageHeader title={sectionLabel} titleAs="h2" titleVariant="title" />
         <div className="sec-section-body">
           {section === "account" ? (
-            <AccountSection key={user.id} user={user} onUserChange={onUserChange} />
+            <><AccountSection key={user.id} user={user} onUserChange={onUserChange} /><GitHubConnectionPanel accountId={user.id} /></>
           ) : section === "notifications" ? (
             <NotificationsSection />
           ) : section === "appearance" ? (

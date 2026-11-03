@@ -6,6 +6,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { MobileTopbarActions, PHONE_QUERY } from "./MobileTopbarSlot";
 import {
   ActionAdd,
+  ActionImport,
   ICON,
   NavRefresh,
 } from "./icons";
@@ -17,6 +18,8 @@ export function TaskBoardHeaderActions({
   isRefreshing,
   onRefresh,
   onCreate,
+  importLabel,
+  onImport,
   leading,
   topbar = false,
 }: {
@@ -27,6 +30,9 @@ export function TaskBoardHeaderActions({
   onRefresh?: () => void;
   /** Omitted where nothing may be created (a read-only project). */
   onCreate?: () => void;
+  importLabel?: string;
+  /** Opens the GitHub issue import; omitted where nothing may be created. */
+  onImport?: () => void;
   leading?: ReactNode;
   /** On a phone, the view toggle and create move into the top bar. For a
    *  toolbar that is not a PageHeader. */
@@ -49,6 +55,15 @@ export function TaskBoardHeaderActions({
         onClick={onRefresh}
       >
         <NavRefresh size={ICON.md} />
+      </Button> : null}
+      {onImport && importLabel ? <Button
+        type="button"
+        variant="ghost"
+        className="page-header-icon-action"
+        tooltip={importLabel}
+        onClick={onImport}
+      >
+        <ActionImport size={ICON.md} />
       </Button> : null}
       {onCreate ? <Button
         type="button"

@@ -60,6 +60,8 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
     }
     if payload.get("tags"):
         created_payload["tags"] = list(payload["tags"])
+    if payload.get("externalSource"):
+        created_payload["externalSource"] = dict(payload["externalSource"])
     for field in (
         "ownerUserId",
         "assigneeUserId",

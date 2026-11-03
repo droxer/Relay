@@ -24,6 +24,7 @@ import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyBacklogForm } from "../lib/taskBoardForm";
 import { collectTags } from "../lib/taskTags";
 import { TaskDrawer } from "./task-board/TaskDrawer";
+import { GitHubImportDrawer } from "./task-board/GitHubImportDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { BoardEmpty } from "./BoardEmpty";
@@ -104,6 +105,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
      rather than emptying the board. */
   const filters = useMemo<BacklogFilters>(() => ({ ...urlFilters, source: "all" }), [urlFilters]);
   const [view, setView] = useState<BacklogView>("list");
+  const [importOpen, setImportOpen] = useState(false);
   /* The form is a shared controller, not this board's own: the project board
      opens the same record drawer and edits through the same form. */
   const {
@@ -193,7 +195,10 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   // browser-only preference once hydration has completed.
   const mounted = useClientMounted();
   useKeyChange(mounted, (isMounted) => {
-    if (isMounted) setView(parseBacklogView(null));
+    if (isMounted) {
+      setView(parseBacklogView(null));
+      if (new URLSearchParams(window.location.search).get("githubImport") === "1") setImportOpen(true);
+    }
   }, { from: false });
 
   // The `c` chord and the palette's "New task" land here: the event path
@@ -279,6 +284,8 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
       isRefreshing={isRefreshing}
       onRefresh={onRefresh ? () => void onRefresh() : undefined}
       onCreate={openCreate}
+      importLabel={t("github_import.action")}
+      onImport={readOnly ? undefined : () => setImportOpen(true)}
     />
   );
 
@@ -436,6 +443,16 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
               onDeleted={() => onOpenRecord(null)}
             />
         </TagFilterContext>
+        ) : null}
+
+        {importOpen && currentProject ? (
+          <GitHubImportDrawer
+            accountId={currentUser.id}
+            open
+            lockedProject={currentProject}
+            onClose={() => setImportOpen(false)}
+            onOpenTask={(taskId) => { setImportOpen(false); onOpenRecord(taskId); }}
+          />
         ) : null}
 
         {form ? (

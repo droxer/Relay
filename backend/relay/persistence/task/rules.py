@@ -16,6 +16,14 @@ from .reducer import TASK_EVENT_HANDLERS
 _HYDRATE_TASK_WRITES = ContextVar("hydrate_task_writes", default=True)
 
 
+class TaskAlreadyImportedError(Exception):
+    """A live task already holds this external reference in the destination."""
+
+    def __init__(self, task_id: str):
+        super().__init__("already_imported")
+        self.task_id = task_id
+
+
 @contextmanager
 def compact_task_writes() -> Iterator[None]:
     """Opt background bookkeeping out of full mutation response histories."""

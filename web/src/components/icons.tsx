@@ -21,6 +21,7 @@ import {
   Cloud,
   Columns3,
   CircleDashed,
+  Download,
   File,
   FileCode,
   FileDiff,
@@ -477,6 +478,7 @@ export const BreadcrumbSeparator = withStandardStroke(LucideChevronRight, "Bread
 
 // Generic actions not covered above.
 export const ActionAdd = withStandardStroke(Plus, "ActionAdd");
+export const ActionImport = withStandardStroke(Download, "ActionImport");
 export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");
 export const ActionEdit = withStandardStroke(Pencil, "ActionEdit");
 export const ActionToggle = withStandardStroke(Power, "ActionToggle");

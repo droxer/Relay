@@ -31,11 +31,12 @@ from .reducer import materialize_task_events
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_task_event
 from ..engine import store_transaction
+from ..resource_lock import resource_transaction
 from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
 from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
 from ...tasks.prerequisites import PREREQUISITES_EVENT
-from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
+from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, TaskAlreadyImportedError, apply_task_events
 from ...tasks.claims import TaskExecutionActiveError, dispatch_claim_active
 from .events import (
     task_creation_events,
@@ -112,7 +113,28 @@ class TaskWriteRows(TaskStoreState):
         logger.debug(
             "Creating database task", task_id=task_id, title=payload.get("title")
         )
-        with store_transaction(self.engine) as conn:
+        ref = (payload.get("externalSource") or {}).get("ref")
+        project_id = payload.get("projectId")
+        destination = f"project:{project_id}" if project_id else f"user:{payload.get('ownerUserId')}"
+        transaction = (
+            resource_transaction(self.engine, f"task-import:{destination}:{ref}")
+            if ref else store_transaction(self.engine)
+        )
+        with transaction as conn:
+            if ref:
+                scope = (
+                    self.tasks.c.project_id == project_id if project_id else and_(
+                        self.tasks.c.project_id.is_(None),
+                        self.tasks.c.owner_user_id == payload.get("ownerUserId"),
+                    )
+                )
+                existing_id = conn.scalar(select(self.tasks.c.id).where(
+                    self.tasks.c.external_ref == ref,
+                    self.tasks.c.deleted_at.is_(None),
+                    scope,
+                ))
+                if existing_id:
+                    raise TaskAlreadyImportedError(existing_id)
             events = number_task_events(
                 task_creation_events(task_id, payload),
                 partial(self._next_task_number, conn),

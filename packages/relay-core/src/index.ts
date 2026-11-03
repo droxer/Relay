@@ -301,6 +301,7 @@ export {
   type RelayTaskListItem,
   type RelayTaskSummary,
   type TaskExecutionAttention,
+  type TaskExternalSource,
   type TaskAwaiting,
   type TaskWaitKind,
   type TaskWaitingRequest,

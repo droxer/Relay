@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { describeTriggers, triggersOf } from "../../lib/automationTrigger";
 import { routineState } from "../../lib/routine";
 import { taskRef } from "../../lib/taskRef";
+import { safeGitHubUrl } from "../../lib/githubImport";
 import type { RelayTaskListItem } from "../../types";
 import { formatNextRunAt, formatNextRunDate } from "../task-board/RoutineChrome";
 import { RoutineStateBadge } from "../RoutineStateBadge";
@@ -87,6 +88,23 @@ export function recordBandFacts(
     technical: true,
     title: task.id,
   });
+  /* An imported task names the issue it came from; the link is built
+     server-side and re-checked here, so it can only open github.com. */
+  const source = task.externalSource;
+  const sourceUrl = safeGitHubUrl(source?.url);
+  if (source && sourceUrl) {
+    facts.push({
+      key: "source",
+      label: t("github_import.source"),
+      value: (
+        <a className="record-band-link" href={sourceUrl} target="_blank" rel="noopener noreferrer" translate="no">
+          {`${source.repository}#${source.number}`}
+        </a>
+      ),
+      technical: true,
+      title: sourceUrl,
+    });
+  }
   return facts;
 }
 

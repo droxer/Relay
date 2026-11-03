@@ -55,6 +55,7 @@
 @import "./issues.css" layer(relay);
 @import "./agents.css" layer(relay);
 @import "./skills.css" layer(relay);
+@import "./github-import.css" layer(relay);
 @import "./teams.css" layer(relay);
 @import "./computer.css" layer(relay);
 @import "./home.css" layer(relay);

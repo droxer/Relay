@@ -895,6 +895,80 @@ missing snapshot answers `404 artifact_snapshot_unavailable`; this mode never
 falls back to current workspace bytes. Reads without it keep their existing
 live fallback for compatibility.
 
+### Importing GitHub issues
+
+Browser users connect a GitHub App from Settings → Account or the import
+drawer; [administrator setup](github-connection.md) is required once per
+deployment. Issue preview and import use the signed-in Account's encrypted
+server-side connection when no explicit legacy `token` is supplied. A chat
+service actor cannot borrow that saved credential. Public repositories remain
+available without a connection.
+
+Connection routes (browser login session required):
+
+- `GET /api/v1/account/github` → `{configured, connected, login, manageUrl,
+  reconnectRequired?}`. Credentials are never returned.
+- `POST /api/v1/account/github/connect`, body `{returnTo?}` → `{authorizeUrl}`.
+  The return destination must be a relative same-origin path.
+- `GET /api/v1/account/github/callback` consumes one-time, session-bound state,
+  exchanges the authorization code with PKCE, and redirects to installation
+  selection if needed. The installation callback verifies the user's access
+  and the App's read-only issue permissions, then saves the encrypted connection
+  and returns to `returnTo` with `githubConnection=connected`.
+- `DELETE /api/v1/account/github` removes the Account's saved credentials and
+  unfinished authorizations; imported tasks are unaffected. This does not
+  uninstall the App on GitHub.
+
+Connection setup is limited per Account (five attempts per minute by default).
+Invalid, expired, replayed, or session-mismatched callback state answers 400
+`github_connection_state_invalid`; unsafe return paths answer 400
+`github_connection_return_invalid`; rate limiting answers 429 with `Retry-After`;
+and missing deployment configuration answers 503 `github_connection_not_configured`.
+Provider failures with valid callback state return to the originating UI with
+`githubConnection=failed` (or `permissions` for excessive App permissions).
+
+`POST /api/v1/tasks/github/issues` previews a page of a repository's issues;
+`POST /api/v1/tasks/github/import` brings the chosen ones in as `backlog`
+tasks. Both take a JSON body (never query parameters, so no access log keeps a
+token):
+
+| Field | Routes | Meaning |
+|---|---|---|
+| `repository` | both | `owner/name` or a `https://github.com/owner/name[...]` URL |
+| `projectId` | both | Destination project; omitted for the caller's intake |
+| `token` | both | Optional legacy GitHub token, overrides the saved connection for this request only; never stored |
+| `state` | preview | `open` (default), `closed`, or `all` |
+| `labels` | preview | Comma-separated label filter, as GitHub takes it |
+| `page` | preview | 1–100; pages are 50 issues |
+| `numbers` | import | 1–50 issue numbers |
+
+The preview answers `{repository, page, hasMore, issues}`; each issue carries
+`number`, `title`, `url`, `state`, `labels`, `author`, `comments`,
+`createdAt`, `updatedAt`, and `importedTaskId` — the task it already became in
+that destination, else `null`. Pull requests are left out.
+
+The import re-reads each issue from GitHub and answers `201` with
+`{created, skipped, failed}`: `created` holds the new tasks, `skipped` names
+`{number, reason, taskId?}` for `already_imported` and `pull_request`, and
+`failed` names `{number, reason}` with a `github_*` code. A rate limit or a
+rejected token fails the remaining issues instead of retrying each.
+
+An imported task records `externalSource`
+(`{provider: "github", ref: "github:owner/name#12", repository, number, url}`;
+`url` is always built from the validated repository). Its title is the
+issue's, its description the issue body followed by a link back, and its tags
+the issue's labels that are valid tags. `POST /tasks` cannot set
+`externalSource`.
+
+Errors are the `detail` codes `github_repository_required`,
+`github_repository_invalid`, `github_token_invalid`,
+`github_issue_numbers_required`, `github_issue_numbers_invalid`,
+`github_import_too_large`, `github_state_invalid`, `github_labels_invalid`,
+`github_page_invalid` (400); `github_forbidden` (403); `github_not_found`,
+`github_issues_disabled` (404); `github_repository_moved` (409);
+`github_token_rejected` (422, never 401); `github_rate_limited` (429);
+`github_unavailable`, `github_unreachable` (502); and `github_timeout` (504).
+
 ### Thread execution and deferred deletion
 
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included

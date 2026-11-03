@@ -99,3 +99,22 @@ export function updateAccountProfile(input: { displayName: string }): Promise<{ 
 export function changePassword(input: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {
   return apiJson("/auth/password", { method: "POST", body: input });
 }
+export interface GitHubConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  login: string | null;
+  manageUrl: string | null;
+  reconnectRequired?: boolean;
+}
+
+export function getGitHubConnection(): Promise<GitHubConnectionStatus> {
+  return apiJson("/account/github");
+}
+
+export function startGitHubConnection(returnTo: string): Promise<{ authorizeUrl: string }> {
+  return apiJson("/account/github/connect", { method: "POST", body: { returnTo } });
+}
+
+export function disconnectGitHub(): Promise<{ connected: false }> {
+  return apiJson("/account/github", { method: "DELETE" });
+}

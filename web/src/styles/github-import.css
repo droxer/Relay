@@ -1,0 +1,218 @@
+/* The GitHub issue import drawer (task-board/GitHubImportDrawer.tsx): the
+   query form, then the issue list as plain hairline rows like the skill
+   drawer's lists, and the shared .adm-form-actions bar pinned below. */
+
+.github-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.github-import-query {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.github-connection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding-block: var(--sp-5);
+  border-block-end: 1px solid var(--line-1);
+}
+
+.github-connection-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  font: var(--type-body);
+  font-weight: 500;
+  color: var(--ink-1);
+}
+
+.github-connection-title svg { width: 1.125rem; height: 1.125rem; }
+.github-connection p { margin: 0; font: var(--type-body-sm); }
+.github-connection-hint { color: var(--ink-3); }
+.github-connection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.github-connection-actions a {
+  color: var(--link);
+  font: var(--type-body-sm);
+  text-underline-offset: 0.2em;
+}
+
+.github-import-filters {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+/* The shared segment is a two-up grid; issue state has three choices. */
+.github-import-filters .adm-profile-segment {
+  grid-template-columns: repeat(3, auto);
+}
+
+@media (max-width: 640px) {
+  .github-import-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.github-import-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  align-items: flex-start;
+}
+
+.github-import-results-head {
+  display: flex;
+  align-self: stretch;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.github-import-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-2);
+}
+
+.github-import-repo {
+  font: var(--type-code);
+  letter-spacing: var(--type-code-track);
+  color: var(--ink-3);
+}
+
+.github-import-list {
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.github-import-row {
+  display: grid;
+  grid-template-columns: var(--sp-4) auto minmax(0, 1fr) auto;
+  align-items: first baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.github-import-row:last-child {
+  border-bottom: 0;
+}
+
+/* A box has no baseline of its own; pin it to the title's first line so a
+   wrapped title does not drag it down to the row's middle. */
+.github-import-row > [data-slot="checkbox"] {
+  align-self: start;
+  margin-top: calc((1lh - 16px) / 2);
+}
+
+.github-import-row-number {
+  font: var(--type-code);
+  letter-spacing: var(--type-code-track);
+  color: var(--ink-3);
+}
+
+.github-import-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+.github-import-row-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--ink-1);
+  text-decoration: none;
+}
+
+a.github-import-row-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.github-import-row[data-imported="true"] .github-import-row-title {
+  color: var(--ink-3);
+}
+
+.github-import-row-labels {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.github-import-label {
+  padding: 0 var(--sp-1);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-1);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-3);
+}
+
+.github-import-row-state {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-3);
+}
+
+button.github-import-row-state {
+  padding: 0;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-1);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+button.github-import-row-state:hover {
+  text-decoration-color: currentColor;
+}
+
+.github-import-empty {
+  margin: 0;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--ink-3);
+}
+
+.github-import-error {
+  margin: 0;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  color: var(--err);
+}
+
+/* The record band's link to the issue an imported task came from. */
+.record-band-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-1);
+  text-underline-offset: 2px;
+}
+
+.record-band-link:hover {
+  text-decoration-color: currentColor;
+}

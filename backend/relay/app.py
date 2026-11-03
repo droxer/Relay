@@ -11,6 +11,7 @@ from loguru import logger
 
 from .api.accounts import (
     auth as auth_routes,
+    github as github_connection_routes,
     notifications as notification_routes,
     password_reset as password_reset_routes,
     profile_images as profile_image_routes,
@@ -40,6 +41,7 @@ from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
 from .api.tasks import (
     automations as automation_routes,
+    github as task_github_routes,
     history as task_history_routes,
     prerequisites as task_prerequisite_routes,
     records as task_record_routes,
@@ -107,6 +109,7 @@ from .bootstrap.http import (
     configure_cors,
 )
 from .bootstrap.stores import (
+    github_connection_service_from_env,
     waitlist_service_from_env,
     Stores,
     build_stores,
@@ -331,6 +334,7 @@ def _publish_state(
         chat_probe=probe_chat_integration,
         chat_provision=provision_chat_integration,
         chat_rotation_locks={},
+        github_connection=github_connection_service_from_env(),
     )
     state = app.state
     state.context = context
@@ -360,6 +364,7 @@ API_ROUTERS = (
     admin_dashboard_routes.router,
     chat_gateway_routes.router,
     thread_message_routes.router,
+    task_github_routes.router,
     task_record_routes.router,
     task_prerequisite_routes.router,
     task_run_routes.router,
@@ -377,6 +382,7 @@ API_ROUTERS = (
     managed_node_routes.router,
     notification_routes.router,
     password_reset_routes.router,
+    github_connection_routes.router,
     waitlist_routes.router,
 )
 

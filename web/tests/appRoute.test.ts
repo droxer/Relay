@@ -540,3 +540,16 @@ it("keeps project automation records, run tabs and list filters within the proje
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=automations&run=r&recordTab=artifacts"), "/projects/p?tab=automations");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members&automation=a&run=r"), "/projects/p?tab=members");
 });
+it("GitHub connection returns survive only on connection and import surfaces", () => {
+  for (const path of ["/tasks", "/projects/p?tab=tasks"]) {
+    const original = new URL(path, "http://relay.test");
+    original.searchParams.set("githubImport", "1");
+    original.searchParams.set("githubConnection", "connected");
+    const canonical = new URL(canonicalBrowserUrl(original.pathname, original.search), original.origin);
+    assert.equal(canonical.searchParams.get("githubImport"), "1");
+    assert.equal(canonical.searchParams.get("githubConnection"), "connected");
+  }
+  assert.equal(canonicalBrowserUrl("/settings/account", "?githubConnection=failed"), "/settings/account?githubConnection=failed");
+  assert.equal(canonicalBrowserUrl("/agents", "?githubImport=1&githubConnection=connected"), "/agents");
+  assert.equal(canonicalBrowserUrl("/tasks", "?githubConnection=untrusted"), "/tasks");
+});

@@ -1,5 +1,9 @@
 import type {
   CreateTaskInput,
+  GitHubImportInput,
+  GitHubImportResponse,
+  GitHubIssueQuery,
+  GitHubIssuesResponse,
   RelayTask,
   RoutineSchedule,
   StartTaskResponse,
@@ -26,6 +30,16 @@ export function createTask(input: CreateTaskInput): Promise<RelayTask> {
     method: "POST",
     body: { ...fields, ...(collaborationStyle ? { collaborationStyle } : {}) },
   });
+}
+
+/** A page of a GitHub repository's issues, each marked if already imported. */
+export function previewGitHubIssues(query: GitHubIssueQuery, signal?: AbortSignal): Promise<GitHubIssuesResponse> {
+  return apiJson<GitHubIssuesResponse>("/tasks/github/issues", { method: "POST", body: query, signal });
+}
+
+/** Import the chosen issues as backlog tasks; repeats are skipped server-side. */
+export function importGitHubIssues(input: GitHubImportInput): Promise<GitHubImportResponse> {
+  return apiJson<GitHubImportResponse>("/tasks/github/import", { method: "POST", body: input });
 }
 
 /** One task or routine, by id. The list poll carries most records already,

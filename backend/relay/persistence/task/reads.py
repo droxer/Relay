@@ -153,3 +153,15 @@ class TaskReadRows(TaskStoreState):
             }
             for row in rows
         ]
+
+    def find_tasks_by_external_refs(self, refs: list[str]) -> list[dict[str, Any]]:
+        """Live tasks imported from any of ``refs`` (``externalSource.ref``)."""
+        if not refs:
+            return []
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(
+                select(self.tasks.c.snapshot)
+                .where(self.tasks.c.external_ref.in_(refs))
+                .where(self.tasks.c.deleted_at.is_(None))
+            ).mappings().all()
+        return [dict(row["snapshot"]) for row in rows]

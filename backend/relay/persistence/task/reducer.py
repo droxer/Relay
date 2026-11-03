@@ -58,6 +58,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["collaborationStyle"] = created["collaborationStyle"]
     if created.get("tags"):
         task["tags"] = list(created["tags"])
+    if created.get("externalSource"):
+        task["externalSource"] = dict(created["externalSource"])
     _apply_task_routine_fields(task, created)
     apply_task_number(task, created)
     for event in events:
