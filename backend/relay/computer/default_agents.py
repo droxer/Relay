@@ -18,8 +18,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from ..agents.creation import AgentCreationError, create_agent_for_user
+from ..agents.creation import AgentCreationError, computer_nodes, create_agent_for_user
 from ..core.computer_identity import computer_id, is_provisional_computer_id
+from ..core.model_policy import is_model_id
 from ..core.models import AGENT_NAMES
 from ..core.node_readiness import is_live_node, ready_runtimes
 from .names import computer_display_name
@@ -82,6 +83,7 @@ def accept_default_agents(
     answered.update(kind for computer, kind in (declined or set()) if computer == target_computer_id)
     taken = _live_names(history)
     created = []
+    nodes = computer_nodes(ctx, target_computer_id, user_id)
     for executor_kind in AGENT_NAMES:
         if executor_kind not in requested or executor_kind in answered:
             continue
@@ -94,6 +96,7 @@ def accept_default_agents(
                 "executorKind": executor_kind,
                 "defaultRole": DEFAULT_AGENT_ROLE,
                 "displayName": name,
+                "modelPolicy": _runtime_model_policy(nodes, executor_kind),
             },
         )
         taken.add(name.casefold())
@@ -129,11 +132,23 @@ def ensure_default_agents(
                 "executorKind": executor_kind,
                 "defaultRole": DEFAULT_AGENT_ROLE,
                 "computerId": node_computer_id,
+                "modelPolicy": _runtime_model_policy([node], executor_kind),
             },
         )
         taken.add(name.casefold())
         created.append(agent)
     return created
+
+
+def _runtime_model_policy(nodes: list[dict[str, Any]], executor_kind: str) -> dict[str, str]:
+    """Snapshot a ready runtime's reported default; never guess from its catalog."""
+    for node in nodes:
+        if node.get("retiredAt") or (node.get("agents") or {}).get(executor_kind) != "ready":
+            continue
+        model = (node.get("agentDefaultModels") or {}).get(executor_kind)
+        if isinstance(model, str) and is_model_id(model):
+            return {"model": model}
+    return {}
 
 
 def default_agent_name(executor_kind: str, taken: set[str]) -> str:

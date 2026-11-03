@@ -187,3 +187,21 @@ def test_stale_accept_respects_saved_decline(alice, stale_session_cache) -> None
     assert response.status_code == 201
     assert response.json()["agents"] == []
     assert client.get("/api/v1/agents").json()["agents"] == []
+
+
+def test_default_agent_saves_the_reported_runtime_default_model(alice) -> None:
+    client, computer = alice
+    registry = client.app.state.registry
+    registry.register({
+        "sandboxId": "node_alice", "userId": ALICE, "workspaceId": "machine-alice",
+        "token": "node_token", "protocolVersion": 1, "supportedAgents": ["claude", "codex"],
+        "capabilities": ["thread-workspaces", "agent-model"], "status": "ready",
+        "agentDefaultModels": {"codex": "configured-model", "claude": "bad model", "unknown": "other"},
+        "agentModels": {"codex": ["first-catalog-model", "configured-model"]},
+    })
+    response = client.post(f"{OFFERS}/accept", json={"computerId": computer, "executorKinds": ["codex"]})
+    assert response.status_code == 201
+    [agent] = response.json()["agents"]
+    assert agent["modelPolicy"] == {"model": "configured-model"}
+    assert client.get("/api/v1/agents").json()["agents"][0]["modelPolicy"] == agent["modelPolicy"]
+    assert registry.monitor_nodes()[0]["agentDefaultModels"] == {"codex": "configured-model"}

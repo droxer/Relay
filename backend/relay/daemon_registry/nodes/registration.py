@@ -31,6 +31,7 @@ from ..records import (
     DAEMON_SANDBOX_MODES,
     DeletedDaemonNodeError,
     agent_inventory_state,
+    agent_default_models_state,
     agent_models_state,
     agent_registration_state,
     custom_model_endpoints_state,
@@ -145,6 +146,7 @@ def _registered_agent_fields(payload: dict[str, Any]) -> dict[str, Any]:
         **_present("agentInventory", agent_inventory),
         **_present("customModelEndpoints", custom_model_endpoints),
         **_present("agentModels", agent_models),
+        **_present("agentDefaultModels", agent_default_models_state(payload)),
     }
 
 

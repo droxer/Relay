@@ -63,7 +63,7 @@ def merge_node_observation(
     # Inventory is reported in-process at registration; it has no table
     # projection. Persisted optional settings below still replace clears.
     inventory: dict[str, Any] = {key: current[key] for key in (
-        "agentInventory", "executorCapabilities", "customModelEndpoints", "agentModels"
+        "agentInventory", "executorCapabilities", "customModelEndpoints", "agentModels", "agentDefaultModels"
     ) if key in current}
     refreshed = {
         **inventory,

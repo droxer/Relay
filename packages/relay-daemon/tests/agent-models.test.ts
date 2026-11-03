@@ -231,6 +231,20 @@ describe("agent model discovery", () => {
     assert.equal(models[0], "m-0");
   });
 
+  it("reports a configured default even when the runtime has no model catalog", async () => {
+    const defaults: Partial<Record<AgentName, string>> = {};
+    const exec = async (): Promise<ExecResult> => ({
+      exit_code: 0, stdout: record("default-model", "configured-model"), stderr: "",
+    });
+    assert.deepEqual(await discoverAgentModels(exec, ["codex"], undefined, undefined, undefined, defaults), {});
+    assert.deepEqual(defaults, { codex: "configured-model" });
+    const invalid = async (): Promise<ExecResult> => ({
+      exit_code: 0, stdout: record("default-model", "bad model"), stderr: "",
+    });
+    await discoverAgentModels(invalid, ["codex"], undefined, undefined, undefined, defaults);
+    assert.deepEqual(defaults, {}, "a removed or invalid setting must clear the previous report");
+  });
+
   it("asks each runtime with its own credentials and omits runtimes that report nothing", async () => {
     const outputs: Partial<Record<AgentName, string>> = {
       codex: record("catalog", CODEX_CATALOG),

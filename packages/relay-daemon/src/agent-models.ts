@@ -1,4 +1,5 @@
-import { commandExecution, nativeWindowsExecution } from "relay-core";
+import { commandExecution, nativeWindowsExecution, shellQuote } from "relay-core";
+import { defaultModelDiscoveryScript } from "./agent-default-models.js";
 import { nativeModelDiscoveryScript } from "./native-discovery.js";
 import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentName } from "relay-core";
 
@@ -117,8 +118,9 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
 };
 
 export function buildModelDiscoveryScript(agent: AgentName): string {
-  if (nativeWindowsExecution()) return nativeModelDiscoveryScript(agent);
-  return [EMIT, ...MODEL_SOURCES[agent], "exit 0"].join("\n");
+  const defaults = defaultModelDiscoveryScript(agent);
+  if (nativeWindowsExecution()) return nativeModelDiscoveryScript(agent) + "\n" + defaults;
+  return [EMIT, ...MODEL_SOURCES[agent], `node --input-type=module -e ${shellQuote(defaults)} 2>/dev/null`, "exit 0"].join("\n");
 }
 
 /**
@@ -131,7 +133,8 @@ export type ProviderListMemory = Map<AgentName, string>;
 
 /**
  * Ask each of `agents` which models it offers. Agents that report nothing are
- * omitted. Best-effort: never throws.
+ * omitted. `defaultModels` receives configured defaults from the same sweep,
+ * including runtimes without a catalog. Best-effort: never throws.
  */
 export async function discoverAgentModels(
   execStream: ExecLike,
@@ -139,8 +142,10 @@ export async function discoverAgentModels(
   signal?: AbortSignal,
   timeoutMs = DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS,
   providerLists: ProviderListMemory = new Map(),
+  defaultModels: Partial<Record<AgentName, string>> = {},
 ): Promise<Partial<Record<AgentName, string[]>>> {
   if (signal?.aborted) return {};
+  for (const agent of agents) delete defaultModels[agent];
   const customEndpoints = new Set(customModelEndpointAgents());
   const entries = await Promise.all(agents.map(async (agent) => {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -152,6 +157,8 @@ export async function discoverAgentModels(
         env: Object.fromEntries(agentCredentialEnv(agent)),
       });
       if (result.exit_code !== 0) return [agent, []] as const;
+      const configuredDefault = decodeRecords(result.stdout).find(({ source }) => source === "default-model")?.text;
+      if (configuredDefault && validModels([configuredDefault]).length) defaultModels[agent] = configuredDefault;
       const fresh = providerListText(result.stdout);
       if (fresh) providerLists.set(agent, fresh);
       return [agent, parseAgentModels(agent, result.stdout, providerLists.get(agent), {

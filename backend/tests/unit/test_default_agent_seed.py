@@ -219,3 +219,10 @@ def test_seed_honors_declines(tmp_path: Path) -> None:
     )
 
     assert [a["executorKind"] for a in agents.list_agents(supervisor_user_id=account["userId"])] == ["codex"]
+
+
+def test_seed_pins_the_reported_default_model(tmp_path: Path) -> None:
+    _, agents, _ = _seed(tmp_path, [_node(agentDefaultModels={"codex": "configured-model"})])
+    seeded = {agent["executorKind"]: agent for agent in agents.list_agents(supervisor_user_id="alice")}
+    assert seeded["codex"]["modelPolicy"] == {"model": "configured-model"}
+    assert seeded["claude"]["modelPolicy"] == {}

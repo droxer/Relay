@@ -388,7 +388,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, options.signal);
   let agentInventory = await discoverAgentInventory(environment.execStream, options.signal, inventoryDiscoveryTimeoutMs);
   const providerModelLists: ProviderListMemory = new Map();
-  let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs, providerModelLists);
+  let agentDefaultModels: Partial<Record<AgentName, string>> = {};
+  let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs, providerModelLists, agentDefaultModels);
   const runtimeRefreshCommands = new Map<string, string>();
   let refreshedCommands: Array<{ commandId: string; leaseId: string }> = [];
   const hostOs = daemonHostOs(process.platform);
@@ -416,6 +417,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
     customModelEndpoints: customModelEndpointAgents(),
     agentModels,
+    agentDefaultModels,
     maxConcurrentRuns,
     status: status ?? (activeRuns.size > 0 ? "busy" : "ready"),
   });
@@ -669,11 +671,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       try {
         const health = await discoverDaemonAgentHealth(environment, logger, sandboxId, signal, idle, agentHealth);
         const inventory = await discoverAgentInventory(environment.execStream, signal, inventoryDiscoveryTimeoutMs);
-        const models = await discoverAgentModels(environment.execStream, readyAgents(health), signal, inventoryDiscoveryTimeoutMs, providerModelLists);
+        const defaults: Partial<Record<AgentName, string>> = {};
+        const models = await discoverAgentModels(environment.execStream, readyAgents(health), signal, inventoryDiscoveryTimeoutMs, providerModelLists, defaults);
         if (signal.aborted || stopping) return;
         agentHealth = { ...agentHealth, ...health };
         agentInventory = keepInUse(inventory, agentInventory);
         agentModels = keepInUse(models, agentModels);
+        agentDefaultModels = keepInUse(defaults, agentDefaultModels);
         refreshedCommands = commands.map(([commandId, leaseId]) => ({ commandId, leaseId }));
         updateHeartbeatSettings(await register());
       } catch (error) {
@@ -795,7 +799,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (runtimeRefreshDue && !refreshInBackground && activeRuns.size === 0 && !backgroundRuntimeRefresh) {
           agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, AGENT_NAMES, agentHealth);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
-          agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists);
+          agentDefaultModels = {};
+          agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists, agentDefaultModels);
           refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
           updateHeartbeatSettings(await register());
           for (const { commandId } of refreshedCommands) runtimeRefreshCommands.delete(commandId);

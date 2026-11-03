@@ -260,6 +260,8 @@ export interface DaemonNodeRegistration {
   customModelEndpoints?: AgentName[];
   /** Model ids each runtime itself offers on this node, in the runtime's order. */
   agentModels?: Partial<Record<AgentName, string[]>>;
+  /** Model id configured as each runtime's default, when discoverable. */
+  agentDefaultModels?: Partial<Record<AgentName, string>>;
   maxConcurrentRuns?: number;
   status?: DaemonNodeStatus;
 }
