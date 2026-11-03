@@ -731,6 +731,16 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Files reads a document beside its list; the properties column would take
+   the width the reading needs, and every fact in it is a tab away. */
+.record-layout:has(> .workspace-body > .record-artifacts-panel) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.record-layout:has(> .workspace-body > .record-artifacts-panel) > .record-layout-aside {
+  display: none;
+}
+
 .record-layout > .workspace-body {
   min-width: 0;
   min-height: 0;

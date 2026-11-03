@@ -114,7 +114,9 @@
 .record-artifacts {
   display: grid;
   flex: 1 1 0;
-  grid-template-columns: minmax(17rem, 0.75fr) minmax(0, 1.6fr);
+  /* The list is a picker held to a reading of its names; every pixel past
+     that goes to the file being read. */
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   min-height: 360px;
 }
@@ -192,6 +194,7 @@
 
 .record-artifact-icon {
   display: inline-flex;
+  align-self: start;
   color: var(--ink-3);
 }
 
@@ -206,11 +209,16 @@
   min-width: 0;
 }
 
+/* Two lines before the cut: generated names share a long stem and differ at
+   the end (ai-daily-update-2026-11-03.md), which a one-line ellipsis hid. */
 .record-artifact-name {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   font: var(--type-name);
   letter-spacing: var(--type-name-track);
 }
@@ -234,6 +242,12 @@
 
 .record-artifacts-preview {
   min-height: 0;
+}
+
+/* The preview has the drawer's width; a document keeps its measure and sits
+   in the middle of it rather than against the list. */
+.record-artifacts-preview .artifact-viewer-body > .doc-prose {
+  margin-inline: auto;
 }
 
 /* Side by side there is nothing to go back to. */

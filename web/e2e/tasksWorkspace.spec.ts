@@ -88,8 +88,11 @@ for (const mobile of [false, true]) {
     // A retired ?tab=workspace link opens the task's files.
     await page.goto("/tasks/ship?project=launch&tab=workspace");
     await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+    // Files gives the preview the drawer's width: the properties are a tab away.
+    await expect(drawer.locator(".record-layout-aside")).toBeHidden();
     const notes = drawer.getByRole("button", { name: /release-notes.md/ });
     await notes.click();
+    if (!mobile) await page.screenshot({ path: "/tmp/relay-task-files-desktop.png" });
     await expect(drawer.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
     await expect(drawer.locator("a[download]")).toHaveAttribute("href", /\/threads\/run\/artifacts\/notes$/);
     await drawer.getByRole("button", { name: "Source", exact: true }).click();

@@ -92,3 +92,21 @@ export function formatArtifactDate(value: string | undefined, locale: string): s
     minute: "2-digit",
   }).format(date);
 }
+
+const OPAQUE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The folder a file row names under its title: the part of the path beyond
+ *  the deliverables folder ("" when the file sits directly in it). An
+ *  automation run writes under its own id (`artifacts/<runId>/`), and that id
+ *  told a reader nothing while crowding out the size and date, so id
+ *  segments are dropped. */
+export function artifactRowFolder(filePath: string, root: string | null | undefined): string {
+  const slash = filePath.lastIndexOf("/");
+  const folder = slash > 0 ? filePath.slice(0, slash) : "";
+  const base = root?.replace(/\/+$/, "");
+  const beyond = !base ? folder
+    : folder === base ? ""
+    : folder.startsWith(`${base}/`) ? folder.slice(base.length + 1)
+    : folder;
+  return beyond.split("/").filter((segment) => segment && !OPAQUE_ID.test(segment)).join("/");
+}
