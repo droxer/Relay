@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ThreadImageAttachment } from "relay-core";
 import { uploadThreadImage } from "../../api-client/sessions";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { StreamAttachment, ICON } from "../icons";
 
@@ -65,18 +66,34 @@ export function useComposerImages(draftKey?: string) {
   } };
 }
 
-export function ComposerImagePicker({ input, disabled }: { input: ReturnType<typeof useComposerImages>; disabled: boolean }) {
+export function ComposerImagePicker({ input, disabled, unavailableReason }: {
+  input: ReturnType<typeof useComposerImages>;
+  disabled: boolean;
+  unavailableReason?: string;
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const reasonId = useId();
   const { t } = useTranslation();
+  const label = t("composer.attach_image", { defaultValue: "Attach images" });
+  const blocked = disabled || !!unavailableReason || input.busy || input.images.length >= 4;
+  const button = <Button type="button" variant="ghost" size="icon" disabled={blocked}
+    aria-label={label} tooltip={unavailableReason ? undefined : label}
+    onClick={() => fileInput.current?.click()}><StreamAttachment size={ICON.sm} /></Button>;
   return <>
-    <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden disabled={disabled || input.busy} onChange={event => {
-      void input.add(Array.from(event.target.files ?? []));
+    <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden disabled={blocked} onChange={event => {
+      if (!blocked) void input.add(Array.from(event.target.files ?? []));
       event.target.value = "";
     }} />
-    <Button type="button" variant="ghost" size="icon" disabled={disabled || input.busy || input.images.length >= 4}
-      aria-label={t("composer.attach_image", { defaultValue: "Attach images" })}
-      title={t("composer.attach_image", { defaultValue: "Attach images" })}
-      onClick={() => fileInput.current?.click()}><StreamAttachment size={ICON.sm} /></Button>
+    {unavailableReason ? <>
+      {/* Disabled buttons cannot receive pointer/focus events; the wrapper
+          keeps the update explanation reachable by mouse and keyboard. */}
+      <Tooltip content={unavailableReason}>
+        <span className="inline-flex" role="group" tabIndex={0} aria-label={label} aria-describedby={reasonId}>
+          {button}
+        </span>
+      </Tooltip>
+      <span id={reasonId} className="sr-only">{unavailableReason}</span>
+    </> : button}
   </>;
 }
 

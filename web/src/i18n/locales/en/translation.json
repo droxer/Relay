@@ -530,6 +530,7 @@
     }
   },
   "composer": {
+    "upload_client_outdated": "Update the Relay client on this Computer to upload images or files.",
     "attach_image": "Attach images",
     "image_limits": "Choose up to 4 PNG, JPEG, or WebP images, at most 10 MB each.",
     "image_failed": "Image upload failed. Choose the image to try again.",

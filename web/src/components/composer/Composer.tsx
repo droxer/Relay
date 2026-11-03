@@ -97,6 +97,10 @@ const ComposerView = forwardRef<ComposerHandle, {
   const { t } = useTranslation();
   const composer = useComposer(draftKey);
   const imageInput = useComposerImages(draftKey);
+  const uploadNode = initializingThread ? selectedRuntimeNode : activeRuntimeNode;
+  const uploadUnavailableReason = uploadNode?.clientOutdated === true
+    ? t("composer.upload_client_outdated")
+    : undefined;
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
   useEffect(() => setStyle(null), [activeTeamId]);
   const {
@@ -178,6 +182,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // runtime — the very bypass the mention comment below was added to close.
   const cannotSendAsWritten = readOnly
     || imageInput.busy
+    || (!!uploadUnavailableReason && imageInput.images.length > 0)
     || (!composerText.trim() && !imageInput.images.length)
     || (initializingThread && !projectName && !runtimeNodeId);
   const cannotSend = cannotSendAsWritten || parsed.blocked;
@@ -386,7 +391,7 @@ const ComposerView = forwardRef<ComposerHandle, {
               }}
               onPaste={(event) => {
                 const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
-                if (files.length && !readOnly && !running && !sendPending) {
+                if (files.length && !readOnly && !running && !sendPending && !uploadUnavailableReason) {
                   event.preventDefault();
                   void imageInput.add(files);
                 }
@@ -407,7 +412,7 @@ const ComposerView = forwardRef<ComposerHandle, {
                 runs is environment, not a per-message choice: it trails the
                 card in the context row below. */}
             <div className="composer-targets">
-              <ComposerImagePicker input={imageInput} disabled={readOnly || running || sendPending} />
+              <ComposerImagePicker input={imageInput} disabled={readOnly || running || sendPending} unavailableReason={uploadUnavailableReason} />
               <AgentSelect
                 logicalAgents={logicalAgents}
                 activeLogicalAgentId={addressedLogicalAgentId ?? activeLogicalAgentId}

@@ -103,3 +103,22 @@ checks (`filterChips.spec.ts:67`, `teamCollaboration.spec.ts:3`); the latter exp
 responsibility-only configuration while the editor includes the member's role.
 Thread/composer, recovery, layout, and performance checks passed. These failures
 were recorded without changing those unrelated surfaces.
+
+## Outdated-client upload guard
+
+A follow-up disables the attachment picker and hidden file input when the
+selected Computer (new Thread) or pinned Computer (existing Thread) reports
+`clientOutdated: true`. The update tooltip is reachable on a focusable wrapper,
+so disabling the button does not hide the explanation from keyboard users.
+Screenshot paste and file-change callbacks use the same restriction; image
+messages cannot dispatch after switching to an outdated Computer. Text-only
+messages remain available, and updating the client re-enables image drafts.
+
+RED: three new interaction tests failed because outdated Computers could still
+upload. GREEN: all five guard tests pass; the composer/image/mention/stop target
+passes 21 tests. The production webpack export, web type check, and diff check
+pass. A real Chrome check verifies hover/focus tooltips, zero upload requests
+from paste or file input, text-only sends, and re-enabling after a client update.
+Targeted ESLint also reports the existing `clear()` call inside the image-draft
+effect (`react-hooks/set-state-in-effect`), which is unchanged by this follow-up;
+no unrelated hook refactor was included.
