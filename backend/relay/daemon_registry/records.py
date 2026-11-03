@@ -268,6 +268,14 @@ def agent_inventory_state(
 MAX_REPORTED_MODELS = 200
 
 
+def agent_default_models_state(payload: dict[str, Any]) -> dict[str, str]:
+    """Configured runtime defaults, bounded by the same rules as pinned models."""
+    raw = payload.get("agentDefaultModels")
+    if not isinstance(raw, dict):
+        return {}
+    return {agent: raw[agent] for agent in AGENT_NAMES if is_model_id(raw.get(agent))}
+
+
 def agent_models_state(payload: dict[str, Any]) -> dict[str, list[str]]:
     """The model ids each runtime itself reports, known agents only.
 

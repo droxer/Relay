@@ -89,7 +89,9 @@ A runtime is not an Agent and never creates one by registering. A connecting
 Computer *offers* a **Default Agent** per ready runtime — an ordinary Logical
 Agent named after the runtime — and its User accepts or declines each, once
 per Computer and runtime. Computers enrolled before the offer existed were
-seeded once, unasked.
+seeded once, unasked. A Default Agent snapshots the runtime’s configured
+default model into its model policy when created, if the Computer reports it;
+otherwise it follows the runtime’s automatic model selection.
 _Avoid_: calling the runtime itself the Default Agent, Agent identity
 
 **Placement**:
