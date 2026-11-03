@@ -7,6 +7,10 @@
 <p align="center"><strong>Relay — The control plane for your AI workforce</strong></p>
 
 <p align="center">
+  <a href="https://www.producthunt.com/products/relay-37?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-relay-e217251c-35b5-458f-a5eb-f62eaa573c22" target="_blank" rel="noopener noreferrer"><img alt="Relay - Put AI agents to work on your own computers | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1300584&amp;theme=light&amp;t=1793709395272"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
