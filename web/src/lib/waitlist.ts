@@ -190,3 +190,11 @@ export function inviteEmailProblem(raw: string): "required" | "invalid" | null {
 export function deliveryFailed(status: WaitlistDeliveryStatus | null | undefined): boolean {
   return status === "failed" || status === "bounced";
 }
+
+/** The idea joins whatever is already written, one per line, so picking two
+    builds a list instead of replacing the first. */
+export function withUseCaseIdea(current: string, idea: string): string {
+  const trimmed = current.trimEnd();
+  if (trimmed.split("\n").some((line) => line.trim() === idea)) return current;
+  return trimmed ? `${trimmed}\n${idea}` : idea;
+}

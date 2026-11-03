@@ -18,6 +18,7 @@ import {
   WAITLIST_LIMITS,
   WAITLIST_STATUS_ORDER,
   waitlistFieldProblems,
+  withUseCaseIdea,
   waitlistJoinInput,
   waitlistLocale,
   waitlistSource,
@@ -243,5 +244,20 @@ describe("waitlist API client", () => {
     assert.match(new URL(requested, ORIGIN).pathname, /\/api\/v1\/admin\/waitlist\/invitations$/);
     assert.deepEqual(sent, { email: "grace@example.com", name: "Grace", locale: "en" });
     assert.equal(result.delivery?.status, "sent");
+  });
+});
+
+describe("withUseCaseIdea", () => {
+  it("fills an empty use case with the idea", () => {
+    assert.equal(withUseCaseIdea("", "Triage bugs"), "Triage bugs");
+    assert.equal(withUseCaseIdea("  \n", "Triage bugs"), "Triage bugs");
+  });
+
+  it("adds a second idea on its own line after what is written", () => {
+    assert.equal(withUseCaseIdea("Our own words\n", "Triage bugs"), "Our own words\nTriage bugs");
+  });
+
+  it("does not repeat an idea already picked", () => {
+    assert.equal(withUseCaseIdea("Triage bugs", "Triage bugs"), "Triage bugs");
   });
 });
