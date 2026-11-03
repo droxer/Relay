@@ -524,6 +524,7 @@
     }
   },
   "composer": {
+    "upload_client_outdated": "更新此电脑上的 Relay 客户端后，即可上传图片或文件。",
     "attach_image": "添加图片",
     "image_limits": "最多添加 4 张 PNG、JPEG 或 WebP 图片，每张不超过 10 MB。",
     "image_failed": "图片上传失败，请重新选择图片重试。",
