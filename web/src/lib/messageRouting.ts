@@ -61,8 +61,9 @@ export function resolveThreadMessageAddress({ text, candidates, defaultAgentId, 
 }
 
 /** Stable retry identity for one semantic continued-thread request. */
-export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style, questionId = null, approve = false }: {
+export function threadMessageOperationKey({ attachmentIds, sessionId, text, intent, addressAgentIds, addressTeamId = null, style, questionId = null, approve = false }: {
   sessionId: string;
+  attachmentIds?: string[];
   text: string;
   intent: ThreadMessageInput["intent"];
   addressAgentIds: readonly string[];
@@ -77,6 +78,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
   return JSON.stringify([
     sessionId,
     text,
+    ...(attachmentIds?.length ? [{ attachmentIds }] : []),
     intent,
     [...new Set(addressAgentIds)].sort(),
     ...(addressTeamId && addressAgentIds.length === 0 ? [addressTeamId] : []),

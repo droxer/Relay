@@ -6,7 +6,7 @@ import type {
   ThreadMessageInput,
   ThreadRecoveryInput,
 } from "../types.ts";
-import { apiJson, RelayApiError } from "./client.ts";
+import { apiJson, RelayApiError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
@@ -59,6 +59,8 @@ export function runLogicalAgents(input: AgentRunInput): Promise<RelaySession> {
     method: "POST",
     body: {
       taskGoal: input.taskGoal,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
       ...(input.daemonNodeId ? { daemonNodeId: input.daemonNodeId } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
       ...(input.teamId && input.style && !input.assignments?.length ? { style: input.style } : {}),
@@ -79,6 +81,7 @@ export function submitThreadMessage(
     method: "POST",
     body: {
       text: input.text,
+      ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
       intent: input.intent,
       ...(input.style && input.intent === "accomplish" && !input.addressAgentIds?.length ? { style: input.style } : {}),
       ...(input.addressAgentIds?.length
@@ -182,4 +185,12 @@ export function renameSession(sessionId: string, title: string, token?: string):
     token,
     body: { title },
   });
+}
+
+export async function uploadThreadImage(file: File, signal?: AbortSignal): Promise<import("relay-core").ThreadImageAttachment> {
+  const response = await fetch(relayApiEndpoint("/thread-attachments"), {
+    method: "POST", credentials: "include", signal,
+    headers: { "Content-Type": file.type }, body: file,
+  });
+  return readApiResponse(response, "POST /thread-attachments");
 }

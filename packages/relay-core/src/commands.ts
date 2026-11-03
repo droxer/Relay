@@ -1,3 +1,4 @@
+import { CLAUDE_IMAGE_INPUT_SCRIPT } from "./image-input.js";
 import { chainCommands, environmentCommand, nativeWindowsExecution } from "./command-execution.js";
 import { anthropicModel, openaiModel, piModel, piProvider } from "./env.js";
 import { agentWorkspacePath, codexCliConfigOverrides, isLocalAgentExecution, runAsAgent } from "./guest.js";
@@ -31,10 +32,12 @@ export function buildCodexCommand(state: AgentState, workspacePath?: string): st
   const prompt = withResumeNote(nativeSkillPrompt(codexTaskPrompt(state), state), state);
   const launch = permissionPromptLaunch(state, "codex-app-server");
   if (launch) {
-    return runAsAgent(withSkillEnv(codexAppServerCommand(launch, { workspacePath, model: state.agent_model, resume, prompt }), state, "CODEX_HOME"), workspacePath);
+    return runAsAgent(withSkillEnv(codexAppServerCommand(launch, { workspacePath, model: state.agent_model, resume, prompt, images: state.input_images }), state, "CODEX_HOME"), workspacePath);
   }
   const argv = [
     ...codexBaseArgv({ workspacePath, model: state.agent_model, resume }),
+    ...(state.input_images ?? []).flatMap((image) => ["--image", image.path]),
+    ...(state.input_images?.length ? ["--"] : []),
     ...(resume ? [resume] : []),
     prompt,
   ];
@@ -48,7 +51,7 @@ export function buildCodexCommand(state: AgentState, workspacePath?: string): st
  */
 function codexAppServerCommand(
   launch: PermissionPromptLaunch,
-  { workspacePath, model: pinned, resume, prompt }: { workspacePath?: string; model?: string; resume?: string; prompt: string },
+  { workspacePath, model: pinned, resume, prompt, images }: { workspacePath?: string; model?: string; resume?: string; prompt: string; images?: AgentState["input_images"] },
 ): string {
   const argv = [
     launch.command,
@@ -60,6 +63,7 @@ function codexAppServerCommand(
   const model = runtimeModel(pinned, openaiModel);
   if (model) argv.push("--model", model);
   if (resume) argv.push("--resume", resume);
+  for (const image of images ?? []) argv.push("--image", image.path);
   argv.push("--", prompt);
   return chainCommands([...envExports(launch.env), shellCommand(argv)]);
 }
@@ -115,6 +119,12 @@ function buildClaudeInvocation(
   if (model) argv.push("--model", model);
   const resume = resumeId(state);
   if (resume) argv.push("--resume", resume);
+  if (state.input_images?.length) {
+    const target = `${state.input_images[0]!.path}.message.json`;
+    argv.push("--input-format", "stream-json");
+    const prepare = shellCommand(["node", "-e", CLAUDE_IMAGE_INPUT_SCRIPT, JSON.stringify({ prompt, images: state.input_images, target })]);
+    return runAsAgent(withSkillEnv(chainCommands([prepare, shellCommand(argv, { stdinFile: target })]), state, "CLAUDE_CONFIG_DIR"), workspacePath);
+  }
   argv.push(prompt);
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
 }

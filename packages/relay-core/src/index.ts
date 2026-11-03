@@ -96,6 +96,7 @@ export {
 export {
   DAEMON_CAPABILITY_GENERATED_FILES,
   DAEMON_CAPABILITY_AGENT_SKILLS,
+  DAEMON_CAPABILITY_IMAGE_ATTACHMENTS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_LINKS,
@@ -148,6 +149,7 @@ export {
   type DaemonNodeRegistration,
   type DaemonNodeRegistrationResponse,
   type DaemonNodeRunCommand,
+  type ThreadImageAttachment,
   type DaemonNodeSandboxMode,
   type DaemonNodeStatus,
   type DaemonHostOs,

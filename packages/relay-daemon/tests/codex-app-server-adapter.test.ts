@@ -173,6 +173,17 @@ describe("Codex app-server adapter", () => {
     });
   });
 
+  it("passes local image blocks to app-server on a resumed turn", async () => {
+    const image = join(directory, "screenshot.png");
+    const result = await run(["--cwd", directory, "--resume", "thr_previous", "--image", image, "--", "Describe"]);
+    assert.equal(result.code, 0);
+    const turn = result.log.find((entry) => entry.method === "turn/start");
+    assert.deepEqual(turn?.params.input, [
+      { type: "text", text: "Describe", text_elements: [] },
+      { type: "localImage", path: image },
+    ]);
+  });
+
   it("ignores non-object JSON frames and finishes the turn", async () => {
     const result = await run(["--cwd", directory, "--", "go"], { FAKE_MODE: "invalid_frames" });
     assert.equal(result.code, 0);

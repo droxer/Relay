@@ -6,9 +6,9 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-export function shellCommand(argv: string[]): string {
-  if (nativeWindowsExecution()) return `await relayRun(${JSON.stringify(argv)})`;
-  return `${argv.map(shellQuote).join(" ")} < /dev/null`;
+export function shellCommand(argv: string[], options?: { stdinFile: string }): string {
+  if (nativeWindowsExecution()) return `await relayRun(${JSON.stringify(argv)}${options ? `, ${JSON.stringify(options)}` : ""})`;
+  return `${argv.map(shellQuote).join(" ")} < ${options ? shellQuote(options.stdinFile) : "/dev/null"}`;
 }
 
 export function escapeRegExp(value: string): string {

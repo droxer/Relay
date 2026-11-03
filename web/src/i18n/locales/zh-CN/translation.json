@@ -524,6 +524,13 @@
     }
   },
   "composer": {
+    "attach_image": "添加图片",
+    "image_limits": "最多添加 4 张 PNG、JPEG 或 WebP 图片，每张不超过 10 MB。",
+    "image_failed": "图片上传失败，请重新选择图片重试。",
+    "image_number": "附件图片 {{number}}",
+    "remove_image": "移除图片 {{number}}",
+    "uploading_images": "正在上传图片…",
+    "remove_image_button": "移除",
     "placeholder": "给智能体发消息…",
     "placeholder_named": "给 {{target}} 发消息…",
     "target_room": "整个团队",

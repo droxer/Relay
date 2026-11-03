@@ -106,10 +106,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
-    { literal = false, questionId, approve = false }: import("../components/composer/Composer").ComposerDispatchOptions = {},
+    { literal = false, questionId, approve = false, attachmentIds = [] }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
-    if (!raw || !selectedUser || threadRunning || projectDispatchDisabled) return false;
+    if ((!raw && !attachmentIds.length) || !selectedUser || threadRunning || projectDispatchDisabled) return false;
     if (requiresRuntimeSelection && !selectedThreadNodeId) {
       reportMutationError("Computer required", null, t("errors.thread_computer_required"));
       return false;
@@ -146,7 +146,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       && composerTeams.some((team) => team.id === roundTeam.addressTeamId)
       ? roundTeam.addressTeamId
       : null;
-    const goal = raw;
+    const goal = raw || "Describe the attached images.";
     let newThreadAgentIds: string[] | undefined;
     // A project round addresses the whole roster unless the composer (or a
     // mention) names one agent — the backend expands whichever it is given.
@@ -184,9 +184,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     }
     // Echo the turn immediately. For a continued session we mint the message id
     // here and hand it to the backend so the persisted event reconciles by id.
-    const messageOperationKey = sessionId
+    const messageOperationKey = (sessionId || attachmentIds.length)
       ? threadMessageOperationKey({
-          sessionId,
+          sessionId: sessionId ?? "new-thread",
+          attachmentIds,
           text: goal,
           intent,
           addressAgentIds: messageAddress.addressAgentIds,
@@ -224,7 +225,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       const done = sessionId
         ? await submitThreadMessageMutation.mutateAsync({
             sessionId,
-            input: threadMessageInput({
+            input: { ...threadMessageInput({
               text: goal,
               intent,
               addressAgentIds: messageAddress.addressAgentIds,
@@ -233,10 +234,13 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
               style: roundTeam.teamId ? requestedStyle : undefined,
               questionId,
               approve,
-            }),
+            }), attachmentIds },
           })
         : await runLogicalAgentsMutation.mutateAsync({
             taskGoal: goal,
+            attachmentIds,
+            userMessageId,
+            ...(attachmentIds.length ? { idempotencyKey: userMessageId } : {}),
             ...(activeProject ? { projectId: activeProject.id } : {}),
             ...(!activeProject && selectedThreadNodeId ? { daemonNodeId: selectedThreadNodeId } : {}),
             ...(activeProject

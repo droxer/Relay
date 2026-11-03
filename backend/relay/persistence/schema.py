@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from .tables import admin_tokens as _admin_tokens  # noqa: F401
 from .tables import agent_placements as _agent_placements  # noqa: F401
+from .tables import attachments as _attachments  # noqa: F401
 from .tables import agents as _agents  # noqa: F401
 from .tables import auth as _auth  # noqa: F401
 from .tables import automations as _automations  # noqa: F401

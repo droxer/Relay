@@ -246,6 +246,7 @@ class ThreadMessageBody(RequestSchema):
     """
 
     text: TrimmedStr = None
+    attachment_ids: CheckedStrList = Field(None, alias="attachmentIds")
     intent: Annotated[
         TrimmedStr,
         WithJsonSchema({"anyOf": [{"enum": sorted(MESSAGE_PURPOSES)}, {"type": "null"}]}),
@@ -264,7 +265,7 @@ class ThreadMessageBody(RequestSchema):
 
     @model_validator(mode="after")
     def _check_shape(self) -> ThreadMessageBody:
-        if not self.text:
+        if not self.text and not self.attachment_ids:
             raise HTTPException(400, "text is required.")
         if self.purpose() not in MESSAGE_PURPOSES:
             raise HTTPException(400, "intent must be accomplish, discuss, or review.")

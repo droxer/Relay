@@ -7,7 +7,7 @@ import { AGENT_NAMES, getAgent, commandExecution, initialAgentState } from 'rela
 import { localProcessExecStream } from '../src/local-runtime.js';
 import { discoverAgentModels } from '../src/agent-models.js';
 import { discoverAgentInventory } from '../src/agent-inventory.js';
-import { npmShimTarget, windowsCommand } from '../src/native-command.js';
+import { npmShimTarget, windowsCommand, relayRun } from '../src/native-command.js';
 
 function windows<T>(body: () => T): T {
   const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
@@ -254,4 +254,17 @@ test('agent runs select native execution while retaining the executor output con
   })));
   assert.ok(called);
   assert.equal(outcome.last_exit_code, 0);
+});
+
+
+test('native runtime launch streams its private multimodal input file to stdin', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'relay-native-image-'));
+  try {
+    const file = join(directory, 'message.json');
+    const message = JSON.stringify({type: 'user', message: {role: 'user', content: [{type: 'image', source: {type: 'base64', media_type: 'image/png', data: 'aW1hZ2U='}}]}});
+    writeFileSync(file, message, {mode: 0o600});
+    const result = await relayRun([process.execPath, '-e', "process.stdout.write(require('node:fs').readFileSync(0))"], {capture: true, stdinFile: file});
+    assert.equal(result.stdout, message);
+    assert.equal(result.code, 0);
+  } finally { rmSync(directory, {recursive: true, force: true}); }
 });

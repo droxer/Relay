@@ -66,6 +66,7 @@ NEXT_STEPS_STATE_KEY = "_relay_next_steps"
 CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
     {
         *WORK_STATE_KEYS,
+        "input_attachments",
         "_relay_task_source_revision",
         "_relay_task_source_status",
         "_relay_task_execution_revision",

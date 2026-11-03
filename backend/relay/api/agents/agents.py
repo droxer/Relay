@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...core.thread_attachments import attachment_ids
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -324,6 +326,10 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
     raw_assignments = body.get("assignments")
     if raw_assignments is not None and not isinstance(raw_assignments, list):
         raise HTTPException(400, "assignments must be a list.")
+    try:
+        images = attachment_ids(body.get("attachmentIds"))
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     decision = body.get("decision")
     style = body.get("style")
     if style is not None:
@@ -335,6 +341,7 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
         return await CollaborationConductor(ctx).submit(
             RunIntent(
                 task_goal=task_goal,
+                attachment_ids=images,
                 session_id=string_field(body, "sessionId")
                 or string_field(body, "session_id")
                 or None,

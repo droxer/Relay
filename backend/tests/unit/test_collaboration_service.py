@@ -470,12 +470,15 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
     assert _request_fingerprint(answer) != _request_fingerprint(approval)
     legacy_payload = {
         k: v for k, v in asdict(plain).items()
-        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve", "task_id")
+        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve", "task_id", "attachment_ids")
     }
     legacy = hashlib.sha256(
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
     assert _request_fingerprint(plain) == legacy
+    pictured = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi", attachment_ids=("image-a",)))
+    assert _request_fingerprint(plain) != _request_fingerprint(pictured)
+
 
 
 def test_setup_draft_identity_does_not_change_the_request_fingerprint() -> None:

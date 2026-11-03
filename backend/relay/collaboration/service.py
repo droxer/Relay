@@ -119,6 +119,7 @@ class CollaborationConductor(
                 intent, actor, fingerprint, session=session, task=answered_task
             )
             if resumed is not None:
+                resumed = self._with_images(intent, actor, session, resumed, self.ctx.registry.monitor_nodes())
                 return await self.ctx.backend.run(resumed["daemonNodeId"], resumed)
         elif intent.approve:
             raise CollaborationError(
@@ -182,6 +183,7 @@ class CollaborationConductor(
             is_recovery=is_recovery,
             answered_task=answered_task,
         )
+        parsed = self._with_images(intent, actor, session, parsed, daemon_nodes)
         dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
         return self._admit_addressed_agents(dispatched, resolved, actor)
 
@@ -202,3 +204,29 @@ class CollaborationConductor(
         ):
             raise CollaborationError("thread_forbidden", status=403)
         return session
+
+    def _with_images(
+        self, intent: _PreparedRound, actor: Actor, session: dict[str, Any] | None,
+        parsed: dict[str, Any], daemon_nodes: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        message_images = self.ctx.session_store.resolve_attachments(
+            intent.attachment_ids, actor["userId"], intent.session_id
+        )
+        # A new runtime conversation and a handoff still need the most recent
+        # visual context. Only explicitly attached images appear on this message.
+        images = message_images
+        if not images and session:
+            images = next((event["attachments"] for event in reversed(session.get("events", []))
+                           if event.get("type") in ("user.message", "session.created") and event.get("attachments")), [])
+        if images:
+            for assignment in parsed["assignments"]:
+                node: dict[str, Any] = next((node for node in daemon_nodes if node["id"] == assignment["daemonNodeId"]), {})
+                if "image-attachments" not in (node.get("capabilities") or []):
+                    raise CollaborationError("image_client_update_required", "Update this Computer to send images.", status=409)
+                if assignment["executorKind"] not in ("codex", "claude"):
+                    raise CollaborationError("image_runtime_unsupported", "Image attachments currently require Codex or Claude.", status=400)
+        return {
+            **parsed,
+            **({"attachments": images} if images else {}),
+            **({"messageAttachments": message_images} if message_images else {}),
+        }

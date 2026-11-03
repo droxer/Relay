@@ -22,6 +22,8 @@ export interface ProjectSetupBrief {
 }
 
 export interface AgentState {
+  /** Files materialized by the daemon, in the runtime filesystem. */
+  input_images?: Array<{ path: string; mediaType: string }>;
   task_goal: string;
   agent_logs: string[];
   last_exit_code: number;

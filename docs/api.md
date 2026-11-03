@@ -1316,3 +1316,39 @@ password policy, and rejects an unchanged password. Success returns
 other login sessions while keeping the calling session. Attempts are rate
 limited. Both endpoints require a session cookie; invalid values return 400.
 The browser exposes both forms at `/settings/account`.
+
+### Thread image attachments
+
+- `POST /api/v1/thread-attachments`: authenticated raw image upload, with
+  `Content-Type: image/png`, `image/jpeg`, or `image/webp`; maximum 10 MiB.
+  Returns `201` with `{id, mediaType, bytes, sha256}`. Uploads are private and
+  staged for their uploading User until admitted to a Thread.
+- `GET /api/v1/thread-attachments/{id}`: image bytes, authorized for the uploading
+  User while staged and by Thread access after admission. Responses are private,
+  non-cacheable, and carry `X-Content-Type-Options: nosniff`.
+- `POST /api/v1/threads/{id}/messages` and `POST /api/v1/agent-runs` accept
+  `attachmentIds` (up to four UUIDs). The message event stores metadata only;
+  the opening message stores it on `session.created`. A message with images may
+  omit text; new `/agent-runs` requests still require `taskGoal`.
+- `GET /api/v1/daemon-nodes/{node}/attachments/{id}?commandId={command}`:
+  daemon-token authentication plus a dispatched `run.start` command belonging
+  to this node and naming this image. Browser credentials alone do not grant
+  daemon download access.
+
+`run.start.attachments` contains the same immutable metadata, never image bytes,
+R2 credentials, or expiring URLs. The daemon verifies size and SHA-256, writes
+private temporary files within the mounted workspace, and removes them after
+execution, including failures. Codex receives native image inputs (including its
+app-server adapter); Claude receives structured image blocks on stdin. Other
+runtimes are refused explicitly. The Computer must advertise `image-attachments`;
+the configured model must support image input. The most recent image-bearing
+message remains visual context for subsequent turns and recovery.
+
+Hosted installs reuse `RELAY_BLOB_STORE=r2`; without it, bytes remain in the
+existing database-backed deployment mode. Apply Alembic revision `20261103_0109`
+before starting the new backend and rebuild the Computer bundle. Thread deletion
+removes bound upload rows and schedules R2 object deletion after commit. Each
+upload also prunes up to 100 abandoned uploads older than 24 hours; a quiet
+installation retains them until the next upload. Object deletion is best effort,
+so failed deletions require storage maintenance. Uploads use the existing
+per-process auth rate limiter with a separate per-User key.

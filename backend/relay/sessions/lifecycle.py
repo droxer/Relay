@@ -18,6 +18,7 @@ class SessionLifecycleMixin(SessionControllerState):
         task_goal: str,
         participants: list[str] | None = None,
         session_id: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         session = self.store.create_session(
             {
@@ -53,6 +54,7 @@ class SessionLifecycleMixin(SessionControllerState):
                 ),
                 **({"computerId": self.computer_id} if self.computer_id else {}),
                 "taskGoal": task_goal,
+                **({"attachments": attachments} if attachments else {}),
                 "participants": participants or ["human"],
                 "status": "running",
             }

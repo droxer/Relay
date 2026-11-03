@@ -101,6 +101,7 @@ import { watchExecutionExit } from "./execution-capture.js";
 import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
 import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
+import { materializeImages } from "./image-attachments.js";
 import { materializeSkills } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
 import { permissionAdapterLaunch } from "./permission-adapters/index.js";
@@ -1699,14 +1700,24 @@ async function executeCommand(
     const skillState = command.skills === undefined
       ? state
       : { ...state, skill_paths: materialized.skillPaths, skill_env: materialized.env };
-    const runState = agentHomeSubdir
+    let runState = agentHomeSubdir
       ? { ...skillState, agent_home_subdir: agentHomeSubdir }
       : skillState;
     // Snapshot document-type workspace files so a successful run can report
     // exactly what it created or changed (see generated-files.ts).
     const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
     let patch;
+    let imageInput: Awaited<ReturnType<typeof materializeImages>> | undefined;
     try {
+      imageInput = await materializeImages({
+        attachments: command.attachments ?? [],
+        hostPath: threadWorkspace.hostPath,
+        executionPath: threadWorkspace.executionPath,
+        fetchImage: (id) => fetchFn(relayApiUrl(backendUrl,
+          `/daemon-nodes/${encodeURIComponent(sandboxId)}/attachments/${encodeURIComponent(id)}?commandId=${encodeURIComponent(command.id)}`),
+          { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) }),
+      });
+      if (imageInput.images.length) runState = { ...runState, input_images: imageInput.images };
       if (command.reportExecutionStarted) {
         await postJsonWithRetry(fetchFn, eventUrl, {
           type: "run.executing",
@@ -1728,6 +1739,9 @@ async function executeCommand(
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
     } finally {
+      try { imageInput?.cleanup(); } catch (error) {
+        logger.warn("Could not remove temporary image inputs", { ...commandLogFields(sandboxId, command), error: error instanceof Error ? error.message : String(error) });
+      }
       outputBuffer.close();
       await settleOutputPosts();
     }

@@ -7,6 +7,7 @@ A mixin of ``DatabaseSessionStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from typing import Any
+from functools import partial
 from sqlalchemy import (
     delete,
     insert,
@@ -17,6 +18,7 @@ from ..db_time import parse_db_time
 from ..engine import after_store_commit, store_transaction
 from ...core.ids import new_database_id, now_iso
 from ..sql import metadata as shared_metadata
+from ..tables.attachments import attachments
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .state import SessionStoreState
 
@@ -36,6 +38,7 @@ class SessionDeletionRows(SessionStoreState):
             if not row:
                 raise KeyError(session_id)
             session_pk = row["id"]
+            self._schedule_attachment_cleanup(conn, session_pk)
             self._insert_tombstone(conn, session_pk, row["snapshot"] or {}, deleted_by)
             conn.execute(
                 delete(self.artifacts).where(self.artifacts.c.session_id == session_pk)
@@ -126,6 +129,7 @@ class SessionDeletionRows(SessionStoreState):
                         conn, task["id"], session_id,
                         delete_orphan=True, deleted_by=deleted_by,
                     )
+            self._schedule_attachment_cleanup(conn, session_pk)
             self._insert_tombstone(conn, session_pk, snapshot, deleted_by)
             conn.execute(
                 delete(self.artifacts).where(self.artifacts.c.session_id == session_pk)
@@ -147,3 +151,11 @@ class SessionDeletionRows(SessionStoreState):
                 .order_by(self.sessions.c.updated_at, self.sessions.c.id).offset(offset).limit(limit)
             ).scalars().all()
         return list(rows)
+
+    def _schedule_attachment_cleanup(self, conn: Any, session_id: str) -> None:
+        keys = list(conn.execute(select(attachments.c.blob_key).where(
+            attachments.c.session_id == session_id, attachments.c.blob_key.is_not(None)
+        )).scalars())
+        conn.execute(delete(attachments).where(attachments.c.session_id == session_id))
+        for key in keys:
+            after_store_commit(self.engine, partial(self._delete_attachment_blob, key))

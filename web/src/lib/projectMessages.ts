@@ -23,6 +23,7 @@ export type PermissionAudit = {
 export type DerivedMessage =
   | {
       kind: "user";
+      attachments?: import("relay-core").ThreadImageAttachment[];
       id: string;
       timestamp: string;
       text: string;
@@ -355,6 +356,7 @@ export class ProjectMessagesAccumulator {
       id: `${session.id}:goal`,
       timestamp: session.createdAt,
       text: session.taskGoal,
+      attachments: session.events.find(event => event.type === "session.created")?.attachments,
     }];
     this.snapshot = [...this.out];
   }
@@ -442,7 +444,7 @@ export class ProjectMessagesAccumulator {
       case "session.failed":
         return false;
       case "user.message":
-        this.out.push({ kind: "user", id: event.id, timestamp: event.timestamp, text: event.text });
+        this.out.push({ kind: "user", id: event.id, timestamp: event.timestamp, text: event.text, ...(event.attachments?.length ? { attachments: event.attachments } : {}) });
         return true;
       case "agent.started": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);

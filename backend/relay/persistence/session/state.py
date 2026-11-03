@@ -23,6 +23,8 @@ class SessionStoreState:
     _event_changes: Any
 
     if TYPE_CHECKING:
+        def _delete_attachment_blob(self, key: str) -> None: ...
+
         # Methods one mixin calls on another, declared so each type-checks alone.
         def _events_for_session(self, conn: Any, session_pk: str) -> list[dict[str, Any]]:
             ...

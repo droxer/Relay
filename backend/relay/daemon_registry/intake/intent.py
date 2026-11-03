@@ -82,6 +82,7 @@ class RunIntentMixin(NodeBackendState):
             request["taskGoal"],
             participants,
             session_id=run_request_id,
+            attachments=request.get("messageAttachments"),
         )["id"]
 
     def _record_run_intent(
@@ -100,6 +101,9 @@ class RunIntentMixin(NodeBackendState):
             else None
         )
         round_id = manifest.get("roundId") if manifest else None
+        images = request.get("messageAttachments") or []
+        if images:
+            self.registry.store.bind_attachments([image["id"] for image in images], session_id, actor_user_id or "")
         current_session = self.registry.store.get_session(session_id)
         if round_id and any(
             event.get("type") == "collaboration.round.started"
@@ -150,6 +154,7 @@ class RunIntentMixin(NodeBackendState):
                     request["taskGoal"],
                     actor_user_id=actor_user_id,
                     message_id=message_id,
+                    attachments=images,
                 )
             controller.continue_session(session_id)
         if decision:
@@ -229,6 +234,8 @@ class RunIntentMixin(NodeBackendState):
         # (ADR-023): the work so far, and the turn to pick up at.
         resume = request.get("_resume") or {}
         state.update(resume.get("state") or {})
+        if request.get("attachments"):
+            state["input_attachments"] = request["attachments"]
         return self.registry.prepare_run_request(
             sandbox_id,
             session_id,

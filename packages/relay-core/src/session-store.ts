@@ -372,6 +372,7 @@ export type RelayEvent =
   | {
       id: string;
       type: "session.created";
+      attachments?: import("./daemon-node-protocol.js").ThreadImageAttachment[];
       sessionId: string;
       timestamp: string;
       workspacePath: string;
@@ -389,6 +390,7 @@ export type RelayEvent =
   | {
       id: string;
       type: "user.message";
+      attachments?: import("./daemon-node-protocol.js").ThreadImageAttachment[];
       sessionId: string;
       timestamp: string;
       text: string;
