@@ -158,3 +158,60 @@ export interface StartTaskResponse {
     message?: string;
   };
 }
+
+/** One issue in a GitHub import preview (`POST /tasks/github/issues`). */
+export interface GitHubIssuePreview {
+  number: number;
+  title: string;
+  /** Always a `https://github.com/...` link, built server-side. */
+  url: string;
+  state: "open" | "closed";
+  labels: string[];
+  author: string | null;
+  comments: number;
+  createdAt?: string;
+  updatedAt?: string;
+  /** The task this issue already became in the chosen destination. */
+  importedTaskId: string | null;
+}
+
+export interface GitHubIssuesResponse {
+  repository: { owner: string; name: string; fullName: string };
+  page: number;
+  hasMore: boolean;
+  issues: GitHubIssuePreview[];
+}
+
+export type GitHubIssueState = "open" | "closed" | "all";
+
+export interface GitHubIssueQuery {
+  repository: string;
+  /** Omitted for the caller's intake. */
+  projectId?: string;
+  state?: GitHubIssueState;
+  /** Comma-separated label names, as GitHub filters them. */
+  labels?: string;
+  page?: number;
+  /** Used for this request only; the server never stores it. */
+  token?: string;
+}
+
+export interface GitHubImportInput {
+  repository: string;
+  projectId?: string;
+  numbers: number[];
+  token?: string;
+}
+
+/** An issue the import left out, and why (a `github_*` code or a skip reason). */
+export interface GitHubImportOutcome {
+  number: number;
+  reason: string;
+  taskId?: string;
+}
+
+export interface GitHubImportResponse {
+  created: RelayTask[];
+  skipped: GitHubImportOutcome[];
+  failed: GitHubImportOutcome[];
+}

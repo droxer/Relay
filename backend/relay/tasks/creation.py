@@ -41,6 +41,9 @@ class TaskCreateRequest:
     project: dict[str, Any] | None
     # The project's thread fields, read only when a thread is opened.
     project_session_fields: Callable[[dict[str, Any]], dict[str, Any]]
+    # Where an imported task came from (``github_import``); never read from
+    # a request body, so ``POST /tasks`` cannot forge one.
+    external_source: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +164,7 @@ def _create_record(
                 else {}
             ),
             **({"assignedTeamId": assignment.team_id} if assignment.team_id else {}),
+            **({"externalSource": request.external_source} if request.external_source else {}),
             **plan.routine,
         }
     )

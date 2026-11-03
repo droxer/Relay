@@ -89,6 +89,7 @@ def task_to_row(
         "routine_listens": bool(task.get("isRoutine")) and listens(task),
         "routine_has_schedule": bool(task.get("isRoutine")) and bool(schedule_triggers(task)),
         "number_scope": task.get("numberScope"),
+        "external_ref": (task.get("externalSource") or {}).get("ref"),
         "number": task.get("number"),
         "dispatch_failure_count": int(
             (task.get("dispatchRetry") or {}).get("failureCount") or 0

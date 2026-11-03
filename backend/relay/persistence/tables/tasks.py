@@ -65,6 +65,9 @@ tasks = Table(
     Column("routine_has_schedule", Boolean, nullable=False, default=False),
     Column("number_scope", Text, nullable=True),
     Column("number", Integer, nullable=True),
+    # ``externalSource.ref`` (``github:owner/repo#12``), so an import can tell
+    # which issues it already brought in.
+    Column("external_ref", Text, nullable=True),
     Column("dispatch_failure_count", Integer, nullable=False, default=0),
     Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
     Column("snapshot", json_type(), nullable=False),
@@ -84,6 +87,12 @@ tasks = Table(
     Index("ix_tasks_assigned_agent_id", "assigned_agent_id"),
     Index("ix_tasks_assigned_team_id", "assigned_team_id"),
     Index("ix_tasks_project_id", "project_id"),
+    Index(
+        "ix_tasks_external_ref",
+        "external_ref",
+        postgresql_where=text("external_ref IS NOT NULL"),
+        sqlite_where=text("external_ref IS NOT NULL"),
+    ),
     Index("ix_tasks_owner_updated_at", "owner_user_id", "updated_at"),
     Index("ix_tasks_assignee_updated_at", "assignee_user_id", "updated_at"),
     # The admin task list and summary read live tasks newest first with an

@@ -593,6 +593,15 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     copyFilterParams(head, source, target);
   }
 
+  // GitHub authorization returns to the account panel or the board it left.
+  // These flags must survive canonicalization before the surface mounts.
+  const githubImportSurface = (head === "backlog" && !entityId)
+    || (head === "projects" && Boolean(entityId) && rest.length === 0 && source.get("tab") === "tasks");
+  if (githubImportSurface && source.get("githubImport") === "1") target.set("githubImport", "1");
+  if (githubImportSurface || (head === "settings" && entityId === "account")) {
+    const result = source.get("githubConnection");
+    if (result && ["connected", "cancelled", "failed", "permissions"].includes(result)) target.set("githubConnection", result);
+  }
   const encoded = target.toString();
   return encoded ? `?${encoded}` : "";
 }

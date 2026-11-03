@@ -107,6 +107,18 @@ export interface TaskAwaiting {
   nextAgentId?: string;
 }
 
+/** The issue an imported task came from (`relay/tasks/github_import.py`). */
+export interface TaskExternalSource {
+  provider: "github";
+  /** `github:owner/repo#12`, lowercased; the key re-imports skip on. */
+  ref: string;
+  /** `owner/repo` as the importer named it. */
+  repository: string;
+  number: number;
+  /** Always a `https://github.com/...` link, built server-side. */
+  url: string;
+}
+
 export interface RelayTask {
   collaborationStyle?: CollaborationStyle;
   acceptancePolicy?: "human" | "automatic";
@@ -140,6 +152,8 @@ export interface RelayTask {
   priority: TaskPriority;
   /** Free-form labels a person files the task under; absent when none. */
   tags?: string[];
+  /** Where an imported task came from; absent for one written in Relay. */
+  externalSource?: TaskExternalSource;
   status: TaskStatus;
   /** User who owns this task; their agent carries it out on their behalf. */
   ownerUserId?: string;

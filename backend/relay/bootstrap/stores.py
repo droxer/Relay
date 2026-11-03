@@ -25,6 +25,9 @@ from ..persistence.team.store import DatabaseTeamStore
 from ..persistence.account.waitlist import DatabaseWaitlistStore
 from ..persistence.notification.store import DatabaseNotificationStore
 from ..accounts.waitlist import WaitlistService, waitlist_config_from_env
+from ..accounts.github_connection import GitHubConnectionService
+from ..core.github_connection import github_config_from_env
+from ..persistence.account.github import DatabaseGitHubConnectionStore
 from ..notifications.mailer import Mailer
 from ..persistence.automation.store import DatabaseAutomationStore
 from ..persistence.protocols import (
@@ -157,6 +160,12 @@ def automation_store_from_env() -> DatabaseAutomationStore:
 def notification_store_from_env() -> DatabaseNotificationStore:
     url = database_url_from_env(setting="database-only notification storage")
     return DatabaseNotificationStore(url, create_schema=url.startswith("sqlite"))
+
+
+def github_connection_service_from_env() -> GitHubConnectionService:
+    config = github_config_from_env()
+    url = database_url_from_env(setting="database-only GitHub connections")
+    return GitHubConnectionService(DatabaseGitHubConnectionStore(url), config)
 
 
 def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:
