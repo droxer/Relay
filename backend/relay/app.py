@@ -50,6 +50,7 @@ from .api.tasks import (
 )
 from .api.threads import (
     artifacts as thread_artifact_routes,
+    attachments as thread_attachment_routes,
     decisions as thread_decision_routes,
     events as thread_event_routes,
     lifecycle as thread_lifecycle_routes,
@@ -363,6 +364,7 @@ API_ROUTERS = (
     chat_integration_routes.router,
     admin_dashboard_routes.router,
     chat_gateway_routes.router,
+    thread_attachment_routes.router,
     thread_message_routes.router,
     task_github_routes.router,
     task_record_routes.router,

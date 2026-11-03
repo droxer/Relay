@@ -22,6 +22,7 @@ from .lifecycle import SessionLifecycleRows
 from .events import SessionEventRows
 from .deletion import SessionDeletionRows
 from .artifacts import SessionArtifactRows
+from .attachments import SessionAttachmentRows
 from .reads import SessionReadRows
 from ..listeners import ChangeListener
 
@@ -32,9 +33,10 @@ class DatabaseSessionStore(
     SessionEventRows,
     SessionDeletionRows,
     SessionArtifactRows,
+    SessionAttachmentRows,
     SessionReadRows,
 ):
-    REQUIRED_SCHEMA_REVISION = "20261010_0086"
+    REQUIRED_SCHEMA_REVISION = "20261103_0107"
     metadata = shared_metadata
 
     sessions = sessions_tables.sessions
@@ -73,6 +75,7 @@ class DatabaseSessionStore(
         """Fail startup before serving traffic when session migrations are absent."""
         schema = inspect(self.engine)
         required_tables = {
+            "thread_attachments",
             "sessions",
             "session_events",
             "session_artifacts",

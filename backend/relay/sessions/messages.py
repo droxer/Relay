@@ -17,8 +17,11 @@ class SessionMessageMixin(SessionControllerState):
         text: str,
         actor_user_id: str | None = None,
         message_id: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"text": text}
+        if attachments:
+            payload["attachments"] = attachments
         if actor_user_id:
             payload["actorUserId"] = actor_user_id
         event = relay_event("user.message", session_id, payload)

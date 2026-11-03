@@ -260,3 +260,11 @@ records execution, not verification of the outcome. Accepting from this view
 names its `reviewRevision`; a changed Task, Thread, or Artifact record requires
 the person to refresh and review again. It does not assert that the Computer's
 current workspace still matches the recorded Artifacts.
+
+**Image Attachment**:
+A private PNG, JPEG, or WebP upload referenced by a Thread's opening message
+or a later message. Postgres owns its metadata and Thread binding; the
+configured blob store owns its bytes (R2 in hosted deployments). A Daemon Node
+may download it only through an active run command naming that attachment,
+then materializes a temporary file visible to its Agent Runtime.
+_Avoid_: public image URL, artifact (an agent-produced deliverable)

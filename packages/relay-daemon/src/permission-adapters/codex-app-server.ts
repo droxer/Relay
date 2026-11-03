@@ -26,6 +26,7 @@ export interface CodexAdapterOptions {
   cwd: string;
   model?: string;
   resume?: string;
+  images?: string[];
   prompt: string;
 }
 
@@ -36,6 +37,7 @@ const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
 
 export function parseCodexAdapterArgs(argv: string[]): CodexAdapterOptions {
   const config: string[] = [];
+  const images: string[] = [];
   let cwd: string | undefined;
   let model: string | undefined;
   let resume: string | undefined;
@@ -49,6 +51,7 @@ export function parseCodexAdapterArgs(argv: string[]): CodexAdapterOptions {
     const arg = argv[index];
     if (arg === "--") break;
     if (arg === "-c" || arg === "--config") config.push(value(arg));
+    else if (arg === "--image") images.push(value(arg));
     else if (arg === "--cwd") cwd = value(arg);
     else if (arg === "--model") model = value(arg);
     else if (arg === "--resume") resume = value(arg);
@@ -57,7 +60,7 @@ export function parseCodexAdapterArgs(argv: string[]): CodexAdapterOptions {
   const prompt = argv.slice(index + 1).join(" ");
   if (!cwd) throw new Error("--cwd is required.");
   if (!prompt) throw new Error("A prompt is required after --.");
-  return { config, cwd, ...(model ? { model } : {}), ...(resume ? { resume } : {}), prompt };
+  return { config, ...(images.length ? { images } : {}), cwd, ...(model ? { model } : {}), ...(resume ? { resume } : {}), prompt };
 }
 
 /** Minimal JSON-RPC peer over a child's stdio. */
@@ -210,7 +213,7 @@ export async function runCodexTurn(
       emitAll(translator.threadStarted(threadId));
       const turn = await peer.request("turn/start", {
         threadId,
-        input: [{ type: "text", text: options.prompt, text_elements: [] }],
+        input: [{ type: "text", text: options.prompt, text_elements: [] }, ...(options.images ?? []).map((path) => ({ type: "localImage", path }))],
       });
       translator.turnStarted(str(record(turn.turn).id));
     } catch (error) {

@@ -40,6 +40,7 @@ class _PreparedRound:
     task_id: str | None = None
     question_id: str | None = None
     approve: bool = False
+    attachment_ids: tuple[str, ...] = ()
 
 
 # What a caller may say about a participant it names. Identity (`assignmentId`)
@@ -75,6 +76,8 @@ def _scoped_idempotency_key(
 def _request_fingerprint(intent: _PreparedRound) -> str:
     payload = asdict(intent)
     payload.pop("idempotency_key", None)
+    if not payload.get("attachment_ids"):
+        payload.pop("attachment_ids", None)
     # Each setup draft creates its own task, so like the draft id below it is
     # identity, not request content, and must not make a retry conflict.
     payload.pop("task_id", None)
@@ -153,7 +156,8 @@ def _prepare_message(intent: MessageIntent) -> _PreparedRound:
         else {"kind": "room"}
     )
     return _PreparedRound(
-        task_goal=intent.text,
+        task_goal=intent.text or ("Describe the attached images." if intent.attachment_ids else ""),
+        attachment_ids=intent.attachment_ids,
         session_id=intent.thread_id,
         raw_assignments=raw_assignments,
         mode=purpose_modes[intent.purpose],
@@ -210,6 +214,7 @@ def _prepare_run(intent: RunIntent) -> _PreparedRound:
     ]
     return _PreparedRound(
         task_goal=intent.task_goal,
+        attachment_ids=intent.attachment_ids,
         session_id=intent.session_id,
         raw_assignments=raw_assignments,
         mode=_mode(intent.mode),

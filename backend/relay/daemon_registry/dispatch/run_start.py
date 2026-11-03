@@ -41,6 +41,12 @@ def _run_start_command(
     handoff_validation: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """The ``run.start`` command before skills and delivery bookkeeping."""
+    images = (run_request.get("state") or {}).get("input_attachments")
+    if images:
+        if not has_capability(sandbox, "image-attachments"):
+            raise _DeliveryRefused("image_client_update_required")
+        if assignment["executorKind"] not in ("codex", "claude"):
+            raise _DeliveryRefused("image_runtime_unsupported")
     return {
         "id": new_database_id(),
         "type": "run.start",
@@ -70,6 +76,7 @@ def _run_start_command(
         ),
         **_optional_fields(sandbox, (("workspacePath", "workspacePath"),)),
         "state": state,
+        **({"attachments": images} if images else {}),
         "_runRequestId": run_request["id"],
         "reportWorkspaceStatus": True,
         **(

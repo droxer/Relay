@@ -2,6 +2,7 @@ import {
   ICON,
   StreamAttachment,
 } from "./icons";
+import { relayApiEndpoint } from "../lib/apiOrigin";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -224,6 +225,12 @@ export const MessageBlock = memo(function MessageBlock({
               Same escaped pipeline as the agent side — no raw HTML. */}
           <div className="user-text md-body agent-prose">
             <MarkdownContent text={message.text} />
+            {message.attachments?.length ? <div className="message-images">{message.attachments.map((image, index) => (
+              <a key={image.id} href={relayApiEndpoint(`/thread-attachments/${encodeURIComponent(image.id)}`)} target="_blank" rel="noreferrer">
+                <img src={relayApiEndpoint(`/thread-attachments/${encodeURIComponent(image.id)}`)} loading="lazy"
+                  alt={t("composer.image_number", { defaultValue: "Attached image {{number}}", number: index + 1 })} />
+              </a>
+            ))}</div> : null}
           </div>
         </div>
         <MsgTime value={message.timestamp} />

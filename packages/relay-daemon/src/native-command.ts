@@ -1,6 +1,6 @@
 /** Native Windows CLI launch: npm shims become Node entrypoints; no command shell interprets arguments. */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { superviseLocalProcess } from './process-supervisor.js';
@@ -42,7 +42,7 @@ export function nativeCommand(command: string, args: string[], env: NodeJS.Proce
 }
 
 /** Runs inside the supervised native script, so every CLI remains in its execution tree. */
-export async function relayRun(argv: string[], options: { capture?: boolean; allowFailure?: boolean; discardStdout?: boolean } = {}): Promise<{ code: number; stdout: string; stderr: string }> {
+export async function relayRun(argv: string[], options: { capture?: boolean; allowFailure?: boolean; stdinFile?: string; discardStdout?: boolean } = {}): Promise<{ code: number; stdout: string; stderr: string }> {
   const invocation = nativeCommand(argv[0]!, argv.slice(1));
   let temporary: string | undefined;
   // Node-based CLIs can receive even large prompts/config JSON without putting them on
@@ -61,10 +61,12 @@ export async function relayRun(argv: string[], options: { capture?: boolean; all
       invocation.args = ['--require', preload, entry];
     }
   }
+  let inputFd: number | undefined;
   try {
+    inputFd = options.stdinFile ? openSync(options.stdinFile, "r") : undefined;
     const result = await new Promise<{ code: number; stdout: string; stderr: string }>((done, reject) => {
       const child = spawn(invocation.command, invocation.args, {
-        stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'inherit', 'inherit'],
+        stdio: options.capture ? [inputFd ?? 'ignore', 'pipe', 'pipe'] : [inputFd ?? 'ignore', 'inherit', 'inherit'],
         windowsHide: true,
       });
       let stdout = '', stderr = '';
@@ -79,7 +81,10 @@ export async function relayRun(argv: string[], options: { capture?: boolean; all
       throw Object.assign(new Error((result.stdout + result.stderr).trim() || `${argv[0]} exited with code ${result.code}.`), { code: result.code });
     }
     return result;
-  } finally { if (temporary) rmSync(temporary, { recursive: true, force: true }); }
+  } finally {
+    if (inputFd !== undefined) closeSync(inputFd);
+    if (temporary) rmSync(temporary, { recursive: true, force: true });
+  }
 }
 
 /** The caller supervises one Node root, retaining existing streaming, cancellation and exit proof. */

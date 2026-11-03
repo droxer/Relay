@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ...core.thread_attachments import attachment_ids
 from ...collaboration.models import MessageIntent, RecoveryIntent
 from ...collaboration.errors import CollaborationError
 from ...collaboration.service import CollaborationConductor
@@ -119,6 +120,10 @@ async def submit_thread_message(
     actor = request_actor(request, ctx.auth_store)
     # Parsed after the actor, so an anonymous caller is refused before its body.
     body = await parse_request_body(request, ThreadMessageBody)
+    try:
+        images = attachment_ids(body.attachment_ids)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     text = body.message_text()
     purpose = body.purpose()
     supplied_address_agent_ids = body.supplied_address_agent_ids()
@@ -151,6 +156,7 @@ async def submit_thread_message(
             MessageIntent(
                 thread_id=thread_id,
                 text=text,
+                attachment_ids=images,
                 purpose=purpose,  # type: ignore[arg-type]
                 address_agent_ids=address_agent_ids,
                 address_team_id=address_team_id,

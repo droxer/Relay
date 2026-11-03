@@ -1,6 +1,7 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, UserAgent, ThreadMessageInput } from "../../types";
+import { ComposerImagePicker, ComposerImagePreviews, useComposerImages } from "./ComposerImages";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
@@ -48,7 +49,7 @@ export type ComposerSendOptions = {
  *  sent as written — a leading "@" is the agent's wording, not an address.
  *  `questionId`: the wait this message answers (see `AwaitingInput`).
  *  `approve`: the answer approves that wait's held step. */
-export type ComposerDispatchOptions = { literal?: boolean; questionId?: string; approve?: boolean };
+export type ComposerDispatchOptions = { attachmentIds?: string[]; literal?: boolean; questionId?: string; approve?: boolean };
 
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every
@@ -95,6 +96,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 }>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
   const { t } = useTranslation();
   const composer = useComposer(draftKey);
+  const imageInput = useComposerImages(draftKey);
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
   useEffect(() => setStyle(null), [activeTeamId]);
   const {
@@ -175,7 +177,8 @@ const ComposerView = forwardRef<ComposerHandle, {
   // picked, but `triggerSend` did not, so the keyboard shortcut dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
   const cannotSendAsWritten = readOnly
-    || !composerText.trim()
+    || imageInput.busy
+    || (!composerText.trim() && !imageInput.images.length)
     || (initializingThread && !projectName && !runtimeNodeId);
   const cannotSend = cannotSendAsWritten || parsed.blocked;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false): Promise<boolean> => {
@@ -193,11 +196,14 @@ const ComposerView = forwardRef<ComposerHandle, {
       const teamStyle = activeTeamId && !projectName && !addressed && (intent ?? "accomplish") === "accomplish"
         ? style ?? undefined
         : undefined;
-      const sent = await (literal
-        ? onSend(teamStyle, intent, { literal: true, ...(approve ? { approve: true } : {}) })
-        : intent ? onSend(teamStyle, intent) : onSend(teamStyle));
+      const sent = await onSend(teamStyle, intent, {
+        ...(literal ? { literal: true } : {}),
+        ...(approve ? { approve: true } : {}),
+        ...(imageInput.images.length ? { attachmentIds: imageInput.images.map(image => image.id) } : {}),
+      });
       if (sent === false) return false;
       setStyle(null);
+      imageInput.clear();
       return true;
     } catch {
       // Dispatch owns error reporting; preserve the override for retry.
@@ -309,6 +315,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       {prompt}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
+          <ComposerImagePreviews input={imageInput} />
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
           {/* The mirror sits under the textarea inside a positioned wrapper so
               the pills track the text through resize and scroll. */}
@@ -377,6 +384,13 @@ const ComposerView = forwardRef<ComposerHandle, {
                   triggerSend();
                 }
               }}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
+                if (files.length && !readOnly && !running && !sendPending) {
+                  event.preventDefault();
+                  void imageInput.add(files);
+                }
+              }}
               onScroll={(e) => {
                 // A tall draft scrolls inside the textarea; the mirror has to
                 // follow or the pills detach from their names.
@@ -393,6 +407,7 @@ const ComposerView = forwardRef<ComposerHandle, {
                 runs is environment, not a per-message choice: it trails the
                 card in the context row below. */}
             <div className="composer-targets">
+              <ComposerImagePicker input={imageInput} disabled={readOnly || running || sendPending} />
               <AgentSelect
                 logicalAgents={logicalAgents}
                 activeLogicalAgentId={addressedLogicalAgentId ?? activeLogicalAgentId}

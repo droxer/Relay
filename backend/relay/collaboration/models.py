@@ -23,6 +23,7 @@ class CollaborationIdempotencyError(ValueError):
 class MessageIntent:
     thread_id: str
     text: str
+    attachment_ids: tuple[str, ...] = ()
     purpose: CollaborationPurpose = "accomplish"
     # Empty addresses the whole room. Several ids address several agents in one
     # round; agents that are not yet participants join the thread by being
@@ -63,6 +64,7 @@ class RunIntent:
     task_goal: str
     session_id: str | None
     raw_assignments: list[dict[str, Any]] | None
+    attachment_ids: tuple[str, ...] = ()
     mode: str = "action"
     requested_team_id: str | None = None
     requested_project_id: str | None = None

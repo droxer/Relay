@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+DAEMON_CAPABILITY_IMAGE_ATTACHMENTS = "image-attachments"
 DAEMON_CAPABILITY_WORK_RESULTS = "work-results"
 DAEMON_CAPABILITY_AGENT_SKILLS = "agent-skills"
 DAEMON_CAPABILITY_RUNTIME_REFRESH = "runtime-refresh"
@@ -53,6 +54,7 @@ DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         DAEMON_CAPABILITY_WORK_RESULTS,
+        DAEMON_CAPABILITY_IMAGE_ATTACHMENTS,
         DAEMON_CAPABILITY_AGENT_SKILLS,
         DAEMON_CAPABILITY_RUNTIME_REFRESH,
         DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE,

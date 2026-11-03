@@ -85,6 +85,7 @@ class SessionLifecycleRows(SessionStoreState):
                         )
                     ),
                     "taskGoal": payload["taskGoal"],
+                    **({"attachments": payload["attachments"]} if payload.get("attachments") else {}),
                     "participants": payload.get("participants", ["human"]),
                 },
             )

@@ -36,6 +36,8 @@ export interface SessionSummariesResponse {
 }
 
 export interface AgentRunInput {
+  idempotencyKey?: string;
+  attachmentIds?: string[];
   style?: CollaborationStyle;
   taskGoal: string;
   /** Computer selected as the immutable runtime for a new thread. */
@@ -62,6 +64,7 @@ export interface AgentRunInput {
 }
 
 export interface ThreadMessageInput {
+  attachmentIds?: string[];
   style?: CollaborationStyle;
   text: string;
   intent: "accomplish" | "discuss" | "review";
