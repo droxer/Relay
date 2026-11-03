@@ -13,6 +13,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CheckIcon } from "../icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   allImportableSelected,
@@ -149,12 +150,12 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
       closeLabel={t("github_import.close")}
       bodyClassName="github-import"
     >
-      <GitHubConnectionPanel />
-      <form className="github-import-query" onSubmit={submit}>
-        <Field label={t("github_import.repository")} required hint={t("github_import.repository_hint")}>
+      <form className="github-import-query" onSubmit={submit} aria-busy={busy !== null}>
+        <Field label={t("github_import.repository")} required hint={t("github_import.repository_hint")} disabled={busy !== null}>
           <Input
             data-modal-initial-focus
             required
+            disabled={busy !== null}
             autoComplete="off"
             spellCheck={false}
             value={repository}
@@ -164,7 +165,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
         </Field>
         {lockedProject ? null : (
           <Field label={t("project.project")} labelId={projectLabelId} wrapper="div" hint={t("github_import.project_hint")}>
-            <Select value={projectId ?? NO_PROJECT} onValueChange={(value) => {
+            <Select disabled={busy !== null} value={projectId ?? NO_PROJECT} onValueChange={(value) => {
               if (value) setProjectId(value === NO_PROJECT ? undefined : value);
             }}>
               <SelectTrigger className="w-full" aria-labelledby={projectLabelId}>
@@ -187,6 +188,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
                   className="adm-profile-segment-btn"
                   data-active={state === option ? "true" : "false"}
                   aria-pressed={state === option}
+                  disabled={busy !== null}
                   onClick={() => setState(option)}
                 >
                   {t(`github_import.states.${option}`)}
@@ -196,6 +198,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
           </Field>
           <Field label={t("github_import.labels")} optional={t("github_import.optional")}>
             <Input
+              disabled={busy !== null}
               autoComplete="off"
               spellCheck={false}
               value={labels}
@@ -204,15 +207,15 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
             />
           </Field>
         </div>
-        <div>
-          <Button type="submit" variant="outline" disabled={!query.repository || busy !== null}>
+        <div className="github-import-query-actions">
+          <Button type="submit" variant={!listing || stale || !importable.length ? "default" : "outline"} loading={busy === "loading"} disabled={!query.repository || busy !== null}>
             {busy === "loading" ? t("github_import.loading") : t("github_import.load")}
           </Button>
         </div>
       </form>
 
       {listing && !stale ? (
-        <section className="github-import-results" aria-label={t("github_import.issues_label")}>
+        <section className="github-import-results" aria-label={t("github_import.issues_label")} aria-busy={busy !== null}>
           <header className="github-import-results-head">
             <label className="github-import-select-all">
               <Checkbox
@@ -221,9 +224,9 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
                 onCheckedChange={() => setSelected((current) => toggleAllImportable(current, issues))}
                 aria-label={t("github_import.select_all")}
               />
-              <span>{t("github_import.selected", { count: selected.size, total: importable.length })}</span>
+              <span aria-live="polite" aria-atomic="true">{t("github_import.selected", { count: selected.size, total: importable.length })}</span>
             </label>
-            <span className="github-import-repo" translate="no">{listing.response.repository.fullName}</span>
+            <span className="github-import-repo" translate="no" title={listing.response.repository.fullName}>{listing.response.repository.fullName}</span>
           </header>
           {issues.length ? (
             <ul className="github-import-list">
@@ -244,17 +247,19 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
               ))}
             </ul>
           ) : (
-            <p className="github-import-empty">{t("github_import.no_issues")}</p>
+            <p className="github-import-empty" role="status">{t("github_import.no_issues")}</p>
           )}
           {listing.response.hasMore ? (
-            <Button type="button" variant="ghost" disabled={busy !== null} onClick={() => void load(listing.response.page + 1)}>
-              {t("github_import.load_more")}
+            <Button type="button" variant="ghost" loading={busy === "loading"} disabled={busy !== null} onClick={() => void load(listing.response.page + 1)}>
+              {busy === "loading" ? t("github_import.loading") : t("github_import.load_more")}
             </Button>
           ) : null}
         </section>
       ) : null}
 
       {error ? <p role="alert" className="github-import-error">{error}</p> : null}
+
+      <div className="github-import-connection-note"><GitHubConnectionPanel /></div>
 
       <footer className="adm-form-actions">
         <Button variant="ghost" disabled={busy !== null} onClick={onClose}>
@@ -281,9 +286,9 @@ function IssueRow({ issue, checked, disabled, onToggle, onOpenTask }: {
   const href = safeGitHubUrl(issue.url);
   const imported = issue.importedTaskId;
   return (
-    <li className="github-import-row" data-imported={imported ? "true" : undefined}>
+    <li className="github-import-row" data-imported={imported ? "true" : undefined} data-selected={checked && !imported ? "true" : undefined}>
       {imported ? (
-        <span className="github-import-row-mark" aria-hidden="true" />
+        <span className="github-import-row-mark" aria-hidden="true"><CheckIcon /></span>
       ) : (
         <Checkbox checked={checked} disabled={disabled} onCheckedChange={onToggle}
           aria-label={t("github_import.select_issue", { number: issue.number, title: issue.title })} />
@@ -297,7 +302,7 @@ function IssueRow({ issue, checked, disabled, onToggle, onOpenTask }: {
         )}
         {issue.labels.length ? (
           <span className="github-import-row-labels">
-            {issue.labels.slice(0, 4).map((label) => <span key={label} className="github-import-label">{label}</span>)}
+            {issue.labels.slice(0, 4).map((label) => <span key={label} className="github-import-label" title={label}>{label}</span>)}
           </span>
         ) : null}
       </span>

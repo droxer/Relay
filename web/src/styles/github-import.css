@@ -11,8 +11,10 @@
 .github-import-query {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
+
+.github-import-query-actions { display: flex; }
 
 .github-connection {
   display: flex;
@@ -38,6 +40,19 @@
 .github-connection p { margin: 0; font: var(--type-body-sm); }
 .github-connection-hint { color: var(--ink-3); }
 
+/* The available task leads; the future connection stays a supporting note. */
+.github-import-connection-note .github-connection {
+  gap: var(--sp-2);
+  padding-block: var(--sp-4) 0;
+  border-block-start: 1px solid var(--line-2);
+  border-block-end: 0;
+}
+
+.github-import-connection-note .github-connection-title {
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-2);
+}
 
 .github-import-filters {
   display: grid;
@@ -51,16 +66,22 @@
   grid-template-columns: repeat(3, auto);
 }
 
-@media (max-width: 640px) {
+@container drawer-body (max-width: 420px) {
   .github-import-filters {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .github-import-query-actions > button { width: 100%; }
+
+  .github-import-results-head { flex-wrap: wrap; }
+
+  .github-import-repo { flex-basis: 100%; }
 }
 
 .github-import-results {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   align-items: flex-start;
 }
 
@@ -81,9 +102,12 @@
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   color: var(--ink-2);
+  min-height: var(--touch-target);
 }
 
 .github-import-repo {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font: var(--type-code);
   letter-spacing: var(--type-code-track);
   color: var(--ink-3);
@@ -101,9 +125,15 @@
   grid-template-columns: var(--sp-4) auto minmax(0, 1fr) auto;
   align-items: first baseline;
   gap: var(--sp-3);
-  padding: var(--sp-2) 0;
+  padding: var(--sp-3) var(--sp-2);
   border-bottom: 0.5px solid var(--line-2);
+  border-radius: var(--r-2);
+  transition: background-color var(--t-fast) var(--ease);
 }
+
+.github-import-row:hover,
+.github-import-row:focus-within { background: var(--row-hover); }
+.github-import-row[data-selected="true"] { background: var(--action-soft); }
 
 .github-import-row:last-child {
   border-bottom: 0;
@@ -117,6 +147,8 @@
 }
 
 .github-import-row-number {
+  min-width: 3ch;
+  text-align: end;
   font: var(--type-code);
   letter-spacing: var(--type-code-track);
   color: var(--ink-3);
@@ -124,11 +156,20 @@
 
 .github-import-row-main {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-1) var(--sp-2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
   min-width: 0;
 }
+
+.github-import-row-mark {
+  display: inline-flex;
+  width: var(--sp-4);
+  height: 1lh;
+  align-items: center;
+  color: var(--ink-3);
+}
+.github-import-row-mark svg { width: var(--sp-4); height: var(--sp-4); }
 
 .github-import-row-title {
   min-width: 0;
@@ -152,9 +193,14 @@ a.github-import-row-title:hover {
   display: inline-flex;
   flex-wrap: wrap;
   gap: var(--sp-1);
+  max-width: 100%;
 }
 
 .github-import-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0 var(--sp-1);
   border: 0.5px solid var(--line-2);
   border-radius: var(--r-1);
@@ -167,6 +213,7 @@ a.github-import-row-title:hover {
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
+  white-space: nowrap;
 }
 
 button.github-import-row-state {
@@ -183,7 +230,11 @@ button.github-import-row-state:hover {
 }
 
 .github-import-empty {
+  align-self: stretch;
   margin: 0;
+  padding: var(--sp-6) var(--sp-4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
   color: var(--ink-3);
@@ -191,6 +242,9 @@ button.github-import-row-state:hover {
 
 .github-import-error {
   margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
   color: var(--err);
