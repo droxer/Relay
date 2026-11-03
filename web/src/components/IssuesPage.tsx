@@ -491,7 +491,6 @@ function IssuesPageView({
 
         {importOpen ? (
           <GitHubImportDrawer
-            accountId={currentUser.id}
             open
             projects={projects}
             initialProjectId={projectFilter ?? undefined}

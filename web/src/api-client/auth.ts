@@ -100,6 +100,7 @@ export function changePassword(input: { currentPassword: string; newPassword: st
   return apiJson("/auth/password", { method: "POST", body: input });
 }
 export interface GitHubConnectionStatus {
+  comingSoon?: boolean;
   configured: boolean;
   connected: boolean;
   login: string | null;

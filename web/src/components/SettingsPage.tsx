@@ -86,7 +86,7 @@ export function SettingsPage({
         <PageHeader title={sectionLabel} titleAs="h2" titleVariant="title" />
         <div className="sec-section-body">
           {section === "account" ? (
-            <><AccountSection key={user.id} user={user} onUserChange={onUserChange} /><GitHubConnectionPanel accountId={user.id} /></>
+            <><AccountSection key={user.id} user={user} onUserChange={onUserChange} /><GitHubConnectionPanel /></>
           ) : section === "notifications" ? (
             <NotificationsSection />
           ) : section === "appearance" ? (

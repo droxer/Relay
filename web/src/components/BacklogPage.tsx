@@ -447,7 +447,6 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
 
         {importOpen && currentProject ? (
           <GitHubImportDrawer
-            accountId={currentUser.id}
             open
             lockedProject={currentProject}
             onClose={() => setImportOpen(false)}

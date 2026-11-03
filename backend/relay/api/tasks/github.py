@@ -1,9 +1,8 @@
 """Importing GitHub issues as tasks: a preview, then the import itself.
 
-Both routes take the repository and an optional ``token`` in the body (never
-the URL, so no access log keeps one); the token is used for this request's
-GitHub reads only and is never stored. ``projectId`` names the destination
-backlog; without it, issues land in the caller's intake.
+Both routes read public repositories anonymously. Tokens and saved account
+connections are not used. ``projectId`` names the destination backlog; without
+it, issues land in the caller's intake.
 """
 
 from __future__ import annotations
@@ -13,8 +12,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from ...security.actor import Actor
-from ...security.request_auth import require_user_session, user_session_token_from_request
-from ..accounts.github import github_connection_errors
 from ...tasks.github_import import (
     MAX_IMPORT_ISSUES,
     ImportDestination,
@@ -31,7 +28,6 @@ from ...tasks.github_issues import (
     GitHubIssueClient,
     Repository,
     parse_repository,
-    parse_token,
 )
 from ..actors import request_actor
 from ..bodies import JsonBodyDep, string_field
@@ -48,7 +44,7 @@ def preview_github_issues(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
-    repo, token = _repository_and_token(body)
+    repo = _public_repository(body)
     destination = _destination(ctx, actor, body)
     state = string_field(body, "state") or "open"
     if state not in ISSUE_STATES:
@@ -57,9 +53,9 @@ def preview_github_issues(
     if len(labels) > MAX_LABEL_FILTER_CHARS:
         raise HTTPException(400, "github_labels_invalid")
     page = _page(body.get("page"))
-    token = _connected_token(request, ctx, actor, token)
     try:
-        with GitHubIssueClient(token) as client:
+        with GitHubIssueClient() as client:
+            client.require_public_repository(repo)
             listing = client.list_issues(repo, state=state, labels=labels, page=page)
     except GitHubError as error:
         raise HTTPException(error.status, error.code) from error
@@ -87,11 +83,14 @@ def import_github_issues(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
-    repo, token = _repository_and_token(body)
+    repo = _public_repository(body)
     destination = _destination(ctx, actor, body)
     numbers = _issue_numbers(body.get("numbers"))
-    token = _connected_token(request, ctx, actor, token)
-    with task_request_errors(), GitHubIssueClient(token) as client:
+    with task_request_errors(), GitHubIssueClient() as client:
+        try:
+            client.require_public_repository(repo)
+        except GitHubError as error:
+            raise HTTPException(error.status, error.code) from error
         result = import_issues(
             ctx,
             actor,
@@ -111,21 +110,11 @@ def import_github_issues(
     }
 
 
-def _connected_token(request: Request, ctx: AppContext, actor: Actor, token: str | None) -> str | None:
-    if token or not ctx.github_connection or not user_session_token_from_request(request):
-        return token
-    account = require_user_session(request, ctx.auth_store)
-    # A chat-service actor may name a different user; it must never borrow a
-    # browser account's saved credential.
-    if account["id"] != actor["account"]["id"]:
-        return None
-    with github_connection_errors():
-        return ctx.github_connection.token_for(account["id"])
-
-
-def _repository_and_token(body: dict[str, Any]) -> tuple[Repository, str | None]:
+def _public_repository(body: dict[str, Any]) -> Repository:
+    if "token" in body:
+        raise HTTPException(400, "github_public_repositories_only")
     try:
-        return parse_repository(body.get("repository")), parse_token(body.get("token"))
+        return parse_repository(body.get("repository"))
     except GitHubError as error:
         raise HTTPException(error.status, error.code) from error
 

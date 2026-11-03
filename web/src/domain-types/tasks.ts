@@ -192,15 +192,12 @@ export interface GitHubIssueQuery {
   /** Comma-separated label names, as GitHub filters them. */
   labels?: string;
   page?: number;
-  /** Used for this request only; the server never stores it. */
-  token?: string;
 }
 
 export interface GitHubImportInput {
   repository: string;
   projectId?: string;
   numbers: number[];
-  token?: string;
 }
 
 /** An issue the import left out, and why (a `github_*` code or a skip reason). */

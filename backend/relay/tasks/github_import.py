@@ -31,7 +31,7 @@ from .requests import TaskRequestReader
 PROVIDER = "github"
 MAX_IMPORT_ISSUES = 50
 # A failure that will fail every later issue too, so the import stops.
-_FATAL_CODES = frozenset({"github_rate_limited", "github_token_rejected", "github_forbidden", "github_unreachable"})
+_FATAL_CODES = frozenset({"github_rate_limited", "github_forbidden", "github_unreachable"})
 
 
 def issue_ref(repo: Repository, number: int) -> str:
