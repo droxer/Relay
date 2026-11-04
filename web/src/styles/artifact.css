@@ -472,29 +472,6 @@
   container: artifact-preview / inline-size;
 }
 
-/* Narrow pane: name (and close) on the first line, the file's actions on a
-   second. In one row the view switch, Copy and Download squeezed the name to
-   nothing and clipped Download off the edge. */
-@container artifact-preview (max-width: 640px) {
-  .artifact-preview-header {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: var(--control-h);
-    row-gap: var(--sp-1);
-    padding-block: var(--sp-2);
-  }
-
-  .artifact-preview-close {
-    order: 1;
-  }
-
-  .artifact-preview-actions {
-    order: 2;
-    flex: 1 0 100%;
-    justify-content: flex-end;
-  }
-}
-
 .artifact-preview-header {
   display: flex;
   align-items: center;
@@ -539,6 +516,32 @@
   align-items: center;
   gap: var(--sp-2);
   flex: 0 0 auto;
+}
+
+/* After the base header/close/actions rules on purpose: same specificity, so
+   the base `height` and `padding` would otherwise win and clip the wrapped
+   actions row. */
+/* Narrow pane: name (and close) on the first line, the file's actions on a
+   second. In one row the view switch, Copy and Download squeezed the name to
+   nothing and clipped Download off the edge. */
+@container artifact-preview (max-width: 640px) {
+  .artifact-preview-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--control-h);
+    row-gap: var(--sp-1);
+    padding-block: var(--sp-2);
+  }
+
+  .artifact-preview-close {
+    order: 1;
+  }
+
+  .artifact-preview-actions {
+    order: 2;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
 }
 
 .artifact-preview-body {
