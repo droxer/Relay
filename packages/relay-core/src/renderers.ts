@@ -1,5 +1,6 @@
 import { ansi, color, status } from "./format.js";
 import { asRecord, parseJsonObject } from "./shell.js";
+import { formatOpenCodeToolError } from "./opencode-errors.js";
 
 const TEXT_MARK = "●";
 const THINK_MARK = "○";
@@ -448,7 +449,15 @@ export class OpenCodeStreamRenderer {
       const state = asRecord(part.state);
       if (state.status !== "completed" && state.status !== "error") return "";
       const target = typeof state.title === "string" && state.title ? state.title : String(part.tool ?? "tool");
-      return toolLine("tool", target);
+      let rendered = toolLine("tool", target);
+      if (state.status === "error") {
+        const error = [state.error, state.output].find((value) => typeof value === "string" && value.trim());
+        if (typeof error === "string") {
+          const message = formatOpenCodeToolError(String(part.tool ?? "tool"), error);
+          rendered += `${status(message.tone === "warn" ? "warn" : "error", sanitizeUntrustedText(message.text))}\n`;
+        }
+      }
+      return rendered;
     }
     return "";
   }

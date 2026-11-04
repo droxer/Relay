@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
-    "./api-url": "./dist/api-url.js"
+    "./api-url": "./dist/api-url.js",
+    "./opencode-errors": "./dist/opencode-errors.js"
   },
   "types": "./dist/index.d.ts",
   "scripts": {

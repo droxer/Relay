@@ -16,6 +16,7 @@
     "paths": {
       "relay-core": ["packages/relay-core/src/index.ts"],
       "relay-core/api-url": ["packages/relay-core/src/api-url.ts"],
+      "relay-core/opencode-errors": ["packages/relay-core/src/opencode-errors.ts"],
       "relay-daemon": ["packages/relay-daemon/src/index.ts"],
       "relay-supervisor": ["packages/relay-supervisor/src/index.ts"]
     }

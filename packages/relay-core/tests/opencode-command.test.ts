@@ -60,6 +60,21 @@ describe("buildOpenCodeCommand", () => {
 });
 
 describe("OpenCodeStreamRenderer", () => {
+  it("shows friendly failed-tool messages in the terminal", () => {
+    for (const field of ["error", "output"]) {
+      for (const [tool, error, expected] of [
+        ["websearch", "Web search cancelled", "Web search cancelled."],
+        ["webfetch", "StatusCode: non 2xx status code (401 GET https://www.reuters.com/technology/artificial-intelligence/)", "This website requires authentication (HTTP 401). Try another source."],
+      ]) {
+        const output = formatOpenCodeJsonLine(JSON.stringify({ type: "tool_use", part: { tool, state: {
+          status: "error", title: tool, [field]: JSON.stringify({ metadata: {}, error }),
+        } } }));
+        assert.ok(output.includes(expected!));
+        assert.doesNotMatch(output, /metadata|StatusCode|non 2xx/);
+      }
+    }
+  });
+
   it("streams deltas as one block with whitespace intact", () => {
     const renderer = new OpenCodeStreamRenderer();
     const output = ["Hello", " ", "world."]
