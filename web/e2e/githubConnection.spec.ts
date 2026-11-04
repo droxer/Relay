@@ -25,7 +25,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/tasks?githubImport=1");
-    const drawer = page.getByRole("dialog", { name: "Import from GitHub" });
+    const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
     await expect(drawer.getByText("Coming soon", { exact: true })).toBeVisible();
@@ -36,7 +36,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     await drawer.getByRole("textbox", { name: /^Repository\b/ }).fill("octo/hello");
     await drawer.getByRole("button", { name: "Load issues", exact: true }).click();
     await drawer.getByRole("button", { name: "Load more", exact: true }).click();
-    const selectAll = drawer.getByRole("checkbox", { name: /^Select every issue not yet imported\b/ });
+    const selectAll = drawer.getByRole("checkbox", { name: /^Select all new issues\b/ });
     await selectAll.click();
     await expect(drawer.getByText("50 of 55 selected", { exact: true })).toBeVisible();
     await expect(drawer.locator('.github-import-row[data-selected="true"]')).toHaveCount(50);
@@ -47,7 +47,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     expect(await drawer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
     await page.goto("/settings/account");
-    const connection = page.getByRole("region", { name: "GitHub connection", exact: true });
+    const connection = page.getByRole("region", { name: "Connections", exact: true });
     await expect(connection.getByText("Coming soon", { exact: true })).toBeVisible();
     await expect(connection.getByRole("button")).toHaveCount(0);
     expect(connectionRequests).toBe(0);
@@ -78,7 +78,7 @@ test("GitHub import has clear loading, recovery, empty, and imported states", as
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/tasks?githubImport=1");
-  const drawer = page.getByRole("dialog", { name: "Import from GitHub" });
+  const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
   await expect(drawer).toHaveCSS("opacity", "1");
   const repository = drawer.getByRole("textbox", { name: /^Repository\b/ });
   await repository.fill("octo/hello");

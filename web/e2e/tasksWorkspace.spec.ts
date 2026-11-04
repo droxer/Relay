@@ -29,7 +29,7 @@ for (const mobile of [false, true]) {
     });
     await page.goto("/tasks");
     const panel = page.locator("#backlog-panel");
-    await expect(panel.getByRole("group", { name: "Backlog metrics" })).toHaveCount(0);
+    await expect(panel.getByRole("group", { name: "Task summary" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Ship the release", exact: true })).toHaveCount(1);
     await expect(panel.getByRole("columnheader", { name: "Actions", exact: true })).toHaveCount(0);
     const rows = panel.getByRole("table", { name: "Tasks", exact: true });
@@ -52,7 +52,7 @@ for (const mobile of [false, true]) {
     await expect(page).toHaveURL((url) => url.searchParams.get("team") === "team-a");
     await panel.getByRole("button", { name: "Clear filters", exact: true }).click();
     const statusNav = panel.getByRole("navigation", { name: "Task queues", exact: true });
-    await statusNav.getByRole("button", { name: "Awaiting your input 1", exact: true }).click();
+    await statusNav.getByRole("button", { name: "Needs attention 1", exact: true }).click();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(statusNav.getByRole("button", { name: "Running 1", exact: true })).toBeVisible();
     await statusNav.getByRole("button", { name: "All open 2", exact: true }).click();

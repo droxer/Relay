@@ -86,16 +86,16 @@ for (const mobile of [false, true]) {
 test("task override can be saved and cleared to inherit", async ({ page }) => {
   const { patches } = await fixture(page);
   await page.goto("/backlog/task?tab=definition");
-  await expect(page.getByText("Team default (Build → Review)")).toBeVisible();
+  await expect(page.getByText("Team default (Build and review)")).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByRole("combobox", { name: "Collaboration", exact: true }).click();
+  await page.getByRole("combobox", { name: "Collaboration style", exact: true }).click();
   await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Pipeline", exact: true }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("pipeline");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByRole("combobox", { name: "Collaboration", exact: true }).click();
-  await page.getByRole("option", { name: "Team default (Build → Review)", exact: true }).click();
+  await page.getByRole("combobox", { name: "Collaboration style", exact: true }).click();
+  await page.getByRole("option", { name: "Team default (Build and review)", exact: true }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("");
 });
@@ -109,7 +109,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await page.getByRole("button", { name: "Edit team" }).click();
     const styles = page.getByRole("radiogroup", { name: "Collaboration style" });
-    const current = styles.getByRole("radio", { name: "Build → Review", exact: true });
+    const current = styles.getByRole("radio", { name: "Build and review", exact: true });
     await current.focus();
     await expect(current).toBeChecked();
     // Arrow keys rove and select within the group, like any radio group.
@@ -131,7 +131,7 @@ for (const theme of ["light", "dark"] as const) {
 test("composer sends a one-message override then returns to team default", async ({ page }) => {
   const { sends } = await fixture(page);
   await page.goto("/threads/style-thread");
-  const select = page.getByRole("combobox", { name: "Message collaboration style" });
+  const select = page.getByRole("combobox", { name: "Collaboration style" });
   await select.click();
   await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Lead-led", exact: true }).click();
@@ -140,13 +140,13 @@ test("composer sends a one-message override then returns to team default", async
   await page.screenshot({ path: "/tmp/relay-style-composer.png", fullPage: true });
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => sends.at(-1)?.style).toBe("lead_led");
-  await expect(select).toContainText("Build → Review · team default");
+  await expect(select).toContainText("Build and review · team default");
 });
 
 test("failed sends retain the override and member mentions hide it", async ({ page }) => {
   const { sends } = await fixture(page, true);
   await page.goto("/threads/style-thread");
-  const select = page.getByRole("combobox", { name: "Message collaboration style" });
+  const select = page.getByRole("combobox", { name: "Collaboration style" });
   await select.click();
   await page.getByRole("option", { name: "Pipeline", exact: true }).click();
   const text = page.locator('textarea[name="message"]');
@@ -160,7 +160,7 @@ test("failed sends retain the override and member mentions hide it", async ({ pa
   await expect.poll(() => sends.length).toBe(2);
   expect(sends.map((send) => send.style)).toEqual(["pipeline", "pipeline"]);
   expect(sends[0].idempotencyKey).toBe(sends[1].idempotencyKey);
-  await expect(select).toContainText("Build → Review · team default");
+  await expect(select).toContainText("Build and review · team default");
   await text.fill("@Builder fix the API");
   await expect(select).toHaveCount(0);
 });

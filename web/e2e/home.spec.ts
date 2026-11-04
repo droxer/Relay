@@ -111,11 +111,11 @@ for (const theme of ["dark", "light"] as const) {
 
     await expect(page).toHaveURL(/\/home$/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Fei");
-    await expect(page.locator(".home-brief")).toContainText("3 things need you");
-    await expect(page.getByRole("link", { name: "Home, 3 things need you" })).toBeVisible();
+    await expect(page.locator(".home-brief")).toContainText("3 items need attention");
+    await expect(page.getByRole("link", { name: "Home, 3 items need attention" })).toBeVisible();
 
     await expect(queue(page).locator(".home-band-title")).toHaveText([
-      "Needs you", "Stuck", "Worth doing",
+      "Needs attention", "Blocked", "Up next",
     ]);
     await expect(queue(page).getByRole("heading", {name:"Start here"})).toBeVisible();
     await expect(queue(page).locator(".home-item-title").filter({hasText:"Migrate billing tables"})).toHaveCount(1);
@@ -129,7 +129,7 @@ for (const theme of ["dark", "light"] as const) {
     // The tabs count the Start here item too, so they agree with the header and the brief.
     await expect(queue(page).locator(".home-section-count").first()).toHaveText("8");
     await expect(queue(page).getByRole("button", { name: /^All/ })).toContainText("8");
-    await expect(queue(page).getByRole("button", { name: /^Needs you/ })).toContainText("3");
+    await expect(queue(page).getByRole("button", { name: /^Needs attention/ })).toContainText("3");
     // My tasks counts statuses, never a blocked task as running, and opens the matching queue.
     const mine = page.getByRole("region", { name: "My tasks" });
     await expect(mine.getByRole("link", { name: /Running/ })).toHaveText(/^1\s*Running$/);
@@ -139,8 +139,8 @@ for (const theme of ["dark", "light"] as const) {
     await expect(setup.getByRole("link", { name: /1 of 2 computers online/ })).toHaveAttribute("href", "/computers");
     await expect(setup).toContainText("studio-linux offline");
     await expect(setup.getByRole("link", { name: /1 of 1 agents ready/ })).not.toContainText("unavailable");
-    // Review work stays in the queue, not also under Recently finished.
-    await expect(page.getByRole("region", { name: "Recently finished" })).not.toContainText("Add retry budget");
+    // Review work stays in the queue, not also under Recently completed.
+    await expect(page.getByRole("region", { name: "Recently completed" })).not.toContainText("Add retry budget");
     await page.screenshot({ path: testInfo.outputPath(`home-${theme}.png`), fullPage: true });
   });
 }
@@ -221,7 +221,7 @@ test("shows a failed source instead of claiming the queue is clear", async ({pag
  await page.goto("/home");
  await expect(page.locator(".home-data-state")).toBeVisible();
  await expect(page.locator(".home-clear")).toHaveCount(0);
- await expect(page.locator(".home-data-state").getByRole("button",{name:"Retry"})).toBeVisible({timeout:20000});
+ await expect(page.locator(".home-data-state").getByRole("button",{name:"Try again"})).toBeVisible({timeout:20000});
 });
 
 test("a focused decision does not produce a false all-clear message", async ({page}) => {
@@ -230,8 +230,8 @@ test("a focused decision does not produce a false all-clear message", async ({pa
  await page.route("**/api/v1/threads?*",route=>route.fulfill({json:{sessions:[migrate]}}));
  await page.goto("/home");
  await expect(page.locator(".home-focus")).toContainText("Migrate billing tables");
- await expect(queue(page)).toContainText("No other items need you");
- await expect(queue(page)).not.toContainText("Nothing needs you right now");
+ await expect(queue(page)).toContainText("No other items need attention");
+ await expect(queue(page)).not.toContainText("Nothing needs attention");
 });
 
 test("reveals all ready work without leaving Home", async ({page}) => {
@@ -268,7 +268,7 @@ test("a first-run account is pointed at setup, not told it is caught up", async 
  await expect(focus).toContainText(/\d of 3 done/);
  await expect(page.locator(".home-brief")).toContainText(/Setup: \d of 3 done/);
  await expect(page.locator(".home-brief")).not.toContainText("caught up");
- await expect(queue(page)).not.toContainText("Nothing needs you right now");
+ await expect(queue(page)).not.toContainText("Nothing needs attention");
  await focus.getByRole("button",{name:/Get started|Continue/}).click();
  await expect(page).toHaveURL(/\/threads/);
 });

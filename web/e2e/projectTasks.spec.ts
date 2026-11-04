@@ -37,7 +37,7 @@ for (const mobile of [false, true]) {
     // need a look. Flow readings and the stage card are gone on purpose.
     await page.goto("/projects/launch");
     await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("group", { name: "Backlog metrics", exact: true })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Task summary", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Flow", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
     await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
@@ -88,13 +88,13 @@ for (const mobile of [false, true]) {
     await expect(board.getByText("Another project's task")).toHaveCount(0);
     // On a phone the view toggle rides the one top bar (MobileTopbarSlot), not
     // the board header; the page holds exactly one either way.
-    await page.getByRole("button", { name: "Board view", exact: true }).click();
+    await page.getByRole("button", { name: "Board", exact: true }).click();
     // The board header is controls only: no metrics, and the lanes name each status.
     await expect(board.locator(".backlog-stats")).toHaveCount(0);
     await expect(board.locator(".backlog-project-status")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-tasks-board-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await page.getByRole("button", { name: "List view", exact: true }).click();
+    await page.getByRole("button", { name: "List", exact: true }).click();
 
     // A new task is created into this project without choosing one.
     // Page actions sit in the phone's top bar, in the board header otherwise.
@@ -103,7 +103,7 @@ for (const mobile of [false, true]) {
     if (mobile) {
       // The phone's plus is a menu: the top bar has no room for a separate
       // GitHub import glyph, so the import rides beside "New task".
-      await expect(page.getByRole("menuitem", { name: "Import from GitHub", exact: true })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: "Import GitHub issues", exact: true })).toBeVisible();
       await page.getByRole("menuitem", { name: "New task", exact: true }).click();
     }
     const form = page.getByRole("dialog", { name: "New task", exact: true });
