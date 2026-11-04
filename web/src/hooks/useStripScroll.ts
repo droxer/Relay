@@ -22,8 +22,13 @@ function horizontalScroller(from: HTMLElement): HTMLElement | null {
  *  fade exactly those edges (`data-more-start`, `data-more-end`). */
 function markEdges(strip: HTMLElement) {
   const max = strip.scrollWidth - strip.clientWidth;
+  // The list's trailing padding is scrollable but holds no chip: a strip whose
+  // only overflow is that gutter has nothing more to reveal, and fading its
+  // last chip for it clipped "Organization" by two pixels.
+  const list = strip.lastElementChild;
+  const gutter = list instanceof HTMLElement ? parseFloat(getComputedStyle(list).paddingInlineEnd) || 0 : 0;
   strip.toggleAttribute("data-more-start", strip.scrollLeft > 1);
-  strip.toggleAttribute("data-more-end", max - strip.scrollLeft > 1);
+  strip.toggleAttribute("data-more-end", max - strip.scrollLeft - gutter > 1);
 }
 
 /**
