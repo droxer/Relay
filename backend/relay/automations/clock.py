@@ -42,17 +42,17 @@ def seed_from_legacy(task: dict[str, Any], now: datetime) -> str | None:
     return next_run_at(task, now)
 
 
-def _due_summary(task: dict[str, Any]) -> str:
-    """Name the schedule whose slot came due; the first one otherwise."""
+def _due_triggers(task: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep every schedule sharing this slot, so removing one preserves its siblings."""
     triggers = schedule_triggers(task)
     due_at = task.get("routineNextRunAt")
     due = datetime.fromisoformat(due_at) if due_at else None
     if due is not None:
         probe = due.replace(microsecond=0) - _EPSILON
-        for trigger in triggers:
-            if next_fire_after(trigger["schedule"], probe) == due:
-                return summarize(trigger["schedule"])
-    return summarize(triggers[0]["schedule"]) if triggers else "Schedule"
+        matching = [trigger for trigger in triggers if next_fire_after(trigger["schedule"], probe) == due]
+        if matching:
+            return matching
+    return triggers[:1]
 
 
 class ScheduleClock:
@@ -102,7 +102,8 @@ class ScheduleClock:
     def _fire_slot(self, routine: dict[str, Any], now: datetime) -> int:
         try:
             following = next_run_at(routine, now)
-            summary = _due_summary(routine)
+            due_triggers = _due_triggers(routine)
+            summary = summarize(due_triggers[0]["schedule"]) if due_triggers else "Schedule"
         except _INVALID_SCHEDULE_ERRORS as error:
             self._pause_invalid(routine, error)
             return 0
@@ -111,7 +112,8 @@ class ScheduleClock:
         # failed pending write never advances past an unfired slot.
         self.task_store.update_task(routine["id"], {"routineNextRunAt": following})
         self.automation_store.mark_pending(
-            routine["id"], {"eventType": "schedule", "summary": summary, "depth": 0}, now
+            routine["id"], {"eventType": "schedule", "summary": summary, "depth": 0,
+                            "schedules": [trigger["schedule"] for trigger in due_triggers]}, now
         )
         logger.info("Automation schedule due", routine_id=routine["id"], next_run_at=following)
         return 1

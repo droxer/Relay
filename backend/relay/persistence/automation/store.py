@@ -21,6 +21,7 @@ from sqlalchemy import delete, insert, or_, select, update
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ...core.ids import new_database_id
 from ..tables.automations import automation_outbox, automation_state, automation_webhook_secrets
+from ..tables.tasks import tasks, task_sessions
 
 AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
@@ -101,6 +102,26 @@ def session_outbox_rows(session_id: str, event: dict[str, Any]) -> list[dict[str
     return [_row("run_event", f"run.{event['status']}", source_type="session", source_id=session_id, payload=payload)]
 
 
+def record_session_outbox(conn: Any, session_id: str, session: dict[str, Any], event: dict[str, Any]) -> None:
+    """Capture matching facts inside the completion transaction, before later edits."""
+    rows = session_outbox_rows(session_id, event)
+    if not rows:
+        return
+    task = conn.scalar(
+        select(tasks.c.snapshot).join(task_sessions, task_sessions.c.task_id == tasks.c.id)
+        .where(task_sessions.c.session_id == session_id, tasks.c.is_routine.is_(False), tasks.c.deleted_at.is_(None))
+        .order_by(tasks.c.id).limit(1)
+    )
+    subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
+    run: dict[str, Any] = next((run for run in session.get("agentRuns", []) if run.get("id") == event.get("runId")), {})
+    if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
+        subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
+    origin = task.get("sourceRoutineId") if task else None
+    rows[0].update(origin_automation_id=origin, depth=int(task.get("routineTriggerDepth") or 0) + 1 if origin else 0)
+    rows[0]["payload"]["subject"] = subject
+    insert_outbox_rows(conn, rows)
+
+
 def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
     now = datetime.now(UTC)
     for row in rows:
@@ -110,7 +131,7 @@ def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
 def _empty_state(routine_id: str) -> dict[str, Any]:
     return {"routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
             "pending_since": None, "fired_window_start": None, "fired_count": 0,
-            "consecutive_failures": 0, "counted_occurrence_ids": []}
+            "consecutive_failures": 0, "counted_occurrence_ids": [], "events_after": None}
 
 
 def _hash(token: str) -> str:
@@ -199,6 +220,7 @@ class DatabaseAutomationStore:
                                      "fired_window_start": current["fired_window_start"],
                                      "fired_count": current["fired_count"],
                                      "consecutive_failures": current["consecutive_failures"],
+                                     "events_after": current["events_after"],
                                      "counted_occurrence_ids": current["counted_occurrence_ids"]})
 
     def reset_rate_window(self, routine_id: str) -> None:
@@ -207,7 +229,13 @@ class DatabaseAutomationStore:
         flipping again after a resume still counts only once."""
         current = self.get_state(routine_id)
         self.save_state(routine_id, {**_empty_state(routine_id),
+                                     "events_after": current["events_after"],
                                      "counted_occurrence_ids": current["counted_occurrence_ids"]})
+
+    def set_events_after(self, routine_id: str, after: datetime) -> None:
+        """A resume ignores older outbox deliveries, including broadcast retries."""
+        state = self.get_state(routine_id)
+        self.save_state(routine_id, {**state, "events_after": after})
 
     def record_outcome(self, routine_id: str, occurrence_id: str, failed: bool) -> int | None:
         """Count one finished occurrence: a failure extends the streak, a
