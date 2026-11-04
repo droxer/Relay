@@ -55,3 +55,6 @@ backend/relay/computer/daemon.tar.gz*
 
 # Deployment API credentials
 deploy/config.env
+
+# Local agent definitions
+/agents/
