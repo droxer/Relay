@@ -57,7 +57,6 @@ export function useThreadNavigation({
   const setComposingNew = useRelayStore((s) => s.setComposingNew);
   const setNewThreadNodeId = useComposerTargetStore((s) => s.setNewThreadNodeId);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
-  const restoreThreadPick = useComposerTargetStore((s) => s.restoreThreadPick);
   const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
 
   function openThread(sessionId: string, replace = false, parentTaskId?: string) {
@@ -69,9 +68,8 @@ export function useThreadNavigation({
       return;
     }
     dropPendingMessage();
-    // Reopening a thread keeps the agent or team last picked there; only a
-    // thread with no pick yet opens on its whole room.
-    restoreThreadPick(sessionId);
+    // useThreadComposerSelection owns restoration and the thread's default.
+    // Reopening the active thread must not reset its automatic agent pick.
     openSession(sessionId);
     if (taskId) showThreadList();
     syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,

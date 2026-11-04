@@ -2,6 +2,8 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, expect, it } from "vitest";
 import { useThreadComposerSelection } from "../src/hooks/useThreadComposerSelection";
 import { useComposerTargetStore } from "../src/lib/composerTargetStore";
+import { useThreadNavigation } from "../src/hooks/useThreadNavigation";
+import type { RelaySession, RelayTaskSummary } from "../src/types";
 
 const taskAgent = { id: "agt_task", executorKind: "codex" as const };
 type Props = Parameters<typeof useThreadComposerSelection>[0];
@@ -59,4 +61,25 @@ it("keeps the crew when the person picked it for that thread", () => {
   useComposerTargetStore.getState().rememberThreadPick("ses_task", { kind: "room" });
   renderHook((props: Props) => useThreadComposerSelection(props), { initialProps: base });
   expect(useComposerTargetStore.getState().projectRoomTarget).toBe(true);
+});
+
+it("keeps the task's agent when navigation reopens the active thread", () => {
+  const session = { id: "ses_task", projectId: "prj_task" } as RelaySession;
+  const noop = () => {};
+  const { result } = renderHook(() => {
+    useThreadComposerSelection(base);
+    return useThreadNavigation({
+      route: "main", myThreads: [session],
+      tasks: [{ id: "tsk_task", linkedSessionIds: [session.id] } as RelayTaskSummary],
+      tasksStatus: "ready", activeSession: session, composingNew: false,
+      routedSessionId: session.id, routedProjectId: null, recordTaskId: null,
+      threadComputers: [], assignableComputers: [], composerRef: { current: null },
+      pinTranscriptToBottom: noop, showThreadList: noop, syncThreadUrl: noop,
+      navigateToProject: noop,
+    });
+  });
+  expect(useComposerTargetStore.getState().projectRoomTarget).toBe(false);
+  act(() => result.current.openThread(session.id));
+  expect(useComposerTargetStore.getState().projectRoomTarget).toBe(false);
+  expect(target()).toBe(taskAgent.id);
 });
