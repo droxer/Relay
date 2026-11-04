@@ -154,13 +154,6 @@
   color: var(--ink-3);
 }
 
-.adm-node-meta-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* The card is three quiet lines — identity, kind/owner, runtimes — so it no
    longer needs a fixed frame with a clipping body: every computer card has
    the same rows, and the grid stretches a row to its tallest card anyway. */
