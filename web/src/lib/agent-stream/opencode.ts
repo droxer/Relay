@@ -1,3 +1,4 @@
+import { formatOpenCodeToolError } from "relay-core/opencode-errors";
 import { asRecord, oneLineTarget, toolInput, toolTarget } from "./builders.ts";
 import { streamRecords, stripAnsi } from "./records.ts";
 import type { AgentSegment } from "./segments.ts";
@@ -76,7 +77,7 @@ function openCodeTool(part: Record<string, unknown>): AgentSegment[] {
   if (state.status === "error") {
     // Older Relay ACP adapters reported a failed tool's message as `output`.
     const error = [state.error, state.output].find((value) => typeof value === "string" && value.trim());
-    if (typeof error === "string") segments.push({ kind: "status", tone: "bad", text: error.trim() });
+    if (typeof error === "string") segments.push({ kind: "status", ...formatOpenCodeToolError(name, error) });
   }
   return segments;
 }

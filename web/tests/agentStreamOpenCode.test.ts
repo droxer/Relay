@@ -8,6 +8,25 @@ const text = { type: "text", part: { type: "text", text: reply } };
 const ndjson = (...events: unknown[]) => events.map((event) => JSON.stringify(event)).join("\n") + "\n";
 
 describe("OpenCode transcript parsing", () => {
+  it("shows cancelled web searches and blocked fetches without JSON envelopes", () => {
+    const raw = ndjson(
+      { type: "tool_use", part: { tool: "websearch", state: { status: "error", input: { query: "OpenAI announcement November 4 2026" }, error: JSON.stringify({ metadata: {}, error: "Web search cancelled" }) } } },
+      { type: "tool_use", part: { tool: "webfetch", state: { status: "error", input: { url: "https://www.reuters.com/technology/artificial-intelligence/" }, error: JSON.stringify({ metadata: {}, error: "StatusCode: non 2xx status code (401 GET https://www.reuters.com/technology/artificial-intelligence/)" }) } } },
+    );
+    const expected = [
+      { kind: "tool", name: "websearch", target: "OpenAI announcement November 4 2026" },
+      { kind: "status", tone: "warn", text: "Web search cancelled." },
+      { kind: "tool", name: "webfetch", target: "https://www.reuters.com/technology/artificial-intelligence/" },
+      { kind: "status", tone: "bad", text: "This website requires authentication (HTTP 401). Try another source." },
+    ];
+    assert.deepEqual(parseAgentStream("opencode", raw), expected);
+    const accumulator = new AgentStreamAccumulator("opencode");
+    for (let end = 1; end <= raw.length; end++) {
+      assert.deepEqual(accumulator.update(raw.slice(0, end)), parseAgentStream("opencode", raw.slice(0, end)));
+    }
+    assert.deepEqual(accumulator.update(raw), expected);
+  });
+
   it("grows one text block across deltas without trimming Markdown whitespace", () => {
     const accumulator = new AgentStreamAccumulator("opencode");
     let raw = "";
