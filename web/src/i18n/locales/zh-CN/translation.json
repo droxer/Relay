@@ -53,8 +53,8 @@
     "confirm": "放弃更改"
   },
   "app_update": {
-    "title": "Relay 有新版本",
-    "body": "重新加载即可使用；打开其他页面时也会自动加载。",
+    "title": "Relay 已更新",
+    "body": "重新加载即可使用新版本，打开其他页面时也会自动加载。",
     "reload": "重新加载"
   },
   "errors": {
