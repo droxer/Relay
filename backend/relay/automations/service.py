@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from ..persistence.automation.store import AUTOMATION_LOCK_KEY
 from ..persistence.engine import store_transaction
-from .clock import ScheduleClock, next_run_at
+from .clock import ScheduleClock, next_run_at, seed_from_legacy
 from .firing import AutomationFiring, in_flight_occurrence, triggered_target
 from .matcher import AutomationMatcher
 from .model import (
@@ -21,6 +21,7 @@ from .model import (
     TriggerError,
     normalize_triggers,
     state_of,
+    schedule_triggers,
     triggers_of,
 )
 from .schedule import next_fire_after
@@ -72,7 +73,16 @@ def routine_fields_v2(body: dict[str, Any], *, current: dict[str, Any] | None, n
                 or triggers != triggers_of(current)):
             validate_future_once(triggers, now)
         fields["routinePauseReason"] = None
-        fields["routineNextRunAt"] = next_run_at({"routineTriggers": triggers}, now)
+        if (current and state_of(current) == "active"
+                and schedule_triggers(current) == schedule_triggers(fields)):
+            # A form save must not consume a slot the clock has not processed.
+            if "routineNextRunAt" in current:
+                fields["routineNextRunAt"] = current["routineNextRunAt"]
+            elif current.get("routineNextRunDate"):
+                # The v2 save removes legacy fields; carry their seed forward.
+                fields["routineNextRunAt"] = seed_from_legacy(current, now)
+        else:
+            fields["routineNextRunAt"] = next_run_at(fields, now)
     else:
         fields["routineNextRunAt"] = None
     return fields
@@ -144,6 +154,7 @@ class AutomationService:
                         # State/outcome writes, schedule advance, and occurrence
                         # creation either all commit or all roll back together.
                         with conn.begin_nested():
+                            self.firing.expire_pending(routine_id, now)
                             self.matcher.deliver(routine_id, deliveries.get(routine_id, []), now)
                             self.clock.run_one(routine_id, now)
                             did_fire = self.firing.fire_one(routine_id, now)
@@ -202,6 +213,8 @@ def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict
     else:
         automation_store.clear_state(task_id)
         automation_store.reset_failures(task_id)
+    # Capture this under the lock, after any wait behind an in-progress tick.
+    automation_store.set_events_after(task_id, datetime.now(UTC))
     task_store.record_activity(task_id, f"Automation resumed by {_resumer(task, actor)}.")
 
 

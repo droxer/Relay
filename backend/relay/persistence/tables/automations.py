@@ -29,6 +29,7 @@ automation_state = Table(
     Column("pending_events", json_type(), nullable=False),
     Column("pending_dropped", Integer, nullable=False, default=0),
     Column("pending_since", DateTime(timezone=True), nullable=True),
+    Column("events_after", DateTime(timezone=True), nullable=True),
     Column("fired_window_start", DateTime(timezone=True), nullable=True),
     Column("fired_count", Integer, nullable=False, default=0),
     Column("consecutive_failures", Integer, nullable=False, default=0),

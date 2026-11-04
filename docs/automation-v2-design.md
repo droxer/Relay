@@ -97,6 +97,10 @@ the same allowlist and assignment-permission checks.
   schedule trigger, the automation is not active, or a `once` has fired.
   Resuming recomputes it from the resume time, so a paused automation never
   fires a backlog of missed slots.
+- An ordinary edit that keeps the active schedule unchanged preserves its
+  stored next run, including an overdue slot the clock has not processed.
+  An exhausted one-off stays exhausted. Adding or editing only event triggers
+  does not advance the schedule.
 
 ### Dropped fields
 
@@ -160,12 +164,28 @@ Missed slots (backend down) collapse into one catch-up run. A `once` schedule
 leaves no next run after it fires. A schedule that fails to compile pauses the
 automation with `invalid_schedule`.
 
+Each pending schedule event retains all schedules sharing the due slot. It
+remains eligible only while at least one of those schedules remains configured;
+removing or changing its sources cancels that pending firing. Older pending
+events without source stamps must match a remaining schedule's generated summary.
+
 ### Matcher
 
 Unchanged except that a broadcast row is matched against every trigger of
 each automation; the first matching trigger marks it pending. Loop guards
 (self-origin, own occurrence, depth > 3) are unchanged. Addressed rows
 (webhook, Run now) match only their automation.
+
+Run completion writes the matching subject and loop provenance into the outbox
+inside the session transaction. Later task edits or link changes cannot change
+the meaning of that completion. Undrained rows from older backends retain their
+legacy enrichment behavior because their historical subject was not captured.
+
+Resume stores a per-automation `automation_state.events_after` cutoff alongside
+the pending-state reset, under the scheduler lock. Trigger deliveries created
+at or before that cutoff are ignored, including undrained webhook calls and
+broadcast retries. Other recipients still receive the same broadcast. Clearing
+pending state or resetting counters preserves the cutoff.
 
 ### Firing (`firing.py`, split out of `matcher.py`)
 
@@ -186,6 +206,9 @@ For each pending automation:
    block gains a `Fired by: Schedule (<summary>)` line.
 
 Pending events older than 24 hours are still dropped and shown in the ledger.
+The tick expires an old batch before matching new events or advancing the
+clock, so a fresh trigger starts a new batch rather than being discarded with
+the old one.
 
 ### Auto-pause on failure
 
@@ -310,3 +333,8 @@ Stop the old scheduler during cutover and run a single scheduler until every
 backend instance uses v2; an older scheduler does not participate in the v2
 automation transaction lock. Existing events remain unchanged and replay
 through the legacy upgrade; the migrations backfill their projections.
+
+The trigger-boundary fixes additionally require migration `20261104_0110`,
+which adds the nullable resume cutoff to `automation_state`. Existing rows
+start without a cutoff; the next resume records one. Apply it before starting
+the updated backend.

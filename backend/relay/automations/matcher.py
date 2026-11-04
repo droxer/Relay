@@ -9,7 +9,7 @@ next run's Trigger context instead of each starting their own.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Any
 
 from loguru import logger
@@ -72,6 +72,9 @@ class AutomationMatcher:
 
     def deliver(self, routine_id: str, deliveries: list[Delivery], now: datetime) -> None:
         """Apply one recipient's rows inside its schedule/firing savepoint."""
+        cutoff = self.automation_store.get_state(routine_id)["events_after"]
+        if cutoff is not None and cutoff.tzinfo is None:
+            cutoff = cutoff.replace(tzinfo=UTC)
         for row, event in deliveries:
             if event is None:
                 self._record_outcome(row)
@@ -79,6 +82,12 @@ class AutomationMatcher:
             # An earlier outcome may have paused this recipient. Recheck the
             # current definition before parking the following event.
             routine = self._load(routine_id)
+            created = row.get("created_at")
+            if cutoff is not None and created is not None:
+                # SQLite returns naive database timestamps; both values are UTC.
+                created = created if created.tzinfo else created.replace(tzinfo=UTC)
+                if created <= cutoff:
+                    continue
             if routine and self._targets({**row, "target_routine_id": routine_id}, event, {routine_id: routine}):
                 self.automation_store.mark_pending(routine_id, event, now)
 
@@ -160,6 +169,11 @@ class AutomationMatcher:
 
     def _enrich_run(self, row: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
         session_id = row.get("source_id") or payload.get("sessionId")
+        if "subject" in payload:
+            return {"eventType": row["event_type"], "subject": payload["subject"], "sessionId": session_id,
+                    "error": payload.get("error"), "originAutomationId": row.get("origin_automation_id"),
+                    "depth": int(row.get("depth") or 0)}
+        # Compatibility with undrained rows written before completion snapshots.
         try:
             session = self.session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):

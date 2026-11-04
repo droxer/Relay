@@ -21,7 +21,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.exc import IntegrityError
-from ..automation.store import insert_outbox_rows, session_outbox_rows
+from ..automation.store import record_session_outbox
 from .reducer import SNAPSHOT_NEUTRAL_SESSION_EVENTS, apply_session_event
 from ...core.ids import new_database_id
 from ..engine import publish_database_notification, store_transaction
@@ -138,7 +138,7 @@ class SessionEventRows(SessionStoreState):
     ) -> None:
         """Write what the event feeds besides the snapshot: outbox, files, runs, usage."""
         if self.emit_automation_events:
-            insert_outbox_rows(conn, session_outbox_rows(session_id, event))
+            record_session_outbox(conn, session_id, session, event)
         if event.get("type") == "artifact.created":
             self._index_workspace_files(conn, session_pk, session, [event["artifact"]])
         if event.get("type") == "agent.completed":

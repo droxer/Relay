@@ -17,8 +17,8 @@ from loguru import logger
 from ..projects.runtime import project_work_error
 from .context import trigger_context_block
 from .matcher import listens_for
-from .model import has_webhook, is_active
-from .schedule import resolve_timezone
+from .model import has_webhook, is_active, schedule_triggers
+from .schedule import resolve_timezone, summarize
 
 PENDING_TTL = timedelta(hours=24)
 RATE_WINDOW = timedelta(hours=1)
@@ -80,6 +80,19 @@ class AutomationFiring:
         state = self.automation_store.get_state(routine_id)
         return bool(state["pending"] and self._fire_one(state, now))
 
+    def expire_pending(self, routine_id: str, now: datetime) -> bool:
+        """Expire the old batch before the clock or matcher adds fresh events."""
+        state = self.automation_store.get_state(routine_id)
+        since = _aware(state["pending_since"])
+        if not state["pending"] or since is None or now - since <= PENDING_TTL:
+            return False
+        count = len(state["pending_events"]) + int(state["pending_dropped"])
+        if self._load(routine_id):
+            self.task_store.record_activity(routine_id, f"Automation dropped {count} pending events after 24 hours without a run.")
+        logger.warning("Automation pending events expired", routine_id=routine_id, count=count)
+        self.automation_store.clear_state(routine_id)
+        return True
+
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)
@@ -95,11 +108,7 @@ class AutomationFiring:
         if not routine or not runnable:
             self.automation_store.clear_state(routine_id)
             return False
-        if now - _aware(state["pending_since"]) > PENDING_TTL:
-            count = len(state["pending_events"]) + int(state["pending_dropped"])
-            self.task_store.record_activity(routine_id, f"Automation dropped {count} pending events after 24 hours without a run.")
-            logger.warning("Automation pending events expired", routine_id=routine_id, count=count)
-            self.automation_store.clear_state(routine_id)
+        if self.expire_pending(routine_id, now):
             return False
         if in_flight_occurrence(self.task_store, routine):
             return False
@@ -175,10 +184,16 @@ class AutomationFiring:
 def still_listened(routine: dict[str, Any], event: dict[str, Any]) -> bool:
     """Whether a pending event still belongs to the routine's triggers. An
     event or webhook left over after its trigger was removed is stale; Run
-    now and the clock's own schedule slots always stand."""
+    now always stands. Clock events retain the schedules that produced them."""
     event_type = event.get("eventType")
-    if event_type in ("manual", "schedule"):
+    if event_type == "manual":
         return True
+    if event_type == "schedule":
+        schedules = [trigger["schedule"] for trigger in schedule_triggers(routine)]
+        # Old rows identify their source by its generated summary. New rows
+        # retain every schedule sharing the slot and compare their full config.
+        return (any(schedule in schedules for schedule in event["schedules"])
+                if "schedules" in event else any(event.get("summary") == summarize(schedule) for schedule in schedules))
     if event_type == "webhook":
         return has_webhook(routine)
     return listens_for(routine, event)

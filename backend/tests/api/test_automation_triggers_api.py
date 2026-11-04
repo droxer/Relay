@@ -703,3 +703,24 @@ def test_resume_reads_pause_after_entering_automation_transaction(monkeypatch) -
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 200, response.text
         assert automations.get_state(task["id"])["fired_count"] == 0
+
+
+@pytest.mark.parametrize("resume", ["patch", "post"])
+def test_resume_drops_undrained_webhook_calls(monkeypatch, resume):
+    from relay.automations.service import automation_service
+
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent, routineTriggers=[WEBHOOK])
+        automations = client.app.state.automation_store
+        automations.enqueue_webhook(task["id"], {"old": True})
+        path = f"/api/v1/tasks/{task['id']}"
+        assert client.patch(path, json={"routineState": "paused"}).status_code == 200
+        response = (client.patch(path, json={"routineState": "active"}) if resume == "patch"
+                    else client.post(path + "/automation/resume"))
+        assert response.status_code == 200, response.text
+        service = automation_service(automations, client.app.state.context)
+        assert service.tick(datetime.now(UTC)) == 0
+        assert client.app.state.task_store.get_task(task["id"]).get("occurrenceIds", []) == []
+        automations.enqueue_webhook(task["id"], {"fresh": True})
+        assert service.tick(datetime.now(UTC)) == 1

@@ -432,7 +432,7 @@ def test_schedule_fires_do_not_count_toward_rate_cap(world):
     routine = _automation(tasks, routineTriggers=[{"kind": "schedule", "schedule": {
         "timezone": "UTC", "repeat": {"every": "hour", "minute": 0}}}])
     for _ in range(7):
-        automations.mark_pending(routine["id"], {"eventType": "schedule", "summary": "Hourly", "depth": 0}, clock.value)
+        automations.mark_pending(routine["id"], {"eventType": "schedule", "summary": "Hourly at :00 (UTC)", "depth": 0}, clock.value)
         assert run(world) == 1
         for occurrence in _occurrences(tasks, routine["id"]):
             tasks.update_task(occurrence["id"], {"status": "done"})
@@ -488,7 +488,7 @@ def test_run_now_without_target_pauses(world):
 
 def test_schedule_occurrence_is_stamped_schedule(world):
     tasks, automations, _, clock = world
-    routine = _automation(tasks, routineTriggers=[])
+    routine = _automation(tasks, routineTriggers=DAILY_9_UTC)
     automations.mark_pending(routine["id"], {"eventType": "schedule", "summary": "Daily at 09:00 (UTC)", "depth": 0}, clock.value)
     run(world)
     [occurrence] = _occurrences(tasks, routine["id"])
