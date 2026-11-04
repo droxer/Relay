@@ -3381,7 +3381,8 @@
     "password_saved": "Password changed.",
     "password_mismatch": "The passwords don’t match. Enter the new password again.",
     "password_same": "Choose a different password from your current password.",
-    "save_error": "Couldn’t save your changes. Try again."
+    "save_error": "Couldn’t save your changes. Try again.",
+    "connections": "Connections"
   },
   "github_import": {
     "action": "Import from GitHub",

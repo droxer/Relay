@@ -54,6 +54,28 @@
   color: var(--ink-2);
 }
 
+/* Settings → Account → Connections: the same connection as one row of a
+   framed option list (GitHubConnectionRow), beside the drawer's note. */
+.github-connection-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+}
+
+.github-connection-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.github-connection-mark svg { width: 1.125rem; height: 1.125rem; }
+
 .github-import-filters {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

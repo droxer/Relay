@@ -3316,7 +3316,8 @@
     "password_saved": "密码已修改。",
     "password_mismatch": "两次输入的密码不一致，请重新输入。",
     "password_same": "新密码不能与当前密码相同。",
-    "save_error": "保存失败，请重试。"
+    "save_error": "保存失败，请重试。",
+    "connections": "关联账户"
   },
   "github_import": {
     "action": "从 GitHub 导入",
