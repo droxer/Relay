@@ -35,17 +35,20 @@ const tileOf = (eyebrow: string) => screen.getByText(eyebrow).closest(".adm-dash
 it("subscribes to the task flow policy cache without requiring a fetch function", async () => {
   const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
   const { client } = renderDashboard([task({ id: "a" })]);
-  // No policy cached yet: the work-in-progress tile carries no limit hint.
+  // Project activity never presents a user limit as project capacity.
   expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).toBeNull();
 
   act(() => {
     client.setQueryData(FLOW_POLICY_KEY, { wipLimit: 5, scope: "user" });
+    client.setQueryData(["task-flow-usage"], { userId: "alice", occupied: 5 });
   });
 
   await waitFor(() => {
-    expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).not.toBeNull();
+    expect(screen.getByText("project.dashboard_user_wip")).toBeTruthy();
   });
   expect(screen.getByText("backlog.metric_active").nextElementSibling?.textContent).toBe("0");
+  expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).toBeNull();
+  expect(screen.getByRole("link", { name: "project.dashboard_view_user_tasks" }).getAttribute("href")).toBe("/backlog?assignee=alice");
   expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining("No queryFn was passed"));
   client.clear();
 });

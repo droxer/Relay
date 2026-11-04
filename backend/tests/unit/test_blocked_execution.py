@@ -232,7 +232,7 @@ def test_executor_disabled_after_routing_releases_known_rejected_claim(execution
 
 
 @pytest.mark.parametrize("source", ["manual", "scheduler"])
-@pytest.mark.parametrize("code", ["task_wip_limit", "capacity_exhausted", "dispatch_failed"])
+@pytest.mark.parametrize("code", ["capacity_exhausted", "dispatch_failed"])
 def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, code):
     ctx, task, _ = execution
     original = ctx.backend.run
@@ -269,7 +269,7 @@ def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, c
         assert result["dispatch"]["state"] == "started"
 
 
-@pytest.mark.parametrize("legacy", ["deadline", "wip", "ambiguous"])
+@pytest.mark.parametrize("legacy", ["deadline", "ambiguous"])
 def test_scheduler_does_not_revive_old_failed_attempts(execution, monkeypatch, legacy):
     ctx, task, _ = execution
     if legacy == "deadline":
@@ -295,19 +295,30 @@ def test_scheduler_does_not_revive_old_failed_attempts(execution, monkeypatch, l
     asyncio.run(scheduler(ctx).tick())
 
 
-def test_wip_rejection_does_not_fill_conversation_list(execution, monkeypatch):
+@pytest.mark.parametrize("source", ["manual", "scheduler"])
+def test_wip_wait_is_queued_without_creating_threads_and_resumes(execution, monkeypatch, source):
     ctx, task, _ = execution
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
-    ctx.task_store.create_task({
-        "title": "Already in progress", "status": "running",
-        "assigneeUserId": "alice",
+    occupied = ctx.task_store.create_task({
+        "title": "Already in progress", "status": "review",
+        "assigneeUserId": "alice", "acceptancePolicy": "human",
     })
-    asyncio.run(scheduler(ctx).tick())
-    failed = ctx.task_store.get_task(task["id"])
-    assert failed["status"] == "blocked"
-    assert failed["dispatchOutcome"]["code"] == "task_wip_limit"
-    sessions = failed.get("linkedSessionIds", [])
-    assert len(sessions) == 1
     for _ in range(3):
-        asyncio.run(scheduler(ctx).tick())
-    assert ctx.task_store.get_task(task["id"])["linkedSessionIds"] == sessions
+        if source == "manual":
+            result = asyncio.run(start_task_on_ready_node(
+                ctx, ctx.task_store.get_task(task["id"]),
+                {"userId": "alice", "isAdmin": False},
+            ))
+            assert result["dispatch"]["state"] == "queued"
+        else:
+            asyncio.run(scheduler(ctx).tick())
+        queued = ctx.task_store.get_task(task["id"])
+        assert queued["status"] == "assigned"
+        assert queued["dispatchOutcome"]["code"] == "task_wip_limit"
+        assert not queued.get("startedAt")
+        assert not queued.get("linkedSessionIds")
+    ctx.task_store.update_task(occupied["id"], {"status": "done"})
+    asyncio.run(scheduler(ctx).tick())
+    resumed = ctx.task_store.get_task(task["id"])
+    assert resumed["dispatchOutcome"]["state"] == "started"
+    assert len(resumed["linkedSessionIds"]) == 1

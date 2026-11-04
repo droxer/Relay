@@ -225,3 +225,19 @@ def test_prepared_start_cannot_overwrite_a_new_block(store):
                 },
             ),
         )
+
+
+def test_cancelled_work_releases_wip_and_reopening_needs_capacity(store, monkeypatch):
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
+    first = store.create_task({"title": "Abandoned", "ownerUserId": "alice"})
+    started = claim(store, first)["startedAt"]
+    cancelled = status(store, first, "cancelled", actorUserId="alice")
+    assert cancelled["workflowStage"] == "cancelled"
+    assert cancelled["cancelledAt"]
+    assert "finishedAt" not in cancelled
+    assert not cancelled.get("deletedAt")
+    assert cancelled["startedAt"] == started
+    second = store.create_task({"title": "New work", "ownerUserId": "alice"})
+    claim(store, second)
+    with pytest.raises(ValueError, match="task_wip_limit"):
+        status(store, first, "assigned")

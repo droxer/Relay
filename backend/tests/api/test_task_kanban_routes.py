@@ -96,3 +96,33 @@ def test_policy_locks_after_work_starts_and_rework_preserves_age(client):
 def test_flow_policy_is_visible_without_exposing_other_users_tasks(client):
     response = client.get("/api/v1/tasks?view=summary").json()
     assert response["flowPolicy"] == {"wipLimit": 5, "scope": "user"}
+
+
+def test_cancel_task_preserves_history_and_cannot_fabricate_delivery(client):
+    task = client.post("/api/v1/tasks", json={"title": "No longer needed"}).json()
+    store = client.app.state.task_store
+    store.update_task(task["id"], {"status": "running"})
+    url = f"/api/v1/tasks/{task['id']}"
+    response = client.patch(url, json={"status": "cancelled"})
+    assert response.status_code == 200
+    cancelled = response.json()
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["cancelledAt"]
+    assert "finishedAt" not in cancelled
+    assert any(e.get("actorUserId") for e in cancelled["events"] if e.get("status") == "cancelled")
+    assert client.get(url).json()["status"] == "cancelled"
+    assert client.patch(url, json={"status": "done"}).status_code == 409
+    assert client.patch(url, json={"status": "review"}).status_code == 409
+    reopened = client.patch(url, json={"status": "assigned"})
+    # Intake cannot queue until it has a project.
+    assert reopened.status_code == 409
+
+
+def test_capacity_usage_counts_current_user_across_projects_before_pagination(client):
+    user_id = client.post("/api/v1/tasks", json={"title": "Owner"}).json()["ownerUserId"]
+    store = client.app.state.task_store
+    for i in range(3):
+        store.create_task({"title": str(i), "ownerUserId": user_id, "status": "review"})
+    store.create_task({"title": "Someone else", "ownerUserId": "other", "status": "review"})
+    response = client.get("/api/v1/tasks?view=summary&limit=1").json()
+    assert response["flowUsage"] == {"userId": user_id, "occupied": 3}
