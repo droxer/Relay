@@ -10,6 +10,8 @@
    Breakpoints (reference — custom properties can't drive @media, so this
    list is the only registry there is; keep it honest when you add a query).
 
+     420px   CONTAINER tier — narrow GitHub-import drawer fields and touch
+             avatar pickers; fewer columns keep controls within their pane
      480px   narrow phone — backlog card grid, login stack; also a CONTAINER
              tier, where the `workspace-list` file rows drop their date
              (the thread space panel is this narrow on the widest screen

@@ -194,10 +194,13 @@
   }
 
   .mobile-topbar-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     color: var(--ink-1);
     font: var(--type-title);
     letter-spacing: var(--type-title-track);
@@ -723,5 +726,44 @@
     .messenger-shell .sidenav-btn {
       opacity: 1;
     }
+  }
+}
+
+/* A landscape phone cannot hold the centred new-thread composition. Let the
+   whole draft screen scroll, with its context in flow, rather than clipping
+   the greeting above the viewport or leaving the computer below it. */
+@media (max-width: 820px) and (max-height: 500px) {
+  .messenger-shell[data-mobile-view="chat"] .chat-panel--landing {
+    grid-template-rows: auto auto;
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .chat-panel--landing .transcript {
+    overflow: visible;
+  }
+
+  .chat-panel--landing .transcript-inner {
+    min-height: 0;
+    padding-block: var(--sp-4);
+  }
+
+  .chat-panel--landing .transcript-empty-mark {
+    display: none;
+  }
+
+  .chat-panel--landing .transcript-empty-title,
+  .chat-panel--landing .transcript-empty-prompt {
+    font: var(--type-title);
+    letter-spacing: var(--type-title-track);
+  }
+
+  .chat-panel--landing .composer-textarea {
+    min-height: 72px;
+  }
+
+  .chat-panel--landing .composer-meta {
+    position: static;
+    margin-top: var(--sp-2);
   }
 }

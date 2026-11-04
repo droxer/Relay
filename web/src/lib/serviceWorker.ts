@@ -8,7 +8,7 @@ const CACHE_PREFIX = "relay-offline-";
 const CACHE_NAME = CACHE_PREFIX + ${JSON.stringify(buildId)};
 const OFFLINE_URL = "/offline.html";
 const PAGE_ROOTS = new Set([
-  "", "login", "waitlist", "join", "forgot-password", "reset-password",
+  "", "home", "login", "waitlist", "join", "forgot-password", "reset-password",
   "threads", "tasks", "issues", "backlog", "automations", "routines",
   "agents", "teams", "computers", "computer", "skills", "settings",
   "projects", "channels", "admin"

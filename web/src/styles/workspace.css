@@ -814,6 +814,12 @@
 
   .record-band--panel .record-band-value {
     justify-content: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .record-band--panel .record-band-cell {
+    align-items: baseline;
   }
 }
 

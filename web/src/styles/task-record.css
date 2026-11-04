@@ -505,7 +505,20 @@
 
 @media (max-width: 820px) {
   .record-drawer-toolbar {
+    flex-wrap: nowrap;
     padding: 0 var(--sp-4);
+  }
+
+  /* The tabs share one row with More; their desktop full width otherwise
+     reserves an entire second band for a single menu button. */
+  .record-drawer-toolbar > .workspace-page-tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+
+  .record-drawer-actions {
+    flex: 0 0 auto;
   }
 
   .record-drawer .workspace-body > [role="tabpanel"] {
