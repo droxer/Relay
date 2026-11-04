@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+
+from relay.app import create_app
+from test_tasks import _bootstrap_admin, _create_account, _login
+from user_ids import user_id
+
+
+@pytest.mark.parametrize("view", ["", "summary"])
+@pytest.mark.parametrize("username", ["admin", "alice"])
+def test_automation_lists_are_owner_scoped_even_for_admins(monkeypatch, tmp_path, view, username):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    client = TestClient(create_app(str(tmp_path)))
+    _bootstrap_admin(client)
+    _create_account(client, "alice", user_id="alice")
+    _create_account(client, "bob", user_id="bob")
+    _login(client, username, "kestrel-vault-7719" if username == "admin" else "userpass")
+    store = client.app.state.task_store
+    owner = user_id(username)
+    own = store.create_task({
+        "title": "My automation", "ownerUserId": owner,
+        "assigneeUserId": owner, "isRoutine": True,
+    })
+    foreign_task = store.create_task({
+        "title": "Bob's task", "ownerUserId": user_id("bob"),
+        "assigneeUserId": user_id("bob"),
+    })
+    # Newer foreign automations must not consume the caller's list limit,
+    # even when the caller is their assignee or the automation is ownerless.
+    for foreign_owner in (user_id("bob"), None):
+        store.create_task({
+            "title": "Another automation", "ownerUserId": foreign_owner,
+            "assigneeUserId": owner, "isRoutine": True,
+        })
+
+    response = client.get("/api/v1/tasks", params={"view": view})
+    assert response.status_code == 200, response.text
+    expected = {own["id"], foreign_task["id"]} if username == "admin" else {own["id"]}
+    assert {task["id"] for task in response.json()["tasks"]} == expected
+
+    limited = client.get("/api/v1/tasks", params={"view": view, "limit": 1})
+    assert limited.status_code == 200, limited.text
+    expected_latest = foreign_task if username == "admin" else own
+    assert [task["id"] for task in limited.json()["tasks"]] == [expected_latest["id"]]
