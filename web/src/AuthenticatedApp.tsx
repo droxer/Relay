@@ -116,7 +116,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const pickAgent = useComposerTargetStore((s) => s.pickAgent);
   const pickTeam = useComposerTargetStore((s) => s.pickTeam);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
-  const restoreThreadPick = useComposerTargetStore((s) => s.restoreThreadPick);
   const rememberThreadPick = useComposerTargetStore((s) => s.rememberThreadPick);
   const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
   const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
@@ -236,9 +235,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   });
 
   const applySessionFromHash = useCallback((sessionId: string) => {
-    restoreThreadPick(sessionId);
+    // useThreadComposerSelection restores the pick when the session changes.
+    // Repeating it here would erase the thread's automatic agent default.
     openSession(sessionId);
-  }, [openSession, restoreThreadPick]);
+  }, [openSession]);
 
   const setComposingNewFromPath = useCallback((next: boolean) => {
     if (next) startComposing();
