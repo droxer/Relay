@@ -86,7 +86,13 @@ export function ComputerCard({
     // heartbeating is dark even though its record still says `online`.
     <article className="computer-card" data-online={isNodeOnline(node) ? "true" : "false"}>
       <header className="computer-card-hero">
-        <span className="computer-card-avatar" data-ownership={ownership} translate="no">
+        <span
+          className="computer-card-avatar"
+          data-ownership={ownership}
+          role="img"
+          aria-label={t(`admin.v2.node_ownership_${ownership}`)}
+          title={t(`admin.v2.node_ownership_${ownership}`)}
+        >
           <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
         </span>
         <div className="computer-card-identity">
@@ -110,7 +116,6 @@ export function ComputerCard({
               of the next. As inline text the break can only fall between
               items. */}
           <p className="computer-card-sub">
-            <span>{t(`admin.v2.node_ownership_${ownership}`)}</span>{" "}
             <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>{" "}
             <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
           </p>
