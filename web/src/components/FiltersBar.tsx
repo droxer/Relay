@@ -23,7 +23,10 @@ import {
   type SelectionKind,
   type SelectionQuery,
 } from "@/lib/filterSelections";
+import { FilterDisplayMenu } from "./FilterDisplayMenu";
 import { ICON } from "./icons";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 /** One filter a page offers. `select` filters by one of `options`; `text` by a substring.
  *  An option's `icon` is drawn beside its label in the menu and on the chip —
@@ -55,8 +58,11 @@ interface FiltersBarProps {
   onClear: () => void;
   /** How many filters Clear would clear; defaults to every filtered field. */
   clearableCount?: number;
-  /** Always-visible control after the search: the narrow-width sort menu. */
+  /** The list's arrangement after the search: the narrow-width group and sort
+   *  menus. A phone folds them behind one Display glyph. */
   trailing?: ReactNode;
+  /** Page controls riding the bar, after `trailing`; never folded. */
+  actions?: ReactNode;
 }
 
 // A flat, URL-backed filter store can hold neither a duplicated rule nor a
@@ -136,8 +142,10 @@ export function FiltersBar({
   onClear,
   clearableCount,
   trailing,
+  actions,
 }: FiltersBarProps) {
   const { t } = useTranslation();
+  const phone = useMediaQuery(PHONE_QUERY);
   const labels = useFilterLabels();
   const selectionFields = useMemo(() => fields.map(({ id, kind }) => ({ id, kind })), [fields]);
   const filterFields = useMemo<FilterField<string>[]>(() => fields.map((field) => {
@@ -222,7 +230,10 @@ export function FiltersBar({
       {chips}
       <div className="backlog-filter-primary">
         {search}
-        {trailing}
+        {/* A phone keeps the toolbar to one row: the arrangement menus fold
+            behind a Display glyph instead of wrapping onto a second. */}
+        {trailing && phone ? <FilterDisplayMenu>{trailing}</FilterDisplayMenu> : trailing}
+        {actions}
       </div>
     </div>
   );

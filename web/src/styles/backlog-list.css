@@ -332,13 +332,12 @@ button.inline-field[aria-expanded="true"] {
     border-bottom: 0;
   }
 
-  /* Phones: two rows, Linear's list toolbar. Search and Add filter share the
-     first; the group and sort menus split the second evenly. `display:
-     contents` lets the search and its neighbours wrap as siblings of the
-     chip group instead of as one block. Each item's basis decides its row:
-     search (50%) + Add filter + a menu (40%) cannot fit one line, so the
-     menus wrap together — they used to share a row with Add filter at a
-     third each and clipped to "Group: P" and "Default c". */
+  /* Phones: one row — search, Add filter, then the Display glyph that holds
+     the group and sort menus (FilterDisplayMenu). Those menus used to wrap
+     onto a second row, which with the queue strip above put the first task
+     ~220px down a 844px screen. `display: contents` lets the search and its
+     neighbours line up as siblings of the chip group instead of as one
+     block; applied filter chips still wrap below. */
   .backlog-filter-primary {
     display: contents;
   }
@@ -356,14 +355,20 @@ button.inline-field[aria-expanded="true"] {
     min-width: 0;
   }
 
-  /* Selectors still see the DOM: the group/sort menus are children of the
-     (display: contents) primary block, not of the bar. Each menu claims half
-     the row, so the pair wraps below Add filter as one row of its own —
-     three-up beside the button, "Group: Project" and "Default order" were
-     clipped to "Group: P" and "Default c" at 390px. */
-  .backlog-filter-primary > :not(.backlog-filter-search-wrap) {
-    flex: 1 1 calc(50% - var(--sp-2));
-    min-width: 0;
+  .backlog-display-trigger {
+    flex: none;
+  }
+
+  /* The menus fill the panel one under the other, at the toolbar's width
+     rather than the half-row each used to claim. */
+  .backlog-display-panel {
+    width: min(18rem, calc(100vw - 2 * var(--sp-4)));
+    gap: var(--sp-2);
+    padding: var(--sp-2);
+  }
+
+  .backlog-display-panel > * {
+    width: 100%;
   }
 
   /* Filled, borderless controls: on a phone the toolbar is a row of soft
@@ -705,7 +710,6 @@ tr[data-selected="true"] > td:first-child {
   }
 
   /* Line two: the meta, indented under the title. */
-  .task-table .issue-col-status,
   .task-table .task-col-ref,
   .task-table .issue-col-project,
   .task-table .task-col-priority,
@@ -724,13 +728,49 @@ tr[data-selected="true"] > td:first-child {
   .task-table > tbody > tr > td[data-slot="table-cell"].task-col-ref { order: 10; min-width: 0; }
   .task-table .task-col-mark--priority,
   .task-table .task-col-priority { order: 11; }
-  .task-table .task-col-assignee { order: 12; }
-  .task-table .task-col-due { order: 13; }
-  .task-table .issue-col-project { order: 14; }
+  .task-table .task-col-due { order: 12; }
+  .task-table .issue-col-project { order: 13; }
 
-  /* Keep the status readable when the table headers disappear. */
-  .task-table .issue-col-status { order: 9; }
-  .task-table > tbody > tr:has(.issue-col-status) { padding-left: var(--sp-4); }
+  /* The assignee closes the meta line and takes what is left of it, cut
+     short rather than wrapped: ahead of the due cell, a long team name pushed
+     the date (an automation's "Paused") onto a third line. The floor keeps
+     its avatar on the line. */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-assignee {
+    order: 14;
+    flex: 1 1 0;
+    min-width: var(--avatar-sm);
+    margin-right: 0;
+  }
+
+  .task-table .task-col-assignee .inline-field {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Issues carries its status in a column of its own, not the shared leading
+     mark. On a phone it becomes that mark, so a task reads the same on /tasks
+     as in a project; the label moved to the meta line had pushed the due date
+     onto a third. The label stays for screen readers (and the title tooltip). */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].issue-col-status {
+    position: absolute;
+    top: calc(var(--sp-3) + (20px - var(--icon-sm)) / 2);
+    left: var(--sp-4);
+    margin: 0;
+    line-height: 0;
+  }
+
+  .task-table .issue-col-status .inline-field {
+    padding: 0;
+  }
+
+  .task-table .issue-col-status .inline-field > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .priority-label { display: inline; }
   .inline-field--icon:has(.priority-label) { gap: var(--sp-1); padding-inline: var(--sp-1); }
 

@@ -64,7 +64,10 @@ export function TaskRecordActions({
           {t("record.retry_run")}
         </Button>
       ) : null}
-      {actions.includes("cancel") ? (
+      {/* Cancelling stops a live run at once, unconfirmed. On a phone it would
+          be the row's only button, read as the next step and one stray tap
+          from ending the agent's work, so it waits in the menu there. */}
+      {actions.includes("cancel") && !phone ? (
         <Button type="button" variant="outline" size="dense" loading={busyAction === "cancel"} onClick={onCancel}>
           {t("record.cancel_run")}
         </Button>
@@ -97,6 +100,11 @@ export function TaskRecordActions({
         <DropdownMenuContent align="end">
           {phone ? (
             <>
+              {actions.includes("cancel") ? (
+                <DropdownMenuItem onClick={onCancel}>
+                  {t("record.cancel_run")}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={onEdit}>
                 <ActionEdit size={ICON.sm} aria-hidden="true" />
                 {t("record.edit")}

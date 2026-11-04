@@ -212,9 +212,9 @@ for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {
     const page = await openPage(browser, "/automations", touch);
     // The chip row's "Add filter" trigger sits on the same rung as the search
-    // and sort. The sort menu is the narrow layout's control: above 820px the
-    // column headers sort and it is not drawn at all.
-    const controls = [".backlog-filter-search-wrap", ...(touch ? [".list-sort-menu"] : []), '.backlog-filter-chips [data-slot="popover-trigger"]'];
+    // and the Display glyph, which holds the sort menu on a phone. Above 820px
+    // the column headers sort and neither is drawn.
+    const controls = [".backlog-filter-search-wrap", ...(touch ? [".backlog-display-trigger"] : []), '.backlog-filter-chips [data-slot="popover-trigger"]'];
     for (const selector of controls) await expect(page.locator(selector).first()).toBeVisible();
     const heights = await Promise.all(controls.map((selector) =>
       page.locator(selector).first().evaluate((element) => element.getBoundingClientRect().height)));

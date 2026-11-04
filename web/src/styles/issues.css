@@ -72,8 +72,7 @@
 .issues-group-by { height: var(--control-h-sm); }
 
 @media (max-width: 820px) {
-  .issue-col-project,
-  .issue-col-status { display: none; }
+  .issue-col-project { display: none; }
 
   /* Linear's group header: a full-bleed, quietly filled band that names the
      group. The rule under a transparent band read as one more row divider,
@@ -83,7 +82,7 @@
   .task-table .issues-band > td[data-slot="table-cell"] {
     padding: var(--sp-2) var(--sp-4);
     border-bottom: 0;
-    background: var(--surface-list);
+    background: var(--surface-band);
   }
 
   .issues-band .list-group-count {

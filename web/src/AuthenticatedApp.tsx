@@ -631,6 +631,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       route={route}
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
+      notFound={notFound}
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}
@@ -711,6 +712,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
           <ThreadsView
             onOpenTaskRecord={openTaskRecord}
             taskThread={isTaskThread}
+            listOnScreen={mobileView === "threads"}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
             currentUser={user}

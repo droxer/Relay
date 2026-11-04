@@ -88,6 +88,8 @@
      literals, so a role that differs by register stays a literal. */
   --surface-rail: #1a1a1a;
   --surface-list: #0f0f0f;
+  /* A phone list's group band: one step off the page it sits on. */
+  --surface-band: #0f0f0f;
 
   /* Ink — every tier that can carry TEXT clears WCAG 1.4.3 (4.5:1) against
      the worst plane it can land on, which is --surface-3, not the canvas.
@@ -875,6 +877,8 @@ html[data-theme="light"] {
   /* Navigation recedes through two subtle neutral-grey steps. */
   --surface-rail: #f7f7f5;
   --surface-list: #ffffff;
+  /* The list plane is white here, so a band filled with it vanished. */
+  --surface-band: #f7f7f5;
 
   /* Neutral text; every tier clears AA on the recessed fill. */
   --ink-1: #080808; /* eveland's ink */
