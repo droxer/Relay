@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { changePassword, updateAccountProfile } from "../../api";
 import type { CurrentUser } from "../../types";
@@ -8,6 +8,46 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordProblem } from "../..
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { UserAvatar } from "../UserAvatar";
+import { GitHubConnectionRow } from "./GitHubConnectionPanel";
+
+const IDENTITY_AVATAR_SIZE = 48;
+
+/** Who is signed in: the saved name, never the draft being typed. */
+function AccountIdentity({ user }: { user: CurrentUser }) {
+  const name = user.displayName ?? user.username;
+  return (
+    <div className="account-identity">
+      <UserAvatar displayName={name} running={false} size={IDENTITY_AVATAR_SIZE} />
+      <div className="account-identity-copy">
+        <p className="account-identity-name">{name}</p>
+        <p className="account-identity-meta">
+          <span>@{user.username}</span>
+          {user.email ? <span>{user.email}</span> : null}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** A group label over a framed panel, the same grammar as the notification
+    and appearance option lists. The footer holds the panel's one action. */
+function AccountPanel({ id, title, footer, children }: {
+  id: string;
+  title: string;
+  footer: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <h3 id={id} className="pref-group-label">{title}</h3>
+      <div className="account-panel">
+        <div className="account-panel-body">{children}</div>
+        <div className="account-panel-footer">{footer}</div>
+      </div>
+    </>
+  );
+}
 
 export function AccountSection({ user, onUserChange }: {
   user: CurrentUser;
@@ -65,45 +105,55 @@ export function AccountSection({ user, onUserChange }: {
 
   return (
     <div className="account-settings">
-      <form className="account-settings-form" onSubmit={(event) => void saveProfile(event)} aria-labelledby="account-profile-title" aria-busy={profileBusy}>
-        <div>
-          <h3 id="account-profile-title">{t("account.profile")}</h3>
-          <p className="account-settings-hint">{t("account.profile_hint")}</p>
-        </div>
-        <Field label={t("account.username")}>
-          <Input value={user.username} readOnly autoComplete="username" />
-        </Field>
-        <Field label={t("account.display_name")}>
-          <Input value={name} onChange={(event) => { setName(event.target.value); setProfileSaved(false); setProfileError(""); }} required maxLength={100} autoComplete="nickname" disabled={profileBusy} />
-        </Field>
-        {profileError && <p className="account-settings-error" role="alert">{profileError}</p>}
-        <div className="account-settings-actions">
-          <Button type="submit" loading={profileBusy} disabled={profileBusy || !name.trim() || name.trim() === (user.displayName ?? user.username)}>{t("account.save_name")}</Button>
-          {profileSaved && <p role="status">{t("account.name_saved")}</p>}
-        </div>
+      <AccountIdentity user={user} />
+
+      <form className="account-group" onSubmit={(event) => void saveProfile(event)} aria-labelledby="account-profile-title" aria-busy={profileBusy}>
+        <AccountPanel
+          id="account-profile-title"
+          title={t("account.profile")}
+          footer={<>
+            {profileSaved ? <p className="account-panel-note" role="status">{t("account.name_saved")}</p> : <span className="account-panel-note" />}
+            <Button type="submit" loading={profileBusy} disabled={profileBusy || !name.trim() || name.trim() === (user.displayName ?? user.username)}>{t("account.save_name")}</Button>
+          </>}
+        >
+          <Field label={t("account.display_name")}>
+            <Input aria-describedby="account-profile-hint" value={name} onChange={(event) => { setName(event.target.value); setProfileSaved(false); setProfileError(""); }} required maxLength={100} autoComplete="nickname" disabled={profileBusy} />
+          </Field>
+          <p id="account-profile-hint" className="account-field-hint">{t("account.profile_hint")}</p>
+          {profileError && <p className="account-settings-error" role="alert">{profileError}</p>}
+        </AccountPanel>
       </form>
-      <form className="account-settings-form" onSubmit={(event) => void savePassword(event)} aria-labelledby="account-password-title" aria-busy={passwordBusy}>
-        <div>
-          <h3 id="account-password-title">{t("account.change_password")}</h3>
-          <p className="account-settings-hint">{t("account.password_hint", { min: MIN_PASSWORD_LENGTH })}</p>
-        </div>
-        <Input className="sr-only" tabIndex={-1} aria-hidden="true" value={user.username} readOnly autoComplete="username" />
-        <Field label={t("account.current_password")}>
-          <Input type="password" value={current} onChange={(event) => { setCurrent(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="current-password" required maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
-        </Field>
-        <Field label={t("account.new_password")}>
-          <Input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
-        </Field>
-        <Field label={t("account.confirm_password")}>
-          <Input type="password" value={confirm} onChange={(event) => { setConfirm(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="new-password" required maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
-        </Field>
-        <p className="account-settings-hint">{t("account.sessions_hint")}</p>
-        {passwordError && <p className="account-settings-error" role="alert">{passwordError}</p>}
-        <div className="account-settings-actions">
-          <Button type="submit" loading={passwordBusy} disabled={passwordBusy || !current || !password || !confirm}>{t("account.change_password")}</Button>
-          {passwordSaved && <p role="status">{t("account.password_saved")}</p>}
-        </div>
+
+      <form className="account-group" onSubmit={(event) => void savePassword(event)} aria-labelledby="account-password-title" aria-busy={passwordBusy}>
+        <AccountPanel
+          id="account-password-title"
+          title={t("account.change_password")}
+          footer={<>
+            {passwordSaved
+              ? <p className="account-panel-note" role="status">{t("account.password_saved")}</p>
+              : <p className="account-panel-note">{t("account.sessions_hint")}</p>}
+            <Button type="submit" loading={passwordBusy} disabled={passwordBusy || !current || !password || !confirm}>{t("account.change_password")}</Button>
+          </>}
+        >
+          <Input className="sr-only" tabIndex={-1} aria-hidden="true" value={user.username} readOnly autoComplete="username" />
+          <Field label={t("account.current_password")}>
+            <Input type="password" value={current} onChange={(event) => { setCurrent(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="current-password" required maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
+          </Field>
+          <Field label={t("account.new_password")}>
+            <Input type="password" aria-describedby="account-password-hint" value={password} onChange={(event) => { setPassword(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
+          </Field>
+          <p id="account-password-hint" className="account-field-hint">{t("account.password_hint", { min: MIN_PASSWORD_LENGTH })}</p>
+          <Field label={t("account.confirm_password")}>
+            <Input type="password" value={confirm} onChange={(event) => { setConfirm(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="new-password" required maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
+          </Field>
+          {passwordError && <p className="account-settings-error" role="alert">{passwordError}</p>}
+        </AccountPanel>
       </form>
+
+      <section className="account-group" aria-labelledby="account-connections-title">
+        <h3 id="account-connections-title" className="pref-group-label">{t("account.connections")}</h3>
+        <GitHubConnectionRow />
+      </section>
     </div>
   );
 }

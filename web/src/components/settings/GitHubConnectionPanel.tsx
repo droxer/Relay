@@ -18,3 +18,21 @@ export function GitHubConnectionPanel() {
     </section>
   );
 }
+
+/** The same connection as one row of the Account section's Connections
+    list, the row shape a notification toggle uses. */
+export function GitHubConnectionRow() {
+  const { t } = useTranslation();
+  return (
+    <div className="pref-option-list">
+      <div className="github-connection-row">
+        <span className="github-connection-mark" aria-hidden="true"><AdminConnect /></span>
+        <span className="pref-option-copy">
+          <span className="pref-option-label">{t("github_connection.title")}</span>
+          <span className="pref-option-sub">{t("github_connection.public_only")}</span>
+        </span>
+        <Badge variant="neutral">{t("github_connection.coming_soon")}</Badge>
+      </div>
+    </div>
+  );
+}
