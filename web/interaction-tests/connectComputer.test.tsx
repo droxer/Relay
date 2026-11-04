@@ -37,7 +37,7 @@ it("shows the cloud computer as coming soon, not as a choice", () => {
   const cloud = screen.getByRole("radio", { name: /Cloud computer/ });
   expect(cloud.getAttribute("aria-disabled") ?? cloud.hasAttribute("disabled").toString()).toBe("true");
   expect(within(cloud).getByText("Coming soon")).toBeTruthy();
-  expect(screen.getByRole("radio", { name: /Your computer/ }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("radio", { name: /Local computer/ }).getAttribute("aria-checked")).toBe("true");
 });
 
 it("explains installation before generating a command", () => {

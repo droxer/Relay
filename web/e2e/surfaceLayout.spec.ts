@@ -468,7 +468,7 @@ test("a board card keeps its controls inside the card on touch", async ({ browse
     leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p", createdAt: stamp, updatedAt: stamp };
   const page = await openPage(browser, "/projects/p?tab=tasks", true, undefined, undefined,
     { projects: [project], tasks: [{ ...task, projectId: project.id }] });
-  await page.getByRole("button", { name: "Board view", exact: true }).click();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
   await expect(page.locator(".backlog-task").first()).toBeVisible();
   const clipped = await clippedChildren(page, ".backlog-task");
   expect(clipped, JSON.stringify(clipped)).toEqual([]);

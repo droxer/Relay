@@ -70,12 +70,12 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   const drawer = page.getByRole("dialog");
   const guidance = drawer.getByRole("region", { name: "Next steps" });
   await expect(guidance).toContainText("Need approval");
-  await expect(guidance).toContainText("Unblock restores the previous stage");
+  await expect(guidance).toContainText("This restores the previous status");
   // Review cannot be accepted while it is blocked.
   await expect(drawer.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
   // Unblocking is a choice in the record's status menu — the same control a
   // list row carries — and the band names the stage the task is held in.
-  const status = drawer.getByRole("button", { name: /^Status: Review · Blocked\./ });
+  const status = drawer.getByRole("button", { name: /^Status: In review · Blocked\./ });
   await status.click();
   await page.getByRole("menuitem", { name: "Unblock", exact: true }).click();
   await drawer.getByRole("button", { name: "Accept", exact: true }).click();
@@ -92,7 +92,7 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
 test("the global Tasks page lays its queue out as the same board, and a drop commits", async ({ page }) => {
   const writes = await mockQueuedTask(page);
   await page.goto("/tasks");
-  await page.getByRole("button", { name: "Board view", exact: true }).click();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
   await expect(page.locator(".backlog-lane")).toHaveCount(5);
   const card = page.locator('.backlog-lane[data-status="assigned"] article');
   // Read across projects, a card names its project.
@@ -110,7 +110,7 @@ test("the global Tasks page lays its queue out as the same board, and a drop com
 /** A project's Issues tab opens as a list; the lanes live behind the view toggle. */
 async function openBoard(page: Page) {
   await page.goto("/projects/p?tab=tasks");
-  await page.getByRole("button", { name: "Board view", exact: true }).click();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
   await expect(page.locator(".backlog-lane")).toHaveCount(5);
 }
 
@@ -132,7 +132,7 @@ async function mockQueuedTask(page: Page): Promise<string[]> {
   return writes;
 }
 
-test("dragging Ready to In progress calls execution rather than setting a fake status", async ({ page }) => {
+test("dragging Ready to Running calls execution rather than setting a fake status", async ({ page }) => {
   const writes = await mockQueuedTask(page);
   await openBoard(page);
   await dragCard(page, page.locator('.backlog-lane[data-status="assigned"] article'), page.locator('.backlog-lane[data-status="running"]'));
@@ -178,7 +178,7 @@ test("the due date is picked from a calendar and kept as a day key", async ({ pa
   await mockQueuedTask(page);
   await page.goto("/tasks");
   await page.getByRole("button", { name: "New task" }).first().click();
-  const due = page.getByRole("button", { name: /^Due Select a date$/ });
+  const due = page.getByRole("button", { name: /^Due Choose a date$/ });
   await due.click();
   await page.getByRole("grid").getByRole("button", { name: /14/ }).first().click();
   await expect(page.getByRole("grid")).toHaveCount(0);
