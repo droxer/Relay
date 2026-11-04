@@ -174,10 +174,12 @@ function ToastIcon({ type }: { type: string | undefined }) {
     return null
   }
 
+  /* One title line tall, so the glyph sits on the title's first line whether
+     the content is centred or top-aligned. */
   return (
     <span
       data-slot="toast-icon"
-      className="shrink-0 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4"
+      className="flex h-lh shrink-0 items-center text-dense [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4"
     >
       {icon}
     </span>
@@ -188,22 +190,35 @@ function ToastList() {
   const { toasts } = ToastPrimitive.useToastManager()
   const { t } = useTranslation()
 
-  return toasts.map((toastItem) => (
-    <Toast key={toastItem.id} toast={toastItem}>
-      <ToastContent>
-        <ToastIcon type={toastItem.type} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <ToastTitle />
-          <ToastDescription />
-        </div>
-        <ToastAction />
-        <ToastClose
-          aria-label={t("toast.dismiss")}
-          render={<Button variant="ghost" size="icon-dense" tooltip={t("toast.dismiss")} />}
-        />
-      </ToastContent>
-    </Toast>
-  ))
+  return toasts.map((toastItem) => {
+    /* A toast that explains itself and asks for something is a notice to act
+       on: its action drops under the copy as the filled button, so the text
+       keeps the full width instead of wrapping beside two controls. A bare
+       title with an action ("Deleted · Undo") stays on one line. */
+    const stacked = Boolean(toastItem.description && toastItem.actionProps)
+    return (
+      <Toast key={toastItem.id} toast={toastItem}>
+        <ToastContent className={cn(stacked && "items-start")}>
+          <ToastIcon type={toastItem.type} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <ToastTitle />
+            <ToastDescription />
+            {stacked && (
+              <ToastAction render={<Button size="dense" />} className="mt-2 self-start" />
+            )}
+          </div>
+          {!stacked && <ToastAction />}
+          {/* Centred on the title line like the icon, at any touch size. */}
+          <span className="flex h-lh shrink-0 items-center text-dense">
+            <ToastClose
+              aria-label={t("toast.dismiss")}
+              render={<Button variant="ghost" size="icon-dense" tooltip={t("toast.dismiss")} />}
+            />
+          </span>
+        </ToastContent>
+      </Toast>
+    )
+  })
 }
 
 function Toaster({

@@ -53,8 +53,8 @@
     "confirm": "Discard changes"
   },
   "app_update": {
-    "title": "A new version of Relay is available",
-    "body": "Reload to use it. Opening another page also loads it.",
+    "title": "Relay has been updated",
+    "body": "Reload now, or it loads when you open another page.",
     "reload": "Reload"
   },
   "errors": {
