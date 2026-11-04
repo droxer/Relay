@@ -7,6 +7,7 @@ from relay.collaboration.policy import (
     REPORT_REMINDED_STATE_KEY,
     REPORT_REMINDER_TARGET_STATE_KEY,
     ROUND_RESULT_REJECTED_STATE_KEY,
+    ROUND_RESULT_STATE_KEY,
     REPAIR_COUNT_STATE_KEY,
     REPAIR_NOTE_STATE_KEY,
     REPAIR_RESUME_INDEX_STATE_KEY,
@@ -259,6 +260,32 @@ def test_missing_required_report_asks_the_same_agent_to_file_it_once():
     assert transition.next_index == 1
     assert transition.state[REPORT_REMINDER_TARGET_STATE_KEY] == "build"
     assert transition.state[REPORT_REMINDED_STATE_KEY] == ["build"]
+
+
+def test_overall_verdict_does_not_skip_automatic_follow_up_for_missing_work_report():
+    state = {ROUND_RESULT_STATE_KEY: {"status": "done"}}
+
+    transition = next_work_transition(
+        request(1), assignments()[1], None, state, max_repairs=2
+    )
+
+    assert transition.next_index == 1
+    assert transition.state[REPORT_REMINDER_TARGET_STATE_KEY] == "build"
+    assert ROUND_RESULT_STATE_KEY not in transition.state
+    assert state[ROUND_RESULT_STATE_KEY] == {"status": "done"}
+
+
+def test_a_human_blocker_is_not_automatically_followed_up():
+    verdict = {"status": "blocked", "note": "Which account should I use?"}
+    state = {ROUND_RESULT_STATE_KEY: verdict}
+
+    transition = next_work_transition(
+        request(1), assignments()[1], None, state, max_repairs=2
+    )
+
+    assert transition.next_index is None
+    assert transition.state[ROUND_RESULT_STATE_KEY] == verdict
+    assert REPORT_REMINDER_TARGET_STATE_KEY not in transition.state
 
 
 def test_report_reminder_spends_no_repair_budget():

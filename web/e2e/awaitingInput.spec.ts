@@ -114,7 +114,7 @@ test("an offered answer is one click, and sends as the reply", async ({ page }, 
   await expect.poll(() => sent).toEqual(["Platform vault"]);
 });
 
-test("a gate stop explains itself plainly and offers next steps", async ({ page }, testInfo) => {
+test("a gate stop offers follow-ups below the response with a free composer", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const gate = "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing.";
   const sent = await serve(page, "dark", true, { finalOutcome: gate }, {
@@ -122,12 +122,18 @@ test("a gate stop explains itself plainly and offers next steps", async ({ page 
     awaiting: { text: "A required step ended without reporting what it did." },
   });
   await page.goto(`/threads/${session.id}`);
-  const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
-  await expect(prompt.locator("blockquote")).toHaveText("A required step ended without reporting what it did.");
-  await expect(prompt).not.toContainText("6fc1d579");
+  await expect(page.locator(".awaiting-input")).toHaveCount(0);
+  await expect(page.getByText("A required step ended without reporting what it did.", { exact: true })).toHaveCount(0);
+  await expect(page.getByPlaceholder("Answer Reviewer…")).toHaveCount(0);
+  const prompt = page.getByRole("region", { name: "Suggested next" });
+  await expect(prompt.getByRole("button")).toHaveText([
+    "Keep going and report back", "Tell me what’s done and what’s left",
+  ]);
   await prompt.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
   await prompt.screenshot({ path: testInfo.outputPath("awaiting-check.png") });
+  const message = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/threads/${session.id}/messages`));
   await prompt.getByRole("button", { name: "Keep going and report back" }).click();
+  expect((await message).postDataJSON().questionId).toBe("wait-1");
   await expect.poll(() => sent).toEqual([
     "Please continue the work. When you stop, report what you did and how you checked it.",
   ]);
@@ -136,18 +142,40 @@ test("a gate stop explains itself plainly and offers next steps", async ({ page 
 test("asking for status is a question, not a task round", async ({ page }) => {
   const gate = "The work can't be accepted yet. A required step failed to run.";
   await serve(page, "light", true, { finalOutcome: gate }, { waitingReason: gate });
-  const bodies: Array<{ text?: string; intent?: string }> = [];
+  const bodies: Array<{ text?: string; intent?: string; questionId?: string }> = [];
   // Registered after serve(), so it answers the message POST first.
   await page.route(`**/threads/${session.id}/messages`, async (route) => {
     bodies.push(JSON.parse(route.request().postData() ?? "{}"));
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...session, status: "running" }) });
   });
   await page.goto(`/threads/${session.id}`);
-  const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
-  await expect(prompt).toContainText("Keeps it waiting on you");
+  const prompt = page.getByRole("region", { name: "Suggested next" });
   await prompt.getByRole("button", { name: "Tell me what’s done and what’s left" }).click();
   await expect.poll(() => bodies.map((body) => body.intent)).toEqual(["discuss"]);
+  expect(bodies[0].questionId).toBeUndefined();
 });
+
+for (const kind of ["check", "budget"] as const) {
+  test(`${kind} recovery uses follow-ups on mobile and accepts a custom message`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const sent = await serve(page, "dark", true, {}, {
+      awaiting: { kind, unreported: kind === "check", text: "A required step ended without reporting what it did." },
+    });
+    await page.goto(`/threads/${session.id}`);
+    await expect(page.locator(".awaiting-input")).toHaveCount(0);
+    const offers = page.getByRole("region", { name: "Suggested next" });
+    await expect(offers).toBeVisible();
+    const bounds = await offers.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: testInfo.outputPath(`recovery-follow-up-${kind}-mobile.png`) });
+    const message = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/threads/${session.id}/messages`));
+    await page.locator(".composer-input-wrap textarea").fill("Continue with staging only.");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    expect((await message).postDataJSON().questionId).toBe("wait-1");
+    await expect.poll(() => sent).toEqual(["Continue with staging only."]);
+  });
+}
 
 test("an offered answer containing an unknown mention sends literally", async ({ page }) => {
   const sent = await serve(page, "light", true, { inputOptions: ["@Unknown deploy", "Staging"] });
