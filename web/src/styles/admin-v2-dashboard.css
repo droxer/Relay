@@ -37,12 +37,12 @@
 }
 
 /* ── KPI rail ─────────────────────────────────────────────────────────
-   One bordered instrument panel divided by hairlines, not four floating
+   One bordered instrument panel divided by hairlines, not floating
    cards — the summary is a single read. Equal tracks keep historical
    totals balanced beneath the operational fleet readout. */
 .adm-dash-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   /* Every tile is eyebrow / value / foot on rows the tiles share (subgrid on
      .adm-dash-tile), so a label that wraps to two lines — "Average cycle
      time · 30 days" — moves every value in its row down with it instead of
@@ -55,9 +55,9 @@
 }
 
 /* Lean row — token usage not yet reported, so its tile is omitted and the
-   remaining three metrics share the available width. */
+   remaining four metrics share the available width. */
 .adm-dash-kpis--lean {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 /* Entrance — the tiles mount once per dashboard load, so they rise on the
@@ -72,6 +72,7 @@
 .adm-dash-tile:nth-child(2) { animation-delay: calc(var(--t-stagger) * 1); }
 .adm-dash-tile:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
 .adm-dash-tile:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+.adm-dash-tile:nth-child(5) { animation-delay: calc(var(--t-stagger) * 4); }
 
 .adm-dash-kpis-wrap {
   position: relative;
@@ -680,10 +681,10 @@
 
   .adm-dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-dash-tile { grid-column: span 1; }
-  /* Two by two: the right column drops its rule, the top row gains one. */
+  /* Two columns: divide rows, and let an odd final metric span the rail. */
   .adm-dash-tile:nth-child(2n) { border-right: none; }
-  .adm-dash-tile:nth-child(-n + 2) { border-bottom: 0.5px solid var(--line-1); }
-  .adm-dash-kpis--lean .adm-dash-tile:last-child { grid-column: 1 / -1; }
+  .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: 0.5px solid var(--line-1); }
+  .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
   /* The floor exists so a desktop row holds one height while readings load.
      Stacked, each row is its own height, and the floor only padded the
      foot-less Computers / Users pair into two tall empty boxes. */

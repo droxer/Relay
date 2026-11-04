@@ -1,5 +1,8 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { listControlPanelAgents } from "../../../api";
+import { ADMIN_ROSTER_POLL_MS } from "../../../lib/controlPanelQueries";
 import { useTranslation } from "react-i18next";
 import { useDashboardSessions } from "../../../hooks/useDashboardSessions";
 import { useTokenUsage } from "../../../hooks/useTokenUsage";
@@ -28,6 +31,12 @@ export function DashboardView({
   const { t, i18n } = useTranslation();
   const sessionsQuery = useDashboardSessions(true);
   const tokens = useTokenUsage();
+  const agentsQuery = useQuery({
+    queryKey: ["admin", "agents"],
+    queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
+    refetchInterval: ADMIN_ROSTER_POLL_MS,
+    select: (data) => data.agents.filter((agent) => !agent.deletedAt).length,
+  });
 
   const sessionsReady = !sessionsQuery.isLoading && !sessionsQuery.error;
   const sessions = sessionsQuery.data;
@@ -109,6 +118,12 @@ export function DashboardView({
                 ? t("admin.v2.dash_kpi_nodes_hint", { running: fleetCount("running"), ready: fleetCount("ready") })
                 : undefined
             }
+          />
+          <KpiTile
+            slot="agents"
+            eyebrow={t("admin.v2.dash_kpi_agents")}
+            value={agentsQuery.isSuccess ? formatCompact(agentsQuery.data, i18n.language) : dash}
+            hint={agentsQuery.isError ? t("workspace.load_failed") : undefined}
           />
           {showTokens ? (
             <KpiTile

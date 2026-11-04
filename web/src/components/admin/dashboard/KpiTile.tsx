@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 interface KpiTileProps {
   eyebrow: string;
   value: ReactNode;
-  slot?: "sessions" | "success" | "nodes" | "users" | "tokens";
+  slot?: "sessions" | "success" | "nodes" | "agents" | "users" | "tokens";
   /** A small trend or share readout beside the numeral (sparkline, meter). */
   visual?: ReactNode;
   delta?: {
