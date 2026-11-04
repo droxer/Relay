@@ -8,9 +8,10 @@ import type { TaskRun } from "../types.js";
  * get going. Collapsing statuses here keeps that judgement in one place
  * instead of in every badge that renders a row.
  */
-export type RunOutcome = "done" | "failed" | "running" | "pending";
+export type RunOutcome = "done" | "failed" | "running" | "pending" | "cancelled";
 
 export function runOutcome(run: TaskRun): RunOutcome {
+  if (run.status === "cancelled") return "cancelled";
   if (run.status === "done") return "done";
   if (run.status === "blocked") return "failed";
   if (run.status === "running") return "running";

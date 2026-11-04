@@ -98,6 +98,7 @@ from .execution.lifecycle import ExecutionLifecycleService
 from .core.settings import AppSettings
 from .migrations_runtime.default_agents import seed_default_agents_at_startup
 from .migrations_runtime.abandoned_sessions import settle_abandoned_sessions_at_startup
+from .migrations_runtime.task_capacity import requeue_capacity_waits
 from .migrations_runtime.startup import (
     migrate_legacy_computer_ids,
     repair_records_before_serving,
@@ -148,6 +149,7 @@ def create_app(
     notification_bridge = database_notification_bridge(stores.sessions, notifier)
     _publish_store_changes(stores, notifier)
     if settings.startup_repairs_enabled:
+        requeue_capacity_waits(task_store=stores.tasks)
         repair_records_before_serving(
             team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
         )

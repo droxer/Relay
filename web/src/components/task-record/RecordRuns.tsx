@@ -42,7 +42,7 @@ const RUN_PAGE_SIZE = 25;
 
 function isTerminal(run: TaskRun): boolean {
   const outcome = runOutcome(run);
-  return outcome === "done" || outcome === "failed";
+  return outcome === "done" || outcome === "failed" || outcome === "cancelled";
 }
 
 /** ↑/↓ (and Home/End) walk the ledger the way a list box does: the next row

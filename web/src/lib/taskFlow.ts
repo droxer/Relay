@@ -1,6 +1,6 @@
 import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
-export const TASK_FLOW_STAGES = ["backlog", "assigned", "running", "review", "done"] as const;
+export const TASK_FLOW_STAGES = ["backlog", "assigned", "queued", "running", "review", "done", "cancelled"] as const;
 export type TaskWorkflowStage = typeof TASK_FLOW_STAGES[number];
 
 export function isFlowStage(status: string): status is TaskWorkflowStage {
@@ -15,7 +15,7 @@ export function taskWorkflowStage(task: RelayTaskListItem): TaskWorkflowStage {
 }
 
 function taskIsWip(task: RelayTaskListItem): boolean {
-  return !task.isRoutine && !task.deletedAt && task.status !== "done"
+  return !task.isRoutine && !task.deletedAt && task.status !== "done" && task.status !== "cancelled"
     && (Boolean(task.startedAt) || ["running", "review", "waiting_for_human"].includes(task.status));
 }
 
@@ -62,13 +62,15 @@ export const NEW_TASK_STATUSES = ["backlog", "assigned"] as const satisfies read
 export function taskHoldAction(task: Pick<RelayTaskListItem, "status" | "isRoutine">): "block" | "unblock" | null {
   if (task.isRoutine) return null;
   if (task.status === "blocked") return "unblock";
-  if (task.status === "done" || task.status === "running") return null;
+  if (task.status === "done" || task.status === "cancelled" || task.status === "running") return null;
   return "block";
 }
 
 export function taskFlowErrorKey(code?: string): string | undefined {
   const keys: Record<string, string> = {
     task_wip_limit: "backlog.wip_wait",
+    task_reopen_required: "backlog.error_reopen",
+    task_cancellation_not_allowed: "backlog.error_cancel",
     task_execution_active: "backlog.error_active",
     task_review_changed: "task_review.changed",
     task_state_changed: "backlog.error_changed",

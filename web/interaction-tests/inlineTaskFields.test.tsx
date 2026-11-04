@@ -40,9 +40,11 @@ it("offers the workflow stages and commits the chosen one", () => {
   expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
     "backlog.statuses.backlog",
     "backlog.statuses.assigned",
+    "backlog.statuses.queued",
     "backlog.statuses.running",
     "backlog.statuses.review",
     "backlog.statuses.done",
+    "backlog.statuses.cancelled",
   ]);
   fireEvent.click(within(menu).getByRole("menuitem", { name: "backlog.statuses.assigned" }));
   expect(onChange).toHaveBeenCalledWith("assigned");
@@ -136,4 +138,21 @@ it("sets a missing due date and clears an existing one", () => {
   expect(screen.getByRole("button", { name: "backlog.inline.due_label" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "backlog.inline.clear_due" }));
   expect(onChange).toHaveBeenLastCalledWith("");
+});
+
+
+it("cancels abandoned work through the shared status control", () => {
+  const onChange = vi.fn();
+  render(<InlineStatus task={{ ...base, status: "blocked", workflowStage: "review", startedAt: base.createdAt }} onChange={onChange} />);
+  fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "backlog.statuses.cancelled" }));
+  expect(onChange).toHaveBeenCalledWith("cancelled");
+});
+
+it("shows queued work but refuses to fabricate a queue transition", () => {
+  const onChange = vi.fn();
+  render(<InlineStatus task={base} onChange={onChange} />);
+  const item = within(screen.getByRole("menu")).getByRole("menuitem", { name: "backlog.statuses.queued" });
+  expect(item.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(item);
+  expect(onChange).not.toHaveBeenCalled();
 });

@@ -143,7 +143,7 @@ export function taskAssignmentOptions({
 /** Assignment is decided before work starts. A started task keeps its crew,
  *  and an intake issue has nowhere to run, so neither offers a picker. */
 export function taskAssignmentEditable(task: RelayTaskListItem): boolean {
-  return (task.status === "backlog" || task.status === "assigned") && !issueNeedsProject(task);
+  return (task.status === "backlog" || task.status === "assigned" || task.status === "queued") && !issueNeedsProject(task);
 }
 
 export type TaskAssignmentChange = TaskAssignmentSelection;
@@ -166,7 +166,7 @@ export function taskAssignmentPatch(task: RelayTaskListItem, change: TaskAssignm
     assignedTeamId: null,
     collaborationStyle: "",
     // A Ready task with nobody on it is not ready.
-    ...(task.status === "assigned" ? { status: "backlog" as const } : {}),
+    ...((task.status === "assigned" || task.status === "queued") ? { status: "backlog" as const } : {}),
   };
 }
 

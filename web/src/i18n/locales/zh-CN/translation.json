@@ -407,7 +407,9 @@
     "setup_task_after": "在 {{tasks}} 之后",
     "setup_task_after_existing_one": "在 {{count}} 个已有任务之后",
     "setup_task_after_existing_other": "在 {{count}} 个已有任务之后",
-    "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。"
+    "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。",
+    "dashboard_user_wip": "你在所有项目中的进行中任务：{{count}} / {{limit}}",
+    "dashboard_view_user_tasks": "查看你在所有项目中的任务"
   },
   "thread": {
     "project_indicator": "项目：{{name}}",
@@ -718,7 +720,9 @@
       "waiting_for_human": "等待你处理",
       "review": "待评审",
       "blocked": "阻塞",
-      "done": "已完成"
+      "done": "已完成",
+      "cancelled": "已取消",
+      "queued": "已排队"
     },
     "priorities": {
       "high": "高",
@@ -777,7 +781,8 @@
         "done": "已完成",
         "failed": "失败",
         "running": "运行中",
-        "pending": "未开始"
+        "pending": "未开始",
+        "cancelled": "已取消"
       },
       "col_trigger": "触发方式",
       "col_started": "开始时间",
@@ -814,7 +819,7 @@
     "wip_limit": "每位用户的进行中任务上限",
     "unblock": "解除阻塞",
     "ready_policy": "有可用容量时，就绪任务会自动开始。待审查或受阻的任务仍计入进行中任务数量上限。",
-    "wip_wait": "请先完成或验收现有工作，再开始新任务。",
+    "wip_wait": "已排队：进行中任务名额空出后，此任务将自动开始。",
     "error_active": "请先停止或完成当前运行，再更改任务状态。",
     "error_changed": "任务已发生变化，请刷新后重试。",
     "error_start": "请使用“开始”启动任务。",
@@ -829,7 +834,10 @@
       "due_empty": "设置截止日期",
       "clear_due": "清除截止日期",
       "assignee_label": "负责人：{{name}}。更改负责人"
-    }
+    },
+    "error_reopen": "请先将任务移至就绪状态，再继续处理。",
+    "error_cancel": "无法取消此任务。请暂停自动化，或重新打开已完成的任务。",
+    "queued": "已排队"
   },
   "workspace": {
     "preview_missing": "此文件已不可用，可能已被移动或删除。",
@@ -1647,7 +1655,12 @@
       "password_reset_error": "无法生成重置链接：{{message}}",
       "password_reset_copy": "复制重置链接",
       "nav_invitations": "邀请",
-      "title_invitations": "邀请"
+      "title_invitations": "邀请",
+      "task_capacity_label": "并发任务上限",
+      "task_capacity_short": "任务名额",
+      "task_capacity_summary": "任务名额：{{count}}",
+      "task_capacity_hint": "所有项目中已开始但未完成的任务（含待验收和受阻任务）。超出上限的任务自动排队。默认 5，清空可恢复默认值。",
+      "task_capacity_invalid": "请输入 1–100 的整数，或清空以使用默认值。"
     },
     "signing_in": "正在登录…",
     "waitlist": {
@@ -2531,7 +2544,7 @@
     },
     "wip": {
       "title": "进行中任务已达上限",
-      "body": "请在任务看板完成现有工作，或评审并验收以释放名额。等待验收的工作也计入上限。"
+      "body": "此任务已排队，名额空出后将自动开始。完成、验收或取消现有任务可释放名额；待验收和受阻任务仍计入上限。"
     },
     "ownership": {
       "title": "此工作已被其他运行占用",
@@ -2663,7 +2676,8 @@
       "running": "进行中",
       "overdue": "已逾期",
       "open": "全部未完成",
-      "done": "最近完成"
+      "done": "最近完成",
+      "cancelled": "已取消"
     },
     "queue_hints": {
       "needs_me": "所有项目中等待你回复或评审的任务。",
@@ -2672,7 +2686,8 @@
       "running": "智能体正在处理的任务。",
       "overdue": "已过截止日期的未完成任务。",
       "open": "所有项目中的全部未完成任务。",
-      "done": "已完成的任务，按完成时间从近到远排列。"
+      "done": "已完成的任务，按完成时间从近到远排列。",
+      "cancelled": "已取消的任务，历史记录完整保留。"
     },
     "empty": {
       "needs_me": "没有等你处理的任务",

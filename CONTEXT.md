@@ -267,3 +267,22 @@ configured blob store owns its bytes (R2 in hosted deployments). A Daemon Node
 may download it only through an active run command naming that attachment,
 then materializes a temporary file visible to its Agent Runtime.
 _Avoid_: public image URL, artifact (an agent-produced deliverable)
+
+
+**Queued Task**:
+A Task whose start is waiting for its responsible User's work-in-progress capacity
+across Projects (`status=queued`). It consumes no WIP slot and the scheduler starts
+it automatically when capacity opens. It differs from Ready (`assigned`), which
+has not yet encountered this capacity wait, and Blocked, which requires action.
+
+**Cancelled Task**:
+An abandoned Task (`status=cancelled`) whose history remains readable. Cancellation
+releases WIP only after execution is settled; it does not mean accepted delivery.
+Reopening to Ready reacquires capacity for previously started work.
+
+
+**Task Capacity**:
+The maximum started, unfinished Tasks a User may have across Projects, including
+review and blocked work. The control panel's Concurrent task limit defaults to
+five; extra starts enter Queued. It bounds work in progress, while a Computer's
+run capacity separately bounds simultaneous agent processes.

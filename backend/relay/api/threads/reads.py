@@ -27,7 +27,7 @@ from .projections import (
 router = APIRouter()
 
 ACTIVE_TASK_STATUSES = frozenset(
-    {"assigned", "running", "waiting_for_human", "review", "blocked"}
+    {"assigned", "queued", "running", "waiting_for_human", "review", "blocked"}
 )
 ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
 

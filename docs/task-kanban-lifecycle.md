@@ -9,11 +9,13 @@ deliverable; ending an attempt does not necessarily finish the task.
 | --- | --- | --- |
 | Backlog | `status=backlog` | Uncommitted demand. Assignment may be recorded without starting work. |
 | Ready | `status=assigned` | Selected or admitted demand waiting for an agent to start. The scheduler pulls when runtime and WIP capacity permit. |
+| Queued | `status=queued` | Waiting for WIP capacity after a start request; starts automatically when a slot opens. Does not consume WIP. |
 | In progress | `workflowStage=running` | An agent has started executing. Human waits remain on this stage until review or another queued continuation. |
 | Review | `workflowStage=review` | Work awaits acceptance by a person with access to the task. Rework returns it to the execution queue. |
 | Done | `status=done` | Accepted delivery. Frees the task's WIP slot. |
+| Cancelled | `status=cancelled` | Abandoned work; preserves history and frees WIP after execution is safely settled. Does not count as delivered work. |
 
-The seven existing API status identifiers remain valid for reads. `blocked` and
+The existing API status identifiers remain valid for reads; `queued` and `cancelled` are additional states. `blocked` and
 `waiting_for_human` are conditions displayed within the preserved workflow stage,
 not separate board columns. Consumers should group by `workflowStage`.
 
@@ -42,27 +44,36 @@ rather than reopening accepted work with new scope.
 
 ## WIP and scheduling
 
-`RELAY_TASK_WIP_LIMIT` is a positive integer, default **5 per user**. Scope is
-the task's human assignee, falling back to its owner; tasks with neither share an
-unowned scope. All backend replicas must use the same configured limit.
+The Admin control panel sets each user's **Concurrent task limit** (1–100),
+default **5**. It limits started, unfinished work, including review and blocked
+tasks. `maxConcurrentTasks` is a per-user override; clearing it restores the
+server default (`RELAY_TASK_WIP_LIMIT`, a positive integer defaulting to 5).
+The effective value is read from the database at admission, so changes apply
+across backend replicas without restarting them. Lowering a user's limit does
+not cancel admitted tasks. Scope is the task's human assignee, falling back to
+its owner; tasks with neither share an
+unowned scope. All backend replicas must use the same configured fallback limit.
 
 The WIP-admission boundary is the first accepted execution claim. It reserves a
 slot but stays in Ready until the daemon reports that an agent has started.
 Legacy event histories also recognize the first running/review/human-waiting
-transition. Unadmitted Ready inventory and routine templates do not consume WIP.
+transition. Unadmitted Ready and Queued inventory and routine templates do not consume WIP.
 All admitted, unfinished tasks do, including blocked work, review, and queued
 continuations. Retries use the same slot; reopening a finished task or moving WIP
 to another user requires capacity.
 
-Manual starts, scheduled starts, and task-scoped thread recovery share the event
-store admission check. PostgreSQL serializes count-and-admit with a transaction
+A capacity preflight queues new work before allocating a thread; the final check
+remains atomic to cover concurrent starts. Manual starts, scheduled starts, and
+task-scoped thread recovery share the event store admission check. PostgreSQL serializes count-and-admit with a transaction
 advisory lock; SQLite acquires its writer lock before reading snapshots. Admission
 reads unfinished snapshots for the affected user. Execution still runs only
 through daemon commands.
 
-At capacity, tasks remain queued with `dispatch.code=task_wip_limit`. This is not a
-failed execution and does not consume the dispatch failure budget. Refused new
-threads are closed without sending a daemon command. Existing conversations remain
+At capacity, tasks enter `status=queued`, `workflowStage=queued`, with
+`dispatch.code=task_wip_limit` and `dispatch.state=queued`. This is a capacity wait,
+not a failed execution. The scheduler retries admission automatically. Genuine
+dispatch failures still block after the first attempt and require manual retry.
+Refused new threads are closed without sending a daemon command. Existing conversations remain
 available. Lowering a limit does not cancel existing work; continuations can finish
 it while new starts wait.
 
@@ -80,6 +91,11 @@ The board uses event-derived `startedAt` and `finishedAt`, not `updatedAt`:
 - Average cycle time: elapsed time from first start through acceptance, including waits.
 - SLE: the 85th percentile cycle time for the last 30 days when at least 20 samples
   exist. Until then, the displayed **8-day initial estimate** is explicitly labeled.
+
+Project activity counts only that project. A separate “Your WIP across projects”
+reading uses the server's `flowUsage: { userId, occupied }`, scoped to the signed-in
+user (including administrators), and links to that user's tasks across projects.
+It counts before list pagination and never presents project WIP as global capacity.
 
 Metrics use the full accessible list before board filters and pagination; routine
 templates are excluded. Deleted tasks are excluded from this operational board,
@@ -106,3 +122,33 @@ Tasks already above the configured WIP limit may finish; new work waits.
 Review blocked and aging work first, review pending deliveries next, and replenish
 Ready as capacity becomes available. Use the measured cycle times to revise the
 initial SLE and the WIP limit. Kanban does not require a sprint boundary.
+
+## Cancelling work and deploying the new states
+
+`PATCH /tasks/{id}` with `status=cancelled` abandons a task without deleting its
+history. The status event records the actor, and replay derives `cancelledAt`.
+`startedAt` remains unchanged; `finishedAt` stays reserved for accepted delivery.
+Cancellation refuses active dispatch claims, live runs, pending finalization,
+and linked executions requiring reconciliation, even when the thread already
+reads completed or failed. Stop the run and await exit evidence, or reconcile
+it through the existing human assertion path, before cancelling the task.
+Automations are paused rather than cancelled. Accepted tasks cannot be cancelled.
+
+A cancelled task must explicitly reopen to Ready before it can run again;
+started tasks reacquire WIP on reopening. Cancelled prerequisites remain
+unsatisfied until explicitly completed or removed; cancellation is not delivery.
+
+Migration `20261104_0111` extends the dispatch index to Ready and Queued tasks.
+PostgreSQL builds the replacement concurrently in an autocommit block before
+removing the old index; SQLite replaces it within the migration transaction.
+Downgrade restores the Ready-only index and retains event history. Deploy matching
+backend and web readers together; older readers do not understand the new states.
+The startup repair requeues only old, unadmitted WIP-refusal blocks, with no
+execution owner or active claim. It preserves human blocks and execution failures.
+`RELAY_STARTUP_REPAIRS=0` disables this repair with the other startup repairs.
+
+Migration `20261104_0112` adds nullable `users.max_concurrent_tasks`. Existing
+users inherit the default; no task histories or admitted executions change.
+Downgrade removes the user overrides. Run both migrations before deploying the
+matching backend. The user list/create/PATCH API exposes `maxConcurrentTasks`
+and `effectiveMaxConcurrentTasks`; only administrators can change the setting.

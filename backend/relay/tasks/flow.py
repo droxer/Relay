@@ -6,7 +6,9 @@ import os
 from typing import Any
 
 UNKNOWN_REASON = "Execution needs attention."
-FLOW_STAGES = ("backlog", "assigned", "running", "review", "done")
+TERMINAL_TASK_STATUSES = ("done", "cancelled")
+WIP_WAIT_MESSAGE = "Work-in-progress capacity is full. This task will start automatically when a slot opens."
+FLOW_STAGES = ("backlog", "assigned", "queued", "running", "review", "done", "cancelled")
 # A new task waits for a person's acceptance unless it asks otherwise. A task
 # created before the policy existed recorded none and always closed on its
 # own, so replay keeps that: the two defaults differ on purpose.
@@ -26,7 +28,7 @@ def flow_scope(task: dict[str, Any]) -> str:
 
 
 def is_wip(task: dict[str, Any]) -> bool:
-    if task.get("isRoutine") or task.get("deletedAt") or task.get("status") == "done":
+    if task.get("isRoutine") or task.get("deletedAt") or task.get("status") in TERMINAL_TASK_STATUSES:
         return False
     return bool(task.get("startedAt")) or task.get("status") in (
         "running",
@@ -75,7 +77,7 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             else:
                 task.pop("waitingRequest", None)
         # A wait after execution is still in progress; an impediment in review stays there.
-        if stage not in ("backlog", "assigned", "running", "review") or (
+        if stage not in ("backlog", "assigned", "queued", "running", "review") or (
             status == "waiting_for_human" and stage == "backlog"
         ):
             stage = "running"
@@ -106,6 +108,10 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
         task.setdefault("finishedAt", event["timestamp"])
     else:
         task.pop("finishedAt", None)
+    if status == "cancelled":
+        task.setdefault("cancelledAt", event["timestamp"])
+    else:
+        task.pop("cancelledAt", None)
     task["workflowStage"] = stage
 
 
@@ -134,9 +140,13 @@ def validate_manual_transition(
         return
     if active:
         raise ValueError("task_execution_active")
+    if current == "cancelled" and target not in ("assigned", "backlog"):
+        raise ValueError("task_reopen_required")
+    if target == "cancelled" and (current == "done" or task.get("isRoutine")):
+        raise ValueError("task_cancellation_not_allowed")
     if unblock:
         return  # Restores a recorded state; does not dispatch an agent.
-    if target in ("running", "waiting_for_human"):
+    if target in ("running", "waiting_for_human", "queued"):
         raise ValueError("task_transition_requires_execution")
     if target == "review" and not task.get("startedAt"):
         raise ValueError("task_review_requires_work")

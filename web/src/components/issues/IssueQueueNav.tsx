@@ -23,6 +23,7 @@ const QUEUE_ICONS = {
   overdue: ActionCalendar,
   open: NavBacklog,
   done: StatusOk,
+  cancelled: StatusError,
 } satisfies Record<IssueQueue, SectionNavItem<IssueQueue>["Icon"]>;
 
 /** The Issues rail: one row per queue, each with its count under the filters.

@@ -7,6 +7,8 @@ from loguru import logger
 
 from ...accounts.user_lifecycle import soft_delete_user as soft_delete_user_cascade
 from ...computer.limits import decorate_user_limits
+from ...core.task_capacity import normalize_task_capacity
+from ...tasks.flow import wip_limit
 from ...computer.node_agents import sync_node_agents
 from ...persistence.org.settings import (
     OrgSettingsValidationError,
@@ -91,7 +93,7 @@ def list_users_for_legacy_supervisor(request: Request, ctx: AppContextDep) -> di
 
 
 def _user_records(ctx: Any) -> list[dict[str, Any]]:
-    return decorate_user_limits(ctx, ctx.auth_store.list_users())
+    return _with_task_capacity(ctx, ctx.auth_store.list_users())
 
 
 @router.delete("/admin/users/{user_id}", status_code=200)
@@ -122,6 +124,14 @@ def update_user(
         patch["display_name"] = string_field(body, "displayName")
     if "email" in body:
         patch["email"] = string_field(body, "email")
+    if "maxConcurrentTasks" in body:
+        if body["maxConcurrentTasks"] is None:
+            patch["clear_max_concurrent_tasks"] = True
+        else:
+            try:
+                patch["max_concurrent_tasks"] = normalize_task_capacity(body["maxConcurrentTasks"])
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
     if "maxLocalComputers" in body:
         # An explicit null is the "inherit the org default" instruction, which
         # is a different edit from leaving the field alone.
@@ -140,7 +150,7 @@ def update_user(
         raise HTTPException(404, "User not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    return {"user": decorate_user_limits(ctx, [user])[0]}
+    return {"user": _with_task_capacity(ctx, [user])[0]}
 
 
 @router.post("/admin/users", status_code=201)
@@ -155,6 +165,12 @@ def create_user(
     node_id = string_field(body, "nodeId") or None
     email = string_field(body, "email") or None
     display_name = string_field(body, "displayName") or username or user_id
+    max_concurrent_tasks = None
+    if body.get("maxConcurrentTasks") is not None:
+        try:
+            max_concurrent_tasks = normalize_task_capacity(body["maxConcurrentTasks"])
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
     max_local_computers: int | None = None
     if body.get("maxLocalComputers") is not None:
         try:
@@ -210,7 +226,9 @@ def create_user(
         email=email,
         max_local_computers=max_local_computers,
     )
-    user = decorate_user_limits(ctx, [user])[0]
+    if max_concurrent_tasks is not None:
+        user = ctx.auth_store.update_user(user["id"], max_concurrent_tasks=max_concurrent_tasks)
+    user = _with_task_capacity(ctx, [user])[0]
     public_node: dict[str, Any] | None = None
     assignment_error: str | None = None
     if node_id:
@@ -241,3 +259,10 @@ def create_user(
         **({"node": public_node} if public_node else {}),
         **({"assignmentError": assignment_error} if assignment_error else {}),
     }
+
+
+def _with_task_capacity(ctx: Any, users: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    default = wip_limit()
+    return [{**user, "maxConcurrentTasks": user.get("maxConcurrentTasks"),
+             "effectiveMaxConcurrentTasks": user.get("maxConcurrentTasks") or default}
+            for user in decorate_user_limits(ctx, users)]

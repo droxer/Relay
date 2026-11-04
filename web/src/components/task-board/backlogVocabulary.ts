@@ -21,6 +21,8 @@ import type { FilterSpec } from "../../lib/urlFilters";
 export const TASK_STATUS_SHAPE: Record<TaskStatus, StateShape> = {
   backlog: "dashed",
   assigned: "solid",
+  queued: "dashed",
+  cancelled: "muted",
   running: "live",
   waiting_for_human: "solid",
   review: "solid",

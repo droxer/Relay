@@ -52,7 +52,7 @@ class TaskDispatchRows(TaskStoreState):
     ) -> list[dict[str, Any]]:
         statement = (
             select(self.tasks.c.snapshot)
-            .where(self.tasks.c.status == "assigned")
+            .where(self.tasks.c.status.in_(("assigned", "queued")))
             .where(
                 or_(
                     self.tasks.c.assigned_agent.is_not(None),
@@ -186,7 +186,7 @@ class TaskDispatchRows(TaskStoreState):
             snapshot = row["snapshot"] or {}
             if (
                 snapshot.get("deletedAt")
-                or snapshot.get("status") != "assigned"
+                or snapshot.get("status") not in ("assigned", "queued")
                 or (
                     snapshot.get("assignedAgent")
                     and snapshot.get("assignedAgent") != agent

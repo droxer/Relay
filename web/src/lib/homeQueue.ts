@@ -85,7 +85,7 @@ export function homeNeedsYouCount(items: readonly HomeItem[]): number {
 }
 
 function isLiveIssue(task: RelayTaskListItem): boolean {
-  return !task.isRoutine && !task.deletedAt && task.status !== "done";
+  return !task.isRoutine && !task.deletedAt && task.status !== "done" && task.status !== "cancelled";
 }
 
 /** Mirrors `responsibleUser` in issueQueues: the assignee, else the owner. */
@@ -143,7 +143,7 @@ function offlineItems(
   mine: readonly RelayTaskListItem[],
   userId: string,
 ): HomeItem[] {
-  const waitingToStart = mine.filter((task) => task.status === "assigned").length;
+  const waitingToStart = mine.filter((task) => task.status === "assigned" || task.status === "queued").length;
   if (!waitingToStart) return [];
   return nodes
     .filter((node) => node.userId === userId && !node.retiredAt && (!node.online || node.stale))

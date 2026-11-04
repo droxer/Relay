@@ -10,7 +10,7 @@ SessionStatus = Literal[
 ]
 TaskPriority = Literal["low", "normal", "high"]
 TaskStatus = Literal[
-    "backlog", "assigned", "running", "waiting_for_human", "review", "done", "blocked"
+    "backlog", "assigned", "queued", "running", "waiting_for_human", "review", "done", "blocked", "cancelled"
 ]
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 

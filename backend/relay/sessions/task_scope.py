@@ -13,7 +13,7 @@ from typing import Any
 from ..collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
 from ..tasks.execution import request_execution_owner
 
-IN_FLIGHT_TASK_STATUSES = frozenset({"assigned", "running", "waiting_for_human"})
+IN_FLIGHT_TASK_STATUSES = frozenset({"assigned", "queued", "running", "waiting_for_human"})
 # A person's mark done is their acceptance, so it also settles the round's
 # task after the round closed on it: awaiting review, or blocked by a failure.
 MARK_DONE_TASK_STATUSES = IN_FLIGHT_TASK_STATUSES | {"review", "blocked"}

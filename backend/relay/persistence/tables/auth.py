@@ -53,6 +53,7 @@ users = Table(
     # computers": a global change has to move every user who was never
     # pinned to a number of their own.
     Column("max_local_computers", Integer, nullable=True),
+    Column("max_concurrent_tasks", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("deleted_at", DateTime(timezone=True), nullable=True),

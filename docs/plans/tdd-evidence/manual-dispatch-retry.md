@@ -2,6 +2,10 @@
 
 ## Intent
 
+The later [task capacity policy](../../task-kanban-lifecycle.md) supersedes this
+report for WIP refusals: they now enter Queued and resume automatically. Genuine
+dispatch failures retain the manual-retry policy below.
+
 The user requested removal of automatic retries after one routine occurrence
 created thousands of failed conversations. Failed dispatches now block on the
 first attempt and retain the reason. Retrying requires explicit user action.

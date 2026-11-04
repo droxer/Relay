@@ -27,11 +27,13 @@ def task_status(value: Any) -> TaskStatus | None:
         in (
             "backlog",
             "assigned",
+            "queued",
             "running",
             "waiting_for_human",
             "review",
             "done",
             "blocked",
+            "cancelled",
         )
         else None
     )

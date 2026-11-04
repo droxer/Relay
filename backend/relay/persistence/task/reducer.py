@@ -187,6 +187,9 @@ def _apply_task_round(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 def _apply_task_status(task: dict[str, Any], event: dict[str, Any]) -> None:
 
+    if event["status"] == "cancelled" and task["status"] != "cancelled":
+        # Fence late closeout even after a person reopens this task.
+        task["cancelledExecutionRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
     apply_flow_status(task, event)
     task["status"] = event["status"]
     if event["status"] != "running":

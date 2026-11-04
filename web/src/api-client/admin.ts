@@ -39,6 +39,7 @@ export function createControlPanelUser(
       ...(input.email ? { email: input.email } : {}),
       ...(input.displayName ? { displayName: input.displayName } : {}),
       ...(input.maxLocalComputers != null ? { maxLocalComputers: input.maxLocalComputers } : {}),
+      ...(input.maxConcurrentTasks != null ? { maxConcurrentTasks: input.maxConcurrentTasks } : {}),
     },
   });
 }
@@ -70,6 +71,7 @@ export function updateControlPanelUser(
       body: {
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.maxConcurrentTasks !== undefined ? { maxConcurrentTasks: input.maxConcurrentTasks } : {}),
         ...(input.maxLocalComputers !== undefined
           ? { maxLocalComputers: input.maxLocalComputers }
           : {}),

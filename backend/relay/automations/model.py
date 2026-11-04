@@ -28,7 +28,7 @@ EVENT_TYPES: dict[tuple[str | None, str | None], str] = {
 }
 SCOPE_FILTERS = ("projectId", "assignedAgentId", "assignedTeamId")
 FILTER_KEYS = (*SCOPE_FILTERS, "fromStatus", "toStatus", "priority", "titleContains")
-TASK_STATUSES = ("backlog", "assigned", "running", "waiting_for_human", "review", "done", "blocked")
+TASK_STATUSES = ("backlog", "assigned", "queued", "running", "waiting_for_human", "review", "done", "blocked", "cancelled")
 TASK_PRIORITIES = ("low", "normal", "high")
 TITLE_CONTAINS_MAX = 120
 ID_MAX = 200

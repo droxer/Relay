@@ -101,7 +101,7 @@ def _unclaimable_dispatch(task: dict[str, Any], agent: str | None) -> DispatchIn
             "code": "agent_mismatch",
             "message": f"This task is assigned to {assigned_agent}, not {agent}.",
         }
-    if task.get("status") != "assigned":
+    if task.get("status") not in ("assigned", "queued"):
         return {
             "state": "queued",
             "code": "task_not_assigned",

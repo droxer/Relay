@@ -40,7 +40,7 @@ def project_move_error(task: dict[str, Any]) -> str | None:
         return "task_already_in_project"
     if task.get("isRoutine") or task.get("sourceRoutineId"):
         return "routine_project_immutable"
-    if task.get("status") not in ("backlog", "assigned", "blocked") or task.get(
+    if task.get("status") not in ("backlog", "assigned", "queued", "blocked") or task.get(
         "linkedSessionIds"
     ):
         return "task_already_started"

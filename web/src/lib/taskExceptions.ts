@@ -30,7 +30,7 @@ type TaskException =
 
 /** Days since the task started, for work still in flight. */
 export function taskWorkAgeDays(task: RelayTaskListItem): number | null {
-  if (!task.startedAt || task.status === "done") return null;
+  if (!task.startedAt || (task.status === "done" || task.status === "cancelled")) return null;
   const started = Date.parse(task.startedAt);
   if (Number.isNaN(started)) return null;
   return Math.max(0, (Date.now() - started) / 86400000);
@@ -79,12 +79,16 @@ export function taskExceptions(
 export type TaskHoldup =
   | { kind: "blocked"; text: string | null }
   | { kind: "waiting"; text: string | null }
+  | { kind: "capacity"; text: string | null }
   /** Ready work the scheduler holds until these prerequisites are done. */
   | { kind: "prerequisites"; ids: string[] };
 
 export function taskHoldup(task: RelayTaskListItem): TaskHoldup | null {
   if (task.status === "blocked") return { kind: "blocked", text: taskBlocker(task).reason };
   if (task.status === "waiting_for_human") return { kind: "waiting", text: task.awaiting?.text?.trim() || null };
+  if (task.status === "queued" && task.dispatchOutcome?.state === "queued" && task.dispatchOutcome.code === "task_wip_limit") {
+    return { kind: "capacity", text: task.dispatchOutcome.message ?? null };
+  }
   if (waitsOnPrerequisites(task)) return { kind: "prerequisites", ids: task.waitingOn ?? [] };
   return null;
 }

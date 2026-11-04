@@ -85,7 +85,7 @@ def _pick_up(
 ) -> tuple[dict[str, Any], str, str]:
     task_id = current["id"]
     ensure_issue_in_project(current)
-    if current.get("status") not in ("backlog", "assigned"):
+    if current.get("status") not in ("backlog", "assigned", "queued"):
         raise HTTPException(409, "task_not_dispatchable")
     if ctx.task_store.open_prerequisites_for([task_id]).get(task_id):
         raise HTTPException(409, "task_prerequisites_open")
@@ -154,7 +154,7 @@ RUN_LEDGER_LIMIT = 30
 RUN_LEDGER_MAX_LIMIT = 200
 # The task statuses that end a run. There is no "failed" task status — a run
 # that went wrong lands in `blocked`, carrying the reason that put it there.
-RUN_TERMINAL_STATUSES = ("done", "blocked")
+RUN_TERMINAL_STATUSES = ("done", "blocked", "cancelled")
 
 
 def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:

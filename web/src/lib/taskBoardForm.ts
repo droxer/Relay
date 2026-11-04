@@ -208,7 +208,7 @@ export function clearTaskAssignment(form: TaskBoardFormState): TaskBoardFormStat
   }
   return {
     ...cleared,
-    status: cleared.status === "assigned" ? "backlog" : cleared.status,
+    status: (cleared.status === "assigned" || cleared.status === "queued") ? "backlog" : cleared.status,
   };
 }
 
