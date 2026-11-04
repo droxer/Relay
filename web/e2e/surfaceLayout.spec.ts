@@ -471,3 +471,38 @@ test("dragging the thread rail moves the rail, and stops where CSS stops it", as
   expect(stored).toBeLessThanOrEqual(after);
   await page.context().close();
 });
+
+test("a task's file preview keeps its header actions inside it on a phone", async ({ browser }) => {
+  /* The narrow-pane rules (artifact.css, the artifact-preview container query)
+     once sat above the base header rule, so its fixed height and padding won
+     and the wrapped actions line was cut off by the header's overflow:hidden. */
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  const shipped = {
+    id: "ship", title: "Ship the release", projectId: "launch", status: "review", description: "", priority: "normal",
+    isRoutine: false, linkedSessionIds: [], ownerUserId: "review-user", createdAt: stamp, updatedAt: stamp, events: [], activity: [],
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [{ id: "launch", name: "Launch", enabled: true, members: [], ownerUserId: "review-user", computerId: "c", createdAt: stamp, updatedAt: stamp }], tasks: [shipped], sandboxes: [], skills: [], files: [], entries: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (path.endsWith("/tasks/ship")) body = shipped;
+    if (path.endsWith("/tasks/ship/artifacts")) body = { artifacts: [{ id: "notes", sessionId: "run", kind: "workspace_file", title: "release-notes.md", path: "artifacts/release-notes.md", contentType: "text/markdown", bytes: 100, createdAt: stamp }] };
+    if (path.endsWith("/threads/run/artifacts/notes")) {
+      await route.fulfill({ status: 200, contentType: "text/plain", body: "# Release notes\n\nReady to ship." });
+      return;
+    }
+    if (path.endsWith("/events")) body = { events: [] };
+    if (path.endsWith("/runs")) body = { runs: [] };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/tasks/ship?project=launch&tab=workspace");
+  const drawer = page.getByRole("dialog");
+  await drawer.getByRole("button", { name: /release-notes.md/ }).click();
+  const header = drawer.locator(".artifact-preview-header");
+  await expect(header).toBeVisible();
+  const [headerBox, downloadBox] = await Promise.all([header.boundingBox(), header.locator("a[download]").boundingBox()]);
+  expect(downloadBox!.y + downloadBox!.height).toBeLessThanOrEqual(headerBox!.y + headerBox!.height + 1);
+  expect(downloadBox!.x + downloadBox!.width).toBeLessThanOrEqual(headerBox!.x + headerBox!.width + 1);
+  await context.close();
+});
