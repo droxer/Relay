@@ -190,6 +190,7 @@ export function TaskRecordPage({
   );
   const actions = (
     <TaskRecordActions
+      readingFile={tab === "artifacts"}
       task={task}
       readOnly={readOnly}
       busyAction={busyAction}

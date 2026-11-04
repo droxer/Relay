@@ -18,6 +18,7 @@ import { recordActions, type RecordAction } from "./recordActions";
 export function TaskRecordActions({
   task,
   readOnly = false,
+  readingFile = false,
   busyAction,
   onRun,
   onCancel,
@@ -27,6 +28,8 @@ export function TaskRecordActions({
   task: RelayTaskListItem;
   /** The task's project is closed for work — the record is readable, not actionable. */
   readOnly?: boolean;
+  /** Let file navigation lead on phones; execution stays in More actions. */
+  readingFile?: boolean;
   busyAction: RecordAction | null;
   onRun: () => void;
   onCancel: () => void;
@@ -39,13 +42,14 @@ export function TaskRecordActions({
   const actions = recordActions(task, { readOnly });
   // One action at a time: every button reads the same lock the record holds.
   const busy = busyAction !== null;
+  const compact = phone && readingFile;
   /* Editing and deleting change the room too, so they go with the rest. An
      archived project keeps its records readable and nothing more. */
   if (readOnly) return null;
 
   return (
     <>
-      {actions.includes("run") ? (
+      {actions.includes("run") && !compact ? (
         <Button type="button" variant="default" size="dense" loading={busyAction === "run"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.run_now")}
@@ -58,7 +62,7 @@ export function TaskRecordActions({
           {t("issues.add_to_project")}
         </Button>
       ) : null}
-      {actions.includes("retry") ? (
+      {actions.includes("retry") && !compact ? (
         <Button type="button" variant="default" size="dense" loading={busyAction === "retry"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.retry_run")}
@@ -98,6 +102,12 @@ export function TaskRecordActions({
           }
         />
         <DropdownMenuContent align="end">
+          {compact && (actions.includes("run") || actions.includes("retry")) ? (
+            <DropdownMenuItem disabled={busy} onClick={onRun}>
+              <ActionStart size={ICON.sm} aria-hidden="true" />
+              {t(actions.includes("retry") ? "record.retry_run" : "record.run_now")}
+            </DropdownMenuItem>
+          ) : null}
           {phone ? (
             <>
               {actions.includes("cancel") ? (
