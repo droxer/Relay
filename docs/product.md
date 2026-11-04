@@ -1,3 +1,164 @@
+# Relay Product Context
+
+<!-- impeccable:product-schema 1 -->
+
+This record describes the current product for design and implementation work.
+The original Product Plan V1.0 is preserved below as strategic direction. Its
+market scenarios, business models, illustrative ROI, and roadmap are proposals,
+not evidence that those capabilities or outcomes have shipped.
+
+## Platform
+
+web
+
+## Users
+
+The current application serves people who own and coordinate agents, computers,
+threads, tasks, and projects. Administrators manage users and shared computing
+resources. These roles are established by the implemented workflows in
+[README.md](../README.md) and the [domain glossary](../CONTEXT.md).
+
+The preserved strategic plan also identifies sales, customer success, product,
+engineering, consulting, training, and management audiences. Their commercial
+priority relative to today's agent-coordination workflows remains an open
+product decision; a design task must not silently change that priority.
+
+## Product Purpose
+
+Relay helps people give work to agents, follow execution, answer questions and
+permission requests, and review results through a shared record. Home brings
+work needing attention together with running work and upcoming tasks.
+
+The strategic purpose remains to amplify people and free time for valuable
+work. The current implementation supports that purpose through threads, tasks,
+automations, projects, agents, teams, skills, and connected computers. Product
+success means helping people complete and review work; quantified productivity
+or business outcomes require evidence before being claimed.
+
+## Positioning
+
+Relay is the control plane for user-owned agents. A person gives agents names,
+roles, and skills, chooses the computer where work runs, and keeps requests,
+execution history, and results connected. The backend coordinates execution;
+registered Daemon Nodes execute agents on computers outside the control plane.
+
+The existing enterprise AI-partner vision is retained as a broader direction.
+It must not be presented as proof of shipped CRM, sales, customer-success,
+organizational-memory, or company-wide analytics integrations.
+
+## Operating Context
+
+- People connect computers and configure agent runtimes, then use threads for
+  interactive work, tasks for tracked work, automations for recurring or
+  triggered work, and projects for a shared workspace and agent roster.
+- Agents run through supported runtimes such as Codex, Claude Code, Pi,
+  OpenCode, and Kimi. Availability depends on the connected computer and its
+  reported runtime readiness.
+- A project and a team have a computer context. Designs must preserve that
+  context when assigning work or presenting execution state.
+- The web interface supports desktop and mobile layouts, light and dark
+  appearance, and English and Simplified Chinese content.
+- Local frontend development uses `make web` on `http://127.0.0.1:5000`, with
+  API requests proxied to the backend. A production static export can be served
+  by the backend. See [local development](local-development.md).
+
+## Capabilities and Constraints
+
+Relay is a responsive browser application with installable web-app support.
+Mobile web remains the same product; this repository does not establish a
+separate native iOS or Android interface.
+
+- Home, Threads, Tasks, Automations, Projects, Agents, Teams, Computers, Skills,
+  Settings, and the Admin Console are implemented application surfaces.
+- Agent execution belongs on Daemon Nodes, never in the backend. Show real
+  runtime, computer, and execution state rather than assuming that an online
+  computer is ready to accept work.
+- Preserve permission prompts, structured questions, review actions, stop and
+  recovery paths, and the history that explains what happened.
+- Use [CONTEXT.md](../CONTEXT.md) for domain terminology. A User, Account,
+  Computer, Daemon Node, Logical Agent, Agent Runtime, and Placement have
+  distinct meanings.
+- Features and availability depend on deployment configuration. Channels is
+  disabled by default. GitHub issue import and private-repository connection
+  must follow the current UI and API capability contract; a coming-soon action
+  must not be described as available.
+- Preserve the separation between the public landing/authentication entry and
+  the heavier signed-in application. Do not load the whole application merely
+  to render the landing page.
+- Data shown to users must come from real operational state. Browser test and
+  marketing screenshot fixtures are demonstrations, not production records.
+
+## Brand Commitments
+
+The product name is Relay. The existing brand line is “The control plane for
+your AI workforce”; current product copy also describes putting agents to work
+on your own computers. Keep the principle of amplifying people rather than
+replacing them.
+
+Use the existing assets in [assets/brand](../assets/brand/), including
+`relay-logo.svg` and `relay-mark.svg`. Follow current product terminology and
+supported translations. This context update does not choose a new visual
+identity or replace the existing interface system.
+
+## Evidence on Hand
+
+- [README.md](../README.md): current product tour, feature descriptions, setup,
+  and operating requirements.
+- [CONTEXT.md](../CONTEXT.md): canonical domain language and ownership rules.
+- [System architecture](system-architecture.md), [API contract](api.md), and
+  the executable application: implementation and capability evidence.
+- [Product screenshots](images/): demonstrations generated from screenshot
+  fixtures, available in English and Simplified Chinese. They are not customer
+  results or testimonials.
+- [Mobile design review](testing/mobile-design-review.md): rendered-layout
+  findings, fixes, verification scope, and remaining environment limitations.
+- [LICENSE](../LICENSE): MIT license terms. Do not invent other licensing or
+  purchasing commitments from the strategic business-model proposals below.
+
+The illustrative ROI and proposed metrics in the original plan are not measured
+outcomes. Customer quotes, adoption counts, benchmarks, certifications, and
+performance guarantees need their own verified sources before being published.
+
+## Product Principles
+
+1. Amplify people: make it straightforward to delegate work, intervene, and
+   decide whether a result is acceptable.
+2. Keep execution accountable: preserve the computer context, permissions,
+   actual execution state, and shared history behind each result.
+3. Make work understandable: show what needs attention and offer a clear next
+   action, including when work is blocked or requires recovery.
+4. Keep the interface simple, clean, and usable on phones while retaining the
+   capabilities needed to complete the work.
+5. Describe shipped capabilities honestly; keep strategic ambitions and
+   illustrative business benefits separate from implementation evidence.
+
+## Accessibility & Inclusion
+
+Preserve keyboard navigation, visible focus, accessible control names, reduced
+motion support, and readable light/dark states. The existing touch-target token
+is 44px, and touch text inputs have a 16px floor to avoid mobile focus zoom.
+Mobile layouts must accommodate long content, translations, safe areas, and
+short landscape viewports without making essential actions unreachable.
+
+These are implementation requirements and design commitments, not a claim of
+certified accessibility conformance. Physical-device and assistive-technology
+coverage should be stated alongside verification results.
+
+## Open Decisions
+
+- The primary commercial audience and sequencing of the broader enterprise
+  scenarios are not resolved by this context refresh.
+- The preserved roadmap's relative month ranges are planning horizons, not
+  dated delivery commitments.
+- Pricing, commercial packages, customer outcomes, and availability claims
+  must be confirmed before they become public product copy.
+
+---
+
+The following strategic plan is preserved verbatim for continuity. Where it
+proposes future capabilities or markets, use the current product record above
+and executable contracts to determine what can be represented as available.
+
 # Relay Product Plan V1.0
 
 <p align="center">
