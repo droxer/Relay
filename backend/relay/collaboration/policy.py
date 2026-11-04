@@ -65,7 +65,7 @@ MISSING_PLAN_ERROR = "The coordinator did not provide a bounded work plan."
 REPORT_REMINDED_STATE_KEY = "_relay_report_reminded"
 REPORT_REMINDER_TARGET_STATE_KEY = "_relay_report_reminder_target"
 REPORT_REMINDER_NOTE = (
-    "Your last turn ended without writing the round result file, so Relay "
+    "Your last turn ended without a complete required report in the round result file, so Relay "
     "cannot tell whether the work is finished. Check the workspace and the "
     "conversation above, then decide. If real work remains, do it now. Then "
     'write the file: "done" when the requested work is complete, or '
@@ -265,7 +265,9 @@ def report_reminder_transition(
     ``unreported`` is the caller's reading of what this turn owed: a work
     report under the work protocol, else the round's verdict. A verdict the
     daemon refused was filed, and an answer turn keeps the contribution it
-    answers for; neither is reminded.
+    answers for; neither is reminded. An overall done/continue verdict does
+    not replace a required work report. A blocked verdict still waits for
+    the human instead of automatically repeating the step.
     """
     index = run_request.get("currentIndex", 0)
     reminded = list(state.get(REPORT_REMINDED_STATE_KEY) or [])
@@ -273,13 +275,17 @@ def report_reminder_transition(
         not unreported
         or not assignment.get("required", True)
         or assignment["assignmentId"] in reminded
-        or ROUND_RESULT_STATE_KEY in state
+        or (state.get(ROUND_RESULT_STATE_KEY) or {}).get("status") == "blocked"
         or ROUND_RESULT_REJECTED_STATE_KEY in state
         or is_answer_turn(run_request.get("state") or {}, index)
     ):
         return None
+    # The follow-up must file a fresh verdict; the incomplete turn's overall
+    # verdict cannot certify work the follow-up may still change.
+    reminded_state = without_report_reminder(state)
+    reminded_state.pop(ROUND_RESULT_STATE_KEY, None)
     return index, {
-        **without_report_reminder(state),
+        **reminded_state,
         REPORT_REMINDED_STATE_KEY: [*reminded, assignment["assignmentId"]],
         REPORT_REMINDER_TARGET_STATE_KEY: assignment["assignmentId"],
     }

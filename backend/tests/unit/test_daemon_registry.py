@@ -4664,8 +4664,10 @@ def test_single_agent_work_outcome_is_independent_of_execution(task_bound, repor
                 "taskGoal": "Resolve the failure", "assignments": [{"agent": "codex"}],
                 **({"taskId": task["id"]} if task else {}),
             })
-            # A turn that filed nothing is asked once to file it before the round ends.
-            for _turn in range(1 if report else 2):
+            # Missing work reports follow up automatically even when an
+            # overall verdict was filed. A repeated omission stops once.
+            missing_work = report is None or (report["status"] != "blocked" and "work" not in report)
+            for _turn in range(2 if missing_work else 1):
                 [command] = registry.take_commands("sbx_alice", "node_token")
                 assert command["state"].get("work_result_required") is True
                 assert ("repair_note" in command["state"]) is bool(_turn)
@@ -4684,6 +4686,29 @@ def test_single_agent_work_outcome_is_independent_of_execution(task_bound, repor
                 assert updated["status"] == task_status
                 if expected == "unfinished":
                     assert updated["continuationSessionId"] == session["id"]
+    asyncio.run(flow())
+
+
+def test_missing_work_report_follows_up_and_finishes_without_a_user_message():
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, _, registry = _pipeline_registry(root, work_results=True)
+            task = registry.task_store.create_task({"title": "Finish the work", "acceptancePolicy": "automatic"})
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Finish the work", "taskId": task["id"], "assignments": [{"agent": "codex"}],
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            _start_run(registry, command)
+            _complete_round_turn(registry, command, roundResult={"status": "done"})
+            assert registry.task_store.get_task(task["id"])["status"] != "waiting_for_human"
+            reminder = _take_report_reminder(registry, command)
+            _complete_round_turn(registry, reminder, roundResult={
+                "status": "done", "work": {"status": "done", "evidence": ["Regression checks passed"]},
+            })
+            assert registry.task_store.get_task(task["id"])["status"] == "done"
+            assert sessions.get_session(session["id"])["workOutcome"] == "reported_done"
+            assert registry.take_commands("sbx_alice", "node_token") == []
+
     asyncio.run(flow())
 
 
@@ -5536,7 +5561,7 @@ def _take_report_reminder(registry: Any, command: dict[str, Any]) -> dict[str, A
     [reminder] = registry.take_commands("sbx_alice", "node_token")
     assert reminder["assignmentId"] == command["assignmentId"]
     assert reminder["sessionId"] == command["sessionId"]
-    assert "without writing the round result file" in reminder["state"]["repair_note"]
+    assert "without a complete required report" in reminder["state"]["repair_note"]
     # The thread says why this turn exists, so it never reads as more of the
     # answer the agent already finished.
     registry.handle_event("sbx_alice", {

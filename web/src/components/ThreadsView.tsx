@@ -316,6 +316,12 @@ export function ThreadsView({
   // answers that question. Naming it lets the backend refuse a reply that a
   // newer question has overtaken instead of resuming the task with it.
   const waitingQuestionId = waiting?.questionId;
+  // A stopped run offers ordinary follow-ups beneath its response. Only a
+  // question or approval needs a prompt attached to the reply box.
+  const followUpWait = waiting?.kind === "check" || waiting?.kind === "budget";
+  const recoverySteps = followUpWait
+    ? [t("awaiting.choice_continue"), t("awaiting.choice_status")]
+    : [];
   // A finished turn's suggested follow-ups, while nothing else claims the
   // thread: no run, no question, no decision, no open permission prompt.
   const nextSteps = useMemo(
@@ -610,9 +616,16 @@ export function ThreadsView({
                   onAnswer={onAnswerPermission}
                 />
                 <NextSteps
-                  key={activeSession?.id}
-                  steps={nextSteps}
-                  onSend={(text) => composerRef.current?.send(text) ?? Promise.resolve(false)}
+                  key={JSON.stringify([activeSession?.id, activeSession?.activeRoundId, waitingQuestionId, followUpWait])}
+                  steps={followUpWait ? recoverySteps : nextSteps}
+                  onSend={(text) => {
+                    const status = followUpWait && text === t("awaiting.choice_status");
+                    const reply = followUpWait
+                      ? t(status ? "awaiting.choice_status_reply" : "awaiting.choice_continue_reply")
+                      : text;
+                    return composerRef.current?.send(reply, status ? { intent: "discuss" } : undefined)
+                      ?? Promise.resolve(false);
+                  }}
                 />
                 {awaitingDecision ? (
                   <DecisionBar
@@ -656,12 +669,12 @@ export function ThreadsView({
           running={running}
           onSend={sendAnswering}
           onCancelRun={onCancelRun}
-          placeholder={waiting
+          placeholder={waiting && !followUpWait
             ? t(waiting.kind === "approval" ? "awaiting.placeholder_changes" : "awaiting.placeholder", { agent: waitingAgentName })
             : landing && selectedUser && activeAgentDisplayName
               ? t("composer.placeholder_landing", { agent: activeAgentDisplayName })
               : undefined}
-          prompt={waiting ? (
+          prompt={followUpWait ? null : waiting ? (
             <AwaitingInputPrompt
               key={activeSession?.id}
               waiting={waiting}
