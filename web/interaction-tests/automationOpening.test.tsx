@@ -36,3 +36,9 @@ it("marks a scheduled run with no trigger block as scheduled", () => {
   const container = renderOpening("Digest\n\nCollect the news.", true);
   expect(container.querySelector(".automation-opening-trigger")?.textContent).toBe("automation.ledger.schedule");
 });
+
+it("draws a run with no brief and no events as its header line alone", () => {
+  const container = renderOpening("Digest", true);
+  screen.getByRole("heading", { name: "Digest" });
+  expect(container.querySelector(".turn-body")).toBeNull();
+});
