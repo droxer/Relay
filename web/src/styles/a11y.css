@@ -2,11 +2,13 @@
    Accessibility / guideline patches
    ===================================================================== */
 
-/* Headings: prefer balanced line breaks to prevent widows */
+/* Headings: prefer balanced line breaks to prevent widows. Never a heading
+   that must stay on one line (.mobile-topbar-title): `text-wrap` is a
+   shorthand that resets `text-wrap-mode` to `wrap`, so a later `balance`
+   undoes its `white-space: nowrap`. */
 .login-headline,
 .adm-auth-title,
 .page-header-title--display,
-.mobile-topbar-title,
 .adm-drawer-title,
 .dialog-title {
   text-wrap: balance;
