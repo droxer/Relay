@@ -427,6 +427,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
           titleAs="h2"
           titleVariant="title"
           count={headerCount}
+          topbarActions
           actions={hasHeaderActions ? (
             <>
               {headerError ? (
@@ -450,10 +451,13 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                   type="button"
                   className="adm-create-action"
                   onClick={() => setInviteEmailOpen(true)}
+                  aria-label={t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
                   tooltip={t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
                 >
                   <AdminInvite size={ICON.md} aria-hidden="true" />
-                  {t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
+                  <span className="adm-create-action-label">
+                    {t(canEmailInvites ? "admin.waitlist.invite_email_cta" : "admin.waitlist.invite_link_cta")}
+                  </span>
                 </Button>
               ) : null}
             </>

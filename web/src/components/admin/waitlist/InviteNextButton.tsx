@@ -56,10 +56,11 @@ export function InviteNextButton({ onInvited }: { onInvited: (results: WaitlistI
       className="adm-create-action"
       onClick={() => void handleClick()}
       disabled={pending}
+      aria-label={t("admin.waitlist.invite_next")}
       tooltip={t("admin.waitlist.invite_next")}
     >
       <AdminInvite size={ICON.md} aria-hidden="true" />
-      {t("admin.waitlist.invite_next")}
+      <span className="adm-create-action-label">{t("admin.waitlist.invite_next")}</span>
     </Button>
   );
 }

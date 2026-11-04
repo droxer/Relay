@@ -560,6 +560,15 @@ tr.is-pulse > td:first-child::after {
   min-height: 0;
 }
 
+/* Phones: the footer's 44px touch targets already put ~22px of air under each
+   glyph, so the card's full bottom padding left more below the footer than the
+   divider has above it. */
+@media (max-width: 820px) {
+  .adm-emp-card.adm-node-card {
+    padding-block-end: var(--sp-3);
+  }
+}
+
 .adm-emp-card .adm-node-card-body {
   gap: var(--sp-3);
   overflow: visible;
