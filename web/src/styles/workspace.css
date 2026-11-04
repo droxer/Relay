@@ -735,6 +735,8 @@
    the width the reading needs, and every fact in it is a tab away. */
 .record-layout:has(> .workspace-body > .record-artifacts-panel) {
   grid-template-columns: minmax(0, 1fr);
+  /* The properties rail is hidden: do not leave its mobile grid row behind. */
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .record-layout:has(> .workspace-body > .record-artifacts-panel) > .record-layout-aside {
@@ -784,7 +786,7 @@
 }
 
 @container record-page (max-width: 768px) {
-  .record-layout {
+  .record-layout:not(:has(> .workspace-body > .record-artifacts-panel)) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }

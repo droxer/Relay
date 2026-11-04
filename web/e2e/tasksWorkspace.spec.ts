@@ -20,7 +20,7 @@ for (const mobile of [false, true]) {
         { id: "checks", sessionId: "run", kind: "workspace_file", title: "checks.txt", path: "artifacts/checks.txt", contentType: "text/plain", bytes: 50, createdAt: stamp },
       ] };
       if (path.endsWith("/threads/run/artifacts/notes") || path.endsWith("/threads/run/artifacts/checks")) {
-        await route.fulfill({ status: 200, contentType: "text/plain", body: path.endsWith("/notes") ? "# Release notes\n\nReady to ship." : "All checks passed." });
+        await route.fulfill({ status: 200, contentType: "text/plain", body: path.endsWith("/notes") ? "# Release notes\n\n" + "Ready to ship.\n\n".repeat(40) + "End of release notes." : "All checks passed." });
         return;
       }
       if (path.endsWith("/events")) body = { events: [] };
@@ -94,6 +94,17 @@ for (const mobile of [false, true]) {
     await notes.click();
     if (!mobile) await page.screenshot({ path: "/tmp/relay-task-files-desktop.png" });
     await expect(drawer.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
+    // The preview must use the remaining drawer height, including when the
+    // narrow layout hides its properties panel. A spare grid row used to
+    // leave half the phone blank below a 360px preview.
+    const preview = drawer.locator(".artifact-preview-body");
+    await expect.poll(async () => {
+      const [body, frame] = await Promise.all([preview.boundingBox(), drawer.boundingBox()]);
+      return body && frame ? Math.abs(body.y + body.height - frame.y - frame.height) : Infinity;
+    }).toBeLessThan(3);
+    await preview.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect(drawer.getByText("End of release notes.", { exact: true })).toBeInViewport();
+    await preview.evaluate((element) => { element.scrollTop = 0; });
     await expect(drawer.locator("a[download]")).toHaveAttribute("href", /\/threads\/run\/artifacts\/notes$/);
     await drawer.getByRole("button", { name: "Source", exact: true }).click();
     await expect(drawer.locator(".code-view")).toContainText("# Release notes");
@@ -115,5 +126,59 @@ for (const mobile of [false, true]) {
     await expect(panel.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  });
+}
+
+for (const width of [320, 390, 820]) {
+  test(`automation preview fills a ${width}px touch screen`, async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ viewport: { width, height: 744 }, hasTouch: true, isMobile: true });
+    const page = await context.newPage();
+    const stamp = "2026-11-03T12:00:00Z";
+    const name = "ai-daily-update-2026-11-03.md";
+    const routine = {
+      id: "daily", title: "AI Daily Updates", description: "", status: "backlog", priority: "normal",
+      isRoutine: true, routineState: "active", routineTriggers: [], linkedSessionIds: [], assignedAgentId: "agent",
+      ownerUserId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [],
+    };
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [], tasks: [routine], skills: [], events: [], runs: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Reader", role: "user", theme: "dark", language: "en" } };
+      if (path.endsWith("/tasks/daily")) body = routine;
+      if (path.endsWith("/tasks/daily/artifacts")) body = { artifacts: [{ id: "digest", sessionId: "run", kind: "workspace_file", title: name, path: `artifacts/${name}`, contentType: "text/markdown", bytes: 9000, createdAt: stamp }] };
+      if (path.endsWith("/threads/run/artifacts/digest")) {
+        await route.fulfill({ contentType: "text/markdown", body: "# AI 每日更新 | 2026 年 11 月 3 日\n\n" + "本期按北京时间整理，可核实的进展与原始文件。\n\n".repeat(50) + "最后一段。" });
+        return;
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto("/automations/daily?tab=artifacts");
+    const drawer = page.getByRole("dialog");
+    await drawer.getByRole("button", { name: new RegExp(name) }).click();
+    const preview = drawer.locator(".artifact-preview-body");
+    await expect(drawer.getByRole("heading", { name: /AI 每日更新/ })).toBeVisible();
+    await expect.poll(async () => {
+      const [body, frame] = await Promise.all([preview.boundingBox(), drawer.boundingBox()]);
+      return body && frame ? Math.abs(body.y + body.height - frame.y - frame.height) : Infinity;
+    }).toBeLessThan(3);
+    const actions = drawer.locator(".artifact-preview-actions");
+    const [controls, toggle] = await Promise.all([actions.boundingBox(), actions.locator(".code-view-toolbar").boundingBox()]);
+    expect(Math.abs(controls!.x - toggle!.x)).toBeLessThan(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath("preview.png") });
+    await preview.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect(drawer.getByText("最后一段。", { exact: true })).toBeInViewport();
+    await drawer.getByRole("button", { name: "More actions", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Run now", exact: true })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Run now", exact: true }).press("Escape");
+    await drawer.getByRole("button", { name: "Source", exact: true }).click();
+    await expect(drawer.locator(".code-view")).toContainText("# AI 每日更新");
+    if (width <= 640) {
+      await drawer.getByRole("button", { name: "Back to files", exact: true }).click();
+      await expect(drawer.getByRole("button", { name: new RegExp(name) })).toBeFocused();
+    } else {
+      await expect(drawer.getByRole("button", { name: new RegExp(name) })).toBeVisible();
+    }
+    await context.close();
   });
 }

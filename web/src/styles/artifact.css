@@ -540,7 +540,22 @@
   .artifact-preview-actions {
     order: 2;
     flex: 1 0 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .artifact-preview-actions > :last-child {
+    margin-left: auto;
+  }
+
+  .artifact-preview-body {
+    --doc-inset-inline: var(--sp-4);
+    --doc-inset-block: var(--sp-4);
+  }
+
+  .artifact-preview-body .doc-prose h1 {
+    font-size: var(--fs-5);
+    text-wrap: balance;
   }
 }
 
