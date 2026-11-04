@@ -102,7 +102,8 @@ export function NotificationBell({
       <PopoverContent side={side} align={align} className="notif-panel" aria-labelledby={headingId}>
         <header className="notif-head">
           <h2 id={headingId} className="notif-heading">{t("notifications.title")}</h2>
-          <div className="notif-actions">
+          {/* Both actions act on the list, so an empty inbox shows neither. */}
+          {controller.notices.length > 0 ? <div className="notif-actions">
             <Button
               type="button"
               variant="ghost"
@@ -118,12 +119,11 @@ export function NotificationBell({
               variant="ghost"
               size="xs"
               className="notif-clear-all"
-              disabled={controller.notices.length === 0}
               onClick={controller.clearAll}
             >
               {t("notifications.clear_all")}
             </Button>
-          </div>
+          </div> : null}
         </header>
         <NotificationList
           controller={controller}

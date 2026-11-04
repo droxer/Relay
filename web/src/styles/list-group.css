@@ -164,7 +164,7 @@
   .list-group-band {
     padding: var(--sp-2) var(--sp-4);
     border-bottom: 0;
-    background: var(--surface-list);
+    background: var(--surface-band);
   }
 
   .list-group-band .list-group-count {

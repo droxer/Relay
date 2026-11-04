@@ -39,8 +39,8 @@ export function TaskBoardHeaderActions({
   topbar?: boolean;
 }) {
   /* A phone list is kept fresh by the shell's polling, and its top bar has
-     room for three glyphs beside the bell, not four: refresh is a desktop
-     affordance. */
+     room for three glyphs beside the bell, not four: refresh and the GitHub
+     import are desktop affordances. */
   const phone = useMediaQuery(PHONE_QUERY);
   const buttons = (
     <>
@@ -56,7 +56,7 @@ export function TaskBoardHeaderActions({
       >
         <NavRefresh size={ICON.md} />
       </Button> : null}
-      {onImport && importLabel ? <Button
+      {onImport && importLabel && !phone ? <Button
         type="button"
         variant="ghost"
         className="page-header-icon-action"

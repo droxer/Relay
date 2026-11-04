@@ -2605,6 +2605,7 @@
   },
   "filters": {
     "add_filter": "添加筛选",
+    "display": "显示",
     "search_fields": "搜索筛选项…",
     "search_operators": "搜索条件…",
     "search_options": "搜索…",

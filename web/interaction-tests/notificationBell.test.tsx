@@ -115,8 +115,9 @@ describe("NotificationBell", () => {
     expect(screen.getByRole("status").textContent).toBe("notifications.empty");
     const trigger = screen.getByRole("button", { name: "notifications.title" });
     expect(trigger.querySelector(".notif-bell-badge")).toBeNull();
-    expect((screen.getByRole("button", { name: "notifications.mark_all_read" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "notifications.clear_all" }) as HTMLButtonElement).disabled).toBe(true);
+    // Both act on the list, so an empty inbox offers neither.
+    expect(screen.queryByRole("button", { name: "notifications.mark_all_read" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "notifications.clear_all" })).toBeNull();
     fireEvent.click(screen.getByText("notifications.settings_link"));
     expect(onOpenSettings).toHaveBeenCalled();
   });

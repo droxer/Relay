@@ -594,6 +594,16 @@
     transition: none;
   }
 
+  /* Home's count rides the glyph's top-right corner. The rail anchors it to
+     the button's corner, which on a wide tab column landed on the label.
+     Through the panel to outrank the expanded-rail placement. */
+  .sidenav-panel .sidenav-btn .sidenav-count {
+    top: 0;
+    right: auto;
+    left: calc(50% + var(--sp-1));
+    transform: none;
+  }
+
   .thread-panel,
   .chat-panel,
   .channels-page,

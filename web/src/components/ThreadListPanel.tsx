@@ -54,6 +54,7 @@ export function ThreadListPanel({
   setQuery,
   selectedSessionId,
   selectedProjectId,
+  listOnScreen,
   onSelectThread,
   onSelectProject,
   onCreateProject,
@@ -81,6 +82,9 @@ export function ThreadListPanel({
   setQuery: Dispatch<SetStateAction<string>>;
   selectedSessionId: string | undefined;
   selectedProjectId: string | null;
+  /** On a phone, whether this pane is the one showing. A selection outlives
+   *  the trip back to the list, so it cannot say. */
+  listOnScreen: boolean;
   onSelectThread: (sessionId: string) => void;
   onSelectProject: (projectId: string | null) => void;
   onCreateProject: () => void;
@@ -184,7 +188,7 @@ export function ThreadListPanel({
         // On a phone the rail's create joins every other list's in the top
         // bar; an open thread or project replaces this pane, so it stands
         // down then (the project page brings its own create).
-        topbarActions={selectedSessionId || selectedProjectId ? "inactive" : true}
+        topbarActions={listOnScreen ? true : "inactive"}
         actions={(() => {
           // One plus for both modes — the shared list-header create
           // affordance, in its primary tier (.page-header-icon-action, shell.css).

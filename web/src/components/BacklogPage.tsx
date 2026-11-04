@@ -326,7 +326,6 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
               tags={tagOptions}
               onChange={setFilters}
               sortMenu={
-                <>
                   <SortMenu
                     /* Status belongs to the section navigation. */
                     options={[
@@ -339,9 +338,8 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
                     onSortChange={setSort}
                     label={t("backlog.sort_label")}
                   />
-                  {actionsInFilterBar ? <div className="backlog-project-actions">{headerActions}</div> : null}
-                </>
               }
+              actions={actionsInFilterBar ? <div className="backlog-project-actions">{headerActions}</div> : null}
             />
           </>
         ) : null}

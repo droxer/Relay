@@ -62,6 +62,7 @@ export function BacklogFiltersBar({
   tags = [],
   showSource = true,
   onChange,
+  actions,
 }: {
   filters: BacklogFilters;
   agents: UserAgent[];
@@ -73,6 +74,10 @@ export function BacklogFiltersBar({
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */
   sortMenu?: ReactNode;
+  /** The page's own controls riding the toolbar (the board's view toggle and
+   *  create). Unlike `sortMenu`, never folded behind the phone's Display menu:
+   *  they portal on into the top bar from here. */
+  actions?: ReactNode;
   extraField?: ExtraBacklogFilter;
 }) {
   const { t } = useTranslation();
@@ -126,6 +131,7 @@ export function BacklogFiltersBar({
       onClear={() => onChange({ ...initialFilters, status: filters.status })}
       clearableCount={BACKLOG_BAR_KEYS.filter((key) => filters[key] !== "all" && filters[key] !== "").length}
       trailing={sortMenu}
+      actions={actions}
     />
   );
 }

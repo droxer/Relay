@@ -63,6 +63,10 @@
   /* 500 is the .code utility's weight (tokens/base.css), copied verbatim
      with the rest of its body — see the note above. */
   font-weight: 500;
+  /* A chip that wraps at a narrow width (`rowcount == 1` on a phone) gets its
+     padding and corners on each line, instead of two half-chips. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* Transcript code — inline chips and fences — steps down with the transcript

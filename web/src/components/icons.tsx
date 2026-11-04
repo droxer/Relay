@@ -67,6 +67,7 @@ import {
   MailPlus,
   RotateCw,
   SlidersHorizontal,
+  SlidersVertical,
   Ungroup,
   Plus,
   Power,
@@ -488,6 +489,10 @@ export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 // nav are one object seen from two surfaces.
 export const AdminNode = withStandardStroke(ChipGlyph, "AdminNode");
 export const AdminManageExecutors = withStandardStroke(Settings2, "AdminManageExecutors");
+// A list's grouping and order, folded behind one glyph on a phone. Vertical
+// faders, not horizontal: SlidersHorizontal is NavBacklog at 18px (see the
+// NavAdmin note above).
+export const ActionDisplayOptions = withStandardStroke(SlidersVertical, "ActionDisplayOptions");
 export const AdminDelete = withStandardStroke(Trash2, "AdminDelete");
 export const AdminRestore = withStandardStroke(RotateCcw, "AdminRestore");
 export const AdminDashboard = withStandardStroke(LayoutDashboard, "AdminDashboard");

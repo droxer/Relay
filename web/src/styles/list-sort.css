@@ -103,6 +103,8 @@ th[data-slot="table-head"] {
   .backlog-page .list-sort-menu { display: flex; }
   .routine-page .list-sort-menu { display: flex; }
   .adm-view .list-sort-menu { display: flex; }
+  /* The task lists' Display popover portals to <body>, out of the page. */
+  .backlog-display-panel .list-sort-menu { display: flex; }
 }
 
 /* ============================ list pager ============================

@@ -2659,6 +2659,7 @@
   },
   "filters": {
     "add_filter": "Add filter",
+    "display": "Display",
     "search_fields": "Search filters…",
     "search_operators": "Search conditions…",
     "search_options": "Search…",

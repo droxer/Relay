@@ -85,6 +85,8 @@ function ProjectLoadingState() {
 
 type ThreadsViewProps = {
   taskThread?: boolean;
+  /** On a phone, the list pane is the one showing (mobile view "threads"). */
+  listOnScreen: boolean;
   directoryMode: "threads" | "projects";
   /** The shell's task list — the project board reads its lanes from it
    *  rather than opening a second observer on the same query. */
@@ -177,6 +179,7 @@ type ThreadsViewProps = {
 
 export function ThreadsView({
   taskThread = false,
+  listOnScreen,
   directoryMode,
   tasks,
   currentUser,
@@ -402,6 +405,7 @@ export function ThreadsView({
            active session outlives the route that opened it. */
         selectedSessionId={projectOverviewState === "hidden" ? activeSession?.id : undefined}
         selectedProjectId={selectedProjectId}
+        listOnScreen={listOnScreen}
         onSelectThread={onSelectThread}
         onSelectProject={onSelectProject}
         onCreateProject={() => setProjectDrawerOpen(true)}

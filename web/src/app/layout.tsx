@@ -78,6 +78,10 @@ const jsonLd = site ? jsonLdScript(softwareJsonLd(site, pageDescription)) : null
 
 export const viewport: Viewport = {
   viewportFit: "cover",
+  /* The shell is 100dvh with the composer docked at its foot; letting the
+     on-screen keyboard resize the layout keeps the composer above it
+     (Chrome on Android; iOS Safari ignores the key). */
+  interactiveWidget: "resizes-content",
 };
 
 // The landing page renders client-side, so its hero image is unknown to the

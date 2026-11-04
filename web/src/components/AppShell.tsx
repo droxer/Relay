@@ -15,25 +15,13 @@ import { CommandMenu as CommandMenuView } from "./CommandMenu";
 import { ShortcutsHelp as ShortcutsHelpView } from "./ShortcutsHelp";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { buildCommands, type CommandId } from "@/lib/commandMenu";
+import { mobileTopbarMode } from "@/lib/mobileTopbar";
 import { taskCreateIntent } from "@/lib/taskCreateIntent";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import type { AppRoute, MobileView } from "@/lib/viewTypes";
 import type { CurrentUser } from "@/types";
 import { Button } from "@/components/ui/button";
 import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
-
-const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
-  home: "nav.home",
-  backlog: "nav.backlog",
-  routine: "nav.routine",
-  agents: "nav.agents",
-  teams: "nav.teams",
-  computers: "nav.computers",
-  skills: "nav.skills",
-  settings: "nav.settings",
-  channels: "nav.channels",
-  admin: "nav.admin",
-};
 
 type MobileChatChrome = {
   artifactCount: number;
@@ -48,6 +36,8 @@ type MobileChatChrome = {
 type AppShellProps = {
   taskWorkspace?: boolean;
   taskThread?: boolean;
+  /** The path named no page; the shell must not dress it as a thread. */
+  notFound?: boolean;
   onNewTask?: () => void;
   route: AppRoute;
   onNavigateRoute: (route: AppRoute) => void;
@@ -97,6 +87,7 @@ const ShortcutsHelp = memo(ShortcutsHelpView);
 export function AppShell({
   taskWorkspace = false,
   taskThread = false,
+  notFound = false,
   onNewTask,
   route,
   onNavigateRoute,
@@ -207,20 +198,10 @@ export function AppShell({
     [isAdmin, t],
   );
 
-  const isThreadRoute = taskThread || route === "main" || (route === "projects" && !taskWorkspace);
-  const directoryLabel = taskThread ? t("thread.back_to_task") : route === "projects" ? t("project.projects") : t("nav.threads");
-  const isMobileChat = isThreadRoute && mobileView === "chat";
-  /* One title line on every route: the open thread in a conversation, the
-     directory ("Threads", "Projects") over its list, and the route's own
-     name everywhere else. Admin and settings name the SURFACE here — the
-     section strip right under the bar already marks the section. */
-  const mobileTitle = isMobileChat
-    ? activeThreadLabel
-    : isThreadRoute
-      ? directoryLabel
-      : taskWorkspace
-        ? t("nav.backlog")
-        : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
+  const topbar = mobileTopbarMode({ route, notFound, taskThread, taskWorkspace, mobileView });
+  const isMobileChat = topbar.chat;
+  const directoryLabel = t(topbar.directoryKey);
+  const mobileTitle = topbar.titleKey === null ? activeThreadLabel : t(topbar.titleKey);
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
   const [leadSlot, setLeadSlot] = useState<HTMLDivElement | null>(null);
   const [titleSlot, setTitleSlot] = useState<HTMLDivElement | null>(null);
@@ -284,7 +265,9 @@ export function AppShell({
           <div className="mobile-topbar-title-slot" ref={setTitleSlot} />
         </div>
         <div className="mobile-topbar-tools">
-          {isMobileChat && mobileChatChrome ? (
+          {/* A new thread has no files yet; a disabled toggle would only take
+              one of the bar's few glyph slots. */}
+          {isMobileChat && mobileChatChrome && !mobileChatChrome.spaceDisabled ? (
             <ArtifactNavButton
               artifactCount={mobileChatChrome.artifactCount}
               inProject={mobileChatChrome.inProject}
