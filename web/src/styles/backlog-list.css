@@ -344,9 +344,12 @@ button.inline-field[aria-expanded="true"] {
 
   .backlog-filter-search-wrap {
     order: -2;
-    flex: 1 1 50%;
+    /* Basis 0 with a floor, not 50%: at 320px a half-row search plus Add
+       filter left no room for the Display glyph, which wrapped onto a row of
+       its own. The search takes what the two controls leave. */
+    flex: 1 1 0;
     width: auto;
-    min-width: 0;
+    min-width: 6rem;
   }
 
   .backlog-filter-chips {

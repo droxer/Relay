@@ -228,6 +228,55 @@ for (const touch of [false, true]) {
   });
 }
 
+const longRoutine = (id: string, extra: Record<string, unknown>) => ({
+  ...routine, id, title: "Quarterly reconciliation of every intercompany ledger export against the treasury statements",
+  assignedAgentId: "agent-long", tags: ["finance-close", "quarter-end-review"], ...extra,
+});
+const phoneRoutines = [
+  longRoutine("routine-a", { routineNextRunAt: "2026-12-31T23:30:00.000Z" }),
+  longRoutine("routine-b", { routineState: "paused" }),
+  { ...routine, id: "routine-c", title: "Short", assignedAgentId: "agent-long", routineNextRunAt: "2026-12-01T09:00:00.000Z" },
+];
+
+for (const width of [320, 375, 390, 820]) {
+  test(`automation rows stay inside a ${width}px phone and keep Run now tappable`, async ({ browser }) => {
+    const page = await openPage(browser, "/automations", true, undefined, undefined, { tasks: phoneRoutines });
+    await page.setViewportSize({ width, height: 844 });
+    const rows = page.locator(".routine-table > tbody > tr");
+    await expect(rows).toHaveCount(phoneRoutines.length);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    // Search, Add filter and the Display glyph share one row, even at 320px.
+    const tops = await Promise.all([".backlog-filter-search-wrap", ".backlog-display-trigger", '.backlog-filter-chips [data-slot="popover-trigger"]'].map((selector) =>
+      page.locator(selector).first().evaluate((element) => Math.round(element.getBoundingClientRect().top))));
+    expect(tops, "filter controls wrapped onto separate rows").toEqual([tops[0], tops[0], tops[0]]);
+    for (let index = 0; index < phoneRoutines.length; index += 1) {
+      const row = rows.nth(index);
+      const metrics = await row.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const inside = (selector: string) => {
+          const target = element.querySelector<HTMLElement>(selector);
+          if (!target || getComputedStyle(target).display === "none") return null;
+          const r = target.getBoundingClientRect();
+          return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+        };
+        return { box: { left: box.left, right: box.right }, title: inside(".backlog-row-title"), run: inside(".backlog-action-primary"), due: inside(".task-col-due"), assignee: inside(".task-col-assignee") };
+      });
+      for (const part of [metrics.title, metrics.due, metrics.assignee, metrics.run]) {
+        if (!part) continue;
+        expect(part.left).toBeGreaterThanOrEqual(metrics.box.left - 1);
+        expect(part.right).toBeLessThanOrEqual(metrics.box.right + 1);
+      }
+      expect(metrics.run, "Run now is drawn").not.toBeNull();
+      expect(metrics.run!.width).toBeGreaterThanOrEqual(44);
+      expect(metrics.run!.height).toBeGreaterThanOrEqual(44);
+      // The title never slides under the action.
+      expect(metrics.title!.right).toBeLessThanOrEqual(metrics.run!.left + 1);
+    }
+    if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}-${width}.png` });
+    await page.context().close();
+  });
+}
+
 /* The shell's rail widths are a two-part contract that no static CSS test can
    check: AppShell writes the DRAGGED width inline on .messenger-shell, and the
    grid track caps it against the viewport. Both halves have to meet on the
