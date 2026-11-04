@@ -16,6 +16,7 @@ import {
   CommandItem as CommandItemPart,
   CommandList,
 } from "@/components/ui/command";
+import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import {
   Dialog,
   DialogBackdrop,
@@ -121,6 +122,11 @@ export function CommandMenu({
                   spellCheck={false}
                   aria-label={t("command.title")}
                   placeholder={t("command.placeholder")}
+                />
+                <OverlayCloseButton
+                  className="command-close"
+                  label={t("sheet.close")}
+                  onClick={onClose}
                 />
               </div>
               <CommandEmpty className="command-empty">

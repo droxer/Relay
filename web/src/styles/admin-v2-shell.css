@@ -49,3 +49,18 @@
 @media (max-width: 640px) {
   .adm-command-status { max-width: 100%; }
 }
+
+@media (max-width: 820px) {
+  /* Invitation actions must wrap within the phone, including long labels. */
+  .admin-console .sec-main > .page-header .page-header-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .admin-console .sec-main > .page-header .page-header-actions > button {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+  }
+}

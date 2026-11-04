@@ -85,7 +85,26 @@
     background: var(--surface-band);
   }
 
+  /* Project names can be much longer than a phone row. Keep the whole
+     label readable instead of painting it past the table's clipped edge. */
+  .issues-band-inner {
+    align-items: baseline;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .issues-band .list-group-name {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .issues-band-hint {
+    flex-basis: 100%;
+  }
+
   .issues-band .list-group-count {
+    flex: none;
     background: transparent;
     color: var(--ink-3);
   }

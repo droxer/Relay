@@ -40,6 +40,8 @@
 }
 
 .notif-panel {
+  max-height: min(var(--available-height, 100dvh), calc(100dvh - var(--sp-4)));
+  overflow: hidden;
   width: min(24rem, var(--available-width, 24rem));
   gap: 0;
   padding: 0;
@@ -54,6 +56,7 @@
 }
 
 .notif-head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -78,6 +81,8 @@
 }
 
 .notif-list {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: min(28rem, 60vh);
   margin: 0;
   padding: var(--sp-1);
@@ -184,6 +189,7 @@
 }
 
 .notif-foot {
+  flex: none;
   padding: var(--sp-2) var(--sp-4);
   border-top: 0.5px solid var(--line-1);
 }
@@ -237,4 +243,12 @@
   flex: 1 1 12rem;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .notif-settings-link {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-target);
+  }
 }

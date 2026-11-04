@@ -271,6 +271,7 @@
    --action ring drawn as a box-shadow so it never competes with the focus
    outline that base.css owns. */
 .preset-avatar-picker {
+  container: avatar-picker / inline-size;
   display: grid;
   gap: var(--sp-3);
 }
@@ -360,4 +361,20 @@
 
 .profile-image-presets-upload {
   justify-self: start;
+}
+
+/* Presets also appear inside narrow popovers on wide touch screens, so the
+   picker width, rather than the viewport, determines its column count. */
+@media (pointer: coarse) {
+  .preset-avatar-option {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
+  @container avatar-picker (max-width: 420px) {
+    .preset-avatar-grid,
+    .preset-avatar-grid[data-kind="teams"] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
 }

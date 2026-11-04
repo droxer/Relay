@@ -9,6 +9,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     headless: true,
+    // These flows mock API responses in the page. A controlling service
+    // worker can bypass that interception; PWA behavior has its own suite.
+    serviceWorkers: "block",
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH },
     trace: "retain-on-failure",
   },

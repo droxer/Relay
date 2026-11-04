@@ -45,6 +45,7 @@ const MORE_ROUTES: readonly {
   labelKey: string;
   adminOnly?: boolean;
 }[] = [
+  { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
   { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
@@ -221,7 +222,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workforce")}>
           <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workforce")}</span>
           <a
-            className={`sidenav-btn ${route === "agents" ? "active" : ""}`}
+            className={`sidenav-btn sidenav-secondary-item ${route === "agents" ? "active" : ""}`}
             data-nav="agents"
             href={hrefForRoute("agents")}
             aria-label={t("nav.agents")}

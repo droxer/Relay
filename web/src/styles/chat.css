@@ -107,6 +107,8 @@
 }
 
 .chat-agent-select[data-availability="unavailable"] {
+  /* A reason the draft cannot run must remain readable on a phone. */
+  max-width: 100%;
   --tone: var(--err);
   border-color: var(--tone-line);
   /* Status is dot/border/text, never a fill — so the fill stays exactly what
@@ -126,9 +128,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  /* The trigger is capped at 40vw, which a phone makes narrower than this
-     sentence; without a shrinkable box the chevron was pushed out past the
-     trigger's border. The words give way, the mark and chevron do not. */
+  /* The label can wrap within the available footer space. */
   min-width: 0;
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
@@ -136,9 +136,8 @@
 
 .chat-agent-select-unavailable-text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Availability inside the picker list is a read-only fact on an

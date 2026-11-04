@@ -588,9 +588,15 @@ a.home-count:hover .home-count-label {
   }
 
   .home-filters {
-    gap: var(--sp-3);
-    padding-inline: var(--sp-3);
-    flex-wrap: wrap;
+    gap: var(--sp-2);
+    padding-inline: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .home-filter {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .home-filter,

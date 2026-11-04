@@ -229,3 +229,22 @@
     display: none;
   }
 }
+
+.command-close {
+  display: none;
+}
+
+/* A phone keyboard has no Escape key. Keep an explicit dismissal beside
+   the search input, including on larger devices with touch input. */
+@media (max-width: 820px), (pointer: coarse) {
+  .command-close {
+    display: flex;
+    flex: none;
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .command-footer {
+    display: none;
+  }
+}

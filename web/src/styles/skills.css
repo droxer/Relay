@@ -244,6 +244,7 @@
    rather than drawn as a bordered panel. */
 .skill-owner-tools {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   padding-top: var(--sp-6);
   border-top: 0.5px solid var(--line-1);
@@ -253,6 +254,7 @@
    .adm-form-actions shape. */
 .skill-owner-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--sp-3);
   padding-top: var(--sp-2);
@@ -267,7 +269,7 @@
    <Field> wrapper, since that — not the segment — is the grid item. */
 .skill-owner-tools .skill-visibility-field {
   justify-self: start;
-  min-width: 260px;
+  min-width: min(260px, 100%);
 }
 
 /* The visibility and source choices are the shared segmented control,
@@ -452,7 +454,18 @@
   }
 
   .skill-detail-body {
-    padding: var(--sp-6);
+    padding: var(--sp-4);
+  }
+
+  .skill-owner-actions > button {
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
+    height: auto;
+  }
+
+  .skill-owner-actions-leading {
+    margin-right: 0;
   }
 
   /* One pane at a time (SkillsPage): the library, or the picked skill with a
