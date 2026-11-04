@@ -100,6 +100,12 @@ for (const mobile of [false, true]) {
     // Page actions sit in the phone's top bar, in the board header otherwise.
     const actions = mobile ? page.locator(".mobile-topbar") : board;
     await actions.getByRole("button", { name: "New task", exact: true }).first().click();
+    if (mobile) {
+      // The phone's plus is a menu: the top bar has no room for a separate
+      // GitHub import glyph, so the import rides beside "New task".
+      await expect(page.getByRole("menuitem", { name: "Import from GitHub", exact: true })).toBeVisible();
+      await page.getByRole("menuitem", { name: "New task", exact: true }).click();
+    }
     const form = page.getByRole("dialog", { name: "New task", exact: true });
     await form.getByRole("textbox", { name: "Title", exact: true }).fill("Prepare release notes");
     await form.getByRole("button", { name: "Create task", exact: true }).click();

@@ -2,6 +2,12 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { MobileTopbarActions, PHONE_QUERY } from "./MobileTopbarSlot";
 import {
@@ -39,9 +45,10 @@ export function TaskBoardHeaderActions({
   topbar?: boolean;
 }) {
   /* A phone list is kept fresh by the shell's polling, and its top bar has
-     room for three glyphs beside the bell, not four: refresh and the GitHub
-     import are desktop affordances. */
+     room for three glyphs beside the bell, not four: refresh is a desktop
+     affordance, and the GitHub import folds into the create plus as a menu. */
   const phone = useMediaQuery(PHONE_QUERY);
+  const phoneImport = phone && onCreate && onImport && importLabel;
   const buttons = (
     <>
       {onRefresh && !phone ? <Button
@@ -65,7 +72,32 @@ export function TaskBoardHeaderActions({
       >
         <ActionImport size={ICON.md} />
       </Button> : null}
-      {onCreate ? <Button
+      {phoneImport ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                className="page-header-icon-action page-header-icon-action--primary"
+                aria-label={createLabel}
+              >
+                <ActionAdd size={ICON.md} />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onCreate}>
+              <ActionAdd size={ICON.sm} aria-hidden="true" />
+              {createLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onImport}>
+              <ActionImport size={ICON.sm} aria-hidden="true" />
+              {importLabel}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : onCreate ? <Button
         type="button"
         variant="ghost"
         // A bare plus everywhere; the tooltip names it (and is its aria-label).
