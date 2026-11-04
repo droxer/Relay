@@ -12,6 +12,7 @@ from sqlalchemy import (
     update,
 )
 
+from ..core.task_capacity import normalize_task_capacity
 from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import row_to_department, row_to_user, user_to_row, user_with_department
 from .auth_state import AuthStoreState
@@ -90,6 +91,8 @@ class AuthUsers(AuthStoreState):
         email: str | None = None,
         max_local_computers: int | None = None,
         clear_max_local_computers: bool = False,
+        max_concurrent_tasks: int | None = None,
+        clear_max_concurrent_tasks: bool = False,
     ) -> dict[str, Any]:
         """Patch a user's profile. Absent arguments leave a field alone.
 
@@ -102,8 +105,14 @@ class AuthUsers(AuthStoreState):
             raise ValueError("userId is required.")
         if clear_max_local_computers and max_local_computers is not None:
             raise ValueError("maxLocalComputers cannot be both cleared and set.")
+        if clear_max_concurrent_tasks and max_concurrent_tasks is not None:
+            raise ValueError("maxConcurrentTasks cannot be both cleared and set.")
         now = datetime.now(UTC)
         patch: dict[str, Any] = {}
+        if clear_max_concurrent_tasks:
+            patch["max_concurrent_tasks"] = None
+        elif max_concurrent_tasks is not None:
+            patch["max_concurrent_tasks"] = normalize_task_capacity(max_concurrent_tasks)
         if display_name is not None:
             display_name = display_name.strip()
             if not display_name:

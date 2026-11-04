@@ -75,9 +75,24 @@ test("cancelled work is historical, not WIP or delivered throughput", () => {
   ]);
   assert.equal(taskWorkflowStage(cancelled), "cancelled");
   assert.ok(cancelled.cancelledAt);
+  assert.equal(cancelled.cancelledExecutionRevision, 0);
   assert.equal(cancelled.finishedAt, undefined);
   const metrics = taskFlowMetrics([cancelled]);
   assert.equal(metrics.wip, 0);
   assert.equal(metrics.throughput, 0);
   assert.equal(taskHoldAction(cancelled), null);
+});
+
+
+test("cancellation replays the retired execution revision across reopening", () => {
+  const task = materializeTaskEvents([
+    relayTaskEvent("task.created", "reopened", { title: "Work", description: "", priority: "normal" }),
+    relayTaskEvent("task.execution.claimed", "reopened", { requestId: "first", expectedRevision: 0, revision: 1 }),
+    relayTaskEvent("task.status", "reopened", { status: "cancelled" }),
+    relayTaskEvent("task.status", "reopened", { status: "assigned" }),
+    relayTaskEvent("task.execution.claimed", "reopened", { requestId: "next", expectedRevision: 1, revision: 2 }),
+  ]);
+  assert.equal(task.cancelledExecutionRevision, 1);
+  assert.equal(task.executionOwner?.revision, 2);
+  assert.equal(task.cancelledAt, undefined);
 });

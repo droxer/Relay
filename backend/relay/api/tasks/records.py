@@ -5,7 +5,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
-from ...tasks.flow import wip_limit
 from ...tasks.review import task_review
 from ...security.actor import Actor
 from ...tasks.assignment import (
@@ -86,7 +85,8 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         )
     return {
         "tasks": with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in tasks])),
-        "flowPolicy": {"wipLimit": wip_limit(), "scope": "user"},
+        "flowPolicy": {"wipLimit": ctx.task_store.wip_limit_for_user(actor["userId"]), "scope": "user"},
+        "flowUsage": {"userId": actor["userId"], "occupied": ctx.task_store.count_wip(actor["userId"])},
     }
 
 

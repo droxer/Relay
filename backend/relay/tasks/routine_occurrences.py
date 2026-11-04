@@ -18,7 +18,7 @@ def existing_routine_occurrence_result(
         except (KeyError, FileNotFoundError):
             continue
         if (
-            occurrence.get("status") == "assigned"
+            occurrence.get("status") in ("assigned", "queued")
             and session.get("status") in ("completed", "failed", "cancelled")
         ):
             continue
@@ -42,6 +42,6 @@ def active_routine_occurrence(
             occurrence = task_store.get_task(occurrence_id)
         except (KeyError, FileNotFoundError):
             continue
-        if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "running", "review", "blocked", "waiting_for_human"}:
+        if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "queued", "running", "review", "blocked", "waiting_for_human"}:
             return occurrence
     return None

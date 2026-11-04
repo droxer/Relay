@@ -64,7 +64,8 @@ Project pages retain their task overview, but selecting a task navigates to Task
 is the scoped task list and `/backlog/{taskId}?project={id}` is the task detail.
 Legacy project task drawer links redirect to the corresponding Tasks detail.
 
-Keep the existing workflow: Backlog → Ready → Running → Review → Done. Ready
+Keep the existing workflow: Backlog → Ready → Queued (when capacity is full) → Running → Review → Done.
+Cancelled is a terminal outcome for abandoned work. Ready
 uses the existing `assigned` status. Blocked and waiting-for-human remain visible
 exceptions, with the reason and next action shown on the task. Do not invent a
 second task lifecycle for projects. Retain the user-scoped work-in-progress

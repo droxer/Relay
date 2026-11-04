@@ -138,6 +138,9 @@ export function UserGroupTable({
                 {member.email ? <span translate="no">{member.email}</span> : null}
                 {member.departmentName ? <span>{member.departmentName}</span> : null}
               </p>
+              <UserCells.Read>{(s) => <p className="adm-emp-meta">{s.t("admin.v2.task_capacity_summary", {
+                count: member.effectiveMaxConcurrentTasks ?? member.maxConcurrentTasks ?? 5,
+              })}</p>}</UserCells.Read>
             </>
           );
         },

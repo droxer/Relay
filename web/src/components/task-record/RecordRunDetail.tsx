@@ -16,6 +16,7 @@ export const TONE_FOR_OUTCOME: Record<RunOutcome, StateTone> = {
   failed: "bad",
   running: "live",
   pending: "neutral",
+  cancelled: "neutral",
 };
 
 function isPlainClick(event: MouseEvent): boolean {

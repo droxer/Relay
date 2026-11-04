@@ -341,10 +341,10 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
   backlog: {
     project: null,
     // The Issues page's queue and grouping (lib/issueQueues).
-    queue: new Set(["needs_me", "untriaged", "blocked", "running", "overdue", "done"]),
+    queue: new Set(["needs_me", "untriaged", "blocked", "running", "overdue", "done", "cancelled"]),
     group: new Set(["status", "assignee", "none"]),
     q: null,
-    status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"]),
+    status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done", "cancelled", "queued"]),
     priority: new Set(["high", "normal", "low"]),
     tag: null,
     agent: null,

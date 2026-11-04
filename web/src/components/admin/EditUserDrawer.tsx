@@ -19,6 +19,8 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { useOnOpen } from "@/hooks/useKeyChange";
 import { UserPasswordReset } from "./UserPasswordReset";
+import { TaskCapacityField } from "./TaskCapacityField";
+import { DEFAULT_TASK_CAPACITY, parseTaskCapacity } from "../../lib/taskCapacity";
 
 interface EditUserDrawerProps {
   open: boolean;
@@ -47,6 +49,9 @@ export function EditUserDrawer({
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [maxLocalComputers, setMaxLocalComputers] = useState("");
+  const [taskCapacity, setTaskCapacity] = useState(String(DEFAULT_TASK_CAPACITY));
+  const [capacityError, setCapacityError] = useState<string | null>(null);
+  const capacityRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [limitError, setLimitError] = useState<string | null>(null);
@@ -56,6 +61,7 @@ export function EditUserDrawer({
 
   const initialDisplayName = user?.displayName ?? "";
   const initialEmail = user?.email ?? "";
+  const initialCapacity = String(user?.maxConcurrentTasks ?? user?.effectiveMaxConcurrentTasks ?? DEFAULT_TASK_CAPACITY);
   const initialLimit =
     user?.maxLocalComputers != null ? String(user.maxLocalComputers) : "";
 
@@ -63,16 +69,19 @@ export function EditUserDrawer({
     setDisplayName(initialDisplayName);
     setEmail(initialEmail);
     setMaxLocalComputers(initialLimit);
+    setTaskCapacity(initialCapacity);
+    setCapacityError(null);
     setError(null);
     setNameError(null);
     setLimitError(null);
     setIsBusy(false);
-  }, `${initialDisplayName}\u0000${initialEmail}\u0000${initialLimit}`);
+  }, `${initialDisplayName}\u0000${initialEmail}\u0000${initialLimit}\u0000${initialCapacity}`);
 
   const hasUnsavedChanges =
     displayName !== initialDisplayName
     || email !== initialEmail
-    || maxLocalComputers !== initialLimit;
+    || maxLocalComputers !== initialLimit
+    || taskCapacity !== initialCapacity;
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
   async function requestClose() {
@@ -101,6 +110,12 @@ export function EditUserDrawer({
       limitRef.current?.focus();
       return;
     }
+    const capacity = parseTaskCapacity(taskCapacity);
+    if (capacity === undefined) {
+      setCapacityError(t("admin.v2.task_capacity_invalid"));
+      capacityRef.current?.focus();
+      return;
+    }
     setIsBusy(true);
     setError(null);
     try {
@@ -109,6 +124,7 @@ export function EditUserDrawer({
         displayName: trimmedName,
         email: email.trim(),
         maxLocalComputers: parsedLimit,
+        ...(taskCapacity !== initialCapacity ? { maxConcurrentTasks: capacity } : {}),
       });
       onSuccess(result.user);
     } catch (err) {
@@ -233,6 +249,9 @@ export function EditUserDrawer({
               {t("admin.v2.emp_limit_in_use", { count: user.localComputerCount })}
             </p>
           ) : null}
+          <TaskCapacityField id="edit-user-task-capacity" value={taskCapacity} inputRef={capacityRef}
+            error={capacityError} onChange={(value) => { setTaskCapacity(value); setCapacityError(null); }} />
+
         </section>
 
         {user ? <UserPasswordReset open={open} userId={user.id} /> : null}

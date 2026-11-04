@@ -3,7 +3,7 @@ import type { CollaborationStyle } from "./session-store.js";
 import type { AgentName } from "./state.js";
 
 export type TaskPriority = "low" | "normal" | "high";
-export type TaskStatus = "backlog" | "assigned" | "running" | "waiting_for_human" | "review" | "done" | "blocked";
+export type TaskStatus = "backlog" | "assigned" | "queued" | "running" | "waiting_for_human" | "review" | "done" | "blocked" | "cancelled";
 /** What fired an occurrence: a trigger kind, or "manual" for Run now. */
 export type RoutineTriggerKind = RoutineTrigger["kind"];
 export type RoutineOccurrenceTriggerKind = RoutineTriggerKind | "manual";
@@ -122,9 +122,12 @@ export interface TaskExternalSource {
 export interface RelayTask {
   collaborationStyle?: CollaborationStyle;
   acceptancePolicy?: "human" | "automatic";
-  workflowStage?: "backlog" | "assigned" | "running" | "review" | "done";
+  workflowStage?: "backlog" | "assigned" | "queued" | "running" | "review" | "done" | "cancelled";
   startedAt?: string;
   finishedAt?: string;
+  cancelledAt?: string;
+  /** A cancelled generation cannot publish late results, even after reopening. */
+  cancelledExecutionRevision?: number;
   blockedAt?: string;
   blockedFromStatus?: TaskStatus;
   waitingFromStatus?: TaskStatus;
@@ -579,13 +582,16 @@ export function taskPriority(value: unknown): TaskPriority | undefined {
 }
 
 export function taskStatus(value: unknown): TaskStatus | undefined {
-  return value === "backlog" || value === "assigned" || value === "running" || value === "waiting_for_human" || value === "review" || value === "done" || value === "blocked"
+  return value === "backlog" || value === "assigned" || value === "queued" || value === "running" || value === "waiting_for_human" || value === "review" || value === "done" || value === "blocked" || value === "cancelled"
     ? value
     : undefined;
 }
 
 function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type: "task.status" }>): void {
   const status = event.status;
+  if (status === "cancelled" && task.status !== "cancelled") {
+    task.cancelledExecutionRevision = task.executionOwner?.revision ?? 0;
+  }
   let stage = task.workflowStage ?? "backlog";
   if (status === "blocked" || status === "waiting_for_human") {
     if (task.status !== status) {
@@ -618,7 +624,7 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
       if (event.request && Object.keys(event.request).length) task.waitingRequest = { ...event.request };
       else delete task.waitingRequest;
     }
-    if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
+    if (stage === "done" || stage === "cancelled" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
   } else {
     // An execution claim reserves WIP before the daemon starts the agent.
     // Keep that admitted work Ready until an actual running event arrives.
@@ -640,5 +646,7 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
   if (["running", "review", "waiting_for_human"].includes(status) && !task.isRoutine) task.startedAt ??= event.timestamp;
   if (status === "done") task.finishedAt ??= event.timestamp;
   else delete task.finishedAt;
+  if (status === "cancelled") task.cancelledAt ??= event.timestamp;
+  else delete task.cancelledAt;
   task.workflowStage = stage;
 }

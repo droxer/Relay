@@ -28,6 +28,7 @@ from ..agents.routing import (
     persist_legacy_session_computer_id,
     resolve_agent_assignments,
 )
+from .flow import WIP_WAIT_MESSAGE, flow_scope, is_wip
 from ..tasks.dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
@@ -281,11 +282,15 @@ class TaskScheduler:
             return CandidateOutcome.SKIPPED
         outcome = candidate.get("dispatchOutcome") or {}
         retry = candidate.get("dispatchRetry") or {}
-        if retry or (
+        if (retry and retry.get("code") != "task_wip_limit") or (
             outcome.get("state") == "queued"
-            and outcome.get("code") in ("task_wip_limit", "dispatch_failed")
+            and outcome.get("code") == "dispatch_failed"
         ):
             self._fail_legacy_retry(candidate, outcome, retry)
+            return CandidateOutcome.SKIPPED
+        if not is_wip(candidate) and self.task_store.count_wip(flow_scope(candidate)) >= self.task_store.wip_limit_for_user(flow_scope(candidate)):
+            record_dispatch_failure(self.task_store, candidate,
+                code="task_wip_limit", message=WIP_WAIT_MESSAGE)
             return CandidateOutcome.SKIPPED
         return None
 
@@ -296,7 +301,7 @@ class TaskScheduler:
         # them when their deadline or claim lease expires.
         with self.task_store.task_write_scope(candidate["id"]) as current:
             if (
-                current.get("status") == "assigned"
+                current.get("status") in ("assigned", "queued")
                 and not dispatch_claim_active(current)
                 and current.get("executionOwner") == candidate.get("executionOwner")
                 and current.get("dispatchOutcome") == candidate.get("dispatchOutcome")
@@ -673,7 +678,7 @@ class TaskScheduler:
             tasks = [
                 task
                 for task in self.task_store.list_tasks()
-                if task.get("status") == "assigned"
+                if task.get("status") in ("assigned", "queued")
                 and not task.get("isRoutine")
                 and (
                     task.get("assignedAgent")

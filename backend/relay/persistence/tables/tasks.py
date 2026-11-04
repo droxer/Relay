@@ -112,10 +112,10 @@ tasks = Table(
         "created_at",
         "id",
         postgresql_where=text(
-            "status = 'assigned' AND is_routine IS false AND deleted_at IS NULL"
+            "status IN ('assigned', 'queued') AND is_routine IS false AND deleted_at IS NULL"
         ),
         sqlite_where=text(
-            "status = 'assigned' AND is_routine IS 0 AND deleted_at IS NULL"
+            "status IN ('assigned', 'queued') AND is_routine IS 0 AND deleted_at IS NULL"
         ),
     ),
     Index(

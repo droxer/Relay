@@ -11,9 +11,11 @@ type TaskDropRejection = "same_status" | "needs_assignment" | "invalid_transitio
  */
 export function taskDropRejection(task: RelayTaskListItem, status: TaskStatus): TaskDropRejection | null {
   if (taskWorkflowStage(task) === status) return "same_status";
+  if (task.status === "cancelled" && status !== "assigned" && status !== "backlog") return "invalid_transition";
+  if (status === "cancelled") return task.status === "running" || task.status === "done" || task.isRoutine ? "invalid_transition" : null;
   if (task.status === "running" || task.status === "blocked") return "invalid_transition";
-  if (status === "waiting_for_human" || status === "blocked") return "invalid_transition";
-  if (status === "running" && !["backlog", "assigned"].includes(task.status)) return "invalid_transition";
+  if (status === "waiting_for_human" || status === "blocked" || status === "queued") return "invalid_transition";
+  if (status === "running" && !["backlog", "assigned", "queued"].includes(task.status)) return "invalid_transition";
   if (status === "review" && !task.startedAt) return "invalid_transition";
   if (status === "done" && task.status !== "review") return "invalid_transition";
   if (status === "backlog" && task.startedAt) return "invalid_transition";

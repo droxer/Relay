@@ -79,6 +79,7 @@ def user_to_row(
         "email": user.get("email"),
         "department_id": department_pk,
         "max_local_computers": user.get("maxLocalComputers"),
+        "max_concurrent_tasks": user.get("maxConcurrentTasks"),
         "created_at": parse_db_time(user["createdAt"]),
         "updated_at": parse_db_time(user["updatedAt"]),
     }
@@ -124,6 +125,7 @@ def row_to_user(row: Any) -> dict[str, Any]:
         "email": row["email"],
         "departmentId": str(row["department_id"]) if row["department_id"] else None,
         "maxLocalComputers": int(limit) if limit is not None else None,
+        "maxConcurrentTasks": row["max_concurrent_tasks"],
         "createdAt": format_db_time(row["created_at"]),
         "updatedAt": format_db_time(row["updated_at"]),
     }

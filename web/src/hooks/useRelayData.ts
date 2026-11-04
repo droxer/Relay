@@ -147,6 +147,7 @@ export function useRelayData(
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
           const result = await listTasks(signal);
           if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
+          if (result.flowUsage) queryClient.setQueryData(["task-flow-usage"], result.flowUsage);
           return result.tasks ?? [];
         },
       },

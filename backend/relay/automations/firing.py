@@ -22,7 +22,7 @@ from .schedule import resolve_timezone, summarize
 
 PENDING_TTL = timedelta(hours=24)
 RATE_WINDOW = timedelta(hours=1)
-IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
+IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "queued", "running"})
 # Occurrences are appended in creation order, so an in-flight one is among the
 # newest. Bounding the scan keeps a long-lived routine's check constant-time.
 IN_FLIGHT_LOOKBACK = 10

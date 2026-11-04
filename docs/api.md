@@ -538,7 +538,7 @@ record over that project; `recordTab` selects a section of that record.
 
 `/tasks` is a list-only table across projects, grouped by project, status,
 assignee, or no grouping (`?group=`). Its queue rail selects `needs_me`,
-`untriaged`, `blocked`, `running`, `overdue`, `open` (default), or `done`
+`untriaged`, `blocked`, `running`, `overdue`, `open` (default), or `done`, or `cancelled`
 (`?queue=`). `?project={id}` is a filter, not a separate project workspace.
 Deleted tasks and routine templates are excluded; routine runs remain visible.
 Archived projects are hidden unless explicitly selected. `/tasks/{taskId}`
@@ -833,17 +833,23 @@ as `task.workspace_wait` events; an acquire clears the matching run's wait state
 
 ### Task flow and acceptance
 
-Task consumers should use `workflowStage` for the five board stages (Backlog,
-Ready, In progress, Review, Done) while retaining `status` for execution and waiting
+Task consumers should use `workflowStage` for the board stages (Backlog,
+Ready, Queued, In progress, Review, Done, Cancelled) while retaining `status` for execution and waiting
 conditions. An execution claim reserves WIP but remains Ready; the task enters In
 progress only when the daemon reports that an agent has started. `GET /tasks` and
 `GET /tasks?view=summary` also return
-`flowPolicy: { wipLimit, scope: "user" }`.
+`flowPolicy: { wipLimit, scope: "user" }` and
+`flowUsage: { userId, occupied }`. The limit is the signed-in user's `maxConcurrentTasks` override, or the server
+default of 5 when no override is set. Admin user create/PATCH accepts
+`maxConcurrentTasks` (integer 1–100); PATCH null clears it. User responses include
+`effectiveMaxConcurrentTasks`. These edits require an administrator.
+Usage is for the signed-in user across projects,
+even for an administrator; it is computed before pagination.
 
 New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is
 `human` (default) or `automatic`; it is immutable once work starts. Successful
 human-policy work enters Review, and `PATCH /tasks/{id}` with `status=done`
-accepts it. Manual transitions to running or human waiting return 409; use the
+accepts it. Manual transitions to queued, running, or human waiting return 409; use the
 execution endpoint or thread controls. Blocking requires `blockerReason`;
 `action=unblock` restores the recorded prior state without pretending to restart
 execution. Active task runs and stale state assumptions reject workflow edits.
@@ -858,8 +864,11 @@ Historical snapshots may omit `attention`; clients must handle missing fields an
 unknown reason codes. `source` is `dispatch`, `execution`, `operator`, or `legacy`;
 `evidence` is `recorded` or `unknown`. These are diagnostic fields, not permission
 to retry execution. Dispatch can return
-`code=task_wip_limit` with `state=queued`; this is a capacity wait and does not
-consume a failure retry. See [the task lifecycle](task-kanban-lifecycle.md) for
+`code=task_wip_limit` with `state=queued`; the task has `status=queued` and
+`workflowStage=queued`, consumes no WIP, and starts automatically once capacity
+opens. `PATCH {"status":"cancelled"}` preserves history and derives `cancelledAt`,
+releasing WIP only after execution is settled. Cancelled tasks do not contribute
+to delivery metrics; explicitly reopen to Ready to continue them. See [the task lifecycle](task-kanban-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
 
 ### Task review

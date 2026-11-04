@@ -126,3 +126,44 @@ def test_capacity_usage_counts_current_user_across_projects_before_pagination(cl
     store.create_task({"title": "Someone else", "ownerUserId": "other", "status": "review"})
     response = client.get("/api/v1/tasks?view=summary&limit=1").json()
     assert response["flowUsage"] == {"userId": user_id, "occupied": 3}
+
+
+@pytest.mark.parametrize("session_status", ["running", "completed", "failed"])
+def test_cancel_task_refuses_live_or_unreconciled_linked_execution(client, session_status):
+    from relay.core.ids import new_database_id
+    from relay.persistence.events import relay_event
+
+    task = client.post("/api/v1/tasks", json={"title": "Keep execution reserved"}).json()
+    app = client.app.state
+    session = app.session_store.create_session({
+        "workspacePath": "/workspace", "taskGoal": "Still held",
+        "participants": ["human", "codex"], "ownerUserId": task["ownerUserId"],
+    })
+    app.task_store.link_session(task["id"], session["id"])
+    app.task_store.update_task(task["id"], {"status": "running"})
+    registry = app.registry
+    registry.register({"sandboxId": "held", "userId": task["ownerUserId"],
+        "token": "held-node-token", "protocolVersion": 1,
+        "supportedAgents": ["codex"], "status": "ready"})
+    request = registry.daemon_store.create_run_request({
+        "nodeId": "held", "sessionId": session["id"], "taskGoal": "Held",
+        "assignments": [{"executorKind": "codex"}], "state": {},
+    })
+    command = {"id": new_database_id(), "type": "run.start", "sessionId": session["id"],
+        "runId": new_database_id(), "agent": "codex", "taskGoal": "Held", "_runRequestId": request["id"]}
+    registry.daemon_store.update_run_request(request["id"], {
+        "currentCommandId": command["id"], "currentRunId": command["runId"]})
+    registry.daemon_store.enqueue_command("held", command)
+    registry.daemon_store.take_queued_commands("held", lease_seconds=60)
+    app.session_store.append_event(session["id"], relay_event("session.status", session["id"], {
+        "status": session_status, "phase": session_status}))
+    response = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "cancelled"})
+    assert response.status_code == 409
+    assert app.task_store.get_task(task["id"])["status"] == "running"
+    assert app.task_store.count_wip(task["ownerUserId"]) == 1
+
+
+def test_queued_is_a_system_status_not_a_new_task_shortcut(client):
+    assert client.post("/api/v1/tasks", json={"title": "Fake queue", "status": "queued"}).status_code == 400
+    task = client.post("/api/v1/tasks", json={"title": "Not dispatched"}).json()
+    assert client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "queued"}).status_code == 409

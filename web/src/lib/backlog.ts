@@ -4,7 +4,7 @@ import { matchesTagFilter } from "./taskTags.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, DaemonNodeMonitorRecord, UserAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
 
-export const TASK_STATUSES: TaskStatus[] = ["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"];
+export const TASK_STATUSES: TaskStatus[] = ["backlog", "assigned", "queued", "running", "waiting_for_human", "review", "blocked", "done", "cancelled"];
 export const TASK_PRIORITIES: TaskPriority[] = ["high", "normal", "low"];
 
 export interface BacklogFilters {
@@ -55,9 +55,9 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
       const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id} ${(task.tags ?? []).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
-    if (filters.due === "overdue" && (!task.dueDate || task.dueDate >= today || task.status === "done")) return false;
+    if (filters.due === "overdue" && (!task.dueDate || task.dueDate >= today || (task.status === "done" || task.status === "cancelled"))) return false;
     if (filters.due === "today" && task.dueDate !== today) return false;
-    if (filters.due === "next_week" && (!task.dueDate || task.dueDate < today || task.dueDate >= nextWeekEnd || task.status === "done")) return false;
+    if (filters.due === "next_week" && (!task.dueDate || task.dueDate < today || task.dueDate >= nextWeekEnd || (task.status === "done" || task.status === "cancelled"))) return false;
     if (filters.due === "unscheduled" && task.dueDate) return false;
     return true;
   }).sort(compareTasks);
@@ -134,7 +134,7 @@ export function canDiscussTask(task: Pick<RelayTaskListItem, "assignedTeamId">):
 }
 
 export function dueTone(task: RelayTaskListItem, today = isoToday()): "neutral" | "warn" | "bad" {
-  if (!task.dueDate || task.status === "done") return "neutral";
+  if (!task.dueDate || (task.status === "done" || task.status === "cancelled")) return "neutral";
   if (task.dueDate < today) return "bad";
   if (task.dueDate === today) return "warn";
   return "neutral";

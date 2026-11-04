@@ -29,8 +29,8 @@ export function TaskHoldupLine({ task, className, labeled = false }: {
   const holdup = taskHoldup(task);
   if (!holdup) return null;
   if (holdup.kind === "prerequisites") return <PrerequisiteHoldup task={task} className={className} labeled={labeled} />;
-  const label = t(`backlog.statuses.${task.status}`);
-  const text = holdup.text ?? t(holdup.kind === "blocked" ? "blocker.no_reason" : "blocker.no_question");
+  const label = holdup.kind === "capacity" ? t("backlog.queued") : t(`backlog.statuses.${task.status}`);
+  const text = holdup.kind === "capacity" ? t("backlog.wip_wait") : holdup.text ?? t(holdup.kind === "blocked" ? "blocker.no_reason" : "blocker.no_question");
   return <HoldupDisclosure task={task} className={className} labeled={labeled} label={label} text={text} kind={holdup.kind} missing={!holdup.text} />;
 }
 

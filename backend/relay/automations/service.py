@@ -299,7 +299,7 @@ def _active_occurrence_result(
         existing = existing_routine_occurrence_result(ctx, routine, active)
         if existing:
             return existing
-    if active.get("status") in ("backlog", "assigned"):
+    if active.get("status") in ("backlog", "assigned", "queued"):
         return active
     return {"task": routine, "session": None, "dispatch": {
         "state": "queued", "code": "automation_running",

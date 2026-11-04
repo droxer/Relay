@@ -12,6 +12,7 @@ from sqlalchemy import (
     or_,
     select,
 )
+from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ..engine import store_transaction
 from ..sql import names_no_uuid_row
@@ -23,6 +24,14 @@ from .state import TaskStoreState
 
 
 class TaskReadRows(TaskStoreState):
+    def wip_limit_for_user(self, scope: str) -> int:
+        with store_transaction(self.engine) as conn:
+            return user_wip_limit(conn, scope)
+
+    def count_wip(self, scope: str) -> int:
+        with store_transaction(self.engine) as conn:
+            return int(conn.scalar(wip_count_query(scope)) or 0)
+
     def get_task(self, task_id: str) -> dict[str, Any]:
         if names_no_uuid_row(self.engine, task_id):
             raise KeyError(task_id)

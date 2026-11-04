@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { useOnOpen } from "@/hooks/useKeyChange";
+import { TaskCapacityField } from "./TaskCapacityField";
+import { DEFAULT_TASK_CAPACITY, parseTaskCapacity } from "../../lib/taskCapacity";
 
 interface AddUserDrawerProps {
   open: boolean;
@@ -60,12 +62,15 @@ export function AddUserDrawer({
   const [password, setPassword] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [maxLocalComputers, setMaxLocalComputers] = useState("");
+  const [taskCapacity, setTaskCapacity] = useState(String(DEFAULT_TASK_CAPACITY));
+  const taskCapacityRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     userId?: string;
     username?: string;
     password?: string;
     maxLocalComputers?: string;
+    taskCapacity?: string;
   }>({});
   const [isBusy, setIsBusy] = useState(false);
   const userIdRef = useRef<HTMLInputElement>(null);
@@ -79,7 +84,8 @@ export function AddUserDrawer({
     || username.trim()
     || password
     || selectedNodeId
-    || maxLocalComputers.trim(),
+    || maxLocalComputers.trim()
+    || taskCapacity !== String(DEFAULT_TASK_CAPACITY),
   );
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
@@ -96,12 +102,13 @@ export function AddUserDrawer({
     setPassword("");
     setSelectedNodeId("");
     setMaxLocalComputers("");
+    setTaskCapacity(String(DEFAULT_TASK_CAPACITY));
     setError(null);
     setFieldErrors({});
     setIsBusy(false);
   });
 
-  function clearFieldError(field: "userId" | "username" | "password" | "maxLocalComputers") {
+  function clearFieldError(field: "userId" | "username" | "password" | "maxLocalComputers" | "taskCapacity") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
@@ -140,6 +147,8 @@ export function AddUserDrawer({
         max: MAX_LOCAL_COMPUTERS_CEILING,
       });
     }
+    const capacity = parseTaskCapacity(taskCapacity);
+    if (capacity === undefined) nextFieldErrors.taskCapacity = t("admin.v2.task_capacity_invalid");
     setFieldErrors(nextFieldErrors);
     // Every invalid field is in the chain, in the order they appear on screen.
     // The limit used to be validated but never focused, so an invalid limit
@@ -152,7 +161,7 @@ export function AddUserDrawer({
           ? passwordRef
           : nextFieldErrors.maxLocalComputers
             ? limitRef
-            : null;
+            : nextFieldErrors.taskCapacity ? taskCapacityRef : null;
     if (firstInvalid) {
       firstInvalid.current?.focus();
       return;
@@ -169,6 +178,7 @@ export function AddUserDrawer({
         email: email.trim() || undefined,
         displayName: displayName.trim() || undefined,
         ...(parsedLimit !== null ? { maxLocalComputers: parsedLimit } : {}),
+        ...(capacity != null ? { maxConcurrentTasks: capacity } : {}),
       });
       onSuccess(result);
     } catch (err) {
@@ -382,6 +392,8 @@ export function AddUserDrawer({
               />
             </Field>
           ) : null}
+          <TaskCapacityField id="add-user-task-capacity" value={taskCapacity} inputRef={taskCapacityRef}
+            error={fieldErrors.taskCapacity} onChange={(value) => { setTaskCapacity(value); clearFieldError("taskCapacity"); }} />
         </section>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}

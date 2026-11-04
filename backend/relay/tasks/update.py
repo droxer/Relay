@@ -466,6 +466,12 @@ def _validate_status_transition(
         dispatch_claim_active(current)
         or ctx.registry.daemon_store.active_run_request_for_task(current["id"])
     )
+    if status == "cancelled":
+        lifecycle = ctx.execution_lifecycle
+        for session_id in current.get("linkedSessionIds", []):
+            session = _linked_session(ctx, session_id)
+            if session and not lifecycle.status(session)["canDelete"]:
+                active = True
     try:
         validate_manual_transition(current, status, active=active, unblock=unblock)
     except ValueError as error:

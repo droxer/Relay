@@ -20,6 +20,7 @@ from ..agents.routing import (
     dispatch_reason_code,
     resolve_agent_assignments,
 )
+from .flow import WIP_WAIT_MESSAGE, flow_scope, is_wip
 from .dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
@@ -141,6 +142,9 @@ class TaskDispatcher:
         # re-resolve (and potentially block) work that already has an owner.
         if self._execution_active():
             return self._active_result()
+        from_capacity = self._capacity_wait()
+        if from_capacity:
+            return from_capacity
         project_result = self._resolve_project_assignments()
         if project_result:
             return project_result
@@ -160,6 +164,13 @@ class TaskDispatcher:
         if claim_result:
             return claim_result
         self._prepared_node = node
+        return None
+
+    def _capacity_wait(self) -> DispatchResult | None:
+        if not is_wip(self.task) and self.ctx.task_store.count_wip(flow_scope(self.task)) >= self.ctx.task_store.wip_limit_for_user(flow_scope(self.task)):
+            updated = record_dispatch_failure(self.ctx.task_store, self.task,
+                code="task_wip_limit", message=WIP_WAIT_MESSAGE)
+            return _result(updated, "queued", code="task_wip_limit", message=WIP_WAIT_MESSAGE)
         return None
 
     def _execution_active(self) -> bool:
@@ -192,6 +203,7 @@ class TaskDispatcher:
         return not self.task.get("isRoutine") and self.task.get("status") in (
             "backlog",
             "assigned",
+            "queued",
         )
 
     def _resolve_project_assignments(self) -> DispatchResult | None:
@@ -572,7 +584,7 @@ class TaskDispatcher:
         released = bool(self.claim_id and code != "dispatch_failed")
         if released and self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)
-        if self.temporary_group_status and released:
+        if self.temporary_group_status and released and code != "task_wip_limit":
             self.ctx.task_store.update_task(self.task["id"], {"status": "backlog"})
         if not self.record_pending:
             # Explicit, not a bare `raise`: this runs in a threadpool worker,
@@ -583,7 +595,7 @@ class TaskDispatcher:
             message=safe_dispatch_error_message(error),
         )
         return _result(
-            updated, "rejected", code=code,
+            updated, updated["dispatchOutcome"]["state"], code=code,
             message=updated["dispatchOutcome"]["message"],
         )
 

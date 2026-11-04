@@ -56,7 +56,7 @@ describe("project issue metrics", () => {
       task({ id: "f", status: "done" }),
       task({ id: "g", status: "done", isRoutine: true }),
     ], "2026-10-04", NOW);
-    assert.deepEqual(metrics.stages, { backlog: 1, assigned: 1, running: 1, review: 1, done: 2 });
+    assert.deepEqual(metrics.stages, { backlog: 1, assigned: 1, running: 1, review: 1, done: 2, queued: 0, cancelled: 0 });
     assert.equal(metrics.done, 2);
   });
 });

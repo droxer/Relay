@@ -55,10 +55,13 @@ export function TaskStatusIcon({ status, className }: { status: TaskStatus; clas
             strokeDasharray={`${progress * PIE_CIRCUMFERENCE} ${PIE_CIRCUMFERENCE}`} transform="rotate(-90 7 7)" />
         </g>
       ) : null}
+      {status === "queued" ? (
+        <path d="M7 3.5V7l2.5 1.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      ) : null}
       {status === "waiting_for_human" ? (
         <circle className="task-status-wait" cx="7" cy="7" r="2.25" fill="currentColor" />
       ) : null}
-      {status === "blocked" ? (
+      {status === "blocked" || status === "cancelled" ? (
         <path d="M3.2 10.8 10.8 3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       ) : null}
     </svg>

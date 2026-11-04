@@ -45,9 +45,25 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
     queryFn: skipToken,
   });
 
+  const { data: usage } = useQuery<{ userId: string; occupied: number }>({
+    queryKey: ["task-flow-usage"],
+    queryFn: skipToken,
+  });
+  const capacity = policy && usage ? (
+    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+      <p className="m-0 text-ink-2">
+        {t("project.dashboard_user_wip", { count: usage.occupied, limit: policy.wipLimit })}
+      </p>
+      <a className="text-ink underline underline-offset-4" href={`/backlog?assignee=${encodeURIComponent(usage.userId)}`}>
+        {t("project.dashboard_view_user_tasks")}
+      </a>
+    </div>
+  ) : null;
+
   if (metrics.total === 0) {
     return (
       <div className="project-dashboard project-dashboard--empty">
+        {capacity}
         <WorkspaceEmpty
           title={t("project.dashboard_empty")}
           hint={t("project.dashboard_empty_hint")}
@@ -73,7 +89,6 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
         <KpiTile
           eyebrow={t("backlog.metric_active")}
           value={metrics.active}
-          hint={policy ? t("project.dashboard_wip_limit", { count: policy.wipLimit }) : undefined}
         />
         <KpiTile
           eyebrow={t("backlog.metric_blocked")}
@@ -87,6 +102,7 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
         />
       </div>
 
+      {capacity}
       <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
     </div>
   );

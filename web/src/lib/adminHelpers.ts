@@ -224,6 +224,8 @@ export interface UserNodeSummary {
   nodes: ControlPanelDaemonNodeRecord[];
   /** Pinned personal-computer limit, or null when the org default applies. */
   maxLocalComputers: number | null;
+  maxConcurrentTasks?: number | null;
+  effectiveMaxConcurrentTasks?: number;
   /** The limit actually in force — the override when pinned, the org default otherwise. */
   effectiveMaxLocalComputers?: number;
   /** Live personal computers the user owns, counted from their nodes. */
@@ -417,6 +419,8 @@ export function buildUserSummaries(
       failedCount,
       nodes: userNodes,
       maxLocalComputers: user?.maxLocalComputers ?? null,
+      maxConcurrentTasks: user?.maxConcurrentTasks,
+      effectiveMaxConcurrentTasks: user?.effectiveMaxConcurrentTasks,
       effectiveMaxLocalComputers: user?.effectiveMaxLocalComputers,
       localComputerCount,
     };

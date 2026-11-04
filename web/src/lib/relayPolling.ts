@@ -39,7 +39,7 @@ export function sessionsPollIntervalMs(streamConnected: boolean): number {
  * (a failed run awaiting retry). Mirrors runOutcome's terminal outcomes.
  */
 export function isSettledTaskStatus(status: TaskStatus | undefined): boolean {
-  return status === "done" || status === "blocked";
+  return status === "done" || status === "cancelled" || status === "blocked";
 }
 
 /**

@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+test.use({ viewport: { width: 1920, height: 1080 } });
+
 const stamp = "2026-09-01T00:00:00.000Z";
 /* The lanes live on a project's Issues tab — the global Issues route is a
    cross-project table — so every card here belongs to one project. */
@@ -26,7 +28,7 @@ async function dragCard(page: Page, card: Locator, lane: Locator) {
   await page.mouse.up();
 }
 
-test("five-stage board preserves blocked review and accepts it only after unblocking", async ({ page }) => {
+test("task board preserves blocked review and accepts it only after unblocking", async ({ page }) => {
   let tasks = [task("Blocked review", "blocked", { number: 1, workflowStage: "review", startedAt: stamp, blockedFromStatus: "review", blockerReason: "Need approval", blockedAt: stamp }), task("Queued delivery", "assigned", { number: 2 })];
   const writes: Array<{ path: string; body: any }> = [];
   await page.route("**/api/v1/**", async (route) => {
@@ -93,7 +95,7 @@ test("the global Tasks page lays its queue out as the same board, and a drop com
   const writes = await mockQueuedTask(page);
   await page.goto("/tasks");
   await page.getByRole("button", { name: "Board", exact: true }).click();
-  await expect(page.locator(".backlog-lane")).toHaveCount(5);
+  await expect(page.locator(".backlog-lane")).toHaveCount(7);
   const card = page.locator('.backlog-lane[data-status="assigned"] article');
   // Read across projects, a card names its project.
   await expect(card).toContainText("Launch");
@@ -102,7 +104,7 @@ test("the global Tasks page lays its queue out as the same board, and a drop com
   await expect.poll(() => writes).toEqual(["run"]);
   // The choice is remembered for the Tasks page only.
   await page.reload();
-  await expect(page.locator(".backlog-lane")).toHaveCount(5);
+  await expect(page.locator(".backlog-lane")).toHaveCount(7);
   await page.goto("/projects/p?tab=tasks");
   await expect(page.locator(".backlog-lane")).toHaveCount(0);
 });
@@ -111,7 +113,7 @@ test("the global Tasks page lays its queue out as the same board, and a drop com
 async function openBoard(page: Page) {
   await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "Board", exact: true }).click();
-  await expect(page.locator(".backlog-lane")).toHaveCount(5);
+  await expect(page.locator(".backlog-lane")).toHaveCount(7);
 }
 
 /** One Ready task; records whether the board started it (run) or PATCHed it. */
@@ -158,6 +160,7 @@ test("a card moves between lanes from the keyboard alone", async ({ page }) => {
     return before === await board.evaluate((element) => element.scrollLeft);
   }).toBe(true);
   await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
   await expect(page.locator('.backlog-lane[data-status="running"]')).toHaveAttribute("data-drop", "active");
   await page.keyboard.press("Space");
   await expect.poll(() => writes).toEqual(["run"]);
@@ -186,4 +189,69 @@ test("the due date is picked from a calendar and kept as a day key", async ({ pa
   await expect(page.getByRole("button", { name: /^Due .*14/ })).toBeVisible();
   await page.getByRole("button", { name: "Clear date" }).click();
   await expect(page.locator('input[name="backlog-due-date"]')).toHaveValue("");
+});
+
+
+test("queued and cancelled tasks have distinct lanes and global capacity stays visible", async ({ page }) => {
+  const tasks = [
+    task("Capacity wait", "queued", { dispatchOutcome: { state: "queued", code: "task_wip_limit" } }),
+    task("Abandoned work", "cancelled", { startedAt: stamp, cancelledAt: stamp }),
+  ];
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: any = { tasks, sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [],
+      flowPolicy: { wipLimit: 5, scope: "user" }, flowUsage: { userId: "review-user", occupied: 5 } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/projects/p");
+  await expect(page.getByText("Your WIP across projects: 5 / 5")).toBeVisible();
+  await expect(page.getByRole("link", { name: "View your tasks across projects" })).toHaveAttribute("href", "/backlog?assignee=review-user");
+  await page.screenshot({ path: test.info().outputPath("capacity-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("Your WIP across projects: 5 / 5")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("capacity-mobile.png"), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await openBoard(page);
+  await expect(page.locator('.backlog-lane[data-status="queued"]')).toContainText("Capacity wait");
+  await expect(page.locator('.backlog-lane[data-status="queued"]')).toContainText("start automatically");
+  await expect(page.locator('.backlog-lane[data-status="cancelled"]')).toContainText("Abandoned work");
+  await expect(page.locator('.backlog-lane[data-status="blocked"]')).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("queued-board.png"), fullPage: true });
+});
+
+test("admin changes a user's task capacity from the default five", async ({ page }) => {
+  let user = { id: "capacity-user", handle: "alice", displayName: "Alice", maxConcurrentTasks: null as number | null,
+    effectiveMaxConcurrentTasks: 5, maxLocalComputers: null, effectiveMaxLocalComputers: 3, localComputerCount: 0 };
+  const writes: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: any = { users: [user], tasks: [], sessions: [], nodes: [], agents: [], teams: [], projects: [], sandboxes: [], entries: [], counts: {} };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "admin", userId: "admin", username: "admin", role: "admin", theme: "light", language: "en" } };
+    if (path.endsWith("/admin/settings")) body = { settings: { maxLocalComputersPerUser: 3, maxTaskRounds: 10 }, capabilities: { userEdits: true, waitlist: false } };
+    if (path.endsWith("/admin/users/capacity-user") && route.request().method() === "PATCH") {
+      const patch = route.request().postDataJSON();
+      writes.push(patch);
+      user = { ...user, ...patch, effectiveMaxConcurrentTasks: patch.maxConcurrentTasks ?? 5 };
+      body = { user };
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Edit user", exact: true }).click();
+  const input = page.getByLabel("Concurrent task limit", { exact: true });
+  await expect(input).toHaveValue("5");
+  await input.press("ArrowDown");
+  await input.press("ArrowDown");
+  await input.press("ArrowDown");
+  await expect(input).toHaveValue("2");
+  await page.screenshot({ path: test.info().outputPath("admin-task-capacity-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await input.scrollIntoViewIfNeeded();
+  await expect(input).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("admin-task-capacity-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].maxConcurrentTasks).toBe(2);
+  await expect(page.locator('[data-user="capacity-user"]')).toContainText("2");
 });

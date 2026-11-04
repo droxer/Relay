@@ -16,7 +16,7 @@ import { TASK_STATUSES, backlogSortColumns, type BacklogSortKey } from "./backlo
 import { byDate, byText, type SortColumn } from "./listSort.ts";
 import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
-export const ISSUE_QUEUES = ["needs_me", "untriaged", "blocked", "running", "overdue", "open", "done"] as const;
+export const ISSUE_QUEUES = ["needs_me", "untriaged", "blocked", "running", "overdue", "open", "done", "cancelled"] as const;
 export type IssueQueue = (typeof ISSUE_QUEUES)[number];
 export const DEFAULT_ISSUE_QUEUE: IssueQueue = "open";
 
@@ -55,7 +55,7 @@ function responsibleUser(task: RelayTaskListItem): string | undefined {
 }
 
 function inQueue(task: RelayTaskListItem, queue: IssueQueue, { userId, today }: IssueQueueContext): boolean {
-  const done = task.status === "done";
+  const done = task.status === "done" || task.status === "cancelled";
   switch (queue) {
     case "needs_me":
       return HUMAN_GATED.has(task.status) && responsibleUser(task) === userId;
@@ -70,7 +70,9 @@ function inQueue(task: RelayTaskListItem, queue: IssueQueue, { userId, today }: 
     case "open":
       return !done;
     case "done":
-      return done;
+      return task.status === "done";
+    case "cancelled":
+      return task.status === "cancelled";
   }
 }
 

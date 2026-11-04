@@ -78,6 +78,7 @@ export interface TaskDeletionResponse {
 
 export interface TasksResponse {
   flowPolicy?: { wipLimit: number; scope: "user" };
+  flowUsage?: { userId: string; occupied: number };
   tasks: RelayTaskSummary[];
 }
 

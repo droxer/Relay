@@ -91,6 +91,10 @@ export function UserCard({
             footer said the card three times. */}
         <div className="adm-emp-card-metrics">
           <span className="adm-emp-card-metric">
+            <span className="adm-emp-metric-label">{t("admin.v2.task_capacity_short")}</span>
+            <span className="tnum ink-dim">{member.effectiveMaxConcurrentTasks ?? member.maxConcurrentTasks ?? 5}</span>
+          </span>
+          <span className="adm-emp-card-metric">
             <span className="adm-emp-metric-label">{t("admin.v2.col_local_limit")}</span>
             <span className={`tnum ${isOverLocalComputerLimit(member) ? "" : "ink-dim"}`}>
               {localComputerUsageLabel(member)}

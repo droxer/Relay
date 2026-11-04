@@ -241,3 +241,33 @@ def test_cancelled_work_releases_wip_and_reopening_needs_capacity(store, monkeyp
     claim(store, second)
     with pytest.raises(ValueError, match="task_wip_limit"):
         status(store, first, "assigned")
+
+
+def test_sql_wip_occupancy_matches_policy_and_scope(store):
+    from relay.tasks.flow import flow_scope, is_wip
+    for state in ("assigned", "queued", "running", "review", "waiting_for_human", "blocked", "done", "cancelled"):
+        store.create_task({"title": state, "status": state, "ownerUserId": "alice"})
+    store.create_task({"title": "Delegated away", "status": "review", "ownerUserId": "alice", "assigneeUserId": "bob"})
+    store.create_task({"title": "Delegated to Alice", "status": "review", "ownerUserId": "bob", "assigneeUserId": "alice"})
+    store.create_task({"title": "Template", "status": "review", "ownerUserId": "alice", "isRoutine": True})
+    expected = sum(is_wip(t) and flow_scope(t) == "alice" for t in store.list_tasks())
+    assert store.count_wip("alice") == expected == 4
+
+
+def test_cancel_fences_late_execution_results_even_after_reopening(store):
+    task = store.create_task({"title": "Abandoned round"})
+    admitted = claim(store, task)
+    owner = dict(admitted["executionOwner"])
+    cancelled = status(store, task, "cancelled", actorUserId="alice")
+    store.update_task(task["id"], {"status": "assigned"})
+    late = store.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "review"}), execution_owner=owner)
+    assert late["status"] == "assigned"
+    assert cancelled["cancelledExecutionRevision"] == owner["revision"]
+
+
+def test_cancel_fences_legacy_revision_zero_results_after_reopening(store):
+    task = store.create_task({"title": "Legacy execution", "status": "running"})
+    status(store, task, "cancelled", actorUserId="alice")
+    store.update_task(task["id"], {"status": "assigned"})
+    late = store.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "review"}), execution_owner={"requestId": "legacy", "revision": 0})
+    assert late["status"] == "assigned"

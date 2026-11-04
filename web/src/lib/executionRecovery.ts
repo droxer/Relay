@@ -74,14 +74,14 @@ export function taskRecoveryReason(task: RelayTaskListItem): string | undefined 
     if (task.attention?.evidence === "unknown" || reason === "Execution needs attention.") return undefined;
     return reason;
   }
-  if (task.status === "assigned" && task.dispatchOutcome?.state !== "started") return task.dispatchOutcome?.message;
+  if ((task.status === "assigned" || task.status === "queued") && task.dispatchOutcome?.state !== "started") return task.dispatchOutcome?.message;
   return undefined;
 }
 
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
   if (task.status === "waiting_for_human") return { key: "human", tone: "info" };
   if (task.status === "review") return { key: "review", tone: "info" };
-  if (task.status === "done") return null;
+  if (task.status === "done" || task.status === "cancelled") return null;
   if (task.workspaceWaiting) return { key: "ownership" };
   if (task.status === "running") return null;
   if (task.status !== "blocked" && (!task.dispatchOutcome || task.dispatchOutcome.state === "started")) return null;

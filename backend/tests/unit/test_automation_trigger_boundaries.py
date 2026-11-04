@@ -232,3 +232,18 @@ def test_resume_cutoff_is_recorded_after_waiting_for_automation_lock(world, monk
     monkeypatch.setattr(module, "lock_automation_state", delayed_lock)
     service.resume(task["id"], {"userId": "alice", "isAdmin": False}, requested_at)
     assert service.tick(datetime.now(UTC)) == 0
+
+
+def test_capacity_queued_occurrence_prevents_duplicate_firings_until_cancelled(world):
+    tasks, _, _, service = world
+    definition = routine(tasks, [schedule({"every": "day", "at": "09:00"})], routineNextRunAt="2026-10-13T09:00:00+00:00")
+    first = datetime(2026, 10, 13, 9, 0, 2, tzinfo=UTC)
+    assert service.tick(first) == 1
+    [occurrence] = occurrences(tasks, definition)
+    tasks.update_task(occurrence["id"], {"status": "queued"})
+    next_day = first + timedelta(days=1)
+    assert service.tick(next_day) == 0
+    assert len(occurrences(tasks, definition)) == 1
+    tasks.update_task(occurrence["id"], {"status": "cancelled"})
+    assert service.tick(next_day + timedelta(seconds=1)) == 1
+    assert len(occurrences(tasks, definition)) == 2

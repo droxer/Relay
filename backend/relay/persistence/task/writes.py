@@ -15,9 +15,7 @@ from loguru import logger
 from sqlalchemy import (
     and_,
     delete,
-    func,
     insert,
-    or_,
     select,
     text,
     update,
@@ -27,6 +25,7 @@ from ...core.ids import new_relay_id
 from ...notifications.rules import task_notification_rows
 from ..automation.store import insert_outbox_rows, task_outbox_rows
 from ..notification.store import insert_notification_rows
+from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_task_event
@@ -34,7 +33,7 @@ from ..engine import store_transaction
 from ..resource_lock import resource_transaction
 from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
-from ...tasks.flow import flow_scope, needs_wip_admission, wip_limit
+from ...tasks.flow import flow_scope, needs_wip_admission
 from ...tasks.prerequisites import PREREQUISITES_EVENT
 from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, TaskAlreadyImportedError, apply_task_events
 from ...tasks.claims import TaskExecutionActiveError, dispatch_claim_active
@@ -247,39 +246,8 @@ class TaskWriteRows(TaskStoreState):
                         ),
                         {"scope": flow_scope(task)},
                     )
-                scope = flow_scope(task)
-                scope_filter = (
-                    and_(
-                        self.tasks.c.assignee_user_id.is_(None),
-                        self.tasks.c.owner_user_id.is_(None),
-                    )
-                    if scope == "unowned"
-                    else or_(
-                        self.tasks.c.assignee_user_id == scope,
-                        and_(
-                            self.tasks.c.assignee_user_id.is_(None),
-                            self.tasks.c.owner_user_id == scope,
-                        ),
-                    )
-                )
-                count = conn.scalar(
-                    select(func.count())
-                    .select_from(self.tasks)
-                    .where(
-                        self.tasks.c.id != task_pk,
-                        scope_filter,
-                        self.tasks.c.status != "done",
-                        self.tasks.c.is_routine.is_(False),
-                        self.tasks.c.deleted_at.is_(None),
-                        or_(
-                            self.tasks.c.snapshot["startedAt"].as_string().is_not(None),
-                            self.tasks.c.status.in_(
-                                ("running", "review", "waiting_for_human")
-                            ),
-                        ),
-                    )
-                )
-                if count >= wip_limit():
+                count = conn.scalar(wip_count_query(flow_scope(task), exclude_task_id=task_pk))
+                if count >= user_wip_limit(conn, flow_scope(task)):
                     raise ValueError(
                         "task_wip_limit: Finish existing work before starting another task."
                     )

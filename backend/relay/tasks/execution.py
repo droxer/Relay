@@ -21,7 +21,9 @@ def prepare_execution_events(
 
     if execution_owner is not None:
         legacy = owner is None and execution_owner.get("revision") == 0
-        if task.get("deletedAt") or (not legacy and owner != execution_owner):
+        if (task.get("deletedAt") or task.get("status") == "cancelled"
+            or execution_owner.get("revision", 0) <= task.get("cancelledExecutionRevision", -1)
+            or (not legacy and owner != execution_owner)):
             return []
         # A closeout can be retried after its verdict persisted. Deduplicate
         # under the write lock, including across backend replicas, so the
@@ -52,6 +54,8 @@ def prepare_execution_events(
         or task.get("isRoutine")
     ):
         raise ValueError("task_ownership_changed: invalid execution claim")
+    if task.get("status") == "cancelled":
+        raise ValueError("task_ownership_changed: reopen the cancelled task before starting work")
     if owner == {"requestId": request_id, "revision": expected + 1}:
         return []
     if "expectedStatus" in claim and task.get("status") != claim["expectedStatus"]:

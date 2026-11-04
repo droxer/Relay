@@ -24,7 +24,7 @@ export function waitingOnRefs(task: Pick<RelayTaskListItem, "waitingOn">, tasks:
 /** Whether a task is held only by unfinished prerequisites: ready or queued
  *  work that the scheduler will start once they are done. */
 export function waitsOnPrerequisites(task: Pick<RelayTaskListItem, "status" | "waitingOn">): boolean {
-  return Boolean(task.waitingOn?.length) && (task.status === "assigned" || task.status === "backlog");
+  return Boolean(task.waitingOn?.length) && (task.status === "assigned" || task.status === "queued" || task.status === "backlog");
 }
 
 /** Tasks a picker may offer as prerequisites of `task`: live, non-automation

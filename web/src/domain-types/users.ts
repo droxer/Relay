@@ -13,6 +13,9 @@ export interface UserRecord {
   departmentName?: string;
   /** Pinned personal-computer limit; null/undefined means it follows the org default. */
   maxLocalComputers?: number | null;
+  /** Started, unfinished tasks across projects. Null inherits the default of five. */
+  maxConcurrentTasks?: number | null;
+  effectiveMaxConcurrentTasks?: number;
   /** The override when there is one, the org default otherwise. Resolved server-side. */
   effectiveMaxLocalComputers?: number;
   /** Live personal computers the user currently owns. */
@@ -51,6 +54,8 @@ export interface UpdateControlPanelUserInput {
   email?: string;
   /** `null` clears the override so the user follows the org default again. */
   maxLocalComputers?: number | null;
+  /** Started, unfinished tasks across projects. Null inherits the default of five. */
+  maxConcurrentTasks?: number | null;
 }
 
 export interface ControlPanelUsersResponse {
@@ -65,6 +70,8 @@ export interface CreateControlPanelUserInput {
   email?: string;
   displayName?: string;
   maxLocalComputers?: number | null;
+  /** Started, unfinished tasks across projects. Null inherits the default of five. */
+  maxConcurrentTasks?: number | null;
 }
 
 export interface CreateControlPanelUserResponse {
