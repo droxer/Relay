@@ -193,14 +193,15 @@
     min-height: var(--touch-target);
   }
 
+  /* One line, always. A thread name runs to a full sentence, and a two-line
+     clamp let it wrap the bar to double height over the transcript; the bar
+     ellipses it instead, and the full name rides the heading's title. */
   .mobile-topbar-title {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
     min-width: 0;
     overflow: hidden;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     color: var(--ink-1);
     font: var(--type-title);
     letter-spacing: var(--type-title-track);
