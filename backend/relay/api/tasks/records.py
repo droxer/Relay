@@ -75,12 +75,12 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     limit = task_list_limit(request.query_params.get("limit"))
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         tasks = ctx.task_store.list_task_summaries(
-            user_id=None if actor["isAdmin"] else actor["userId"],
+            user_id=actor["userId"],
             limit=limit,
         )
     else:
         tasks = ctx.task_store.list_tasks(
-            user_id=None if actor["isAdmin"] else actor["userId"],
+            user_id=actor["userId"],
             limit=limit,
         )
     return {

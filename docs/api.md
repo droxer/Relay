@@ -71,6 +71,12 @@ and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
 truncate either projection.
 
+Personal task lists are scoped to the signed-in user for every role, including
+administrators. Tasks appear when the user owns them or is their assignee;
+automations appear only for their owner. Both projections apply this scope
+before the limit. Personal project lists likewise return only the user's own
+projects, including archived projects.
+
 Task lists include `waitingOnSummaries` alongside the authoritative `waitingOn`
 IDs. These summaries contain only a direct unfinished prerequisite's id, number,
 title, status, responsible user ids/name, and `canOpen`. They are supplied only

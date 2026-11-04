@@ -325,7 +325,7 @@ def test_task_summary_view_without_limit_preserves_completeness(monkeypatch) -> 
         response = client.get("/api/v1/tasks?view=summary")
 
         assert response.status_code == 200
-        assert observed == {"user_id": None, "limit": None}
+        assert observed == {"user_id": client.get("/api/v1/auth/me").json()["user"]["userId"], "limit": None}
 
 
 def test_routine_create_defaults_to_paused(monkeypatch) -> None:

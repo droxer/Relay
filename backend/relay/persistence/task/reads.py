@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 from sqlalchemy import (
+    and_,
     or_,
     select,
 )
@@ -69,7 +70,10 @@ class TaskReadRows(TaskStoreState):
             statement = statement.where(
                 or_(
                     self.tasks.c.owner_user_id == user_id,
-                    self.tasks.c.assignee_user_id == user_id,
+                    and_(
+                        self.tasks.c.is_routine.is_(False),
+                        self.tasks.c.assignee_user_id == user_id,
+                    ),
                 )
             )
         if limit is not None:
@@ -138,7 +142,10 @@ class TaskReadRows(TaskStoreState):
             statement = statement.where(
                 or_(
                     self.tasks.c.owner_user_id == user_id,
-                    self.tasks.c.assignee_user_id == user_id,
+                    and_(
+                        self.tasks.c.is_routine.is_(False),
+                        self.tasks.c.assignee_user_id == user_id,
+                    ),
                 )
             )
         if task_ids is not None:
