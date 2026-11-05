@@ -1,0 +1,73 @@
+.agent-delegation-settings {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-5) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-1);
+}
+
+.agent-delegation-settings legend,
+.direct-delegation h3 {
+  padding: 0;
+  color: var(--ink-1);
+  font: var(--type-label);
+}
+
+.agent-delegation-settings p,
+.direct-delegation-note,
+.direct-delegation-status {
+  color: var(--ink-3);
+  font: var(--type-meta);
+}
+
+.direct-delegation-objective {
+  display: block;
+  margin-top: var(--sp-2);
+  font: var(--type-body);
+}
+
+.agent-delegation-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--touch-target);
+  overflow-wrap: anywhere;
+  color: var(--ink-1);
+  cursor: pointer;
+}
+
+.direct-delegation {
+  margin: var(--sp-3) 0 var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+  color: var(--ink-1);
+  overflow-wrap: anywhere;
+}
+
+.direct-delegation summary {
+  min-height: var(--touch-target);
+  align-content: center;
+  cursor: pointer;
+  font: var(--type-label);
+}
+
+.direct-delegation-status {
+  display: block;
+  margin-top: var(--sp-1);
+}
+
+.direct-delegation p,
+.direct-delegation ul {
+  margin: var(--sp-3) 0;
+}
+
+.direct-delegation ul {
+  padding-inline-start: var(--sp-5);
+}
+
+.direct-delegation h3 {
+  margin: var(--sp-4) 0 var(--sp-2);
+}

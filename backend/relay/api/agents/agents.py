@@ -22,6 +22,7 @@ from ...security.request_auth import require_admin_session
 from ...agents.binding import binding_status
 from ...agents.location import AgentMoveError, place_agent_on_node
 from ...agents.creation import AgentCreationError, create_agent_for_user
+from ...agents.delegation import validate_delegation_targets
 from ...agents.routing import placement_node
 from ...computer.names import computer_display_name
 from ...projects.catalog import agent_has_active_project
@@ -40,7 +41,7 @@ router = APIRouter()
 # different computer or runtime is a different coworker, so it should be a new
 # agent, not an edit. The role is the agent's own default; a team may assign
 # its member a different one.
-AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole"})
+AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole", "delegationAgentIds"})
 
 
 @router.get("/agents")
@@ -387,6 +388,8 @@ def _update_agent_and_realize_placements(
     if "skillPolicy" in patch:
         raise HTTPException(422, "Use skill grant routes to manage skillPolicy.")
     previous = ctx.agent_store.get_agent(agent_id)
+    if previous and "delegationAgentIds" in patch:
+        patch = {**patch, "delegationAgentIds": validate_delegation_targets(ctx, previous, patch["delegationAgentIds"])}
     updated = ctx.agent_store.update_agent(agent_id, patch)
     if previous and updated.get("version") != previous.get("version"):
         for placement in ctx.agent_placement_store.list_placements(agent_id=agent_id):

@@ -12,6 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ...core.agent_names import generate_agent_name
+from ...core.agent_delegation import delegation_agent_ids
 from ...core.computer_identity import is_provisional_computer_id
 from ...core.ids import new_database_id, now_iso
 from ...core.model_policy import normalize_model_policy, policy_model
@@ -33,6 +34,7 @@ AGENT_PATCH_FIELDS = frozenset(
         "defaultRole",
         "enabled",
         "compatibilityKey",
+        "delegationAgentIds",
     }
 )
 PLACEMENT_RELEVANT_AGENT_FIELDS = frozenset(
@@ -494,6 +496,8 @@ def _normalize_agent_identity_patch(
     ensure_unique_name: Callable[..., None],
 ) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
+    if "delegationAgentIds" in patch:
+        normalized["delegationAgentIds"] = delegation_agent_ids(patch["delegationAgentIds"])
     if "displayName" in patch:
         display_name = _required_string(patch, "displayName")
         ensure_unique_name(

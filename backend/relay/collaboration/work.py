@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ..core.role_charters import role_charter
 from .contracts import text_list
+from .delegation import DELEGATION_REFUSAL, delegation_request
 from .styles import role_stage
 
 MAX_WORK_ITEMS = 16
@@ -30,6 +31,7 @@ QUESTION_COUNT = "_relay_question_count"
 WORK_STATE_KEYS = frozenset(
     {
         WORK_PROTOCOL,
+        DELEGATION_REFUSAL,
         WORK_RESULTS,
         WORK_REPAIRS,
         WORK_REPAIR_NOTE,
@@ -59,6 +61,10 @@ def validate_work_result(value: Any) -> dict[str, Any] | None:
         if not isinstance(note, str) or len(note) > 2000:
             return None
         result["note"] = note.strip()
+        if "delegation" in value:
+            if value["status"] != "continue" or "plan" in value:
+                return None
+            result["delegation"] = delegation_request(value["delegation"])
         for field in ("findings", "messages"):
             entries = value.get(field, [])
             if not isinstance(entries, list) or len(entries) > 20:

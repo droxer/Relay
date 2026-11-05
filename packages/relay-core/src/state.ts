@@ -71,6 +71,8 @@ export interface AgentState {
    * read it back; absent means nothing will consume what the agent writes.
    */
   work_result_required?: boolean;
+  delegation_candidates?: Array<{ agentId: string; name: string }>;
+  delegation_return?: string;
   work_messages?: Array<Record<string, unknown>>;
   work_question?: string;
   work_revalidation_note?: string;

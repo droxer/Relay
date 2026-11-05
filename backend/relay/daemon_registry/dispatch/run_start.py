@@ -81,7 +81,7 @@ def _run_start_command(
         "reportWorkspaceStatus": True,
         **(
             {"reportExecutionStarted": True}
-            if context or run_request.get("taskId")
+            if context or run_request.get("taskId") or assignment.get("delegationId") or assignment.get("delegationReturnId")
             else {}
         ),
         **(

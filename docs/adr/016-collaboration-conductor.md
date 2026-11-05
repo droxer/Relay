@@ -154,6 +154,47 @@ single-assignment daemon delivery envelopes.
 
 ## Handoff context and execution evidence
 
+### Direct delegation without a Team
+
+An individual action round may offer targets from its requesting Logical
+Agent's `delegationAgentIds` policy. An absent or null policy allows every
+eligible Agent, including Agents created later; an explicit list restricts
+targets and an empty list disables delegation. Targets must be
+other owned Agents on the same Computer, with an active, ready Placement; a
+Project round additionally limits targets to its Project Agent roster. The
+conductor freezes resolved candidates in the admitted manifest, and delivery
+revalidates Agent configuration, Placement and the requester's current grant.
+The Computer must advertise `direct-delegation` and `work-results`; older
+clients continue normal individual work without offering delegation.
+
+The runtime-neutral request is `work.delegation` in a `continue` work report:
+`{agentId, objective, context?, acceptanceCriteria, expectedOutputs}`. It names
+no executor, node, or permission override. The conductor compiles it into an
+immutable `direct_delegation` child manifest before dispatch: the yielded turn,
+the optional delegate contribution, and a required requester continuation.
+Deterministic identities make a replay after manifest persistence idempotent.
+The existing daemon queue, workspace, cancellation fence, task execution owner,
+and finalization recovery remain authoritative.
+
+The requesting Agent yields its process slot. The delegate's completion,
+blocker, missing report, or confirmed runtime failure returns control to that
+Agent with attributed predecessor context. A failed delegate does not by itself
+block the parent Task. Only the requester continuation can report the original
+work done; human acceptance is unchanged. Unavailable or revoked targets are
+refused and the requester receives one bounded continuation explaining the
+refusal, with further delegation disabled. If a delegate becomes ineligible
+after plan persistence but before delivery, confirmed non-delivery returns the
+failure to the requester too; an already dispatched run still requires exit
+evidence. There is one active delegation at a time, at most two per round, and no
+nested delegation. Team rounds retain their existing planning contract.
+
+The thread receipt names requester, target, objective, deliverables, criteria,
+and the returned report. Execution needs daemon acknowledgement or output;
+staging alone is only queued. Requester-reported completion is distinguished
+from process exit and human acceptance.
+
+### Handoff evidence
+
 New handoff rounds include an optional versioned `handoffContext` linking the
 receiving assignment and decision to captured event boundaries, logical-agent
 identity, runtime/workspace identity, run/artifact references, and bounded

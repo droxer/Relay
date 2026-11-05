@@ -3482,5 +3482,36 @@
     "permissions_error": "Relay’s GitHub App needs read-only issue access. Ask your Relay administrator to check its permissions.",
     "coming_soon": "Coming soon",
     "public_only": "Import issues from public repositories now. GitHub connection for private repositories is coming soon."
+  },
+  "delegation": {
+    "can_delegate_to": "Can delegate to",
+    "settings_help": "All eligible agents can receive delegated work by default, including new agents. Turn this off to choose specific agents. Changes save immediately.",
+    "loading": "Loading agents…",
+    "load_failed": "Could not load agents. Reload this page to try again.",
+    "no_targets": "Create another agent on this Computer to enable delegation.",
+    "unavailable_target": "Unavailable agent — remove permission",
+    "requester": "Requesting agent",
+    "delegate": "Delegate",
+    "receipt": "{{requester}} delegated to {{target}}",
+    "expected_outputs": "Expected outputs",
+    "acceptance_criteria": "Acceptance criteria",
+    "returned_report": "{{target}}’s report",
+    "runtime_failed": "{{target}}’s runtime failed. The requester receives the failure and decides how to proceed.",
+    "accountability": "{{requester}} remains responsible for checking the result. Agent reports are claims, not acceptance.",
+    "status": {
+      "queued": "Queued",
+      "working": "Working",
+      "returned": "Returned",
+      "resuming": "Requester resumed",
+      "reported_done": "Requester reported completion",
+      "needs_attention": "Needs attention",
+      "cancelled": "Cancelled"
+    },
+    "work_status": {
+      "done": "Reported done",
+      "continue": "Unfinished",
+      "blocked": "Blocked"
+    },
+    "all_eligible": "All eligible agents (including new ones)"
   }
 }

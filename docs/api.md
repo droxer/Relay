@@ -65,6 +65,28 @@ route. `/` is replaced with `/threads`.
 Persisted media uses `/profile-images/{kind}/{id}` and intentionally stays
 outside the JSON version namespace.
 
+### Agent delegation permissions
+
+`PATCH /api/v1/agents/{agentId}` accepts `delegationAgentIds`, an array of at
+most 20 other owned Agent ids on the same Computer, or `null`. An omitted or
+null setting permits all eligible Agents, including those created later;
+an explicit list restricts targets and `[]` disables delegation. Patch with
+`null` to restore the default. The equivalent admin agent patch validates targets
+against the agent's owner, not the administrator's identity. Invalid, foreign,
+self, and cross-Computer targets answer 400. The setting is event-sourced in
+the Agent snapshot and returned with Agent records.
+
+On a Computer advertising `direct-delegation` and `work-results`, an individual
+action round exposes eligible targets to its runtime. An Agent requests work
+through the existing daemon result envelope, using outer `status: "continue"`
+and `work: {status: "continue", delegation: {agentId, objective, context?,
+acceptanceCriteria, expectedOutputs}}`. The conductor validates this untrusted
+request; it is not a new browser dispatch endpoint. Project delegates must be
+on the Project Agent roster. A `collaboration.round.started` manifest with
+`source: "direct_delegation"` records the requester, delegate, objective,
+deliverables, criteria, and the delegate/return assignment ids in `delegation`.
+The existing thread event stream carries the manifest and attributed runs.
+
 `GET /api/v1/tasks` returns complete task records for compatibility. Browser
 list views may request `GET /api/v1/tasks?view=summary`, which omits `events`
 and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`

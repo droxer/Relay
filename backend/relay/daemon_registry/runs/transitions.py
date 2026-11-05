@@ -28,6 +28,8 @@ from ...projects.context import (
     merge_context_suggestions,
 )
 from ...collaboration.manifest import compile_assignment_work_graph, create_round_manifest
+from ...collaboration.delegation import DELEGATION_REFUSAL, compile_delegation
+from ...collaboration.policy import ROUND_RESULT_STATE_KEY
 from ...projects.setup_result import completed_setup
 from .run_cursor import advanced_run_cursor
 from .. import config
@@ -55,6 +57,8 @@ class RunTransitionMixin(RegistryState):
     ) -> tuple[list[dict[str, Any]], int, dict[str, Any]]:
         """Apply the work protocol's transition, adopting a lead plan if it carries one."""
         assignments = run_request["assignments"]
+        if work_result and work_result.get("delegation") and not assignment.get("delegatedByAgentId"):
+            return self._adopt_direct_delegation(run_request, controller, work_result["delegation"], next_state)
         transition = next_work_transition(run_request, assignment, work_result, next_state)
         next_state = transition.state
         if transition.plan is not None:
@@ -67,6 +71,37 @@ class RunTransitionMixin(RegistryState):
             len(assignments) if transition.next_index is None else transition.next_index
         )
         return assignments, next_index, next_state
+
+    def _adopt_direct_delegation(
+        self, run_request: dict[str, Any], controller: Any, proposal: Any, state: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], int, dict[str, Any]]:
+        assignments = run_request["assignments"]
+        index = run_request.get("currentIndex", 0)
+        parent = state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        try:
+            planned, receipt = compile_delegation(assignments, index, proposal, parent.get("delegationCandidates") or [])
+            if not self.logical_assignment_validator:
+                raise ValueError("Delegation requires logical agent validation.")
+            self.logical_assignment_validator(planned[index + 1])
+        except ValueError as error:
+            if not state.get(DELEGATION_REFUSAL):
+                retry = {key: value for key, value in state.items() if key != ROUND_RESULT_STATE_KEY}
+                return assignments, index, {**retry, DELEGATION_REFUSAL: str(error)}
+            return assignments, len(assignments), {**state, WORK_PLAN_ERROR: str(error)}
+        planned = compile_assignment_work_graph(planned, purpose="accomplish", team_snapshot=None)
+        manifest = {
+            **create_round_manifest(
+                source="direct_delegation", purpose="accomplish", address=parent.get("address") or {"kind": "room"},
+                assignments=planned, team_snapshot=None, project_snapshot=parent.get("projectSnapshot"),
+                collaboration_id=parent.get("collaborationId"), round_id=f"round_{receipt['id']}",
+            ),
+            "parentRoundId": parent.get("roundId"), "workScope": parent.get("workScope", {"kind": "thread"}),
+            "humanStarted": is_human_started_round(parent), "delegation": receipt,
+            "delegationCandidates": parent.get("delegationCandidates") or [],
+        }
+        controller.record_collaboration_round_started(run_request["sessionId"], manifest)
+        next_state = {key: value for key, value in state.items() if key != ROUND_RESULT_STATE_KEY}
+        return planned, index + 1, {**next_state, COLLABORATION_MANIFEST_STATE_KEY: manifest}
 
     @staticmethod
     def _adopt_lead_plan(

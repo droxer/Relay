@@ -26,6 +26,7 @@
 @import "./artifact.css" layer(relay);
 @import "./thread-space.css" layer(relay);
 @import "./handoff.css" layer(relay);
+@import "./direct-delegation.css" layer(relay);
 @import "./composer.css" layer(relay);
 
 @import "./pills.css" layer(relay);

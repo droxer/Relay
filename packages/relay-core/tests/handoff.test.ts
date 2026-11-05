@@ -457,6 +457,23 @@ describe("prompts", () => {
     assert.match(prompt, /Add a "work" field to the JSON you write to `\.relay\/round-result\.json`, never to your reply/);
     assert.doesNotMatch(prompt, /finishing JSON/);
   });
+  it("offers bounded direct delegation through the shared report contract", () => {
+    const delegated = state({
+      task_goal: "Build sign-in", work_result_required: true,
+      round_result_file: ".relay/round-result.json",
+      delegation_candidates: [{ agentId: "ben", name: "Ben" }],
+    });
+    for (const prompt of [claudeTaskPrompt(delegated), codexTaskPrompt(delegated)]) {
+      assert.match(prompt, /\[Direct delegation\]/);
+      assert.match(prompt, /"agentId":"ben"/);
+      assert.match(prompt, /work\.delegation/);
+      assert.match(prompt, /Do not start another agent process yourself/);
+      assert.match(prompt, /delegates cannot delegate further/);
+      assert.match(prompt, /You remain responsible/);
+    }
+    assert.doesNotMatch(claudeTaskPrompt(state({ task_goal: "Work alone", work_result_required: true })), /\[Direct delegation\]/);
+    assert.match(claudeTaskPrompt(state({ task_goal: "Resume", work_result_required: true, delegation_return: "Delegation refused: target unavailable" })), /Delegation refused: target unavailable/);
+  });
   it("tells a lead sent back to repair what it is fixing", () => {
     const repairState = state({
       task_goal: "Ship the migration",

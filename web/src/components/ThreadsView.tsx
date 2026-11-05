@@ -37,6 +37,8 @@ import { TaskStatusTimeline } from "./TaskStatusTimeline";
 import { TaskActionBar, taskNeedsAction } from "./TaskActionBar";
 import { TaskReviewPanel } from "./task-record/TaskReviewPanel";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
+import { DirectDelegationCard } from "./DirectDelegationCard";
+import { directDelegations } from "../lib/directDelegations";
 import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { parseAutomationOpening } from "../lib/automationOpening";
 import { threadOriginIndex } from "../lib/threads";
@@ -266,6 +268,7 @@ export function ThreadsView({
     .filter((round) => round.styleFallbackFrom)
     .map((round) => activeSession?.agentRuns.find((run) => run.assignmentId === round.assignments[0]?.assignmentId)?.id)),
   [activeSession?.agentRuns, activeSession?.collaborationRounds]);
+  const delegations = useMemo(() => directDelegations(activeSession), [activeSession]);
   // An automation run's first turn draws as the automation's card. A fired
   // run says so in its goal's trigger block; a scheduled one carries none, so
   // the task list is what marks the thread as a routine occurrence.
@@ -586,6 +589,9 @@ export function ThreadsView({
                         retryDisabled={running}
                         pickupFrom={source ? labelForAgentRun(source, logicalAgentNames, agentDisplayNames) : undefined}
                       />
+                      {msg.kind === "agent" ? delegations.filter((delegation) => delegation.requesterRunId === msg.runId).map((delegation) => (
+                        <DirectDelegationCard key={delegation.id} delegation={delegation} names={logicalAgentNames} />
+                      )) : null}
                     </div>
                   );
                 })}

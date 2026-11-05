@@ -49,6 +49,7 @@ export function getControlPanelAgent(agentId: string, signal?: AbortSignal): Pro
 }
 
 export type UserAgentMetaPatch = {
+  delegationAgentIds?: string[] | null;
   displayName?: string;
   instructions?: string;
   /** `{}` returns the agent to its runtime's default model. */

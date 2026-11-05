@@ -28,6 +28,7 @@ import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { formatRelativeTime } from "./admin/helpers";
 import { IdentityMark } from "./IdentityMark";
 import { AgentProfileEditor } from "./AgentProfileEditor";
+import { AgentDelegationSettings } from "./AgentDelegationSettings";
 import { PlacementList } from "./PlacementList";
 import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPlacements";
 import { ProfileImagePicker } from "./ProfileImagePicker";
@@ -113,6 +114,7 @@ export function AgentProfilePanel({
       ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}),
       ...(patch.modelPolicy !== undefined ? { modelPolicy: patch.modelPolicy } : {}),
       ...(patch.defaultRole !== undefined ? { defaultRole: patch.defaultRole } : {}),
+      ...(patch.delegationAgentIds !== undefined ? { delegationAgentIds: patch.delegationAgentIds } : {}),
     });
   }
 
@@ -330,6 +332,16 @@ export function AgentProfilePanel({
         {canEditProfile && error ? (
           <Alert variant="boxed">{t("admin.v2.action_failed", { message: error })}</Alert>
         ) : null}
+        <AgentDelegationSettings
+          key={agent.id}
+          agent={agent}
+          editable={canEditProfile && !saving}
+          admin={canManage}
+          onChange={async (ids) => {
+            const result = await patchAgent({ delegationAgentIds: ids });
+            applyAgentUpdate(result.agent);
+          }}
+        />
       </div>
 
       {/* Management lives at the foot of the record and only in edit mode —

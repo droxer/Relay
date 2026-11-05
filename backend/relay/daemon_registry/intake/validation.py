@@ -30,6 +30,15 @@ class RunTargetValidationMixin(NodeBackendState):
         agent = self.agent_store.get_agent(agent_id)
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
+        if requester_id := assignment.get("delegatedByAgentId"):
+            requester = self.agent_store.get_agent(requester_id)
+            if not requester or not requester.get("enabled", True) or requester.get("deletedAt") or (
+                requester_id == agent_id
+                or (requester.get("delegationAgentIds") is not None and agent_id not in requester["delegationAgentIds"])
+                or requester.get("supervisorUserId") != agent.get("supervisorUserId")
+                or requester.get("computerId") != agent.get("computerId")
+            ):
+                raise ValueError("Delegation permission is no longer available.")
         if agent.get("toolPolicy"):
             raise ValueError(
                 "agent_policy_unsupported: logical agent policy is not enforceable by this runtime"

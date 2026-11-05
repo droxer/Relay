@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from ...collaboration.policy import ROUND_RESULT_STATE_KEY
+from ...collaboration.work import WORK_RESULTS
 from ...tasks.execution import request_execution_owner
 from ...sessions.agent_state import initial_agent_state
 from ...sessions.controller import SessionController
 from ..state import RegistryState
+from .run_cursor import advanced_run_cursor
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,8 @@ class RunFailureMixin(RegistryState):
         if run_id:
             self.clear_run_output(run_id)
         controller = self._controller_for_failed_request(run_request)
+        index = run_request.get("currentIndex", 0)
+        assignment = run_request["assignments"][index] if index < len(run_request["assignments"]) else {}
         if run_id and run_request.get("currentAgent"):
             controller.record_agent_completed(
                 run_request["sessionId"],
@@ -76,7 +81,22 @@ class RunFailureMixin(RegistryState):
                     "exitCode": 1,
                     "agentLog": outcome,
                 },
+                fail_task=not bool(assignment.get("delegatedByAgentId")),
             )
+        if assignment.get("delegatedByAgentId") and self.store.get_session(run_request["sessionId"])["status"] == "running":
+            # The dispatched case returned above and terminalization proved
+            # any staged command undelivered. Returning to A cannot overlap B.
+            state = {key: value for key, value in (run_request.get("state") or {}).items() if key != ROUND_RESULT_STATE_KEY}
+            state[WORK_RESULTS] = {
+                **state.get(WORK_RESULTS, {}),
+                assignment["assignmentId"]: {"status": "blocked", "evidence": [], "note": outcome},
+            }
+            updated = self.daemon_store.update_run_request_if_status(
+                run_request["id"], run_request["status"], advanced_run_cursor(index + 1, state)
+            )
+            if updated:
+                self._follow_up_run_request(updated)
+            return
         controller.fail_session(run_request["sessionId"], outcome)
         self.daemon_store.update_run_request(
             run_request["id"], {"status": "failed", "error": outcome}

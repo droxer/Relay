@@ -113,6 +113,14 @@ def decide_failure(
     assignments = run_request["assignments"]
     index = run_request.get("currentIndex", 0)
     state = dict(next_state)
+    if assignments[index].get("delegatedByAgentId"):
+        state.pop(ROUND_RESULT_STATE_KEY, None)
+        results = dict(state.get(WORK_RESULTS) or {})
+        results[assignments[index]["assignmentId"]] = {
+            "status": "blocked", "evidence": [], "note": outcome,
+        }
+        state[WORK_RESULTS] = results
+        return FailureDecision("continue", index + 1, state)
     repairs = int(state.get(REPAIR_COUNT_STATE_KEY) or 0)
     can_repair = (
         bool(run_request.get("taskId"))
@@ -197,6 +205,9 @@ def next_work_transition(
     next_index: int | None
     next_index, state = advance_after_success(run_request, next_state)
     state = without_report_reminder(state)
+    if assignment.get("delegatedByAgentId"):
+        state.pop(ROUND_RESULT_STATE_KEY, None)
+        return WorkTransition(index + 1, state)
     reported = work_result or {"status": "missing", "evidence": []}
     question = question_transition(assignments, index, state, reported)
     if question:

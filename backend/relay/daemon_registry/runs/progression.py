@@ -238,6 +238,7 @@ class RunProgressionMixin(RegistryState):
                 _agent_completed_payload(
                     event, turn.assignment, status="failed", exit_code=exit_code, agent_log=agent_log
                 ),
+                fail_task=not bool(turn.assignment.get("delegatedByAgentId")),
             )
         )
         # Preserve deliverables when the agent process succeeded but the
@@ -344,7 +345,7 @@ class RunProgressionMixin(RegistryState):
                     status="completed" if event["exitCode"] == 0 else "failed",
                     exit_code=event["exitCode"], agent_log=agent_log, details=details,
                 ),
-                fail_task=not decision.succeeded,
+                fail_task=not decision.succeeded and not bool(turn.assignment.get("delegatedByAgentId")),
             )
         )
         if decision.succeeded:
