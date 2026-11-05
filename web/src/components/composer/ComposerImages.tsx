@@ -7,61 +7,71 @@ import { Button } from "@/components/ui/button";
 import { StreamAttachment, ICON } from "../icons";
 
 export function useComposerImages(draftKey?: string) {
+  const [imageDraftKey, setImageDraftKey] = useState(draftKey);
   const [images, setImages] = useState<Array<ThreadImageAttachment & { preview: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const generation = useRef(0);
-  const previews = useRef(new Set<string>());
-  const controller = useRef<AbortController | null>(null);
+  const uploads = useRef({ generation: 0, previews: new Set<string>(), controller: null as AbortController | null });
   const { t } = useTranslation();
+  // Reset before the new Thread commits, so its composer cannot show or send
+  // the previous Thread's images. The effect only releases external resources.
+  if (imageDraftKey !== draftKey) {
+    setImageDraftKey(draftKey);
+    setImages([]);
+    setBusy(false);
+    setError(null);
+  }
   const clear = () => {
-    generation.current++;
-    controller.current?.abort();
-    controller.current = null;
-    for (const url of previews.current) URL.revokeObjectURL(url);
-    previews.current.clear();
+    const resources = uploads.current;
+    resources.generation++;
+    resources.controller?.abort();
+    resources.controller = null;
+    for (const url of resources.previews) URL.revokeObjectURL(url);
+    resources.previews.clear();
     setImages([]);
     setBusy(false);
     setError(null);
   };
   useEffect(() => {
-    clear();
+    const resources = uploads.current;
     return () => {
-      generation.current++;
-      controller.current?.abort();
-      for (const url of previews.current) URL.revokeObjectURL(url);
-      previews.current.clear();
+      resources.generation++;
+      resources.controller?.abort();
+      resources.controller = null;
+      for (const url of resources.previews) URL.revokeObjectURL(url);
+      resources.previews.clear();
     };
   }, [draftKey]); // The image draft belongs to the same Thread as the text draft.
 
   async function add(files: File[]) {
-    if (controller.current || !files.length) return;
+    const resources = uploads.current;
+    if (resources.controller || !files.length) return;
     setError(null);
     if (images.length + files.length > 4 || files.some(file => file.size < 1 || file.size > 10 * 1024 * 1024 || !["image/png", "image/jpeg", "image/webp"].includes(file.type))) {
       setError(t("composer.image_limits", { defaultValue: "Choose up to 4 PNG, JPEG, or WebP images, at most 10 MB each." }));
       return;
     }
-    const current = generation.current;
+    const current = resources.generation;
     const abort = new AbortController();
-    controller.current = abort;
+    resources.controller = abort;
     setBusy(true);
     try {
       for (const file of files) {
         const attachment = await uploadThreadImage(file, abort.signal);
-        if (generation.current !== current) return;
+        if (resources.generation !== current) return;
         const preview = URL.createObjectURL(file);
-        previews.current.add(preview);
+        resources.previews.add(preview);
         setImages(previous => [...previous, { ...attachment, preview }]);
       }
     } catch (cause) {
-      if (generation.current === current) setError(cause instanceof Error ? cause.message : t("composer.image_failed", { defaultValue: "Image upload failed. Choose the image to try again." }));
+      if (resources.generation === current) setError(cause instanceof Error ? cause.message : t("composer.image_failed", { defaultValue: "Image upload failed. Choose the image to try again." }));
     } finally {
-      if (generation.current === current) { controller.current = null; setBusy(false); }
+      if (resources.generation === current) { resources.controller = null; setBusy(false); }
     }
   }
   return { images, busy, error, add, clear, remove(id: string) {
     const image = images.find(image => image.id === id);
-    if (image) { URL.revokeObjectURL(image.preview); previews.current.delete(image.preview); }
+    if (image) { URL.revokeObjectURL(image.preview); uploads.current.previews.delete(image.preview); }
     setImages(previous => previous.filter(image => image.id !== id));
   } };
 }

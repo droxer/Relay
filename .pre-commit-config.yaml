@@ -24,7 +24,6 @@ repos:
       - id: ruff
         name: ruff (backend)
         files: ^backend/
-        args: ['--config', 'backend/pyproject.toml']
 
   - repo: local
     hooks:
