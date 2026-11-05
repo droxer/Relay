@@ -88,3 +88,17 @@ def test_admin_cannot_use_legacy_sandbox_routes_to_control_a_personal_computer(p
             "sandboxId": "node_alice", "userId": identities["alice"],
         })
     assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize("bearer", ["token_alice", "attacker_ui_token"])
+def test_daemon_registration_cannot_mint_a_human_credential(personal_resources, bearer):
+    _client, app, identities, sessions = personal_resources
+    daemon = TestClient(app)
+    registered = daemon.post("/api/v1/daemon-node-registrations", json={
+        "sandboxId": "node_alice", "userId": identities["alice"], "token": "token_alice",
+        "protocolVersion": 1, "supportedAgents": ["codex"], "status": "ready",
+        "workspaceId": "machine_alice", "workspacePath": "/workspace/alice",
+    }, headers={"Authorization": f"Bearer {bearer}"})
+    assert registered.status_code == 200, registered.text
+    response = daemon.get(f"/api/v1/threads/{sessions['alice']}", headers={"Authorization": f"Bearer {bearer}"})
+    assert response.status_code == 401, response.text
