@@ -138,22 +138,6 @@ it("announces the prompt once, after it has appeared", async () => {
   await waitFor(() => expect(status.textContent).toBe("awaiting.question_title"));
 });
 
-it("asks for status without handing the agent a task round", async () => {
-  const onSend = vi.fn(async () => true);
-  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
-  fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_status" }));
-  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
-  expect(onSend).toHaveBeenLastCalledWith(undefined, "discuss", { literal: true });
-});
-
-it("sends keep-going as an ordinary reply that resumes the work", async () => {
-  const onSend = vi.fn(async () => true);
-  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
-  fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_continue" }));
-  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
-  expect(onSend).toHaveBeenLastCalledWith(undefined, undefined, { literal: true });
-});
-
 it("folds what else held the work up behind one line under the question", () => {
   setup(vi.fn(async () => true), ["Staging", "Production"], {
     kind: "question", text: "Which environment?", options: ["Staging", "Production"],
@@ -173,15 +157,6 @@ it("says what happens once a pick went through, in place of the answers", async 
   expect(screen.queryByRole("button", { name: "awaiting.write_own" })).toBeNull();
 });
 
-it("tells a gate stop's choices apart by what each does to the work", async () => {
-  const onSend = vi.fn(async () => true);
-  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
-  const status = screen.getByRole("button", { name: "awaiting.choice_status" });
-  expect(document.getElementById(status.getAttribute("aria-describedby") ?? "")?.textContent).toBe("awaiting.effect_stays");
-  fireEvent.click(status);
-  await waitFor(() => expect(screen.getByText("awaiting.sent_discuss")).toBeTruthy());
-});
-
 it("points an unreported stop at the agent's last message instead of quoting the gate", () => {
   setup(vi.fn(async () => true), [], {
     kind: "check", text: "A required step ended without reporting what it did.", options: [], notes: [], unreported: true,
@@ -189,7 +164,8 @@ it("points an unreported stop at the agent's last message instead of quoting the
   expect(screen.getByRole("heading", { name: "awaiting.unreported_title" })).toBeTruthy();
   expect(screen.getByText("awaiting.unreported_text")).toBeTruthy();
   expect(screen.queryByText("A required step ended without reporting what it did.")).toBeNull();
-  expect(screen.getByRole("button", { name: "awaiting.choice_continue" })).toBeTruthy();
+  // A stop's follow-ups are the agent's own suggestions, under its response.
+  expect(screen.queryByRole("list", { name: "awaiting.choices" })).toBeNull();
 });
 
 const task = { id: "task_2", number: 2 } as NonNullable<Waiting["task"]>;
@@ -210,9 +186,9 @@ it("lets the person close a stopped task as done without sending the agent anyth
 it("marks the task done by its number key and unlocks the prompt if that fails", async () => {
   const onMarkDone = vi.fn(async () => false);
   setup(vi.fn(async () => true), [], unreportedCheck, onMarkDone);
-  fireEvent.keyDown(document.body, { key: "3" });
+  fireEvent.keyDown(document.body, { key: "1" });
   await waitFor(() => expect(onMarkDone).toHaveBeenCalledOnce());
-  await waitFor(() => expect((screen.getByRole("button", { name: "awaiting.choice_continue" }) as HTMLButtonElement).disabled).toBe(false));
+  await waitFor(() => expect((screen.getByRole("button", { name: "awaiting.choice_mark_done" }) as HTMLButtonElement).disabled).toBe(false));
 });
 
 it("offers mark done only for a stop on a task, never beside an agent's own answers", () => {
@@ -230,8 +206,6 @@ it("approves an approval wait in one pick and asks for changes by writing", asyn
   const onSend = vi.fn(async () => true);
   const { onReply } = setup(onSend, [], { kind: "approval", text: null, options: [], notes: [], nextAgentId: "agt_r" });
   expect(screen.getByRole("heading", { name: "awaiting.approval_title" })).toBeTruthy();
-  // Approval offers no status question: what it waits on is the person's call.
-  expect(screen.queryByRole("button", { name: /awaiting.choice_status/ })).toBeNull();
   // Asking for changes is writing them: it opens the reply box.
   fireEvent.click(screen.getByRole("button", { name: "awaiting.request_changes" }));
   expect(onReply).toHaveBeenCalledOnce();
