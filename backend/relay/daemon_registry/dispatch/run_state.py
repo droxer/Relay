@@ -275,6 +275,10 @@ def _project_state(
 ) -> dict[str, Any]:
     """The project brief and, for a setup draft, where to write the proposal."""
     next_state = dict(state)
+    if manifest.get("projectManager"):
+        if not has_capability(sandbox, "project-manager"):
+            raise _DeliveryRefused("Update this computer to use the project manager tools.")
+        next_state["project_manager"] = manifest["projectManager"]
     project_brief = project_context_brief(
         manifest.get("projectSnapshot") or assignment.get("projectSnapshot"),
         {

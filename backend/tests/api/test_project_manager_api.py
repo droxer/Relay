@@ -52,7 +52,7 @@ def test_manager_round_is_single_agent_thread_scoped_and_reuses_thread(setup_env
     app, client, node, project, planner, _ = setup_env
     result, command = _start(setup_env)
     assert command["state"]["project_manager"]["projectId"] == project["id"]
-    assert command["agentId"] == planner["id"]
+    assert command["logicalAgentId"] == planner["id"]
     assert not command.get("taskId")
     _complete(app, node, command, result["threadId"])
     second = client.post(f"/api/v1/projects/{project['id']}/manager/messages", json={
