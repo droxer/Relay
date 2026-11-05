@@ -26,7 +26,7 @@ from .api.agents import (
     teams as team_routes,
 )
 from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
-from .api.connections import routes as connection_routes
+from .api.connections import routes as connection_routes, tools as connection_tools_routes
 from .connections.service import ConnectionService
 from .api.computers import (
     admin_nodes as admin_node_routes,
@@ -359,6 +359,7 @@ def _publish_state(
 # the order its routes were declared.
 API_ROUTERS = (
     connection_routes.router,
+    connection_tools_routes.router,
     automation_routes.router,
     auth_routes.router,
     device_authorization_routes.router,

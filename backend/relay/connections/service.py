@@ -14,6 +14,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from ..core.connections import ConnectionConfig, ConnectionError, PROVIDERS, safe_return
 from ..core.ids import new_database_id, now_iso
 from ..persistence.connection.store import DatabaseConnectionStore
+from ..security.rate_limit import AuthRateLimiter
 from . import providers
 
 
@@ -21,6 +22,17 @@ class ConnectionService:
     def __init__(self, store: DatabaseConnectionStore, configs: dict[str, ConnectionConfig], encryption_key: str | None):
         self.store, self.configs = store, configs
         self.cipher = Fernet(encryption_key.encode()) if encryption_key else None
+        self.tool_limiter = AuthRateLimiter(attempts=120, window_seconds=60)
+
+    def issue_run_token(self, claims: dict[str, Any]) -> str:
+        return self._seal({**claims, "purpose": "connection-run", "expiresAt": time.time() + 86400})
+
+    def read_run_token(self, token: str) -> dict[str, Any]:
+        claims = self._open(token)
+        if (claims.get("purpose") != "connection-run" or claims.get("expiresAt", 0) <= time.time()
+                or not all(isinstance(claims.get(key), str) for key in ("owner", "nodeId", "commandId", "leaseId", "runId"))):
+            raise ConnectionError("connection_run_credential_invalid", 401)
+        return claims
 
     def _seal(self, value: dict[str, Any]) -> str:
         if not self.cipher:
