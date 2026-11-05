@@ -184,7 +184,13 @@ export function useRelayMutations() {
 
   const createTaskMutation = useMutation({
     mutationFn: (input: CreateTaskInput) => createTask(input),
-    onSuccess: cacheTask,
+    onSuccess: async (task) => {
+      // A list poll started before creation can still carry the old rows.
+      // Cancel it before publishing the new task or automation, otherwise its
+      // response removes the new record until another refresh.
+      await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
+      cacheTask(task);
+    },
     onError: onRelayError("Failed to create task", "errors.save_task"),
   });
 
