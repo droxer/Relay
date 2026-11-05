@@ -33,7 +33,7 @@ def personal_resources(monkeypatch, tmp_path):
             "nodeLocation": "user-device", "protocolVersion": 1,
             "supportedAgents": ["codex"], "capabilities": ["workspace-read-shared"],
             "status": "ready",
-        }, authorized_node_location="user-device")
+        }, ui_token=f"ui_{name}", authorized_node_location="user-device")
     return client, app, identities, sessions
 
 
@@ -102,3 +102,29 @@ def test_daemon_registration_cannot_mint_a_human_credential(personal_resources, 
     assert registered.status_code == 200, registered.text
     response = daemon.get(f"/api/v1/threads/{sessions['alice']}", headers={"Authorization": f"Bearer {bearer}"})
     assert response.status_code == 401, response.text
+
+
+@pytest.mark.parametrize("path,key", [("/daemon-nodes", "nodes"), ("/sandboxes", "sandboxes")])
+def test_cookie_identity_cannot_be_overridden_by_another_users_stored_token(personal_resources, path, key):
+    client, _app, identities, _sessions = personal_resources
+    response = client.get(f"/api/v1{path}", headers={"Authorization": "Bearer ui_alice"})
+    assert response.status_code == 200, response.text
+    assert {row["userId"] for row in response.json()[key]} == {identities["admin"]}
+
+
+def test_foreign_ui_token_does_not_override_a_signed_in_person(personal_resources):
+    client, app, _identities, _sessions = personal_resources
+    path = "/api/v1/sandboxes/node_alice"
+    assert client.get(path, headers={"Authorization": "Bearer ui_alice"}).status_code == 403
+    # A token-only legacy browser still acts as its own user when no cookie
+    # supplies a different authenticated identity.
+    assert TestClient(app).get(path, headers={"Authorization": "Bearer ui_alice"}).status_code == 200
+
+
+def test_legacy_sandbox_without_credentials_is_not_public(personal_resources):
+    _client, app, _identities, _sessions = personal_resources
+    app.state.registry.register({
+        "sandboxId": "legacy_unconfigured", "token": "", "protocolVersion": 1,
+        "supportedAgents": ["codex"], "status": "ready",
+    })
+    assert TestClient(app).get("/api/v1/sandboxes/legacy_unconfigured").status_code == 401
