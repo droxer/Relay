@@ -189,9 +189,10 @@ export function renameSession(sessionId: string, title: string, token?: string):
 
 export async function uploadThreadImage(file: File, signal?: AbortSignal): Promise<import("relay-core").ThreadImageAttachment> {
   // WebKit can send an empty body for picker-backed Files (bug 319985).
-  // Read the bounded image into memory so the network process needs no file access.
+  // Send buffered bytes directly, bypassing File/Blob resolution in the
+  // network process (including for pages controlled by a service worker).
   signal?.throwIfAborted();
-  const body = new Blob([await file.arrayBuffer()], { type: file.type });
+  const body = await file.arrayBuffer();
   signal?.throwIfAborted();
   const response = await fetch(relayApiEndpoint("/thread-attachments"), {
     method: "POST", credentials: "include", signal,
