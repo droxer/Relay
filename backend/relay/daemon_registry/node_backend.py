@@ -20,6 +20,7 @@ from ..core.ids import new_sandbox_id, now_iso
 from ..core.models import AGENT_NAMES, DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS
 from ..persistence.protocols import AgentPlacementStore, AgentStore
 from ..skills.bundle import resolve_bundle
+from ..connections.service import ConnectionService
 from .credentials import sandbox_node_auth_error, sandbox_ui_auth_error
 from .registry import DaemonNodeRegistry
 from ..tasks.execution import request_execution_owner
@@ -45,12 +46,17 @@ class ServerDaemonNodeBackend(
         skill_store: Any | None = None,
         team_store: Any | None = None,
         project_store: Any | None = None,
+        connections: ConnectionService | None = None,
     ):
         self.registry = registry
         self.agent_store = agent_store
         self.skill_store = skill_store
         self.team_store = team_store
         self.project_store = project_store
+        self.connections = connections
+        if connections:
+            self.registry.connection_grant_resolver = lambda session: connections.for_work(
+                session.get("ownerUserId") or "", session["id"], session.get("taskId"))
         self.agent_placement_store = agent_placement_store
         self.registry.logical_assignment_validator = self._validate_logical_assignment
         self.registry.logical_skill_bundle_resolver = self._resolve_logical_skill_bundle

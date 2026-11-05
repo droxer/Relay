@@ -138,6 +138,27 @@ class ConnectionService:
     def grants(self, owner: str, target_type: str, target_id: str) -> builtins.list[dict[str, Any]]:
         return self.store.grants(owner, target_type, target_id)
 
+    def for_work(self, owner: str, thread_id: str, task_id: str | None = None) -> builtins.list[dict[str, Any]]:
+        result = self.grants(owner, "task" if task_id else "thread", task_id or thread_id)
+        for grant in result:
+            record = self._connection(owner, grant["connectionId"])
+            if record["status"] != "connected" or record["provider"] not in self.configs:
+                raise ConnectionError("connection_unavailable", 409)
+            current = self._current_grant(owner, grant)
+            if not current or not current["resources"] or not current["actions"]:
+                raise ConnectionError("connection_access_denied", 403)
+        return result
+
+    def _current_grant(self, owner: str, grant: dict[str, Any]) -> dict[str, Any] | None:
+        current = self.store.grant(owner, grant["id"])
+        if current and current.get("sourceGrantId"):
+            source = self.store.grant(owner, current["sourceGrantId"])
+            if not source or source["connectionId"] != current["connectionId"]:
+                return None
+            current = {**current, "resources": list(set(current["resources"]) & set(source["resources"])),
+                "actions": list(set(current["actions"]) & set(source["actions"]))}
+        return current
+
     def set_grants(self, owner: str, target_type: str, target_id: str, raw: Any) -> builtins.list[dict[str, Any]]:
         if target_type not in {"thread", "task", "automation"} or not isinstance(raw, list) or len(raw) > 10:
             raise ConnectionError("connection_grants_invalid")
@@ -164,7 +185,7 @@ class ConnectionService:
         if record["status"] != "connected":
             raise ConnectionError("connection_unavailable", 409)
         for grant in snapshot:
-            current = self.store.grant(owner, grant["id"])
+            current = self._current_grant(owner, grant)
             if (current and current["connectionId"] == grant["connectionId"] == connection_id
                     and action in grant["actions"] and action in current["actions"]
                     and resource in grant["resources"] and resource in current["resources"]):

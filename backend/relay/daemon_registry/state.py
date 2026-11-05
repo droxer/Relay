@@ -42,6 +42,7 @@ class RegistryState:
     plain_node_tokens: dict[str, str]
     dispatch_lock: GlobalDispatchLock
     logical_assignment_validator: Callable[[dict[str, Any]], None] | None
+    connection_grant_resolver: Callable[[dict[str, Any]], list[dict[str, Any]]] | None
     logical_skill_bundle_resolver: (
         Callable[[str, str | None], tuple[dict[str, Any] | None, list[dict[str, Any]]]] | None
     )
