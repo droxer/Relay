@@ -133,3 +133,34 @@ def test_run_bound_tools_check_lease_and_live_revocation(context):
     result = client.post("/api/v1/connection-tools", headers=headers, json=call)
     assert result.json()["result"]["isError"] is True
     assert client.post("/api/v1/connection-tools", json=call).status_code == 401
+
+
+def test_task_creation_saves_access_atomically(context):
+    app, client, _project = context
+    connection = _connect(client)
+    grant = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    response = client.post("/api/v1/tasks", json={"title": "Read issues", "connectionGrants": [grant]})
+    assert response.status_code == 201, response.text
+    task = response.json()
+    assert len(client.get(f"/api/v1/connection-grants/task/{task['id']}").json()["grants"]) == 1
+    before = len(app.state.task_store.list_tasks())
+    response = client.post("/api/v1/tasks", json={"title": "Invalid access", "connectionGrants": [{**grant, "actions": ["arbitrary.http"]}]})
+    assert response.status_code == 400, response.text
+    assert len(app.state.task_store.list_tasks()) == before
+
+
+def test_new_thread_saves_access_before_delivery(context):
+    app, client, project = context
+    connection = _connect(client)
+    grant = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    node = app.state.registry.monitor_nodes()[0]
+    app.state.registry.register({**node, "sandboxId": node["id"], "token": "token_node_alice_github",
+        "protocolVersion": 2, "supportedAgents": ["codex", "claude"],
+        "capabilities": [*node["capabilities"], "service-connections", "work-results", "task-workspaces"]})
+    response = client.post("/api/v1/agent-runs", json={"taskGoal": "Read issues", "projectId": project["id"], "connectionGrants": [grant]})
+    assert response.status_code == 202, response.text
+    thread = response.json()
+    saved = client.get(f"/api/v1/connection-grants/thread/{thread['id']}").json()["grants"]
+    assert len(saved) == 1
+    commands = app.state.daemon_store.take_queued_commands(node["id"])
+    assert any(record["command"].get("connections") for record in commands)
