@@ -1,4 +1,4 @@
-"""Resolve explicitly permitted delegates within a thread's Computer and Project."""
+"""Resolve eligible delegates within a thread's Computer and Project."""
 
 from typing import Any
 
@@ -8,8 +8,10 @@ from ..projects.runtime import project_member_ids
 from .routing import resolve_agent_assignments
 
 
-def validate_delegation_targets(ctx: Any, agent: dict[str, Any], value: Any) -> list[str]:
+def validate_delegation_targets(ctx: Any, agent: dict[str, Any], value: Any) -> list[str] | None:
     ids = delegation_agent_ids(value)
+    if ids is None:
+        return None
     for agent_id in ids:
         target = ctx.agent_store.get_agent(agent_id)
         if agent_id == agent["id"] or not target or target.get("deletedAt") or (
@@ -25,12 +27,20 @@ def delegation_candidates(
     ctx: Any, assignment: dict[str, Any], *, project: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     agent = ctx.agent_store.get_agent(assignment.get("agentId")) or {}
+    if not agent.get("supervisorUserId"):
+        return []
     nodes = ctx.registry.monitor_nodes()
     node = next((node for node in nodes if node["id"] == assignment["daemonNodeId"]), None)
     if not has_capability(node, DAEMON_CAPABILITY_DIRECT_DELEGATION):
         return []
     candidates = []
-    for agent_id in agent.get("delegationAgentIds") or []:
+    target_ids = agent.get("delegationAgentIds")
+    if target_ids is None:
+        target_ids = [
+            target["id"] for target in ctx.agent_store.list_agents(supervisor_user_id=agent["supervisorUserId"])
+            if target["id"] != agent["id"] and target.get("computerId") == agent.get("computerId")
+        ]
+    for agent_id in target_ids:
         if project and agent_id not in project_member_ids(project):
             continue
         try:

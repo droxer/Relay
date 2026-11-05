@@ -68,8 +68,10 @@ outside the JSON version namespace.
 ### Agent delegation permissions
 
 `PATCH /api/v1/agents/{agentId}` accepts `delegationAgentIds`, an array of at
-most 20 other owned Agent ids on the same Computer. The default is empty;
-`[]` revokes all targets. The equivalent admin agent patch validates targets
+most 20 other owned Agent ids on the same Computer, or `null`. An omitted or
+null setting permits all eligible Agents, including those created later;
+an explicit list restricts targets and `[]` disables delegation. Patch with
+`null` to restore the default. The equivalent admin agent patch validates targets
 against the agent's owner, not the administrator's identity. Invalid, foreign,
 self, and cross-Computer targets answer 400. The setting is event-sourced in
 the Agent snapshot and returned with Agent records.

@@ -11,7 +11,7 @@ vi.mock("../src/api", () => ({ listUserAgents: agents.list, listControlPanelAgen
 function agent(id: string, computerId = "computer", supervisorUserId = "alice"): UserAgent {
   return { id, displayName: id.toUpperCase(), computerId, supervisorUserId, enabled: true } as UserAgent;
 }
-function settings(onChange = vi.fn().mockResolvedValue(undefined), selected: string[] = []) {
+function settings(onChange = vi.fn().mockResolvedValue(undefined), selected: string[] | null = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><AgentDelegationSettings agent={{...agent("a"), delegationAgentIds: selected}}
     editable onChange={onChange} /></QueryClientProvider>);
@@ -113,6 +113,33 @@ it("uses the administrator roster for the agent's owner", async () => {
 
 it("does not offer edit controls to a read-only viewer with no grants", () => {
   const client = new QueryClient();
-  const {container} = render(<QueryClientProvider client={client}><AgentDelegationSettings agent={agent("a")} editable={false} onChange={vi.fn()} /></QueryClientProvider>);
+  const {container} = render(<QueryClientProvider client={client}><AgentDelegationSettings agent={{...agent("a"), delegationAgentIds: []}} editable={false} onChange={vi.fn()} /></QueryClientProvider>);
   expect(container.querySelector("fieldset")).toBeNull();
+});
+
+it("permits all eligible agents by default without saving a fixed list", async () => {
+  agents.list.mockResolvedValue({agents: [agent("b"), agent("c")]});
+  const client = new QueryClient();
+  const save = vi.fn();
+  render(<QueryClientProvider client={client}><AgentDelegationSettings agent={agent("a")} editable onChange={save} /></QueryClientProvider>);
+  const all = screen.getByRole("checkbox", {name: "delegation.all_eligible"});
+  expect(all.getAttribute("aria-checked")).toBe("true");
+  expect((await screen.findByRole("checkbox", {name: "B"})).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("checkbox", {name: "C"}).getAttribute("aria-checked")).toBe("true");
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("switches between all eligible agents and an explicit custom list", async () => {
+  agents.list.mockResolvedValue({agents: [agent("b")]});
+  const save = settings(undefined, null);
+  const all = screen.getByRole("checkbox", {name: "delegation.all_eligible"});
+  fireEvent.click(all);
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith([]));
+  const target = await screen.findByRole("checkbox", {name: "B"});
+  await waitFor(() => expect(target.getAttribute("aria-checked")).toBe("false"));
+  fireEvent.click(target);
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith(["b"]));
+  await waitFor(() => expect(target.getAttribute("aria-checked")).toBe("true"));
+  fireEvent.click(all);
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith(null));
 });

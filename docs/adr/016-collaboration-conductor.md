@@ -157,7 +157,9 @@ single-assignment daemon delivery envelopes.
 ### Direct delegation without a Team
 
 An individual action round may offer targets from its requesting Logical
-Agent's `delegationAgentIds` permission. The default is empty. Targets must be
+Agent's `delegationAgentIds` policy. An absent or null policy allows every
+eligible Agent, including Agents created later; an explicit list restricts
+targets and an empty list disables delegation. Targets must be
 other owned Agents on the same Computer, with an active, ready Placement; a
 Project round additionally limits targets to its Project Agent roster. The
 conductor freezes resolved candidates in the admitted manifest, and delivery

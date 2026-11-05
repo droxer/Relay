@@ -33,7 +33,8 @@ class RunTargetValidationMixin(NodeBackendState):
         if requester_id := assignment.get("delegatedByAgentId"):
             requester = self.agent_store.get_agent(requester_id)
             if not requester or not requester.get("enabled", True) or requester.get("deletedAt") or (
-                agent_id not in (requester.get("delegationAgentIds") or [])
+                requester_id == agent_id
+                or (requester.get("delegationAgentIds") is not None and agent_id not in requester["delegationAgentIds"])
                 or requester.get("supervisorUserId") != agent.get("supervisorUserId")
                 or requester.get("computerId") != agent.get("computerId")
             ):

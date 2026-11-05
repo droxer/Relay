@@ -37,6 +37,8 @@ def test_delegation_permissions_survive_store_reload(tmp_path):
     updated = store.update_agent(agent["id"], {"delegationAgentIds": ["b", "b"]})
     assert updated["delegationAgentIds"] == ["b"]
     assert make_agent_store(tmp_path).get_agent(agent["id"])["delegationAgentIds"] == ["b"]
+    store.update_agent(agent["id"], {"delegationAgentIds": None})
+    assert make_agent_store(tmp_path).get_agent(agent["id"])["delegationAgentIds"] is None
 
 
 def test_child_blocker_returns_control_to_requester_without_accepting_child_work():

@@ -12,15 +12,15 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
   agent: UserAgent;
   editable: boolean;
   admin?: boolean;
-  onChange: (ids: string[]) => Promise<void>;
+  onChange: (ids: string[] | null) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
-  const [selected, setSelected] = useState(agent.delegationAgentIds ?? []);
+  const [selected, setSelected] = useState<string[] | null>(agent.delegationAgentIds ?? null);
   useEffect(() => {
-    if (!pending.current) setSelected(agent.delegationAgentIds ?? []);
+    if (!pending.current) setSelected(agent.delegationAgentIds ?? null);
   }, [agent.delegationAgentIds]);
   const roster = useQuery({
     queryKey: ["delegation-agents", admin ? "admin" : "own", agent.supervisorUserId],
@@ -32,14 +32,15 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
   const candidates = (roster.data?.agents ?? []).filter((other) => other.id !== agent.id && other.enabled
     && other.computerId === agent.computerId && other.supervisorUserId === agent.supervisorUserId);
   // Keep revoked/deleted or moved targets removable even when no longer eligible.
-  const missing = selected.filter((id) => !candidates.some((candidate) => candidate.id === id));
-  async function toggle(id: string, checked: boolean) {
+  const allEligible = selected === null;
+  const custom = selected ?? [];
+  const missing = custom.filter((id) => !candidates.some((candidate) => candidate.id === id));
+  async function save(next: string[] | null) {
     if (pending.current) return;
     pending.current = true;
     setSaving(true);
     setError("");
     try {
-      const next = checked ? [...selected, id] : selected.filter((value) => value !== id);
       await onChange(next);
       setSelected(next);
     } catch (failure) {
@@ -49,18 +50,23 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
       setSaving(false);
     }
   }
-  if (!editable && !selected.length) return null;
+  if (!editable && !allEligible && !custom.length) return null;
   return (
     <fieldset className="agent-delegation-settings" disabled={saving || !editable} aria-busy={saving}>
       <legend>{t("delegation.can_delegate_to")}</legend>
       <p>{t("delegation.settings_help")}</p>
+      <label className="agent-delegation-option">
+        <Checkbox checked={allEligible} disabled={saving || !editable}
+          onCheckedChange={(checked) => void save(checked ? null : [])} />
+        <span>{t("delegation.all_eligible")}</span>
+      </label>
       {roster.isLoading ? <p role="status">{t("delegation.loading")}</p> : null}
       {roster.error ? <Alert variant="boxed">{t("delegation.load_failed")}</Alert> : null}
       {!roster.isLoading && !roster.error && !candidates.length && !missing.length ? <p>{t("delegation.no_targets")}</p> : null}
       {[...candidates.map((target) => ({ id: target.id, name: target.displayName })), ...missing.map((id) => ({ id, name: t("delegation.unavailable_target") }))].map((target) => (
         <label key={target.id} className="agent-delegation-option">
-          <Checkbox checked={selected.includes(target.id)} disabled={saving || !editable || (!selected.includes(target.id) && selected.length >= 20)}
-            onCheckedChange={(checked) => void toggle(target.id, checked)} />
+          <Checkbox checked={allEligible || custom.includes(target.id)} disabled={saving || !editable || allEligible || (!custom.includes(target.id) && custom.length >= 20)}
+            onCheckedChange={(checked) => void save(checked ? [...custom, target.id] : custom.filter((id) => id !== target.id))} />
           <span>{target.name}</span>
         </label>
       ))}

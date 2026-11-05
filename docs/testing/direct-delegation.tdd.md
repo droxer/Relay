@@ -3,7 +3,7 @@
 ## Intent
 
 An individual Logical Agent may yield a bounded contribution to another
-explicitly permitted, owned Agent on the same Computer, then receive the result
+eligible, owned Agent on the same Computer, then receive the result
 and retain responsibility for the original request. No Team is required.
 
 ## RED and GREEN
@@ -20,7 +20,7 @@ unavailable after manifest persistence but before delivery.
 
 | Guarantee | Evidence |
 | --- | --- |
-| Permission settings persist and are default-deny | `backend/tests/unit/test_direct_delegation.py` |
+| Permission restrictions persist; the default allows all eligible Agents | `backend/tests/unit/test_direct_delegation.py`, `backend/tests/api/test_direct_delegation_api.py` |
 | Self, missing, foreign and cross-Computer grants are rejected; another User cannot edit grants | `backend/tests/api/test_direct_delegation_api.py` |
 | A → B → A shares one Thread and workspace | API flow tests with real database stores and daemon command/event handling |
 | Delegate success, blocker, runtime failure and confirmed non-delivery return control | API and pure-policy tests |
@@ -68,3 +68,25 @@ command queue and daemon event ingestion. They do not launch a paid agent CLI.
 Live model choice to delegate, physical-device accessibility, and a hosted
 deployment were not exercised. Installed Computers need the newly advertised
 `direct-delegation` capability to receive the delegation prompt.
+
+## Default-all follow-up
+
+The default now allows every eligible Agent, including future Agents. Omitted
+or null `delegationAgentIds` means all; an explicit array remains a restriction
+and an empty array disables delegation. Existing explicit restrictions are
+preserved. Ownership, Computer, Project roster, Placement and readiness checks
+still apply. No data migration is needed.
+
+Two new API tests failed before implementation: an unconfigured Agent received
+no candidates, and resetting the policy to null was rejected. These RED tests
+are preserved in `bb9386b8`. They now pass, along with regression checks for
+foreign and cross-Computer exclusion and persisted policy resets.
+
+- Focused backend suite (delegation API, Agent API, pure delegation, routing,
+  and daemon registry): **393 passed**.
+- Delegation UI interaction suite: **14 passed**, **97.82% statements** and
+  **95.65% branches** for the new components.
+- Production web build, web ESLint, TypeScript, backend Ruff and mypy passed.
+- Playwright verified default checked targets, switching to a custom list,
+  and resetting to dynamic all on the exported app. The mobile screenshot
+  was inspected; no horizontal overflow was detected.

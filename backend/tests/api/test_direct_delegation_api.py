@@ -49,6 +49,10 @@ def test_foreign_and_cross_computer_grants_are_rejected(env):
         response = client.patch(f"/api/v1/agents/{a['id']}", json={"delegationAgentIds": [target["id"]]})
         assert response.status_code == 400, response.text
     assert client.patch(f"/api/v1/agents/{foreign['id']}", json={"delegationAgentIds": []}).status_code == 403
+    started = client.post("/api/v1/agent-runs", json={"taskGoal": "Build", "assignments": [{"agentId": a["id"]}]})
+    assert started.status_code == 202, started.text
+    [command] = app.state.registry.take_commands("node_a", "node_token")
+    assert {item["agentId"] for item in command["state"]["delegation_candidates"]} == {b["id"]}
 
 
 @pytest.mark.parametrize("child_outcome", ["done", "blocked", "failed"])
