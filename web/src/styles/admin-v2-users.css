@@ -248,14 +248,6 @@ tr.is-pulse > td:first-child::after {
   min-width: 3.5rem;
 }
 
-/* Card-only. The list view carries these as real column headers now, so this
-   label must not come back to the table. */
-.adm-emp-metric-label {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  color: var(--ink-3);
-}
-
 /* Same rung as the ratios beside it: a display numeral in one column made
    the running count the loudest thing in every row, zeros included. */
 .adm-emp-running {
@@ -603,32 +595,113 @@ tr.is-pulse > td:first-child::after {
   color: var(--ink-4);
 }
 
-.adm-emp-card-metrics {
-  display: flex;
-  align-items: center;
-  /* Three metrics plus the action buttons no longer fit one line at the
-     card's narrowest, so let them wrap instead of overflowing the footer. */
-  flex-wrap: wrap;
-  min-width: 0;
-  column-gap: var(--sp-5);
-  row-gap: var(--sp-2);
-  font-feature-settings: var(--font-features), "tnum" 1;
+/* Limits band: the two limits an admin sets, one row each — label left,
+   value flush right, so the numbers line up down the card and across a grid
+   row. The footer's own hairline is the band's top rule. */
+
+/* Actions moved to the header; the identity column gives way to them rather
+   than wrapping them under the name. */
+.adm-emp-card .adm-node-card-head {
+  flex-wrap: nowrap;
 }
 
-.adm-emp-card-metric {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-  /* CJK labels can break at any character, and as flex items their
-     min-content is one glyph — without nowrap a tight footer splits
-     "运行中"/"就绪" mid-word. */
+.adm-emp-card .adm-node-card-identity {
+  flex: 1 1 0;
+}
+
+.adm-emp-limits {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sp-1-5);
+  min-width: 0;
+}
+
+.adm-emp-limit-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1-5);
+  margin: 0;
+}
+
+/* The over-limit warning gets its own line under the rows: squeezed into the
+   computer row it pushed the count onto a second line. */
+.adm-emp-limit-note {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.adm-emp-limit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.adm-emp-limit-label {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+  /* CJK labels can break at any character; keep each label one line. */
   white-space: nowrap;
 }
 
-.adm-emp-card-metric .tnum {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
+.adm-emp-limit-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  min-width: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+
+.adm-emp-limit-value .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* Pinned for this user rather than following the org default. Quieter than
+   the value it qualifies — a fact about the number, not a state. */
+.adm-emp-limit-custom {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-3);
+}
+
+/* One slot per allowed computer. Filled = connected, hairline = free,
+   crimson = a computer the lowered limit no longer covers. Achromatic until
+   something is wrong, so a full quota reads as full, not as an alarm. */
+.adm-emp-slots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.adm-emp-slot {
+  width: 6px;
+  height: 10px;
+  border-radius: 1.5px;
+  /* --ink-4, not a line token: a hairline slot vanished at 6px wide. */
+  box-shadow: inset 0 0 0 1px var(--ink-4);
+}
+
+.adm-emp-slot[data-slot-state="used"] {
+  background: var(--ink-2);
+  box-shadow: none;
+}
+
+.adm-emp-slot[data-slot-state="over"] {
+  background: var(--err);
+  box-shadow: none;
+}
+
+.adm-emp-limit[data-over="true"] .adm-emp-limit-value .tnum {
+  color: var(--err);
 }
 
 .adm-node-card.is-pulse::after {

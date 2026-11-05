@@ -4,6 +4,7 @@ import { byNumber, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
 import { formatThreadStamp } from "./threadStamp.ts";
 import { AGENT_RUNTIME_DISPLAY_ORDER } from "./agentRuntimeOrder.ts";
+import { DEFAULT_TASK_CAPACITY } from "./taskCapacity.ts";
 
 export const ADMIN_AGENTS_KEY = ["admin", "agents"] as const;
 
@@ -249,6 +250,36 @@ export function localComputerUsageLabel(
 ): string {
   if (member.effectiveMaxLocalComputers === undefined) return String(member.localComputerCount);
   return `${member.localComputerCount}/${member.effectiveMaxLocalComputers}`;
+}
+
+/** More slots than this stop reading as a count at a glance, so the card
+    falls back to the bare ratio. */
+const MAX_LIMIT_SLOTS = 10;
+
+export type LimitSlot = "used" | "free" | "over";
+
+/** The user card's computer meter: one slot per allowed personal computer,
+    plus an `over` slot for each one a lowered limit no longer covers. Null
+    when there is no limit to draw, nothing to draw, or too many slots. */
+export function localComputerSlots(
+  member: Pick<UserNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
+): LimitSlot[] | null {
+  const limit = member.effectiveMaxLocalComputers;
+  if (limit === undefined) return null;
+  const total = Math.max(limit, member.localComputerCount);
+  if (total === 0 || total > MAX_LIMIT_SLOTS) return null;
+  return Array.from({ length: total }, (_, index): LimitSlot => {
+    if (index >= limit) return "over";
+    return index < member.localComputerCount ? "used" : "free";
+  });
+}
+
+/** The concurrent task limit in force: the server's resolved value, else the
+    pinned override, else the default. */
+export function taskCapacityOf(
+  member: Pick<UserNodeSummary, "maxConcurrentTasks" | "effectiveMaxConcurrentTasks">,
+): number {
+  return member.effectiveMaxConcurrentTasks ?? member.maxConcurrentTasks ?? DEFAULT_TASK_CAPACITY;
 }
 
 export type UserQuickFilter = "all" | "running" | "ready" | "idle" | "failed" | "unassigned";
