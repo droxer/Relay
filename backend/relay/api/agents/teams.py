@@ -106,19 +106,14 @@ def _member_views(
 ) -> dict[str, dict[str, Any]]:
     """Agent views for every live member across ``teams``, computed once.
 
-    One agent read per distinct member, then one placement read and one node
-    read for the whole batch, instead of the full placement chain per member
-    per team.
+    One batched agent lookup, then one placement read and one node read for
+    the whole batch, instead of a checkout and query per distinct member.
     """
     member_ids: dict[str, None] = {}
     for team in teams:
         for agent_id in team.get("memberAgentIds", []):
             member_ids.setdefault(agent_id, None)
-    agents = [
-        agent
-        for agent in (ctx.agent_store.get_agent(agent_id) for agent_id in member_ids)
-        if agent and not agent.get("deletedAt")
-    ]
+    agents = ctx.agent_store.get_agents_by_ids(list(member_ids))
     return {
         view["id"]: view
         for view in _agent_views(ctx, agents)

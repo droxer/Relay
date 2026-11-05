@@ -9,6 +9,8 @@ running backend shares one database across stores.
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
 from typing import Any
 
 from sqlalchemy import update
@@ -21,10 +23,30 @@ from relay.persistence.daemon.store import DatabaseDaemonStore
 from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.task.store import DatabaseTaskStore
 from relay.persistence.team.store import DatabaseTeamStore
+from relay.persistence import engine as engine_module
 from relay.security.auth import DatabaseAccountAuthStore
 from postgres_backend import database_url_for
 
 DATABASE_FILE = "relay.db"
+
+
+@contextmanager
+def isolated_store_engines() -> Iterator[None]:
+    """Release engines created in a test, preserving any enclosing fixtures'."""
+    with engine_module._ENGINE_LOCK:
+        existing = set(engine_module._ENGINES.values())
+    try:
+        yield
+    finally:
+        with engine_module._ENGINE_LOCK:
+            created = {
+                url: engine for url, engine in engine_module._ENGINES.items()
+                if engine not in existing
+            }
+            for url in created:
+                del engine_module._ENGINES[url]
+        for engine in created.values():
+            engine.dispose()
 
 
 def sqlite_url(root: str | Path) -> str:

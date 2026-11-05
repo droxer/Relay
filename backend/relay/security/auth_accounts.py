@@ -243,23 +243,27 @@ class AuthAccounts(AuthStoreState):
     def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
-                conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))
-                .mappings()
-                .first()
-            )
-            account = row_to_database_account(row) if row else None
-            if not account or not account.get("userId"):
-                return account
-            user = (
                 conn.execute(
-                    select(self.users).where(
-                        self.users.c.id == account["userId"]
+                    select(
+                        self.accounts,
+                        self.users.c.id.label("linked_user_id"),
+                        self.users.c.display_name.label("user_display_name"),
+                        self.users.c.deleted_at.label("user_deleted_at"),
                     )
+                    .outerjoin(self.users, self.users.c.id == self.accounts.c.user_id)
+                    .where(self.accounts.c.id == account_id)
                 )
                 .mappings()
                 .first()
             )
-            return {**account, "displayName": user["display_name"]} if user and not user.get("deleted_at") else None
+        if row is None:
+            return None
+        account = row_to_database_account(row)
+        if not account.get("userId"):
+            return account
+        if row["linked_user_id"] is None or row["user_deleted_at"] is not None:
+            return None
+        return {**account, "displayName": row["user_display_name"]}
 
     def list_accounts(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

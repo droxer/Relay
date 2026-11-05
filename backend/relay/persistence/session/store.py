@@ -73,7 +73,13 @@ class DatabaseSessionStore(
 
     def verify_schema(self) -> None:
         """Fail startup before serving traffic when session migrations are absent."""
-        schema = inspect(self.engine)
+        with self.engine.connect() as conn:
+            self._verify_schema(conn)
+
+    def _verify_schema(self, conn: Any) -> None:
+        # An Engine-bound Inspector checks out a connection for every lookup.
+        # Keep the startup checks on one connection, including the revision.
+        schema = inspect(conn)
         required_tables = {
             "thread_attachments",
             "sessions",
@@ -131,8 +137,7 @@ class DatabaseSessionStore(
         if self.engine.dialect.name != "sqlite":
             if "alembic_version" not in schema.get_table_names():
                 raise RuntimeError("Database is missing the Alembic migration version.")
-            with self.engine.connect() as conn:
-                revision = conn.scalar(text("SELECT version_num FROM alembic_version"))
+            revision = conn.scalar(text("SELECT version_num FROM alembic_version"))
             if revision is None or revision < self.REQUIRED_SCHEMA_REVISION:
                 raise RuntimeError(
                     "Database migration is behind the required revision "
