@@ -39,6 +39,7 @@ LAYERS = {
     "sessions": 3,
     "daemon_registry": 4,
     "accounts": 5,
+    "connections": 5,
     "agents": 5,
     "teams": 5,
     "projects": 5,
@@ -95,6 +96,7 @@ POLICY_MODULES = frozenset(
 # Package initializers that must stay empty so importing one leaf module never
 # executes the rest of its package.
 EMPTY_PACKAGES = (
+    "connections",
     "accounts",
     "agents",
     "api",

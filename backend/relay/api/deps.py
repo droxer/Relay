@@ -35,6 +35,7 @@ from ..execution.lifecycle import ExecutionLifecycleService
 from ..accounts.password_reset import PasswordResetService
 from ..accounts.waitlist import WaitlistService
 from ..accounts.github_connection import GitHubConnectionService
+from ..connections.service import ConnectionService
 
 ChatProbe = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
 ChatProvision = Callable[[dict[str, Any], str], Awaitable[tuple[bool, str]]]
@@ -84,6 +85,7 @@ class AppContext:
     # Shared and mutable on purpose: one lock per integration, process-wide.
     chat_rotation_locks: dict[str, asyncio.Lock]
     github_connection: GitHubConnectionService | None = None
+    connections: ConnectionService | None = None
 
 
 def app_context(request: Request) -> AppContext:

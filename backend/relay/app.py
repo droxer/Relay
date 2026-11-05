@@ -26,6 +26,7 @@ from .api.agents import (
     teams as team_routes,
 )
 from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
+from .api.connections import routes as connection_routes
 from .api.computers import (
     admin_nodes as admin_node_routes,
     daemon_wire as daemon_wire_routes,
@@ -111,6 +112,7 @@ from .bootstrap.http import (
     configure_cors,
 )
 from .bootstrap.stores import (
+    connection_service_from_env,
     github_connection_service_from_env,
     waitlist_service_from_env,
     Stores,
@@ -338,6 +340,7 @@ def _publish_state(
         chat_provision=provision_chat_integration,
         chat_rotation_locks={},
         github_connection=github_connection_service_from_env(),
+        connections=connection_service_from_env(),
     )
     state = app.state
     state.context = context
@@ -350,6 +353,7 @@ def _publish_state(
 # path both could match. A domain split across modules lists its routers in
 # the order its routes were declared.
 API_ROUTERS = (
+    connection_routes.router,
     automation_routes.router,
     auth_routes.router,
     device_authorization_routes.router,

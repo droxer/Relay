@@ -105,7 +105,7 @@ def event_matches(trigger: dict[str, Any], event: dict[str, Any]) -> bool:
 
 MAX_TRIGGERS = 5
 STATES = ("active", "paused", "paused_by_relay")
-PAUSE_REASONS = ("rate_limited", "failing", "no_target", "invalid_schedule")
+PAUSE_REASONS = ("rate_limited", "failing", "no_target", "invalid_schedule", "connection_unavailable")
 LEGACY_FIELDS = ("routineType", "routineCadence", "routineNextRunDate", "routineEnabled",
                  "routineDisabledReason", "routineTrigger")
 

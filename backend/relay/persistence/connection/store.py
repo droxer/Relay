@@ -68,6 +68,12 @@ class DatabaseConnectionStore:
         with store_transaction(self.engine) as conn:
             return conn.scalar(select(grants.c.record).where(grants.c.owner_user_id == owner, grants.c.id == grant_id))
 
+    def usage(self, owner: str, connection_id: str) -> builtins.list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(select(grants).where(grants.c.owner_user_id == owner)).mappings()
+            return [{"targetType": row["target_type"], "targetId": row["target_id"]}
+                for row in rows if row["record"]["connectionId"] == connection_id]
+
     def set_grants(self, owner: str, target_type: str, target_id: str, records: builtins.list[dict[str, Any]]) -> builtins.list[dict[str, Any]]:
         aggregate = f"{owner}:{target_type}:{target_id}"
         with self.lock(aggregate) as conn:
