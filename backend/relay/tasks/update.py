@@ -321,6 +321,7 @@ def _ensure_patch_not_empty(
         and fields.acceptance_policy is None
         and fields.collaboration_style is None
         and not move_project
+        and "connectionGrants" not in body
     ):
         raise TaskRequestError(400, EMPTY_PATCH_DETAIL)
 

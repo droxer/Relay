@@ -64,6 +64,7 @@ class RunIntent:
     task_goal: str
     session_id: str | None
     raw_assignments: list[dict[str, Any]] | None
+    connection_grants: list[dict[str, Any]] | None = None
     attachment_ids: tuple[str, ...] = ()
     mode: str = "action"
     requested_team_id: str | None = None

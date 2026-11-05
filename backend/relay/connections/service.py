@@ -172,7 +172,12 @@ class ConnectionService:
         return current
 
     def set_grants(self, owner: str, target_type: str, target_id: str, raw: Any) -> builtins.list[dict[str, Any]]:
-        if target_type not in {"thread", "task", "automation"} or not isinstance(raw, list) or len(raw) > 10:
+        if target_type not in {"thread", "task", "automation"}:
+            raise ConnectionError("connection_grants_invalid")
+        return self.store.set_grants(owner, target_type, target_id, self.validate_grants(owner, raw))
+
+    def validate_grants(self, owner: str, raw: Any) -> builtins.list[dict[str, Any]]:
+        if not isinstance(raw, list) or len(raw) > 10:
             raise ConnectionError("connection_grants_invalid")
         normalized, seen = [], set()
         for item in raw:
@@ -189,7 +194,7 @@ class ConnectionService:
                 raise ConnectionError("connection_grants_invalid")
             seen.add(record["id"])
             normalized.append({"connectionId": record["id"], "resources": sorted(set(resources)), "actions": sorted(set(actions))})
-        return self.store.set_grants(owner, target_type, target_id, normalized)
+        return normalized
 
     def call(self, owner: str, snapshot: builtins.list[dict[str, Any]], connection_id: str,
              action: str, resource: str, arguments: Any) -> Any:

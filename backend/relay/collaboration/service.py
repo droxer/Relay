@@ -30,6 +30,7 @@ from .request import RoundRequestMixin
 from .roster import RosterMixin, _room_agent_ids
 from .task_scope import TaskScopeMixin
 from ..security.actor import Actor
+from ..core.connections import ConnectionError
 
 
 class CollaborationConductor(
@@ -208,6 +209,24 @@ class CollaborationConductor(
         self, intent: _PreparedRound, actor: Actor, session: dict[str, Any] | None,
         parsed: dict[str, Any], daemon_nodes: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        connection_fields = {}
+        if intent.connection_grants is not None:
+            if session or intent.task_id:
+                raise CollaborationError("connection_existing_work", "Edit Connections on the existing work.", status=409)
+            if not self.ctx.connections:
+                raise CollaborationError("connections_not_configured", status=503)
+            try:
+                normalized_grants = self.ctx.connections.validate_grants(actor["userId"], intent.connection_grants)
+            except ConnectionError as error:
+                raise CollaborationError(error.code, status=error.status) from error
+            if normalized_grants:
+                for assignment in parsed["assignments"]:
+                    connection_node = next((n for n in daemon_nodes if n["id"] == assignment["daemonNodeId"]), {})
+                    if "service-connections" not in connection_node.get("capabilities", []):
+                        raise CollaborationError("connection_client_update_required", "Update this Computer to use Connections.", status=409)
+                    if assignment["executorKind"] not in ("codex", "claude"):
+                        raise CollaborationError("connection_runtime_unsupported", "Connections require Codex or Claude.", status=409)
+            connection_fields = {"connectionGrants": normalized_grants}
         message_images = self.ctx.session_store.resolve_attachments(
             intent.attachment_ids, actor["userId"], intent.session_id
         )
@@ -226,6 +245,7 @@ class CollaborationConductor(
                     raise CollaborationError("image_runtime_unsupported", "Image attachments currently require Codex or Claude.", status=400)
         return {
             **parsed,
+            **connection_fields,
             **({"attachments": images} if images else {}),
             **({"messageAttachments": message_images} if message_images else {}),
         }

@@ -310,6 +310,8 @@ class ServerDaemonNodeBackend(
                 == COLLABORATION_ADMISSION_EXPIRED_OUTCOME
             ):
                 controller.reopen_expired_admission(session_id)
+            if "connectionGrants" in request and self.connections:
+                self.connections.set_grants(actor_user_id or "", "thread", session_id, request["connectionGrants"])
             dispatch_task_goal = self._record_run_intent(
                 controller,
                 session_id,
