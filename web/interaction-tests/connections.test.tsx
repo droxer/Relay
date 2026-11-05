@@ -60,3 +60,14 @@ it("does not resave old access when the next ordinary message is sent", async ()
   await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
   expect(connectionsApi.saveConnectionGrants).toHaveBeenCalledTimes(1);
 });
+
+it("keeps inherited Automation access read-only in the picker", async () => {
+  vi.mocked(connectionsApi.getConnectionGrants).mockResolvedValueOnce({ targetType: "task", targetId: "occurrence", readOnly: true,
+    grants: [{ id: "grant", revision: 1, connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }] });
+  const onChange = vi.fn();
+  render(<ConnectionGrantField targetType="task" targetId="occurrence" onChange={onChange} />, { wrapper });
+  fireEvent.click(screen.getByText("connections.title"));
+  const resource = await screen.findByRole("checkbox", { name: "octo/hello" });
+  fireEvent.click(resource);
+  expect(onChange).not.toHaveBeenCalled();
+});
