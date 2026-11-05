@@ -1,6 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
+import { Trans } from "react-i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { RuntimeRefreshButton } from "./RuntimeRefreshButton";
 import { RuntimeMark } from "../RuntimeMark";
@@ -27,7 +28,7 @@ import {
   NavMore,
   NodeOwnershipIcon,
 } from "../icons";
-import { formatRunElapsed } from "../../lib/computerNodes";
+import { computerName, formatRunElapsed, pathSegments } from "../../lib/computerNodes";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
 import { runtimeNotReadyDetail, runtimeStateLabel } from "./runtimeStateLabel";
 import {
@@ -38,6 +39,7 @@ import {
   nodeAgentPresence,
   nodeOwnershipProfile,
   nodeSandboxProfile,
+  showsLifecycleStatus,
   statusTone,
   visibleNodeAgentNames,
   visualStatus,
@@ -70,16 +72,16 @@ export function ComputerCard({
   onOpenThread?: (sessionId: string) => void;
   t: TFunction;
 }) {
-  const named = Boolean(node.displayName?.trim()) && node.displayName !== node.id;
-  const title = named ? node.displayName! : t("computer.unnamed");
+  const title = computerName(node) ?? t("computer.unnamed");
   const status = visualStatus(node);
   const ownership = nodeOwnershipProfile(node);
   const sandbox = nodeSandboxProfile(node);
   const runtimes = visibleNodeAgentNames(node);
   const activeRuns = node.activeRuns ?? [];
   // The status pill only earns its place when it says something the presence
-  // readout below the name cannot: provisioning, failed, stopped.
-  const showStatus = status !== "ready" && status !== "stale" && status !== "running";
+  // readout cannot: provisioning, failed, stopped — the same rule as the
+  // admin fleet card (`showsLifecycleStatus`).
+  const showStatus = showsLifecycleStatus(status);
 
   return (
     // Stale-aware, matching the presence pill: a daemon that stopped
@@ -96,8 +98,12 @@ export function ComputerCard({
           <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
         </span>
         <div className="computer-card-identity">
-          <div className="computer-card-nameline">
-            <h2 className="computer-card-name" translate="no">{title}</h2>
+          {/* The name owns its line and the status readouts ride under it, as
+              on the admin fleet card. Sharing one wrapping row, a long name
+              pushed the OS onto a line of its own while a short one kept it
+              inline, so no two cards had the same header shape. */}
+          <h2 className="computer-card-name" translate="no" title={title}>{title}</h2>
+          <div className="computer-card-state">
             <NodePresence node={node} t={t} withLabel />
             <HostOsBadge node={node} />
             {showStatus ? (
@@ -120,9 +126,12 @@ export function ComputerCard({
             <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
           </p>
           {/* The reader owns this machine, so the fix is theirs to make:
-              say it in the open, not only in the badge's hover title. */}
+              name it in the open — the command, not only the badge's hover
+              title — at the sub line's quiet weight, under the name. */}
           {node.clientOutdated === true ? (
-            <p className="computer-card-outdated">{t("computer.client_outdated_hint")}</p>
+            <p className="computer-card-outdated">
+              <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+            </p>
           ) : null}
         </div>
         {/* One overflow menu instead of a row of outlined buttons: managing
@@ -198,8 +207,10 @@ export function ComputerCard({
                   title={t("computer.open_run_thread")}
                 >
                   <StateMark shape="live" className="computer-run-mark" />
-                  <span className="computer-run-agent">{labelForExecutor(run.agent)}</span>
+                  {/* What the run is doing leads; who runs it is the quiet
+                      attribution after it. */}
                   <span className="computer-run-goal">{run.taskGoal || t("computer.untitled_run")}</span>
+                  <span className="computer-run-agent">{labelForExecutor(run.agent)}</span>
                   <span className="computer-run-elapsed tnum">{formatRunElapsed(run.startedAt)}</span>
                 </Button>
               </li>
@@ -231,10 +242,14 @@ export function ComputerCard({
           The id is copied, never read, so it lives in the overflow menu. */}
       <footer className="computer-card-meta">
         <span className="code computer-fact-path" title={node.workspacePath}>
-          {node.workspacePath || t("computer.fact_unset")}
+          {node.workspacePath
+            ? pathSegments(node.workspacePath).map((segment, index) => (
+                <span key={`${index}:${segment}`}>{segment}</span>
+              ))
+            : t("computer.fact_unset")}
         </span>
         {node.queuedCommandCount > 0 ? (
-          <span className="tnum">{t("admin.queued")} {node.queuedCommandCount}</span>
+          <span className="tnum">{t("computer.queued_count", { count: node.queuedCommandCount })}</span>
         ) : null}
       </footer>
     </article>
@@ -259,11 +274,16 @@ function RuntimeRow({
   const detail = runtimeNotReadyDetail(node, agent, disabled);
 
   const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
+  // A failed runtime says so in words: a red ring beside a grey one is a
+  // difference of hue alone (WCAG 1.4.1).
+  const failed = tone === "bad";
 
   return (
     <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`} title={tooltip}>
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
-      <RuntimeMark agent={agent} presence={presence} tone={tone} variant="labeled" role="img" aria-label={stateLabel} title={stateLabel} />
+      <RuntimeMark agent={agent} presence={presence} tone={tone} variant="labeled" role="img" aria-label={stateLabel} title={stateLabel}>
+        {failed ? <span className="runtime-mark-state" aria-hidden="true">{stateLabel}</span> : null}
+      </RuntimeMark>
     </li>
   );
 }

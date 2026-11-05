@@ -30,6 +30,7 @@ import { ManagedNodeHistory } from "./admin/ManagedNodeHistory";
 import { PageHeader } from "./PageHeader";
 import { SectionNav } from "./SectionNav";
 import { hrefForAdminSection } from "../lib/appRoute";
+import { isNodeOnline } from "../lib/adminHelpers";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AdminViewToggle, type AdminView } from "./admin/AdminViewToggle";
@@ -397,7 +398,11 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   const headerCount = usersSection
     ? t("admin.user_count", { count: users.length })
     : view === "computers"
-      ? t("admin.node_count", { count: nodes.length })
+      // The owner's page counts "4 computers · 3 online"; the fleet reads the
+      // same way.
+      ? nodes.length > 0
+        ? `${t("admin.node_count", { count: nodes.length })} · ${t("computer.online_count", { count: nodes.filter(isNodeOnline).length })}`
+        : t("admin.node_count", { count: nodes.length })
       : undefined;
 
   return (

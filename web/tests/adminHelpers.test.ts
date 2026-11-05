@@ -27,6 +27,9 @@ import {
   orderNodeAgentNames,
   truncateId,
   visualStatus,
+  showsLifecycleStatus,
+  fleetRuntimeSlots,
+  failedRuntimeCount,
 } from "../src/lib/adminHelpers.js";
 import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent, UserRecord } from "../src/types.js";
 
@@ -546,5 +549,47 @@ describe("isPersonalComputer", () => {
     assert.equal(isPersonalComputer({ nodeLocation: "user-device", userId: undefined }), false);
     assert.equal(isPersonalComputer({ nodeLocation: "managed", userId: "alice" }), false);
     assert.equal(isPersonalComputer({ nodeLocation: undefined, userId: "alice" }), false);
+  });
+});
+
+describe("showsLifecycleStatus", () => {
+  it("lets presence speak for ready, stale, running, and busy computers", () => {
+    for (const status of ["ready", "stale", "running", "busy"]) {
+      assert.equal(showsLifecycleStatus(status), false, status);
+    }
+  });
+
+  it("adds the lifecycle word only when presence cannot say it", () => {
+    for (const status of ["provisioning", "failed", "stopped"]) {
+      assert.equal(showsLifecycleStatus(status), true, status);
+    }
+  });
+});
+
+describe("fleetRuntimeSlots", () => {
+  it("reserves every runtime visible on any computer, in display order", () => {
+    const slots = fleetRuntimeSlots([
+      { agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "unavailable" } },
+      { agents: { codex: "ready", claude: "failed", kimi: "ready", pi: "ready" } },
+    ] as Pick<ControlPanelDaemonNodeRecord, "agents">[]);
+    assert.deepEqual(slots, visibleNodeAgentNames({ agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "ready" } } as Pick<ControlPanelDaemonNodeRecord, "agents">));
+    assert.ok(slots.includes("pi"));
+  });
+
+  it("leaves out an opt-in runtime no computer reports", () => {
+    const slots = fleetRuntimeSlots([
+      { agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "unavailable" } },
+    ] as Pick<ControlPanelDaemonNodeRecord, "agents">[]);
+    assert.equal(slots.includes("pi"), false);
+  });
+});
+
+describe("failedRuntimeCount", () => {
+  it("counts shown runtimes that last reported failed", () => {
+    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready", kimi: "failed", pi: "unavailable" } } as Pick<ControlPanelDaemonNodeRecord, "agents">), 2);
+  });
+
+  it("does not count a runtime an admin switched off", () => {
+    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready" }, disabledAgents: ["codex"] } as Pick<ControlPanelDaemonNodeRecord, "agents" | "disabledAgents">), 0);
   });
 });

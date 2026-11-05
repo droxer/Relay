@@ -3,7 +3,7 @@
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
-import { statusTone, visualStatus } from "./helpers";
+import { failedRuntimeCount, showsLifecycleStatus, statusTone, visualStatus } from "./helpers";
 import { NodeActions } from "./NodeActions";
 import { NodeMeta } from "./NodeMeta";
 import { NodePresence } from "./NodePresence";
@@ -12,6 +12,7 @@ import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 import { HostOsBadge } from "../computer/HostOsBadge";
 import { isNodeOnline } from "../../lib/adminHelpers";
+import { computerName } from "../../lib/computerNodes";
 
 interface NodeCardProps {
   node: ControlPanelDaemonNodeRecord;
@@ -37,18 +38,18 @@ export function NodeCard({
 }: NodeCardProps) {
   const { deletePending, deleteError, handleDelete } = useNodeDelete(node, onDelete, t);
 
-  const hasName = Boolean(node.displayName);
-  const nodeName = hasName ? node.displayName! : node.id;
-  // Only show the id handle when it adds information — a node whose display
-  // name is (or equals) its id would otherwise print the same string twice.
-  const showHandle = hasName && node.id !== nodeName;
+  // An unnamed computer says so in words, as on the owner's page; the id is
+  // always the handle under the name, never the title itself.
+  const nodeName = computerName(node) ?? t("computer.unnamed");
   const status = visualStatus(node);
   const online = isNodeOnline(node);
   // ONE status readout per card. Presence (Online/Offline) is the ordinary
   // case; the lifecycle pill replaces it only when it says something presence
-  // cannot — running, provisioning, failed, stopped. Showing both printed
-  // "Running · Online" on every busy machine.
-  const showStatusPill = status !== "ready" && status !== "stale";
+  // cannot — provisioning, failed, stopped. Busy work is the run count beside
+  // it, the rule the owner's card uses too (`showsLifecycleStatus`).
+  const showStatusPill = showsLifecycleStatus(status);
+  const runCount = node.activeRuns?.length ?? 0;
+  const failedRuntimes = failedRuntimeCount(node);
 
   return (
     <article
@@ -57,16 +58,10 @@ export function NodeCard({
     >
       <header className="adm-node-card-head">
         <div className="adm-node-card-identity">
-          <span
-            className={`adm-node-card-name${hasName ? "" : " code"}`}
-            translate="no"
-            title={nodeName}
-          >
+          <span className="adm-node-card-name" translate="no" title={nodeName}>
             {nodeName}
           </span>
-          {showHandle ? (
-            <span className="adm-node-card-handle code" translate="no">{node.id}</span>
-          ) : null}
+          <span className="adm-node-card-handle code" translate="no">{node.id}</span>
           {/* The status rides under the name rather than beside it: beside
               it, a card narrower than name + status wrapped the status onto
               a line of its own, floated right next to the menu. */}
@@ -76,12 +71,24 @@ export function NodeCard({
                 className="adm-status-plain"
                 tone={statusTone(status)}
                 label={t(`status.${status}`, { defaultValue: status })}
-                live={status === "running" || status === "busy"}
+                live={statusTone(status) === "info"}
               />
             ) : (
               <NodePresence node={node} t={t} withLabel />
             )}
             <HostOsBadge node={node} />
+            {/* Work counts ride on the status line rather than in the
+                footer, where a queue count wrapped onto a line of its own
+                and lifted that card's runtimes out of line with its row. */}
+            {runCount > 0 ? (
+              <span className="adm-node-card-count tnum">{t("computer.running_count", { count: runCount })}</span>
+            ) : null}
+            {node.queuedCommandCount > 0 ? (
+              <span className="adm-node-card-count tnum">{t("computer.queued_count", { count: node.queuedCommandCount })}</span>
+            ) : null}
+            {failedRuntimes > 0 ? (
+              <span className="adm-node-card-count is-failed tnum">{t("computer.runtimes_failed_count", { count: failedRuntimes })}</span>
+            ) : null}
             <ClientOutdatedBadge node={node} t={t} />
           </span>
         </div>
@@ -105,9 +112,6 @@ export function NodeCard({
         <span className="adm-node-runtimes" title={t("admin.v2.node_runtimes")}>
           <NodeRuntimeMarks node={node} t={t} />
         </span>
-        {node.queuedCommandCount > 0 ? (
-          <span className="adm-node-card-queued tnum">{node.queuedCommandCount} {t("admin.queued")}</span>
-        ) : null}
       </footer>
       {deleteError ? (
         <p className="adm-node-card-error" role="alert">{t("admin.v2.action_failed", { message: deleteError })}</p>

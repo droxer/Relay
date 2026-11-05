@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
-import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
+import type { AgentName, ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import {
   AdminNode,
   ICON,
@@ -18,6 +18,7 @@ import {
 } from "../icons";
 import { SearchInput } from "@/components/ui/search-input";
 import {
+  fleetRuntimeSlots,
   matchesNodeQuickFilter,
   nodesByStatus,
   nodeSortColumns,
@@ -96,6 +97,8 @@ interface NodeCellState {
   onRenameNode: NodesViewProps["onRenameNode"];
   onManageExecutors: NodesViewProps["onManageExecutors"];
   onDeleteNode: NodesViewProps["onDeleteNode"];
+  /** Runtime columns every row reserves (`fleetRuntimeSlots`). */
+  runtimeSlots: readonly AgentName[];
 }
 
 const NodeCells = createCellState<NodeCellState>("NodeBandTable");
@@ -146,8 +149,8 @@ function NodeUserColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
 }
 
 function NodeRuntimesColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
-  const { t } = useNodeCellState();
-  return <NodeRuntimesCell node={node} t={t} />;
+  const { t, runtimeSlots } = useNodeCellState();
+  return <NodeRuntimesCell node={node} slots={runtimeSlots} t={t} />;
 }
 
 function NodeActionsColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
@@ -269,9 +272,12 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
   const { sort, toggleSort, setSort } = useListSort(sortColumns, "nodeSort");
   const { page, setPage } = usePagination("nodePage");
   // What the stable column defs read at render time (see NodeCells).
+  // Over the whole fleet, not the filtered slice: the columns stay put as
+  // the reader filters and searches.
+  const runtimeSlots = useMemo(() => fleetRuntimeSlots(nodes), [nodes]);
   const cellState = useMemo<NodeCellState>(
-    () => ({ t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
-    [t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
+    () => ({ t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, runtimeSlots }),
+    [t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, runtimeSlots],
   );
   /* `useListSort` owns the sort (it persists in the URL); TanStack's
      SortingState is a read-only projection of it. Header clicks go back

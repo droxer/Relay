@@ -1,7 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
+import type { AgentName, ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
 import { nodeOwnershipProfile } from "./helpers";
 import { NodeActions } from "./NodeActions";
@@ -11,6 +11,8 @@ import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { ICON, NodeOwnershipIcon } from "../icons";
 import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 import { HostOsBadge } from "../computer/HostOsBadge";
+import { computerName } from "../../lib/computerNodes";
+import { failedRuntimeCount } from "../../lib/adminHelpers";
 
 /* The nodes list is a TanStack table now (see NodesView): a "row" here is one
    component per column, and flexRender mounts each as a real component —
@@ -29,7 +31,7 @@ export function NodeIdentityCell({
   node: ControlPanelDaemonNodeRecord;
   t: TFunction;
 }) {
-  const nodeName = node.displayName || node.id;
+  const nodeName = computerName(node) ?? t("computer.unnamed");
   /* No status pill. The list bands BY status, so the band above this row is
      that pill — said once for the whole group. The presence pill stays:
      online/offline is a fact about the connection, not the lifecycle, and a
@@ -49,15 +51,23 @@ export function NodeIdentityCell({
         <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
       </span>
       <span className="adm-node-row-identity">
-        <span className="adm-node-row-nameline">
-          <span className="adm-node-card-name" translate="no" title={nodeName}>
-            {nodeName}
-          </span>
+        {/* The name owns the first line. Sharing it with the presence, OS and
+            update badges, which do not shrink, squeezed the name to "Ada's
+            MacBo…" — or to nothing at all — in a narrow column. */}
+        <span className="adm-node-card-name" translate="no" title={nodeName}>
+          {nodeName}
+        </span>
+        <span className="adm-node-row-state">
           <NodePresence node={node} t={t} withLabel />
           <HostOsBadge node={node} />
+          {failedRuntimeCount(node) > 0 ? (
+            <span className="adm-node-card-count is-failed tnum">
+              {t("computer.runtimes_failed_count", { count: failedRuntimeCount(node) })}
+            </span>
+          ) : null}
           <ClientOutdatedBadge node={node} t={t} />
+          <span className="adm-node-card-handle code" translate="no" title={node.id}>{node.id}</span>
         </span>
-        <span className="adm-node-card-handle code" translate="no">{node.id}</span>
       </span>
     </span>
   );
@@ -79,10 +89,19 @@ export function NodeUserCell({
   );
 }
 
-export function NodeRuntimesCell({ node, t }: { node: ControlPanelDaemonNodeRecord; t: TFunction }) {
+export function NodeRuntimesCell({
+  node,
+  slots,
+  t,
+}: {
+  node: ControlPanelDaemonNodeRecord;
+  /** The fleet's runtime columns (`fleetRuntimeSlots`), so rows line up. */
+  slots?: readonly AgentName[];
+  t: TFunction;
+}) {
   return (
     <span className="adm-node-row-agents">
-      <NodeRuntimeMarks node={node} t={t} />
+      <NodeRuntimeMarks node={node} slots={slots} t={t} />
     </span>
   );
 }

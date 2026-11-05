@@ -342,7 +342,8 @@
 
 /* Plain dot + word: without a fill the pill's inline padding only indented
    the dot off the name's left edge. */
-.adm-node-card-state :is(.adm-status-plain, .adm-presence-pill) {
+/* The same flush dot + word on the fleet list row and the owner's card. */
+:is(.adm-node-card-state, .adm-node-row-state, .computer-card-state) :is(.adm-status-plain, .adm-presence-pill) {
   padding-inline: 0;
 }
 
@@ -354,13 +355,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* An unnamed node falls back to printing its raw id here. The `font`
-   shorthand above resets family, so .code needs to be re-asserted. */
-.adm-node-card-name.code {
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
 }
 
 .adm-node-card-handle {
@@ -470,16 +464,20 @@
   color: var(--ink-4);
 }
 
-/* List row: name and status pill share one line so the row gains the status
-   readout the card already had. */
-.adm-node-row-nameline {
+/* List row: the name owns the first line; presence, OS, update and the id
+   handle share the second, where the badges keep their size and the handle
+   is what gives. On the name's line, the badges squeezed the name itself —
+   to "Ada's MacBo…", or to nothing in a narrow column. */
+.adm-node-row-state {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1) var(--sp-2);
   min-width: 0;
 }
 
-.adm-node-row-nameline .adm-node-card-name {
+.adm-node-row-state .adm-node-card-handle {
+  flex: 1 1 6rem;
   min-width: 0;
 }
 
@@ -542,13 +540,19 @@
   margin-top: 0;
 }
 
-/* Queued-commands count is secondary meta, so it sits at the muted ink tier
-   like the node handle above it. */
-.adm-node-card-queued {
+/* Running and queued counts on the status line: secondary meta at the
+   handle's muted ink, sized with the presence word beside them. */
+.adm-node-card-count {
   flex: none;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
+
+/* "1 runtime failed": the words that carry what the red ring beside the
+   runtime's name only hints at. */
+.adm-node-card-count.is-failed {
+  color: var(--err);
 }
 
 .adm-node-card-actions {

@@ -36,6 +36,27 @@
   min-width: 0;
 }
 
+/* Fixed runtime columns in the fleet list (`fleetRuntimeSlots`): every row
+   reserves the same slots in the same order, and a slot its computer lacks
+   stays empty, so Kimi never slides into Pi's place on the row above. */
+.adm-node-runtimes-marks[data-slotted="true"] {
+  display: grid;
+  grid-auto-columns: minmax(5rem, max-content);
+  grid-auto-flow: column;
+  gap: var(--sp-2);
+}
+
+/* The owner's card prints a failed runtime's state beside its ring (the
+   fleet surfaces count failures on the status line instead): on a dark
+   computer every ring is hollow, so hue alone would be the only cue
+   (WCAG 1.4.1). */
+.runtime-mark-state {
+  color: var(--err);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
 .adm-runtime-name {
   color: var(--ink-1);
   font: var(--type-meta);
