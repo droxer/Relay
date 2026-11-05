@@ -137,10 +137,12 @@ class ConnectionService:
             return str(secret["access_token"])
 
     def _unavailable(self, owner: str, record: dict[str, Any]) -> None:
-        if record["status"] == "disconnected":
-            return
-        self.store.save(owner, {**_public(record), "status": "reconnect_required",
-            "revision": record["revision"] + 1, "updatedAt": now_iso()}, record.get("sealedSecret"))
+        with self.store.lock(record["id"]):
+            current = self._connection(owner, record["id"])
+            if current["status"] == "disconnected":
+                return
+            self.store.save(owner, {**_public(current), "status": "reconnect_required",
+                "revision": current["revision"] + 1, "updatedAt": now_iso()}, current.get("sealedSecret"))
 
     def resources(self, owner: str, connection_id: str, cursor: str = "") -> dict[str, Any]:
         record = self._connection(owner, connection_id)
@@ -157,7 +159,11 @@ class ConnectionService:
         return self.store.grants(owner, target_type, target_id)
 
     def for_work(self, owner: str, thread_id: str, task_id: str | None = None) -> builtins.list[dict[str, Any]]:
-        result = self.grants(owner, "task" if task_id else "thread", task_id or thread_id)
+        return self.check_target(owner, "task" if task_id else "thread", task_id or thread_id)
+
+    def check_target(self, owner: str, kind: str, target_id: str) -> builtins.list[dict[str, Any]]:
+        result = self.grants(owner, kind, target_id)
+        effective = []
         for grant in result:
             record = self._connection(owner, grant["connectionId"])
             if record["status"] != "connected" or record["provider"] not in self.configs:
@@ -165,7 +171,14 @@ class ConnectionService:
             current = self._current_grant(owner, grant)
             if not current or not current["resources"] or not current["actions"]:
                 raise ConnectionError("connection_access_denied", 403)
-        return result
+            effective.append(current)
+        return effective
+
+    def disconnect_all(self, owner: str) -> None:
+        with self.store.lock(owner):
+            for record in self.list(owner):
+                self.disconnect(owner, record["id"])
+            self.store.clear_authorizations(owner)
 
     def _current_grant(self, owner: str, grant: dict[str, Any]) -> dict[str, Any] | None:
         current = self.store.grant(owner, grant["id"])

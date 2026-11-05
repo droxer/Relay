@@ -61,6 +61,8 @@ def tools(request: Request, ctx: AppContextDep, *, body: JsonBodyDep) -> Respons
         return Response(status_code=202)
     if method == "initialize":
         params = body.get("params") or {}
+        if not isinstance(params, dict):
+            raise HTTPException(400, "connection_arguments_invalid")
         result: dict[str, Any] = {"protocolVersion": params.get("protocolVersion", "2024-11-05"),
             "capabilities": {"tools": {}}, "serverInfo": {"name": "relay-connections", "version": "1.0.0"}}
     elif method == "ping":

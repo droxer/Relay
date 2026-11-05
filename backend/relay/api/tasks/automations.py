@@ -17,6 +17,7 @@ from ...automations.model import TriggerError, has_webhook, is_active
 from ...automations.service import automation_service
 from ...automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ...security.edge import client_ip
+from ...core.connections import ConnectionError
 from ..contract import API_PREFIX
 from ..deps import AppContextDep, app_context
 from ..actors import get_task_for_actor, request_actor
@@ -126,6 +127,8 @@ async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) 
         raise HTTPException(403, str(error)) from error
     except TriggerError as error:
         raise HTTPException(400, str(error)) from error
+    except ConnectionError as error:
+        raise HTTPException(409, error.code) from error
     return public_task_envelope(resumed)
 
 

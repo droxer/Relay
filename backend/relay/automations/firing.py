@@ -19,6 +19,8 @@ from .context import trigger_context_block
 from .matcher import listens_for
 from .model import has_webhook, is_active, schedule_triggers
 from .schedule import resolve_timezone, summarize
+from ..connections.service import ConnectionService
+from ..core.connections import ConnectionError
 
 PENDING_TTL = timedelta(hours=24)
 RATE_WINDOW = timedelta(hours=1)
@@ -63,11 +65,13 @@ class AutomationFiring:
         automation_store: Any,
         project_store: Any = None,
         max_runs_per_hour: int = 6,
+        connections: ConnectionService | None = None,
     ) -> None:
         self.task_store = task_store
         self.automation_store = automation_store
         self.project_store = project_store
         self.max_runs_per_hour = max_runs_per_hour
+        self.connections = connections
 
     def fire(self, now: datetime) -> int:
         fired = 0
@@ -108,6 +112,12 @@ class AutomationFiring:
         if not routine or not runnable:
             self.automation_store.clear_state(routine_id)
             return False
+        if self.connections:
+            try:
+                self.connections.check_target(routine.get("ownerUserId") or "", "automation", routine_id)
+            except ConnectionError:
+                self.pause(routine_id, "connection_unavailable", "Automation paused: reconnect a required service before resuming.")
+                return False
         if self.expire_pending(routine_id, now):
             return False
         if in_flight_occurrence(self.task_store, routine):

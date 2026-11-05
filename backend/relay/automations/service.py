@@ -2,6 +2,7 @@
 firing — each automation isolated within one locked transaction."""
 
 from __future__ import annotations
+from ..connections.service import ConnectionService
 
 import os
 from datetime import datetime, UTC
@@ -112,13 +113,15 @@ class AutomationService:
         project_store: Any,
         max_runs_per_hour: int = DEFAULT_MAX_RUNS_PER_HOUR,
         batch: int = DEFAULT_OUTBOX_BATCH,
+        connections: ConnectionService | None = None,
     ) -> None:
         self.task_store = task_store
         self.automation_store = automation_store
         self.project_store = project_store
+        self.connections = connections
         self.clock = ScheduleClock(task_store=task_store, automation_store=automation_store)
         self.firing = AutomationFiring(task_store=task_store, automation_store=automation_store,
-                                       project_store=project_store, max_runs_per_hour=max_runs_per_hour)
+                                       project_store=project_store, max_runs_per_hour=max_runs_per_hour, connections=connections)
         self.matcher = AutomationMatcher(task_store=task_store, session_store=session_store,
                                          automation_store=automation_store, firing=self.firing, batch=batch)
 
@@ -176,6 +179,8 @@ class AutomationService:
             task = self.task_store.get_task(task_id)
             if task.get("ownerUserId") != actor.get("userId"):
                 raise PermissionError("Only the automation's owner can resume it.")
+            if self.connections:
+                self.connections.check_target(actor["userId"], "automation", task_id)
             if state_of(task) == "active":
                 return task
             validate_future_once(triggers_of(task), now)
@@ -233,6 +238,7 @@ def automation_service(automation_store: Any, ctx: AppContext) -> AutomationServ
     """The service an API request runs, built from the app's stores."""
     return AutomationService(task_store=ctx.task_store, session_store=ctx.session_store,
                              automation_store=automation_store, project_store=ctx.project_store,
+                             connections=getattr(ctx, "connections", None),
                              max_runs_per_hour=max_runs_per_hour_from_env())
 
 

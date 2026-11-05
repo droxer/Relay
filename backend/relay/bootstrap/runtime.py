@@ -45,6 +45,7 @@ def task_scheduler_from_env(
         task_store=task_store, session_store=session_store, automation_store=automation_store,
         project_store=project_store, max_runs_per_hour=max_runs_per_hour_from_env(),
         batch=settings.automation_outbox_batch,
+        connections=backend.connections,
     )
     return TaskScheduler(
         automations=automations,

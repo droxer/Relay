@@ -121,6 +121,8 @@ def create_task(
         )
         if "connectionGrants" in body:
             connection_service(ctx).set_grants(owner, "automation" if task.get("isRoutine") else "task", task["id"], body["connectionGrants"])
+        if task.get("isRoutine") and task.get("routineState") == "active":
+            connection_service(ctx).check_target(owner, "automation", task["id"])
     return public_task(task)
 
 
@@ -166,6 +168,8 @@ def update_task(
             if task.get("sourceRoutineId"):
                 raise HTTPException(409, "connection_generated_task_read_only")
             connection_service(ctx).set_grants(actor["userId"], "automation" if task.get("isRoutine") else "task", task["id"], body["connectionGrants"])
+        if task.get("isRoutine") and task.get("routineState") == "active":
+            connection_service(ctx).check_target(actor["userId"], "automation", task["id"])
     return public_task(task)
 
 

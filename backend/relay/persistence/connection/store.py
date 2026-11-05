@@ -59,6 +59,10 @@ class DatabaseConnectionStore:
             return conn.scalar(delete(states).where(states.c.state_hash == hashlib.sha256(state.encode()).hexdigest(),
                 states.c.owner_user_id == owner, states.c.expires_at > time.time()).returning(states.c.sealed_secret))
 
+    def clear_authorizations(self, owner: str) -> None:
+        with store_transaction(self.engine) as conn:
+            conn.execute(delete(states).where(states.c.owner_user_id == owner))
+
     def grants(self, owner: str, target_type: str, target_id: str) -> builtins.list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             return list(conn.scalars(select(grants.c.record).where(grants.c.owner_user_id == owner,
