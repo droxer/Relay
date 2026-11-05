@@ -7,10 +7,8 @@ import {
   agentsOnNodes,
   buildUserSummaries,
   userEmptyStateTranslationKey,
-  usersByStatus,
   userSummaryStatus,
   formatRelativeTime,
-  USER_SUMMARY_STATUS_ORDER,
   nodesByStatus,
   NODE_STATUS_ORDER,
   initialsOf,
@@ -450,40 +448,6 @@ describe("initialsOf", () => {
   it("falls back for empty input", () => {
     assert.equal(initialsOf(""), "?");
     assert.equal(initialsOf("   "), "?");
-  });
-});
-
-describe("usersByStatus", () => {
-  it("bands every user under the state their own row derives", () => {
-    const users = [
-      user({ id: "a", displayName: "A" }),
-      user({ id: "b", displayName: "B" }),
-      user({ id: "c", displayName: "C" }),
-      user({ id: "d", displayName: "D" }),
-    ];
-    const nodes = [
-      node({ id: "n1", userId: "a", status: "running", activeRuns: [{ id: "r" }] as never }),
-      node({ id: "n2", userId: "b", status: "ready" }),
-      node({ id: "n3", userId: "c", status: "failed" }),
-    ];
-    const summaries = buildUserSummaries(users, nodes);
-
-    const grouped = usersByStatus(summaries);
-    const total = USER_SUMMARY_STATUS_ORDER.reduce((sum, key) => sum + grouped[key].length, 0);
-
-    // A partition: every user lands in exactly one band.
-    assert.equal(total, summaries.length);
-    for (const summary of summaries) {
-      const { key } = userSummaryStatus(summary);
-      assert.ok(grouped[key].some((member) => member.id === summary.id));
-    }
-    // The user with no computer at all is the one band nothing else fills.
-    assert.deepEqual(grouped.no_nodes.map((member) => member.id), ["d"]);
-  });
-
-  it("keeps a band for every declared state, even an empty one", () => {
-    const grouped = usersByStatus(buildUserSummaries([], []));
-    for (const key of USER_SUMMARY_STATUS_ORDER) assert.deepEqual(grouped[key], []);
   });
 });
 

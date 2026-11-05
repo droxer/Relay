@@ -252,28 +252,6 @@ export function localComputerUsageLabel(
   return `${member.localComputerCount}/${member.effectiveMaxLocalComputers}`;
 }
 
-/** More slots than this stop reading as a count at a glance, so the card
-    falls back to the bare ratio. */
-const MAX_LIMIT_SLOTS = 10;
-
-export type LimitSlot = "used" | "free" | "over";
-
-/** The user card's computer meter: one slot per allowed personal computer,
-    plus an `over` slot for each one a lowered limit no longer covers. Null
-    when there is no limit to draw, nothing to draw, or too many slots. */
-export function localComputerSlots(
-  member: Pick<UserNodeSummary, "localComputerCount" | "effectiveMaxLocalComputers">,
-): LimitSlot[] | null {
-  const limit = member.effectiveMaxLocalComputers;
-  if (limit === undefined) return null;
-  const total = Math.max(limit, member.localComputerCount);
-  if (total === 0 || total > MAX_LIMIT_SLOTS) return null;
-  return Array.from({ length: total }, (_, index): LimitSlot => {
-    if (index >= limit) return "over";
-    return index < member.localComputerCount ? "used" : "free";
-  });
-}
-
 /** The concurrent task limit in force: the server's resolved value, else the
     pinned override, else the default. */
 export function taskCapacityOf(
@@ -319,36 +297,6 @@ export function userSummaryStatus(
   }
   if (member.nodeCount > 0) return { tone: "neutral", key: "idle" };
   return { tone: "neutral", key: "no_nodes" };
-}
-
-/**
- * User fleet health, most-urgent first — the order the user list
- * bands in. Not the order `UserSummaryStatusKey` happens to be declared
- * in: that union lists the states, this ranks them. An admin opens this list
- * to find the people whose machines need something, so a failure sorts above
- * a healthy fleet and a user with no computer at all sorts last.
- */
-export const USER_SUMMARY_STATUS_ORDER: readonly UserSummaryStatusKey[] = [
-  "failed",
-  "running",
-  "ready",
-  "idle",
-  "no_nodes",
-];
-
-/**
- * Users partitioned by fleet health, in `USER_SUMMARY_STATUS_ORDER`.
- * `userSummaryStatus` is already exclusive — every user has exactly
- * one — so this is a true partition, which is what a band may claim to be.
- */
-export function usersByStatus(
-  members: UserNodeSummary[],
-): Record<UserSummaryStatusKey, UserNodeSummary[]> {
-  const grouped = Object.fromEntries(
-    USER_SUMMARY_STATUS_ORDER.map((key) => [key, [] as UserNodeSummary[]]),
-  ) as Record<UserSummaryStatusKey, UserNodeSummary[]>;
-  for (const member of members) grouped[userSummaryStatus(member).key].push(member);
-  return grouped;
 }
 
 /**

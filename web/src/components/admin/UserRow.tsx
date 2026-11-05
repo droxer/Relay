@@ -24,6 +24,7 @@ import { sortIndicator, type SortState } from "../../lib/listSort";
 import { ActionEdit, AdminDelete, ICON } from "../icons";
 import { TonePill } from "../StatusPill";
 import { UserComputers } from "./UserComputers";
+import { UserStatusMark } from "./UserStatusMark";
 import {
   isOverLocalComputerLimit,
   localComputerUsageLabel,
@@ -46,24 +47,19 @@ interface UserCellState {
   onDelete?: (id: string) => void;
 }
 
-const UserCells = createCellState<UserCellState>("UserGroupTable");
+const UserCells = createCellState<UserCellState>("UserTable");
 
 /**
- * One status band's users as a real table.
+ * The user roster as one table.
  *
- * Every band is its own table with its own header — a single header above six
- * bands stops naming the row under the reader's eye — and the shared sort
- * state puts the same caret on every copy. Sorting itself is manual: the
- * caller pre-orders `members` through `applySort` (whose
- * missing-sinks-both-ways semantics TanStack's inversion cannot express) and
- * this table only reflects the state and reports header clicks.
- *
- * Column geometry is ported from the old `.adm-emp-cols` grid
- * (`minmax(220px, 1.2fr) minmax(0, 2fr) 5rem 5.5rem 5rem 4.5rem`): identity
- * keeps its 220px floor, computers take the slack, and the three metric
- * columns and actions stay pinned at their rem tracks, flush right.
+ * Status is not a column or a band: each computer chip carries its own
+ * liveness, and a row names its user's state beside the name only when it is
+ * running or needs attention. Sorting itself is manual: the caller pre-orders
+ * `members` through `applySort` (whose missing-sinks-both-ways semantics
+ * TanStack's inversion cannot express) and this table only reflects the
+ * state and reports header clicks.
  */
-export function UserGroupTable({
+export function UserTable({
   label,
   members,
   sort,
@@ -73,7 +69,7 @@ export function UserGroupTable({
   onEdit,
   onDelete,
 }: {
-  /** The band's label — also the table's accessible name. */
+  /** The table's accessible name. */
   label: string;
   /** Already sorted and paged: the table renders exactly these rows. */
   members: UserNodeSummary[];
@@ -133,15 +129,21 @@ export function UserGroupTable({
             <>
               <div className="adm-emp-id-line">
                 <p className="adm-emp-name" translate="no">{member.displayName}</p>
+                <UserCells.Read>{(s) => <UserStatusMark member={member} t={s.t} />}</UserCells.Read>
               </div>
-              <p className="adm-emp-meta code">
+              {/* One quiet line of who they are. Task capacity joins it only
+                  when pinned for this user — the org default repeated on every
+                  row said nothing. */}
+              <p className="adm-emp-meta">
                 <span translate="no">@{userHandleOf(member)}</span>
                 {member.email ? <span translate="no">{member.email}</span> : null}
                 {member.departmentName ? <span>{member.departmentName}</span> : null}
+                {member.maxConcurrentTasks != null ? (
+                  <UserCells.Read>{(s) => <span>{s.t("admin.v2.task_capacity_summary", {
+                    count: taskCapacityOf(member),
+                  })}</span>}</UserCells.Read>
+                ) : null}
               </p>
-              <UserCells.Read>{(s) => <p className="adm-emp-meta">{s.t("admin.v2.task_capacity_summary", {
-                count: taskCapacityOf(member),
-              })}</p>}</UserCells.Read>
             </>
           );
         },
@@ -162,8 +164,14 @@ export function UserGroupTable({
           const member = row.original;
           return (
             <div className="adm-emp-metric">
+              {/* The card's wording, so the two layouts read one number. */}
               <span className={`adm-emp-ratio tnum ${isOverLocalComputerLimit(member) ? "" : "ink-dim"}`}>
-                {localComputerUsageLabel(member)}
+                {member.effectiveMaxLocalComputers === undefined
+                  ? localComputerUsageLabel(member)
+                  : s.t("admin.v2.emp_card_computers_value", {
+                    used: member.localComputerCount,
+                    limit: member.effectiveMaxLocalComputers,
+                  })}
               </span>
               {isOverLocalComputerLimit(member) ? (
                 <TonePill
@@ -177,40 +185,10 @@ export function UserGroupTable({
         }}</UserCells.Read>,
       },
       {
-        id: "running",
-        meta: { headClass: "adm-emp-col-metric text-right", cellClass: "adm-emp-col-metric text-right" } satisfies ColumnChrome,
-        header: () => <UserCells.Read>{(s) => sortHead("running", s.t("admin.v2.col_running"), "end", "desc")}</UserCells.Read>,
-        cell: ({ row }) => {
-          const member = row.original;
-          return (
-            <div className="adm-emp-metric">
-              <span className={`adm-emp-running tnum ${member.runningCount > 0 ? "ink-strong" : "ink-dim"}`}>
-                {member.runningCount}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
-        id: "ready",
-        meta: { headClass: "adm-emp-col-metric text-right", cellClass: "adm-emp-col-metric text-right" } satisfies ColumnChrome,
-        header: () => <UserCells.Read>{(s) => sortHead("ready", s.t("admin.v2.col_ready"), "end", "desc")}</UserCells.Read>,
-        cell: ({ row }) => {
-          const member = row.original;
-          return (
-            <div className="adm-emp-metric">
-              <span className="adm-emp-ratio tnum ink-dim">
-                {member.readyCount}/{member.nodeCount}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
         /* Actions is not a column of data — there is nothing to order by. */
         id: "actions",
         meta: { headClass: "adm-emp-col-actions text-right", cellClass: "adm-emp-col-actions text-right" } satisfies ColumnChrome,
-        header: () => <UserCells.Read>{(s) => s.t("admin.v2.col_actions")}</UserCells.Read>,
+        header: () => <UserCells.Read>{(s) => <span className="sr-only">{s.t("admin.v2.col_actions")}</span>}</UserCells.Read>,
         cell: ({ row }) => <UserCells.Read>{(s) => {
           const member = row.original;
           const { deletePending: pending, onEdit: edit, onDelete: del, t: say } = s;
