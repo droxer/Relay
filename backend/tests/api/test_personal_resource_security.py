@@ -128,3 +128,14 @@ def test_legacy_sandbox_without_credentials_is_not_public(personal_resources):
         "supportedAgents": ["codex"], "status": "ready",
     })
     assert TestClient(app).get("/api/v1/sandboxes/legacy_unconfigured").status_code == 401
+
+
+def test_legacy_shared_node_and_ui_secret_never_grants_human_authority(personal_resources):
+    _client, app, identities, sessions = personal_resources
+    app.state.registry.register({
+        "sandboxId": "node_alice", "userId": identities["alice"], "token": "token_alice",
+        "protocolVersion": 1, "supportedAgents": ["codex"], "status": "ready",
+        "workspaceId": "machine_alice", "workspacePath": "/workspace/alice",
+    }, ui_token="token_alice")
+    response = TestClient(app).get(f"/api/v1/threads/{sessions['alice']}", headers={"Authorization": "Bearer token_alice"})
+    assert response.status_code == 401, response.text

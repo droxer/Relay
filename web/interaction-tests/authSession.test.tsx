@@ -75,13 +75,17 @@ it("lets login and logout replace the probed user", async () => {
 
 it("does not let a pending probe overwrite a login", async () => {
   let resolve!: (value: { authenticated: boolean }) => void;
-  vi.spyOn(api, "getMe").mockImplementation(() => new Promise((done) => { resolve = done; }));
+  vi.spyOn(api, "getMe")
+    .mockImplementationOnce(() => new Promise((done) => { resolve = done; }))
+    .mockResolvedValue({ authenticated: true, user: ADMIN });
   const { result } = renderHook(() => useAuthSession(), { wrapper: wrapper() });
   act(() => result.current.setUser(ADMIN));
   await waitFor(() => expect(result.current.user).toEqual(ADMIN));
+  useRelayStore.getState().setTokens({ admin: "new-session-ui-token" });
   await act(async () => { resolve({ authenticated: false }); });
   await waitFor(() => expect(result.current.status).toBe("authenticated"));
   expect(result.current.user).toEqual(ADMIN);
+  expect(useRelayStore.getState().tokens).toEqual({ admin: "new-session-ui-token" });
 });
 
 it("hands the probe's capabilities to useSessionCapabilities without a second /auth/me", async () => {
