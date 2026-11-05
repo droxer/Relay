@@ -315,6 +315,7 @@ def test_legacy_routine_reads_as_v2_and_patches_keep_its_schedule(monkeypatch) -
             "routineNextRunDate": "2030-01-02", "routineEnabled": True,
             "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": ALICE,
         })
+        _login(client, "alice")
         current = client.get(f"/api/v1/tasks/{legacy['id']}").json()
         assert current["routineState"] == "active"
         assert not set(LEGACY_FIELDS) & set(current)
