@@ -64,12 +64,23 @@ test("routines filter by their own fields", async ({ page }) => {
   await expect(page.getByRole("option")).toHaveText([/^Trigger/, /^Agent/, /^Assignee/]);
 });
 
-test("the agent roster rail filters availability with a chip", async ({ page }) => {
-  await mockApi(page);
+test("the agent roster quick search filters agents and survives reload through the URL", async ({ page }) => {
+  const agents = ["Ada", "Ben"].map((name) => ({
+    id: name.toLowerCase(), displayName: name, executorKind: "codex", defaultRole: "implementer",
+    supervisorUserId: "u", enabled: true, availability: "ready", placements: [], skills: [],
+    version: 1, createdAt: stamp, updatedAt: stamp,
+  }));
+  await mockApi(page, { agents });
   await page.goto("/agents");
-  const band = page.getByRole("group", { name: "Agent filters" });
-  await band.getByRole("button", { name: "Add filter" }).click();
-  await page.getByRole("option", { name: /^Availability/ }).click();
-  await page.getByRole("option", { name: "Offline" }).click();
-  await expect(page).toHaveURL(/[?&]availability=offline\b/);
+  const roster = page.locator(".agents-roster-list");
+  await expect(roster.getByRole("button", { name: /Ada/ })).toBeVisible();
+  await expect(roster.getByRole("button", { name: /Ben/ })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search agents" }).fill("Ben");
+  await expect(page).toHaveURL(/[?&]q=Ben\b/);
+  await expect(roster.getByRole("button", { name: /Ada/ })).toHaveCount(0);
+  await expect(roster.getByRole("button", { name: /Ben/ })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("searchbox", { name: "Search agents" })).toHaveValue("Ben");
+  await expect(roster.getByRole("button", { name: /Ada/ })).toHaveCount(0);
+  await expect(roster.getByRole("button", { name: /Ben/ })).toBeVisible();
 });

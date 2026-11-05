@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SessionCapabilities } from "../api";
-import { AUTH_CAPABILITIES_QUERY_KEY } from "../hooks/useAuthSession";
+import { AUTH_CAPABILITIES_QUERY_KEY, AuthSessionClientContext } from "../hooks/useAuthSession";
 import { ArtifactViewerProvider } from "./ArtifactViewerProvider";
 
 /** Mounted with the Account id as its key. An old request or mutation can
@@ -27,7 +27,9 @@ export function PersonalSpaceProvider({ children }: { children: ReactNode }) {
   }, [capabilities, client]);
   useEffect(() => () => client.clear(), [client]);
 
-  return <QueryClientProvider client={client}>
-    <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
-  </QueryClientProvider>;
+  return <AuthSessionClientContext.Provider value={authClient}>
+    <QueryClientProvider client={client}>
+      <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
+    </QueryClientProvider>
+  </AuthSessionClientContext.Provider>;
 }

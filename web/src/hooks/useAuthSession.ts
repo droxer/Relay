@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getMe, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
@@ -6,6 +6,9 @@ import { clearTokens, writeSignedInHint } from "../lib/appStorage";
 import { useRelayStore } from "../lib/store";
 
 const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
+/** Personal-data providers preserve this client for auth consumers below them.
+ * A new data cache must not interpret the current Account as a new sign-in. */
+export const AuthSessionClientContext = createContext<QueryClient | null>(null);
 /** Where the `/auth/me` probe leaves the server's capability switches, so
     `useSessionCapabilities` reads them without asking a second time. */
 export const AUTH_CAPABILITIES_QUERY_KEY = ["auth", "capabilities"] as const;
@@ -58,7 +61,8 @@ export function useAuthSession(): {
   status: AuthStatus;
   setUser: (user: CurrentUser | null) => void;
 } {
-  const queryClient = useQueryClient();
+  const dataClient = useQueryClient();
+  const queryClient = useContext(AuthSessionClientContext) ?? dataClient;
   const query = useQuery({
     queryKey: AUTH_SESSION_QUERY_KEY,
     queryFn: ({ signal }) => probeSession(signal, queryClient),
@@ -68,7 +72,7 @@ export function useAuthSession(): {
     gcTime: Infinity,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-  });
+  }, queryClient);
 
   const setUser = useCallback((user: CurrentUser | null) => {
     void queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY });

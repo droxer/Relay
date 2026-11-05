@@ -20,7 +20,7 @@ describe("task board review regressions", () => {
   it("hydrates persisted views after the deterministic first render", () => {
     assert.match(backlogPage, /useState<BacklogView>\("list"\)/);
     // Restored once the client owns the tree — never while hydrating.
-    assert.match(backlogPage, /useKeyChange\(mounted, \(isMounted\) => \{\s*if \(isMounted\) setView\(parseBacklogView\(null\)\)/);
+    assert.match(backlogPage, /useKeyChange\(mounted, \(isMounted\) => \{\s*if \(isMounted\) \{\s*setView\(parseBacklogView\(null\)\)/);
   });
 
   it("limits backlog selection to records rendered on the current list or lane pages", () => {
