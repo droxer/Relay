@@ -325,7 +325,7 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
  */
 const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
   backlog: ["lanes"],
-  admin: ["userLanes", "nodeLanes", "waitlistLanes"],
+  admin: ["nodeLanes", "waitlistLanes"],
 };
 
 /**
@@ -424,7 +424,6 @@ function copyRecordTab(
 const LEGACY_ADMIN_PARAMS: Readonly<Record<string, string>> = {
   employeePage: "userPage",
   employeeSort: "userSort",
-  employeeLanes: "userLanes",
 };
 
 /** A saved admin view from before the rename keeps its page, sort, and lanes. */

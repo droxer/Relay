@@ -105,19 +105,15 @@
 /* ── Users view ───────────────────────────────────────────────── */
 
 
-/* Column tracks for the per-band user tables. Lengths, not scale steps —
-   the design grid bans arbitrary bracket values in component classes.
-   The grouped tables use fixed layout (list-group.css), so the narrow
-   tracks are WIDTHS — sized for the longest header, zh-CN included — and the
-   identity and computers columns share the rest. */
+/* Column tracks for the user table. Lengths, not scale steps — the design
+   grid bans arbitrary bracket values in component classes. The table uses
+   fixed layout (list-group.css), so the narrow tracks are WIDTHS — sized for
+   the longest header, zh-CN included — and the identity and computers
+   columns share the rest. */
 .adm-emp-col-identity { width: 34%; }
-/* Label + the reserved sort caret + cell padding: "Local limit" is the
-   longest of the three metric headers. */
+/* Label + the reserved sort caret + cell padding for "Local limit". */
 .adm-emp-col-metric { width: 8rem; }
 .adm-emp-col-actions { width: 5rem; }
-/* The three metric tracks are fixed, so the users table needs a wider floor
-   than the shared 720px for its Computers column to keep room for a chip. */
-.adm-grouped-list table[data-slot="table"].adm-emp-table { min-width: 64rem; }
 /* A one-shot 'recently updated' marker, not live work — ink, drawn once on
    the --t-draw cadence (--live blue + the pulse cadences are reserved for
    live work). Rows are <tr> now, and a <tr> is not a reliable positioning
@@ -164,10 +160,17 @@ tr.is-pulse > td:first-child::after {
   margin: var(--sp-1) 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  gap: var(--sp-1-5);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
+}
+
+/* Same separator as the card's handle · department line. */
+.adm-emp-meta > * + *::before {
+  content: "·";
+  margin-inline-end: var(--sp-1-5);
+  color: var(--ink-4);
 }
 
 .adm-emp-nodes {
@@ -248,12 +251,6 @@ tr.is-pulse > td:first-child::after {
   min-width: 3.5rem;
 }
 
-/* Same rung as the ratios beside it: a display numeral in one column made
-   the running count the loudest thing in every row, zeros included. */
-.adm-emp-running {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
 
 .adm-emp-ratio {
   font: var(--type-body-sm);
@@ -616,26 +613,12 @@ tr.is-pulse > td:first-child::after {
   flex: 1 1 0;
 }
 
-.adm-emp-limits {
+.adm-emp-limit-rows {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: var(--sp-1-5);
   min-width: 0;
-}
-
-.adm-emp-limit-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1-5);
-  margin: 0;
-}
-
-/* The over-limit warning gets its own line under the rows: squeezed into the
-   computer row it pushed the count onto a second line. */
-.adm-emp-limit-note {
-  display: flex;
-  justify-content: flex-end;
   margin: 0;
 }
 
@@ -679,32 +662,6 @@ tr.is-pulse > td:first-child::after {
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
-}
-
-/* One slot per allowed computer. Filled = connected, hairline = free,
-   crimson = a computer the lowered limit no longer covers. Achromatic until
-   something is wrong, so a full quota reads as full, not as an alarm. */
-.adm-emp-slots {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.adm-emp-slot {
-  width: 6px;
-  height: 10px;
-  border-radius: 1.5px;
-  /* --ink-4, not a line token: a hairline slot vanished at 6px wide. */
-  box-shadow: inset 0 0 0 1px var(--ink-4);
-}
-
-.adm-emp-slot[data-slot-state="used"] {
-  background: var(--ink-2);
-  box-shadow: none;
-}
-
-.adm-emp-slot[data-slot-state="over"] {
-  background: var(--err);
-  box-shadow: none;
 }
 
 .adm-emp-limit[data-over="true"] .adm-emp-limit-value .tnum {

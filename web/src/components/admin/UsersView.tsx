@@ -14,25 +14,20 @@ import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { SearchInput } from "@/components/ui/search-input";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { applySort } from "../../lib/listSort";
-import { LANE_PAGE_SIZE, paginate } from "../../lib/pagination";
-import { useLanePagination, usePagination } from "../../hooks/usePagination";
+import { paginate } from "../../lib/pagination";
+import { usePagination } from "../../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { ListGroup } from "../ListGroup";
 import { userSortColumns } from "../../lib/adminHelpers";
-import { UserGroupTable } from "./UserRow";
+import { UserTable } from "./UserRow";
 import {
   buildUserSummaries,
   userEmptyStateTranslationKey,
-  usersByStatus,
-  USER_SUMMARY_STATUS_ORDER,
-  type UserSummaryStatusKey,
   matchesUserQuickFilter,
   type UserQuickFilter,
 } from "./helpers";
 import { UserCard } from "./UserCard";
-import type { StateTone } from "../StateMark";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { Alert } from "@/components/ui/alert";
 
@@ -47,18 +42,6 @@ interface UsersViewProps {
 }
 
 const FILTERS: UserQuickFilter[] = ["all", "running", "ready", "idle", "failed", "unassigned"];
-
-/* The band's tone. `running` takes `live` rather than `info`: a band saying
-   work is in flight right now is exactly what --live is scoped to, and it is
-   the same reading the row's old pill carried through `live={tone==="info"}`.
-   Everything else is `userSummaryStatus`'s own tone. */
-const USER_STATUS_BAND_TONE: Record<UserSummaryStatusKey, StateTone> = {
-  failed: "bad",
-  running: "live",
-  ready: "good",
-  idle: "neutral",
-  no_nodes: "neutral",
-};
 
 // User activity slices mirror the Nodes status chips (and the card status
 // pill). running/ready/failed overlap by design — a user can own one
@@ -134,7 +117,6 @@ export function UsersView({
   // so a bare `sort` would have the two tables fighting over one key.
   const { sort, toggleSort, setSort } = useListSort(sortColumns, "userSort");
   const { page, setPage } = usePagination("userPage");
-  const { lanePages: groupPages, setLanePage: setGroupPage } = useLanePagination(USER_SUMMARY_STATUS_ORDER, "userLanes");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -161,14 +143,6 @@ export function UsersView({
   // One cursor for both layouts: switching card/list keeps the reader on the
   // same people rather than resetting them to the top of the roster.
   const paged = paginate(filtered, page);
-  const grouped = useMemo(() => usersByStatus(filtered), [filtered]);
-  const pagedGroups = useMemo(
-    () => Object.fromEntries(USER_SUMMARY_STATUS_ORDER.map((key) => [
-      key,
-      paginate(grouped[key], groupPages[key] ?? 1, LANE_PAGE_SIZE),
-    ])) as Record<UserSummaryStatusKey, ReturnType<typeof paginate<ReturnType<typeof buildUserSummaries>[number]>>>,
-    [grouped, groupPages],
-  );
 
   if (summaries.length === 0) {
     return (
@@ -220,12 +194,10 @@ export function UsersView({
             widths it appears, it is the only way to sort at all. */}
         <SortMenu
           options={[
-                  { key: "user", label: t("admin.col_user") },
-                  { key: "computers", label: t("admin.v2.col_computers"), defaultDirection: "desc" as const },
-                  { key: "localLimit", label: t("admin.v2.col_local_limit"), defaultDirection: "desc" as const },
-                  { key: "running", label: t("admin.v2.col_running"), defaultDirection: "desc" as const },
-                  { key: "ready", label: t("admin.v2.col_ready"), defaultDirection: "desc" as const },
-        ]}
+            { key: "user", label: t("admin.col_user") },
+            { key: "computers", label: t("admin.v2.col_computers"), defaultDirection: "desc" as const },
+            { key: "localLimit", label: t("admin.v2.col_local_limit"), defaultDirection: "desc" as const },
+          ]}
           sort={sort}
           onSortChange={setSort}
           label={t("admin.v2.nav_users", { defaultValue: "Users" })}
@@ -261,55 +233,27 @@ export function UsersView({
           ))}
         </div>
       ) : (
-        /* Grouped by fleet health — the reason an admin opens this list. The
-           per-row status pill went with it: the band is that pill, said once
-           for the whole group instead of once per user. */
+        /* The shared admin-table frame (list-group.css): fixed column tracks,
+           cell ellipsis, and the narrow-screen restack. One table, no status
+           bands — each computer chip already carries its own liveness. */
         <div className="adm-grouped-list">
-          {USER_SUMMARY_STATUS_ORDER.map((key) => {
-            const group = grouped[key];
-            if (group.length === 0) return null;
-            const label = t(`admin.v2.emp_state_${key}`, { defaultValue: key });
-            const groupPage = pagedGroups[key];
-            return (
-              <ListGroup
-                key={key}
-                label={label}
-                count={group.length}
-                tone={USER_STATUS_BAND_TONE[key]}
-              >
-                <UserGroupTable
-                  label={label}
-                  members={groupPage.items}
-                  sort={sort}
-                  onSort={toggleSort}
-                  highlightedId={highlightedUserId}
-                  deletePending={pendingDelete !== null}
-                  onEdit={onEditUser ? (id) => {
-                    const user = usersById.get(id);
-                    if (user) onEditUser(user);
-                  } : undefined}
-                  onDelete={onDeleteUser ? (id) => void handleDeleteUser(id) : undefined}
-                />
-                <Pagination
-                  compact
-                  className="list-group-pager"
-                  page={groupPage}
-                  onPageChange={(next) => setGroupPage(key, next)}
-                  label={label}
-                />
-              </ListGroup>
-            );
-          })}
+          <UserTable
+            label={t("admin.v2.nav_users", { defaultValue: "Users" })}
+            members={paged.items}
+            sort={sort}
+            onSort={toggleSort}
+            highlightedId={highlightedUserId}
+            deletePending={pendingDelete !== null}
+            onEdit={onEditUser ? (id) => {
+              const user = usersById.get(id);
+              if (user) onEditUser(user);
+            } : undefined}
+            onDelete={onDeleteUser ? (id) => void handleDeleteUser(id) : undefined}
+          />
         </div>
       )}
 
-      {/* The CARD layout is a flat grid and pages off one cursor. The list
-          groups, so it pages per band — one cursor over the whole list would
-          empty a band because of the cursor rather than because nobody is in
-          that state. */}
-      {layout === "card" ? (
-        <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_users", { defaultValue: "Users" })} />
-      ) : null}
+      <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_users", { defaultValue: "Users" })} />
     </div>
   );
 }

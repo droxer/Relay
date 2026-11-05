@@ -15,7 +15,7 @@ import {
 } from "./helpers";
 import { UserComputers } from "./UserComputers";
 import { UserLimits } from "./UserLimits";
-import { TonePill } from "../StatusPill";
+import { UserStatusMark } from "./UserStatusMark";
 
 interface UserCardProps {
   member: UserNodeSummary;
@@ -57,18 +57,9 @@ export function UserCard({
               <span className="adm-emp-card-dept">{member.departmentName}</span>
             ) : null}
           </span>
-          {/* "Ready" is the default healthy state — the good tone on the card
-              already carries it; only running / idle / no-nodes get named.
-              Same place and drawing as a computer card's status: under the
-              name, dot + word, no tinted slab. */}
-          {key !== "ready" ? (
+          {key === "running" || key === "failed" ? (
             <span className="adm-node-card-state">
-              <TonePill
-                className="adm-status-plain"
-                tone={tone}
-                label={t(`admin.v2.emp_state_${key}`, { defaultValue: key })}
-                live={tone === "info"}
-              />
+              <UserStatusMark member={member} t={t} />
             </span>
           ) : null}
         </div>

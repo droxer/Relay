@@ -6,7 +6,6 @@ import { describe, it } from "node:test";
 import {
   buildUserSummaries,
   isOverLocalComputerLimit,
-  localComputerSlots,
   localComputerUsageLabel,
   taskCapacityOf,
 } from "../src/lib/adminHelpers.js";
@@ -94,30 +93,6 @@ describe("user summary computer limits", () => {
 });
 
 describe("user card limits", () => {
-  it("draws one slot per allowed computer and marks the ones in use", () => {
-    assert.deepEqual(
-      localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: 3 }),
-      ["used", "free", "free"],
-    );
-  });
-
-  it("adds an over slot for each computer beyond a lowered limit", () => {
-    assert.deepEqual(
-      localComputerSlots({ localComputerCount: 2, effectiveMaxLocalComputers: 1 }),
-      ["used", "over"],
-    );
-    assert.deepEqual(
-      localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: 0 }),
-      ["over"],
-    );
-  });
-
-  it("draws no meter without a limit or when slots would not fit the card", () => {
-    assert.equal(localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: undefined }), null);
-    assert.equal(localComputerSlots({ localComputerCount: 0, effectiveMaxLocalComputers: 0 }), null);
-    assert.equal(localComputerSlots({ localComputerCount: 2, effectiveMaxLocalComputers: 50 }), null);
-  });
-
   it("resolves task capacity from the server, then the override, then the default", () => {
     assert.equal(taskCapacityOf({ effectiveMaxConcurrentTasks: 8, maxConcurrentTasks: 3 }), 8);
     assert.equal(taskCapacityOf({ maxConcurrentTasks: 3 }), 3);
