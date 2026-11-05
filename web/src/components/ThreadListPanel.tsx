@@ -136,7 +136,9 @@ export function ThreadListPanel({
     const sections = [
       { key: "needsYou", tone: "attn", label: t("thread.group_needs_you"), group: limited.needsYou },
       { key: "running", tone: "run", label: t("thread.group_running"), group: limited.running },
-      { key: "idle", tone: "idle", label: t("thread.group_idle"), group: limited.idle },
+      // Settled conversations stay in the ordinary thread list; “Idle” would
+      // give standalone chats a lifecycle status they do not have.
+      { key: "idle", tone: "idle", label: t("nav.threads"), group: limited.idle },
     ] as const;
     return [...sections.map(({ group, ...section }) => group.items.length > 0 ? (
       <div key={section.key} className="conversation-group" data-tone={section.tone}>

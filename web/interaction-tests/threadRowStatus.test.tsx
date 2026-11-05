@@ -40,17 +40,14 @@ function renderRow(item: ThreadItem, tone: "attn" | "run" | "idle", layout: "ful
   return container;
 }
 
-/* The rail no longer filters by state, so every row has to answer "what is
-   this thread doing?" on its own — including a settled one, which says
-   nothing in words. */
-it("marks every row's state, whatever the row has to say", () => {
+it("marks a task thread's state, including when it is settled", () => {
   for (const [status, shape, tone] of [
     ["waiting_for_human", "solid", "warn"],
     ["running", "live", "live"],
     ["completed", "muted", "neutral"],
   ] as const) {
     const container = renderRow(
-      { session: session(status, status) },
+      { session: session(status, status), origin: { kind: "backlog", taskId: "task", title: "Task" } },
       status === "waiting_for_human" ? "attn" : status === "running" ? "run" : "idle",
     );
     const marks = container.querySelectorAll(".state-mark");
@@ -74,16 +71,16 @@ it("spends the ring on a thread whose computer gave out, not on a settled one", 
   expect(mark?.getAttribute("data-tone")).toBe("bad");
 });
 
-it("rings a failed thread even though it files under Idle", () => {
+it("keeps failure and cancellation status for task threads", () => {
   // A failed thread is not running and needs no decision, so the rail groups
   // it with the settled ones. The group tone drew it with the same grey muted
   // pip as a clean finish, leaving the word "Failed" as the only difference.
-  const failed = renderRow({ session: session("f", "failed") }, "idle").querySelector(".state-mark");
+  const failed = renderRow({ session: session("f", "failed"), origin: { kind: "backlog", taskId: "task", title: "Task" } }, "idle").querySelector(".state-mark");
   expect(failed?.getAttribute("data-shape")).toBe("ring");
   expect(failed?.getAttribute("data-tone")).toBe("bad");
 
   // A cancel was the user's own call, not a fault: it keeps the settled pip.
-  const cancelled = renderRow({ session: session("c", "cancelled") }, "idle").querySelector(".state-mark");
+  const cancelled = renderRow({ session: session("c", "cancelled"), origin: { kind: "routine", taskId: "auto", title: "Automation" } }, "idle").querySelector(".state-mark");
   expect(cancelled?.getAttribute("data-shape")).toBe("muted");
   expect(cancelled?.getAttribute("data-tone")).toBe("neutral");
 });
@@ -110,4 +107,18 @@ it("names the running agent, never its executor kind", () => {
 
   const unnamed = renderRow({ session: session("u", "running", { execution: { phase: "running" } as never }), runningAgent: "claude" }, "run");
   expect(unnamed.querySelector(".conversation-status")?.textContent).toBe("thread.group_running");
+});
+
+it.each(["completed", "cancelled", "failed"])("shows a settled standalone %s thread as a chat without lifecycle status", (status) => {
+  const container = renderRow({ session: session("chat", status, { execution: { phase: "terminal" } as never }) }, "idle");
+  expect(container.querySelector(".state-mark")).toBeNull();
+  expect(container.querySelector(".conversation-status")).toBeNull();
+  expect(container.querySelector(".conversation-subline")).toBeNull();
+  expect(screen.getByRole("button", { name: /Thread chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
+});
+
+it("keeps project context without giving a standalone project chat a status", () => {
+  const container = renderRow({ session: session("project-chat", "cancelled", { projectId: "project" }), projectName: "Website" }, "idle", "nested");
+  expect(container.querySelector(".state-mark")).toBeNull();
+  expect(screen.getByRole("button", { name: /Thread project-chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
 });
