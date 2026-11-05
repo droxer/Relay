@@ -113,7 +113,7 @@ def test_run_bound_tools_check_lease_and_live_revocation(context):
     node = app.state.registry.monitor_nodes()[0]
     command_id = new_database_id()
     app.state.daemon_store.enqueue_command(node["id"], {"id": command_id, "type": "run.start",
-        "sessionId": thread["id"], "runId": new_database_id(), "connections": saved})
+        "sessionId": thread["id"], "runId": new_database_id(), "agent": "codex", "taskGoal": "Read issues", "connections": saved})
     [lease] = app.state.daemon_store.take_queued_commands(node["id"])
     path = f"/api/v1/daemon-nodes/{node['id']}/commands/{command_id}/connections"
     node_headers = {"Authorization": "Bearer token_node_alice_github"}
