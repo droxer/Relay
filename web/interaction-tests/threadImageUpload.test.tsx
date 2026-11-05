@@ -1,18 +1,19 @@
-import { Blob, File } from "node:buffer";
+import { File } from "node:buffer";
 import { expect, it, vi } from "vitest";
 import { uploadThreadImage } from "../src/api-client/sessions";
 
-it.each(["image/jpeg", "image/png", "image/webp"])("uploads complete %s bytes when the browser cannot send a picked File", async (type) => {
-  vi.stubGlobal("Blob", Blob);
+it.each(["image/jpeg", "image/png", "image/webp"])("uploads complete %s bytes without File or Blob serialization", async (type) => {
   const bytes = new Uint8Array([0, 1, 127, 128, 255]);
   const file = new File([bytes], "photo", { type });
+  const buffer = await file.arrayBuffer();
+  vi.spyOn(file, "arrayBuffer").mockResolvedValue(buffer);
   const attachment = { id: "image-1", mediaType: type, bytes: bytes.length };
-  // Model WebKit 319985: the page can read the file, but the network
-  // process sends an empty body for the picked, disk-backed File.
+  // Keep the request on fetch's byte-buffer path: the upload must not
+  // require the network process to resolve either a File or a Blob.
   const fetch = vi.fn(async (_url: string, init: RequestInit) => {
-    const body = init.body as unknown as Blob;
-    const received = body instanceof File ? new ArrayBuffer(0) : await body.arrayBuffer();
-    if (!received.byteLength) return new Response(JSON.stringify({ detail: "Images must be between 1 byte and 10 MB." }), { status: 400 });
+    expect(init.body).toBe(buffer);
+    const request = new Request("https://relay.example/api/v1/thread-attachments", init);
+    const received = await request.arrayBuffer();
     expect(new Uint8Array(received)).toEqual(bytes);
     return new Response(JSON.stringify(attachment), { status: 201 });
   });
@@ -48,7 +49,6 @@ it("does not upload if the draft is cancelled while reading the photo", async ()
 });
 
 it("preserves server upload errors", async () => {
-  vi.stubGlobal("Blob", Blob);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Storage unavailable" }), { status: 503 })));
   const file = new File(["photo"], "photo.jpg", { type: "image/jpeg" });
   await expect(uploadThreadImage(file as unknown as globalThis.File)).rejects.toThrow("Storage unavailable");
