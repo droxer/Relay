@@ -24,7 +24,6 @@ repos:
       - id: ruff
         name: ruff (backend)
         files: ^backend/
-        args: ['--config', 'backend/pyproject.toml']
 
   - repo: local
     hooks:
@@ -33,7 +32,7 @@ repos:
         entry: uv
         args: ['lock', '--project', 'backend', '--locked']
         language: system
-        files: ^backend/pyproject\.toml$
+        files: ^backend/(pyproject\.toml|uv\.lock)$
         pass_filenames: false
         require_serial: true
 
@@ -70,4 +69,12 @@ repos:
         language: system
         types_or: [css]
         files: ^web/src/styles/
+        pass_filenames: false
+
+      - id: lint-web
+        name: eslint (web)
+        entry: npm run lint --workspace web
+        language: system
+        types_or: [javascript, jsx, ts, tsx]
+        files: ^web/(src/|eslint\.config\.)
         pass_filenames: false

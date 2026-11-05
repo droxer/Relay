@@ -29,6 +29,9 @@ let thread = "thr_main";
 const turn = "turn_1";
 let T = { threadId: thread, turnId: turn };
 log({ argv: process.argv.slice(2) });
+// Model a service that stays alive until stopped, even after stdin closes.
+// Otherwise EOF can win the race with SIGTERM on Linux and omit its audit log.
+setInterval(() => {}, 1000);
 process.on("SIGTERM", () => { log({ signal: "SIGTERM" }); process.exit(0); });
 async function playTurn() {
   note("turn/started", { threadId: thread, turn: { id: turn, status: "inProgress", items: [] } });

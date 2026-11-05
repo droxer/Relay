@@ -67,3 +67,16 @@ it("blocks an image draft after switching to an outdated Computer and enables it
   rerender(composer(props));
   expect((screen.getByRole("button", { name: "composer.send" }) as HTMLButtonElement).disabled).toBe(false);
 });
+
+it("removes an attached image and releases its preview URL", async () => {
+  const revoke = vi.fn();
+  vi.stubGlobal("URL", { createObjectURL: () => "blob:preview", revokeObjectURL: revoke });
+  vi.mocked(uploadThreadImage).mockResolvedValue({ id: "image-1", mediaType: "image/png", bytes: 3, sha256: "a".repeat(64) });
+  const { container } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "composer.attach_image" }));
+  fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(["png"], "image.png", { type: "image/png" })] } });
+  const remove = await screen.findByRole("button", { name: "composer.remove_image" });
+  fireEvent.click(remove);
+  expect(container.querySelector(".composer-images img")).toBeNull();
+  expect(revoke).toHaveBeenCalledWith("blob:preview");
+});

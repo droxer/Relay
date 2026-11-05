@@ -218,6 +218,9 @@ test("discovery re-probes a guest's cached runtime so a stopped one is reported"
 });
 
 test("a cloud computer's probes tell not installed, check failed, not responding, and a dead sandbox apart", async (t) => {
+  // A real guest owns handles while a check waits; this fake only owns promises.
+  const handle = setInterval(() => {}, 1_000);
+  t.after(() => clearInterval(handle));
   const root = mkdtempSync(join(tmpdir(), "relay-runtime-status-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, "runtime");

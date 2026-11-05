@@ -160,6 +160,16 @@ devbox/      The BoxLite guest image that sandboxed agents run in
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md) has the detailed layout and a guide to where each kind of change starts.
 
+GitHub Actions runs [CI](.github/workflows/ci.yml) on every push and pull request,
+and supports manual runs. The pre-commit job runs every hook in
+`.pre-commit-config.yaml` against all tracked files, including repository hygiene,
+the uv lockfile check, Ruff, mypy, TypeScript types, ESLint, and CSS lint. Separate
+test jobs build and test the TypeScript packages and web UI (including React tests
+and vendored dependency regressions), and run the Python suite with PostgreSQL 16
+available for migration and schema tests.
+CI uses Node.js 22, Python 3.12, and locked npm/uv dependencies. Browser
+Playwright suites remain separate from this workflow.
+
 ## Deployment
 
 [`docs/deployment.md`](docs/deployment.md) covers hosting the web UI on Vercel and the backend plus Postgres on Railway. Run daemons on the computers that execute your agents; they connect to the backend over outbound HTTP(S).

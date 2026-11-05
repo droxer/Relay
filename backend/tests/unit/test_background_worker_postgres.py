@@ -67,7 +67,7 @@ def test_alembic_autogeneration_preserves_vendor_schema(postgres_queue, monkeypa
     from sqlalchemy.engine import URL
 
     params = conninfo_to_dict(postgres_queue)
-    url = URL.create("postgresql+psycopg", username=params["user"], host=params["host"],
+    url = URL.create("postgresql+psycopg", username=params["user"], password=params.get("password"), host=params["host"],
                      port=int(params["port"]), database=params["dbname"], query={"options": params["options"]})
     monkeypatch.setenv("RELAY_DATABASE_URL", url.render_as_string(hide_password=False))
     backend_root = Path(__file__).resolve().parents[2]
@@ -104,7 +104,7 @@ def test_worker_processes_real_relay_services(postgres_queue, monkeypatch, tmp_p
     from sqlalchemy.engine import URL
 
     params = conninfo_to_dict(postgres_queue)
-    url = URL.create("postgresql+psycopg", username=params["user"], host=params["host"],
+    url = URL.create("postgresql+psycopg", username=params["user"], password=params.get("password"), host=params["host"],
                      port=int(params["port"]), database=params["dbname"], query={"options": params["options"]})
     monkeypatch.setenv("RELAY_DATABASE_URL", url.render_as_string(hide_password=False))
     backend_root = Path(__file__).resolve().parents[2]

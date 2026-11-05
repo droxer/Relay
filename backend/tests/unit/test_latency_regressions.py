@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import pytest
 from contextlib import nullcontext
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -61,7 +62,9 @@ def _registry(root: str) -> DaemonNodeRegistry:
     return registry
 
 
-def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypatch) -> None:
+@pytest.mark.parametrize("uptime", [100.0, 7200.0])
+def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypatch, uptime) -> None:
+    monkeypatch.setattr("relay.daemon_registry.nodes.liveness.time.monotonic", lambda: uptime)
     monkeypatch.setattr(config, "DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS", 3600)
     with TemporaryDirectory() as root:
         registry = _registry(root)
@@ -75,7 +78,9 @@ def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypa
         assert lock.acquisitions == 0
 
         # A due refresh still serializes with dispatch.
-        registry._last_fleet_liveness_refresh_at = 0.0
+        # Zero is not overdue on a freshly booted runner whose uptime is less
+        # than the persist interval. Age the recorded observation explicitly.
+        registry._last_fleet_liveness_refresh_at -= config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
         registry._refresh_persisted_liveness()
         assert lock.acquisitions == 1
 

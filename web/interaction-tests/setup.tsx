@@ -1,4 +1,4 @@
-import { afterEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { cloneElement, createElement } from "react";
 
@@ -10,6 +10,18 @@ if (!("PointerEvent" in globalThis)) {
   Object.assign(globalThis, { PointerEvent: PointerEventShim });
   if (typeof window !== "undefined") Object.assign(window, { PointerEvent: PointerEventShim });
 }
+
+// jsdom has no native modal/fullscreen state. NWSAPI delegates these selectors
+// back to Element.matches, which re-enters NWSAPI until the stack overflows.
+// Floating UI checks them when opening a popup, stalling otherwise tiny tests.
+// Keep the fallback inside each test so restoreAllMocks still cleans it up.
+const nativeMatches = Element.prototype.matches;
+beforeEach(() => {
+  vi.spyOn(Element.prototype, "matches").mockImplementation(function (selector) {
+    if (selector === ":modal" || selector === ":fullscreen") return false;
+    return nativeMatches.call(this, selector);
+  });
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),

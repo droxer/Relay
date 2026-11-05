@@ -135,3 +135,22 @@ it.each(["retry", "handoff"] as const)("retains Stop while a %s is being dispatc
     expect(useHandoffStore.getState()).toMatchObject({ open: false, note: "", agentId: "agent-1" });
   }
 });
+
+it.each(["rerun", "handoff"] as const)("reuses the operation id when a %s recovery is retried", async (kind) => {
+  const { deps, session } = setup(true);
+  deps.effectiveSelectableLogicalAgents = deps.composerLogicalAgents!;
+  const recover = vi.fn().mockRejectedValueOnce(new Error("connection lost")).mockResolvedValueOnce(session);
+  deps.requestThreadRecoveryMutation = { mutateAsync: recover } as ThreadDispatchDeps["requestThreadRecoveryMutation"];
+  useHandoffStore.setState({ agentId: "agent-1", note: "Continue the work" });
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  const retry = () => kind === "handoff" ? result.current.sendHandoff() : result.current.retryAgentMessage("codex", "agent-1");
+  await act(async () => { await retry(); });
+  expect(deps.recoveryOperationIdsRef.current.size).toBe(1);
+  await act(async () => { await retry(); });
+  const first = recover.mock.calls[0][0].input;
+  const second = recover.mock.calls[1][0].input;
+  expect(first.idempotencyKey).toBeTruthy();
+  expect(second.idempotencyKey).toBe(first.idempotencyKey);
+  expect(second.kind).toBe(kind);
+  expect(deps.recoveryOperationIdsRef.current.size).toBe(0);
+});

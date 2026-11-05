@@ -126,8 +126,11 @@ describe("memoized transcript messages", () => {
     // single path, not the three copies.
     assert.match(source, /recoveryOperationIdsRef/);
     assert.match(source, /idempotencyKey: recoveryOperationId\(recoveryKey\)/);
+    // Image-bearing new messages also have an idempotency key; they are not
+    // recovery requests. Keep the single-path assertion scoped to recovery.
+    const recoverySource = source.slice(source.indexOf("async function dispatchRecovery("), source.indexOf("async function sendDecision("));
     assert.equal(
-      source.match(/idempotencyKey:/g)?.length,
+      recoverySource.match(/idempotencyKey:/g)?.length,
       1,
       "only dispatchRecovery may mint a recovery idempotency key",
     );

@@ -27,6 +27,8 @@ const options = [
   { optionId: "reject", name: "Reject", kind: "reject_once" },
 ];
 log({ argv: process.argv.slice(2), cwd: process.cwd(), pid: process.pid });
+// Keep the service alive after EOF so shutdown exercises its signal handler.
+setInterval(() => {}, 1000);
 process.on("SIGTERM", () => { log({ signal: "SIGTERM" }); process.exit(143); });
 async function prompt(id, params) {
   const sid = params.sessionId;

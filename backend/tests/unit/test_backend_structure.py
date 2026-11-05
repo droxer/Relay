@@ -17,25 +17,27 @@ from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.task.store import DatabaseTaskStore
 from relay.security.auth import DatabaseAccountAuthStore
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 def test_backend_container_runs_as_non_root_runtime_user() -> None:
-    dockerfile = Path("backend/Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "backend/Dockerfile").read_text(encoding="utf-8")
 
     assert "USER relay" in dockerfile
     assert "useradd" in dockerfile
 
 
 def test_devbox_dockerfile_inputs_are_available_in_build_context() -> None:
-    dockerfile = Path("dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "dockerfile").read_text(encoding="utf-8")
     dockerignore_patterns = {
         line.strip()
-        for line in Path(".dockerignore").read_text(encoding="utf-8").splitlines()
+        for line in (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
 
     for source in ("devbox/claude-settings.json", "devbox/codex-config.toml"):
         assert f"COPY {source} " in dockerfile
-        assert Path(source).is_file()
+        assert (REPO_ROOT / source).is_file()
     assert "devbox/" not in dockerignore_patterns
 
 

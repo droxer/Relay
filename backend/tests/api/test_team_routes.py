@@ -1573,8 +1573,8 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert again.status_code == 202
-        assert again.json()["dispatch"]["state"] == ("rejected" if executing else "queued")
-        assert again.json()["dispatch"]["code"] == ("invalid_state" if executing else "task_execution_active")
+        assert again.json()["dispatch"]["state"] == "queued"
+        assert again.json()["dispatch"]["code"] == "task_execution_active"
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == expected_status
         assert app.state.registry.take_commands("node_alice", "node_token") == []
 

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { useRosterTabs } from "../src/components/roster/RosterTabs";
 import { AgentSelect } from "../src/components/composer/AgentSelect";
@@ -72,9 +72,10 @@ it("selects a composer team with Enter after switching rosters", async () => {
   // jsdom has no layout for the popup's automatic initial-focus positioning.
   act(() => option.focus());
   fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-  expect(document.activeElement).toBe(screen.getByRole("option", { name: /Team One/ }));
+  await waitFor(() => {
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("option", { name: /Team One/ }));
+  });
   fireEvent.keyDown(document.activeElement!, { key: "Enter" });
   expect(onTeamPicked).toHaveBeenCalledWith(team);
-}, 60000);
+});
