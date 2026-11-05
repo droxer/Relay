@@ -19,10 +19,12 @@ def request(method: str, url: str, *, token: str | None = None, raw: bool = Fals
         with httpx.Client(timeout=15, follow_redirects=False, transport=transport) as client:
             with client.stream(method, url, headers=headers, **kwargs) as response:
                 if response.status_code in (401, 403):
+                    if response.headers.get("x-ratelimit-remaining") == "0":
+                        raise ConnectionError("connection_rate_limited", 429)
                     raise ConnectionError("connection_reconnect_required", 409)
                 if response.status_code == 429:
                     raise ConnectionError("connection_rate_limited", 429)
-                if not 200 <= response.status_code < 300:
+                if not 200 <= response.status_code < 300 and response.status_code != 400:
                     raise ConnectionError("connection_provider_unavailable", 502)
                 content = bytearray()
                 for chunk in response.iter_bytes():
@@ -36,6 +38,8 @@ def request(method: str, url: str, *, token: str | None = None, raw: bool = Fals
                     code = result.get("error")
                     if code in {"invalid_auth", "token_revoked", "token_expired", "invalid_grant"}:
                         raise ConnectionError("connection_reconnect_required", 409)
+                    raise ConnectionError("connection_provider_rejected", 422)
+                if response.status_code == 400:
                     raise ConnectionError("connection_provider_rejected", 422)
                 return result
     except (httpx.HTTPError, ValueError) as error:

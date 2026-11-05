@@ -98,6 +98,10 @@ class ConnectionService:
         if PROVIDERS[provider].pkce:
             fields["code_verifier"] = pending["verifier"]
         tokens = providers.exchange(config, fields)
+        scopes = set(str(tokens.get("scope", "")).replace(",", " ").split())
+        required = {"repo"} if provider == "github" else {"channels:read", "channels:history", "chat:write"} if provider == "slack" else {"https://www.googleapis.com/auth/drive.readonly"}
+        if not required <= scopes:
+            raise ConnectionError("connection_permissions_invalid", 422)
         identity = providers.identity(provider, tokens["access_token"])
         reconnect_id = pending.get("reconnectId")
         old = self._connection(owner, reconnect_id) if reconnect_id else None
@@ -133,6 +137,8 @@ class ConnectionService:
             return str(secret["access_token"])
 
     def _unavailable(self, owner: str, record: dict[str, Any]) -> None:
+        if record["status"] == "disconnected":
+            return
         self.store.save(owner, {**_public(record), "status": "reconnect_required",
             "revision": record["revision"] + 1, "updatedAt": now_iso()}, record.get("sealedSecret"))
 
