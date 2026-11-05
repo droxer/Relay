@@ -31,6 +31,26 @@ def node(
     }
 
 
+@pytest.mark.parametrize("caller,is_admin", [("admin", True), ("alice", False)])
+def test_only_owner_can_route_work_to_a_personal_computer(tmp_path, caller, is_admin):
+    agents = make_agent_store(tmp_path)
+    placements = make_agent_placement_store(tmp_path)
+    agent = agents.create_agent("alice", {"displayName": "Private agent", "executorKind": "codex", "defaultRole": "implementer"})
+    placements.create_placement(agent, "node_private")
+    computer = {**node("node_private", "codex"), "nodeLocation": "user-device", "userId": "alice"}
+    args = dict(
+        user_id=caller, is_admin=is_admin, agent_store=agents,
+        placement_store=placements, daemon_nodes=[computer],
+    )
+    if caller == "alice":
+        [assignment] = resolve_agent_assignments([{"agentId": agent["id"]}], **args)
+        assert assignment["daemonNodeId"] == "node_private"
+    else:
+        with pytest.raises(AgentRoutingError) as error:
+            resolve_agent_assignments([{"agentId": agent["id"]}], **args)
+        assert error.value.code == "agent_forbidden"
+
+
 def test_rejects_collaboration_across_nodes_even_with_shared_workspace(
     tmp_path: Path,
 ) -> None:

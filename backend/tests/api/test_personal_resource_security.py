@@ -33,7 +33,7 @@ def personal_resources(monkeypatch, tmp_path):
             "nodeLocation": "user-device", "protocolVersion": 1,
             "supportedAgents": ["codex"], "capabilities": ["workspace-read-shared"],
             "status": "ready",
-        })
+        }, authorized_node_location="user-device")
     return client, app, identities, sessions
 
 
@@ -66,4 +66,25 @@ def test_admin_cannot_browse_someone_elses_personal_computer(personal_resources,
 
     monkeypatch.setattr("relay.api.computers.node_workspace.dispatch_workspace_command", dispatch)
     response = client.get(f"/api/v1/admin/daemon-nodes/node_alice/workspace/{suffix}")
+    assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize("operation", ["read", "run", "provision"])
+def test_admin_cannot_use_legacy_sandbox_routes_to_control_a_personal_computer(personal_resources, monkeypatch, operation):
+    client, _app, identities, _sessions = personal_resources
+
+    def resolve(*_args):
+        pytest.fail("A private Computer must be refused before resolving an agent")
+
+    monkeypatch.setattr("relay.api.computers.sandboxes._resolve_legacy_assignment", resolve)
+    if operation == "read":
+        response = client.get("/api/v1/sandboxes/node_alice")
+    elif operation == "run":
+        response = client.post("/api/v1/sandboxes/node_alice/runs", json={
+            "taskGoal": "Do not dispatch", "assignments": [{"agent": "codex"}],
+        })
+    else:
+        response = client.post("/api/v1/sandboxes", json={
+            "sandboxId": "node_alice", "userId": identities["alice"],
+        })
     assert response.status_code == 403, response.text
