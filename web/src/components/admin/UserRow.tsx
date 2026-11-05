@@ -27,6 +27,7 @@ import { UserComputers } from "./UserComputers";
 import {
   isOverLocalComputerLimit,
   localComputerUsageLabel,
+  taskCapacityOf,
   type UserNodeSummary,
 } from "./helpers";
 import { useManualSortTable } from "../../hooks/useManualSortTable";
@@ -139,7 +140,7 @@ export function UserGroupTable({
                 {member.departmentName ? <span>{member.departmentName}</span> : null}
               </p>
               <UserCells.Read>{(s) => <p className="adm-emp-meta">{s.t("admin.v2.task_capacity_summary", {
-                count: member.effectiveMaxConcurrentTasks ?? member.maxConcurrentTasks ?? 5,
+                count: taskCapacityOf(member),
               })}</p>}</UserCells.Read>
             </>
           );

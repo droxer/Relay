@@ -11,11 +11,10 @@ import {
 } from "../icons";
 import {
   userSummaryStatus,
-  isOverLocalComputerLimit,
-  localComputerUsageLabel,
   type UserNodeSummary,
 } from "./helpers";
 import { UserComputers } from "./UserComputers";
+import { UserLimits } from "./UserLimits";
 import { TonePill } from "../StatusPill";
 
 interface UserCardProps {
@@ -73,44 +72,8 @@ export function UserCard({
             </span>
           ) : null}
         </div>
-      </header>
-
-      <div className="adm-node-card-body">
-        <div className="adm-agents adm-emp-nodes">
-          {/* Every computer the user has, cloud and local alike — the same
-              set the list row shows and the READY x/y footer below counts.
-              Filtering to local machines made a card with only a cloud
-              computer say "No computer assigned." beside READY 0/1. */}
-          <UserComputers nodes={member.nodes} t={t} />
-        </div>
-      </div>
-
-      <footer className="adm-node-card-foot">
-        {/* Only the limit is said here. Running is the state pill above and
-            readiness is each computer's dot, so counting them again in the
-            footer said the card three times. */}
-        <div className="adm-emp-card-metrics">
-          <span className="adm-emp-card-metric">
-            <span className="adm-emp-metric-label">{t("admin.v2.task_capacity_short")}</span>
-            <span className="tnum ink-dim">{member.effectiveMaxConcurrentTasks ?? member.maxConcurrentTasks ?? 5}</span>
-          </span>
-          <span className="adm-emp-card-metric">
-            <span className="adm-emp-metric-label">{t("admin.v2.col_local_limit")}</span>
-            <span className={`tnum ${isOverLocalComputerLimit(member) ? "" : "ink-dim"}`}>
-              {localComputerUsageLabel(member)}
-            </span>
-            {/* Hue alone can't say "over" — a red count and a red pill read
-                the same at a glance — so the pill carries a word, like every
-                other state on this card. */}
-            {isOverLocalComputerLimit(member) ? (
-              <TonePill
-                tone="bad"
-                label={t("admin.v2.emp_limit_over_short")}
-                title={t("admin.v2.emp_limit_over")}
-              />
-            ) : null}
-          </span>
-        </div>
+        {/* Actions sit beside the name so the footer can give the limits its
+            full width; at a card's width the two did not fit one line. */}
         {onDelete || onEdit ? (
           <div className="adm-node-card-actions">
             {onEdit ? (
@@ -143,6 +106,23 @@ export function UserCard({
             ) : null}
           </div>
         ) : null}
+      </header>
+
+      <div className="adm-node-card-body">
+        <div className="adm-agents adm-emp-nodes">
+          {/* Every computer the user has, cloud and local alike — the same
+              set the list row shows and the READY x/y footer below counts.
+              Filtering to local machines made a card with only a cloud
+              computer say "No computer assigned." beside READY 0/1. */}
+          <UserComputers nodes={member.nodes} t={t} />
+        </div>
+      </div>
+
+      <footer className="adm-node-card-foot adm-emp-card-foot">
+        {/* The two limits an admin sets on this user. Running is the state
+            pill above and readiness is each computer's dot, so neither is
+            counted again here. */}
+        <UserLimits member={member} t={t} />
       </footer>
     </article>
   );

@@ -6,7 +6,9 @@ import { describe, it } from "node:test";
 import {
   buildUserSummaries,
   isOverLocalComputerLimit,
+  localComputerSlots,
   localComputerUsageLabel,
+  taskCapacityOf,
 } from "../src/lib/adminHelpers.js";
 import { parseLimitInput } from "../src/lib/computerLimits.js";
 import type { ControlPanelDaemonNodeRecord, UserRecord } from "../src/types.js";
@@ -91,6 +93,38 @@ describe("user summary computer limits", () => {
   });
 });
 
+describe("user card limits", () => {
+  it("draws one slot per allowed computer and marks the ones in use", () => {
+    assert.deepEqual(
+      localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: 3 }),
+      ["used", "free", "free"],
+    );
+  });
+
+  it("adds an over slot for each computer beyond a lowered limit", () => {
+    assert.deepEqual(
+      localComputerSlots({ localComputerCount: 2, effectiveMaxLocalComputers: 1 }),
+      ["used", "over"],
+    );
+    assert.deepEqual(
+      localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: 0 }),
+      ["over"],
+    );
+  });
+
+  it("draws no meter without a limit or when slots would not fit the card", () => {
+    assert.equal(localComputerSlots({ localComputerCount: 1, effectiveMaxLocalComputers: undefined }), null);
+    assert.equal(localComputerSlots({ localComputerCount: 0, effectiveMaxLocalComputers: 0 }), null);
+    assert.equal(localComputerSlots({ localComputerCount: 2, effectiveMaxLocalComputers: 50 }), null);
+  });
+
+  it("resolves task capacity from the server, then the override, then the default", () => {
+    assert.equal(taskCapacityOf({ effectiveMaxConcurrentTasks: 8, maxConcurrentTasks: 3 }), 8);
+    assert.equal(taskCapacityOf({ maxConcurrentTasks: 3 }), 3);
+    assert.equal(taskCapacityOf({}), 5);
+  });
+});
+
 describe("settings copy", () => {
   it("ships every key the settings and user-limit surfaces render", async () => {
     const locale = JSON.parse(
@@ -115,6 +149,12 @@ describe("settings copy", () => {
       "col_local_limit",
       "edit_user_title",
       "edit_user_action",
+      "emp_card_tasks",
+      "emp_card_tasks_value",
+      "emp_card_computers",
+      "emp_card_computers_value",
+      "emp_card_custom",
+      "emp_card_custom_hint",
     ]) {
       assert.equal(typeof v2[key], "string", `missing admin.v2.${key}`);
     }
