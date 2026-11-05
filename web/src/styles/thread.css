@@ -399,12 +399,8 @@
   flex-shrink: 0;
 }
 
-/* The state pip leads every row's title, nested or full, so the marks line up
-   in one scannable column down the rail and a settled thread — which says
-   nothing in words — still answers "what is this doing?". It is .state-mark,
-   whose shape grammar this rule used to get wrong, spending the hollow ring
-   on `idle` while the ring meant "failed" everywhere else. The tone -> shape
-   table lives in ThreadRow. */
+/* Task and automation rows retain a lifecycle pip. Standalone chats show
+   one only for live activity or something that needs attention. */
 
 /* The live pip breathes in place instead of wearing the shared halo, which
    rides 5px proud of the dot and has no room on a title line. Drawing in and

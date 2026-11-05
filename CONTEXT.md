@@ -113,6 +113,12 @@ on the thread, cannot change after the thread starts, and bounds every agent
 eligible to participate in that thread.
 _Avoid_: Per-turn computer, movable thread
 
+**Standalone Thread**:
+A Thread linked to neither a Task nor an Automation. It is an ongoing chat
+without a persistent lifecycle status in the UI; live execution, requests for
+input, and execution recovery still surface while relevant. A Project
+Conversation can also be a Standalone Thread.
+
 **Thread Workspace**:
 The writable work context of a Thread that belongs to neither a Task nor a
 Project. Every Agent participating in that Thread shares it; no Agent workspace

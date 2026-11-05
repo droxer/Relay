@@ -32,8 +32,8 @@ type ThreadRowProps = {
   onRename?: (session: RelaySession) => void;
   onClose?: (sessionId: string) => void;
   /** The row's attention tone, from the same groupThreads partition either
-      mode runs. Every row draws it as a pip leading the title; rows with
-      something more specific to say also spell it out on the meta line. */
+      mode runs. Task rows and active chats draw it before the title; rows
+      with more to say also spell it out on the meta line. */
   tone: ThreadTone;
   /** "full" — the threads rail's row: title + stamp, over one plain meta
       line when the row has status or context to add. "nested" — a project
@@ -73,6 +73,10 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const executionPhase = session.execution?.phase;
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
     : executionPhase && ["queued", "stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
+  // A standalone thread is an ongoing chat. Only linked work has a
+  // persistent lifecycle; chats show a signal while something is happening.
+  const hasLifecycle = Boolean(item.origin);
+  const showState = hasLifecycle || tone !== "idle";
   const label = threadLabel(session);
   const stamp = formatThreadStamp(session.updatedAt, i18n.language, now);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
@@ -81,7 +85,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       ? t("thread.group_needs_you")
       : tone === "run"
         ? t("thread.group_running")
-        : t("thread.group_idle");
+        : hasLifecycle ? t("thread.group_idle") : "";
   const projectName = item.projectName ?? session.projectId;
   const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
   // A backlog task's thread inside a project already carries the project
@@ -94,12 +98,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
-  // The meta line's status text. A live run names its agent; a thread
-  // waiting on a decision or one that ended badly says so outright. Settled
-  // (completed / merely idle) threads stay silent — the group header above
-  // them already says "idle", and restating it on every row is noise. A
-  // cancel keeps its words but takes the settled grey pip, not the failure
-  // ring: it was the user's own call, not a fault.
+  // Live activity names the agent or the input it needs. Only linked work
+  // keeps failure/cancellation labels after execution ends; standalone chats
+  // return to a plain conversation row.
   const status: { text: string; tone: "attn" | "run" | "err" | "idle" } | null =
     session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
       ? { tone: "attn", text: t(`thread.execution_${session.execution.phase}`) }
@@ -114,9 +115,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
         }
       : tone === "attn"
         ? { tone: "attn", text: t("thread.statuses.waiting_for_human") }
-        : session.status === "failed"
+        : hasLifecycle && session.status === "failed"
           ? { tone: "err", text: t("thread.statuses.failed") }
-          : session.status === "cancelled"
+          : hasLifecycle && session.status === "cancelled"
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
@@ -165,12 +166,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       >
         <span className="conversation-copy">
           <span className="conversation-topline">
-            {/* Every row leads with its state, in the same column whatever
-                the row goes on to say. A settled thread says nothing in
-                words — it is the majority of the rail and used to be the one
-                row with no state at all — and the rail no longer offers a
-                filter to ask the question for you. */}
-            <StateMark {...PIP[pipTone]} />
+            {showState ? <StateMark {...PIP[pipTone]} /> : null}
             <span className="conversation-name">
               <strong title={label}>{label}</strong>
               {/* A property of the thread itself, so it rides the title and
