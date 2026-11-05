@@ -98,3 +98,15 @@ def test_grant_validation_is_atomic(service):
     with pytest.raises(ConnectionError):
         service.set_grants("alice", "automation", "automation-1", [valid, {**valid, "resources": ["https://evil.example"]}])
     assert len(service.grants("alice", "automation", "automation-1")) == 1
+
+
+def test_delivery_resolves_only_work_grants_and_refuses_unavailable_access(service):
+    connection = connect(service)
+    grant = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    service.set_grants("alice", "thread", "thread-1", [grant])
+    resolved = service.for_work("alice", "thread-1")
+    assert resolved[0]["connectionId"] == connection["id"]
+    assert service.for_work("bob", "thread-1") == []
+    service.disconnect("alice", connection["id"])
+    with pytest.raises(ConnectionError, match="connection_unavailable"):
+        service.for_work("alice", "thread-1")

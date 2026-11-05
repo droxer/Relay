@@ -76,3 +76,25 @@ def test_catalog_advertises_only_configured_providers(context):
     assert response.status_code == 200
     assert {p["id"]: p["configured"] for p in response.json()["providers"]} == {
         "github": True, "slack": False, "google-drive": False}
+
+
+def test_automation_occurrence_snapshots_grants_and_cannot_expand_them(context):
+    app, client, project = context
+    connection = _connect(client)
+    routine_response = client.post("/api/v1/tasks", json={"title": "Weekly issues", "projectId": project["id"],
+        "isRoutine": True, "routineState": "active", "routineTriggers": []})
+    assert routine_response.status_code == 201, routine_response.text
+    routine = routine_response.json()
+    grant = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    path = f"/api/v1/connection-grants/automation/{routine['id']}"
+    assert client.put(path, json={"grants": [grant]}).status_code == 200
+    occurrence = app.state.task_store.create_triggered_occurrence(routine["id"], run_date="2026-11-06",
+        trigger_kind="manual", depth=0, context="Run now")
+    assert occurrence
+    grants_path = f"/api/v1/connection-grants/task/{occurrence['id']}"
+    response = client.get(grants_path)
+    assert len(response.json()["grants"]) == 1
+    assert response.json()["readOnly"] is True
+    assert client.put(grants_path, json={"grants": []}).status_code == 409
+    assert client.delete(f"/api/v1/connections/{connection['id']}").status_code == 200
+    assert app.state.task_store.get_task(routine["id"])["routinePauseReason"] == "connection_unavailable"
