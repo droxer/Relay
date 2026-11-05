@@ -19,7 +19,7 @@ env:
 
 jobs:
   lint:
-    name: Lint and typecheck
+    name: Pre-commit checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -39,21 +39,10 @@ jobs:
         run: npm ci
       - name: Install Python dependencies
         run: uv sync --project backend --locked --extra dev
-      - name: Lint Python
-        run: uv run --project backend ruff check backend
-      - name: Typecheck Python
-        working-directory: backend
-        run: uv run mypy
       - name: Build shared types
         run: npm run build -w relay-core
-      - name: Typecheck packages and tests
-        run: npx --no-install tsc -p packages/tsconfig.json --noEmit
-      - name: Typecheck web
-        run: npx --no-install tsc -p web/tsconfig.json --noEmit
-      - name: Lint web
-        run: npm run lint -w web
-      - name: Lint CSS
-        run: npm run lint:css -w web
+      - name: Run all pre-commit hooks
+        run: uv run --project backend --extra dev pre-commit run --all-files --show-diff-on-failure
 
   typescript-tests:
     name: TypeScript and web tests
