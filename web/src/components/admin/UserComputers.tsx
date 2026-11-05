@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { isNodeOnline, nodeOwnershipProfile, visualStatus } from "../../lib/adminHelpers";
 import { NodePresence } from "./NodePresence";
+import { computerName } from "../../lib/computerNodes";
 import {
   ICON,
   NodeOwnershipIcon,
@@ -39,8 +40,12 @@ export function UserComputers({
       {nodes.map((node) => {
         const ownership = nodeOwnershipProfile(node);
         const status = visualStatus(node);
+        // Named as on the computer cards: an unnamed machine says so, and its
+        // id rides in the hover title rather than standing in for a name.
+        const name = computerName(node);
+        const label = name ?? t("computer.unnamed");
         const title = [
-          node.displayName || node.id,
+          name ?? `${label} (${node.id})`,
           t(`admin.v2.node_ownership_${ownership}`),
           t(`status.${status}`, { defaultValue: status }),
         ].join(" · ");
@@ -55,7 +60,7 @@ export function UserComputers({
             <NodePresence node={node} t={t} />
             <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-chip-mark" aria-hidden="true" />
             <span className="adm-computer-chip-name" translate="no">
-              {node.displayName || node.id}
+              {label}
             </span>
           </Badge>
         );

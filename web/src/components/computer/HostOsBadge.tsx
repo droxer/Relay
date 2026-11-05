@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import type { DaemonHostOs } from "relay-core";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { HOST_OS_NAMES, markedHostOs } from "../../lib/hostOs";
 
 /* The operating systems' own marks, monochrome so they sit in the ink of the
@@ -27,7 +28,9 @@ function OsMark({ os, ...props }: { os: DaemonHostOs } & MarkProps) {
 }
 
 /** The computer's operating system, as the daemon reported it
-    (`markedHostOs` decides which computers carry one). */
+    (`markedHostOs` decides which computers carry one). Drawn plain — glyph
+    and word, no chip fill — because it is a fixed fact about the machine and
+    must not outweigh the live presence readout beside it. */
 export function HostOsBadge({
   node,
   className,
@@ -38,7 +41,7 @@ export function HostOsBadge({
   const os = markedHostOs(node);
   if (!os) return null;
   return (
-    <Badge variant="neutral" className={className} data-os={os} translate="no">
+    <Badge variant="neutral" className={cn("host-os-mark", className)} data-os={os} translate="no">
       <OsMark os={os} />
       {HOST_OS_NAMES[os]}
     </Badge>

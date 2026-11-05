@@ -97,6 +97,42 @@ export function visualStatus(node: ControlPanelDaemonNodeRecord): string {
   return isStale(node) ? "stale" : node.status;
 }
 
+/**
+ * Whether a computer's lifecycle status earns a pill beside its presence.
+ *
+ * One rule for every computer surface: presence (Online / Offline) is always
+ * the status readout, and the lifecycle word joins it only when it says
+ * something presence cannot — provisioning, failed, stopped. Ready and stale
+ * restate presence, and running/busy is said by the run count instead, so a
+ * busy machine no longer read "Running" on the admin card and "Online" on
+ * the owner's.
+ */
+export function showsLifecycleStatus(status: string): boolean {
+  return status !== "ready" && status !== "stale" && status !== "running" && status !== "busy";
+}
+
+/**
+ * How many of a computer's shown runtimes last reported failed — said in
+ * words on the fleet card and row, so a failure is never told only by the
+ * hue of a 6px ring (on a dark computer every ring is hollow). A runtime an
+ * admin switched off is not counted: that is a choice, not an alarm.
+ */
+export function failedRuntimeCount(node: Pick<ControlPanelDaemonNodeRecord, "agents" | "disabledAgents">): number {
+  return visibleNodeAgentNames(node).filter(
+    (name) => node.agents[name] === "failed" && !node.disabledAgents?.includes(name),
+  ).length;
+}
+
+/**
+ * The runtime slots a fleet table reserves, in display order: every runtime
+ * visible on at least one of `nodes`. A row then draws a placeholder for a
+ * slot its own computer lacks, so the columns line up down the table.
+ */
+export function fleetRuntimeSlots(nodes: readonly Pick<ControlPanelDaemonNodeRecord, "agents">[]): AgentName[] {
+  const shown = new Set(nodes.flatMap((node) => visibleNodeAgentNames(node)));
+  return AGENT_RUNTIME_DISPLAY_ORDER.filter((name) => shown.has(name));
+}
+
 export type NodeQuickFilter = "all" | "ready" | "running" | "provisioning" | "failed" | "stopped" | "unassigned";
 
 /** Match the fleet lifecycle slices while keeping an intentional stop distinct

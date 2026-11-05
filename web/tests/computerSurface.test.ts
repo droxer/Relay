@@ -77,7 +77,10 @@ describe("My Computer record card", () => {
     const card = await read("web/src/components/computer/ComputerCard.tsx");
     assert.match(card, /computer-runtime-name/);
     assert.match(card, /role="img" aria-label=\{stateLabel\}/);
-    assert.doesNotMatch(card, /\{stateLabel\}\s*<\//);
+    // The state word stays on hover for a working runtime; only a failed one
+    // prints it, so failure is not told by the ring's hue alone.
+    assert.doesNotMatch(card.replace(/\{failed \? <span className="runtime-mark-state"[^}]*>\{stateLabel\}<\/span> : null\}/, ""), /\{stateLabel\}\s*<\//);
+    assert.match(card, /\{failed \? <span className="runtime-mark-state"/);
     assert.doesNotMatch(card, /ready \? null/);
     assert.match(card, /\[labelForExecutor\(agent\), stateLabel, version, detail\]/);
     assert.doesNotMatch(card, /<Badge|computer-runtime-detail|computer-runtime-version/);

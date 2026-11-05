@@ -49,3 +49,25 @@ export function formatRunElapsed(startedAt: string, now: number = Date.now()): s
 export function abbreviateNodeId(id: string, edge = 8): string {
   return id.length <= edge * 2 + 1 ? id : `${id.slice(0, edge)}…${id.slice(-edge)}`;
 }
+
+/**
+ * A computer's own name, or null when it has none.
+ *
+ * A record with no display name, or one that only repeats its id, is
+ * unnamed: every surface then says so in words ("Unnamed computer") and
+ * shows the id as the secondary handle, rather than one surface printing
+ * the raw id as the title and another printing a phrase.
+ */
+export function computerName(node: { id: string; displayName?: string | null }): string | null {
+  const name = node.displayName?.trim();
+  return name && name !== node.id ? name : null;
+}
+
+/**
+ * A workspace path cut after each separator, so it can wrap only between
+ * directories. Left to `overflow-wrap: anywhere`, a long path broke inside a
+ * directory name ("relay-" / "workspace").
+ */
+export function pathSegments(path: string): string[] {
+  return path.match(/[^/\\]*[/\\]|[^/\\]+$/g) ?? [];
+}

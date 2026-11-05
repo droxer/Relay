@@ -481,14 +481,20 @@ tr.is-pulse > td:first-child::after {
 
 .adm-view-controls > .adm-fleet-filters {
   margin-bottom: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .adm-view-controls > .adm-search {
   /* The search shares the filter row instead of taking a row of its own:
-     one band of controls above the roster, not two. */
-  flex: 0 1 320px;
-  min-width: 200px;
+     one band of controls above the roster, not two. It starts from a small
+     basis and grows to its 320px cap, because the row breaks on BASIS
+     widths: a rigid 320px basis pushed the card/list toggle onto a row of
+     its own whenever the chips were wide. */
+  flex: 1 1 15rem;
+  min-width: 12rem;
+  max-width: 320px;
+  margin-inline-start: auto;
 }
 
 .adm-layout-toggle {
@@ -502,6 +508,7 @@ tr.is-pulse > td:first-child::after {
    switch offered a table no phone can show (AdminPage pins cards). */
 @media (max-width: 820px) {
   .adm-view-controls {
+    flex-wrap: wrap;
     gap: var(--sp-2);
   }
 

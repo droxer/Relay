@@ -75,20 +75,16 @@
 }
 
 /* At the limit the header keeps only the disabled button and its 2/2; the
-   reason is a quiet note above the roster, the roster's own width, so the
-   page corner stays one clean row. Informational, not an error: neutral ink,
-   no danger tone. */
+   reason is a quiet note above the roster, so the page corner stays one
+   clean row. Informational, not an error: neutral ink, no danger tone — and
+   a plain line, not a framed box: drawn with the cards' hairline and plane
+   it read as one more card in the roster. */
 .computer-limit-notice {
   display: flex;
-  max-width: 72rem;
   align-items: flex-start;
   gap: var(--sp-2);
   margin: 0 0 var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
-  color: var(--ink-2);
+  color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
@@ -101,19 +97,26 @@
 }
 
 /* A handful of machines, not a fleet: full records rather than survey tiles.
-   As a page of its own the roster has the whole canvas, so records sit two
-   abreast once each still gets a record's width (34rem) — and never more,
-   because the cap stops a 2560px display from stretching a short runtime
-   list across the screen. Narrower, it is the single stack it always was. */
+   As a page of its own the roster has the whole canvas, so records sit side
+   by side once each still gets a record's width (34rem), sharing the full
+   width rather than stopping at a cap that left a dead band on the right.
+   Records differ in height by a whole section (active runs come and go), so
+   they flow in columns rather than grid rows: a short record beside a busy
+   one left a hole under it in a row, and stretching it to match only moved
+   the hole inside the card. Narrower, it is the single stack it always was. */
 .computer-list {
-  display: grid;
-  max-width: 72rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr));
-  align-items: start;
-  gap: var(--sp-4);
+  column-gap: var(--sp-4);
+  column-width: 34rem;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.computer-list > li {
+  display: flex;
+  min-width: 0;
+  margin-bottom: var(--sp-4);
+  break-inside: avoid;
 }
 
 /* ---- record ---------------------------------------------------------- */
@@ -126,6 +129,7 @@
   container-name: computer;
   display: flex;
   min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
@@ -160,11 +164,12 @@
   gap: var(--sp-1);
 }
 
-.computer-card-nameline {
+/* Presence, OS, lifecycle and update badges: the line under the name. */
+.computer-card-state {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1) var(--sp-3);
   min-width: 0;
 }
 
@@ -221,17 +226,28 @@
 
 /* The client on this machine is older than the server: what to do about it,
    under the line that says what the machine is. */
+/* Supporting text, not a paragraph that out-shouts the name: the body-sm
+   rung, one ink step down. */
 .computer-card-outdated {
   margin: var(--sp-1) 0 0;
   color: var(--ink-2);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .computer-card-actions {
   display: flex;
   flex: 0 0 auto;
   margin-inline-start: auto;
+}
+
+/* The host OS (HostOsBadge), here and on the admin fleet card and row: the
+   neutral Badge's glyph and word without its fill, so a fixed fact about the
+   machine sits a tier below the live presence readout instead of above it. */
+.host-os-mark {
+  padding-inline: 0;
+  background: transparent;
+  color: var(--ink-2);
 }
 
 /* ---- sections -------------------------------------------------------- */
@@ -297,7 +313,7 @@
 
 .computer-run-open {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--sp-2);
   width: 100%;
@@ -325,16 +341,19 @@ button.computer-run-open:hover {
   --mark-accent: var(--live);
 }
 
+/* The goal is what the reader came for; the runtime is its attribution. */
 .computer-run-agent {
-  color: var(--ink-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .computer-run-goal {
   min-width: 0;
   overflow: hidden;
   color: var(--ink-1);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -389,13 +408,24 @@ button.computer-run-open:hover {
 
 /* Wraps rather than truncates. A tail ellipsis would cut the identifying
    end of the path, and the `direction: rtl` trick that front-truncates it
-   reorders the leading slash — `/workspace` rendered as `workspace/`. */
+   reorders the leading slash — `/workspace` rendered as `workspace/`.
+   It wraps only between directories: each segment (`pathSegments`) is an
+   unbreakable box, so `relay-workspace` is never split at its hyphen. A
+   single directory wider than the card is the one place an ellipsis cuts. */
 .computer-fact-path {
   min-width: 0;
   color: var(--ink-3);
   font-size: var(--fs-1);
   line-height: var(--leading-snug);
-  overflow-wrap: anywhere;
+}
+
+.computer-fact-path > span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 
 @media (max-width: 820px) {

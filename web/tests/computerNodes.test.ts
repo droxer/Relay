@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   abbreviateNodeId,
+  computerName,
   countUserDeviceComputers,
   formatRunElapsed,
   nodesAssignedToUser,
+  pathSegments,
 } from "../src/lib/computerNodes.js";
 import type { DaemonNodeMonitorRecord } from "../src/types.js";
 
@@ -185,5 +187,34 @@ describe("abbreviateNodeId", () => {
 
   it("leaves an id that already fits alone", () => {
     assert.equal(abbreviateNodeId("node-1"), "node-1");
+  });
+});
+
+describe("computerName", () => {
+  it("returns the trimmed display name", () => {
+    assert.equal(computerName({ id: "node-1", displayName: "  Ada's Mac " }), "Ada's Mac");
+  });
+
+  it("treats a missing, blank, or id-repeating name as unnamed", () => {
+    assert.equal(computerName({ id: "node-1" }), null);
+    assert.equal(computerName({ id: "node-1", displayName: "   " }), null);
+    assert.equal(computerName({ id: "node-1", displayName: "node-1" }), null);
+  });
+});
+
+describe("pathSegments", () => {
+  it("cuts a POSIX path after each separator", () => {
+    assert.deepEqual(pathSegments("/Users/ada/relay-workspace"), ["/", "Users/", "ada/", "relay-workspace"]);
+  });
+
+  it("cuts a Windows path after each backslash and keeps every character", () => {
+    const path = "C:\\Users\\ada\\relay-workspace\\";
+    const segments = pathSegments(path);
+    assert.deepEqual(segments, ["C:\\", "Users\\", "ada\\", "relay-workspace\\"]);
+    assert.equal(segments.join(""), path);
+  });
+
+  it("returns nothing for an empty path", () => {
+    assert.deepEqual(pathSegments(""), []);
   });
 });
