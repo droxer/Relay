@@ -82,6 +82,7 @@ def test_direct_delegation_runs_b_then_resumes_a_in_same_thread(env, child_outco
 
 def test_agent_cannot_delegate_to_unapproved_target(env):
     app, client, a, b = setup_agents(env)
+    assert client.patch(f"/api/v1/agents/{a['id']}", json={"delegationAgentIds": []}).status_code == 200
     client.post("/api/v1/agent-runs", json={"taskGoal": "Build", "assignments": [{"agentId": a["id"]}]})
     [first] = app.state.registry.take_commands("node_a", "node_token")
     complete(app, first, {"status": "continue", "delegation": {"agentId": b["id"], "objective": "Write tests",
@@ -90,6 +91,34 @@ def test_agent_cannot_delegate_to_unapproved_target(env):
     assert resumed["state"]["agent_display_name"] == "A"
     assert "refused" in resumed["state"]["delegation_return"].lower()
     assert not any(run["logicalAgentId"] == b["id"] for run in app.state.session_store.get_session(first["sessionId"])["agentRuns"])
+
+
+def test_all_eligible_agents_are_delegation_targets_by_default(env):
+    app, client, a, b = setup_agents(env)
+    response = client.post("/api/v1/agent-runs", json={"taskGoal": "Build", "assignments": [{"agentId": a["id"]}]})
+    assert response.status_code == 202, response.text
+    [first] = app.state.registry.take_commands("node_a", "node_token")
+    assert b["id"] in {candidate["agentId"] for candidate in first["state"]["delegation_candidates"]}
+    complete(app, first, {"status": "continue", "delegation": {"agentId": b["id"], "objective": "Write tests",
+        "acceptanceCriteria": ["pass"], "expectedOutputs": ["tests"]}})
+    [child] = app.state.registry.take_commands("node_a", "node_token")
+    assert child["state"]["agent_display_name"] == "B"
+
+
+def test_resetting_to_all_includes_agents_created_later(env):
+    app, client, a, b = setup_agents(env)
+    assert client.patch(f"/api/v1/agents/{a['id']}", json={"delegationAgentIds": []}).status_code == 200
+    reset = client.patch(f"/api/v1/agents/{a['id']}", json={"delegationAgentIds": None})
+    assert reset.status_code == 200, reset.text
+    created = client.post("/api/v1/agents", json={"computerId": a["computerId"], "executorKind": "codex",
+        "defaultRole": "implementer", "displayName": "C"})
+    assert created.status_code == 201, created.text
+    c = created.json()["agent"]
+    response = client.post("/api/v1/agent-runs", json={"taskGoal": "Build", "assignments": [{"agentId": a["id"]}]})
+    assert response.status_code == 202, response.text
+    [first] = app.state.registry.take_commands("node_a", "node_token")
+    ids = {candidate["agentId"] for candidate in first["state"]["delegation_candidates"]}
+    assert ids == {b["id"], c["id"]}
 
 
 def begin_delegation(env):
