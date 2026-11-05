@@ -124,6 +124,8 @@ def test_run_bound_tools_check_lease_and_live_revocation(context):
     assert response.status_code == 200, response.text
     assert "secret-token" not in response.text
     headers = {"Authorization": f"Bearer {response.json()['token']}"}
+    malformed = client.post("/api/v1/connection-tools", headers=headers, json={"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": "invalid"})
+    assert malformed.status_code == 400
     tools = client.post("/api/v1/connection-tools", headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert tools.status_code == 200, tools.text
     assert len(tools.json()["result"]["tools"]) == 1

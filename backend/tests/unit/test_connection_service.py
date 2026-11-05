@@ -127,3 +127,13 @@ def test_deleting_owner_retires_credentials_and_pending_authorizations(service):
     assert service.store.get("alice", connection["id"])["sealedSecret"] is None
     with pytest.raises(ConnectionError, match="connection_state_invalid"):
         service.complete("alice", "session", "github", state, code="code")
+
+
+def test_late_provider_rejection_cannot_restore_disconnected_credentials(service):
+    connection = connect(service)
+    stale = service.store.get("alice", connection["id"])
+    service.disconnect("alice", connection["id"])
+    service._unavailable("alice", stale)
+    current = service.store.get("alice", connection["id"])
+    assert current["status"] == "disconnected"
+    assert current["sealedSecret"] is None
