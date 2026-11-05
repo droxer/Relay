@@ -963,7 +963,7 @@ to GitHub. Both routes verify the repository's `private: false` and
 `visibility: public` metadata before reading issues. Request tokens are rejected,
 and saved Account connections are never used.
 
-GitHub connection is **coming soon**. `GET /api/v1/account/github` (browser login
+The legacy Account GitHub App connection is **coming soon**. `GET /api/v1/account/github` (browser login
 required) answers `{configured: false, connected: false, comingSoon: true,
 login: null, manageUrl: null}`. The authenticated connect and callback endpoints
 answer `501 github_connection_coming_soon`, including when App environment settings
@@ -1398,3 +1398,32 @@ upload also prunes up to 100 abandoned uploads older than 24 hours; a quiet
 installation retains them until the next upload. Object deletion is best effort,
 so failed deletions require storage maintenance. Uploads use the existing
 per-process auth rate limiter with a separate per-User key.
+
+## Service Connections
+
+The provider-neutral Connections API is separate from the legacy Account GitHub
+App API. It authenticates external identities for use in Threads, Tasks, and
+Automations; the public GitHub issue importer retains its anonymous contract.
+
+`GET /api/v1/connection-providers` returns deployment availability and supported
+actions. `GET /api/v1/connections` returns only the signed-in User's redacted
+identities. `POST /api/v1/connections/authorizations` accepts `provider`, a safe
+local `returnTo`, and optionally `reconnectId`. The browser follows its `url`;
+the provider callback validates the initiating session and single-use state.
+
+Work access is read and replaced through
+`/api/v1/connection-grants/{thread|task|automation}/{id}` (GET/PUT). A PUT body
+contains `grants`, each naming `connectionId`, `resources`, and `actions`.
+Preserve returned `id`/`revision` pairs when editing; stale pairs answer 409.
+Task create/PATCH and new `/api/v1/agent-runs` requests also accept
+`connectionGrants`, saved before dispatch. Linked Threads use Task access;
+generated Automation Tasks expose read-only access snapshots.
+
+Permission edits replace the previous Grant identity. Existing run snapshots
+cannot recover a removed permission when it is added back later. Disconnect
+removes saved credentials and pauses dependent active Automations without
+claiming that an executing agent has exited. Run-scoped MCP calls use
+`POST /api/v1/connection-tools`; browser sessions cannot authorize those calls.
+
+See [Connections](connections.md) for all routes, resource pagination, provider
+configuration, supported runtime adapters, and deployment verification limits.

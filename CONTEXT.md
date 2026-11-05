@@ -239,10 +239,23 @@ edits, and an issue already in the same destination is skipped. GitHub labels
 become Tags.
 _Avoid_: Sync, mirror, GitHub task
 
+**Connection**:
+A User-owned authorization to use one external service identity and
+its permitted resources. Connecting a service makes it available for explicit
+use by work; it does not give every Agent access.
+_Avoid_: Integration (the existing administrative chat-client configuration),
+Account (the User's Relay login credential)
+
+**Connection Grant**:
+An authorization for a Thread, Task, or Automation to use specified
+resources and actions through one Connection. A Task's linked Threads use the
+Task's Grants; an Automation's generated Tasks receive a bounded snapshot.
+_Avoid_: Skill, Placement, global agent access
+
 **GitHub Connection**:
-A planned Account authorization of Relay's GitHub App for selected repositories.
-It is currently **coming soon**. Issue Import supports public repositories
-anonymously; it does not use saved credentials.
+A Connection authorizing GitHub issue reads for selected work through a GitHub
+OAuth App. The older Account GitHub App installation flow remains disabled;
+Issue Import still supports public repositories anonymously.
 
 **Wait**:
 A Task parked at `waiting_for_human` on a person, recorded as its
