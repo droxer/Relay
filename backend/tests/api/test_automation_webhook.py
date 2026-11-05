@@ -162,13 +162,16 @@ def test_webhook_tick_creates_a_labeled_run_in_the_api_ledger(monkeypatch):
 
 
 def test_non_owner_assignee_cannot_rotate_secret(monkeypatch):
-    from test_tasks import _create_account, _create_agent, _login
+    from test_tasks import _create_account, _login
     from test_automation_triggers_api import _routine
     with TemporaryDirectory() as root:
-        client, _ = _client(monkeypatch, root)
+        client, agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
-        agent = _create_agent(client, user_id("bob"))
-        routine = _routine(client, agent, assigneeUserId=user_id("bob"), routineTriggers=[{"kind": "webhook"}])
+        routine = _routine(client, agent, routineTriggers=[{"kind": "webhook"}])
+        # Legacy delegated records still grant no access to the assignee.
+        from store_fixtures import overwrite_snapshot
+        store = client.app.state.task_store
+        overwrite_snapshot(store.tasks, store.engine, routine["id"], {**store.get_task(routine["id"]), "assigneeUserId": user_id("bob")})
         _login(client, "bob")
         path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
         assert client.get(path).status_code == 403

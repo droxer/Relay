@@ -37,8 +37,6 @@ router = APIRouter()
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: Actor, body: TaskStartBody) -> PreparedStart:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
-    if task.get("isRoutine") and not actor["isAdmin"] and task.get("ownerUserId") != actor.get("userId"):
-        raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     ensure_task_project_writable(ctx, task)
     raw_assignments = body.assignments
     with task_request_errors():
@@ -181,7 +179,7 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         failure_message = None
     session_ids = list(task.get("linkedSessionIds", []))
     artifacts = newest_artifacts_by_file(
-        ctx, [(task["id"], session_id) for session_id in session_ids]
+        ctx, [(task["id"], session_id) for session_id in session_ids], owner_user_id=task.get("ownerUserId")
     )
     return {
         "taskId": task["id"],

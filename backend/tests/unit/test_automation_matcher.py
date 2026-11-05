@@ -682,7 +682,7 @@ def test_pending_clear_and_firing_keep_the_failure_count(world):
 
 def test_resume_drops_stale_pending_events_before_the_next_tick(world):
     tasks, automations, service, clock = world
-    routine = _automation(tasks)
+    routine = _automation(tasks, ownerUserId="ops")
     tasks.update_task(routine["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
                                       "routineNextRunAt": None})
     automations.mark_pending(routine["id"], {"eventType": "task.status_changed", "toStatus": "blocked",
@@ -691,7 +691,7 @@ def test_resume_drops_stale_pending_events_before_the_next_tick(world):
     assert resumed["routineState"] == "active"
     assert run(world) == 0
     assert _occurrences(tasks, routine["id"]) == []
-    assert "Automation resumed by an admin." in [item.get("message") for item in tasks.get_task(routine["id"])["activity"]]
+    assert "Automation resumed by its owner." in [item.get("message") for item in tasks.get_task(routine["id"])["activity"]]
 
 
 def _controller(world, occurrence):

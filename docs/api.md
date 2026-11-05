@@ -71,12 +71,39 @@ and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
 truncate either projection.
 
+Personal task lists are scoped to the signed-in user for every role, including
+administrators. Tasks and automations appear only for their owner. Both projections apply this scope
+before the limit. Personal project lists likewise return only the user's own
+projects, including archived projects.
+
+Task, automation, thread, and project details and their history, files, and
+mutations require ownership too. Admin status and task assignment do not grant
+access to another user's records by ID. Explicit artifact-owner and workspace
+selectors must name the signed-in user or a resource they own.
+
+The personal thread, artifact, sandbox, and computer lists likewise default
+to the signed-in user's own records. A valid session cookie supplies the
+identity even when a saved sandbox UI bearer token is also present; that token
+cannot switch the caller to a different user. Token-only legacy clients still
+use their UI credential when no session cookie authenticates a person.
+
+A Computer owned by a user with `nodeLocation: "user-device"` accepts file
+browsing and work only from its owner. The admin workspace browser and legacy
+sandbox read, run, and adoption routes do not grant another administrator
+control over that personal Computer. Managed hardware retains its admin policy.
+
+Daemon registration proves execution-plane authority only. An unauthenticated
+daemon cannot set or replace a browser UI credential through its bearer header.
+Node credentials never authenticate human operations, including when an older
+record has the same hash in both credential slots. Such legacy browser clients
+must sign in with an account rather than reuse the daemon's secret.
+
 Task lists include `waitingOnSummaries` alongside the authoritative `waitingOn`
 IDs. These summaries contain only a direct unfinished prerequisite's id, number,
 title, status, responsible user ids/name, and `canOpen`. They are supplied only
-when the prerequisite belongs to the same live project and the caller owns that
-project or is an administrator. A summary never grants access to the full task;
-`canOpen` follows the existing task owner/assignee rule. Missing summaries mean
+when the prerequisite belongs to the same live project and the caller owns both
+that project and the prerequisite. A summary never grants access to the full task;
+`canOpen` follows the task ownership rule. Missing summaries mean
 private or unavailable details, not a resolved dependency.
 
 Home's seven-day Upcoming list uses local calendar dates for task deadlines,
@@ -154,7 +181,7 @@ automation with `routineState: "paused_by_relay"` and
 `routinePauseReason: "failing"`, and records it in the automation's activity.
 
 `POST /api/v1/tasks/{id}/automation/resume` turns a paused automation back on.
-Only the automation's owner or an admin may call it; anyone else gets 403. A
+Only the automation's owner may call it; anyone else gets 403. A
 task that is not an automation gets 404. On an already-active automation it
 returns the task unchanged. Otherwise it drops pending events, so stale ones
 can't fire the moment it resumes, and resets the failure count. It sets
@@ -164,7 +191,7 @@ task. Resuming a `paused_by_relay`
 automation also starts a fresh hourly rate window. Resuming an owner pause
 keeps the window, so pausing and resuming can't get around the hourly cap.
 `PATCH` with `routineState: "active"` runs the same reset.
-Only an owner or admin may lift a Relay pause through PATCH, including moving
+Only an owner may lift a Relay pause through PATCH, including moving
 it to an ordinary `paused` state. An assignee may still edit the definition
 without lifting that pause and toggle an ordinary owner pause.
 
@@ -192,7 +219,7 @@ share a savepoint. A failing automation rolls back its own work while healthy
 automations continue. Failed recipients of broadcast events retain targeted
 outbox retries, so retrying does not deliver the event again to healthy recipients.
 
-`POST /tasks/{id}/runs` (Run now) is available to the owner or an admin,
+`POST /tasks/{id}/runs` (Run now) is available to the owner,
 including on a `paused` automation, but not on one paused by Relay for
 `rate_limited`. With nowhere to run it answers with dispatch code `no_target`,
 and it never changes the automation's state. A free automation dispatches
@@ -212,7 +239,7 @@ and rate limiting returns 429 with `Retry-After`.
 
 `GET /api/v1/tasks/{id}/automation/webhook-secret` returns `configured`, `path`,
 and `header`, never the secret. `POST` on the same path generates or rotates a
-secret and returns it once with status 201. Only an owner or admin
+secret and returns it once with status 201. Only an owner
 can manage it. The database stores only its SHA-256 hash. Rotating invalidates
 the previous token; leaving the webhook kind deletes the stored hash.
 
@@ -222,7 +249,7 @@ and clips each webhook payload to 8 KB. Pending events expire after 24 hours.
 Automations skip their own occurrences and stop chains beyond depth 3. The
 hourly cap pauses the definition (`paused_by_relay`, `rate_limited`);
 resuming clears the reason and starts a fresh rate window. The run ledger
-shows the reason and offers Resume to the owner or an admin.
+shows the reason and offers Resume to the owner.
 
 
 ## Normalized Mutations
@@ -650,11 +677,14 @@ the daemon retries the same outcome without inline snapshots or the fallback
 transcript. If that is still too large, it retains the durable completion for
 retry rather than replacing a successful run with a failure.
 
-Daemon nodes expose the same workspace-read shape used by projects:
+The legacy unscoped computer-root file routes return 403 for authenticated
+admins. A Computer can contain several Users' private work, so hardware
+administration does not authorize browsing its storage root. Open files through
+the owning Task, Thread, or Project workspace routes instead.
 
 ```text
-GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/files?path={relativePath}
-GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/file?path={relativePath}
+GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/files
+GET /api/v1/admin/daemon-nodes/{nodeId}/workspace/file
 ```
 
 Default agents a connecting computer offers its signed-in user. An offer lists

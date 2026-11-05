@@ -66,12 +66,7 @@ class TaskReadRows(TaskStoreState):
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
         if user_id is not None:
-            statement = statement.where(
-                or_(
-                    self.tasks.c.owner_user_id == user_id,
-                    self.tasks.c.assignee_user_id == user_id,
-                )
-            )
+            statement = statement.where(self.tasks.c.owner_user_id == user_id)
         if limit is not None:
             statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:
@@ -135,12 +130,7 @@ class TaskReadRows(TaskStoreState):
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
         if user_id is not None:
-            statement = statement.where(
-                or_(
-                    self.tasks.c.owner_user_id == user_id,
-                    self.tasks.c.assignee_user_id == user_id,
-                )
-            )
+            statement = statement.where(self.tasks.c.owner_user_id == user_id)
         if task_ids is not None:
             statement = statement.where(self.tasks.c.id.in_(task_ids))
         if limit is not None:

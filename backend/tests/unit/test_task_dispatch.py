@@ -129,6 +129,7 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
+        _bootstrap_user(client)
         node = _register_node(
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
         )
@@ -147,6 +148,7 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
             }
         )
 
+        _login_user(client)
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
 
@@ -161,6 +163,7 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
+        _bootstrap_user(client)
         node = _register_node(app, "sbx_alice", capabilities=["thread-workspaces"])
         agent = _agent(app, node)
 
@@ -177,6 +180,7 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
             }
         )
 
+        _login_user(client)
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
 
@@ -303,6 +307,7 @@ def test_routine_occurrence_keeps_its_own_directory_on_an_older_daemon(monkeypat
         replace_app_context(app, today=FixedDate.today)
         client = TestClient(app)
         _bootstrap_admin(client)
+        _bootstrap_user(client)
         node = _register_node(
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
         )
@@ -321,6 +326,7 @@ def test_routine_occurrence_keeps_its_own_directory_on_an_older_daemon(monkeypat
             },
         ).json()
 
+        _login_user(client)
         started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
         assert started.status_code == 202, started.text
         occurrence = started.json()["task"]
@@ -348,6 +354,7 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
         replace_app_context(app, today=FixedDate.today)
         client = TestClient(app)
         _bootstrap_admin(client)
+        _bootstrap_user(client)
         node = _register_node(
             app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", "artifact-layout"]
         )
@@ -366,6 +373,7 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
             },
         ).json()
 
+        _login_user(client)
         started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
         assert started.status_code == 202, started.text
         occurrence = started.json()["task"]

@@ -41,7 +41,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         except ValueError as error:
             raise HTTPException(400, "limit must be an integer.") from error
         summaries = ctx.session_store.list_session_summaries(
-            owner_user_id=None if actor["isAdmin"] else actor["userId"],
+            owner_user_id=actor["userId"],
             limit=min(max(1, requested_limit), 200),
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
@@ -50,7 +50,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     visible = [
         session
         for session in ctx.session_store.list_sessions()
-        if actor["isAdmin"] or session.get("ownerUserId") == actor["userId"]
+        if session.get("ownerUserId") == actor["userId"]
     ]
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
@@ -79,7 +79,6 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     requested_user = request.query_params.get("userId")
     if (
         requested_user
-        and not actor["isAdmin"]
         and requested_user != actor["userId"]
     ):
         raise HTTPException(403, "Cannot list artifacts for another user.")
@@ -88,8 +87,7 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     if hasattr(ctx.session_store, "list_artifact_summaries"):
         return {
             "artifacts": ctx.session_store.list_artifact_summaries(
-                owner_user_id=requested_user
-                or (None if actor["isAdmin"] else actor["userId"]),
+                owner_user_id=requested_user or actor["userId"],
                 workspace_path=workspace_path,
                 limit=limit,
             )
@@ -97,9 +95,7 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     artifacts: list[dict[str, Any]] = []
     for session in ctx.session_store.list_sessions():
         owner = session.get("ownerUserId")
-        if not actor["isAdmin"] and owner != actor["userId"]:
-            continue
-        if requested_user and owner != requested_user:
+        if owner != (requested_user or actor["userId"]):
             continue
         if workspace_path and session.get("workspacePath") != workspace_path:
             continue
@@ -171,7 +167,6 @@ def _workspace_scope(
         raise HTTPException(404, "Team not found.")
     if (
         team
-        and not actor["isAdmin"]
         and team.get("ownerUserId") != actor["userId"]
     ):
         raise HTTPException(403, "Cannot read another user's team workspace.")
@@ -185,7 +180,6 @@ def _workspace_scope(
         raise HTTPException(404, "Project not found.")
     if (
         project
-        and not actor["isAdmin"]
         and project.get("ownerUserId") != actor["userId"]
     ):
         raise HTTPException(403, "Cannot read another user's project workspace.")

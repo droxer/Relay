@@ -86,7 +86,7 @@ def _readable_project(
     project = ctx.project_store.get_project(project_id)
     if not project:
         raise HTTPException(404, "Project not found.")
-    if not actor["isAdmin"] and project.get("ownerUserId") != actor["userId"]:
+    if project.get("ownerUserId") != actor["userId"]:
         raise HTTPException(403, "Project belongs to another user.")
     return project
 

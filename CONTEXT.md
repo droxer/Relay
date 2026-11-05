@@ -162,6 +162,10 @@ _Avoid_: Workspace, Agent home
 **Project**:
 A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
+Project, Task, Automation, and Thread records are private to their owning User;
+an Account's admin role and a Task's assignee do not grant access to another
+User's records. Administrative hardware and account management are separate
+authorities.
 _Avoid_: Folder, Team
 
 **Linked Directory**:

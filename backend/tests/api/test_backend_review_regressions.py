@@ -81,7 +81,7 @@ def test_artifact_download_never_reads_backend_host(
     session = SessionController(
         review_app.state.session_store,
         workspace_path=str(workspace),
-        owner_user_id="admin",
+        owner_user_id=_admin_id(review_app),
     ).create_session("Remote report")
     artifact = {
         "id": new_database_id(),
@@ -109,7 +109,7 @@ def test_artifact_snapshots_download_with_restricted_csp(
     review_app, review_client, content_type
 ):
     session = SessionController(
-        review_app.state.session_store, owner_user_id="admin"
+        review_app.state.session_store, owner_user_id=_admin_id(review_app)
     ).create_session("Download")
     artifact = {
         "id": new_database_id(),
@@ -203,7 +203,7 @@ def test_legacy_daemon_completion_does_not_collect_backend_files(review_app, tmp
     session = SessionController(
         review_app.state.session_store,
         workspace_path=str(workspace),
-        owner_user_id="admin",
+        owner_user_id=_admin_id(review_app),
     ).create_session("Legacy daemon")
     review_app.state.registry._record_generated_workspace_artifacts(
         {"workspacePath": str(workspace)},
@@ -263,10 +263,10 @@ def test_terminal_occurrence_keeps_routine_schedule_and_deleted_history(
     task = routine_run_with_session(review_app, "Occurrence")
     session_id = task["linkedSessionIds"][0]
     routine = store.create_task(
-        {"title": "Schedule", "isRoutine": True, "ownerUserId": "admin"}
+        {"title": "Schedule", "isRoutine": True, "ownerUserId": _admin_id(review_app)}
     )
     deleted = store.create_task(
-        {"title": "Deleted history", "ownerUserId": "admin"}
+        {"title": "Deleted history", "ownerUserId": _admin_id(review_app)}
     )
     for linked in (routine, deleted):
         store.link_session(linked["id"], session_id)
@@ -292,12 +292,12 @@ def _undelivered_task_round(app, title: str) -> tuple[dict, dict]:
         "capabilities": ["thread-workspaces"], "status": "ready",
     })
     task = app.state.task_store.create_task({
-        "title": title, "ownerUserId": "admin", "acceptancePolicy": "automatic",
+        "title": title, "ownerUserId": _admin_id(app), "acceptancePolicy": "automatic",
         "assignedAgent": "codex", "assignedAgentId": "agt_codex", "status": "assigned",
     })
     session = SessionController(
         app.state.session_store, workspace_path="/workspace/admin",
-        owner_user_id="admin",
+        owner_user_id=_admin_id(app),
     ).create_session(title, ["human"])
     request = app.state.registry.daemon_store.create_run_request({
         "nodeId": "node_admin", "sessionId": session["id"], "taskId": task["id"],
@@ -342,12 +342,12 @@ def test_thread_decision_on_awaiting_task_round_speaks_for_its_task(
     """A thread parked on its human belongs to the task its active round scopes."""
     app = review_app
     task = app.state.task_store.create_task({
-        "title": "Asked a question", "ownerUserId": "admin",
+        "title": "Asked a question", "ownerUserId": _admin_id(review_app),
         "acceptancePolicy": "automatic",
     })
     controller = SessionController(
         app.state.session_store, task_store=app.state.task_store, task_id=task["id"],
-        workspace_path="/workspace", owner_user_id="admin",
+        workspace_path="/workspace", owner_user_id=_admin_id(review_app),
     )
     session = controller.create_session("Asked a question", ["human"])
     controller.record_collaboration_round_started(session["id"], {
@@ -372,7 +372,7 @@ def test_thread_decision_on_awaiting_task_round_speaks_for_its_task(
 def test_dispatching_decisions_are_refused_without_a_dispatch(review_client, review_app, kind):
     session = SessionController(
         review_app.state.session_store, workspace_path="/workspace",
-        owner_user_id="admin",
+        owner_user_id=_admin_id(review_app),
     ).create_session("Finished", ["human"])
     SessionController(review_app.state.session_store).complete_session(session["id"], "Done.")
 
@@ -390,13 +390,13 @@ def test_old_round_cannot_settle_newer_task_execution(review_app, review_client,
     from relay.persistence.events import relay_task_event
 
     app = review_app
-    task = app.state.task_store.create_task({"title": "Shared task", "ownerUserId": "admin"})
+    task = app.state.task_store.create_task({"title": "Shared task", "ownerUserId": _admin_id(review_app)})
     task = app.state.task_store.append_event(task["id"], relay_task_event(
         "task.execution.claimed", task["id"], {"requestId": "old_request", "expectedRevision": 0},
     ))
     controller = SessionController(app.state.session_store, task_store=app.state.task_store,
                                    task_id=task["id"], task_execution_owner=task["executionOwner"],
-                                   owner_user_id="admin")
+                                   owner_user_id=_admin_id(review_app))
     session = controller.create_session("Old thread")
     controller.record_collaboration_round_started(session["id"], {
         "roundId": "old_round", "workScope": {"kind": "task", "taskId": task["id"]},
@@ -415,12 +415,12 @@ def test_old_round_cannot_settle_newer_task_execution(review_app, review_client,
 def _blocked_task_thread(app, *, policy: str = "automatic"):
     """A task round that stopped to ask, parked on its thread's human."""
     task = app.state.task_store.create_task({
-        "title": "Asked a question", "ownerUserId": "admin",
+        "title": "Asked a question", "ownerUserId": _admin_id(app),
         "acceptancePolicy": policy,
     })
     controller = SessionController(
         app.state.session_store, task_store=app.state.task_store, task_id=task["id"],
-        workspace_path="/workspace", owner_user_id="admin",
+        workspace_path="/workspace", owner_user_id=_admin_id(app),
     )
     session = controller.create_session("Asked a question", ["human"])
     controller.record_collaboration_round_started(session["id"], {
@@ -486,7 +486,7 @@ def test_reject_keeps_the_question_the_thread_waits_on(review_app, review_client
 def test_reject_is_refused_while_the_thread_runs(review_app, review_client):
     session = SessionController(
         review_app.state.session_store, workspace_path="/workspace",
-        owner_user_id="admin",
+        owner_user_id=_admin_id(review_app),
     ).create_session("Still running", ["human"])
     SessionController(review_app.state.session_store).continue_session(session["id"])
     review_app.state.session_store.append_event(session["id"], {

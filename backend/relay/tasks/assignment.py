@@ -9,11 +9,17 @@ from typing import Any
 
 from ..automations.model import EVENT_KINDS
 from ..projects.runtime import project_task_assignment_error
-from .requests import TaskRequestError
 from ..projects.access import ProjectAccessError, project_for_owner
 from ..security.actor import Actor
+from .requests import TaskRequestError
 
 FILTER_SCOPE_KEYS = ("projectId", "assignedAgentId", "assignedTeamId")
+
+
+def validate_task_owner_assignment(owner_user_id: str | None, assignee_user_id: str | None) -> None:
+    """Private work cannot create an execution Thread for another User."""
+    if not owner_user_id or (assignee_user_id and assignee_user_id != owner_user_id):
+        raise TaskRequestError(403, "task_assignment_owner_required")
 
 
 def logical_agent_for_assignment(

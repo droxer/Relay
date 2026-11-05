@@ -162,11 +162,10 @@ def ensure_relay_pause_transition_allowed(
     if (
         state_of(current) == "paused_by_relay"
         and (routine.get("routineState") in ("active", "paused") or routine.get("isRoutine") is False)
-        and not actor.get("isAdmin")
         and current.get("ownerUserId") != actor.get("userId")
     ):
         # An ordinary pause or conversion would let the assignee activate it later.
-        raise TaskRequestError(403, "Only the automation's owner or an admin can resume it.")
+        raise TaskRequestError(403, "Only the automation's owner can resume it.")
 
 
 def _read_fields(current: dict[str, Any], request: TaskPatchRequest) -> _Fields:

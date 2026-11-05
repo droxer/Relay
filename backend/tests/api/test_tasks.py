@@ -38,6 +38,7 @@ def _bootstrap_admin(client: TestClient) -> None:
 
 
 def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
+    client = _setup_admin_client(client)
     response = client.post(
         "/api/v1/admin/accounts",
         json={
@@ -56,6 +57,13 @@ def _login(client: TestClient, username: str, password: str = "userpass") -> Non
         json={"username": username, "password": password},
     )
     assert response.status_code == 200
+
+
+def _setup_admin_client(client: TestClient) -> TestClient:
+    """Keep administrative fixture setup separate from the tested caller."""
+    admin = TestClient(client.app)
+    _login(admin, "admin", "kestrel-vault-7719")
+    return admin
 
 
 def _mark_run_executing(client: TestClient, command: dict) -> None:
@@ -81,6 +89,7 @@ def _create_agent(
     executor_kind: str = "codex",
     node_id: str | None = None,
 ) -> dict:
+    client = _setup_admin_client(client)
     if node_id:
         # node_id names a node the caller already registered (usually
         # through the real registration route) — reuse its identity.
@@ -175,6 +184,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         assert task["routineState"] == "paused"
         assert "routineNextRunAt" not in task
 
+        _login(client, "alice")
         updated = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={
@@ -252,6 +262,7 @@ def test_task_collaboration_style_is_validated(monkeypatch) -> None:
         task = created.json()
         assert task["collaborationStyle"] == "build_review"
 
+        _login(client, "alice")
         rejected_solo = client.patch(
             f"/api/v1/tasks/{task['id']}", json={"collaborationStyle": "solo"},
         )
@@ -325,7 +336,7 @@ def test_task_summary_view_without_limit_preserves_completeness(monkeypatch) -> 
         response = client.get("/api/v1/tasks?view=summary")
 
         assert response.status_code == 200
-        assert observed == {"user_id": None, "limit": None}
+        assert observed == {"user_id": client.get("/api/v1/auth/me").json()["user"]["userId"], "limit": None}
 
 
 def test_routine_create_defaults_to_paused(monkeypatch) -> None:
@@ -413,7 +424,7 @@ def test_routine_schedule_change_and_resume_recalculate_next_run(monkeypatch) ->
         )
         assert created.status_code == 201
         path = f"/api/v1/tasks/{created.json()['id']}"
-
+        _login(client, "alice")
         resumed = client.patch(path, json={"routineState": "active"})
         assert resumed.status_code == 200
         assert resumed.json()["routineNextRunAt"].endswith("T09:00:00+00:00")
@@ -467,11 +478,13 @@ def test_marking_task_done_only_completes_task_scoped_session(
                 },
             )
 
+        _login(client, "alice")
         session = client.get(f"/api/v1/threads/{session_id}")
         assert session.status_code == 200
         assert session.json()["status"] == "running"
 
         client.app.state.task_store.update_task(task["id"], {"status": "review"})
+        _login(client, "alice")
         updated = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "done"})
         assert updated.status_code == 200
         assert updated.json()["status"] == "done"
@@ -540,6 +553,7 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert pending_commands.status_code == 200
         assert pending_commands.json()["commands"] == []
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202
         assert started.json()["session"]["id"]
@@ -616,6 +630,7 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
         )
         assert created.status_code == 201
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
         assert started.status_code == 202
 
@@ -654,6 +669,7 @@ def test_task_start_requests_managed_capacity_when_no_node_is_ready(
             }
         )
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -691,6 +707,7 @@ def test_task_start_reports_restart_of_stopped_managed_capacity(monkeypatch) -> 
             }
         )
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -743,6 +760,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
         )
         assert created.status_code == 201
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
         assert started.status_code == 202
         session_id = started.json()["session"]["id"]
@@ -896,6 +914,7 @@ def test_unassigned_project_task_runs_the_project_roster(
         assert created.status_code == 201
         assert "assignedAgent" not in created.json()
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
         assert started.status_code == 202
         session = started.json()["session"]
@@ -1023,6 +1042,7 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
         )
         assert created.status_code == 201
 
+        _login(client, "alice")
         started = client.post(
             f"/api/v1/tasks/{created.json()['id']}/runs",
             json={
@@ -1103,6 +1123,7 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
         )
         assert created.status_code == 201
 
+        _login(client, "alice")
         started = client.post(
             f"/api/v1/tasks/{created.json()['id']}/runs",
             json={
@@ -1159,6 +1180,7 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
 
         result = asyncio.run(app.state.task_scheduler.tick())
         assert result.dispatched == 1
+        _login(client, "alice")
         updated = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert updated.status_code == 200
         assert updated.json()["status"] == "assigned"
@@ -1225,6 +1247,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         assert task["status"] == "backlog"
         assert task["linkedSessionIds"] == []
 
+        _login(client, "alice")
         start = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert start.status_code == 202
         assert start.json()["session"]["id"]
@@ -1282,6 +1305,7 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
 
         fired = asyncio.run(app.state.task_scheduler.tick())
         assert fired.fired == 1
+        _login(client, "alice")
         definition = client.get(f"/api/v1/tasks/{created.json()['id']}").json()
         [occurrence_id] = definition["occurrenceIds"]
         assert app.state.task_store.get_task(occurrence_id)["status"] == "assigned"
@@ -1353,6 +1377,7 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
         ).json()
         occurrence = fire_now(app.state.task_store, routine["id"], run_date="2026-08-30")
         assert occurrence and occurrence["assignedAgentId"] == original_agent["id"]
+        _login(client, "alice")
         reassigned = client.patch(
             f"/api/v1/tasks/{routine['id']}",
             json={"assignedAgentId": replacement_agent["id"]},
@@ -1396,6 +1421,7 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
             )
             assert claimed is not None
 
+            _login(client, "alice")
             updated = client.patch(f"/api/v1/tasks/{task['id']}", json=patch)
 
             assert updated.status_code == 409
@@ -1430,6 +1456,7 @@ def test_claimed_task_rejects_pickup_assignment_update(monkeypatch) -> None:
         )
         assert claimed is not None
 
+        _login(client, "alice")
         response = client.post(
             f"/api/v1/tasks/{task['id']}/pickups",
             json={"agentId": second["id"]},
@@ -1466,6 +1493,7 @@ def test_claimed_task_allows_metadata_update(monkeypatch) -> None:
         )
         assert claimed is not None
 
+        _login(client, "alice")
         response = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={"title": "Updated title", "priority": "high"},
@@ -1517,6 +1545,7 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
             },
         ).json()
 
+        _login(client, "alice")
         started = client.post(
             f"/api/v1/tasks/{task['id']}/runs",
             json={"assignments": [{"agentId": override["id"]}]},
@@ -1588,6 +1617,7 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
         assert invalid_flag.status_code == 400
         assert "isRoutine" in invalid_flag.json()["detail"]
 
+        _login(client, "alice")
         active_without_target = client.post(
             "/api/v1/tasks",
             json={
@@ -1622,6 +1652,7 @@ def test_clearing_a_legacy_ready_intake_issue_returns_it_to_backlog(monkeypatch)
             }
         )
 
+        _login(client, "alice")
         cleared = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={
@@ -1694,6 +1725,7 @@ def test_active_task_assignment_cannot_change(monkeypatch) -> None:
             },
         )
 
+        _login(client, "alice")
         reassigned = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={"assignedAgentId": second["id"]},
@@ -1726,6 +1758,7 @@ def test_pickup_rejects_terminal_tasks_without_creating_a_session(monkeypatch) -
         ).json()
 
         client.app.state.task_store.update_task(task["id"], {"status": "done"})
+        _login(client, "alice")
         pickup = client.post(
             f"/api/v1/tasks/{task['id']}/pickups",
             json={"agentId": agent["id"]},
@@ -1759,6 +1792,7 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
         assert created.status_code == 201
         task_id = created.json()["id"]
 
+        _login(client, "alice")
         deleted = client.delete(f"/api/v1/tasks/{task_id}")
         assert deleted.status_code == 200
         assert deleted.json()["outcome"] == "deleted"
@@ -1780,7 +1814,7 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
         assert missing.status_code == 404
 
 
-def test_task_delete_requires_owner_or_admin(monkeypatch) -> None:
+def test_task_delete_requires_owner(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -1792,7 +1826,7 @@ def test_task_delete_requires_owner_or_admin(monkeypatch) -> None:
             json={
                 "title": "Owned by Alice",
                 "ownerUserId": ALICE,
-                "assigneeUserId": BOB,
+                "assigneeUserId": ALICE,
             },
         ).json()
 
@@ -1832,6 +1866,7 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
         )
         assert claimed is not None
 
+        _login(client, "alice")
         claim_delete = client.delete(f"/api/v1/tasks/{dispatching['id']}")
         assert claim_delete.status_code == 409
         assert claim_delete.json()["detail"] == "task_execution_active"
@@ -1926,7 +1961,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
         for index, task in enumerate([routine, *occurrences]):
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": "Routine run",
-                "participants": ["human", "codex"], "ownerUserId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
             })
             if active is not True or index != 2:
                 sessions.append_event(session["id"], relay_event(
@@ -1940,7 +1975,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             linked.append(session["id"])
         unrelated = sessions.create_session({
             "workspacePath": root, "taskGoal": "Keep me",
-            "participants": ["human"], "ownerUserId": "admin",
+            "participants": ["human"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
         })
         if active == "reserved":
             # Fail on the last thread after earlier deletes to prove rollback.
@@ -1981,7 +2016,7 @@ def test_task_delete_deletes_its_threads(monkeypatch) -> None:
         def thread(goal: str) -> str:
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": goal,
-                "participants": ["human", "codex"], "ownerUserId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))
@@ -2027,7 +2062,7 @@ def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine)
         for index in range(2):
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": f"Round {index}",
-                "participants": ["human"], "ownerUserId": "admin",
+                "participants": ["human"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))
@@ -2083,7 +2118,7 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         sessions = client.app.state.session_store
         session = sessions.create_session({
             "workspacePath": root, "taskGoal": "Linked work",
-            "participants": ["human", "codex"], "ownerUserId": "admin",
+            "participants": ["human", "codex"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
         })
         if session_status != "created":
             sessions.append_event(session["id"], relay_event(

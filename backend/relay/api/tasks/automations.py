@@ -93,8 +93,8 @@ def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id:
     if not task.get("isRoutine") or not has_webhook(task):
         raise HTTPException(409, "automation_not_webhook")
     editors = {task.get("ownerUserId")} - {None}
-    if not actor["isAdmin"] and actor.get("userId") not in editors:
-        raise HTTPException(403, "Only the automation's owner or an admin can manage its webhook.")
+    if actor.get("userId") not in editors:
+        raise HTTPException(403, "Only the automation's owner can manage its webhook.")
     return task
 
 
@@ -114,7 +114,7 @@ def rotate_webhook_secret(task_id: str, request: Request, ctx: AppContextDep) ->
 
 @router.post("/tasks/{task_id}/automation/resume")
 async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    """Turn a paused automation back on (owner or admin)."""
+    """Turn a paused automation back on (owner only)."""
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
     if not task.get("isRoutine"):

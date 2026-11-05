@@ -6,6 +6,7 @@ from typing import Any
 from ..core.computer_identity import computer_id
 from ..core.model_policy import policy_model
 from ..core.node_readiness import is_live_node
+from ..computer.access import is_personal_computer
 from ..daemon_registry.scheduling import node_accepts_run
 from ..persistence.agent.placements import placement_status
 from ..sessions.controller import SessionController
@@ -176,6 +177,9 @@ def resolve_agent_assignments(
         rejection_reasons: set[str] = set()
         for placement in placements:
             node = placement_node(placement, nodes)
+            if node and is_personal_computer(node) and node.get("userId") != user_id:
+                rejection_reasons.add("agent_forbidden")
+                continue
             view = placement_status(placement, agent, node)
             # A missing node is never ready or busy; the check only narrows it.
             if node is None or view["status"] not in ("ready", "busy"):
@@ -193,6 +197,8 @@ def resolve_agent_assignments(
                 rejection_reasons.add("workspace_unavailable")
                 continue
             candidates.append((placement, node))
+        if not candidates and "agent_forbidden" in rejection_reasons:
+            raise AgentRoutingError("agent_forbidden", "Only its owner may run work on a personal computer.")
         if not candidates and session is None and session_store is not None:
             attached = _attach_never_run_agent_to_managed_capacity(
                 agent,

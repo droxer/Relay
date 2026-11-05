@@ -43,7 +43,7 @@ def test_normalize_tags_refuses_invalid_lists(value) -> None:
 def test_task_tags_are_set_on_create_replaced_and_cleared_on_patch(client) -> None:
     created = client.post(
         "/api/v1/tasks",
-        json={"title": "Tagged", "ownerUserId": ALICE, "tags": ["Bug", " bug ", "ui"]},
+        json={"title": "Tagged", "tags": ["Bug", " bug ", "ui"]},
     )
     assert created.status_code == 201, created.text
     task = created.json()
@@ -71,7 +71,7 @@ def test_task_tags_refuse_an_invalid_list(client) -> None:
     assert refused.status_code == 400
     assert "tags must be a list" in refused.json()["detail"]
 
-    created = client.post("/api/v1/tasks", json={"title": "Ok", "ownerUserId": ALICE})
+    created = client.post("/api/v1/tasks", json={"title": "Ok"})
     refused_patch = client.patch(
         f"/api/v1/tasks/{created.json()['id']}", json={"tags": ["a,b"]}
     )
@@ -83,7 +83,6 @@ def test_automation_tags_round_trip_through_the_api(client) -> None:
         "/api/v1/tasks",
         json={
             "title": "Nightly report",
-            "ownerUserId": ALICE,
             "isRoutine": True,
             "routineTriggers": WEEKLY_TRIGGERS,
             "routineState": "paused",

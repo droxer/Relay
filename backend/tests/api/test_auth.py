@@ -551,8 +551,7 @@ def test_artifact_index_is_scoped_to_authenticated_user(monkeypatch) -> None:
         assert alice_client.get(f"/api/v1/artifacts?userId={user_id('bob')}").status_code == 403
 
         admin_bob_artifacts = admin_client.get(f"/api/v1/artifacts?userId={user_id('bob')}")
-        assert admin_bob_artifacts.status_code == 200
-        assert [artifact["ownerUserId"] for artifact in admin_bob_artifacts.json()["artifacts"]] == [user_id("bob")]
+        assert admin_bob_artifacts.status_code == 403
 
 
 def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
@@ -636,9 +635,7 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         assert alice_client.get(f"/api/v1/workspace/brief?userId={user_id('bob')}").status_code == 403
 
         admin_bob = admin_client.get(f"/api/v1/workspace/brief?userId={user_id('bob')}")
-        assert admin_bob.status_code == 200
-        assert admin_bob.json()["userId"] == user_id("bob")
-        assert admin_bob.json()["metrics"]["sessionCount"] == 1
+        assert admin_bob.status_code == 403
 
 
 def test_workspace_brief_only_lists_generated_artifacts(monkeypatch) -> None:
@@ -720,7 +717,7 @@ def test_user_workspace_file_routes_are_removed(monkeypatch) -> None:
         assert bob_client.get("/api/v1/workspace/files?userId=alice").status_code == 404
 
 
-def test_admin_can_create_resources_for_specific_user(monkeypatch) -> None:
+def test_admin_cannot_link_a_thread_to_another_users_task(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -729,7 +726,7 @@ def test_admin_can_create_resources_for_specific_user(monkeypatch) -> None:
 
         response = client.post("/api/v1/tasks", json={
             "title": "Bob task",
-            "ownerUserId": "bob",
+            "ownerUserId": "bob", "assigneeUserId": "bob",
             "isRoutine": True, "routineState": "paused", "createSession": True,
         })
 
@@ -741,8 +738,7 @@ def test_admin_can_create_resources_for_specific_user(monkeypatch) -> None:
             "taskGoal": "Admin-linked session",
             "taskId": task["id"],
         })
-        assert response.status_code == 201
-        assert response.json()["ownerUserId"] == "bob"
+        assert response.status_code == 403
 
 
 def test_invalid_session_cookie_is_rejected(monkeypatch) -> None:
@@ -866,9 +862,10 @@ def test_authenticated_user_can_list_own_sandbox_and_daemon_node_without_token(m
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
+        owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
 
         response = client.post("/api/v1/admin/daemon-nodes", json={
-            "userId": "alice",
+            "userId": owner,
             "workspacePath": "/workspace/alice",
         })
         assert response.status_code == 201
@@ -880,12 +877,12 @@ def test_authenticated_user_can_list_own_sandbox_and_daemon_node_without_token(m
 
         response = client.get("/api/v1/sandboxes")
         assert response.status_code == 200
-        assert {sandbox["userId"] for sandbox in response.json()["sandboxes"]} == {"alice", "bob"}
+        assert {sandbox["userId"] for sandbox in response.json()["sandboxes"]} == {owner}
         _assert_no_secret_fields(response.json())
 
         response = client.get("/api/v1/daemon-nodes")
         assert response.status_code == 200
-        assert {node["userId"] for node in response.json()["nodes"]} == {"alice", "bob"}
+        assert {node["userId"] for node in response.json()["nodes"]} == {owner}
         _assert_no_secret_fields(response.json())
 
 

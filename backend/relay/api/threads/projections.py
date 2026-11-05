@@ -130,8 +130,6 @@ def user_for_workspace_brief(
     requested = (
         requested_user.strip() if isinstance(requested_user, str) else ""
     )
-    if requested and actor["isAdmin"]:
-        return requested
     if requested and requested != actor["userId"]:
         raise HTTPException(403, "Cannot read another user's workspace.")
     return actor["userId"]
@@ -153,8 +151,7 @@ def agent_for_workspace(
     if not agent or agent.get("deletedAt"):
         raise HTTPException(404, "Agent not found.")
     if (
-        not actor["isAdmin"]
-        and agent_supervisor_user_id(agent) != actor["userId"]
+        agent_supervisor_user_id(agent) != actor["userId"]
     ):
         raise HTTPException(403, "Cannot read another user's agent workspace.")
     return agent

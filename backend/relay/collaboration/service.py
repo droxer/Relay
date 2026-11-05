@@ -63,7 +63,7 @@ class CollaborationConductor(
                 existing = self.ctx.backend.idempotent_run(
                     prepared.idempotency_key,
                     actor["userId"],
-                    actor_is_admin=actor["isAdmin"],
+                    actor_is_admin=False,
                     expected_fingerprint=fingerprint,
                 )
                 if existing:
@@ -72,7 +72,7 @@ class CollaborationConductor(
                 existing = self.ctx.backend.idempotent_session_run(
                     prepared.session_id,
                     actor["userId"],
-                    actor_is_admin=actor["isAdmin"],
+                    actor_is_admin=False,
                     expected_fingerprint=fingerprint,
                 )
                 if existing:
@@ -199,8 +199,7 @@ class CollaborationConductor(
         if not session.get("id"):
             raise CollaborationError("thread_not_found", status=404)
         if (
-            not actor["isAdmin"]
-            and session.get("ownerUserId") != actor["userId"]
+            session.get("ownerUserId") != actor["userId"]
         ):
             raise CollaborationError("thread_forbidden", status=403)
         return session

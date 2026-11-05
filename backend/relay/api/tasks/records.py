@@ -75,12 +75,12 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     limit = task_list_limit(request.query_params.get("limit"))
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         tasks = ctx.task_store.list_task_summaries(
-            user_id=None if actor["isAdmin"] else actor["userId"],
+            user_id=actor["userId"],
             limit=limit,
         )
     else:
         tasks = ctx.task_store.list_tasks(
-            user_id=None if actor["isAdmin"] else actor["userId"],
+            user_id=actor["userId"],
             limit=limit,
         )
     return {
@@ -172,7 +172,7 @@ def review_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_or_404(ctx.task_store, task_id)
-    if not actor.get("isAdmin") and current.get("ownerUserId") != actor.get("userId"):
+    if current.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "task_delete_forbidden")
     if not current.get("deletedAt"):
         ensure_task_project_writable(ctx, current)

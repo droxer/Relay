@@ -19,13 +19,13 @@ from ...core.managed_node_policy import managed_node_placeholder
 from ...daemon_registry.records import public_sandbox_record
 from ..actors import (
     actor_can_access_sandbox,
-    authorized_sandbox_for_token,
     bearer_token,
     request_actor,
     request_actor_or_none,
 )
 from ..bodies import JsonBodyDep
 from ..deps import AppContextDep
+from .sandboxes import require_sandbox_access
 
 router = APIRouter()
 
@@ -58,8 +58,9 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         presented = [present_computer(ctx, node) for node in observed]
         return [*presented, *pending]
 
+    actor = request_actor_or_none(request, ctx.auth_store)
     token = bearer_token(request)
-    if token:
+    if token and actor is None:
         nodes = ctx.registry.monitor_nodes_for_token(token)
         if nodes is not None:
             managed_ids = {
@@ -71,17 +72,16 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
                 if node["id"] in managed_ids
             ]
             return {"nodes": visible_computers(nodes, managed_nodes)}
-    actor = request_actor_or_none(request, ctx.auth_store)
     if actor:
         nodes = [
             node
             for node in ctx.registry.monitor_nodes()
-            if actor_can_access_sandbox(actor, node)
+            if node.get("userId") == actor["userId"]
         ]
         managed_nodes = [
             node
             for node in ctx.managed_node_store.list_nodes()
-            if actor["isAdmin"] or node.get("userId") == actor["userId"]
+            if node.get("userId") == actor["userId"]
         ]
         return {"nodes": visible_computers(nodes, managed_nodes)}
     raise HTTPException(401, "Authentication required.")
@@ -107,8 +107,13 @@ def update_daemon_node(
         raise HTTPException(403, "Daemon node access denied.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
+    nodes = (
+        ctx.registry.monitor_nodes()
+        if updated.get("userId") == actor["userId"]
+        else ctx.registry.control_panel_nodes()
+    )
     monitor_node = next(
-        (node for node in ctx.registry.monitor_nodes() if node["id"] == sandbox_id),
+        (node for node in nodes if node["id"] == sandbox_id),
         public_sandbox_record(updated),
     )
     return {"node": present_computer(ctx, monitor_node)}
@@ -134,8 +139,13 @@ def update_daemon_node_disabled_agents(
         raise HTTPException(404, "Daemon node not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
+    nodes = (
+        ctx.registry.monitor_nodes()
+        if updated.get("userId") == actor["userId"]
+        else ctx.registry.control_panel_nodes()
+    )
     monitor_node = next(
-        (node for node in ctx.registry.monitor_nodes() if node["id"] == sandbox_id),
+        (node for node in nodes if node["id"] == sandbox_id),
         public_sandbox_record(updated),
     )
     return {"node": present_computer(ctx, monitor_node)}
@@ -225,19 +235,7 @@ def update_daemon_node_agent_role_overrides(
     sandbox = ctx.registry.get(sandbox_id)
     if not sandbox:
         raise HTTPException(404, "Daemon node not found.")
-    token = bearer_token(request)
-    authorized_sandbox = authorized_sandbox_for_token(ctx.registry, token)
-    actor = (
-        None if authorized_sandbox else request_actor_or_none(request, ctx.auth_store)
-    )
-    if authorized_sandbox:
-        if authorized_sandbox["id"] != sandbox_id:
-            raise HTTPException(403, "Daemon node access denied.")
-    elif actor:
-        if not actor_may_manage_computer(actor, sandbox):
-            raise HTTPException(403, "Daemon node access denied.")
-    else:
-        raise HTTPException(401, "Authentication required.")
+    actor = require_sandbox_access(sandbox, request, ctx)
     body = _request_body
     raw = body.get("agentRoleOverrides")
     if not isinstance(raw, dict):
@@ -250,9 +248,14 @@ def update_daemon_node_agent_role_overrides(
         raise HTTPException(404, "Daemon node not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
+    nodes = (
+        ctx.registry.monitor_nodes()
+        if not actor or updated.get("userId") == actor["userId"]
+        else ctx.registry.control_panel_nodes()
+    )
     return {
         "node": next(
-            (node for node in ctx.registry.monitor_nodes() if node["id"] == sandbox_id),
+            (node for node in nodes if node["id"] == sandbox_id),
             public_sandbox_record(updated),
         )
     }

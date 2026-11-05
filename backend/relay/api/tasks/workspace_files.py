@@ -15,6 +15,7 @@ from ...tasks.workspace import (
 )
 from ..actors import (
     actor_can_access_record,
+    get_session_header_for_actor,
     get_task_for_actor,
     request_actor,
 )
@@ -110,7 +111,7 @@ def _prepare_task_files(task_id: str, request: Request, ctx: AppContext) -> Any:
         )
     produced = sorted(
         newest_artifacts_by_file(
-            ctx, sources, all_versions=request.query_params.get("versions") == "all"
+            ctx, sources, owner_user_id=actor["userId"], all_versions=request.query_params.get("versions") == "all"
         ).values(),
         key=lambda item: item.get("createdAt") or "",
         reverse=True,
@@ -169,6 +170,8 @@ def _task_workspace_target(
             409 if reason == "workspace-not-created" else 503,
             {"reason": reason, "code": reason},
         )
+    if binding.get("sessionId"):
+        get_session_header_for_actor(ctx.session_store, binding["sessionId"], actor)
     return workspace_binding_target(nodes, binding)
 
 

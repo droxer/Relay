@@ -78,7 +78,7 @@ def task_events(
 
 
 def newest_artifacts_by_file(
-    ctx: Any, sources: list[tuple[str, str]], *, all_versions: bool = False
+    ctx: Any, sources: list[tuple[str, str]], *, owner_user_id: str | None, all_versions: bool = False
 ) -> dict[str, dict[str, Any]]:
     """Workspace artifacts across `(taskId, sessionId)` pairs, newest per file.
 
@@ -99,6 +99,8 @@ def newest_artifacts_by_file(
                 session_id=session_id,
                 exc_info=True,
             )
+            continue
+        if session.get("ownerUserId") != owner_user_id:
             continue
         for artifact in workspace_artifacts(session):
             # Continuity checkpoints are retained artifacts too, but they are
@@ -145,7 +147,7 @@ def task_artifacts(
         )
     ordered = sorted(
         newest_artifacts_by_file(
-            ctx, sources, all_versions=request.query_params.get("versions") == "all"
+            ctx, sources, owner_user_id=actor["userId"], all_versions=request.query_params.get("versions") == "all"
         ).values(),
         key=lambda item: item.get("createdAt") or "",
         reverse=True,

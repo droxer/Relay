@@ -32,6 +32,11 @@ BOB = user_id("bob")
 CAROL = user_id("carol")
 
 
+def _legacy_ui_client(client: TestClient) -> TestClient:
+    """Exercise UI bearer authority without an administrator's session cookie."""
+    return TestClient(client.app)
+
+
 def _bootstrap_admin(client: TestClient) -> str:
     """Bootstrap the admin account and return its user id."""
     response = client.post(
@@ -955,6 +960,7 @@ def test_stopped_managed_runtime_preserves_agent_for_restart(monkeypatch) -> Non
         response = client.delete(f"/api/v1/admin/managed-nodes/{managed['id']}/runtime")
 
         assert response.status_code == 204, response.text
+        _login(client, "alice", "userpass")
         [visible] = client.get("/api/v1/daemon-nodes").json()["nodes"]
         assert visible["id"] == managed["id"]
         assert visible["managedNodeId"] == managed["id"]
@@ -1113,7 +1119,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
         assert response.status_code == 200
         assert response.json()["commands"] == []
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "review auth",
@@ -1173,7 +1179,7 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
         )
         assert response.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "recover this run",
@@ -1274,7 +1280,7 @@ def test_output_event_does_not_replace_explicit_lease_heartbeat(monkeypatch) -> 
         )
         assert response.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "recover after output",
@@ -1347,7 +1353,7 @@ def test_run_completed_finalizes_even_when_token_usage_is_unusable(monkeypatch) 
             ).status_code
             == 200
         )
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "report broken usage",
@@ -1378,12 +1384,12 @@ def test_run_completed_finalizes_even_when_token_usage_is_unusable(monkeypatch) 
         )
         assert completed.status_code == 200
 
-        session = client.get(f"/api/v1/threads/{session_id}").json()
+        session = _legacy_ui_client(client).get(f"/api/v1/threads/{session_id}", headers={"Authorization": "Bearer ui_token"}).json()
         assert session["status"] == "completed"
         assert session.get("tokenUsage") is None
         node = next(
             item
-            for item in client.get("/api/v1/daemon-nodes").json()["nodes"]
+            for item in client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
             if item["id"] == "sbx_alice"
         )
         assert node["activeRuns"] == []
@@ -1413,7 +1419,7 @@ def test_daemon_delivery_output_reaches_the_canonical_session_stream(
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "stream this answer",
@@ -1485,7 +1491,7 @@ def test_daemon_delivery_output_reaches_the_canonical_session_stream(
         )
         assert completed.status_code == 200
 
-        stream = client.get(f"/api/v1/threads/{session_id}/events")
+        stream = _legacy_ui_client(client).get(f"/api/v1/threads/{session_id}/events", headers={"Authorization": "Bearer ui_token"})
         payloads = [
             json.loads(line.removeprefix("data: "))
             for line in stream.text.splitlines()
@@ -1510,7 +1516,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
-        admin_id = _bootstrap_admin(client)
+        _bootstrap_admin(client)
         _login_admin(client)
         response = client.post(
             "/api/v1/daemon-node-registrations",
@@ -1528,7 +1534,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
         )
         assert response.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "cancel this run reliably",
@@ -1543,12 +1549,14 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
             headers={"Authorization": "Bearer node_token"},
         ).json()["commands"]
 
-        if not stop_as_admin:
-            client.cookies.clear()
-        cancel = client.post(
+        if stop_as_admin:
+            denied = client.post(f"/api/v1/threads/{session_id}/cancellations", json={})
+            assert denied.status_code == 403
+        client.cookies.clear()
+        cancel = _legacy_ui_client(client).post(
             f"/api/v1/threads/{session_id}/cancellations",
             json={"reason": "no longer needed"},
-            headers={} if stop_as_admin else {"Authorization": "Bearer ui_token"},
+            headers={"Authorization": "Bearer ui_token"},
         )
         assert cancel.status_code == 202
         poll_url = (
@@ -1590,7 +1598,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
         stopped = app.state.session_store.get_session(session_id)
         assert stopped["agentRuns"][-1]["tokenUsage"]["total"] == 34
         assert stopped["tokenUsage"]["total"] == 34
-        assert stopped["decisions"][-1]["actorUserId"] == (admin_id if stop_as_admin else ALICE)
+        assert stopped["decisions"][-1]["actorUserId"] == ALICE
 
         after_terminal = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1",
@@ -1625,7 +1633,7 @@ def test_session_cancel_uses_durable_run_when_node_monitor_is_stale(
         )
         assert response.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "stop while the monitor snapshot is stale",
@@ -1648,9 +1656,10 @@ def test_session_cancel_uses_durable_run_when_node_monitor_is_stale(
             lambda: [{**node, "activeRuns": []} for node in monitored()],
         )
 
-        cancel = client.post(
+        cancel = _legacy_ui_client(client).post(
             f"/api/v1/threads/{session_id}/cancellations",
             json={"reason": "stop clicked"},
+            headers={"Authorization": "Bearer ui_token"},
         )
 
         assert cancel.status_code == 202
@@ -1688,7 +1697,7 @@ def test_cancel_returns_terminal_session_when_run_finishes_before_request(
         )
         assert response.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "finish before stop click",
@@ -1717,7 +1726,7 @@ def test_cancel_returns_terminal_session_when_run_finishes_before_request(
         )
         assert completed.status_code == 200
 
-        cancel = client.post(
+        cancel = _legacy_ui_client(client).post(
             f"/api/v1/threads/{session_id}/cancellations",
             json={"reason": "stop clicked"},
             headers={"Authorization": "Bearer ui_token"},
@@ -1734,7 +1743,7 @@ def test_cancel_marks_orphaned_running_session_cancelled(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         _login_admin(client)
-        session = SessionController(app.state.registry.store).create_session(
+        session = SessionController(app.state.registry.store, owner_user_id=app.state.auth_store.resolve_user_id("admin")).create_session(
             "stop an orphaned conversation"
         )
 
@@ -1790,7 +1799,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
         assert body["agents"]["kimi"] == "failed"
         assert body["agentDetails"]["kimi"]["detail"] == "Kimi is not logged in."
 
-        public = client.get(
+        public = _legacy_ui_client(client).get(
             "/api/v1/daemon-nodes", headers={"Authorization": "Bearer ui_token"}
         )
         assert public.status_code == 200
@@ -1802,7 +1811,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
         assert admin.status_code == 200
         assert "nodeToken" not in admin.json()["nodes"][0]
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "try kimi",
@@ -2135,7 +2144,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
         assert listed["sandboxMode"] == "boxlite"
         assert listed["displayName"] == node["id"]
 
-        sandboxes = client.get(
+        sandboxes = _legacy_ui_client(client).get(
             "/api/v1/sandboxes",
             headers={"Authorization": f"Bearer {body['sandboxToken']}"},
         )
@@ -3734,7 +3743,7 @@ def test_sandbox_run_accepts_fresh_new_conversation_payload(monkeypatch) -> None
         assert run.json()["ownerUserId"] == ALICE
 
 
-def test_admin_can_start_existing_user_session_on_user_daemon_node(
+def test_only_owner_can_start_existing_user_session_on_personal_computer(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3810,6 +3819,13 @@ def test_admin_can_start_existing_user_session_on_user_daemon_node(
                 "sessionId": session_id,
             },
         )
+        assert run.status_code == 403
+        alice_client = TestClient(app)
+        _login(alice_client, "alice", "userpass")
+        run = alice_client.post("/api/v1/sandboxes/sbx_alice/runs", json={
+            "taskGoal": "Alice resumes her own thread", "assignments": [{"agent": "codex"}],
+            "sessionId": session_id,
+        })
         assert run.status_code == 202
         assert run.json()["id"] == session_id
         assert run.json()["ownerUserId"] == ALICE
@@ -4136,7 +4152,7 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
             "thread-workspaces",
         ]
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "generate the quarterly report",
@@ -4181,12 +4197,15 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
         )
         assert response.status_code == 200
 
-        listed = client.get("/api/v1/artifacts").json()["artifacts"]
+        listed = _legacy_ui_client(client).get(
+            "/api/v1/artifacts", headers={"Authorization": "Bearer ui_token"}
+        ).json()["artifacts"]
         assert [item["workspaceRelativePath"] for item in listed] == ["reports/q2.pdf"]
         assert listed[0]["sessionId"] == session_id
 
-        download = client.get(
-            f"/api/v1/threads/{session_id}/artifacts/{listed[0]['id']}"
+        download = _legacy_ui_client(client).get(
+            f"/api/v1/threads/{session_id}/artifacts/{listed[0]['id']}",
+            headers={"Authorization": "Bearer ui_token"},
         )
         assert download.status_code == 200
         assert download.content == b"pdf bytes"
@@ -4255,7 +4274,7 @@ def test_cancel_recovers_a_session_whose_run_request_is_stuck_finalizing(
         )
         assert registration.status_code == 200
 
-        run = client.post(
+        run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
                 "taskGoal": "stop a thread wedged in finalizing",
@@ -4279,7 +4298,7 @@ def test_cancel_recovers_a_session_whose_run_request_is_stuck_finalizing(
         monkeypatch.setattr(store, "list_active_runs", lambda node_id=None: [])
         monkeypatch.setattr(app.state.registry, "active_commands", {})
 
-        cancel = client.post(
+        cancel = _legacy_ui_client(client).post(
             f"/api/v1/threads/{session_id}/cancellations",
             json={"reason": "stop clicked"},
             headers={"Authorization": "Bearer ui_token"},

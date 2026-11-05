@@ -196,7 +196,7 @@ def test_session_read_backfills_managed_affinity_from_deleted_runtime_history(
             {
                 "workspacePath": "/workspace/admin",
                 "daemonNodeId": "runtime_old",
-                "ownerUserId": "admin",
+                "ownerUserId": _admin_id(app),
                 "taskGoal": "continue after replacement",
                 "participants": ["human", "codex"],
             }
@@ -262,7 +262,7 @@ def test_thread_read_does_not_500_when_registration_history_disagrees_with_the_s
             {
                 "workspacePath": "/workspace/admin",
                 "daemonNodeId": "runtime_1",
-                "ownerUserId": "admin",
+                "ownerUserId": _admin_id(app),
                 "taskGoal": "continue after replacement",
                 "participants": ["human", "codex"],
             }

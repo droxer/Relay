@@ -8,8 +8,28 @@ import { RelayApiError } from "../src/api";
 import { useAuthSession } from "../src/hooks/useAuthSession";
 import { useSessionCapabilities } from "../src/hooks/useSessionCapabilities";
 import type { CurrentUser } from "../src/types";
+import { useRelayStore } from "../src/lib/store";
+import { readTokens } from "../src/lib/appStorage";
 
 const ADMIN = { id: "u1", username: "admin", role: "admin", userId: "admin" } as CurrentUser;
+
+it("removes cached browser credentials and selections on sign-out", async () => {
+  const client = new QueryClient();
+  client.setQueryData(["auth", "me"], ADMIN);
+  const { result, unmount } = renderHook(() => useAuthSession(), {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  useRelayStore.getState().setTokens({ admin: "private-ui-token", node: "private-ui-token" });
+  useRelayStore.setState({ selectedUser: "admin", selectedSessionId: "private-thread", activeSessionId: "private-thread" });
+
+  act(() => result.current.setUser(null));
+
+  expect(useRelayStore.getState().tokens).toEqual({});
+  expect(readTokens()).toEqual({});
+  expect(useRelayStore.getState().selectedSessionId).toBeUndefined();
+  expect(useRelayStore.getState().activeSessionId).toBeNull();
+  unmount(); client.clear();
+});
 
 function wrapper() {
   const client = new QueryClient();
@@ -55,13 +75,17 @@ it("lets login and logout replace the probed user", async () => {
 
 it("does not let a pending probe overwrite a login", async () => {
   let resolve!: (value: { authenticated: boolean }) => void;
-  vi.spyOn(api, "getMe").mockImplementation(() => new Promise((done) => { resolve = done; }));
+  vi.spyOn(api, "getMe")
+    .mockImplementationOnce(() => new Promise((done) => { resolve = done; }))
+    .mockResolvedValue({ authenticated: true, user: ADMIN });
   const { result } = renderHook(() => useAuthSession(), { wrapper: wrapper() });
   act(() => result.current.setUser(ADMIN));
   await waitFor(() => expect(result.current.user).toEqual(ADMIN));
+  useRelayStore.getState().setTokens({ admin: "new-session-ui-token" });
   await act(async () => { resolve({ authenticated: false }); });
   await waitFor(() => expect(result.current.status).toBe("authenticated"));
   expect(result.current.user).toEqual(ADMIN);
+  expect(useRelayStore.getState().tokens).toEqual({ admin: "new-session-ui-token" });
 });
 
 it("hands the probe's capabilities to useSessionCapabilities without a second /auth/me", async () => {

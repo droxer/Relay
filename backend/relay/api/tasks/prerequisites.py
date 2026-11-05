@@ -87,13 +87,16 @@ def with_dependency_summaries(
             project = ctx.project_store.get_project(project_id)
             projects[project_id] = bool(
                 project and not project.get("archivedAt")
-                and (actor["isAdmin"] or project.get("ownerUserId") == actor["userId"])
+                and project.get("ownerUserId") == actor["userId"]
             )
         visible: list[dict[str, Any]] = []
         if project_id and projects.get(project_id):
             for key in task.get("waitingOn") or []:
                 source = summaries.get(key)
-                if not source or source.get("projectId") != project_id or source.get("status") == "done":
+                if (
+                    not source or source.get("projectId") != project_id or source.get("status") == "done"
+                    or not actor_can_access_record(actor, source)
+                ):
                     continue
                 visible.append({
                     **{name: source[name] for name in ("id", "number", "title", "status", "ownerUserId", "assigneeUserId") if name in source},
