@@ -94,6 +94,17 @@ default model into its model policy when created, if the Computer reports it;
 otherwise it follows the runtime’s automatic model selection.
 _Avoid_: calling the runtime itself the Default Agent, Agent identity
 
+**Direct Delegation**:
+A Logical Agent's bounded request for another explicitly permitted Logical
+Agent to contribute to its work, without creating a Team. The requesting Agent
+yields while the delegate works in the same Thread's workspace, then receives
+the delegate's result and remains responsible for checking it and completing
+the original request. A delegate's report is a claim, not acceptance. Both
+Agents belong to the same User and run on the Thread's Computer; a Project
+Conversation additionally limits delegates to its Project Agent roster.
+_Avoid_: Handoff (which transfers the next turn without a return obligation),
+subagent (an Agent Runtime's own internal child, not a Logical Agent)
+
 **Placement**:
 The active binding of one Logical Agent to one Agent Runtime on one stable
 Computer. The current Daemon Node is resolved at dispatch time and may be

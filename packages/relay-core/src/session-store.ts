@@ -14,6 +14,7 @@ export type HumanDecisionKind = "approve" | "reject" | "cancel" | "rerun" | "han
 export type WorkspaceLayout = "node-root" | "thread" | "project" | "task";
 
 export interface CollaborationWorkResult {
+  delegation?: { agentId: string; objective: string; context?: string; acceptanceCriteria: string[]; expectedOutputs: string[] };
   status: "done" | "continue" | "blocked";
   note?: string;
   evidence: string[];
@@ -174,6 +175,18 @@ export interface CollaborationWorkItem {
 }
 
 export interface CollaborationRoundManifest {
+  delegation?: {
+    id: string;
+    requestedByAgentId: string;
+    targetAgentId: string;
+    requesterAssignmentId: string;
+    childAssignmentId: string;
+    resumeAssignmentId: string;
+    objective: string;
+    context?: string;
+    acceptanceCriteria: string[];
+    expectedOutputs: string[];
+  };
   parentRoundId?: string;
   /** Absent on legacy rounds; task links do not imply execution ownership. */
   workScope?: { kind: "thread" } | { kind: "task"; taskId: string };

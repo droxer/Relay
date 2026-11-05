@@ -143,6 +143,15 @@ function promptPreludes(state: AgentState): string[] {
       "Messages are durable handoffs delivered at assignment boundaries, not live interrupts. For a needed teammate answer, address a question to an earlier work item and report blocked or continue. The conductor permits at most two consultations and then escalates.",
       "Roles and proposals do not grant tool or external-action permissions. Preserve user constraints and request authorization where required.",
     ].join("\n"));
+    if (state.delegation_return) preludes.push(state.delegation_return);
+    if (state.delegation_candidates?.length) {
+      preludes.push([
+        "[Direct delegation]",
+        `Allowed agents on this Computer: ${JSON.stringify(state.delegation_candidates)}`,
+        "When a specialist can help, yield by writing work.status: 'continue' and work.delegation: {agentId, objective, context, acceptanceCriteria: ['observable criterion'], expectedOutputs: ['deliverable']} in the round-result JSON. Set the outer status to 'continue' too, then end your turn. Do not start another agent process yourself.",
+        "Relay runs the delegate in this workspace and returns control to you with its report. You remain responsible for inspecting its changes and verifying the original request. One delegation runs at a time, at most two per round; delegates cannot delegate further. Only listed targets are permitted. Delegation grants no additional tool or external-action permissions.",
+      ].join("\n"));
+    }
     if (state.team_plan_candidates?.length) {
       preludes.push([
         "[Team planning]",

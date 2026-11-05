@@ -57,6 +57,8 @@ export interface UserAgent {
   profileImageUrl?: string | null;
   executorKind: AgentName;
   instructions?: string;
+  /** Explicit permission to delegate to other owned agents on this Computer. */
+  delegationAgentIds?: string[];
   /** The job this agent does on a team, e.g. "reviewer". Shapes its prompt and,
       for a reviewer, makes it review a round instead of redoing the work. */
   defaultRole?: AgentRole;

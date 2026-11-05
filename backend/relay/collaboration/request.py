@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from ..core.ids import new_relay_id
+from ..agents.delegation import delegation_candidates
 from ..sessions.handoff_context import capture_handoff_context
 from ..security.actor import Actor
 from .errors import CollaborationError
@@ -54,6 +55,11 @@ class RoundRequestMixin(ConductorState):
             intent, session, is_recovery, answered_task
         )
         manifest = {**manifest, **scope_fields}
+        if len(resolved) == 1 and not team_snapshot and intent.mode == "action" and not is_recovery and intent.project_setup is None:
+            project = self.ctx.project_store.get_project(project_snapshot["projectId"]) if project_snapshot else None
+            candidates = delegation_candidates(self.ctx, resolved[0], project=project)
+            if candidates:
+                manifest = {**manifest, "delegationCandidates": candidates}
         handoff_context = self._handoff_context(
             intent, session, fingerprint, resolved[0], task_id, round_id
         )

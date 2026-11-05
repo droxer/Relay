@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+from ...collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
+from ...collaboration.delegation import DELEGATION_REFUSAL, MAX_DELEGATIONS
 from ...collaboration.work import (
     WORK_PROTOCOL, WORK_RESULTS, work_repair_notes,
     QUESTION_RESUME, QUESTION_NOTE, predecessor_context,
@@ -349,6 +351,23 @@ def _work_protocol_state(
     """Work-result contract fields and the round's repair note, if any."""
     assignment = assignments[index]
     next_state = dict(state)
+    manifest = request_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+    next_state.pop("delegation_candidates", None)
+    next_state.pop("delegation_return", None)
+    if request_state.get(WORK_PROTOCOL) and not request_state.get(DELEGATION_REFUSAL) and not assignment.get("delegatedByAgentId") and sum(
+        bool(item.get("delegatedByAgentId")) for item in assignments
+    ) < MAX_DELEGATIONS:
+        next_state["delegation_candidates"] = [
+            {"agentId": item["agentId"], "name": item.get("agentDisplayName", item["agentId"])}
+            for item in manifest.get("delegationCandidates") or []
+        ]
+    if assignment.get("delegationReturnId"):
+        next_state["delegation_return"] = "The delegated turn has ended. Inspect its attributed predecessor report and workspace changes. You own the original outcome."
+    if request_state.get(DELEGATION_REFUSAL):
+        next_state["delegation_return"] = (
+            f"Delegation refused: {request_state[DELEGATION_REFUSAL]}. "
+            "No delegate was dispatched. Continue the original request yourself, or report your blocker to the human. Do not delegate again this round."
+        )
     if request_state.get(WORK_PROTOCOL):
         if not has_capability(sandbox, DAEMON_CAPABILITY_WORK_RESULTS):
             raise _DeliveryRefused("This work round requires a daemon with work-results support.")

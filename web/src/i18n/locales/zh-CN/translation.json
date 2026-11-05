@@ -3425,5 +3425,35 @@
     "permissions_error": "Relay 的 GitHub App 需要只读 Issue 权限，请联系管理员检查配置。",
     "coming_soon": "即将推出",
     "public_only": "目前支持导入公开仓库的 Issue。用于私有仓库的 GitHub 连接即将推出。"
+  },
+  "delegation": {
+    "can_delegate_to": "可以委派给",
+    "settings_help": "选择此智能体可以请求协助的智能体。它们在同一台计算机上工作，并将结果返回给请求方。更改后立即保存。",
+    "loading": "正在加载智能体…",
+    "load_failed": "无法加载智能体，请刷新页面重试。",
+    "no_targets": "在此计算机上创建另一个智能体以启用委派。",
+    "unavailable_target": "智能体不可用 — 移除权限",
+    "requester": "请求方智能体",
+    "delegate": "受委派智能体",
+    "receipt": "{{requester}} 委派给 {{target}}",
+    "expected_outputs": "预期产出",
+    "acceptance_criteria": "验收标准",
+    "returned_report": "{{target}} 的报告",
+    "runtime_failed": "{{target}} 的运行时失败。请求方将收到失败信息并决定如何继续。",
+    "accountability": "{{requester}} 仍负责检查结果。智能体的报告不代表验收通过。",
+    "status": {
+      "queued": "已排队",
+      "working": "执行中",
+      "returned": "已返回",
+      "resuming": "请求方已继续",
+      "reported_done": "请求方报告已完成",
+      "needs_attention": "需要处理",
+      "cancelled": "已取消"
+    },
+    "work_status": {
+      "done": "报告已完成",
+      "continue": "未完成",
+      "blocked": "受阻"
+    }
   }
 }
