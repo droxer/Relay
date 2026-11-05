@@ -110,3 +110,10 @@ def test_delivery_resolves_only_work_grants_and_refuses_unavailable_access(servi
     service.disconnect("alice", connection["id"])
     with pytest.raises(ConnectionError, match="connection_unavailable"):
         service.for_work("alice", "thread-1")
+
+
+def test_insufficient_provider_consent_is_not_reported_connected(service, monkeypatch):
+    monkeypatch.setattr(providers, "exchange", lambda *_args: {"access_token": "provider-secret", "scope": "read:user"})
+    with pytest.raises(ConnectionError, match="connection_permissions_invalid"):
+        connect(service)
+    assert service.list("alice") == []
