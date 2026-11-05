@@ -15,6 +15,8 @@ from ...core.daemon_records import (
 from ...sessions.controller import SessionController
 from ...sessions.errors import SessionArchivedError, SessionRunInFlightError
 from ...sessions.task_scope import thread_task_scope
+from ...tasks.assignment import validate_task_owner_assignment
+from ...tasks.requests import TaskRequestError
 from ...teams.dispatch import (
     TeamDispatchError,
     task_thread_assignments,
@@ -143,6 +145,7 @@ def _task_thread_ownership(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
     """A task thread's ownership and assignments come from the task."""
     try:
+        validate_task_owner_assignment(task.get("ownerUserId"), task.get("assigneeUserId"))
         thread_ownership = task_thread_ownership(
             task, team_store=ctx.team_store, agent_store=ctx.agent_store
         )
@@ -152,6 +155,8 @@ def _task_thread_ownership(
             team_store=ctx.team_store,
             agent_store=ctx.agent_store,
         )
+    except TaskRequestError as error:
+        raise HTTPException(error.status, error.detail) from error
     except TeamDispatchError as error:
         raise HTTPException(409, error.code) from error
     expected_owner = thread_ownership.get("owner_user_id")

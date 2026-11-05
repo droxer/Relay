@@ -2,7 +2,8 @@ import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getMe, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
-import { writeSignedInHint } from "../lib/appStorage";
+import { clearTokens, writeSignedInHint } from "../lib/appStorage";
+import { useRelayStore } from "../lib/store";
 
 const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
 /** Where the `/auth/me` probe leaves the server's capability switches, so
@@ -25,13 +26,24 @@ function authRetryDelay(attempt: number): number {
   return Math.min(1_000 * 2 ** attempt, MAX_RETRY_DELAY_MS);
 }
 
+function clearPersonalCredentials(): void {
+  clearTokens();
+  useRelayStore.setState({ tokens: {}, selectedUser: "", selectedSessionId: undefined, activeSessionId: null, composingNew: false });
+}
+
 async function probeSession(signal: AbortSignal, queryClient: QueryClient): Promise<CurrentUser | null> {
   try {
     const result = await getMe(signal);
+    if (signal.aborted) return null;
+    const previous = queryClient.getQueryData<CurrentUser | null>(AUTH_SESSION_QUERY_KEY);
+    if (!result.authenticated || !result.user || previous?.id !== result.user.id) clearPersonalCredentials();
     queryClient.setQueryData(AUTH_CAPABILITIES_QUERY_KEY, result.capabilities ?? {});
     return result.authenticated && result.user ? result.user : null;
   } catch (error) {
-    if (isAuthRejection(error)) return null;
+    if (isAuthRejection(error)) {
+      if (!signal.aborted) clearPersonalCredentials();
+      return null;
+    }
     throw error;
   }
 }
@@ -60,6 +72,8 @@ export function useAuthSession(): {
 
   const setUser = useCallback((user: CurrentUser | null) => {
     void queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
+    const previous = queryClient.getQueryData<CurrentUser | null>(AUTH_SESSION_QUERY_KEY);
+    if (!user || previous?.id !== user.id) clearPersonalCredentials();
     queryClient.setQueryData<CurrentUser | null>(AUTH_SESSION_QUERY_KEY, user);
     // A sign-in answers with the user alone; the capability switches only
     // come from /auth/me, so fetch them once for the new session.

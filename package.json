@@ -13,7 +13,8 @@
   "scripts": {
     "build:computer": "npm run build -w relay-core && npm run build -w relay-daemon && node tools/build-computer.mjs",
     "build": "npm run build -w relay-core && npm run build -w relay-daemon && npm run build -w relay-supervisor && node tools/build-computer.mjs && npm run build -w web && tsc -p packages/tsconfig.json",
-    "test": "npm run test:ts && npm run test:py",
+    "test": "npm run test:security-dependencies && npm run test:ts && npm run test:py",
+    "test:security-dependencies": "node --test tools/vendor/braces/test/*.cjs tools/vendor/deepmerge/test/*.cjs",
     "test:ts": "npm run build && node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js && npm run test:react -w web",
     "test:py": "UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest",
     "test:integration": "npm run build && UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -m integration",
@@ -21,6 +22,8 @@
   },
   "overrides": {
     "braces": "$braces",
+    "deepmerge": "$deepmerge",
+    "minimatch@>=7.0.0": "11.0.1",
     "nanoid": "3.3.18",
     "postcss": "8.5.23",
     "sharp": "0.35.5",
@@ -28,6 +31,7 @@
   },
   "devDependencies": {
     "braces": "file:tools/vendor/braces",
+    "deepmerge": "file:tools/vendor/deepmerge",
     "@boxlite-ai/boxlite": "^0.9.7",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",

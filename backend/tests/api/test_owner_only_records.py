@@ -92,7 +92,7 @@ def test_agent_run_cannot_reopen_someone_elses_thread(owned_records):
     assert response.status_code == 403, response.text
 
 
-@pytest.mark.parametrize("operation", ["create", "update", "start"])
+@pytest.mark.parametrize("operation", ["create", "update", "start", "link_thread"])
 def test_private_task_cannot_be_dispatched_as_another_user(owned_records, operation):
     admin, app, _ids = owned_records
     owner = admin.get("/api/v1/auth/me").json()["user"]["userId"]
@@ -100,9 +100,45 @@ def test_private_task_cannot_be_dispatched_as_another_user(owned_records, operat
         response = admin.post("/api/v1/tasks", json={"title": "Private", "assigneeUserId": user_id("alice")})
     else:
         task = app.state.task_store.create_task({
-            "title": "Private", "ownerUserId": owner, "assigneeUserId": user_id("alice") if operation == "start" else owner,
+            "title": "Private", "ownerUserId": owner, "assigneeUserId": user_id("alice") if operation in ("start", "link_thread") else owner,
             "status": "assigned", "sourceRoutineId": "legacy-routine",
         })
-        response = (admin.patch(f"/api/v1/tasks/{task['id']}", json={"assigneeUserId": user_id("alice")})
+        if operation == "link_thread":
+            response = admin.post("/api/v1/threads", json={"taskGoal": "Private", "taskId": task["id"]})
+        else:
+            response = (admin.patch(f"/api/v1/tasks/{task['id']}", json={"assigneeUserId": user_id("alice")})
                     if operation == "update" else admin.post(f"/api/v1/tasks/{task['id']}/runs", json={}))
     assert response.status_code == 403, response.text
+
+
+def test_admin_cannot_reopen_foreign_thread_through_own_sandbox(owned_records, monkeypatch):
+    admin, app, ids = owned_records
+    owner = admin.get('/api/v1/auth/me').json()['user']['userId']
+    app.state.registry.register({
+        'sandboxId': 'admin-node', 'userId': owner, 'token': 'admin-node-token',
+        'workspacePath': '/workspace/admin', 'protocolVersion': 1,
+        'supportedAgents': ['codex'], 'status': 'ready',
+    })
+
+    def resolve(*_args):
+        pytest.fail('Refuse the foreign Thread before resolving an execution Agent')
+
+    monkeypatch.setattr('relay.api.computers.sandboxes._resolve_legacy_assignment', resolve)
+    response = admin.post('/api/v1/sandboxes/admin-node/runs', json={
+        'sessionId': ids['thread'], 'taskGoal': 'Private', 'assignments': [{'agent': 'codex'}],
+    })
+    assert response.status_code == 403, response.text
+
+
+def test_admin_fleet_monitor_does_not_disclose_private_run_details(owned_records, monkeypatch):
+    admin, app, ids = owned_records
+    monkeypatch.setattr(app.state.registry, 'monitor_nodes', lambda: [{
+        'id': 'private-node', 'userId': user_id('alice'), 'status': 'ready',
+        'activeRuns': [{'runId': 'run-1', 'sessionId': ids['thread'], 'agent': 'codex',
+                        'taskGoal': 'Confidential customer project', 'workspacePath': '/private/customer'}],
+    }])
+    response = admin.get('/api/v1/admin/daemon-nodes')
+    assert response.status_code == 200
+    [node] = response.json()['nodes']
+    [run] = node['activeRuns']
+    assert run == {'runId': 'run-1', 'agent': 'codex'}

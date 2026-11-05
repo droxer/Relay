@@ -11,6 +11,7 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.concurrency import run_in_threadpool
 
 from ...computer.node_agents import sync_node_agents
+from ...computer.access import actor_may_manage_computer
 from ...core.models import DaemonNodeRegistration
 from ...daemon_registry.records import (
     CommandEventMismatchError,
@@ -172,9 +173,18 @@ def register_daemon_node(
         )
         if not prior and not (actor and actor.get("isAdmin")):
             raise PermissionError("Computer enrollment is required before daemon registration.")
+        # Registration proves node authority only. A daemon must never turn
+        # its bearer token into a credential that can answer human prompts.
+        ui_token = bearer_token(request)
+        if (
+            not actor
+            or (prior and not actor_may_manage_computer(actor, prior))
+            or ui_token == registration.get("token")
+        ):
+            ui_token = None
         sandbox = ctx.registry.register(
             registration,
-            bearer_token(request),
+            ui_token,
             authorized_node_location=(
                 "user-device" if admin_authorized_ownership else None
             ),

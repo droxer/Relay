@@ -172,7 +172,7 @@ def review_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_or_404(ctx.task_store, task_id)
-    if not actor.get("isAdmin") and current.get("ownerUserId") != actor.get("userId"):
+    if current.get("ownerUserId") != actor.get("userId"):
         raise HTTPException(403, "task_delete_forbidden")
     if not current.get("deletedAt"):
         ensure_task_project_writable(ctx, current)

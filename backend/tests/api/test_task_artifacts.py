@@ -89,7 +89,7 @@ def test_task_artifacts_dedupes_regenerated_file_across_sessions(monkeypatch) ->
             task_store=app.state.task_store,
             task_id=task["id"],
             workspace_path=ws,
-            owner_user_id="admin",
+            owner_user_id=client.app.state.auth_store.resolve_user_id("admin"),
             owner_agent_id=agent["id"],
         )
         second_session = controller.create_session(task["title"], ["human", "claude"])[

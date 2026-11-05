@@ -25,7 +25,9 @@ def _client(monkeypatch, root: str) -> tuple[TestClient, dict]:
     client = TestClient(create_app(root))
     _bootstrap_admin(client)
     _create_account(client, "alice", user_id="alice")
-    return client, _create_agent(client, ALICE)
+    agent = _create_agent(client, ALICE)
+    _login(client, "alice")
+    return client, agent
 
 
 def _routine(client: TestClient, agent: dict, **extra) -> dict:
@@ -172,13 +174,13 @@ def test_project_and_team_filters_require_same_computer(monkeypatch) -> None:
         assert response.json()["detail"] == "project_team_off_computer"
 
 
-def test_ownerless_task_can_still_be_edited(monkeypatch) -> None:
+def test_ownerless_task_is_not_editable_through_a_personal_route(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, _ = _client(monkeypatch, root)
         task = client.app.state.task_store.create_task({"title": "legacy ownerless"})
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"title": "renamed"})
-        assert response.status_code == 200, response.text
-        assert response.json()["title"] == "renamed"
+        assert response.status_code == 403, response.text
+        assert client.app.state.task_store.get_task(task["id"])["title"] == "legacy ownerless"
 
 
 def test_ownerless_automation_cannot_filter_by_scope(monkeypatch) -> None:
@@ -190,10 +192,9 @@ def test_ownerless_automation_cannot_filter_by_scope(monkeypatch) -> None:
         })
         scoped = {"kind": "task_event", "on": "created", "filters": {"assignedAgentId": agent["id"]}}
         response = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTriggers": [scoped]})
-        assert response.status_code == 400
-        assert "owner" in response.json()["detail"]
+        assert response.status_code == 403
         unscoped = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTriggers": [ON_BLOCKED]})
-        assert unscoped.status_code == 200, unscoped.text
+        assert unscoped.status_code == 403, unscoped.text
 
 
 def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch) -> None:
@@ -353,6 +354,7 @@ def test_run_now_on_paused_automation_runs_and_keeps_it_paused(monkeypatch) -> N
 def test_admin_settings_report_the_triggers_capability(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, _ = _client(monkeypatch, root)
+        _login(client, "admin", "kestrel-vault-7719")
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is True
         monkeypatch.setenv("RELAY_AUTOMATION_TRIGGERS_ENABLED", "0")
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is False
@@ -452,14 +454,14 @@ def test_resume_by_non_owner_is_403(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
-        # Bob can see the automation as its assignee, but only its owner or an admin may resume it.
+        # Assignment does not grant access to the owner's automation.
         task = _routine(client, agent)
         client.app.state.task_store.update_task(task["id"], {
             "assigneeUserId": BOB, "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
         _login(client, "bob")
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 403
-        assert "owner or an admin" in response.json()["detail"]
+        assert response.json()["detail"] == "Task access denied."
         assert client.app.state.task_store.get_task(task["id"])["routineState"] == "paused_by_relay"
 
 
@@ -482,13 +484,13 @@ def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> 
         _login(client, "bob")
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"routineState": state})
         assert response.status_code == 403
-        assert "owner or an admin" in response.json()["detail"]
+        assert response.json()["detail"] == "Task access denied."
         assert store.get_task(task["id"]) == before
         assert automations.get_state(task["id"]) == before_state
 
 
-@pytest.mark.parametrize("actor, expected_status", [("bob", 403), ("alice", 200), ("admin", 200)])
-def test_only_owner_or_admin_can_convert_a_relay_paused_automation(monkeypatch, actor: str, expected_status: int) -> None:
+@pytest.mark.parametrize("actor, expected_status", [("bob", 403), ("alice", 200), ("admin", 403)])
+def test_only_owner_can_convert_a_relay_paused_automation(monkeypatch, actor: str, expected_status: int) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
@@ -499,34 +501,35 @@ def test_only_owner_or_admin_can_convert_a_relay_paused_automation(monkeypatch, 
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         before = store.get_task(task["id"])
-        if actor != "admin":
-            _login(client, actor)
+        _login(client, actor, "kestrel-vault-7719" if actor == "admin" else "userpass")
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"isRoutine": False})
         assert response.status_code == expected_status, response.text
         if expected_status == 403:
-            assert "owner or an admin" in response.json()["detail"]
+            assert response.json()["detail"] == "Task access denied."
             assert store.get_task(task["id"]) == before
         else:
             assert response.json()["isRoutine"] is False
 
 
-@pytest.mark.parametrize("actor", ["alice", "admin"])
-def test_owner_or_admin_can_lift_relay_pause_via_patch(monkeypatch, actor: str) -> None:
+@pytest.mark.parametrize("actor,status", [("alice", 200), ("admin", 403)])
+def test_only_owner_can_lift_relay_pause_via_patch(monkeypatch, actor: str, status: int) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         task = _routine(client, agent)
         client.app.state.task_store.update_task(task["id"], {
             "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None,
         })
-        if actor == "alice":
-            _login(client, "alice")
+        _login(client, actor, "kestrel-vault-7719" if actor == "admin" else "userpass")
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"routineState": "active"})
-        assert response.status_code == 200, response.text
-        assert response.json()["routineState"] == "active"
-        assert "routinePauseReason" not in response.json()
+        assert response.status_code == status, response.text
+        if status == 200:
+            assert response.json()["routineState"] == "active"
+            assert "routinePauseReason" not in response.json()
+        else:
+            assert client.app.state.task_store.get_task(task["id"])["routineState"] == "paused_by_relay"
 
 
-def test_assignee_can_edit_relay_pause_and_toggle_an_ordinary_pause(monkeypatch) -> None:
+def test_assignee_cannot_edit_relay_pause_or_toggle_an_ordinary_pause(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         _create_account(client, "bob", user_id="bob")
@@ -539,14 +542,14 @@ def test_assignee_can_edit_relay_pause_and_toggle_an_ordinary_pause(monkeypatch)
         _login(client, "bob")
         path = f"/api/v1/tasks/{task['id']}"
         response = client.patch(path, json={"title": "Updated"})
-        assert response.status_code == 200, response.text
-        assert response.json()["routineState"] == "paused_by_relay"
-        assert response.json()["routinePauseReason"] == "failing"
+        assert response.status_code == 403, response.text
+        assert store.get_task(task["id"])["routineState"] == "paused_by_relay"
+        assert store.get_task(task["id"])["routinePauseReason"] == "failing"
         store.update_task(task["id"], {"routineState": "paused", "routinePauseReason": None})
         for state in ("active", "paused"):
             response = client.patch(path, json={"routineState": state})
-            assert response.status_code == 200, response.text
-            assert response.json()["routineState"] == state
+            assert response.status_code == 403, response.text
+            assert store.get_task(task["id"])["routineState"] == "paused"
 
 
 def test_resume_by_owner_succeeds(monkeypatch) -> None:
@@ -653,8 +656,8 @@ def test_completed_once_remains_editable_and_active_resume_is_noop(monkeypatch) 
         assert client.post(path + "/automation/resume").status_code == 200
 
 
-@pytest.mark.parametrize("body, status", [({"routineState": "active"}, 403), ({"isRoutine": False}, 403), ({"routineTriggers": DAILY_9}, 200)])
-def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body: dict, status: int) -> None:
+@pytest.mark.parametrize("body", [{"routineState": "active"}, {"isRoutine": False}, {"routineTriggers": DAILY_9}])
+def test_assignee_is_refused_before_routine_validation(monkeypatch, body: dict) -> None:
     from relay.api.tasks import payloads as task_payloads
 
     with TemporaryDirectory() as root:
@@ -664,23 +667,15 @@ def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body
         store = client.app.state.task_store
         store.update_task(task["id"], {"assigneeUserId": BOB})
         _login(client, "bob")
-        original = task_payloads.routine_fields
-        paused = False
+        before = store.get_task(task["id"])
 
-        def racing_fields(payload, *, current=None):
-            nonlocal paused
-            fields = original(payload, current=current)
-            if not paused:
-                paused = True
-                store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
-            return fields
+        def racing_fields(*_args, **_kwargs):
+            pytest.fail("A foreign record must be refused before its routine fields are processed")
 
         monkeypatch.setattr(task_payloads, "routine_fields", racing_fields)
         response = client.patch(f"/api/v1/tasks/{task['id']}", json=body)
-        assert response.status_code == status, response.text
-        current = store.get_task(task["id"])
-        assert current["routineState"] == "paused_by_relay"
-        assert current["routinePauseReason"] == "failing"
+        assert response.status_code == 403, response.text
+        assert store.get_task(task["id"]) == before
 
 
 def test_resume_reads_pause_after_entering_automation_transaction(monkeypatch) -> None:

@@ -78,6 +78,7 @@ def test_workspace_brief_accepts_legacy_agent_user_id(monkeypatch, tmp_path):
         ),
     )
 
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
@@ -101,6 +102,7 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
         }
     )
 
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
@@ -132,6 +134,7 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
         for index in range(10)
     }
 
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
@@ -240,6 +243,7 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
         }
     )
 
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text

@@ -11,9 +11,10 @@ from ...daemon_registry.records import provisioned_sandbox_record, public_sandbo
 from ...daemon_registry.credentials import sandbox_ui_auth_error, sandbox_ui_token_matches
 from ...persistence.agent.placements import create_node_placement
 from ...computer.names import present_computer
+from ...computer.access import actor_may_manage_computer
 from ...computer.limits import assert_local_computer_allowed, local_computer_enrollment_scope
 from ..deps import AppContextDep
-from ..actors import actor_can_access_sandbox, bearer_token, request_actor_or_none
+from ..actors import bearer_token, get_session_for_actor, request_actor_or_none, request_actor_or_sandbox
 from ...security.actor import Actor
 from ..bodies import JsonBodyDep, assignment_list, json_body, string_field
 
@@ -29,24 +30,23 @@ def public_computer_record(
 def require_sandbox_access(
     sandbox: dict[str, Any], request: Request, ctx: AppContextDep
 ) -> Actor | None:
+    actor = request_actor_or_none(request, ctx.auth_store)
+    if actor:
+        if not actor_may_manage_computer(actor, sandbox):
+            raise HTTPException(403, "Sandbox access denied.")
+        return actor
     token = bearer_token(request)
     if token and sandbox_ui_token_matches(sandbox, token):
         return None
-    actor = request_actor_or_none(request, ctx.auth_store)
-    if actor:
-        if not actor_can_access_sandbox(actor, sandbox):
-            raise HTTPException(403, "Sandbox access denied.")
-        return actor
     auth_error = sandbox_ui_auth_error(sandbox, token)
-    if auth_error:
-        raise HTTPException(401, auth_error)
-    return None
+    raise HTTPException(401, auth_error or "Authentication required.")
 
 
 @router.get("/sandboxes")
 def sandboxes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor_or_none(request, ctx.auth_store)
     token = bearer_token(request)
-    if token:
+    if token and actor is None:
         allowed = [
             public_computer_record(ctx, sandbox)
             for sandbox in ctx.backend.list()
@@ -54,12 +54,11 @@ def sandboxes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         ]
         if allowed:
             return {"sandboxes": allowed}
-    actor = request_actor_or_none(request, ctx.auth_store)
     if actor:
         allowed = [
             public_computer_record(ctx, sandbox)
             for sandbox in ctx.backend.list()
-            if actor_can_access_sandbox(actor, sandbox)
+            if sandbox.get("userId") == actor["userId"]
         ]
         return {"sandboxes": allowed}
     raise HTTPException(401, "Authentication required.")
@@ -85,6 +84,8 @@ def provision_sandbox(
                 if string_field(body, "sandboxId")
                 else ctx.registry.find_by_user(user_id, string_field(body, "workspacePath") or None)
             )
+            if existing and not actor_may_manage_computer(actor, existing):
+                raise PermissionError("Sandbox access denied.")
             if not existing:
                 assert_local_computer_allowed(ctx, user_id)
             sandbox = ctx.backend.provision(
@@ -134,10 +135,10 @@ async def run_sandbox(
     if not task_goal or not assignments:
         raise HTTPException(400, "taskGoal and at least one assignment are required.")
     session_id = string_field(body, "sessionId") or string_field(body, "session_id")
-    user_id = sandbox.get("userId")
-    if user_id and session_id and actor and actor.get("isAdmin"):
-        session = ctx.session_store.get_session(session_id)
-        user_id = session.get("ownerUserId") or user_id
+    user_id = actor["userId"] if actor else sandbox.get("userId")
+    if session_id:
+        session_actor = actor or request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
+        get_session_for_actor(ctx.session_store, session_id, session_actor)
     if user_id:
         assignments = [
             _resolve_legacy_assignment(ctx, user_id, sandbox_id, assignment)

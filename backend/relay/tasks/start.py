@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..automations.service import request_manual_occurrence
 from ..core.validation import valid_agent
+from .assignment import validate_task_owner_assignment
 from .dispatch import start_task_on_ready_node
 from .dispatch_outcome import DispatchResult
 from .implicit_assignments import implicit_group_assignments_for_task
@@ -45,6 +46,7 @@ def prepare_task_start(
     agent_requested: bool,
 ) -> PreparedStart:
     """Resolve who runs a task the actor may start, recording any refusal."""
+    validate_task_owner_assignment(task.get("ownerUserId"), task.get("assigneeUserId"))
     task_id = task["id"]
     ensure_issue_in_project(task)
     if ctx.task_store.open_prerequisites_for([task_id]).get(task_id):

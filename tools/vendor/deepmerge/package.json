@@ -1,0 +1,8 @@
+{
+  "name": "deepmerge",
+  "version": "4.3.1-relay.1",
+  "description": "deepmerge 4.3.1 with Relay's own-property writes for CVE-2026-93753",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT"
+}

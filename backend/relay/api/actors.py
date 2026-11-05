@@ -154,16 +154,13 @@ def assignee_user_id_for_task(
         return requested
     if requested and requested == actor["userId"]:
         return requested
+    if requested:
+        raise HTTPException(403, "A user-owned task cannot be reassigned to another user.")
     return fallback or actor["userId"]
 
 
 def actor_can_access_record(actor: Actor, record: dict[str, Any]) -> bool:
-    if actor["isAdmin"]:
-        return True
-    return (
-        record.get("ownerUserId") == actor["userId"]
-        or record.get("assigneeUserId") == actor["userId"]
-    )
+    return record.get("ownerUserId") == actor["userId"]
 
 
 def actor_can_access_sandbox(actor: Actor, sandbox: dict[str, Any]) -> bool:

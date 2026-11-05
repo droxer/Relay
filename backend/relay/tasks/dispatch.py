@@ -13,6 +13,8 @@ from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from .claims import dispatch_claim_active
+from .assignment import validate_task_owner_assignment
+from .requests import TaskRequestError
 from .placement import ensure_managed_capacity_for_task, ready_node_for_task, task_goal_text
 from ..agents.routing import (
     AgentRoutingError,
@@ -97,6 +99,17 @@ class TaskDispatcher:
         return self._prepared_node, result
 
     def _prepare_dispatch(self) -> DispatchResult | None:
+        if self._execution_active():
+            return self._active_result()
+        try:
+            validate_task_owner_assignment(
+                self.task.get("ownerUserId"), self.task.get("assigneeUserId")
+            )
+        except TaskRequestError as error:
+            return _record_result(
+                self.ctx, self.task["id"], "rejected",
+                code="task_assignment_forbidden", message=error.detail,
+            )
         # Work already under way reports that, not that it could never start.
         if issue_needs_project(self.task) and not self._execution_active():
             return _record_result(

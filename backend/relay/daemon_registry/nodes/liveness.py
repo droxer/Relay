@@ -189,6 +189,11 @@ class NodeLivenessMixin(RegistryState):
     def control_panel_nodes(self) -> list[dict[str, Any]]:
         nodes = self.monitor_nodes()
         for node in nodes:
+            # Fleet health does not grant access to private Thread contents.
+            node["activeRuns"] = [
+                {key: run[key] for key in ("commandId", "runId", "agent", "startedAt") if key in run}
+                for run in node.get("activeRuns", [])
+            ]
             plain = self.plain_node_tokens.get(node["id"])
             if plain and not (node.get("nodeLocation") == "user-device" and node.get("userId")):
                 node["nodeToken"] = plain

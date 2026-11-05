@@ -10,6 +10,7 @@ from issue_projects import project_for_agents
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from store_fixtures import overwrite_snapshot
+from test_tasks import _login
 from user_ids import user_id
 from relay.computer.node_agents import sync_node_agents
 from relay.sessions.controller import SessionController
@@ -1549,7 +1550,7 @@ def test_completed_thread_retry_reopens_after_message_commit_interruption(
         )
 
 
-def test_admin_can_replay_a_scoped_message_for_an_user_owned_thread(
+def test_owner_can_replay_a_scoped_message_for_their_thread(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -1605,6 +1606,7 @@ def test_admin_can_replay_a_scoped_message_for_an_user_owned_thread(
             "idempotencyKey": "admin_retry_1",
         }
 
+        _login(client, "alice")
         first = client.post(f"/api/v1/threads/{session['id']}/messages", json=body)
         replay = client.post(f"/api/v1/threads/{session['id']}/messages", json=body)
 
@@ -1786,6 +1788,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
             }
         )
 
+        _login(client, "alice")
         response = client.post(
             "/api/v1/agent-runs",
             json={
@@ -1854,6 +1857,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
             }
         )
 
+        _login(client, "alice")
         response = client.post(
             "/api/v1/agent-runs",
             json={
@@ -2582,10 +2586,11 @@ def test_task_owner_cannot_be_reassigned_to_another_users_agent(
             "assignedAgent": "codex",
         })
 
+        _login(client, "alice")
         missing_agent = client.patch(
             f"/api/v1/tasks/{task['id']}", json={"assigneeUserId": BOB}
         )
-        assert missing_agent.status_code == 400
+        assert missing_agent.status_code == 403
 
         reassigned = client.patch(
             f"/api/v1/tasks/{task['id']}",
@@ -2720,7 +2725,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
             {
                 "title": "Start legacy work",
                 "sourceRoutineId": "routine_nightly",
-                "ownerUserId": "requester",
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgent": "codex",
                 "status": "assigned",
@@ -2792,6 +2797,7 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
         ).json()["agent"]
         _place_if_needed(client, agent["id"], "node_a")
 
+        _login(client, "alice")
         run = client.post(
             "/api/v1/agent-runs",
             json={

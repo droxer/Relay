@@ -56,6 +56,11 @@ export function writeTokens(tokens: TokenMap): void {
   if (typeof window !== "undefined") localStorage.setItem(tokenStorageKey, JSON.stringify(tokens));
 }
 
+export function clearTokens(): void {
+  try { if (typeof window !== "undefined") localStorage.removeItem(tokenStorageKey); }
+  catch { /* Storage may be blocked; the in-memory credentials are cleared too. */ }
+}
+
 export function readTheme(): Theme {
   if (typeof localStorage === "undefined") return "system";
   const stored = localStorage.getItem(themeStorageKey);

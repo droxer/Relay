@@ -53,7 +53,12 @@ def _credential_hash(sandbox: dict[str, Any], field: str) -> str | None:
 
 
 def sandbox_ui_token_matches(sandbox: dict[str, Any], token: str | None) -> bool:
-    return _hash_matches(_credential_hash(sandbox, "uiTokenHash"), token)
+    ui_hash = _credential_hash(sandbox, "uiTokenHash")
+    # Old records can carry one secret in both slots. A daemon credential
+    # never grants human authority, even before that record is repaired.
+    if ui_hash == _credential_hash(sandbox, "nodeTokenHash"):
+        return False
+    return _hash_matches(ui_hash, token)
 
 
 def daemon_node_token_matches(sandbox: dict[str, Any], token: str | None) -> bool:

@@ -133,12 +133,7 @@ def test_list_dependency_summary_respects_project_access(project_context, monkey
     assert _set(client, dependent, [upstream["id"]]).status_code == 200
     rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
     assert upstream["id"] not in rows
-    [summary] = rows[dependent["id"]]["waitingOnSummaries"]
-    assert summary["title"] == "Bob's upstream work"
-    assert summary["ownerUserId"] == bob["id"]
-    assert summary["responsibleName"] == "Sam Lee"
-    assert summary["canOpen"] is False
-    assert "description" not in summary and "events" not in summary
+    assert rows[dependent["id"]]["waitingOnSummaries"] == []
     assert client.get(f"/api/v1/tasks/{upstream['id']}").status_code == 403
 
     # An accessible task alone does not grant the project's private metadata.

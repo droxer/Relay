@@ -15,15 +15,14 @@ from relay.core.computer_identity import computer_id
 from automation_helpers import WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents, project_for_team
 from user_ids import user_id
+from test_tasks import _setup_admin_client
 
 ALICE = user_id("alice")
 BOB = user_id("bob")
 REQUESTER = user_id("requester")
 
-# Delegated team work — one user's task, another user's team — cannot
-# live in a project, whose tasks belong to its owner. Outside a project the
-# only work that still runs is a routine's own run, so that is what these
-# delegation fixtures are.
+# Projectless team execution is an automation's run. Its task, agents, and
+# execution thread all belong to the same user.
 ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
 
 
@@ -43,7 +42,7 @@ def _bootstrap(client: TestClient) -> None:
 
 def _user(client: TestClient, user_id: str) -> None:
     assert (
-        client.post(
+        _setup_admin_client(client).post(
             "/api/v1/admin/users",
             json={
                 "userId": user_id,
@@ -110,7 +109,7 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
-        response = client.post("/api/v1/admin/teams", json={
+        response = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"]],
             "memberConfigs": {builder["id"]: {"role": "implementer", "responsibility": "API", "required": True}},
@@ -181,7 +180,7 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
-        team = client.post("/api/v1/admin/teams", json={
+        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
             "memberConfigs": {builder["id"]: {"required": False}},
@@ -277,7 +276,7 @@ def _agent(
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
-    response = client.post(
+    response = _setup_admin_client(client).post(
         "/api/v1/admin/agents",
         json={
             "supervisorUserId": user_id(handle),
@@ -361,7 +360,7 @@ def test_admin_and_user_manage_teams(monkeypatch) -> None:
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
 
-        created = client.post(
+        created = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -380,7 +379,7 @@ def test_admin_and_user_manage_teams(monkeypatch) -> None:
             "offline",
             "offline",
         ]
-        admin_renamed = client.patch(
+        admin_renamed = _setup_admin_client(client).patch(
             f"/api/v1/admin/teams/{team['id']}",
             json={
                 "name": "Delivery admin",
@@ -470,7 +469,7 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -517,7 +516,7 @@ def test_user_team_routes_cannot_access_another_user_team(monkeypatch) -> None:
         _user(client, "alice")
         _user(client, "bob")
         bob_lead = _agent(client, "bob", "Bob lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": BOB,
@@ -526,7 +525,7 @@ def test_user_team_routes_cannot_access_another_user_team(monkeypatch) -> None:
                 "memberAgentIds": [bob_lead["id"]],
             },
         ).json()["team"]
-        assert client.get(f"/api/v1/admin/teams/{team['id']}").status_code == 200
+        assert _setup_admin_client(client).get(f"/api/v1/admin/teams/{team['id']}").status_code == 200
 
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert (
@@ -558,7 +557,7 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -676,7 +675,7 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
         alice = _agent(client, "alice", "Lead", "codex")
         bob = _agent(client, "bob", "Outsider", "claude")
 
-        rejected = client.post(
+        rejected = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -688,7 +687,7 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
         assert rejected.status_code == 400
         assert rejected.json()["detail"] == "team_member_wrong_supervisor"
 
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -711,7 +710,7 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
         assert conflict.json()["detail"] == "task_agent_and_team_conflict"
 
 
-def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> None:
+def test_team_task_owner_can_switch_to_one_of_their_agents(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -719,7 +718,7 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
         _user(client, "requester")
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -732,7 +731,7 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
             client.app,
             {
                 "title": "Delegated delivery",
-                "ownerUserId": REQUESTER,
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
             },
@@ -771,7 +770,7 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
         assert "assignedTeamId" not in reassigned_agent.json()
 
 
-def test_admin_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
+def test_owner_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -779,7 +778,7 @@ def test_admin_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -793,6 +792,7 @@ def test_admin_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
             {"title": "Owner-only task", "ownerUserId": ALICE, "projectId": project["id"]}
         )
 
+        _login(client, "alice")
         assigned = client.patch(
             f"/api/v1/tasks/{legacy['id']}", json={"assignedTeamId": team["id"]}
         )
@@ -808,7 +808,7 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -818,6 +818,7 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
             },
         ).json()["team"]
         project = project_for_team(client.app, ALICE, team)
+        _login(client, "alice")
         task = client.post(
             "/api/v1/tasks",
             json={
@@ -840,7 +841,7 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
         assert "assignedAgentId" not in unchanged
 
 
-def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
+def test_agent_pickup_thread_is_owned_by_the_task_owner(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -865,11 +866,12 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
             app,
             {
                 "title": "Delegated pickup",
-                "ownerUserId": REQUESTER,
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
             }
         )
 
+        _login(client, "alice")
         pickup = client.post(
             f"/api/v1/tasks/{task['id']}/pickups", json={"agentId": agent["id"]}
         )
@@ -896,7 +898,7 @@ def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
         _user(client, "alice")
         _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -909,7 +911,7 @@ def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
             client.app,
             {
                 "title": "Delegated work",
-                "ownerUserId": REQUESTER,
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
             },
@@ -918,7 +920,7 @@ def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
         assert (
             client.post(
                 "/api/v1/auth/login",
-                json={"username": "requester", "password": "userpass"},
+                json={"username": "alice", "password": "userpass"},
             ).status_code
             == 200
         )
@@ -946,7 +948,7 @@ def test_deleting_lead_agent_promotes_next_member(monkeypatch) -> None:
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -956,7 +958,7 @@ def test_deleting_lead_agent_promotes_next_member(monkeypatch) -> None:
             },
         ).json()["team"]
 
-        assert client.delete(f"/api/v1/admin/agents/{lead['id']}").status_code == 200
+        assert _setup_admin_client(client).delete(f"/api/v1/admin/agents/{lead['id']}").status_code == 200
 
         updated = app.state.team_store.get_team(team["id"])
         assert updated["leadAgentId"] == support["id"]
@@ -971,7 +973,7 @@ def test_team_emptied_by_agent_deletion_is_disabled_and_restaffable(monkeypatch)
         _bootstrap(client)
         _user(client, "alice")
         only = _agent(client, "alice", "Only", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -981,25 +983,25 @@ def test_team_emptied_by_agent_deletion_is_disabled_and_restaffable(monkeypatch)
             },
         ).json()["team"]
 
-        assert client.delete(f"/api/v1/admin/agents/{only['id']}").status_code == 200
+        assert _setup_admin_client(client).delete(f"/api/v1/admin/agents/{only['id']}").status_code == 200
         emptied = app.state.team_store.get_team(team["id"])
         assert emptied["memberAgentIds"] == []
         assert emptied["enabled"] is False
 
-        renamed = client.patch(
+        renamed = _setup_admin_client(client).patch(
             f"/api/v1/admin/teams/{team['id']}", json={"name": "Delivery (paused)"}
         )
         assert renamed.status_code == 200, renamed.text
         assert renamed.json()["team"]["name"] == "Delivery (paused)"
 
-        reenabled = client.patch(
+        reenabled = _setup_admin_client(client).patch(
             f"/api/v1/admin/teams/{team['id']}", json={"enabled": True}
         )
         assert reenabled.status_code == 400
         assert reenabled.json()["detail"] == "team_members_required"
 
         fresh = _agent(client, "alice", "Fresh", "claude")
-        restaffed = client.patch(
+        restaffed = _setup_admin_client(client).patch(
             f"/api/v1/admin/teams/{team['id']}",
             json={
                 "leadAgentId": fresh["id"],
@@ -1021,7 +1023,7 @@ def test_startup_repairs_team_members_deleted_by_an_older_runtime(monkeypatch) -
         _user(client, "alice")
         deleted_lead = _agent(client, "alice", "Deleted lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1068,13 +1070,13 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1087,7 +1089,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerUserId": REQUESTER,
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
             },
@@ -1095,6 +1097,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
 
         assert task["assignedTeamId"] == team["id"]
         assert "assignedAgentId" not in task
+        _login(client, "alice")
         started = client.post(
             f"/api/v1/tasks/{task['id']}/runs",
             json={"assignments": [{"agent": "pi"}]},
@@ -1160,13 +1163,13 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1187,6 +1190,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
             },
         ).json()
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -1260,6 +1264,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         )
         assert task["status"] == "backlog"
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -1274,7 +1279,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         assert managed["userId"] == ALICE
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "assigned"
 
-        attempt = client.post(f"/api/v1/admin/managed-nodes/{managed['id']}/attempts")
+        attempt = _setup_admin_client(client).post(f"/api/v1/admin/managed-nodes/{managed['id']}/attempts")
         assert attempt.status_code == 201
         enrolled = client.post(
             "/api/v1/daemon-node-enrollments",
@@ -1343,13 +1348,13 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         )
         for agent in (lead, reviewer):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1371,6 +1376,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
             },
         ).json()
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -1454,13 +1460,13 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
         support = _agent(client, "alice", "Support", "claude", place=False)
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice_team"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1481,6 +1487,7 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
             },
         ).json()
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -1519,13 +1526,13 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         )
         lead = _agent(client, "alice", "Lead", "codex", place=False)
         assert (
-            client.post(
+            _setup_admin_client(client).post(
                 f"/api/v1/admin/agents/{lead['id']}/placements",
                 json={"daemonNodeId": "node_alice"},
             ).status_code
             == 201
         )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1545,6 +1552,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
                 "assignedTeamId": team["id"],
             },
         ).json()
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.json()["dispatch"]["state"] == "started"
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "assigned"
@@ -1557,7 +1565,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         # Disabling the team makes resolution fail permanently; a second start
         # must not blocked-out a task whose run is still in flight.
         assert (
-            client.patch(
+            _setup_admin_client(client).patch(
                 f"/api/v1/admin/teams/{team['id']}", json={"enabled": False}
             ).status_code
             == 200
@@ -1582,7 +1590,7 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
         _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1606,6 +1614,7 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
         ).json()
 
         [session_id] = task["linkedSessionIds"]
+        _login(client, "alice")
         session = client.get(f"/api/v1/threads/{session_id}").json()
         # A team task runs in its project's room; the team never becomes the
         # thread's team there. The team's lead still owns the thread.
@@ -1627,7 +1636,7 @@ def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
         _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1640,12 +1649,13 @@ def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
             client.app,
             {
                 "title": "Link a Team thread",
-                "ownerUserId": REQUESTER,
+                "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
             },
         )
 
+        _login(client, "alice")
         created = client.post(
             "/api/v1/threads",
             json={"taskGoal": "Link a Team thread", "taskId": task["id"]},
@@ -1669,7 +1679,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1678,6 +1688,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
+        _login(client, "alice")
         routine = client.post(
             "/api/v1/tasks",
             json={
@@ -1690,6 +1701,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
             },
         ).json()
 
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
 
         assert started.status_code == 202
@@ -1736,13 +1748,13 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         )
         lead = _agent(client, "alice", "Lead", "codex")
         assert (
-            client.post(
+            _setup_admin_client(client).post(
                 f"/api/v1/admin/agents/{lead['id']}/placements",
                 json={"daemonNodeId": "node_alice"},
             ).status_code
             == 201
         )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1751,6 +1763,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
+        _login(client, "alice")
         routine = client.post(
             "/api/v1/tasks",
             json={
@@ -1764,6 +1777,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         ).json()
         promoted = fire_now(app.state.task_store, routine["id"], run_date="2026-07-23")
         assert promoted is not None
+        _login(client, "alice")
         first_start = client.post(f"/api/v1/tasks/{promoted['id']}/runs", json={})
         assert first_start.status_code == 202
         assert first_start.json()["session"] is not None
@@ -1791,7 +1805,7 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1804,7 +1818,7 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
         # the team without emptying the project it works in.
         keeper = _agent(client, "alice", "Keeper", "claude")
         project = project_for_agents(client.app.state.project_store, ALICE, [keeper])
-        assert client.delete(f"/api/v1/admin/agents/{lead['id']}").status_code == 200
+        assert _setup_admin_client(client).delete(f"/api/v1/admin/agents/{lead['id']}").status_code == 200
 
         create_with_thread = client.post(
             "/api/v1/tasks",
@@ -1844,7 +1858,7 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
         _bootstrap(client)
         _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1864,6 +1878,7 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
             },
         ).json()
 
+        _login(client, "alice")
         assigned = client.put(
             f"/api/v1/tasks/{task['id']}/assignment", json={"teamId": team["id"]}
         )
@@ -1872,7 +1887,7 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
         assert assigned.json()["status"] == "assigned"
 
         assert (
-            client.patch(
+            _setup_admin_client(client).patch(
                 f"/api/v1/admin/teams/{team['id']}", json={"enabled": False}
             ).status_code
             == 200
@@ -1907,13 +1922,13 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -1932,6 +1947,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         task_round = next(
@@ -2083,13 +2099,13 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
         )
         lead = _agent(client, "alice", "Lead", "codex")
         assert (
-            client.post(
+            _setup_admin_client(client).post(
                 f"/api/v1/admin/agents/{lead['id']}/placements",
                 json={"daemonNodeId": "node_alice"},
             ).status_code
             == 201
         )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2107,6 +2123,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         command = app.state.registry.take_commands("node_alice", "node_token")[0]
@@ -2124,7 +2141,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
             },
             "node_token",
         )
-        client.patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
+        _setup_admin_client(client).patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
 
         answered = client.post(
             "/api/v1/agent-runs",
@@ -2158,13 +2175,13 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
         )
         lead = _agent(client, "alice", "Lead", "codex")
         assert (
-            client.post(
+            _setup_admin_client(client).post(
                 f"/api/v1/admin/agents/{lead['id']}/placements",
                 json={"daemonNodeId": "node_alice"},
             ).status_code
             == 201
         )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2182,6 +2199,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         command = app.state.registry.take_commands("node_alice", "node_token")[0]
@@ -2199,7 +2217,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
             },
             "node_token",
         )
-        client.patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
+        _setup_admin_client(client).patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
 
         answered = client.post(
             "/api/v1/agent-runs",
@@ -2278,13 +2296,13 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2348,13 +2366,13 @@ def test_agent_runs_rejects_a_team_id_that_does_not_match_the_thread(
         )
         lead = _agent(client, "alice", "Lead", "codex")
         assert (
-            client.post(
+            _setup_admin_client(client).post(
                 f"/api/v1/admin/agents/{lead['id']}/placements",
                 json={"daemonNodeId": "node_alice"},
             ).status_code
             == 201
         )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2408,13 +2426,13 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
         outsider = _agent(client, "alice", "Outsider", "claude")
         for agent in (lead, outsider):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2432,6 +2450,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         command = app.state.registry.take_commands("node_alice", "node_token")[0]
@@ -2486,13 +2505,13 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2511,6 +2530,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         for executor in ("codex", "claude", "codex"):
@@ -2596,13 +2616,13 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_user(
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2621,6 +2641,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_user(
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         first = app.state.registry.take_commands("node_alice", "node_token")[0]
@@ -2705,13 +2726,13 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_user(
         support = _agent(client, "alice", "Support", "claude")
         for agent in (lead, support):
             assert (
-                client.post(
+                _setup_admin_client(client).post(
                     f"/api/v1/admin/agents/{agent['id']}/placements",
                     json={"daemonNodeId": "node_alice"},
                 ).status_code
                 == 201
             )
-        team = client.post(
+        team = _setup_admin_client(client).post(
             "/api/v1/admin/teams",
             json={
                 "ownerUserId": ALICE,
@@ -2730,6 +2751,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_user(
                 "assignedTeamId": team["id"],
             },
         )
+        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
         for executor in ("codex", "claude", "codex"):
@@ -2780,7 +2802,7 @@ def recovery_team_thread(monkeypatch, tmp_path):
     lead = _agent(client, "alice", "Lead", "codex", role="planner")
     reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
     app.state.registry.update_status("test_node_alice", {"status": "ready"})
-    response = client.post(
+    response = _setup_admin_client(client).post(
         "/api/v1/admin/teams",
         json={
             "ownerUserId": ALICE,
@@ -2800,6 +2822,7 @@ def recovery_team_thread(monkeypatch, tmp_path):
         workspace_layout="thread",
     )
     session = controller.create_session("Build a login page")
+    _login(client, "alice")
     return client, controller, session, team, reviewer
 
 
@@ -2843,7 +2866,7 @@ def test_recovery_dispatches_current_user_turn(
         expected = "Only fix the logout bug now"
         controller.record_user_message(session["id"], expected)
     controller.fail_session(session["id"], "Agent stopped before answering")
-    client.patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
+    _setup_admin_client(client).patch(f"/api/v1/admin/teams/{team['id']}", json={"enabled": False})
     body = {
         "kind": kind,
         "targetAgentId": reviewer["id"],
@@ -3360,6 +3383,7 @@ def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
     for title in ("First", "Second"):
         task = store.create_task({"title": title, "ownerUserId": ALICE})
         store.link_session(task["id"], session["id"])
+    _login(client, "alice")
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
         json={
@@ -3423,6 +3447,7 @@ def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_th
         ("messages", {"text": "Explain the design", "addressAgentId": reviewer["id"]}),
         ("recoveries", {"kind": "handoff", "targetAgentId": reviewer["id"]}),
     ):
+        _login(client, "alice")
         response = client.post(f"/api/v1/threads/{session['id']}/{endpoint}", json=body)
         assert response.status_code == 202, response.text
         assert response.json()["collaborationRounds"][-1]["workScope"] == {
@@ -3831,7 +3856,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         app.state.registry.update_status(node_id, {
             "status": "ready", "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "work-results"],
         })
-        team = client.post("/api/v1/admin/teams", json={
+        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], *[member["id"] for member in members]],
             "collaborationStyle": "lead_led",
@@ -3927,7 +3952,7 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
-        team = client.post("/api/v1/admin/teams", json={
+        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
         }).json()["team"]
@@ -3942,7 +3967,7 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
         session = controller.create_session("Fix it")
         if disabled_member:
             disabled = {"lead": lead, "builder": builder, "reviewer": reviewer}[disabled_member]
-            changed = client.patch(
+            changed = _setup_admin_client(client).patch(
                 f"/api/v1/admin/agents/{disabled['id']}", json={"enabled": False},
             )
             assert changed.status_code == 200, changed.text
@@ -4031,7 +4056,7 @@ def test_pipeline_continues_to_final_specialist_after_missing_member_report(monk
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"],
             "status": "ready",
         })
-        team = client.post("/api/v1/admin/teams", json={
+        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
             "collaborationStyle": "pipeline",
@@ -4090,7 +4115,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
-        team = client.post("/api/v1/admin/teams", json={
+        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
         }).json()["team"]
@@ -4110,6 +4135,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
             workspace_layout="thread",
         ).create_session("Fix it too")
 
+        _login(client, "alice")
         invalid_style = client.post(
             f"/api/v1/threads/{team_session['id']}/messages",
             json={"text": "x", "style": "debate"},

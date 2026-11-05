@@ -261,7 +261,7 @@ def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> N
         def finished_thread() -> str:
             session = sessions.create_session({
                 "workspacePath": root, "taskGoal": "Run",
-                "participants": ["human", "codex"], "ownerUserId": "admin",
+                "participants": ["human", "codex"], "ownerUserId": client.app.state.auth_store.resolve_user_id("admin"),
             })
             sessions.append_event(session["id"], relay_event(
                 "session.completed", session["id"], {"outcome": "Done"}))

@@ -180,6 +180,7 @@ def test_daemon_without_model_support_fails_the_run_instead_of_ignoring_it(
 def test_computer_list_reports_whether_the_daemon_can_select_models(env) -> None:
     app, client = env
     _register_node(app, ["agent-model"])
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
 
     sandboxes = client.get("/api/v1/sandboxes").json()["sandboxes"]
 
@@ -301,6 +302,7 @@ def test_agent_offers_no_models_when_its_runtime_reports_none(env) -> None:
 def test_computer_list_carries_the_models_each_runtime_reports(env) -> None:
     app, client = env
     _register_node(app, ["agent-model"], agentModels={"codex": ["gpt-6-luna"]})
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
 
     sandboxes = client.get("/api/v1/sandboxes").json()["sandboxes"]
 

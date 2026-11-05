@@ -64,7 +64,7 @@ def test_admin_cannot_browse_someone_elses_personal_computer(personal_resources,
     async def dispatch(*_args):
         pytest.fail("A private Computer must be refused before dispatching a file read")
 
-    monkeypatch.setattr("relay.api.computers.node_workspace.dispatch_workspace_command", dispatch)
+    monkeypatch.setattr("relay.api.computers.workspace_transport.dispatch_workspace_command", dispatch)
     response = client.get(f"/api/v1/admin/daemon-nodes/node_alice/workspace/{suffix}")
     assert response.status_code == 403, response.text
 
@@ -102,6 +102,11 @@ def test_daemon_registration_cannot_mint_a_human_credential(personal_resources, 
     assert registered.status_code == 200, registered.text
     response = daemon.get(f"/api/v1/threads/{sessions['alice']}", headers={"Authorization": f"Bearer {bearer}"})
     assert response.status_code == 401, response.text
+    answer = daemon.post(
+        f"/api/v1/threads/{sessions['alice']}/permission-requests/pending-prompt",
+        json={"decision": "allow"}, headers={"Authorization": f"Bearer {bearer}"},
+    )
+    assert answer.status_code == 401, answer.text
 
 
 @pytest.mark.parametrize("path,key", [("/daemon-nodes", "nodes"), ("/sandboxes", "sandboxes")])
@@ -139,3 +144,11 @@ def test_legacy_shared_node_and_ui_secret_never_grants_human_authority(personal_
     }, ui_token="token_alice")
     response = TestClient(app).get(f"/api/v1/threads/{sessions['alice']}", headers={"Authorization": "Bearer token_alice"})
     assert response.status_code == 401, response.text
+
+
+def test_foreign_ui_token_cannot_override_cookie_when_changing_role_overrides(personal_resources):
+    client, _app, _identities, _sessions = personal_resources
+    response = client.patch('/api/v1/daemon-nodes/node_alice/agent-role-overrides',
+                            json={'agentRoleOverrides': {}},
+                            headers={'Authorization': 'Bearer ui_alice'})
+    assert response.status_code == 403, response.text

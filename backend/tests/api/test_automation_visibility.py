@@ -21,7 +21,7 @@ def test_personal_task_lists_are_user_scoped_even_for_admins(monkeypatch, tmp_pa
     store = client.app.state.task_store
     owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
     owned_task = store.create_task({"title": "My task", "ownerUserId": owner})
-    assigned_task = store.create_task({
+    store.create_task({
         "title": "Assigned to me", "ownerUserId": user_id("bob"), "assigneeUserId": owner,
     })
     own = store.create_task({
@@ -43,7 +43,7 @@ def test_personal_task_lists_are_user_scoped_even_for_admins(monkeypatch, tmp_pa
     response = client.get("/api/v1/tasks", params={"view": view})
     assert response.status_code == 200, response.text
     assert {task["id"] for task in response.json()["tasks"]} == {
-        own["id"], owned_task["id"], assigned_task["id"],
+        own["id"], owned_task["id"],
     }
 
     limited = client.get("/api/v1/tasks", params={"view": view, "limit": 1})

@@ -24,8 +24,8 @@ function makeQueryClient(): QueryClient {
 
 /**
  * What every page needs: the query client and the error boundary. The
- * dialog, toast, tooltip, and artifact-viewer providers belong to the
- * signed-in surfaces alone (`SignedInProviders` in App.tsx), so the landing
+ * dialog, toast, and tooltip providers ride App.tsx. PersonalSpaceProvider
+ * gives each signed-in Account its own data cache and artifact viewer, so the landing
  * page and the sign-in screens never download that stack.
  */
 export function Providers({ children }: { children: ReactNode }) {

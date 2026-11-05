@@ -227,10 +227,12 @@ def test_task_list_keeps_older_tasks_and_routines_beyond_200(monkeypatch, query)
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
+        owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
         expected = {
             app.state.task_store.create_task({
                 "title": f"Task {index}",
                 "isRoutine": index == 0,
+                "ownerUserId": owner,
             })["id"]
             for index in range(205)
         }

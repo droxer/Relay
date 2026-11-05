@@ -11,7 +11,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "./components/ui/DialogProvider";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { ArtifactViewerProvider } from "./components/ArtifactViewerProvider";
+import { PersonalSpaceProvider } from "./components/PersonalSpaceProvider";
 import { BuildUpdateNotice } from "./components/BuildUpdateNotice";
 import { LoginScreen } from "./components/LoginScreen";
 import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
@@ -35,8 +35,7 @@ import { useUserPreferences } from "./hooks/useUserPreferences";
 // ── App ───────────────────────────────────────────────────────────────────────
 
 /**
- * The providers only a signed-in surface uses: dialogs and toasts, tooltips,
- * and the artifact viewer. They ride the app chunk, not the page's own code,
+ * Dialogs, toasts, and tooltips ride the app chunk, not the page's own code,
  * so a visitor on the landing page or the sign-in screen never loads them.
  */
 export function SignedInProviders({ children }: { children: ReactNode }) {
@@ -47,7 +46,7 @@ export function SignedInProviders({ children }: { children: ReactNode }) {
     <TooltipProvider>
       <DialogProvider>
         <BuildUpdateNotice />
-        <ArtifactViewerProvider>{children}</ArtifactViewerProvider>
+        {children}
       </DialogProvider>
     </TooltipProvider>
   );
@@ -150,5 +149,7 @@ function AuthGate() {
 
   const deviceCode = deviceApprovalCode(window.location.pathname, window.location.search);
   if (deviceCode) return <DeviceApproval code={deviceCode} user={user} />;
-  return <AuthenticatedApp user={user} setUser={setUser} preferences={preferences} />;
+  return <PersonalSpaceProvider key={user.id}>
+    <AuthenticatedApp user={user} setUser={setUser} preferences={preferences} />
+  </PersonalSpaceProvider>;
 }

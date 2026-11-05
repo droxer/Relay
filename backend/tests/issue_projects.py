@@ -85,13 +85,14 @@ def project_store_create(
 def routine_run_with_session(app: Any, title: str, workspace_path: str = "/workspace") -> dict[str, Any]:
     """A projectless occurrence with a thread, for file and lifecycle API tests."""
     from relay.sessions.controller import SessionController
+    owner = app.state.auth_store.resolve_user_id("admin")
 
     task = app.state.task_store.create_task({
-        "title": title, "ownerUserId": "admin", "sourceRoutineId": "routine_nightly",
+        "title": title, "ownerUserId": owner, "sourceRoutineId": "routine_nightly",
     })
     controller = SessionController(
         app.state.session_store, task_store=app.state.task_store,
-        task_id=task["id"], workspace_path=workspace_path, owner_user_id="admin",
+        task_id=task["id"], workspace_path=workspace_path, owner_user_id=owner,
     )
     controller.create_session(title, ["human"])
     return app.state.task_store.get_task(task["id"])
