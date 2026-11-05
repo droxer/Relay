@@ -7,6 +7,8 @@ import pytest
 from cryptography.fernet import Fernet
 
 from relay.connections import providers
+from relay.core.ids import new_database_id
+from test_github_issue_import import ALICE
 from test_github_issue_import import context as context
 
 
@@ -24,6 +26,8 @@ def configuration(monkeypatch):
             return httpx.Response(200, json={"id": 17, "login": "octocat"})
         if request.url.path == "/user/repos":
             return httpx.Response(200, json=[{"id": 42, "full_name": "octo/hello"}])
+        if request.url.path == "/repos/octo/hello/issues":
+            return httpx.Response(200, json=[{"number": 1, "title": "Connections"}])
         raise AssertionError(str(request.url))
 
     monkeypatch.setattr(providers, "transport", httpx.MockTransport(handler))
@@ -98,3 +102,34 @@ def test_automation_occurrence_snapshots_grants_and_cannot_expand_them(context):
     assert client.put(grants_path, json={"grants": []}).status_code == 409
     assert client.delete(f"/api/v1/connections/{connection['id']}").status_code == 200
     assert app.state.task_store.get_task(routine["id"])["routinePauseReason"] == "connection_unavailable"
+
+
+def test_run_bound_tools_check_lease_and_live_revocation(context):
+    app, client, _project = context
+    connection = _connect(client)
+    thread = app.state.session_store.create_session({"workspacePath": "/workspace", "taskGoal": "Read issues", "ownerUserId": ALICE})
+    grant = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    saved = client.put(f"/api/v1/connection-grants/thread/{thread['id']}", json={"grants": [grant]}).json()["grants"]
+    node = app.state.registry.monitor_nodes()[0]
+    command_id = new_database_id()
+    app.state.daemon_store.enqueue_command(node["id"], {"id": command_id, "type": "run.start",
+        "sessionId": thread["id"], "runId": new_database_id(), "connections": saved})
+    [lease] = app.state.daemon_store.take_queued_commands(node["id"])
+    path = f"/api/v1/daemon-nodes/{node['id']}/commands/{command_id}/connections"
+    node_headers = {"Authorization": "Bearer token_node_alice_github"}
+    assert client.post(path, json={"leaseId": "wrong"}, headers=node_headers).status_code == 409
+    response = client.post(path, json={"leaseId": lease["leaseId"]}, headers=node_headers)
+    assert response.status_code == 200, response.text
+    assert "secret-token" not in response.text
+    headers = {"Authorization": f"Bearer {response.json()['token']}"}
+    tools = client.post("/api/v1/connection-tools", headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert tools.status_code == 200, tools.text
+    assert len(tools.json()["result"]["tools"]) == 1
+    call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "connection_call", "arguments": {
+        "connectionId": connection["id"], "action": "github.list_issues", "resource": "octo/hello", "arguments": {}}}}
+    result = client.post("/api/v1/connection-tools", headers=headers, json=call)
+    assert "Connections" in result.json()["result"]["content"][0]["text"]
+    client.delete(f"/api/v1/connections/{connection['id']}")
+    result = client.post("/api/v1/connection-tools", headers=headers, json=call)
+    assert result.json()["result"]["isError"] is True
+    assert client.post("/api/v1/connection-tools", json=call).status_code == 401
