@@ -1703,6 +1703,20 @@ async function executeCommand(
     let runState = agentHomeSubdir
       ? { ...skillState, agent_home_subdir: agentHomeSubdir }
       : skillState;
+    if (command.connections?.length) {
+      if (!command.leaseId) throw new Error("Connection tools require an explicit command lease");
+      const access = await fetchFn(relayApiUrl(backendUrl,
+        `/daemon-nodes/${encodeURIComponent(sandboxId)}/commands/${encodeURIComponent(command.id)}/connections`), {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ leaseId: command.leaseId }), signal: requestSignal(signal),
+      });
+      if (!access.ok) throw new Error(`Connection access unavailable (${access.status})`);
+      const credential = await access.json() as { token?: unknown };
+      if (typeof credential.token !== "string") throw new Error("Invalid connection access response");
+      runState = { ...runState, connection_tools: {
+        url: relayApiUrl(backendUrl, "/connection-tools"), token: credential.token,
+      } };
+    }
     // Snapshot document-type workspace files so a successful run can report
     // exactly what it created or changed (see generated-files.ts).
     const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);

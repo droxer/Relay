@@ -128,6 +128,8 @@ export interface AgentState {
   skill_paths?: string[];
   /** Per-run config directories. Command builders accept only their declared key. */
   skill_env?: Record<string, string>;
+  /** Daemon-issued run credential for bounded service tools; never a provider token. */
+  connection_tools?: { url: string; token: string };
   /**
    * Launch spec for the stdio MCP server a local, native-policy Claude run
    * asks through (`--permission-prompt-tool`). Set by the daemon only when it
