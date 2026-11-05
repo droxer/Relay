@@ -61,14 +61,20 @@ test("an installed CLI whose check fails reads as a plain failure", async () => 
   );
 });
 
-test("a check that outlives its deadline reads as unresponsive", async () => {
+test("a check that outlives its deadline reads as unresponsive", async (t) => {
+  // AbortSignal.timeout is unref'ed; the fake has no process handle to keep
+  // Node 22 alive until the deadline, unlike the real readiness check.
+  const handle = setInterval(() => {}, 1_000);
+  t.after(() => clearInterval(handle));
   await assert.rejects(
     runBoundedPreflight("kimi", undefined, hangUntilAborted, 20),
     (error) => error instanceof AgentUnresponsiveError && /Kimi is not responding/.test(error.message),
   );
 });
 
-test("a thrown error after the deadline still reads as unresponsive", async () => {
+test("a thrown error after the deadline still reads as unresponsive", async (t) => {
+  const handle = setInterval(() => {}, 1_000);
+  t.after(() => clearInterval(handle));
   await assert.rejects(
     runBoundedPreflight("kimi", undefined, (signal) => new Promise((_, reject) => {
       signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });

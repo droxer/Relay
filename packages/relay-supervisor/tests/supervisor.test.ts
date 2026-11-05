@@ -202,7 +202,10 @@ test("supervisor restarts a managed daemon after its child exits", async () => {
   assert.equal(launcher.starts.length, 2);
 });
 
-test("supervisor backend requests time out instead of freezing reconciliation", async () => {
+test("supervisor backend requests time out instead of freezing reconciliation", async (t) => {
+  // Stand in for the socket handle absent from the injected fetch function.
+  const handle = setInterval(() => {}, 1_000);
+  t.after(() => clearInterval(handle));
   const client = new SupervisorBackendClient({
     backendUrl: "http://backend.test",
     requestTimeoutMs: 5,

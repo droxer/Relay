@@ -148,13 +148,19 @@ test("update pause accounts for an in-flight poll before acknowledging and stops
   let runs = 0;
   let finish!: () => void;
   const running = new Promise<void>(resolve => { finish = resolve; });
+  let allowExecution!: () => void;
+  const preparation = new Promise<void>(resolve => { allowExecution = resolve; });
+  let beganExecution!: () => void;
+  const started = new Promise<void>(resolve => { beganExecution = resolve; });
   const command = runCommand('update-race');
   const daemon = runRelayDaemon({
     backendUrl: 'http://relay.test', sandboxId: 'update-race', userId: 'alice', token: 'fixture',
     workspacePath: process.cwd(), stateDir, signal: stop.signal, logger: testLogger(),
     pollIntervalMs: 1, shutdownGraceMs: 50,
-    environment: fakeEnvironment({ exec: async (_cmd, args) => {
-      if (!isInventoryProbe(args)) { runs++; await running; }
+    environment: fakeEnvironment({ ensure: async (_agent, _signal, workspace) => {
+      if (workspace) await preparation;
+    }, exec: async (_cmd, args) => {
+      if (!isInventoryProbe(args)) { runs++; beganExecution(); await running; }
       return { exit_code: 0, stdout: '', stderr: '' };
     } }),
     fetchFn: async url => {
@@ -174,15 +180,21 @@ test("update pause accounts for an in-flight poll before acknowledging and stops
     const deadline = Date.now() + 5000;
     while (!pause?.acknowledged() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(pause?.acknowledged(), true);
-    assert.equal(runs, 1);
+    // The acknowledgement proves admission is journaled even while runtime
+    // preparation is pending. It does not promise the process already started.
+    assert.equal(runs, 0);
     assert.equal(new ExecutionJournal(join(stateDir, 'executions')).pending().length, 1);
     await new Promise(resolve => setTimeout(resolve, 150));
     assert.equal(polls, 1);
+    allowExecution();
+    await started;
+    assert.equal(runs, 1);
     pause!.release();
     while (polls === 1 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
     assert.ok(polls > 1);
   } finally {
     pause?.release();
+    allowExecution();
     finish();
     stop.abort();
     await daemon;
@@ -979,8 +991,7 @@ test("a native local Claude run asks a person through the daemon's permission br
 test("a native local run fails rather than run without asking when its permission broker cannot start", async () => {
   const previous = captureEnv(["RELAY_AGENT_HOME", "RELAY_RUN_AS_CURRENT_USER", "RELAY_AGENT_WORKSPACE", "RELAY_LOCAL_PERMISSION_POLICY", "TMPDIR"]);
   delete process.env.RELAY_LOCAL_PERMISSION_POLICY;
-  // The broker's private directory goes under the temp dir; a missing one stops it starting.
-  process.env.TMPDIR = join(tmpdir(), `relay-missing-${process.pid}-${Date.now()}`, "nested");
+  const missingTempDir = join(tmpdir(), `relay-missing-${process.pid}-${Date.now()}`, "nested");
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   const agentCommands: string[] = [];
@@ -1000,6 +1011,11 @@ test("a native local run fails rather than run without asking when its permissio
       logger: testLogger(),
       signal: stop.signal,
       environment: fakeEnvironment({
+        ensure: async (_agent, _signal, workspace) => {
+          // Change it after workspace locking: the gate creates its temp
+          // directory recursively and would otherwise repair this fixture.
+          if (workspace) process.env.TMPDIR = missingTempDir;
+        },
         exec: async (_cmd, args) => {
           if (!isInventoryProbe(args)) agentCommands.push(args?.[1] ?? "");
           return { exit_code: 0, stdout: "done\n", stderr: "" };

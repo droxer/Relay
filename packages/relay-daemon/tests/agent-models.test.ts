@@ -326,7 +326,10 @@ describe("agent model discovery", () => {
     assert.deepEqual(await discoverAgentModels(throwing, []), {});
   });
 
-  it("aborts a hung sweep at its deadline", async () => {
+  it("aborts a hung sweep at its deadline", async (t) => {
+    // The fake has no child process handle; keep the unref'ed abort deadline live.
+    const handle = setInterval(() => {}, 1_000);
+    t.after(() => clearInterval(handle));
     let aborted = false;
     const hanging = async (_cmd: string, _args?: string[], options?: { signal?: AbortSignal }): Promise<ExecResult> =>
       await new Promise<ExecResult>((_resolve, reject) => {
