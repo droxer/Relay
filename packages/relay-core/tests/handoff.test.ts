@@ -359,6 +359,7 @@ describe("prompts", () => {
     assert.match(asked, /\[Next steps\]/);
     assert.match(asked, /write `\.relay\/next-steps\.json` as JSON: \{"nextSteps"/);
     assert.match(asked, /1–3 follow-up requests/);
+    assert.match(asked, /If you stopped before the work was done, suggest the specific requests that would finish it/);
     assert.match(asked, /never mention it in your reply/);
     assert.doesNotMatch(plain, /\[Next steps\]/);
   });

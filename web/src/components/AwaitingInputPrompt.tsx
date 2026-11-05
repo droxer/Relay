@@ -12,9 +12,6 @@ type Choice = {
   label: string;
   /** Sent as the reply. A choice with `act` sends nothing to the agent. */
   reply: string;
-  /** `discuss` asks without resuming: a status question must not hand the
-   *  agent a task round whose verdict could continue or close the task. */
-  intent?: "discuss";
   /** Approves the step an approval wait holds back (ADR-023). */
   approve?: true;
   /** Acts on the task instead of replying; resolves false when it did not. */
@@ -47,9 +44,8 @@ const ANNOUNCE_DELAY_MS = 150;
  * transcript where a scrolled-up reader would lose it. The agent's own words
  * are the loud thing; everything around them stays quiet.
  *
- * Answering should be a pick, not a chore: the agent's offered answers (or,
- * for a gate stop, the two next steps that always make sense) are one click
- * each and send as the reply — by click or by its number key while nothing
+ * Answering should be a pick, not a chore: the agent's offered answers (or
+ * an approval's approve) are one click each and send as the reply — by click or by its number key while nothing
  * else has focus (or focus is on the prompt itself). Typing stays available
  * for anything else.
  */
@@ -115,22 +111,9 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
       ...(markDone ? [markDone] : []),
     ]
     : !asked
-    ? [
-      {
-        label: t("awaiting.choice_continue"),
-        reply: t("awaiting.choice_continue_reply"),
-        effect: ref ? t("awaiting.effect_resume", { ref }) : t("awaiting.effect_resume_thread"),
-        sent: resumed,
-      },
-      {
-        label: t("awaiting.choice_status"),
-        reply: t("awaiting.choice_status_reply"),
-        intent: "discuss",
-        effect: t("awaiting.effect_stays"),
-        sent: t("awaiting.sent_discuss", { agent: agentName }),
-      },
-      ...(markDone ? [markDone] : []),
-    ]
+    // A gate stop or a spent budget renders as follow-ups beneath the
+    // response (ThreadsView), so only the person's own mark done is left.
+    ? (markDone ? [markDone] : [])
     : waiting.options.map((option) => ({ label: option, reply: option, sent: resumed }));
   const choose = async (index: number) => {
     const choice = choices[index];
@@ -141,7 +124,7 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
         ? await choice.act()
         : await onChoose(
           choice.reply,
-          choice.intent ? { intent: choice.intent } : choice.approve ? { approve: true } : undefined,
+          choice.approve ? { approve: true } : undefined,
         );
       if (done) setSent(choice.sent);
       else setChosen(null);

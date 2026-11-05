@@ -319,16 +319,15 @@ export function ThreadsView({
   // A stopped run offers ordinary follow-ups beneath its response. Only a
   // question or approval needs a prompt attached to the reply box.
   const followUpWait = waiting?.kind === "check" || waiting?.kind === "budget";
-  const recoverySteps = followUpWait
-    ? [t("awaiting.choice_continue"), t("awaiting.choice_status")]
-    : [];
   // A finished turn's suggested follow-ups, while nothing else claims the
-  // thread: no run, no question, no decision, no open permission prompt.
+  // thread: no run, no question, no decision, no open permission prompt. A
+  // stopped run's are the agent's own read of what is left, so they stay.
   const nextSteps = useMemo(
     () => threadNextSteps(activeSession, {
-      busy: running || waiting !== null || awaitingDecision || openPermissionRequests(activeSession).length > 0,
+      busy: running || (waiting !== null && !followUpWait) || awaitingDecision
+        || openPermissionRequests(activeSession).length > 0,
     }),
-    [activeSession, running, waiting, awaitingDecision],
+    [activeSession, running, waiting, followUpWait, awaitingDecision],
   );
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
@@ -617,15 +616,8 @@ export function ThreadsView({
                 />
                 <NextSteps
                   key={JSON.stringify([activeSession?.id, activeSession?.activeRoundId, waitingQuestionId, followUpWait])}
-                  steps={followUpWait ? recoverySteps : nextSteps}
-                  onSend={(text) => {
-                    const status = followUpWait && text === t("awaiting.choice_status");
-                    const reply = followUpWait
-                      ? t(status ? "awaiting.choice_status_reply" : "awaiting.choice_continue_reply")
-                      : text;
-                    return composerRef.current?.send(reply, status ? { intent: "discuss" } : undefined)
-                      ?? Promise.resolve(false);
-                  }}
+                  steps={nextSteps}
+                  onSend={(text) => composerRef.current?.send(text) ?? Promise.resolve(false)}
                 />
                 {awaitingDecision ? (
                   <DecisionBar

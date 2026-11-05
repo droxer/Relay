@@ -8,6 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+import pytest
+
 from relay.core.next_steps import (
     NEXT_STEP_MAX_CHARS,
     NEXT_STEPS_MAX,
@@ -15,8 +17,10 @@ from relay.core.next_steps import (
     sanitize_next_steps,
 )
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
+from relay.core.human_waits import wait_record
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.persistence.session.reducer import apply_session_event
+from relay.sessions.controller import SessionController
 from store_fixtures import make_daemon_store, make_session_store, make_task_store
 
 REPO = Path(__file__).parents[3]
@@ -117,6 +121,26 @@ def test_a_round_that_asks_its_person_offers_its_answers_not_next_steps() -> Non
             assert session["inputOptions"] == ["eu", "us"]
             assert "nextSteps" not in session
     asyncio.run(flow())
+
+
+@pytest.mark.parametrize(("kind", "offered"), [
+    ("check", True), ("budget", True), ("question", False), ("approval", False),
+])
+def test_a_stop_offers_the_agents_next_steps_unless_its_wait_brings_answers(
+    kind: str, offered: bool,
+) -> None:
+    with TemporaryDirectory() as root:
+        sessions, tasks, _registry_ = _registry(root)
+        task = tasks.create_task({"title": "Deploy"})
+        controller = SessionController(sessions, task_store=tasks, task_id=task["id"])
+        session = controller.create_session("Deploy")
+        controller.complete_session(
+            session["id"], "Stopped.", task_status="waiting_for_human",
+            input_request=wait_record(kind, "wait-1"),  # type: ignore[arg-type]
+            next_steps=["Run the staging smoke test"],
+        )
+        completed = sessions.get_session(session["id"])
+        assert completed.get("nextSteps") == (["Run the staging smoke test"] if offered else None)
 
 
 def test_new_activity_retires_the_suggestions() -> None:
