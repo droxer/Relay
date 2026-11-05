@@ -1,3 +1,4 @@
+@import "./connections.css" layer(relay);
 /* The app's surfaces, imported by App.tsx so they load with the app's chunk
    instead of blocking the landing page's first paint. The global sheet
    (src/styles.css) has already declared the layer order and the tokens; these

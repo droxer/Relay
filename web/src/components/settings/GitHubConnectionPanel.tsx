@@ -4,15 +4,15 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "../ui/badge";
 import { AdminConnect } from "../icons";
 
-/** Public issue imports are available; account connection is deferred. */
+/** The anonymous importer is separate from authenticated service tools. */
 export function GitHubConnectionPanel() {
   const { t } = useTranslation();
   return (
-    <section className="github-connection" aria-label={t("github_connection.title")}>
+    <section className="github-connection" aria-label={t("github_connection.import_title")}>
       <h3 className="github-connection-title">
         <AdminConnect aria-hidden="true" />
-        {t("github_connection.title")}
-        <Badge variant="neutral">{t("github_connection.coming_soon")}</Badge>
+        {t("github_connection.import_title")}
+        <Badge variant="neutral">{t("github_connection.public_repositories")}</Badge>
       </h3>
       <p className="github-connection-hint">{t("github_connection.public_only")}</p>
     </section>

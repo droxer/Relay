@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import delete, insert, select, update, func
 
 from ...core.ids import new_database_id, now_iso
+from ...core.connections import ConnectionError
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..resource_lock import resource_transaction
 from ..tables.connections import connections, events, grants, states
@@ -82,12 +83,17 @@ class DatabaseConnectionStore:
         aggregate = f"{owner}:{target_type}:{target_id}"
         with self.lock(aggregate) as conn:
             old = {g["connectionId"]: g for g in self.grants(owner, target_type, target_id)}
+            for record in records:
+                prior = old.get(record["connectionId"], {})
+                if "id" in record and (record["id"] != prior.get("id") or record["revision"] != prior.get("revision")):
+                    raise ConnectionError("connection_grants_changed", 409)
             conn.execute(delete(grants).where(grants.c.owner_user_id == owner,
                 grants.c.target_type == target_type, grants.c.target_id == target_id))
             saved = []
             for record in records:
                 prior = old.get(record["connectionId"], {})
-                item = {**record, "id": prior.get("id") or new_database_id(), "revision": prior.get("revision", 0) + 1}
+                same_access = prior and prior["resources"] == record["resources"] and prior["actions"] == record["actions"]
+                item = prior if same_access else {**record, "id": new_database_id(), "revision": prior.get("revision", 0) + 1}
                 conn.execute(insert(grants).values(id=item["id"], owner_user_id=owner, target_type=target_type,
                     target_id=target_id, record=item))
                 saved.append(item)

@@ -215,6 +215,7 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
+        ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),
         priority: form.priority,
         tags: form.tags,
         ...routineMutationFields(form),

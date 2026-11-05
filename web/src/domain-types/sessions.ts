@@ -36,6 +36,7 @@ export interface SessionSummariesResponse {
 }
 
 export interface AgentRunInput {
+  connectionGrants?: import("./connections.ts").ConnectionGrant[];
   idempotencyKey?: string;
   attachmentIds?: string[];
   style?: CollaborationStyle;

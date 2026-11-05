@@ -104,15 +104,17 @@ class ConnectionService:
             raise ConnectionError("connection_permissions_invalid", 422)
         identity = providers.identity(provider, tokens["access_token"])
         reconnect_id = pending.get("reconnectId")
-        old = self._connection(owner, reconnect_id) if reconnect_id else None
-        if old and (old["subject"] != identity["subject"] or old["tenant"] != identity["tenant"]
-                    or old["status"] == "disconnected"):
-            raise ConnectionError("connection_identity_mismatch", 409)
-        record = {"id": reconnect_id or new_database_id(), "provider": provider, **identity,
-            "label": old["label"] if old else identity["identity"], "status": "connected",
-            "revision": old["revision"] + 1 if old else 1, "updatedAt": now_iso(),
-            "actions": list(PROVIDERS[provider].actions)}
-        self.store.save(owner, record, self._seal(_tokens(tokens)))
+        connection_id = reconnect_id or new_database_id()
+        with self.store.lock(connection_id):
+            old = self._connection(owner, reconnect_id) if reconnect_id else None
+            if old and (old["subject"] != identity["subject"] or old["tenant"] != identity["tenant"]
+                        or old["status"] == "disconnected"):
+                raise ConnectionError("connection_identity_mismatch", 409)
+            record = {"id": connection_id, "provider": provider, **identity,
+                "label": old["label"] if old else identity["identity"], "status": "connected",
+                "revision": old["revision"] + 1 if old else 1, "updatedAt": now_iso(),
+                "actions": list(PROVIDERS[provider].actions)}
+            self.store.save(owner, record, self._seal(_tokens(tokens)))
         return record, pending["returnTo"]
 
     def token(self, owner: str, connection_id: str) -> str:
@@ -212,7 +214,12 @@ class ConnectionService:
                     or not all(isinstance(action, str) and action in record["actions"] for action in actions)):
                 raise ConnectionError("connection_grants_invalid")
             seen.add(record["id"])
-            normalized.append({"connectionId": record["id"], "resources": sorted(set(resources)), "actions": sorted(set(actions))})
+            expected = {key: item[key] for key in ("id", "revision") if key in item}
+            if expected and (set(expected) != {"id", "revision"} or not isinstance(expected["id"], str)
+                    or type(expected["revision"]) is not int or expected["revision"] < 1):
+                raise ConnectionError("connection_grants_invalid")
+            normalized.append({"connectionId": record["id"], "resources": sorted(set(resources)),
+                "actions": sorted(set(actions)), **expected})
         return normalized
 
     def call(self, owner: str, snapshot: builtins.list[dict[str, Any]], connection_id: str,

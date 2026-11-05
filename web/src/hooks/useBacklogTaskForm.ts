@@ -118,6 +118,7 @@ export function useBacklogTaskForm({
       const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         description: form.description,
+        ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),
         priority: form.priority,
         tags: form.tags,
         ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
