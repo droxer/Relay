@@ -108,9 +108,9 @@ class SessionCompletionMixin(SessionControllerState):
             relay_event("session.completed", session_id, {
                 "outcome": outcome, "workOutcome": work_outcome,
                 **_session_input_fields(request),
-                # Offered only when nobody is being waited on: a question's
-                # own answers are the next step then.
-                **({"nextSteps": list(next_steps)} if next_steps and not request else {}),
+                # A question or an approval brings its own answers; any other
+                # stop offers what the agent itself suggested doing next.
+                **({"nextSteps": list(next_steps)} if next_steps and not _brings_answers(request) else {}),
             }),
         )
         self._update_task_status(
@@ -140,6 +140,11 @@ class SessionCompletionMixin(SessionControllerState):
                     self._update_task_status("blocked", outcome, {"sessionId": session_id, "code": "execution_failed"})
             logger.info("Session failed", session_id=session_id, outcome=outcome)
             return session
+
+
+def _brings_answers(request: dict[str, Any]) -> bool:
+    """Whether a wait answers itself: a question's options, an approval's pick."""
+    return bool(request) and request.get("kind") not in {"check", "budget"}
 
 
 def _session_input_fields(request: dict[str, Any] | None) -> dict[str, Any]:
