@@ -51,6 +51,7 @@ markers = [
   "postgres: requires a live Postgres database",
   "integration: starts backend, daemon, or client processes",
   "slow: longer-running filesystem or process tests",
+  "production_password_hash: exercise the unmodified production password hashing cost",
 ]
 
 [tool.ruff]

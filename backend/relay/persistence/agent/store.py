@@ -19,7 +19,7 @@ from ...core.models import AGENT_NAMES, AGENT_ROLES
 from ...core.preset_avatars import current_preset_avatar_url, validate_profile_image_url
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
-from ..sql import metadata as shared_metadata
+from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import agents as agents_tables
 
 AGENT_PATCH_FIELDS = frozenset(
@@ -110,6 +110,27 @@ class DatabaseAgentStore:
             if row
             else None
         )
+
+    def get_agents_by_ids(self, agent_ids: list[str]) -> list[dict[str, Any]]:
+        """Read live members with one checkout and bounded primary-key batches."""
+        ids = [key for key in dict.fromkeys(agent_ids) if not names_no_uuid_row(self.engine, key)]
+        if not ids:
+            return []
+        found = {}
+        with store_transaction(self.engine) as conn:
+            for offset in range(0, len(ids), 500):
+                rows = conn.execute(
+                    select(self.agents.c.snapshot, self.agents.c.supervisor_user_id)
+                    .where(
+                        self.agents.c.id.in_(ids[offset:offset + 500]),
+                        self.agents.c.deleted_at.is_(None),
+                    )
+                ).mappings()
+                for row in rows:
+                    agent = _normalized_agent_snapshot(row["snapshot"], row["supervisor_user_id"])
+                    if not agent.get("deletedAt"):
+                        found[agent["id"]] = agent
+        return [found[key] for key in ids if key in found]
 
     def list_agents(
         self,

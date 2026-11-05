@@ -165,6 +165,31 @@ npm run test:py
 `test:py` uses `UV_CACHE_DIR=.uv-cache` so dependency downloads and builds stay
 inside the repository workspace.
 
+Backend tests use real password hashing with 1,000 PBKDF2 rounds to avoid
+repeating the production CPU cost for every account fixture. Tests marked
+`production_password_hash` retain the production cost and verify its work
+factor, salts, and password checks. To run all tests at the production cost:
+
+```bash
+npm run test:py -- --full-password-cost
+```
+
+To find slow tests, use `npm run test:py -- --durations=20`. For a focused
+run, pass a test path, for example
+`npm run test:py -- backend/tests/api/test_auth.py -q`.
+
+Test-created shared database engines are disposed after each test, so pools
+and their SQL compilation caches do not accumulate across the suite. Stores
+within a test still share their engine and database as they do in the app.
+
+Production and test stores use the same bounded database reads: team views
+fetch members in batches of up to 500 IDs through one connection checkout,
+and account lookup joins the User in one query. These paths reduce database
+round trips while retaining deleted-record filtering and roster order.
+Schema verification also keeps its reflection queries on one connection per
+store, avoiding repeated pool checkouts and PostgreSQL liveness pings during
+app startup.
+
 ### Personal-computer setup troubleshooting
 
 An online computer can still lack the capabilities required for team dispatch.

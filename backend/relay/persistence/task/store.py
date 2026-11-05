@@ -46,7 +46,11 @@ class DatabaseTaskStore(
             create_all_tables(self.engine)
 
     def verify_schema(self) -> None:
-        schema = inspect(self.engine)
+        with self.engine.connect() as conn:
+            self._verify_schema(conn)
+
+    def _verify_schema(self, conn: Any) -> None:
+        schema = inspect(conn)
         required_tables = {
             "tasks",
             "task_events",

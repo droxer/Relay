@@ -123,13 +123,15 @@ def test_team_list_reads_each_member_and_the_fleet_once(roster, monkeypatch) -> 
     nodes = _count_calls(monkeypatch, app.state.registry, "monitor_nodes")
     placements = _count_calls(monkeypatch, app.state.agent_placement_store, "list_placements")
     agents = _count_calls(monkeypatch, app.state.agent_store, "get_agent")
+    batches = _count_calls(monkeypatch, app.state.agent_store, "get_agents_by_ids")
 
     listed = client.get("/api/v1/admin/teams").json()
 
     assert listed == baseline
     assert nodes[0] == 1
     assert placements[0] == 1
-    assert agents[0] == len(agent_ids)
+    assert agents[0] == 0
+    assert batches[0] == 1
 
 
 def test_placement_list_reads_the_fleet_once(roster, monkeypatch) -> None:
