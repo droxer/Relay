@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import pytest
 from contextlib import nullcontext
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -61,7 +62,9 @@ def _registry(root: str) -> DaemonNodeRegistry:
     return registry
 
 
-def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypatch) -> None:
+@pytest.mark.parametrize("uptime", [100.0, 7200.0])
+def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypatch, uptime) -> None:
+    monkeypatch.setattr("relay.daemon_registry.nodes.liveness.time.monotonic", lambda: uptime)
     monkeypatch.setattr(config, "DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS", 3600)
     with TemporaryDirectory() as root:
         registry = _registry(root)
