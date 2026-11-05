@@ -31,9 +31,11 @@ function ConnectionGrantContent({ value, targetType = "thread", targetId, disabl
   const saved = useQuery({ queryKey: ["connections", "grants", targetType, targetId],
     queryFn: () => getConnectionGrants(targetType, targetId!), enabled: Boolean(targetId) });
   const selected = value ?? saved.data?.grants ?? [];
-  const readonly = disabled || saved.data?.readOnly || (saved.data?.targetType === "task" && targetType === "thread");
+  const readonly = disabled || (Boolean(targetId) && (saved.isPending || Boolean(saved.error)))
+    || saved.data?.readOnly || (saved.data?.targetType === "task" && targetType === "thread");
   const records = connections.data?.connections ?? [];
   const update = (connectionId: string, patch: Partial<ConnectionGrant> | null) => {
+    if (readonly) return;
     const others = selected.filter(grant => grant.connectionId !== connectionId);
     const prior = selected.find(grant => grant.connectionId === connectionId);
     onChange(patch ? [...others, { connectionId, resources: [], actions: [], ...prior, ...patch }] : others);
@@ -78,14 +80,14 @@ function GrantOptions({ connection, grant, onChange, disabled, expanded }: {
       {resources.error && <p role="alert">{t("connections.resources_failed")} <Button type="button" variant="outline" onClick={() => void resources.refetch()}>{t("connections.retry")}</Button></p>}
       {!resources.isPending && !resources.error && !items.length && <p>{t("connections.no_resources")}</p>}
       {grant.resources.filter(id => !items.some(item => item.id === id)).map(id => <label className="connection-choice" key={id}>
-        <Checkbox checked onCheckedChange={() => onChange({ resources: toggle(grant.resources, id) })} />{id}
+        <Checkbox checked disabled={disabled} onCheckedChange={() => onChange({ resources: toggle(grant.resources, id) })} />{id}
       </label>)}
-      {items.map(item => <label className="connection-choice" key={item.id}><Checkbox checked={grant.resources.includes(item.id)}
+      {items.map(item => <label className="connection-choice" key={item.id}><Checkbox checked={grant.resources.includes(item.id)} disabled={disabled}
         onCheckedChange={() => onChange({ resources: toggle(grant.resources, item.id) })} />{item.name}</label>)}
       {resources.hasNextPage && <Button type="button" variant="ghost" disabled={resources.isFetchingNextPage} onClick={() => void resources.fetchNextPage()}>{t("connections.load_more")}</Button>}
     </fieldset>
     <fieldset disabled={disabled}><legend>{t("connections.actions")}</legend>
-      {connection.actions.map(action => <label className="connection-choice" key={action}><Checkbox checked={grant.actions.includes(action)}
+      {connection.actions.map(action => <label className="connection-choice" key={action}><Checkbox checked={grant.actions.includes(action)} disabled={disabled}
         onCheckedChange={() => onChange({ actions: toggle(grant.actions, action) })} />{t(`connections.action.${action.replaceAll(".", "_")}`)}</label>)}
     </fieldset>
     {grant.actions.includes("slack.post_message") && <p>{t("connections.write_notice")}</p>}
