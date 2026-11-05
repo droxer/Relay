@@ -35,6 +35,11 @@ update-pause race evidence (`0 !== 1`).
 The deadline handles stand in for the resource missing from the test doubles;
 production timeout behavior is unchanged. All edits are in test files.
 
+A clean Linux reproduction also found fake Codex/Kimi servers exiting on stdin
+EOF before their SIGTERM audit handler ran. The service stand-ins now hold a
+referenced interval until they exit, so the existing shutdown assertions exercise
+signal handling instead of racing EOF. This changes no production shutdown code.
+
 ## GREEN
 
 ```sh
