@@ -117,3 +117,13 @@ def test_insufficient_provider_consent_is_not_reported_connected(service, monkey
     with pytest.raises(ConnectionError, match="connection_permissions_invalid"):
         connect(service)
     assert service.list("alice") == []
+
+
+def test_deleting_owner_retires_credentials_and_pending_authorizations(service):
+    connection = connect(service)
+    url = service.start("alice", "session", "github", "/settings/connections")
+    state = parse_qs(urlsplit(url).query)["state"][0]
+    service.disconnect_all("alice")
+    assert service.store.get("alice", connection["id"])["sealedSecret"] is None
+    with pytest.raises(ConnectionError, match="connection_state_invalid"):
+        service.complete("alice", "session", "github", state, code="code")

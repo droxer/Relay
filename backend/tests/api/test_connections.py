@@ -8,6 +8,8 @@ from cryptography.fernet import Fernet
 
 from relay.connections import providers
 from relay.core.ids import new_database_id
+from relay.automations.service import automation_service
+from datetime import datetime, UTC
 from test_github_issue_import import ALICE
 from test_github_issue_import import context as context
 
@@ -164,3 +166,28 @@ def test_new_thread_saves_access_before_delivery(context):
     assert len(saved) == 1
     commands = app.state.daemon_store.take_queued_commands(node["id"])
     assert any(record["command"].get("connections") for record in commands)
+
+
+def test_unavailable_service_pauses_before_automation_fires_and_prevents_resume(context):
+    app, client, project = context
+    connection = _connect(client)
+    routine = client.post("/api/v1/tasks", json={"title": "Read issues", "projectId": project["id"],
+        "isRoutine": True, "routineState": "active", "routineTriggers": [], "connectionGrants": [{
+            "connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}]}).json()
+    stored = app.state.connections.store.get(ALICE, connection["id"])
+    app.state.connections._unavailable(ALICE, stored)
+    app.state.automation_store.enqueue_manual(routine["id"])
+    automation_service(app.state.automation_store, app.state.context).tick(datetime.now(UTC))
+    current = app.state.task_store.get_task(routine["id"])
+    assert current.get("occurrenceIds", []) == []
+    assert current["routinePauseReason"] == "connection_unavailable"
+    assert client.post(f"/api/v1/tasks/{routine['id']}/automation/resume").status_code == 409
+
+
+def test_admin_cannot_access_another_users_connections(context):
+    _app, client, _project = context
+    connection = _connect(client)
+    assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
+    assert client.get("/api/v1/connections").json()["connections"] == []
+    assert client.delete(f"/api/v1/connections/{connection['id']}").status_code == 404
+    assert client.get(f"/api/v1/connections/{connection['id']}/resources").status_code == 404
