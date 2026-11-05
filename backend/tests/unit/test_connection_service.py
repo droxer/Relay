@@ -1,6 +1,8 @@
 """Service authorization and grants must not expose or widen credentials."""
 
 from urllib.parse import parse_qs, urlsplit
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, current_thread
 
 import httpx
 import pytest
@@ -10,6 +12,8 @@ from relay.connections import providers
 from relay.connections.service import ConnectionService
 from relay.core.connections import ConnectionConfig, ConnectionError
 from relay.persistence.connection.store import DatabaseConnectionStore
+from relay.persistence.connection.snapshots import copy_automation_grants
+from relay.persistence.engine import store_transaction
 
 
 @pytest.fixture
@@ -137,3 +141,67 @@ def test_late_provider_rejection_cannot_restore_disconnected_credentials(service
     current = service.store.get("alice", connection["id"])
     assert current["status"] == "disconnected"
     assert current["sealedSecret"] is None
+
+
+def test_reconnect_cannot_overwrite_concurrent_disconnect(service, monkeypatch):
+    connection = connect(service)
+    url = service.start("alice", "session", "github", "/settings/connections", connection["id"])
+    state = parse_qs(urlsplit(url).query)["state"][0]
+    entered, release, disconnected = Event(), Event(), Event()
+    original = service._connection
+
+    def paused_read(owner, connection_id):
+        record = original(owner, connection_id)
+        if current_thread().name.endswith("_0") and not entered.is_set():
+            entered.set()
+            assert release.wait(5)
+        return record
+
+    def disconnect():
+        service.disconnect("alice", connection["id"])
+        disconnected.set()
+
+    monkeypatch.setattr(service, "_connection", paused_read)
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="connection-race") as pool:
+        reconnecting = pool.submit(service.complete, "alice", "session", "github", state, code="code")
+        assert entered.wait(5)
+        deleting = pool.submit(disconnect)
+        disconnected.wait(0.5)
+        release.set()
+        reconnecting.result(timeout=5)
+        deleting.result(timeout=5)
+    assert service.store.get("alice", connection["id"])["status"] == "disconnected"
+
+
+def test_expanding_after_removal_does_not_restore_an_old_run(service):
+    connection = connect(service)
+    initial = {"connectionId": connection["id"], "resources": ["octo/hello", "octo/other"], "actions": ["github.list_issues"]}
+    old = service.set_grants("alice", "thread", "thread", [initial])
+    service.set_grants("alice", "thread", "thread", [{**initial, "resources": ["octo/other"]}])
+    service.set_grants("alice", "thread", "thread", [initial])
+    with pytest.raises(ConnectionError, match="connection_access_denied"):
+        service.call("alice", old, connection["id"], "github.list_issues", "octo/hello", {})
+    new = service.for_work("alice", "thread")
+    assert service.call("alice", new, connection["id"], "github.list_issues", "octo/hello", {})
+
+
+def test_stale_grant_edits_are_rejected(service):
+    connection = connect(service)
+    initial = {"connectionId": connection["id"], "resources": ["octo/hello"], "actions": ["github.list_issues"]}
+    saved = service.set_grants("alice", "thread", "thread", [initial])
+    service.set_grants("alice", "thread", "thread", [])
+    with pytest.raises(ConnectionError, match="connection_grants_changed"):
+        service.set_grants("alice", "thread", "thread", saved)
+
+
+def test_automation_expansion_cannot_restore_revoked_occurrence_access(service):
+    connection = connect(service)
+    initial = {"connectionId": connection["id"], "resources": ["octo/hello", "octo/other"], "actions": ["github.list_issues"]}
+    service.set_grants("alice", "automation", "automation", [initial])
+    with store_transaction(service.store.engine) as conn:
+        copy_automation_grants(conn, "alice", "automation", "occurrence")
+    snapshot = service.for_work("alice", "thread", "occurrence")
+    service.set_grants("alice", "automation", "automation", [{**initial, "resources": ["octo/other"]}])
+    service.set_grants("alice", "automation", "automation", [initial])
+    with pytest.raises(ConnectionError, match="connection_access_denied"):
+        service.call("alice", snapshot, connection["id"], "github.list_issues", "octo/hello", {})
