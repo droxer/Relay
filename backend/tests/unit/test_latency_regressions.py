@@ -78,7 +78,9 @@ def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypa
         assert lock.acquisitions == 0
 
         # A due refresh still serializes with dispatch.
-        registry._last_fleet_liveness_refresh_at = 0.0
+        # Zero is not overdue on a freshly booted runner whose uptime is less
+        # than the persist interval. Age the recorded observation explicitly.
+        registry._last_fleet_liveness_refresh_at -= config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
         registry._refresh_persisted_liveness()
         assert lock.acquisitions == 1
 
