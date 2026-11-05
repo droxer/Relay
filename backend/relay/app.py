@@ -40,6 +40,7 @@ from .api.computers import (
 from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
 from .api.projects import manager as project_manager_routes
+from .migrations_runtime.project_managers import initialize_project_managers
 from .api.tasks import (
     automations as automation_routes,
     github as task_github_routes,
@@ -240,6 +241,8 @@ def create_app(
         waitlist=waitlist,
         password_reset=password_reset,
     )
+    if settings.startup_repairs_enabled:
+        initialize_project_managers(app.state.context)
     _mount_routes(app, settings)
     return app
 

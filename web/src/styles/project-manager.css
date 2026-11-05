@@ -1,0 +1,45 @@
+.project-workspace-page { position: relative; }
+.project-workspace-page:has(> .project-manager-panel) > :is(.page-header, .workspace-body) {
+  margin-inline-end: var(--manager-panel-width, 32rem);
+}
+.manager-dashboard-entry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+
+.project-manager-panel {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  width: min(32rem, 100%);
+  min-width: min(20rem, 100%);
+  max-width: 85%;
+  overflow: auto;
+  border-inline-start: 1px solid var(--line-1);
+  background: var(--surface-0);
+  color: var(--ink-1);
+}
+.manager-resize-handle { position: absolute; inset-block: 0; inset-inline-start: 0; }
+
+.manager-header, .manager-composer { padding: var(--sp-4); flex-shrink: 0; }
+.manager-header { display: flex; align-items: start; justify-content: space-between; border-bottom: 1px solid var(--line-1); }
+.manager-header h2, .manager-proposal h3 { margin: 0; font-size: var(--text-lg); }
+.manager-header p, .manager-before { margin: var(--sp-1) 0; color: var(--ink-2); font-size: var(--text-sm); }
+.manager-content { overflow: auto; flex: 1; min-height: 0; padding: var(--sp-4); overflow-wrap: anywhere; }
+.manager-configuration, .manager-field { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.manager-transcript { margin-block: var(--sp-5); }
+.manager-proposal { border-top: 1px solid var(--line-1); padding-block: var(--sp-4); }
+.manager-operation { border: 0; border-top: 1px solid var(--line-1); margin-block: var(--sp-4); padding: var(--sp-3) 0; min-width: 0; }
+.manager-operation legend label { display: flex; align-items: center; gap: var(--sp-2); }
+.manager-actions, .manager-prompts { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+.manager-actions { margin-top: var(--sp-3); }
+.manager-composer { border-top: 1px solid var(--line-1); padding-bottom: max(var(--sp-4), env(safe-area-inset-bottom)); }
+.manager-composer textarea { max-height: 10rem; overflow: auto; }
+.manager-prompts { margin-bottom: var(--sp-2); }
+
+@media (width < 48rem) {
+  .project-manager-panel { position: fixed; inset: 0; z-index: var(--z-dialog); width: 100%; min-width: 0; max-width: 100%; resize: none; border: 0; }
+  .project-manager-mobile-shell { position: fixed; inset: 0; z-index: var(--z-dialog); }
+  .manager-content, .manager-header, .manager-composer { padding-inline: var(--sp-3); }
+  .manager-composer textarea { font-size: 1rem; }
+}

@@ -103,6 +103,9 @@ export interface ProjectContextSuggestion {
 }
 
 export interface ProjectRecord {
+  managerAgentId?: string | null;
+  managerThreadId?: string | null;
+  managerInitialized?: boolean;
   id: string;
   ownerUserId: string;
   name: string;
@@ -137,6 +140,7 @@ export interface ProjectsResponse {
 }
 
 export interface CreateProjectInput {
+  managerAgentId?: string;
   name: string;
   description?: string;
   goal?: string;

@@ -72,6 +72,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const [description, setDescription] = useState("");
   const [intent, setIntent] = useState("");
   const [setupAgentId, setSetupAgentId] = useState(AUTO_SETUP_AGENT);
+  const [managerAgentId, setManagerAgentId] = useState("");
   const [computerId, setComputerId] = useState("");
   const [folder, setFolder] = useState("");
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -126,6 +127,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   }
 
   function chooseComputer(value: string) {
+    if (value !== computerId) setManagerAgentId("");
     if (value !== computerId) setFolder("");
     setComputerId(value);
     setComputerError(null);
@@ -144,6 +146,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: name.trim(),
       ...(nextDescription ? { description: nextDescription } : {}),
       daemonNodeId: computerId,
+      ...(managerAgentId ? {managerAgentId} : {}),
       ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
@@ -168,6 +171,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: provisionalProjectName(brief, t("project.setup_fallback_name")),
       description: brief,
       daemonNodeId: computerId,
+      ...(managerAgentId ? {managerAgentId} : {}),
       ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
@@ -297,6 +301,11 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
           </>
         )}
 
+        {selectedComputer && setupAgents.length ? <Field label={t("project_manager.agent")} htmlFor="new-project-manager">
+          <select id="new-project-manager" value={managerAgentId || [...setupAgents].sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id))[0]?.id || ""} disabled={busy} onChange={e => setManagerAgentId(e.target.value)}>
+            {setupAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.displayName}</option>)}
+          </select>
+        </Field> : null}
         <div className="adm-form-actions">
           {userId && origin === "fresh" ? (
             <Button

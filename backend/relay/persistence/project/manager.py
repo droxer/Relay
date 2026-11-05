@@ -13,11 +13,19 @@ from ..tables.projects import manager_events, manager_proposals
 from ..tables.projects import projects
 from ..tables.tasks import tasks
 from ..resource_lock import resource_transaction
+from ..sql import names_no_uuid_row
 
 
 class ManagerRows:
     # Declared by DatabaseProjectStore.
     engine: Any
+
+    @contextmanager
+    def manager_read_scope(self) -> Iterator[None]:
+        with store_transaction(self.engine) as conn:
+            if self.engine.dialect.name == "postgresql":
+                conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            yield
 
     @contextmanager
     def manager_transaction(self, project_id: str, task_ids: list[str] | None = None) -> Iterator[dict[str, Any]]:
@@ -39,6 +47,8 @@ class ManagerRows:
             ).order_by(manager_proposals.c.created_at.desc(), manager_proposals.c.id.desc()).limit(50)).scalars())
 
     def manager_proposal(self, project_id: str, proposal_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, proposal_id):
+            return None
         with store_transaction(self.engine) as conn:
             value = conn.scalar(select(manager_proposals.c.snapshot).where(
                 manager_proposals.c.project_id == project_id, manager_proposals.c.id == proposal_id,

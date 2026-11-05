@@ -25,7 +25,7 @@ def checked_fields(raw: Any, *, create: bool = False) -> dict[str, Any]:
             raise ManagerError("manager_assignment_invalid", 400)
     if (create or "title" in raw) and (not str(raw.get("title", "")).strip() or len(raw["title"]) > 200):
         raise ManagerError("manager_title_invalid", 400)
-    if "priority" in raw and raw["priority"] not in ("low", "normal", "high", "urgent"):
+    if "priority" in raw and raw["priority"] not in ("low", "normal", "high"):
         raise ManagerError("manager_priority_invalid", 400)
     if "tags" in raw and (not isinstance(raw["tags"], list) or len(raw["tags"]) > 50 or any(not isinstance(t, str) or len(t) > 100 for t in raw["tags"])):
         raise ManagerError("manager_tags_invalid", 400)
@@ -79,7 +79,8 @@ def stage_proposal(ctx: Any, project: dict[str, Any], command: dict[str, Any], r
         proposal = {
             "id": new_database_id(), "projectId": current["id"], "threadId": command["sessionId"],
             "agentId": command.get("logicalAgentId"), "runId": command["runId"],
-            "sourceMessageId": command.get("state", {}).get("user_message_id"),
+            "sourceMessageId": next((event["id"] for event in reversed(ctx.session_store.get_session(command["sessionId"])["events"])
+                                     if event["type"] == "user.message"), None),
             "operations": operations, "state": "pending", "revision": 1, "createdAt": now_iso(),
         }
         # A regenerated proposal for the same turn replaces its previous draft.
@@ -125,6 +126,7 @@ def apply_proposal(ctx: Any, actor: Actor, project: dict[str, Any], proposal_id:
                     raise ManagerError("manager_task_stale")
             created: dict[str, str] = {}
             results = []
+            applied_operations = []
             for op in operations:
                 fields = checked_fields(edits.get(op["id"], op["fields"]), create=op["kind"] == "create") if op["kind"] != "prerequisites" else {}
                 if op["kind"] == "create":
@@ -152,10 +154,12 @@ def apply_proposal(ctx: Any, actor: Actor, project: dict[str, Any], proposal_id:
                     for task_id in op["afterTaskIds"]:
                         scoped_task(ctx, current, task_id)
                     task = ctx.task_store.set_task_prerequisites(task["id"], prerequisites, actor_user_id=actor["userId"])
-                results.append(task)
+                results.append({**{k:v for k,v in task.items() if k not in ("events", "activity")},
+                                "revision": task_revision(task), "eventIds": [e["id"] for e in task.get("events", [])[-4:]]})
+                applied_operations.append({**op, "fields": fields})
             applied = {**proposal, "state": "applied", "revision": proposal["revision"] + 1,
                        "appliedBy": actor["userId"], "appliedAt": now_iso(), "applicationKey": key,
-                       "applicationInput": body, "appliedOperationIds": selected}
+                       "applicationInput": body, "appliedOperationIds": selected, "operations": applied_operations}
             result = {"proposal": applied, "tasks": results}
             ctx.project_store.save_manager_proposal({**applied, "result": result})
             return result
