@@ -102,3 +102,19 @@ def test_sqlite_legacy_conversion_rolls_back_on_duplicate_binding_keys(tmp_path)
     with engine.begin() as conn:
         assert conn.scalar(select(documents.c.payload)) == [binding, binding]
         assert conn.scalar(text("SELECT count(*) FROM chat_conversations")) == 0
+
+
+@pytest.mark.postgres
+def test_long_external_conversation_keys_are_indexable_without_truncation():
+    import hashlib
+    from postgres_backend import disposable_postgres_url
+
+    key = "".join(hashlib.sha256(str(i).encode()).hexdigest() for i in range(128))
+    with disposable_postgres_url() as url:
+        store = DatabaseChatIntegrationStore(url)
+        payload = {"provider": "discord", "conversationId": key + "é"}
+        first = store.set_conversation_session(payload, "thread-1", "owner")
+        assert store.get_conversation_session(payload) == first
+        second = store.set_conversation_session({**payload, "conversationId": key + "ê"}, "thread-2", "owner")
+        assert store.get_conversation_session(payload)["sessionId"] == "thread-1"
+        assert second["key"] != first["key"]

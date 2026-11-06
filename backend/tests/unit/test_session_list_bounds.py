@@ -1,5 +1,6 @@
 """Full thread lists scope before hydrating history and bound SQL parameters."""
 
+import pytest
 from sqlalchemy import event
 
 from relay.persistence.events import relay_event
@@ -50,3 +51,12 @@ def test_full_thread_list_batches_event_parameters_and_keeps_all_records(tmp_pat
     assert all(s["events"] and s["eventCount"] == len(s["events"]) for s in result)
     assert max(len(parameters) for _, parameters in statements) <= 500
     assert len(statements) == 3, "one snapshot query and two bounded history batches"
+
+
+@pytest.mark.postgres
+def test_invalid_owner_has_no_threads_in_postgres():
+    from postgres_backend import disposable_postgres_url
+    from relay.persistence.session.store import DatabaseSessionStore
+
+    with disposable_postgres_url() as url:
+        assert DatabaseSessionStore(url).list_sessions(owner_user_id="not-a-uuid") == []
