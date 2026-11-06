@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import secrets
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
+from ...persistence.chat.coordination import ChatOperationInProgress
 from ...security.request_auth import require_admin_session
 from ...security.user_handles import user_record
 from ..bodies import JsonBodyDep, string_field
@@ -22,6 +22,8 @@ def _actor_name(account: dict[str, Any]) -> str:
 
 
 def _chat_error(error: Exception) -> HTTPException:
+    if isinstance(error, ChatOperationInProgress):
+        return HTTPException(409, str(error))
     if isinstance(error, KeyError):
         return HTTPException(404, "Chat integration record not found.")
     if isinstance(error, ValueError):
@@ -81,17 +83,18 @@ def update_chat_integration(
 async def activate_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
     try:
-        await run_in_threadpool(ctx.chat_store.validate_activation, integration_id)
-        settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
-        if settings.get("provider") == "telegram":
-            provisioned, message = await ctx.chat_provision(settings, integration_id)
-            if not provisioned:
-                raise ValueError(message)
-        else:
-            message = "Integration activated."
-        integration = await run_in_threadpool(
-            ctx.chat_store.activate_integration, integration_id, actor=_actor_name(account)
-        )
+        async with ctx.chat_store.provider_operation(integration_id):
+            await run_in_threadpool(ctx.chat_store.validate_activation, integration_id)
+            settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
+            if settings.get("provider") == "telegram":
+                provisioned, message = await ctx.chat_provision(settings, integration_id)
+                if not provisioned:
+                    raise ValueError(message)
+            else:
+                message = "Integration activated."
+            integration = await run_in_threadpool(
+                ctx.chat_store.activate_integration, integration_id, actor=_actor_name(account)
+            )
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration, "provisioning": {"ok": True, "message": message}}
@@ -101,14 +104,15 @@ async def activate_chat_integration(integration_id: str, request: Request, ctx: 
 async def check_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
     try:
-        settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
-        provider_health = await ctx.chat_probe(settings)
-        integration = await run_in_threadpool(
-            ctx.chat_store.check_integration,
-            integration_id,
-            actor=_actor_name(account),
-            provider_health=provider_health,
-        )
+        async with ctx.chat_store.provider_operation(integration_id):
+            settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
+            provider_health = await ctx.chat_probe(settings)
+            integration = await run_in_threadpool(
+                ctx.chat_store.check_integration,
+                integration_id,
+                actor=_actor_name(account),
+                provider_health=provider_health,
+            )
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -121,10 +125,11 @@ async def rotate_telegram_webhook_secret(
     ctx: AppContextDep,
 ) -> dict[str, Any]:
     account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
-    locks = ctx.chat_rotation_locks
-    lock = locks.setdefault(integration_id, asyncio.Lock())
-    async with lock:
-        return await _rotate_telegram_webhook_secret(integration_id, request, ctx, account)
+    try:
+        async with ctx.chat_store.provider_operation(integration_id):
+            return await _rotate_telegram_webhook_secret(integration_id, request, ctx, account)
+    except ChatOperationInProgress as error:
+        raise _chat_error(error) from error
 
 
 async def _rotate_telegram_webhook_secret(

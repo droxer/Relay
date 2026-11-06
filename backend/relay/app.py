@@ -355,7 +355,6 @@ def _publish_state(
         password_reset_rate_limiter=rate_limiter(settings.password_reset_limit),
         chat_probe=probe_chat_integration,
         chat_provision=provision_chat_integration,
-        chat_rotation_locks={},
         github_connection=github_connection_service_from_env(),
         connections=connections,
     )

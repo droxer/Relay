@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date
@@ -82,8 +81,6 @@ class AppContext:
     password_reset_rate_limiter: AuthRateLimiter
     chat_probe: ChatProbe
     chat_provision: ChatProvision
-    # Shared and mutable on purpose: one lock per integration, process-wide.
-    chat_rotation_locks: dict[str, asyncio.Lock]
     github_connection: GitHubConnectionService | None = None
     connections: ConnectionService | None = None
 

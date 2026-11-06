@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -40,6 +41,7 @@ def test_chat_admin_database_work_runs_off_loop(monkeypatch, operation):
                 "set_telegram_webhook_secret": {"id": "integration"},
             }.items()
         })
+        store.provider_operation = lambda integration_id: nullcontext()
         monkeypatch.setattr(integrations, "require_admin_session", database_call("auth", {"username": "admin"}))
 
         async def provision(settings, integration_id):
@@ -56,7 +58,7 @@ def test_chat_admin_database_work_runs_off_loop(monkeypatch, operation):
 
         ctx = SimpleNamespace(
             auth_store=object(), chat_store=store, chat_provision=provision,
-            chat_probe=probe, chat_rotation_locks={},
+            chat_probe=probe,
         )
         handler = (
             integrations.check_chat_integration if operation == "check"

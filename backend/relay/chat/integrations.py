@@ -4,7 +4,7 @@ import json
 import os
 import secrets
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractAsyncContextManager, contextmanager, nullcontext
 from threading import RLock
 from typing import Any, Literal
 from urllib.parse import urlparse, urlunsplit
@@ -13,6 +13,8 @@ from sqlalchemy import insert, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
 from ..core.ids import new_relay_id, now_iso
+from ..persistence.chat.coordination import chat_operation, provider_operation
+from ..persistence.resource_lock import resource_transaction
 from ..persistence.db_time import parse_db_time
 from ..persistence.engine import create_all_tables, shared_engine, store_transaction
 from ..persistence.sql import metadata as shared_metadata
@@ -102,7 +104,14 @@ class DatabaseChatIntegrationStore:
             return self._public_integration(integration)
 
     def update_integration(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
-        with self._atomic_scope():
+        # Display-only edits do not change what the provider sees. Configuration
+        # changes must not race activation, health checks, or secret rotation.
+        guard = (
+            chat_operation(self.engine, integration_id)
+            if {"tenantId", "config", "secrets", "status"}.intersection(payload)
+            else nullcontext()
+        )
+        with guard, self._atomic_scope():
             integration = self._find_integration(integration_id)
             secret_patch = payload.get("secrets")
             if (
@@ -157,6 +166,9 @@ class DatabaseChatIntegrationStore:
     def validate_activation(self, integration_id: str) -> None:
         with self._lock:
             self._validate_activation_integration(self._find_integration(integration_id))
+
+    def provider_operation(self, integration_id: str) -> AbstractAsyncContextManager[None]:
+        return provider_operation(self.engine, integration_id)
 
     def validate_telegram_webhook_rotation(self, integration_id: str) -> None:
         with self._lock:
@@ -331,7 +343,7 @@ class DatabaseChatIntegrationStore:
 
     def clear_conversation_sessions(self, session_id: str) -> int:
         """Drop bindings that point at a permanently deleted session."""
-        with self._atomic_scope():
+        with self._atomic_scope("conversations"):
             records = self._read_conversations()
             remaining = [
                 record
@@ -345,7 +357,7 @@ class DatabaseChatIntegrationStore:
 
     def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
         """Bind a conversation thread to a Relay session (upsert by thread key)."""
-        with self._atomic_scope():
+        with self._atomic_scope("conversations"):
             key = _conversation_key(payload)
             now = now_iso()
             records = self._read_conversations()
@@ -558,13 +570,13 @@ class DatabaseChatIntegrationStore:
             conn.execute(insert(self.documents).values(document_key=key, payload=payload, updated_at=now))
 
     @contextmanager
-    def _atomic_scope(self) -> Iterator[None]:
-        """Serialize in-process callers and run the body in one transaction."""
+    def _atomic_scope(self, document_group: str = "configuration") -> Iterator[None]:
+        """Serialize document mutations across replicas before reading state."""
         with self._lock:
             if self._transaction_connection is not None:
                 yield
                 return
-            with store_transaction(self.engine) as conn:
+            with resource_transaction(self.engine, f"chat-documents:{document_group}") as conn:
                 self._transaction_connection = conn
                 try:
                     yield

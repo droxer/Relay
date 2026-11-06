@@ -33,7 +33,7 @@ def context(store, provision):
     async def probe(settings):
         return True, "healthy"
     return SimpleNamespace(
-        chat_store=store, auth_store=object(), chat_rotation_locks={}, chat_provision=provision, chat_probe=probe,
+        chat_store=store, auth_store=object(), chat_provision=provision, chat_probe=probe,
     )
 
 
