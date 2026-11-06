@@ -88,6 +88,9 @@ def _cascade(
         # references, so require an explicit archive before cascading.
         raise ValueError("user_has_projects")
     record = ctx.auth_store.soft_delete_user(user_id)
+    connections = getattr(ctx, "connections", None)
+    if connections:
+        connections.disconnect_all(user_id)
     affected_nodes = ctx.registry.unassign_user_everywhere(user_id)
 
     removed_placements: list[str] = []

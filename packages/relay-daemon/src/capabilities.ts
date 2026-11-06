@@ -30,6 +30,7 @@ import {
 
 export const DAEMON_ADVERTISED_CAPABILITIES: readonly DaemonNodeCapability[] = [
   "runtime-refresh",
+  "service-connections",
   DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_IMAGE_ATTACHMENTS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,

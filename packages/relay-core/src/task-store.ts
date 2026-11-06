@@ -35,7 +35,7 @@ export type RoutineTrigger =
   | { kind: "task_event" | "run_event"; on: RoutineTriggerOn; filters?: RoutineTriggerFilters }
   | { kind: "webhook" };
 export type RoutineState = "active" | "paused" | "paused_by_relay";
-export type RoutinePauseReason = "rate_limited" | "failing" | "no_target" | "invalid_schedule";
+export type RoutinePauseReason = "rate_limited" | "failing" | "no_target" | "invalid_schedule" | "connection_unavailable";
 
 export interface TaskExecutionAttention {
   schemaVersion: 1;

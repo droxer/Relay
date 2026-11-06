@@ -14,6 +14,7 @@ import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { PermissionPromptAdapter } from "./agents.js";
 import type { AgentState, PermissionPromptLaunch } from "./state.js";
 import { isResumableSessionId } from "./runtime-session.js";
+import { codexConnectionArgs, connectionServer } from "./connection-tools.js";
 
 /** Only a well-formed id is ever placed on a command line. */
 function resumeId(state: AgentState): string | undefined {
@@ -32,10 +33,11 @@ export function buildCodexCommand(state: AgentState, workspacePath?: string): st
   const prompt = withResumeNote(nativeSkillPrompt(codexTaskPrompt(state), state), state);
   const launch = permissionPromptLaunch(state, "codex-app-server");
   if (launch) {
-    return runAsAgent(withSkillEnv(codexAppServerCommand(launch, { workspacePath, model: state.agent_model, resume, prompt, images: state.input_images }), state, "CODEX_HOME"), workspacePath);
+    return runAsAgent(withSkillEnv(codexAppServerCommand(launch, { workspacePath, model: state.agent_model, resume, prompt, images: state.input_images, connections: state.connection_tools }), state, "CODEX_HOME"), workspacePath);
   }
   const argv = [
     ...codexBaseArgv({ workspacePath, model: state.agent_model, resume }),
+    ...codexConnectionArgs(state.connection_tools),
     ...(state.input_images ?? []).flatMap((image) => ["--image", image.path]),
     ...(state.input_images?.length ? ["--"] : []),
     ...(resume ? [resume] : []),
@@ -51,12 +53,13 @@ export function buildCodexCommand(state: AgentState, workspacePath?: string): st
  */
 function codexAppServerCommand(
   launch: PermissionPromptLaunch,
-  { workspacePath, model: pinned, resume, prompt, images }: { workspacePath?: string; model?: string; resume?: string; prompt: string; images?: AgentState["input_images"] },
+  { workspacePath, model: pinned, resume, prompt, images, connections }: { workspacePath?: string; model?: string; resume?: string; prompt: string; images?: AgentState["input_images"]; connections?: AgentState["connection_tools"] },
 ): string {
   const argv = [
     launch.command,
     ...launch.args,
     ...codexCliConfigOverrides(pinned),
+    ...codexConnectionArgs(connections),
     "--cwd",
     workspacePath ?? agentWorkspacePath(),
   ];
@@ -139,13 +142,14 @@ export const CLAUDE_PERMISSION_PROMPT_TOOL = "mcp__relay__approve";
  */
 function claudePermissionPromptArgv(state: AgentState): string[] {
   const launch = permissionPromptLaunch(state, "claude-mcp");
-  if (!launch) return [];
+  if (!launch && !state.connection_tools) return [];
   const mcpConfig = {
     mcpServers: {
-      relay: { type: "stdio", command: launch.command, args: launch.args, env: launch.env },
+      ...(launch ? { relay: { type: "stdio", command: launch.command, args: launch.args, env: launch.env } } : {}),
+      ...(state.connection_tools ? { relay_connections: connectionServer(state.connection_tools) } : {}),
     },
   };
-  return ["--permission-prompt-tool", CLAUDE_PERMISSION_PROMPT_TOOL, "--mcp-config", JSON.stringify(mcpConfig)];
+  return [...(launch ? ["--permission-prompt-tool", CLAUDE_PERMISSION_PROMPT_TOOL] : []), "--mcp-config", JSON.stringify(mcpConfig)];
 }
 
 /**

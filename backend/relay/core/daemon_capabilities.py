@@ -53,9 +53,12 @@ DAEMON_CAPABILITY_DOT_THREAD_RECORDS = "dot-thread-records"
 # Thread records under `.relay/threads/`, moved there from `.threads/` and `threads/`.
 DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 
+DAEMON_CAPABILITY_SERVICE_CONNECTIONS = "service-connections"
+
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         DAEMON_CAPABILITY_WORK_RESULTS,
+        DAEMON_CAPABILITY_SERVICE_CONNECTIONS,
         DAEMON_CAPABILITY_DIRECT_DELEGATION,
         DAEMON_CAPABILITY_PROJECT_MANAGER,
         DAEMON_CAPABILITY_IMAGE_ATTACHMENTS,

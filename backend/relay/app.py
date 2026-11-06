@@ -26,6 +26,8 @@ from .api.agents import (
     teams as team_routes,
 )
 from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
+from .api.connections import routes as connection_routes, tools as connection_tools_routes
+from .connections.service import ConnectionService
 from .api.computers import (
     admin_nodes as admin_node_routes,
     daemon_wire as daemon_wire_routes,
@@ -113,6 +115,7 @@ from .bootstrap.http import (
     configure_cors,
 )
 from .bootstrap.stores import (
+    connection_service_from_env,
     github_connection_service_from_env,
     waitlist_service_from_env,
     Stores,
@@ -162,6 +165,7 @@ def create_app(
         project_store=stores.projects,
         notification_store=stores.notifications,
     )
+    connections = connection_service_from_env()
     backend = ServerDaemonNodeBackend(
         registry,
         agent_store=stores.agents,
@@ -169,6 +173,7 @@ def create_app(
         skill_store=stores.skills,
         team_store=stores.teams,
         project_store=stores.projects,
+        connections=connections,
     )
     if settings.startup_repairs_enabled:
         migrate_legacy_computer_ids(
@@ -240,6 +245,7 @@ def create_app(
         notification_bridge=notification_bridge,
         waitlist=waitlist,
         password_reset=password_reset,
+        connections=connections,
     )
     if settings.startup_repairs_enabled:
         initialize_project_managers(app.state.context)
@@ -299,6 +305,7 @@ def _publish_state(
     notification_bridge: PostgresNotificationBridge | None,
     waitlist: WaitlistService,
     password_reset: PasswordResetService,
+    connections: ConnectionService,
 ) -> None:
     """Build the one ``AppContext`` request handlers read (see api/deps.py).
 
@@ -342,6 +349,7 @@ def _publish_state(
         chat_provision=provision_chat_integration,
         chat_rotation_locks={},
         github_connection=github_connection_service_from_env(),
+        connections=connections,
     )
     state = app.state
     state.context = context
@@ -354,6 +362,8 @@ def _publish_state(
 # path both could match. A domain split across modules lists its routers in
 # the order its routes were declared.
 API_ROUTERS = (
+    connection_routes.router,
+    connection_tools_routes.router,
     automation_routes.router,
     auth_routes.router,
     device_authorization_routes.router,

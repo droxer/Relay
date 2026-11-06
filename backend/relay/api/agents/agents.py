@@ -342,6 +342,7 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
         return await CollaborationConductor(ctx).submit(
             RunIntent(
                 task_goal=task_goal,
+                connection_grants=body.get("connectionGrants"),
                 attachment_ids=images,
                 session_id=string_field(body, "sessionId")
                 or string_field(body, "session_id")

@@ -98,6 +98,7 @@ class DaemonNodeRegistry(
         )
         # (run request id, assignment index) pairs whose slot wait was logged.
         self._logged_capacity_waits: set[tuple[str, int]] = set()
+        self.connection_grant_resolver: Callable[[dict[str, Any]], list[dict[str, Any]]] | None = None
         self._dispatch_locks_guard = RLock()
         self._dispatch_locks: dict[str, _DispatchLockEntry] = {}
         self.logical_assignment_validator: Callable[[dict[str, Any]], None] | None = (

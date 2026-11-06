@@ -44,6 +44,8 @@ from ..schemas import (
     openapi_body,
 )
 from .prerequisites import task_with_prerequisite_view, with_waiting_on, with_dependency_summaries
+from ..connections.routes import connection_errors, service as connection_service
+from ...persistence.engine import store_transaction
 from .payloads import (
     project_move_target,
     public_task,
@@ -103,7 +105,7 @@ def create_task(
     assignee = assignee_user_id_for_task(actor, body, owner)
     project_id = _request_body.project_id or None
     project = project_for_owner(ctx, project_id, owner, require_enabled=True)
-    with task_request_errors():
+    with task_request_errors(), connection_errors(), store_transaction(ctx.task_store.engine):
         task = create_task_record(
             ctx,
             actor,
@@ -117,6 +119,10 @@ def create_task(
                 project_session_fields=lambda selected: project_session_fields(ctx, selected),
             ),
         )
+        if "connectionGrants" in body:
+            connection_service(ctx).set_grants(owner, "automation" if task.get("isRoutine") else "task", task["id"], body["connectionGrants"])
+        if task.get("isRoutine") and task.get("routineState") == "active":
+            connection_service(ctx).check_target(owner, "automation", task["id"])
     return public_task(task)
 
 
@@ -144,7 +150,7 @@ def update_task(
         if _request_body.names_assignee()
         else None
     )
-    with task_request_errors():
+    with task_request_errors(), connection_errors(), store_transaction(ctx.task_store.engine):
         task = update_task_record(
             ctx,
             actor,
@@ -158,6 +164,12 @@ def update_task(
                 automation_store=ctx.automation_store,
             ),
         )
+        if "connectionGrants" in body:
+            if task.get("sourceRoutineId"):
+                raise HTTPException(409, "connection_generated_task_read_only")
+            connection_service(ctx).set_grants(actor["userId"], "automation" if task.get("isRoutine") else "task", task["id"], body["connectionGrants"])
+        if task.get("isRoutine") and task.get("routineState") == "active":
+            connection_service(ctx).check_target(actor["userId"], "automation", task["id"])
     return public_task(task)
 
 

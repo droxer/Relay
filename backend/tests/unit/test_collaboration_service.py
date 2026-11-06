@@ -470,7 +470,7 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
     assert _request_fingerprint(answer) != _request_fingerprint(approval)
     legacy_payload = {
         k: v for k, v in asdict(plain).items()
-        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve", "task_id", "attachment_ids")
+        if k not in ("idempotency_key", "style", "project_setup", "question_id", "approve", "task_id", "attachment_ids", "connection_grants")
     }
     legacy = hashlib.sha256(
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()

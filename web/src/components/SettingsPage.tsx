@@ -7,9 +7,11 @@ import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
 import type { CurrentUser } from "../types";
 import { AccountSection } from "./settings/AccountSection";
+import { ConnectionsSection } from "./settings/ConnectionsSection";
 import { NotificationsSection } from "./settings/NotificationsSection";
 import {
   IdentityUser,
+  AdminConnect,
   NavNotifications,
   PrefAppearance,
   PrefLanguage,
@@ -50,6 +52,7 @@ export function SettingsPage({
 
   const items: SectionNavItem<SettingsSection>[] = [
     { id: "account", label: t("account.title"), Icon: IdentityUser, href: hrefForSettingsSection("account") },
+    { id: "connections", label: t("connections.title"), Icon: AdminConnect, href: hrefForSettingsSection("connections") },
     { id: "notifications", label: t("notifications.title"), Icon: NavNotifications, href: hrefForSettingsSection("notifications") },
     { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
     { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
@@ -86,6 +89,8 @@ export function SettingsPage({
         <div className="sec-section-body">
           {section === "account" ? (
             <AccountSection key={user.id} user={user} onUserChange={onUserChange} />
+          ) : section === "connections" ? (
+            <ConnectionsSection />
           ) : section === "notifications" ? (
             <NotificationsSection />
           ) : section === "appearance" ? (

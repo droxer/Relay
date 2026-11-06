@@ -13,3 +13,4 @@ export * from "./domain-types/agents.ts";
 export * from "./domain-types/chat.ts";
 export * from "./domain-types/skills.ts";
 export * from "./domain-types/waitlist.ts";
+export * from "./domain-types/connections.ts";

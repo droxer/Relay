@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "../UserAvatar";
-import { GitHubConnectionRow } from "./GitHubConnectionPanel";
 
 const IDENTITY_AVATAR_SIZE = 48;
 
@@ -152,7 +151,7 @@ export function AccountSection({ user, onUserChange }: {
 
       <section className="account-group" aria-labelledby="account-connections-title">
         <h3 id="account-connections-title" className="pref-group-label">{t("account.connections")}</h3>
-        <GitHubConnectionRow />
+        <a className="pref-option-label" href="/settings/connections">{t("connections.title")}</a>
       </section>
     </div>
   );

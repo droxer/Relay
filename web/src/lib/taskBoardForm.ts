@@ -23,6 +23,7 @@ export function taskAcceptancePolicy(task: Pick<RelayTaskListItem, "acceptancePo
 }
 
 export type TaskBoardFormBase = {
+  connectionGrants?: import("../domain-types/connections.ts").ConnectionGrant[];
   id?: string;
   number?: number;
   projectId?: string;
@@ -116,6 +117,7 @@ export function routineMutationFields(
 }
 
 export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState): boolean {
+  if (JSON.stringify(a.connectionGrants) !== JSON.stringify(b.connectionGrants)) return false;
   if (a.variant !== b.variant) return false;
   if (
     a.id !== b.id

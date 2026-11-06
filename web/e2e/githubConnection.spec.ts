@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const layout of ["desktop", "narrow", "mobile"] as const) {
-  test(`Public GitHub imports and coming-soon connection (${layout})`, async ({ page }) => {
+  test(`Public GitHub imports and Connections settings link (${layout})`, async ({ page }) => {
     const mobile = layout === "mobile";
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
     if (layout === "narrow") await page.addInitScript(() => localStorage.setItem("relay-web.drawerWidth.detail", "420"));
@@ -28,10 +28,10 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
-    await expect(drawer.getByText("Coming soon", { exact: true })).toBeVisible();
+    await expect(drawer.getByText("Public repositories", { exact: true })).toBeVisible();
     await expect(drawer.getByRole("button", { name: /Connect GitHub|Reconnect GitHub/ })).toHaveCount(0);
     await expect(drawer.locator('input[type="password"]')).toHaveCount(0);
-    await expect(drawer.getByText("Import issues from public repositories now. GitHub connection for private repositories is coming soon.")).toBeVisible();
+    await expect(drawer.getByText("Import public issues without authentication. Private repository imports are not available. Use Connections to give your work authenticated service access.")).toBeVisible();
     await page.screenshot({ path: `/tmp/relay-github-polish-${layout}-initial.png`, fullPage: true, animations: "disabled" });
     await drawer.getByRole("textbox", { name: /^Repository\b/ }).fill("octo/hello");
     await drawer.getByRole("button", { name: "Load issues", exact: true }).click();
@@ -48,7 +48,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
     await page.goto("/settings/account");
     const connection = page.getByRole("region", { name: "Connections", exact: true });
-    await expect(connection.getByText("Coming soon", { exact: true })).toBeVisible();
+    await expect(connection.getByRole("link", { name: "Connections", exact: true })).toHaveAttribute("href", "/settings/connections");
     await expect(connection.getByRole("button")).toHaveCount(0);
     expect(connectionRequests).toBe(0);
   });
