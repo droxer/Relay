@@ -43,6 +43,7 @@ from .api.computers import (
 )
 from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
+from .api.projects import setup as project_setup_routes
 from .api.projects import manager as project_manager_routes
 from .api.projects import mcp as project_mcp_routes
 from .api.tasks import (
@@ -378,6 +379,7 @@ API_ROUTERS = (
     agent_routes.router,
     team_routes.router,
     project_routes.router,
+    project_setup_routes.router,
     project_manager_routes.router,
     project_mcp_routes.router,
     project_plan_routes.router,

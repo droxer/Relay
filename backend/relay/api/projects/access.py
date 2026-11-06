@@ -71,3 +71,14 @@ def ensure_project_node_matches(
 ) -> None:
     if node is not None and computer_id(node) != project["computerId"]:
         raise HTTPException(409, "project_computer_mismatch")
+
+
+def require_owned_project(
+    ctx: AppContextDep, project_id: str, owner_user_id: str | None
+) -> dict[str, Any]:
+    """The live project the actor owns. Only an empty id yields no project,
+    and a route path always carries one, so the 404 here is unreachable."""
+    project = project_for_owner(ctx, project_id, owner_user_id)
+    if project is None:
+        raise HTTPException(404, "Project not found.")
+    return project
