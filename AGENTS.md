@@ -262,8 +262,8 @@ migration.
     stores are assembled from one mixin per concern in their package —
     `daemon/` (nodes, commands, run requests, workspace responses,
     maintenance, plus `rows.py`/`rules.py`), `session/` (lifecycle, events,
-    deletion, artifacts, reads), `task/` (writes, dispatch, routines, links,
-    reads, plus `events.py`/`rules.py`) — each with a `state.py` declaring
+    deletion, artifacts, attachments, reads, metrics), `task/` (writes, dispatch,
+    routines, links, reads, plus `events.py`/`rules.py`) — each with a `state.py` declaring
     the shared engine and tables. Import from the defining module; there is
     no re-export facade. Every
     aggregate (accounts, sessions, tasks, daemon nodes, agents, teams,

@@ -298,6 +298,14 @@ open threads. Ownership and archive filtering occur in storage before event
 histories are loaded; neither list silently truncates records or replaces them
 with summaries.
 
+Admin token reporting at `GET /api/v1/admin/dashboard/tokens?tz=Asia/Shanghai`
+uses the viewer's local calendar dates (UTC for a missing/invalid timezone).
+It returns fourteen daily buckets and seven-day totals; `fresh` excludes cache
+reads, and `unreportedRuns` identifies runtimes that completed without reporting
+usage. Totals include retained usage after thread deletion. The backend groups
+the ledger in storage and caches each reporting window briefly. See
+[dashboard reporting storage and timezone behavior](backend-scalability.md#grouped-dashboard-token-metrics).
+
 Chat activation, health checks, and webhook-secret rotation are exclusive per
 integration across PostgreSQL backend replicas. A conflicting operation, or a
 `PATCH /api/v1/admin/chat-integrations/{id}` changing `tenantId`, `config`,

@@ -72,13 +72,9 @@ chosen workload as part of the broader refactoring goal.
 
 ## Next audit findings
 
-Source inspection identified work that remains outside this completed cache
-change. `persistence/session/reads.py::_read_token_usage` still returns every run
-ledger row in the reporting window, including task-goal text and a session join
-that the dashboard does not consume. A grouped store query could bound data
-transfer by day/runtime while preserving timezone boundaries, legacy cache-token
-counts, unreported runs, and deleted-thread usage. The public full-ledger method
-must retain its existing response contract.
+The [token metrics follow-up](backend-token-metrics.tdd.md) resolves the raw-ledger
+transfer identified during this audit. The full-ledger reader retains its
+existing contract; dashboard routes use grouped metrics instead.
 
 `automations/service.py::tick` collects unseeded/due routines, deliveries, and all
 pending states into one Python collection under the global automation transaction

@@ -133,3 +133,26 @@ made. The dashboard's authorization, response, and timezone contracts are
 unchanged. No database migration is required.
 
 See [concurrency and retention evidence](testing/backend-dashboard-cache.tdd.md).
+
+
+## Grouped dashboard token metrics
+
+`persistence/session/metrics.py` owns session and token dashboard projections.
+Token reporting uses one query over the indexed `completed_at` ledger window,
+with no session join or task-goal/record metadata transfer. The query returns at
+most `(day_window + 1) * (1 + distinct unreported runtimes)` groups; reporting
+work in the database still scales with the matching ledger rows. Reported runs
+share a single group per day, while unreported runs retain their runtime counts.
+The extra day group preserves the existing summary-only treatment of future
+observations. Retained ledger usage survives thread deletion.
+
+Local calendar midnights are converted to UTC query boundaries in Python,
+including 23-hour and 25-hour daylight-saving days, so SQLite and PostgreSQL
+follow the same reporting contract without timezone database extensions. The
+fourteen-day series, seven-day totals, fresh/cache arithmetic, and runtime
+coverage notices are unchanged. Ties among equal missing-run counts use latest
+observation first, then runtime name for deterministic equal timestamps.
+
+The full `list_token_usage` reader still returns every retained run with its
+metadata. No migration is required; the existing completion-time index supports
+the window predicate. See [work-bound, timezone, and regression evidence](testing/backend-token-metrics.tdd.md).
