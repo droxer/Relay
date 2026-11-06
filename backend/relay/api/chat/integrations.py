@@ -5,6 +5,7 @@ import secrets
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from ...security.request_auth import require_admin_session
 from ...security.user_handles import user_record
@@ -78,17 +79,19 @@ def update_chat_integration(
 
 @router.post("/admin/chat-integrations/{integration_id}/activations")
 async def activate_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    account = require_admin_session(request, ctx.auth_store)
+    account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
     try:
-        ctx.chat_store.validate_activation(integration_id)
-        settings = ctx.chat_store.connection_settings(integration_id)
+        await run_in_threadpool(ctx.chat_store.validate_activation, integration_id)
+        settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
         if settings.get("provider") == "telegram":
             provisioned, message = await ctx.chat_provision(settings, integration_id)
             if not provisioned:
                 raise ValueError(message)
         else:
             message = "Integration activated."
-        integration = ctx.chat_store.activate_integration(integration_id, actor=_actor_name(account))
+        integration = await run_in_threadpool(
+            ctx.chat_store.activate_integration, integration_id, actor=_actor_name(account)
+        )
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration, "provisioning": {"ok": True, "message": message}}
@@ -96,11 +99,12 @@ async def activate_chat_integration(integration_id: str, request: Request, ctx: 
 
 @router.post("/admin/chat-integrations/{integration_id}/health-checks")
 async def check_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    account = require_admin_session(request, ctx.auth_store)
+    account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
     try:
-        settings = ctx.chat_store.connection_settings(integration_id)
+        settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
         provider_health = await ctx.chat_probe(settings)
-        integration = ctx.chat_store.check_integration(
+        integration = await run_in_threadpool(
+            ctx.chat_store.check_integration,
             integration_id,
             actor=_actor_name(account),
             provider_health=provider_health,
@@ -116,7 +120,7 @@ async def rotate_telegram_webhook_secret(
     request: Request,
     ctx: AppContextDep,
 ) -> dict[str, Any]:
-    account = require_admin_session(request, ctx.auth_store)
+    account = await run_in_threadpool(require_admin_session, request, ctx.auth_store)
     locks = ctx.chat_rotation_locks
     lock = locks.setdefault(integration_id, asyncio.Lock())
     async with lock:
@@ -130,22 +134,26 @@ async def _rotate_telegram_webhook_secret(
     account: dict[str, Any],
 ) -> dict[str, Any]:
     try:
-        ctx.chat_store.validate_telegram_webhook_rotation(integration_id)
-        previous_settings = ctx.chat_store.connection_settings(integration_id)
+        await run_in_threadpool(ctx.chat_store.validate_telegram_webhook_rotation, integration_id)
+        previous_settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
         previous_secret = previous_settings.get("secrets", {}).get("webhookSecret")
         webhook_secret = secrets.token_urlsafe(32)
-        integration = ctx.chat_store.set_telegram_webhook_secret(
+        integration = await run_in_threadpool(
+            ctx.chat_store.set_telegram_webhook_secret,
             integration_id,
             webhook_secret,
             actor=_actor_name(account),
         )
-        settings = ctx.chat_store.connection_settings(integration_id)
+        settings = await run_in_threadpool(ctx.chat_store.connection_settings, integration_id)
         provisioned, message = await ctx.chat_provision(settings, integration_id)
         if not provisioned:
             if isinstance(previous_secret, str) and previous_secret:
                 restored, restore_message = await ctx.chat_provision(previous_settings, integration_id)
                 if restored:
-                    ctx.chat_store.set_telegram_webhook_secret(integration_id, previous_secret, actor=_actor_name(account))
+                    await run_in_threadpool(
+                        ctx.chat_store.set_telegram_webhook_secret,
+                        integration_id, previous_secret, actor=_actor_name(account),
+                    )
                 else:
                     raise ValueError(
                         f"{message} The previous webhook could not be restored ({restore_message}); "
