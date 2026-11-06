@@ -94,8 +94,10 @@ general project-route module decreased from 591 to 364 lines. `create_app`
 registers the setup router explicitly. No schema, public response, protocol, or
 environment setting changed. Daemons still execute every agent run.
 
-Synchronous work uses the existing bounded worker pool. Transactions and their
-callbacks remain synchronous on one worker; they never span a provider await.
+Synchronous work uses the existing bounded worker pool. Store mutation
+transactions and their callbacks remain synchronous on one worker; they never
+span a provider await. The follow-up [chat coordination change](backend-chat-coordination.tdd.md)
+uses a separate, non-writing transaction only for provider coordination.
 The round dispatch record makes the preparation/dispatch/admission phases
 explicit without creating a second dispatch mechanism.
 
@@ -105,10 +107,10 @@ The overall refactoring goal remains active. This change proves thread placement
 and behavior, not production throughput or replica safety for every aggregate.
 Further review must cover:
 
-- Shared chat configuration document writes: the current store's mutation scope
-  uses an instance `RLock`, which alone cannot serialize separate PostgreSQL
-  replicas. Rotation also has a process-local asynchronous lock. Cross-replica
-  mutation and provider-rotation semantics need dedicated concurrency evidence.
+- Chat document growth and history query bounds. The follow-up
+  [chat coordination change](backend-chat-coordination.tdd.md) addresses the
+  store/rotation replica races identified in this review, with live PostgreSQL
+  evidence, while retaining the shared JSON document representation.
 - Async application/background operations beyond the HTTP scenarios exercised
   here, database query bounds, and contention under concurrent load.
 - PostgreSQL-specific behavior (the normal suite skips environment-dependent

@@ -75,6 +75,9 @@ def test_provider_operation_refuses_conflicting_replica_work(chat_replicas, oper
                     }[operation]
                     await asyncio.wait_for(handler(integration_id, object(), b), 1)
             assert error.value.status_code == 409
+            unchanged = await run_in_threadpool(second.connection_settings, integration_id)
+            assert unchanged["secrets"]["botToken"] == "test-token"
+            assert unchanged["secrets"]["webhookSecret"] == calls[0]["secrets"]["webhookSecret"]
         finally:
             release.set()
             await rotation

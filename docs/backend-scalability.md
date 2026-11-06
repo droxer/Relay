@@ -17,7 +17,7 @@ The control plane keeps agent execution on daemons. This change addresses blocki
 2. Installations with unmigrated local operational state must import it with an earlier release before upgrading; the legacy file importers and startup checks have been removed.
 3. Start the new backend. For independent replicas, use the same PostgreSQL database across replicas; every store, accounts included, lives there. Run schedulers/recovery through the application lifespan.
 
-Budget database connections across processes: each process has its own configured pool and notification connection. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
+Budget database connections across processes: each process has its own configured pool and notification connection. Chat activation, health checks, and secret rotation also retain one dedicated coordination connection per in-flight operation; see the [chat coordination deployment notes](testing/backend-chat-coordination.tdd.md#deployment-and-remaining-scope), including the requirement to restart replicas together. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
 
 ## Rollback
 

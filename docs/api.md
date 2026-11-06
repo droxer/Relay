@@ -292,6 +292,12 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
+Chat activation, health checks, and webhook-secret rotation are exclusive per
+integration across PostgreSQL backend replicas. A conflicting operation, or a
+`PATCH /api/v1/admin/chat-integrations/{id}` changing `tenantId`, `config`,
+`secrets`, or `status` during one, returns 409; retry after the active operation
+finishes. Display-only edits and operations on other integrations can proceed.
+
 An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
 checking that no dispatch claim or run request owns it. It records the status
 change through task events. For an automation definition, Run now queues a fresh
