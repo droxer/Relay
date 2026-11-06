@@ -5,9 +5,10 @@ feature per computer instead of per release. This module is the one list of
 them; ``packages/relay-core/src/daemon-node-protocol.ts`` is its TypeScript
 mirror and ``tests/unit/test_client_version_parity.py`` pins the two together.
 
-Whether a computer runs an older client is also decided here. Every package
-still reports version 0.1.0, so a version string cannot tell an old daemon from
-a new one; capabilities can. A current daemon advertises every capability in
+Whether a computer needs a client update is also decided here. Release identity
+is reported separately as ``clientVersion``; required wire behaviours remain
+capability-based so legacy daemons and mixed releases stay compatible.
+A current daemon advertises every capability in
 ``DAEMON_NODE_CAPABILITIES``, so a registered computer missing any of them is
 running an older client. A capability a daemon advertises only in some modes
 must never join that set, or every such computer would read as outdated.

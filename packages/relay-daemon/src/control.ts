@@ -1,4 +1,5 @@
 /** `relay` — start, stop and inspect the background services the computer installer created. */
+import { RELAY_CLIENT_VERSION } from './client-version.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -52,6 +53,7 @@ Commands:
   stop      Stop ${product} and keep it stopped, also after login, until "${command} start".
   restart   Restart ${product} (for example after signing in to an agent CLI).
   status    Show whether ${product} is running.
+  version   Show the installed ${product} client version.
   mcp       Serve Relay MCP over stdio: --config <private-config.json>.
   logs      Show recent ${product} output. Add --follow to keep streaming.
   update    Install the latest ${product} release from your backend and restart.
@@ -61,6 +63,7 @@ Options:
   --computer <id>   Act on one connected computer when several are installed.
   -f, --follow      With "logs", stream new output until Ctrl+C.
   --force           With "update", restart even while runs are in progress.
+  -v, --version     Show the installed client version.
   --help            Show this help message.
 `;
 
@@ -126,6 +129,7 @@ export function parseControlArgs(args: string[]): ControlArgs {
   let force = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
+    if (arg === '--version' || arg === '-v') return { command: 'version', follow };
     if (arg === '--help' || arg === '-h' || arg === 'help') return { command: 'help', follow };
     if (arg === '--follow' || arg === '-f') { follow = true; continue; }
     if (arg === '--force') { force = true; continue; }
@@ -268,6 +272,7 @@ function styledHelp(text: string, style: TerminalStyle): string {
 export function runControl(args: string[], deps: ControlDeps): number {
   const options = parseControlArgs(args);
   const brand = deps.brand ?? RELAY_BRAND;
+  if (options.command === 'version') { deps.log(`${brand.command} ${RELAY_CLIENT_VERSION}`); return 0; }
   if (options.command === 'help') { deps.log(styledHelp(help(brand), deps.style ?? PLAIN)); return 0; }
   if (!COMMANDS.includes(options.command)) throw new Error(`Unknown command: ${options.command}. Run "${brand.command} --help".`);
   const services = selectServices(deps, options.computer);
