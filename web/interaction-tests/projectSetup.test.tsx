@@ -68,7 +68,9 @@ it("creates the project from the intent and asks the chosen agent to draft its s
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(create).toHaveBeenCalledWith({
-    name: "Launch the site", description: "Launch the site.\nWith pricing.", daemonNodeId: "node", leadAgentId: null, members: [],
+    name: "Launch the site", description: "Launch the site.\nWith pricing.", daemonNodeId: "node",
+    // The preselected manager is sent as the owner's explicit choice.
+    managerAgentId: "ada", leadAgentId: null, members: [],
   });
   expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Launch the site.\nWith pricing.", agentId: "bo" } });
   expect(onSaved.mock.calls[0][0].version).toBe(2);

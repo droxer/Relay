@@ -8,9 +8,6 @@ export function getProjectManager(id: string, signal?: AbortSignal): Promise<Pro
 export function setProjectManager(id: string, agentId: string, expectedVersion: number): Promise<ProjectManagerResponse> {
   return apiJson(path(id), { method: "PUT", body: { agentId, expectedVersion } });
 }
-export function sendManagerMessage(id: string, body: { text: string; idempotencyKey: string }): Promise<{threadId: string}> {
-  return apiJson(`${path(id)}/messages`, { method: "POST", body });
-}
 export function openManagerConversation(id: string): Promise<{threadId:string}> {
   return apiJson(`${path(id)}/conversation`,{method:"POST",body:{}});
 }

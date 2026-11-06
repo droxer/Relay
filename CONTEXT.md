@@ -211,13 +211,18 @@ persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
 **Project Manager**:
-A Project roster role (`project_manager`) held by one user-owned Logical Agent
-with an active Placement on that Project's Computer. It is local to the Project:
-the Agent retains its name, profile, global Agent Role, and roles in other
-Projects. Chat opens an ordinary Thread with that Agent. The Project records its
-role holder and canonical conversation; changing the holder preserves history.
-The manager reads live Project records and stages Task changes for the Project
-Owner to review and apply. It does not gain acceptance or execution authority.
+A responsibility one Project Agent holds beside its Project role (the member's
+`projectManager` flag), so a reviewer or planner can also manage the Project and
+handing it over never changes anyone's role. The holder is an ordinary
+user-owned Logical Agent with an active Placement on that Project's Computer: it
+keeps its name, profile, global Agent Role, and roles in other Projects. Only
+the owner assigns it — at creation the owner's choice, else the Project's lead —
+and nothing reads it into place later. The roster is its only record; the
+Project's `managerAgentId` is derived. The manager conversation is an ordinary
+Project Conversation that no Agent owns; a message goes to whoever it
+addresses. The holder gets the manager tools in every round it takes part in,
+reads live Project records, and stages Task changes for the Project Owner to
+review and apply. It does not gain acceptance or execution authority.
 _Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
 
 **Relay MCP**:

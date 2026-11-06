@@ -57,7 +57,7 @@ def test_project_task_run_tells_the_agent_about_the_project(briefed_project):
     brief = commands[0]["state"]["project_brief"]
     assert brief.startswith("Project: Website launch")
     assert "Goal: Ship the marketing site by Friday" in brief
-    assert "- Lead (project_manager, lead): Plan and build" in brief
+    assert "- Lead (planner, project manager, lead): Plan and build" in brief
     assert "Lighthouse above 90" in brief
 
 

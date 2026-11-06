@@ -1,13 +1,9 @@
-"""Owner-facing manager conversations and command-scoped daemon tools."""
+"""Owner-facing manager role, conversation, proposals, and command-scoped daemon tools."""
 from __future__ import annotations
 
 from typing import Any
 from fastapi import APIRouter, HTTPException, Request
-from starlette.concurrency import run_in_threadpool
-from ...collaboration.models import RunIntent
-from ...collaboration.service import CollaborationConductor
-from ...collaboration.errors import CollaborationError
-from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view, update_project_with_manager
+from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
 from ...projects.runtime import project_work_error
@@ -53,7 +49,7 @@ def set_manager(project_id: str, request: Request, ctx: AppContextDep, *, _reque
     if not isinstance(version, int) or isinstance(version, bool):
         raise HTTPException(400, "project_expected_version_required")
     try:
-        project = update_project_with_manager(ctx, project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
+        project = ctx.project_store.update_project(project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
     except ProjectVersionConflict as error:
         raise HTTPException(409, "project_version_conflict") from error
     except ManagerError as error:
@@ -68,42 +64,16 @@ def overview(project_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 
 @router.post("/projects/{project_id}/manager/conversation")
 def manager_conversation(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    """Open (or start) the Project's manager Thread. It never dispatches a run:
+    the owner talks to the role holder through the ordinary Thread composer."""
     project = _owned(ctx, request, project_id)
-    view = manager_view(ctx, project)
-    project = view["project"]
-    if project.get("managerThreadId"):
-        return {"threadId": project["managerThreadId"]}
-    if not project.get("managerAgentId"):
+    if not project.get("managerAgentId") and not project.get("managerThreadId"):
         raise HTTPException(409, "manager_unconfigured")
     try:
         _, thread_id = ensure_manager_thread(ctx, project)
     except ManagerError as error:
         raise HTTPException(error.status, error.code) from error
     return {"threadId": thread_id}
-
-
-@router.post("/projects/{project_id}/manager/messages", status_code=202)
-async def manager_message(project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep) -> dict[str, Any]:
-    project = _owned(ctx, request, project_id, writable=True)
-    text = _request_body.get("text")
-    if not isinstance(text, str) or not text.strip() or len(text) > 20000:
-        raise HTTPException(400, "manager_message_invalid")
-    key = _request_body.get("idempotencyKey")
-    if not isinstance(key, str) or not 1 <= len(key) <= 200:
-        raise HTTPException(400, "manager_idempotency_key_required")
-    view = await run_in_threadpool(manager_view, ctx, project)
-    if view["manager"]["reason"]:
-        raise HTTPException(409, view["manager"]["reason"])
-    try:
-        project, thread_id = await run_in_threadpool(ensure_manager_thread, ctx, view["project"])
-        session = await CollaborationConductor(ctx).submit(RunIntent(
-            task_goal=text.strip(), session_id=thread_id, requested_project_id=project_id,
-            raw_assignments=[{"agentId": project["managerAgentId"], "mode": "action"}],
-            source="project_manager", idempotency_key=key,
-        ), request_actor(request, ctx.auth_store))
-    except (ManagerError, CollaborationError) as error:
-        raise HTTPException(error.status, error.code) from error
-    return {"threadId": session["id"], "project": project}
 
 
 @router.post("/projects/{project_id}/manager/proposals/{proposal_id}/apply")

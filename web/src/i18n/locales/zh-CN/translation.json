@@ -105,8 +105,7 @@
     "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
     "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
-    "save_prerequisites": "无法保存前置任务。请检查连接后重试。",
-    "project_manager_target_changed": "项目经理已变更。请刷新对话并向当前 Agent 重新发送消息。"
+    "save_prerequisites": "无法保存前置任务。请检查连接后重试。"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {
@@ -411,7 +410,8 @@
     "setup_task_after_existing_other": "在 {{count}} 个已有任务之后",
     "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。",
     "dashboard_user_wip": "你在所有项目中的进行中任务：{{count}} / {{limit}}",
-    "dashboard_view_user_tasks": "查看你在所有项目中的任务"
+    "dashboard_view_user_tasks": "查看你在所有项目中的任务",
+    "member_make_manager": "项目经理"
   },
   "thread": {
     "project_indicator": "项目：{{name}}",

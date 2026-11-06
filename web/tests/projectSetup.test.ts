@@ -76,6 +76,25 @@ describe("setup drafts", () => {
     assert.equal(input.leadAgentId, "ada");
   });
 
+  it("keeps the current Project Manager when the owner keeps them", () => {
+    const managed = { ...project, managerAgentId: "bo" } as ProjectRecord;
+    const input = setupApplyInput(managed, setupDraftFromProposal(proposal, managed));
+    assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [false, true]);
+  });
+
+  it("hands the role to the member the proposal names", () => {
+    const managed = { ...project, managerAgentId: "bo" } as ProjectRecord;
+    const named = { ...proposal, members: proposal.members?.map((m) => (m.agentId === "ada" ? { ...m, projectManager: true } : m)) };
+    const input = setupApplyInput(managed, setupDraftFromProposal(named, managed));
+    assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [true, false]);
+  });
+
+  it("leaves the role open when the holder is not kept", () => {
+    const managed = { ...project, managerAgentId: "someone-else" } as ProjectRecord;
+    const input = setupApplyInput(managed, setupDraftFromProposal(proposal, managed));
+    assert.ok(input.members?.every((m) => !m.projectManager));
+  });
+
   it("leaves the roster alone when the owner keeps no members", () => {
     const draft = setupDraftFromProposal(proposal, project);
     const input = setupApplyInput(project, { ...draft, members: draft.members.map((m) => ({ ...m, include: false })) });

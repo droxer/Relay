@@ -305,6 +305,8 @@ def _apply_participants_joined(session: dict[str, Any], event: dict[str, Any]) -
 
 
 def _apply_project_manager_assigned(session: dict[str, Any], event: dict[str, Any]) -> None:
+    # Replay only: earlier releases moved the manager Thread's owner with the
+    # role. Nothing appends this event now; the role never re-owns a Thread.
     agent_id = event.get("agentId")
     if agent_id:
         session["ownerAgentId"] = agent_id

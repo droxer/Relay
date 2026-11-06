@@ -2,7 +2,7 @@
 
 from typing import Any
 from ..core.computer_identity import computer_id
-from ..projects.manager import ManagerError, ensure_manager_thread, initialize_manager
+from ..projects.manager import ManagerError, ensure_manager_thread
 from ..projects.manager_reads import read_manager_tool
 from ..projects.manager_proposals import stage_proposal
 from ..projects.runtime import project_work_error
@@ -43,7 +43,6 @@ def invoke(ctx: Any, grant: dict[str, Any], project_id: str, tool: str, argument
         if tool == "propose":
             if code := project_work_error(project):
                 raise ManagerError(code)
-            project = initialize_manager(ctx, project)
             if not project.get("managerAgentId"):
                 raise ManagerError("manager_unconfigured")
             command: dict[str, Any]

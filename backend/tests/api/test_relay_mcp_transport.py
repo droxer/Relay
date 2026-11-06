@@ -15,11 +15,13 @@ import pytest
 from fastapi.testclient import TestClient
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+import test_project_manager_api as manager_api
 import test_project_setup_api as setup_api
 from test_relay_mcp_api import _token
 from test_project_manager_api import _start
 
 setup_env = setup_api.setup_env
+managed_env = manager_api.managed_env
 ROOT = Path(__file__).resolve().parents[3]
 NODE_BRIDGE = ROOT / "dist/packages/relay-daemon/src/relay-mcp.js"
 requires_node_bridge = pytest.mark.skipif(
@@ -63,8 +65,8 @@ def _http_transport(app):
             worker.join(timeout=5)
 
 
-def test_official_mcp_client_discovers_and_calls_hosted_tools(setup_env):
-    app, owner, _, project, *_ = setup_env
+def test_official_mcp_client_discovers_and_calls_hosted_tools(managed_env):
+    app, owner, _, project, *_ = managed_env
     grant = _token(owner, project)
     with _http_transport(app) as url:
 
@@ -140,9 +142,9 @@ def test_real_local_node_bridge_round_trips_to_python_with_scope_enforced(setup_
         assert grant["token"] not in process.stdout + process.stderr
 
 
-def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(setup_env):
-    app, owner, node, project, *_ = setup_env
-    result, command = _start(setup_env)
+def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(managed_env):
+    app, owner, node, project, *_ = managed_env
+    result, command = _start(managed_env)
     external = TestClient(app)
     issued = external.post(
         f"/api/v1/daemon-nodes/{node['id']}/mcp-token",
@@ -176,11 +178,11 @@ def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(setup_en
 
 @requires_node_bridge
 @pytest.mark.integration
-def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(setup_env, tmp_path):
+def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path):
     import os
 
-    app, owner, node, project, *_ = setup_env
-    result, command = _start(setup_env)
+    app, owner, node, project, *_ = managed_env
+    result, command = _start(managed_env)
     other = owner.post(
         "/api/v1/projects", json={"name": "Other managed scope", "daemonNodeId": node["id"], "members": []}
     ).json()["project"]

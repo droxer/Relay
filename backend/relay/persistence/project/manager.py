@@ -1,4 +1,4 @@
-"""Project manager binding and event-authoritative proposals."""
+"""Project manager conversation pointer and event-authoritative proposals."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from typing import Any
 from sqlalchemy import insert, select, update
 from ...core.ids import new_database_id
+from ...core.project_roles import project_with_manager
 from ..db_time import parse_db_time
 from ..engine import store_transaction
 from ..tables.projects import manager_events, manager_proposals
@@ -35,7 +36,7 @@ class ManagerRows:
                 raise KeyError(project_id)
             if task_ids:
                 conn.execute(select(tasks.c.id).where(tasks.c.id.in_(task_ids)).order_by(tasks.c.id).with_for_update()).all()
-            yield dict(project)
+            yield project_with_manager(dict(project))
 
     def mutate_manager(self, project_id: str, change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
         return self._mutate_current(project_id, "project.manager_changed", change)  # type: ignore[attr-defined]

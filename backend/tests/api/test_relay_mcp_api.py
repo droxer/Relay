@@ -1,8 +1,10 @@
 """MCP uses revocable scoped API tokens, never a browser or daemon credential."""
 from fastapi.testclient import TestClient
+import test_project_manager_api as manager_api
 import test_project_setup_api as setup_api
 
 setup_env=setup_api.setup_env
+managed_env=manager_api.managed_env
 
 
 def _token(client, project):
@@ -30,8 +32,8 @@ def test_mcp_token_reads_its_project_and_is_never_revealed_again(setup_env):
     assert external.get('/api/v1/mcp/projects',headers=headers).status_code == 401
 
 
-def test_mcp_scope_cannot_escape_and_proposals_need_owner_apply(setup_env):
-    app,client,node,project,*_=setup_env
+def test_mcp_scope_cannot_escape_and_proposals_need_owner_apply(managed_env):
+    app,client,node,project,*_=managed_env
     grant=_token(client,project)
     external=TestClient(app)
     headers={'Authorization':f"Bearer {grant['token']}"}
@@ -50,9 +52,9 @@ def test_mcp_scope_cannot_escape_and_proposals_need_owner_apply(setup_env):
     assert applied.json()['tasks'][0]['status'] == 'backlog'
 
 
-def test_computer_mcp_tokens_follow_computer_ownership_and_run_lifetime(setup_env):
+def test_computer_mcp_tokens_follow_computer_ownership_and_run_lifetime(managed_env):
     from test_project_manager_api import _start
-    app, client, node, project, *_ = setup_env
+    app, client, node, project, *_ = managed_env
     external = TestClient(app)
     url = f"/api/v1/daemon-nodes/{node['id']}/mcp-token"
     assert external.post(url, json={}).status_code == 401
@@ -61,7 +63,7 @@ def test_computer_mcp_tokens_follow_computer_ownership_and_run_lifetime(setup_en
     assert issued.status_code == 201, issued.text
     auth = {"Authorization": f"Bearer {issued.json()['token']}"}
     assert external.get('/api/v1/mcp/projects', headers=auth).status_code == 200
-    result, command = _start(setup_env)
+    result, command = _start(managed_env)
     issued = external.post(url, headers=headers, json={"commandId": command['id'], "leaseId": command['leaseId']})
     assert issued.status_code == 201, issued.text
     run_auth = {"Authorization": f"Bearer {issued.json()['token']}"}

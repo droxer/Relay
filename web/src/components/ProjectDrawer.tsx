@@ -72,7 +72,8 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const [description, setDescription] = useState("");
   const [intent, setIntent] = useState("");
   const [setupAgentId, setSetupAgentId] = useState(AUTO_SETUP_AGENT);
-  const [managerAgentId, setManagerAgentId] = useState("");
+  // Undefined until the owner picks: the oldest eligible agent is shown and sent.
+  const [managerChoice, setManagerChoice] = useState<string | null>();
   const [computerId, setComputerId] = useState("");
   const [folder, setFolder] = useState("");
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -99,6 +100,10 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     () => (selectedComputer ? agentsEligibleForProject(agents, stableComputerId(selectedComputer), selectedComputer.id) : []),
     [agents, selectedComputer],
   );
+  const defaultManagerId = [...setupAgents].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id))[0]?.id;
+  const chosenManager = managerChoice === undefined ? defaultManagerId : managerChoice;
+  // A choice made for one computer cannot stand on another.
+  const managerAgentId = chosenManager && setupAgents.some((agent) => agent.id === chosenManager) ? chosenManager : null;
   const busy = createProjectMutation.isPending || startProjectSetupMutation.isPending;
   const hasUnsavedChanges = Boolean(name || description || intent || computerId || folder);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
@@ -127,7 +132,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   }
 
   function chooseComputer(value: string) {
-    if (value !== computerId) setManagerAgentId("");
+    if (value !== computerId) setManagerChoice(undefined);
     if (value !== computerId) setFolder("");
     setComputerId(value);
     setComputerError(null);
@@ -146,7 +151,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: name.trim(),
       ...(nextDescription ? { description: nextDescription } : {}),
       daemonNodeId: computerId,
-      ...(managerAgentId ? {managerAgentId} : {}),
+      managerAgentId: managerAgentId ?? null,
       ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
@@ -171,7 +176,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: provisionalProjectName(brief, t("project.setup_fallback_name")),
       description: brief,
       daemonNodeId: computerId,
-      ...(managerAgentId ? {managerAgentId} : {}),
+      managerAgentId: managerAgentId ?? null,
       ...(workspaceHostPath ? { workspaceHostPath } : {}),
       leadAgentId: null,
       members: [],
@@ -302,7 +307,8 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
         )}
 
         {selectedComputer && setupAgents.length ? <Field label={t("project_manager.agent")} htmlFor="new-project-manager">
-          <select id="new-project-manager" value={managerAgentId || [...setupAgents].sort((a,b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id))[0]?.id || ""} disabled={busy} onChange={e => setManagerAgentId(e.target.value)}>
+          <select id="new-project-manager" value={managerAgentId ?? ""} disabled={busy} onChange={e => setManagerChoice(e.target.value || null)}>
+            <option value="">{t("project_manager.none")}</option>
             {setupAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.displayName}</option>)}
           </select>
         </Field> : null}

@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..core.ids import new_relay_id, now_iso
-from ..core.project_roles import PROJECT_ROLES
+from ..core.models import AGENT_ROLES
 from .runtime import agent_on_project_computer
 from .setup_result import SETUP_MODES
 
@@ -163,7 +163,7 @@ def setup_manifest_block(
         **({"openTasks": open_tasks} if mode == "plan" else {}),
         "intent": intent,
         "candidates": candidates,
-        "roles": list(PROJECT_ROLES),
+        "roles": list(AGENT_ROLES),
         **({"previousProposal": previous_proposal} if previous_proposal else {}),
     }
 

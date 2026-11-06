@@ -603,7 +603,7 @@ export function ThreadsView({
                   agentDisplayNames={agentDisplayNames}
                 />
                 <HandoffStatus session={activeSession} />
-                {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} /> : null}
+                {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} running={running} /> : null}
                 <CollaborationStatus session={activeSession} />
                 {/* A setup thread only drafts; the owner applies on the dashboard. */}
                 {!projectReadOnly ? (

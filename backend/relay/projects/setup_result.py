@@ -10,7 +10,8 @@ import re
 from typing import Any
 
 from ..core.ids import now_iso
-from ..core.project_roles import PROJECT_ROLES
+from ..core.models import AGENT_ROLES
+from ..core.project_roles import upgrade_member
 
 
 SETUP_TASKS_MAX = 8
@@ -133,7 +134,8 @@ def _proposal_members(raw: Any) -> list[dict[str, Any]]:
         if agent_id in seen:
             continue
         seen.add(agent_id)
-        role = item.get("role") if item.get("role") in PROJECT_ROLES else "implementer"
+        item = upgrade_member(item)
+        role = item.get("role") if item.get("role") in AGENT_ROLES else "implementer"
         instructions = _clip(item.get("instructions"), _LIMITS["instructions"])
         members.append(
             {
@@ -141,6 +143,7 @@ def _proposal_members(raw: Any) -> list[dict[str, Any]]:
                 "role": role,
                 "responsibilities": responsibilities,
                 **({"instructions": instructions} if instructions else {}),
+                **({"projectManager": True} if item.get("projectManager") is True else {}),
             }
         )
         if len(members) == _MEMBERS_MAX:

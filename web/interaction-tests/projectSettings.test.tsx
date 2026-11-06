@@ -38,7 +38,7 @@ it("creates a project on the selected compatible computer", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New project" } });
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "node" } });
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
-  await waitFor(() => expect(create).toHaveBeenCalledWith({ name: "New project", daemonNodeId: "node", leadAgentId: null, members: [] }));
+  await waitFor(() => expect(create).toHaveBeenCalledWith({ name: "New project", daemonNodeId: "node", managerAgentId: null, leadAgentId: null, members: [] }));
   expect(onSaved).toHaveBeenCalledWith(project);
 });
 
@@ -50,7 +50,7 @@ it("creates a project with a description", async () => {
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "node" } });
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith({
-    name: "New project", description: "What it is for", daemonNodeId: "node", leadAgentId: null, members: [],
+    name: "New project", description: "What it is for", daemonNodeId: "node", managerAgentId: null, leadAgentId: null, members: [],
   }));
 });
 

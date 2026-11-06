@@ -1,6 +1,7 @@
 import type { AgentRole } from "relay-core";
-export type ProjectRole = AgentRole | "project_manager";
-export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = ["project_manager", "planner", "implementer", "reviewer", "tester", "fixer"];
+/** What a member does in the Project's rounds; managing it is `projectManager`. */
+export type ProjectRole = AgentRole;
+export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = ["planner", "implementer", "reviewer", "tester", "fixer"];
 
 export interface ProjectMember {
   agentId: string;
@@ -8,6 +9,8 @@ export interface ProjectMember {
   responsibilities: string;
   instructions?: string;
   enabled: boolean;
+  /** Holds the Project Manager responsibility; at most one member does. */
+  projectManager?: boolean;
 }
 
 export type ProjectSetupState = "drafting" | "proposed" | "failed" | "applied" | "dismissed";
@@ -28,6 +31,7 @@ export interface ProjectSetupProposal {
     responsibilities: string;
     instructions?: string;
     issue?: ProjectSetupMemberIssue;
+    projectManager?: boolean;
   }>;
   tasks?: ProjectSetupProposedTask[];
 }
@@ -105,9 +109,9 @@ export interface ProjectContextSuggestion {
 }
 
 export interface ProjectRecord {
+  /** Derived from the roster: the member carrying `projectManager`. */
   managerAgentId?: string | null;
   managerThreadId?: string | null;
-  managerInitialized?: boolean;
   id: string;
   ownerUserId: string;
   name: string;
@@ -142,7 +146,8 @@ export interface ProjectsResponse {
 }
 
 export interface CreateProjectInput {
-  managerAgentId?: string;
+  /** Omitted: the lead holds the role. Null: nobody does yet. */
+  managerAgentId?: string | null;
   name: string;
   description?: string;
   goal?: string;
@@ -157,6 +162,7 @@ export interface CreateProjectInput {
     responsibilities: string;
     instructions?: string;
     enabled?: boolean;
+    projectManager?: boolean;
   }>;
 }
 

@@ -45,7 +45,6 @@ from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
 from .api.projects import manager as project_manager_routes
 from .api.projects import mcp as project_mcp_routes
-from .migrations_runtime.project_managers import initialize_project_managers
 from .api.tasks import (
     automations as automation_routes,
     github as task_github_routes,
@@ -253,8 +252,6 @@ def create_app(
         password_reset=password_reset,
         connections=connections,
     )
-    if settings.startup_repairs_enabled:
-        initialize_project_managers(app.state.context)
     mcp_http = RelayMcpHttp(app.state.context)
     # Exact transport route precedes the web catch-all without swallowing the
     # existing /mcp/tokens and compatibility JSON routes.

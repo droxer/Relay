@@ -1,22 +1,30 @@
 # Project Manager Agent and Relay MCP
 
-The Project Manager is an actual Logical Agent holding the `project_manager`
-role in a Project roster. The Agent retains its name, profile, global execution
-role and roles in other Projects. There is one holder per Project. New Projects
-select their eligible lead, or the first eligible Agent, and put that Agent in
-the roster. Explicit `managerAgentId: null` leaves the role unassigned.
+The Project Manager is an ordinary Logical Agent that holds one responsibility
+in a Project: the `projectManager` flag on its roster entry. The flag sits
+beside the member's `role`, which stays one of the Agent Roles (planner,
+implementer, reviewer, tester, fixer), so a reviewer can also manage the
+Project, and handing the responsibility over never changes anyone's role. At
+most one member holds it. The roster is the only record; the Project's
+`managerAgentId` is derived from it on read. A legacy member stored with
+`role: "project_manager"` reads back as a planner holding the flag
+(`core/project_roles.py`).
 
-The Dashboard shows the Agent and its Project role. Chat opens its normal Thread;
-opening it does not dispatch a run. The normal composer, transcript, permission
-prompts and Agent attribution apply. There is no manager chat drawer or alternate
-Relay persona. The role can be reassigned through the Project Agents editor.
-The Project's canonical manager Thread and standing context survive reassignment.
-Reassignment commits the roster update and a `thread.project_manager_assigned`
-event together. That event changes the current Thread owner and joins the new
-Agent without rewriting past runs or removing historical participants. The
-composer reconciles saved targets against the current role holder after its
-Agent directory loads. Stale targets in the role's canonical conversation return
-409 instead of silently dispatching the former manager.
+Only the owner assigns the role. A new Project takes the owner's
+`managerAgentId`, else its lead when the lead is eligible; `null` leaves it
+open. The creation drawer preselects the oldest eligible Agent and sends that
+choice explicitly. No read, startup repair or conversation assigns a manager
+afterwards, and nobody joins the roster except the Agent the owner chose.
+
+The Dashboard shows the Agent and its Project role. Chat opens the Project's
+manager Thread, an ordinary Project Conversation; opening it does not dispatch a
+run. No Agent owns that Thread: the holder is its first participant, and each
+message goes to whoever it addresses, through the ordinary Thread message route.
+The composer defaults to the current holder. Reassigning the role changes only
+the roster. It writes nothing to the Thread, which keeps its participants and
+history, and the former holder stays an ordinary Agent that can still be
+addressed there, without the manager tools. There is no manager chat drawer,
+dedicated message route or alternate Relay persona.
 
 The role reads fresh Project records, explains progress and the backlog, and
 stages Task changes. An owner reviews the proposal in the Thread, edits individual
@@ -26,13 +34,20 @@ transaction. It cannot silently start work, accept an outcome or reconcile a run
 
 ## Capability resolution
 
-`manager_run_context` resolves the enabled Project roster role for the selected
-Logical Agent. A conversation round pins that Project/Agent/binding revision in
-its run manifest. Manager capability does not depend on the canonical Thread ID;
-addressing the role holder in another Project conversation receives the same
-scoped tools, and proposals appear in the conversation that produced them.
-Project setup drafts keep their separate setup workflow. The canonical manager
-Thread is the role's default conversation and navigation destination.
+`manager_run_context` resolves the enabled Project roster role for each
+Logical Agent in a round. A round that includes the holder, alone or beside
+other Agents, pins that Project/Agent/binding revision in its run manifest, and
+the registry hands the tools to the holder's assignment only. Manager
+capability does not depend on the Thread; proposals appear in the conversation
+that produced them. Project setup drafts keep their separate setup workflow.
+
+Holding the role never stops an Agent from running. On a Computer that does not
+advertise `project-manager-mcp`, the holder runs without the tools and the
+manager view reports `project_manager_update_required` to the owner.
+
+`GET /projects/{id}/manager` only reads. It reports the holder, candidates,
+availability reason, the manager Thread (absent if it was deleted; opening the
+conversation starts a new one) and proposals.
 
 ## Local Agent Runtimes
 
@@ -170,6 +185,14 @@ See [architecture-fix verification](testing/project-manager-architecture-fixes.m
 and [the initial feature evidence](testing/project-manager.tdd.md). Migrations 0113
 (proposals), 0114 (Connections) and 0115 (MCP token digests) must run before serving this version.
 Rebuild and install the Computer client advertising `project-manager-mcp`; older
-clients are refused for manager runs until updated. Native provider
+clients run the manager without its tools until updated. Native provider
 sessions are not simulated by the browser fixtures; actual stdio/API transport,
 configuration preservation and authorization have separate tests.
+
+The role-as-flag model needs no migration: stored rosters with the legacy
+`project_manager` role are upgraded when read, and the retired
+`managerInitialized` field is dropped from responses. Projects the removed
+startup backfill never reached simply show the role as unassigned until the
+owner picks a holder. `backend/tests/api/test_project_manager_api.py` covers the
+flag, handover without Thread rewrites, read-only views, multi-Agent rounds and
+older Computers.

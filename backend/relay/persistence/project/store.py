@@ -19,7 +19,7 @@ from ..sql import metadata as shared_metadata
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
-from ...core.project_roles import project_manager_id
+from ...core.project_roles import project_manager_id, project_with_manager
 
 PROJECT_NAME_MAX_LENGTH = 120
 # A project that links an existing directory on its computer names it under
@@ -84,7 +84,7 @@ class DatabaseProjectStore(ManagerRows):
                 .mappings()
                 .first()
             )
-        return dict(row["snapshot"]) if row else None
+        return project_with_manager(dict(row["snapshot"])) if row else None
 
     def list_projects(
         self,
@@ -102,7 +102,7 @@ class DatabaseProjectStore(ManagerRows):
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return sorted(
-            (dict(row["snapshot"]) for row in rows),
+            (project_with_manager(dict(row["snapshot"])) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),
         )
 
@@ -355,7 +355,7 @@ class DatabaseProjectStore(ManagerRows):
                         raise KeyError(project_id)
                     if row["snapshot"].get("archivedAt") and not allow_archived:
                         raise ProjectVersionConflict(project_id)
-                    current = dict(row["snapshot"])
+                    current = project_with_manager(dict(row["snapshot"]))
                     if int(current["version"]) != expected_version:
                         raise ProjectVersionConflict(project_id)
                     result = mutate(current)
@@ -438,7 +438,6 @@ def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "leadAgentId": payload.get("leadAgentId"),
         "managerAgentId": project_manager_id(payload["members"]),
-        "managerInitialized": "managerAgentId" in payload,
         "managerThreadId": None,
         "members": list(payload["members"]),
         "enabled": payload.get("enabled") is not False,
@@ -460,9 +459,6 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
         "leadAgentId",
         "members",
         "enabled",
-        "managerAgentId",
-        "managerThreadId",
-        "managerInitialized",
     }
     unknown = set(patch) - allowed
     if unknown:

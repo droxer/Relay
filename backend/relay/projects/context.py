@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.project_roles import is_project_manager
+
 
 def project_context_brief(
     snapshot: dict[str, Any] | None, agent_names: dict[str, str] | None = None
@@ -41,7 +43,7 @@ def project_context_brief(
 
 
 def _crew_line(member: dict[str, Any], names: dict[str, str], *, lead: bool) -> str:
-    marker = ", lead" if lead else ""
+    marker = (", project manager" if is_project_manager(member) else "") + (", lead" if lead else "")
     name = names.get(member["agentId"])
     label = f"{name} ({member['role']}{marker})" if name else f"{member['role']}{marker}"
     return f"- {label}: {member['responsibilities']}"

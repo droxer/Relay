@@ -19,6 +19,8 @@ export interface SetupMemberDraft {
   instructions?: string;
   include: boolean;
   issue?: ProjectSetupMemberIssue;
+  /** The proposal named this member the Project Manager. */
+  projectManager?: boolean;
 }
 
 export interface SetupTaskDraft {
@@ -81,6 +83,7 @@ export function setupDraftFromProposal(proposal: ProjectSetupProposal, project: 
     ...(member.instructions ? { instructions: member.instructions } : {}),
     include: !member.issue,
     ...(member.issue ? { issue: member.issue } : {}),
+    ...(member.projectManager ? { projectManager: true } : {}),
   }));
   return {
     name: proposal.name ?? project.name,
@@ -109,12 +112,15 @@ export function effectiveLead(members: readonly SetupMemberDraft[], leadAgentId:
  *  sent only when the owner kept at least one member; an empty selection
  *  leaves the current roster alone. */
 export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): UpdateProjectInput {
-  const members = draft.members.filter(memberKept).map(({ agentId, role, responsibilities, instructions }) => ({
+  const kept = draft.members.filter(memberKept);
+  const managerId = setupManagerId(kept, project.managerAgentId ?? null);
+  const members = kept.map(({ agentId, role, responsibilities, instructions }) => ({
     agentId,
     role,
     responsibilities: responsibilities.trim(),
     ...(instructions?.trim() ? { instructions: instructions.trim() } : {}),
     enabled: true,
+    ...(agentId === managerId ? { projectManager: true } : {}),
   }));
   const name = draft.name.trim();
   return {
@@ -126,6 +132,15 @@ export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): Upda
     ...(members.length ? { members, leadAgentId: effectiveLead(draft.members, draft.leadAgentId) } : {}),
     setupResolution: "applied",
   };
+}
+
+/** Who manages the Project once the roster is replaced: the kept member the
+ *  proposal names, else the current holder if the owner kept them. Applying a
+ *  setup never silently drops the role. */
+export function setupManagerId(kept: readonly SetupMemberDraft[], currentManagerId: string | null): string | null {
+  const proposed = kept.find((member) => member.projectManager);
+  if (proposed) return proposed.agentId;
+  return kept.some((member) => member.agentId === currentManagerId) ? currentManagerId : null;
 }
 
 /** The apply request for the tasks the owner kept. An assignee survives only
