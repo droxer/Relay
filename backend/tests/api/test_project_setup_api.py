@@ -498,3 +498,21 @@ def test_a_draft_that_never_dispatched_names_no_deleted_task(setup_env, monkeypa
     assert setup["state"] == "failed"
     assert "taskId" not in setup
     assert client.get("/api/v1/tasks").json()["tasks"] == []
+
+
+def test_manifest_preparation_failure_discards_claimed_draft_task(setup_env, monkeypatch, database_io_off_event_loop):
+    _app, client, _node, project, planner, _builder = setup_env
+
+    def fail_manifest(**kwargs):
+        raise RuntimeError("manifest preparation failed")
+
+    monkeypatch.setattr("relay.api.projects.setup.setup_manifest_block", fail_manifest)
+    with pytest.raises(RuntimeError, match="manifest preparation failed"):
+        client.post(f"/api/v1/projects/{project['id']}/setup", json={
+            "intent": "Launch", "agentId": planner["id"],
+        })
+
+    setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
+    assert (setup["state"], setup["error"]) == ("failed", "project_setup_dispatch_failed")
+    assert "taskId" not in setup
+    assert client.get("/api/v1/tasks").json()["tasks"] == []
