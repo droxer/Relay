@@ -470,7 +470,7 @@ def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, op
         return [{"path": "SKILL.md", "content": b"---\nname: imported\ndescription: Imported\n---\nBody"}]
 
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
-    source = {"url": "https://github.com/example/review", "ref": "main"}
+    source = {"name": "imported", "description": "Imported", "url": "https://github.com/example/review", "ref": "main"}
     if operation == "reimport":
         response = client.post("/api/v1/skills/import", json=source)
         assert response.status_code == 201
