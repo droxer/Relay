@@ -17,6 +17,13 @@ refused when work selects Connections. Computers must advertise the
 backend URL; a VM cannot reach a host-only loopback backend by using its own
 loopback address. Use an HTTPS backend reachable from the Computer/VM.
 
+This is separate from [Relay MCP](project-manager-design.md#mcp-tools), which
+reads Relay Project records and stages Task proposals at `/api/v1/mcp`.
+Connections expose `connection_call` at `/api/v1/connection-tools` using their
+own run credentials and work Grants. A Relay MCP token does not authorize this
+endpoint. See the [architecture](system-architecture.md#41-implemented-mcp-boundaries)
+for the two tool boundaries.
+
 Provider credentials stay encrypted in the backend database. Neither the
 browser nor the Computer receives them. A Computer exchanges its active command
 lease for a bounded run credential. Every service call checks the current

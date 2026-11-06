@@ -51,7 +51,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | FastAPI construction, middleware, lifespan | `backend/relay/app.py`, `backend/relay/bootstrap/` | `backend/relay/core/settings.py`, `backend/relay/api/deps.py`, API tests |
 | Public URL and response contract | `backend/relay/api/contract.py`, domain route in `backend/relay/api/` | `docs/api.md`, `web/src/api.ts`, `packages/relay-core/src/api-url.ts` |
 | Authentication and record access | `backend/relay/security/request_auth.py`, `backend/relay/api/actors.py` | `security/auth.py` (account store mixins), auth API tests and daemon-token tests |
-| Relay MCP protocol and tools | `backend/relay/mcp/` | `api/projects/mcp.py` compatibility/token routes, daemon `relay-mcp*.ts` transport, MCP protocol/transport tests; `docs/project-manager-design.md` |
+| Relay MCP protocol and tools | `backend/relay/mcp/` (`http.py`, `server.py`, `catalog.py`, `access.py`, `credentials.py`, `operations.py`) | `app.py` ASGI route/lifespan, `api/projects/mcp.py` compatibility/token routes, `persistence/account/mcp_tokens.py`, daemon `relay-mcp*.ts` transport; `docs/system-architecture.md` §4 and `docs/project-manager-design.md` |
 | Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/connections.md` |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
@@ -118,6 +118,22 @@ agent route -> agent routing -> ServerDaemonNodeBackend
 Any apparent shortcut that executes an agent from the backend violates the
 control-plane boundary.
 
+### Relay MCP call
+
+```text
+runtime stdio -> Node bridge -> POST /api/v1/mcp -> Python SDK/catalog
+             -> bearer/Project scope -> Project reads or proposal staging
+managed run: runtime transport -> daemon-held command token -> same endpoint
+```
+
+Python owns the catalog and application dispatch. The Node bridge only forwards
+protocol messages. `api/projects/mcp.py` retains token and compatibility JSON
+routes; it is not the MCP protocol implementation. Service Connections use a
+separate `/connection-tools` endpoint and work Grants. Check
+`test_relay_mcp_api.py`, `test_relay_mcp_protocol.py` and
+`test_relay_mcp_transport.py` under `backend/tests/api/`, plus the daemon's
+`relay-mcp*.test.ts` tests, when changing this boundary.
+
 ## Change-Surface Checklist
 
 | If you change... | Also inspect... |
@@ -130,6 +146,7 @@ control-plane boundary.
 | A TanStack Query mutation | every aggregate changed server-side, optimistic rollback, SSE race safety |
 | An agent name or executor | validation, routing, command, prompt, renderer, UI labels, tests |
 | Daemon delivery semantics | leases, retries, idempotency, cancellation, shutdown, daemon/backend tests |
+| Relay MCP tools or scopes | Python catalog and operations, compatibility JSON routes, reader/manager grants, token renewal/revocation, standalone and managed transport tests |
 | Workspace paths | traversal protection, thread isolation, local/cloud parity, workspace tests |
 | A public browser route | app router, History API state, canonical API prefix, ADR-012 |
 

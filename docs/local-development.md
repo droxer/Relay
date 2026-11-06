@@ -583,6 +583,38 @@ Installations with unmigrated account, thread, daemon, agent, team, placement,
 chat, managed-node, or profile-image files must migrate them using an earlier
 release before upgrading. Existing source files are left untouched.
 
+## Relay MCP development
+
+Relay MCP is hosted by the Python backend at `POST /api/v1/mcp`; starting
+`make backend` starts its SDK lifespan too. There is no additional MCP service
+or port. Build the TypeScript packages with `make build-packages` before testing
+the Node stdio bridge. Python is required on the backend only.
+
+Apply migrations through `20261106_0115` (MCP token digests; Connections uses
+0114), then deploy the backend before installing a rebuilt Computer bridge that
+requires the hosted endpoint. A local Computer running with `SANDBOX_MODE=none`
+reconciles Relay MCP into its ready Agent Runtimes after registration. Restart
+already open runtime sessions to load the configuration. Computers advertise
+`project-manager-mcp` and `project-reader-mcp` for the corresponding run access.
+
+Inspect `mcp-status.json` in the daemon's private state directory or run
+`relay-daemon doctor` for ready, retrying, blocked or stale setup. Configuration
+conflicts preserve user edits; revoked or unknown standalone credentials require
+explicit reconnection. Keep tokens outside Project workspaces. See
+[installation and recovery](project-manager-design.md#local-agent-runtimes)
+before changing runtime configuration or credential files.
+
+The bridge requires an HTTPS backend, except loopback HTTP for local development.
+Isolated runtimes need a backend reachable through their configured transport.
+Service Connections have their own credentials, runtime restrictions and
+[deployment setup](connections.md#deployment-setup).
+
+Focused backend verification (real Node interop checks require built packages):
+
+```bash
+uv run --project backend --extra dev pytest backend/tests/api/test_relay_mcp_api.py backend/tests/api/test_relay_mcp_protocol.py backend/tests/api/test_relay_mcp_transport.py -q
+```
+
 ## Source Map
 
 ```text
@@ -601,6 +633,9 @@ backend/relay/daemon_registry/node_backend.py daemon admission and run dispatch
 backend/relay/daemon_registry/registry.py     daemon registry (mixins: nodes, commands,
                                               admission, delivery, progression, events, reaper)
 backend/relay/tasks/scheduler.py              routine promotion and assigned-task dispatch
+backend/relay/mcp/                            hosted MCP protocol, catalog, scopes and Project dispatch
+backend/relay/api/projects/mcp.py             MCP token routes and compatibility JSON adapters
+backend/relay/persistence/account/mcp_tokens.py digest-only MCP credential store
 backend/relay/chat/integrations.py            chat integration glue
 backend/relay/{accounts,agents,teams,projects, domain use cases, one package per aggregate
   tasks,skills,computer,execution,realtime}/
@@ -616,6 +651,7 @@ packages/relay-core/src/renderers.ts          stream-json and JSONL renderers
 packages/relay-core/src/token-usage.ts        TokenUsage type and normalizeTokenUsage
 packages/relay-daemon/src/cli.ts              daemon binary entrypoint
 packages/relay-daemon/src/index.ts            daemon runtime
+packages/relay-daemon/src/relay-mcp*.ts        MCP stdio/HTTP transport, run proxy and installation
 packages/relay-daemon/src/box.ts              BoxLite VM setup
 packages/relay-daemon/src/execution.ts        BoxLite execution manager
 packages/relay-daemon/src/sandbox-session.ts  sandbox session lifecycle and agent preflight

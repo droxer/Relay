@@ -54,6 +54,8 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/admin/agents`, `/api/v1/admin/agent-placements` | Admin logical-agent and placement CRUD |
 | `/api/v1/agent-runs` | Ad-hoc agent-targeted run dispatch |
 | `/api/v1/projects` | Computer-bound project rosters and shared-workspace rooms |
+| `/api/v1/mcp` | Hosted Relay MCP protocol, scoped Project reads/proposals, and MCP token management |
+| `/api/v1/connections`, `/api/v1/connection-grants`, `/api/v1/connection-tools` | External-service authentication, explicit work Grants, and run-bound tools |
 | `/api/v1/sandboxes`, `/api/v1/daemon-nodes` | Execution-plane observations and commands |
 | `/api/v1/artifacts`, `/api/v1/workspace` | Generated artifacts and workspace reads |
 | `/api/v1/admin` | Administrative users, users, fleet, agents, teams, and integrations |
@@ -1483,14 +1485,24 @@ metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
 
 `POST /api/v1/daemon-nodes/{id}/mcp-token` uses the enrolled Computer credential
 and returns a separate MCP token scoped to its owner and Computer. Optional
-`{commandId, leaseId}` restricts it to a currently dispatched manager command and
-Project; authentication stops when that run ends (maximum 24 hours).
+`{commandId, leaseId}` restricts it to a currently dispatched Project roster
+member's command and Project; authentication stops when that run ends (maximum
+24 hours). Reader runs receive `access: "read"`; the Project Manager's run
+receives `access: "manage"`. `tools/list` omits `relay_propose_task_changes` for
+readers, and attempting it still returns a tool error `project_manager_required`.
 
 `POST /api/v1/mcp` is the canonical MCP Streamable HTTP endpoint, hosted by
 `backend/relay/mcp/` using the official Python SDK. It supports initialization,
 notifications, `tools/list` and `tools/call` with stateless JSON responses. The
 Python catalog defines the nine Project read/proposal tools; the local Node
 stdio bridge forwards messages unchanged. No separate MCP deployment is needed.
+The SDK endpoint is registered directly as an ASGI route and is not enumerated
+in FastAPI's generated OpenAPI schema. Its catalog and schemas are discovered
+through MCP `tools/list`.
+
+This endpoint is separate from Service Connections' `/api/v1/connection-tools`;
+its MCP tokens do not authorize external-provider calls. See the
+[implemented tool architecture](system-architecture.md#41-implemented-mcp-boundaries).
 
 Every request requires `Authorization: Bearer <MCP token>`; browser cookies alone
 are refused. All responses are `no-store`, untrusted browser Origins are refused,
