@@ -90,3 +90,28 @@ def round_manager_context(project_snapshot: dict[str, Any] | None, assignments: 
                "members": project_snapshot.get("members") or []}
     return next((context for assignment in assignments
                  if (context := manager_run_context(project, assignment.get("agentId")))), None)
+
+
+def project_reader_context(project_snapshot: dict[str, Any] | None, agent_id: str | None) -> dict[str, Any] | None:
+    """Read-only Project access for an enabled roster member other than the holder.
+
+    Every Agent working in the Project may read its Tasks and records through
+    Relay MCP; only the holder's context (``round_manager_context``) can stage
+    Task changes.
+    """
+    if not project_snapshot or not agent_id:
+        return None
+    members = [m for m in project_snapshot.get("members") or [] if m.get("enabled", True)]
+    if not any(m.get("agentId") == agent_id for m in members) or project_manager_id(members) == agent_id:
+        return None
+    return {"projectId": project_snapshot["projectId"], "agentId": agent_id,
+            "bindingRevision": project_snapshot["projectRevision"]}
+
+
+def command_project_access(state: dict[str, Any], logical_agent_id: str | None) -> tuple[dict[str, Any], str] | None:
+    """The Project scope a run's state grants its own Agent, and whether it may manage."""
+    for key, access in (("project_manager", "manage"), ("project_reader", "read")):
+        scope = state.get(key)
+        if scope and scope.get("agentId") == logical_agent_id:
+            return scope, access
+    return None

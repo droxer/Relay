@@ -1459,8 +1459,12 @@ async function executeCommand(
   const managerToolAbort = new AbortController();
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   try {
-    const invokeManager = state.project_manager ? createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
-      commandId:command.id,leaseId:command.leaseId,projectId:state.project_manager.projectId,fetchFn,
+    // The Project Manager stages Task changes; every other roster member
+    // reads through the same run-scoped transport, and the backend refuses
+    // its proposals.
+    const projectScope = state.project_manager ?? state.project_reader;
+    const invokeManager = projectScope ? createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
+      commandId:command.id,leaseId:command.leaseId,projectId:projectScope.projectId,fetchFn,
       signal:AbortSignal.any([managerToolAbort.signal,...(signal?[signal]:[])])}) : undefined;
     managerBridge = invokeManager ? createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
       const workspaceTool = ["files", "file", "search"].includes(tool);
@@ -1468,6 +1472,7 @@ async function executeCommand(
       return workspaceTool ? managerWorkspaceTool(threadWorkspace.hostPath, tool, args) : result;
     }) : undefined;
     if (managerBridge && state.project_manager) state.project_manager = { ...state.project_manager, toolCommand: managerBridge.toolCommand };
+    else if (managerBridge && state.project_reader) state.project_reader = { ...state.project_reader, toolCommand: managerBridge.toolCommand };
     return await runInWorkspace(execution);
   } finally {
     managerToolAbort.abort();
@@ -1728,8 +1733,8 @@ async function executeCommand(
     const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: recordsId };
     const options = {
       execStream: execution.execStream,
-      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge && state.project_manager
-        ? {backendUrl,projectId:state.project_manager.projectId,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
+      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge && (state.project_manager ?? state.project_reader)
+        ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)!.projectId,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
         : {disabled:true})} : undefined,
       eventSink,
       runId: command.runId,

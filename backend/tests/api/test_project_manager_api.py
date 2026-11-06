@@ -11,13 +11,14 @@ from test_project_setup_api import _take_command, _complete
 setup_env = setup_api.setup_env
 
 
-def _ready(app, node, *, tools=True, setup=False):
+def _ready(app, node, *, tools=True, setup=False, reader=True):
     app.state.registry.register({
         "sandboxId": node["id"], "userId": node["userId"],
         "token": f"token_{node['id']}", "protocolVersion": 1,
         "supportedAgents": ["codex", "claude"],
         "capabilities": ["thread-workspaces", "project-workspaces", "project-manager",
-                         *(["project-manager-mcp"] if tools else []), *(["project-setup"] if setup else [])],
+                         *(["project-manager-mcp"] if tools else []), *(["project-reader-mcp"] if reader else []),
+                         *(["project-setup"] if setup else [])],
         "status": "ready", "workspacePath": "/workspace/relay",
         "workspaceId": node["workspaceId"],
     })
@@ -518,7 +519,45 @@ def test_another_agents_task_run_gets_no_manager_tools(managed_env):
     command = _run_task(managed_env, {"title": "Build the page", "assignedAgentId": builder["id"]})
     assert command["logicalAgentId"] == builder["id"]
     assert "project_manager" not in command["state"]
+    # Not on the roster: no Project tools at all.
+    assert "project_reader" not in command["state"]
     assert _tool(managed_env, command, "overview").status_code == 403
+
+
+def _join(env, agent, role="implementer"):
+    _, client, _, project, *_ = env
+    current = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
+    members = [*current["members"], {"agentId": agent["id"], "role": role, "responsibilities": "Build"}]
+    response = client.patch(f"/api/v1/projects/{project['id']}",
+                            json={"expectedVersion": current["version"], "members": members})
+    assert response.status_code == 200, response.text
+
+
+def test_a_roster_member_reads_project_tasks_but_cannot_propose(managed_env):
+    _, _, _, project, _, builder = managed_env
+    _join(managed_env, builder)
+    command = _run_task(managed_env, {"title": "Build the page", "assignedAgentId": builder["id"]})
+    assert command["logicalAgentId"] == builder["id"]
+    assert "project_manager" not in command["state"]
+    assert command["state"]["project_reader"] == {
+        **command["state"]["project_reader"], "projectId": project["id"], "agentId": builder["id"],
+    }
+    assert _tool(managed_env, command, "overview").status_code == 200
+    assert _tool(managed_env, command, "tasks").status_code == 200
+    refused = _tool(managed_env, command, "propose", {"operations": [{"kind": "create", "fields": {"title": "Sneak"}}]})
+    assert refused.status_code == 403
+    assert refused.json()["detail"] == "project_manager_required"
+
+
+def test_an_older_computer_runs_a_roster_member_without_read_tools(managed_env):
+    app, client, node, project, _, builder = managed_env
+    _join(managed_env, builder)
+    _ready(app, node, reader=False)
+    created = client.post("/api/v1/tasks", json={"projectId": project["id"], "title": "Build", "assignedAgentId": builder["id"]})
+    assert client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={}).status_code == 202
+    command = _take_command(app, node)
+    assert command["logicalAgentId"] == builder["id"]
+    assert "project_reader" not in command["state"]
 
 
 def test_manager_brings_its_tools_to_its_own_automation_runs(managed_env):
@@ -542,3 +581,4 @@ def test_a_setup_draft_by_the_manager_keeps_its_own_workflow(managed_env):
     command = _take_command(app, node)
     assert command["logicalAgentId"] == planner["id"]
     assert "project_manager" not in command["state"]
+    assert "project_reader" not in command["state"]

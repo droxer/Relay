@@ -6,7 +6,7 @@ from ..projects.manager import ManagerError, ensure_manager_thread
 from ..projects.manager_reads import read_manager_tool
 from ..projects.manager_proposals import stage_proposal
 from ..projects.runtime import project_work_error
-from .access import scoped_project
+from .access import may_manage, scoped_project
 from .errors import McpError
 
 
@@ -41,6 +41,8 @@ def invoke(ctx: Any, grant: dict[str, Any], project_id: str, tool: str, argument
                 }
             }
         if tool == "propose":
+            if not may_manage(grant):
+                raise McpError(403, "project_manager_required")
             if code := project_work_error(project):
                 raise ManagerError(code)
             if not project.get("managerAgentId"):

@@ -3,6 +3,7 @@
 from typing import Any
 from datetime import datetime, timedelta, UTC
 from ..core.computer_identity import computer_id
+from ..core.project_roles import command_project_access
 from ..daemon_registry.records import DeletedDaemonNodeError
 from ..persistence.engine import store_transaction
 from ..persistence.db_time import parse_db_time
@@ -71,9 +72,10 @@ def computer_token(ctx: Any, sandbox_id: str, node_token: str | None, body: dict
             or command.get("leaseId") != body.get("leaseId")
         ):
             raise McpError(409, "Run lease is no longer active.")
-        scope = command["command"].get("state", {}).get("project_manager")
-        if not scope or command["command"].get("logicalAgentId") != scope.get("agentId"):
-            raise McpError(403, "Project Manager role required.")
+        access = command_project_access(command["command"].get("state", {}), command["command"].get("logicalAgentId"))
+        if not access:
+            raise McpError(403, "Project roster membership required.")
+        scope = access[0]
         project = ctx.project_store.get_project(scope["projectId"])
         if not project or project["ownerUserId"] != node["userId"] or project["computerId"] != computer_id(node):
             raise McpError(403, "Project scope mismatch.")

@@ -222,7 +222,9 @@ Project's `managerAgentId` is derived. The holder works through the Tasks and
 Automations it runs: every round it takes part in carries the manager tools,
 so it reads live Project records and stages Task changes for the Project Owner
 to review and apply. The Project dashboard only names it; there is no chat to
-open there. It does not gain acceptance or execution authority.
+open there. It does not gain acceptance or execution authority. Every other
+enabled Project Agent reads the same records read-only; only the holder may
+stage Task changes.
 _Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
 
 **Relay MCP**:
