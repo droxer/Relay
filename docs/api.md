@@ -1430,13 +1430,14 @@ New tasks stay in backlog. Applying changes does not start work, accept review,
 answer a Wait, or reconcile execution. Disabled and archived Projects refuse
 new manager work and proposal applications.
 
-`POST /api/v1/daemon-nodes/{id}/project-manager/tools` is the execution-plane
-bridge. It requires node authentication plus the currently dispatched command
-and lease, and validates its active manager run and canonical Project Thread.
-It exposes scoped reads, workspace authorization, and proposal staging, never
-owner Apply. The runtime invokes its per-run Node helper; node credentials and
-leases remain in the daemon. See [the design](project-manager-design.md) and
-[verification evidence](testing/project-manager.tdd.md).
+`POST /api/v1/daemon-nodes/{id}/project-manager/tools` remains a compatibility
+adapter. It requires node authentication plus the currently dispatched command
+and lease, and validates the pinned manager Project/Agent run context rather than
+a canonical Thread ID. New daemons route both native MCP and isolated host/guest
+calls through the MCP bearer-token API using a command-bound token held in daemon
+memory. Both paths expose scoped reads, workspace authorization and proposal
+staging, never owner Apply. See [the design](project-manager-design.md) and
+[current verification evidence](testing/project-manager-architecture-fixes.md).
 
 
 ### Relay MCP bearer-token API
