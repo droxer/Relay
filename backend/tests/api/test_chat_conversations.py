@@ -190,3 +190,17 @@ def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
         expected = {visible} if view == "chat" else {visible, archived}
         assert {s["id"] for s in response.json()["sessions"]} == expected
         assert all(s["events"] for s in response.json()["sessions"])
+
+
+@pytest.mark.parametrize("invalid_owner", [None, "", 123])
+def test_invalid_chat_identity_cannot_turn_into_an_unscoped_list(monkeypatch, tmp_path, invalid_owner):
+    monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_secret")
+    app = create_app(tmp_path)
+    monkeypatch.setattr(app.state.chat_store, "resolve_identity", lambda payload: {"userId": invalid_owner})
+    queries = []
+    monkeypatch.setattr(app.state.session_store, "list_sessions", lambda **kwargs: queries.append(kwargs) or [])
+    response = TestClient(app).post(
+        "/api/v1/internal/chat/conversation/sessions", headers=CHAT_HEADERS, json=CONVERSATION,
+    )
+    assert response.status_code == 404
+    assert queries == [], "an invalid identity must never reach an unfiltered storage query"
