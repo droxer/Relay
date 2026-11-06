@@ -20,7 +20,8 @@ from . import providers
 
 class ConnectionService:
     def __init__(self, store: DatabaseConnectionStore, configs: dict[str, ConnectionConfig], encryption_key: str | None):
-        self.store, self.configs = store, configs
+        self.store = store
+        self.configs = {key: value for key, value in configs.items() if key in PROVIDERS}
         self.cipher = Fernet(encryption_key.encode()) if encryption_key else None
         self.tool_limiter = AuthRateLimiter(attempts=120, window_seconds=60)
 
@@ -52,7 +53,7 @@ class ConnectionService:
             "actions": list(provider.actions)} for key, provider in PROVIDERS.items()]
 
     def list(self, owner: str) -> builtins.list[dict[str, Any]]:
-        return [row for row in self.store.list(owner) if row["status"] != "disconnected"]
+        return [row for row in self.store.list(owner) if row["status"] != "disconnected" and row["provider"] in PROVIDERS]
 
     def _connection(self, owner: str, connection_id: str) -> dict[str, Any]:
         record = self.store.get(owner, connection_id)
@@ -78,8 +79,6 @@ class ConnectionService:
         if definition.pkce:
             fields.update(code_challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode(),
                 code_challenge_method="S256")
-        if provider == "google-drive":
-            fields.update(access_type="offline", prompt="consent")
         return definition.authorize_url + "?" + urlencode(fields)
 
     def complete(self, owner: str, session: str, provider: str, state: str, *, code: str | None,
@@ -99,7 +98,7 @@ class ConnectionService:
             fields["code_verifier"] = pending["verifier"]
         tokens = providers.exchange(config, fields)
         scopes = set(str(tokens.get("scope", "")).replace(",", " ").split())
-        required = {"repo"} if provider == "github" else {"channels:read", "channels:history", "chat:write"} if provider == "slack" else {"https://www.googleapis.com/auth/drive.readonly"}
+        required = {"repo"}
         if not required <= scopes:
             raise ConnectionError("connection_permissions_invalid", 422)
         identity = providers.identity(provider, tokens["access_token"])
@@ -178,7 +177,7 @@ class ConnectionService:
 
     def disconnect_all(self, owner: str) -> None:
         with self.store.lock(owner):
-            for record in self.list(owner):
+            for record in self.store.list(owner):
                 self.disconnect(owner, record["id"])
             self.store.clear_authorizations(owner)
 
@@ -205,7 +204,7 @@ class ConnectionService:
             if not isinstance(item, dict) or set(item) - {"id", "revision", "connectionId", "resources", "actions"}:
                 raise ConnectionError("connection_grants_invalid")
             record = self._connection(owner, item.get("connectionId", ""))
-            if record["status"] != "connected" or record["id"] in seen:
+            if record["status"] != "connected" or record["provider"] not in PROVIDERS or record["id"] in seen:
                 raise ConnectionError("connection_grants_invalid")
             resources, actions = item.get("resources"), item.get("actions")
             if (not isinstance(resources, list) or not 1 <= len(resources) <= 100

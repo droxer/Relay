@@ -5,13 +5,11 @@ the resources and actions a Thread, Task, or Automation may use. Open
 **Settings → Connections**, connect a service, and choose it in the work's
 **Connections** section. Multiple external accounts are supported.
 
-The first implementation supports these actions:
+GitHub is the only supported provider for now:
 
 | Service | Actions | Resources |
 | --- | --- | --- |
 | GitHub | Read up to 50 issues per call; optional open/closed/all filter | Selected repositories |
-| Slack | Read channel history; optionally post a message | Selected public channels; invite the installed app to channels it should use |
-| Google Drive | Read file content; export Google documents as plain text | Selected files within the authorized account |
 
 Agents receive a per-run MCP tool through Codex or Claude. Other runtimes are
 refused when work selects Connections. Computers must advertise the
@@ -42,21 +40,12 @@ For each service to enable, configure all three settings:
 RELAY_CONNECTIONS_GITHUB_CLIENT_ID
 RELAY_CONNECTIONS_GITHUB_CLIENT_SECRET
 RELAY_CONNECTIONS_GITHUB_CALLBACK_URL
-
-RELAY_CONNECTIONS_SLACK_CLIENT_ID
-RELAY_CONNECTIONS_SLACK_CLIENT_SECRET
-RELAY_CONNECTIONS_SLACK_CALLBACK_URL
-
-RELAY_CONNECTIONS_GOOGLE_DRIVE_CLIENT_ID
-RELAY_CONNECTIONS_GOOGLE_DRIVE_CLIENT_SECRET
-RELAY_CONNECTIONS_GOOGLE_DRIVE_CALLBACK_URL
 ```
 
-Callback URLs must be the deployment's public HTTPS origin followed by
-`/api/v1/connections/callback/github`, `/api/v1/connections/callback/slack`, or
-`/api/v1/connections/callback/google-drive`. HTTP is accepted only for localhost
-development. Register the exact URL with the provider. An incomplete or invalid
-configuration fails startup; an unconfigured provider appears unavailable.
+The callback URL must be the deployment's public HTTPS origin followed by
+`/api/v1/connections/callback/github`. HTTP is accepted only for localhost
+development. Register the exact URL with GitHub. An incomplete or invalid
+configuration fails startup; GitHub appears unavailable until configured.
 
 Use a GitHub **OAuth App** for the new provider-neutral flow. It requests
 `read:user repo offline_access`; GitHub's repository consent is broader than
@@ -64,17 +53,6 @@ Relay's exposed tools. Relay permits only issue reads on explicitly selected
 repositories. This is separate from the older, disabled Account GitHub App
 installation flow and never reuses its saved credentials. See
 [GitHub's authorization documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps).
-
-Slack uses an installed app's **bot identity**, requesting `channels:read`,
-`channels:history`, and `chat:write`. Selecting the write action in work grants
-permission to post to that work's selected channels; the picker leaves write
-access unchecked initially. See [Slack's OAuth flow](https://docs.slack.dev/authentication/installing-with-oauth/).
-
-Google uses a Web application OAuth client with `openid`, `email`, and
-`https://www.googleapis.com/auth/drive.readonly`, requesting offline access for
-unattended work. Enable the Drive API and configure the consent screen and test
-users or verification required by your deployment. See
-[Google's web server OAuth documentation](https://developers.google.com/identity/protocols/oauth2/web-server).
 
 ## Work and recovery
 
@@ -91,8 +69,8 @@ users or verification required by your deployment. See
   to a replaced Automation Grant require a new Automation occurrence to use
   the new access. Submitted Grant IDs and revisions are checked for stale edits.
 - Schedules, Relay events, generic webhooks, and Run now can all use Connections.
-  Native provider-event subscriptions are future work; connecting Slack does
-  not create an inbound chat channel or a service-event trigger.
+  Native provider-event subscriptions are future work; connecting GitHub does
+  not create a service-event trigger.
 - Unavailable required access pauses an Automation before another occurrence is
   created. Reconnect the same external identity, then explicitly Resume. Resume
   checks access and uses the existing schedule cutoff instead of replaying

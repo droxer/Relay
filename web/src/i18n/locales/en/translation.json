@@ -3550,22 +3550,16 @@
     "inherited": "This run uses the access saved by its automation.",
     "task_managed": "This thread uses its task’s connections. Edit them on the task.",
     "connect_new_tab": "Connect a service in Settings (opens a new tab)",
-    "write_notice": "This work can post messages to the selected channels. Active automations may post without asking each time.",
     "status": {
       "connected": "Connected",
       "reconnect_required": "Reconnect needed",
       "disconnected": "Disconnected"
     },
     "provider_hint": {
-      "github": "Authorize GitHub repository access. Relay exposes issue reads only for the repositories you choose.",
-      "slack": "Read channel history and optionally post messages.",
-      "google-drive": "Read files you select in Google Drive."
+      "github": "Authorize GitHub repository access. Relay exposes issue reads only for the repositories you choose."
     },
     "action": {
-      "github_list_issues": "Read issues",
-      "slack_history": "Read channel history",
-      "slack_post_message": "Post messages",
-      "google-drive_read_file": "Read file content"
+      "github_list_issues": "Read issues"
     },
     "targets": {
       "thread": "Thread",

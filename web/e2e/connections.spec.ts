@@ -3,8 +3,6 @@ import { expect, test, type Page } from "@playwright/test";
 const connection = { id: "github-1", provider: "github", label: "Personal GitHub", identity: "octocat", status: "connected", actions: ["github.list_issues"] };
 const providers = [
   { id: "github", name: "GitHub", configured: true, actions: ["github.list_issues"] },
-  { id: "slack", name: "Slack", configured: false, actions: ["slack.history", "slack.post_message"] },
-  { id: "google-drive", name: "Google Drive", configured: false, actions: ["google-drive.read_file"] },
 ];
 const stamp = "2026-11-06T00:00:00Z";
 
@@ -55,7 +53,8 @@ for (const [name, viewport, theme, language] of [
   await serve(page, theme, language);
   await page.goto("/settings/connections");
   await expect(page.getByText("octocat", { exact: true })).toBeVisible();
-  await expect(page.getByText("Slack", { exact: true })).toBeVisible();
+  await expect(page.getByText("Slack", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Gmail", { exact: true })).toHaveCount(0);
   const panel = page.locator("#settings-panel");
   const overflow = await panel.evaluate(el => el.scrollWidth > el.clientWidth + 1);
   expect(overflow).toBe(false);

@@ -9,7 +9,7 @@ import * as connectionsApi from "../src/api-client/connections";
 vi.mock("../src/api-client/connections", async importOriginal => ({
   ...await importOriginal<typeof import("../src/api-client/connections")>(),
   listConnections: vi.fn(async () => ({ connections: [{ id: "github-1", provider: "github", identity: "octocat", label: "Personal", status: "connected", actions: ["github.list_issues"] }] })),
-  listConnectionProviders: vi.fn(async () => ({ providers: [{ id: "github", name: "GitHub", configured: true, actions: ["github.list_issues"] }, { id: "slack", name: "Slack", configured: false, actions: [] }] })),
+  listConnectionProviders: vi.fn(async () => ({ providers: [{ id: "github", name: "GitHub", configured: true, actions: ["github.list_issues"] }] })),
   connectionResources: vi.fn(async () => ({ resources: [{ id: "octo/hello", name: "octo/hello" }], nextCursor: null })),
   connectionUsage: vi.fn(async () => ({ usage: [] })),
   getConnectionGrants: vi.fn(async () => ({ grants: [], readOnly: false })),
@@ -22,11 +22,11 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>;
 }
 
-it("shows the real connected identity and explains unavailable providers", async () => {
+it("shows the real connected GitHub identity and no other providers", async () => {
   render(<ConnectionsSection />, { wrapper });
   expect(await screen.findByText("octocat")).toBeTruthy();
-  expect(screen.getByText("Slack")).toBeTruthy();
-  expect(screen.getByText("connections.not_configured")).toBeTruthy();
+  expect(screen.queryByText("Slack")).toBeNull();
+  expect(screen.queryByText("Gmail")).toBeNull();
   expect(screen.getByRole("button", { name: "connections.disconnect" })).toBeTruthy();
 });
 

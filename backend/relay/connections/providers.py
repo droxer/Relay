@@ -3,7 +3,6 @@
 import json
 import re
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
@@ -50,6 +49,7 @@ def request(method: str, url: str, *, token: str | None = None, raw: bool = Fals
 
 
 def exchange(config: ConnectionConfig, fields: dict[str, str]) -> dict[str, Any]:
+    _require_provider(config.provider)
     result = request("POST", PROVIDERS[config.provider].token_url,
         data={"client_id": config.client_id, "client_secret": config.client_secret, **fields})
     if not isinstance(result, dict) or not isinstance(result.get("access_token"), str) or not result["access_token"]:
@@ -61,78 +61,42 @@ def exchange(config: ConnectionConfig, fields: dict[str, str]) -> dict[str, Any]
 
 
 def identity(provider: str, token: str) -> dict[str, str]:
-    if provider == "github":
-        data = request("GET", "https://api.github.com/user", token=token)
-        subject, label, tenant = data.get("id"), data.get("login"), "github.com"
-    elif provider == "slack":
-        data = request("POST", "https://slack.com/api/auth.test", token=token)
-        subject, label, tenant = data.get("user_id"), data.get("user"), data.get("team_id")
-        label = f"{label} · {data.get('team', tenant)}"
-    else:
-        data = request("GET", "https://openidconnect.googleapis.com/v1/userinfo", token=token)
-        subject, label, tenant = data.get("sub"), data.get("email"), "google"
+    _require_provider(provider)
+    data = request("GET", "https://api.github.com/user", token=token)
+    subject, label, tenant = data.get("id"), data.get("login"), "github.com"
     if not subject or not label or not tenant:
         raise ConnectionError("connection_identity_invalid", 422)
     return {"subject": str(subject), "identity": str(label), "tenant": str(tenant)}
 
 
 def resources(provider: str, token: str, cursor: str = "") -> dict[str, Any]:
-    if len(cursor) > 1000 or any(ord(c) < 32 for c in cursor):
+    _require_provider(provider)
+    if len(cursor) > 1000 or (cursor and (not cursor.isdigit() or not 1 <= int(cursor) <= 10000)):
         raise ConnectionError("connection_cursor_invalid")
-    if provider == "github":
-        if cursor and (not cursor.isdigit() or not 1 <= int(cursor) <= 10000):
-            raise ConnectionError("connection_cursor_invalid")
-        page = int(cursor or "1")
-        data = request("GET", "https://api.github.com/user/repos", token=token,
-            params={"per_page": 50, "page": page, "sort": "full_name"})
-        items = [{"id": r["full_name"], "name": r["full_name"]} for r in data]
-        next_cursor = str(page + 1) if len(items) == 50 else None
-    elif provider == "slack":
-        data = request("GET", "https://slack.com/api/conversations.list", token=token,
-            params={"types": "public_channel", "exclude_archived": "true", "limit": 50, "cursor": cursor})
-        items = [{"id": r["id"], "name": f"#{r['name']}"} for r in data.get("channels", [])]
-        next_cursor = (data.get("response_metadata") or {}).get("next_cursor") or None
-    else:
-        data = request("GET", "https://www.googleapis.com/drive/v3/files", token=token,
-            params={"q": "trashed = false", "pageSize": 50, "pageToken": cursor,
-                "fields": "nextPageToken,files(id,name,mimeType)", "orderBy": "name"})
-        items = [{"id": r["id"], "name": r["name"]} for r in data.get("files", [])]
-        next_cursor = data.get("nextPageToken")
+    page = int(cursor or "1")
+    data = request("GET", "https://api.github.com/user/repos", token=token,
+        params={"per_page": 50, "page": page, "sort": "full_name"})
+    items = [{"id": r["full_name"], "name": r["full_name"]} for r in data]
+    next_cursor = str(page + 1) if len(items) == 50 else None
     return {"resources": items, "nextCursor": next_cursor}
 
 
 def valid_resource(provider: str, value: Any) -> bool:
-    if not isinstance(value, str):
+    if provider not in PROVIDERS or not isinstance(value, str):
         return False
-    pattern = r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+" if provider == "github" else r"[A-Za-z0-9_-]{1,200}"
+    pattern = r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
     return bool(re.fullmatch(pattern, value)) and all(part not in {".", ".."} for part in value.split("/"))
 
 
 def call(provider: str, token: str, action: str, resource: str, arguments: dict[str, Any]) -> Any:
     if not valid_resource(provider, resource) or action not in PROVIDERS[provider].actions:
         raise ConnectionError("connection_access_denied", 403)
-    if provider == "github":
-        if set(arguments) - {"state"} or arguments.get("state", "open") not in {"open", "closed", "all"}:
-            raise ConnectionError("connection_arguments_invalid")
-        return request("GET", f"https://api.github.com/repos/{resource}/issues", token=token,
-            params={"state": arguments.get("state", "open"), "per_page": 50})
-    if provider == "slack":
-        if action == "slack.history":
-            if arguments:
-                raise ConnectionError("connection_arguments_invalid")
-            return request("GET", "https://slack.com/api/conversations.history", token=token,
-                params={"channel": resource, "limit": 50})
-        text = arguments.get("text")
-        if set(arguments) != {"text"} or not isinstance(text, str) or not 1 <= len(text) <= 4000:
-            raise ConnectionError("connection_arguments_invalid")
-        return request("POST", "https://slack.com/api/chat.postMessage", token=token,
-            json={"channel": resource, "text": text, "unfurl_links": False, "unfurl_media": False})
-    if arguments:
+    if set(arguments) - {"state"} or arguments.get("state", "open") not in {"open", "closed", "all"}:
         raise ConnectionError("connection_arguments_invalid")
-    base = f"https://www.googleapis.com/drive/v3/files/{quote(resource, safe='')}"
-    metadata = request("GET", base, token=token, params={"fields": "id,name,mimeType"})
-    if metadata.get("mimeType", "").startswith("application/vnd.google-apps."):
-        content = request("GET", base + "/export", token=token, params={"mimeType": "text/plain"}, raw=True)
-    else:
-        content = request("GET", base, token=token, params={"alt": "media"}, raw=True)
-    return {**metadata, "content": content}
+    return request("GET", f"https://api.github.com/repos/{resource}/issues", token=token,
+        params={"state": arguments.get("state", "open"), "per_page": 50})
+
+
+def _require_provider(provider: str) -> None:
+    if provider not in PROVIDERS:
+        raise ConnectionError("connection_access_denied", 403)

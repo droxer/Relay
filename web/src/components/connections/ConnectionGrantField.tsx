@@ -53,7 +53,7 @@ function ConnectionGrantContent({ value, targetType = "thread", targetId, disabl
         const grant = selected.find(item => item.connectionId === connection.id);
         return <div className="connection-grant" key={connection.id}>
           <label className="connection-choice"><Checkbox checked={Boolean(grant)} disabled={readonly || connection.status !== "connected"}
-            onCheckedChange={checked => update(connection.id, checked ? { actions: connection.actions.filter(action => action !== "slack.post_message") } : null)} />
+            onCheckedChange={checked => update(connection.id, checked ? { actions: connection.actions } : null)} />
             <span>{connection.label} · {connection.identity}</span>
           </label>
           {connection.status !== "connected" && <p role="alert">{t("connections.status.reconnect_required")}</p>}
@@ -90,7 +90,6 @@ function GrantOptions({ connection, grant, onChange, disabled, expanded }: {
       {connection.actions.map(action => <label className="connection-choice" key={action}><Checkbox checked={grant.actions.includes(action)} disabled={disabled}
         onCheckedChange={() => onChange({ actions: toggle(grant.actions, action) })} />{t(`connections.action.${action.replaceAll(".", "_")}`)}</label>)}
     </fieldset>
-    {grant.actions.includes("slack.post_message") && <p>{t("connections.write_notice")}</p>}
     {(!grant.resources.length || !grant.actions.length) && <p role="alert">{t("connections.selection_required")}</p>}
   </div>;
 }

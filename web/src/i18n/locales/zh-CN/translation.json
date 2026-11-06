@@ -3486,22 +3486,16 @@
     "inherited": "本次运行使用自动化保存的授权。",
     "task_managed": "此对话使用所属任务的连接，请在任务中修改。",
     "connect_new_tab": "在设置中连接服务（在新标签页打开）",
-    "write_notice": "当前工作可以向所选频道发送消息。启用的自动化可能会直接发送，无需逐次确认。",
     "status": {
       "connected": "已连接",
       "reconnect_required": "需要重新连接",
       "disconnected": "已断开"
     },
     "provider_hint": {
-      "github": "授权 GitHub 仓库访问。Relay 仅开放所选仓库的议题读取操作。",
-      "slack": "读取频道历史记录，并可授权发送消息。",
-      "google-drive": "读取所选 Google Drive 文件。"
+      "github": "授权 GitHub 仓库访问。Relay 仅开放所选仓库的议题读取操作。"
     },
     "action": {
-      "github_list_issues": "读取议题",
-      "slack_history": "读取频道历史",
-      "slack_post_message": "发送消息",
-      "google-drive_read_file": "读取文件内容"
+      "github_list_issues": "读取议题"
     },
     "targets": {
       "thread": "对话",

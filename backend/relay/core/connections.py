@@ -36,11 +36,7 @@ class Provider:
 PROVIDERS = {
     "github": Provider("GitHub", "https://github.com/login/oauth/authorize",
         "https://github.com/login/oauth/access_token", "read:user repo offline_access", ("github.list_issues",)),
-    "slack": Provider("Slack", "https://slack.com/oauth/v2/authorize", "https://slack.com/api/oauth.v2.access",
-        "channels:read channels:history chat:write", ("slack.history", "slack.post_message"), pkce=False),
-    "google-drive": Provider("Google Drive", "https://accounts.google.com/o/oauth2/v2/auth",
-        "https://oauth2.googleapis.com/token", "openid email https://www.googleapis.com/auth/drive.readonly",
-        ("google-drive.read_file",)),
+
 }
 
 

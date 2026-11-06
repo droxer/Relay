@@ -1,7 +1,7 @@
 # Connections
 
 Status: design reference with the core authentication and work-access flow
-implemented. [Connections setup](connections.md) documents the actual provider
+implemented for GitHub only. Additional providers are deferred. [Connections setup](connections.md) documents the actual provider
 scopes, supported runtimes, deployment requirements, and implementation limits.
 Native provider-event subscriptions, provider-side revocation jobs, and the
 remaining management extensions below remain proposed.
@@ -15,8 +15,7 @@ Disconnecting prevents further service calls without deleting work history.
 
 Example: connect GitHub, give a Task read access to one repository, and ask an
 Agent to summarize open issues. Reuse that Connection in a Thread discussing
-the result or an Automation that produces the summary every Monday. A Slack
-Connection can separately permit that Automation to post to one chosen channel.
+the result or an Automation that produces the summary every Monday.
 
 Authentication establishes available access. A **Connection Grant** assigns a
 bounded part of that access to work. Neither an Agent name nor a prompt grants
@@ -37,8 +36,8 @@ ownership; the Account authenticates the person establishing the Connection.
   and generic webhook triggers through `routineTriggers`. A service event is
   a new trigger type; a connected service is also useful with existing triggers.
 - Admin chat integrations are disabled by default and describe inbound chat
-  clients. A personal Slack Connection here provides tools for work; it does
-  not implicitly enable an inbound chat gateway or its administrative authority.
+  clients. Connections provide tools for work and do not implicitly enable
+  an inbound chat gateway or its administrative authority.
 
 ## Entry and layout
 
@@ -65,11 +64,9 @@ Settings         Connections
  Notifications   YOUR CONNECTIONS
  Appearance      GitHub · personal       Connected           Manage
  Language        alex · 2 repositories · Used by 4 items
-                 Slack · Studio          Reconnect needed    Reconnect
-                 alex@studio.example · #release-notes
 
                  AVAILABLE SERVICES
-                 Google Drive   Read selected files          Connect
+                 GitHub         Read selected issues         Connect
 ```
 
 Labels and counts above are illustrative content, not seed/server data. Rows
@@ -296,9 +293,8 @@ return re-fetches authoritative status rather than trusting a query-string flag.
 2. Implement and verify GitHub authentication and bounded read actions through
    Thread, Task, and scheduled Automation. Preserve anonymous public issue import.
    Do not reactivate the old Account-scoped route merely because code exists.
-3. Add Slack and Google Drive adapters, resource selectors, and consent copy
-   against verified provider documentation. Each advertises only tested actions.
-   Slack writes need explicit per-resource authorization; Drive starts with reads.
+3. Keep the current release limited to GitHub. Additional provider adapters,
+   resource selectors, and consent copy are deferred until explicitly requested.
 4. Add service-event subscriptions using the same Connection/Grant model after
    the scheduled/manual path works. This is a separate capability of a provider,
    not a prerequisite for using that provider in Automations.
