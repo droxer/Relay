@@ -26,7 +26,7 @@ ADMIN_TOKEN ?=
 # sources are newer, or the backend would keep handing computers an old client.
 COMPUTER_BUNDLE := backend/relay/computer/daemon.tar.gz
 COMPUTER_BUNDLE_SOURCES := $(shell find packages/relay-core/src packages/relay-daemon/src -name '*.ts') \
-	packages/relay-core/package.json packages/relay-daemon/package.json tools/build-computer.mjs
+	package.json package-lock.json packages/relay-core/package.json packages/relay-daemon/package.json tools/build-computer.mjs
 
 .PHONY: cloud-computer-image devbox-image devbox-check devbox-oci build-packages test test-e2e test-python backend-install backend backend-test backend-migrate backend-worker pre-commit-install pre-commit-run daemon-install daemon-test daemon supervisor-install supervisor-test supervisor serve web-install web-test web run-fresh stop
 
@@ -76,8 +76,10 @@ pre-commit-run:
 
 # A failed build must not keep the backend down; its startup check names the
 # stale bundle instead, and the next `make backend` tries again.
+# Refresh dependencies first: a pull may introduce a package absent from an
+# existing node_modules even though it is already declared in the lockfile.
 $(COMPUTER_BUNDLE): $(COMPUTER_BUNDLE_SOURCES)
-	-npm run build:computer
+	-npm install -w relay-daemon && npm run build:computer
 
 backend: $(COMPUTER_BUNDLE)
 	$(if $(filter command line environment,$(origin BACKEND_PORT)),BACKEND_PORT="$(BACKEND_PORT)" )UV_CACHE_DIR=.uv-cache uv run --project backend relay
