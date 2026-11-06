@@ -4,6 +4,8 @@ from ...core.thread_attachments import attachment_ids
 
 from typing import Any
 
+from starlette.concurrency import run_in_threadpool
+
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
@@ -319,7 +321,7 @@ def delete_agent_placement(
 
 @router.post("/agent-runs", status_code=202)
 async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await json_body(request)
     task_goal = string_field(body, "taskGoal") or string_field(body, "task_goal")
     if not task_goal:

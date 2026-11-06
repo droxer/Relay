@@ -3,6 +3,8 @@ from __future__ import annotations
 import unicodedata
 from typing import Any
 
+from starlette.concurrency import run_in_threadpool
+
 from fastapi import APIRouter, HTTPException, Request
 
 from ...core.thread_attachments import attachment_ids
@@ -117,7 +119,7 @@ def _is_javascript_non_newline_space(character: str) -> bool:
 async def submit_thread_message(
     thread_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     # Parsed after the actor, so an anonymous caller is refused before its body.
     body = await parse_request_body(request, ThreadMessageBody)
     try:
@@ -127,13 +129,13 @@ async def submit_thread_message(
     text = body.message_text()
     purpose = body.purpose()
     supplied_address_agent_ids = body.supplied_address_agent_ids()
-    session = get_session_for_actor(ctx.session_store, thread_id, actor)
+    session = await run_in_threadpool(get_session_for_actor, ctx.session_store, thread_id, actor)
     mention_owner_id = (
         session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
     )
     mentioned_agent_ids = _leading_mention_agent_ids(
         text,
-        ctx.agent_store.list_agents(supervisor_user_id=mention_owner_id),
+        await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=mention_owner_id),
     )
     address_agent_ids = mentioned_agent_ids or supplied_address_agent_ids
     address_team_id = body.address_team_id or None
@@ -178,7 +180,7 @@ async def submit_thread_message(
 async def request_thread_recovery(
     thread_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await json_body(request)
     kind = string_field(body, "kind")
     if kind not in RECOVERY_KINDS:

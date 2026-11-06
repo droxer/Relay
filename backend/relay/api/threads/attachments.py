@@ -17,7 +17,7 @@ _HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nos
 
 @router.post("/thread-attachments", status_code=201)
 async def upload_image(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     retry_after = ctx.auth_rate_limiter.consume(f"thread-image:{actor['userId']}")
     if retry_after is not None:
         raise HTTPException(

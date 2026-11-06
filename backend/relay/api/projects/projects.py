@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 from ...projects.manager import initial_manager_id, manager_role_patch, ManagerError
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
 from ...core.ids import new_database_id
+from ...security.actor import Actor
 from ...persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ...projects.catalog import (
     create_project_payload,
@@ -318,18 +320,21 @@ def get_project_setup(
     }
 
 
-@router.post("/projects/{project_id}/setup", status_code=202)
-async def start_project_setup(
-    project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
-) -> dict[str, Any]:
-    """Ask an agent on the project's computer to draft the project's setup.
+@dataclass(frozen=True)
+class _PreparedSetup:
+    actor: Actor
+    intent: RunIntent
+    draft: dict[str, Any]
+    previous: dict[str, Any] | None
+    revising: bool
 
-    With `revise: true` the same thread drafts again from the last proposal
-    and the owner's note; otherwise a fresh setup thread starts.
-    """
+
+def _prepare_project_setup(
+    project_id: str, request: Request, ctx: AppContextDep, body: dict[str, Any]
+) -> _PreparedSetup:
+    """Prepare and claim a draft on one worker, including its task transaction."""
     actor = request_actor(request, ctx.auth_store)
     project = _owned_project(ctx, project_id, actor["userId"])
-    body = _request_body
     if code := project_work_error(project):
         raise HTTPException(409, code)
     try:
@@ -409,35 +414,49 @@ async def start_project_setup(
 
     project = _mutate_setup(ctx, project_id, claim_with_task)
     draft = project["setup"]
+    intent_record = RunIntent(
+        task_goal=goal,
+        task_id=draft["taskId"],
+        session_id=thread_id,
+        raw_assignments=[{"agentId": agent_id, "mode": "action"}],
+        requested_project_id=project_id,
+        idempotency_key=body.get("idempotencyKey") if isinstance(body.get("idempotencyKey"), str) else None,
+        source="project_setup",
+        project_setup=setup_manifest_block(
+            intent=intent,
+            candidates=candidates,
+            previous_proposal=previous_proposal,
+            draft_id=draft["draftId"],
+            mode=mode,
+            open_tasks=open_tasks,
+        ),
+    )
+    return _PreparedSetup(actor, intent_record, draft, previous, revising)
+
+
+@router.post("/projects/{project_id}/setup", status_code=202)
+async def start_project_setup(
+    project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    """Ask an agent on the project's computer to draft the project's setup.
+
+    With `revise: true` the same thread drafts again from the last proposal
+    and the owner's note; otherwise a fresh setup thread starts.
+    """
+    prepared = await run_in_threadpool(_prepare_project_setup, project_id, request, ctx, _request_body)
+    draft, previous, revising = prepared.draft, prepared.previous, prepared.revising
     try:
-        session = await CollaborationConductor(ctx).submit(
-            RunIntent(
-                task_goal=goal,
-                task_id=draft["taskId"],
-                session_id=thread_id,
-                raw_assignments=[{"agentId": agent_id, "mode": "action"}],
-                requested_project_id=project_id,
-                idempotency_key=body.get("idempotencyKey") if isinstance(body.get("idempotencyKey"), str) else None,
-                source="project_setup",
-                project_setup=setup_manifest_block(
-                    intent=intent,
-                    candidates=candidates,
-                    previous_proposal=previous_proposal,
-                    draft_id=draft["draftId"],
-                    mode=mode,
-                    open_tasks=open_tasks,
-                ),
-            ),
-            actor,
-        )
+        session = await CollaborationConductor(ctx).submit(prepared.intent, prepared.actor)
     except CollaborationError as error:
-        _undo_draft(ctx, project_id, draft, previous if revising else None, error.code)
+        await run_in_threadpool(_undo_draft, ctx, project_id, draft, previous if revising else None, error.code)
         detail: Any = str(error) if error.status in (400, 403) else {"code": error.code, "message": str(error)}
         raise HTTPException(error.status, detail) from error
     except Exception:
         # Whatever failed, the draft must not wait forever on a run that
         # never started, nor leave its task in the backlog.
-        _undo_draft(ctx, project_id, draft, previous if revising else None, "project_setup_dispatch_failed")
+        await run_in_threadpool(
+            _undo_draft, ctx, project_id, draft, previous if revising else None, "project_setup_dispatch_failed"
+        )
         raise
 
     def attach_thread(latest: dict[str, Any]) -> dict[str, Any] | None:
@@ -450,10 +469,10 @@ async def start_project_setup(
             return None
         return {**current, "threadId": session["id"]}
 
-    project = _mutate_setup(ctx, project_id, attach_thread)
+    project = await run_in_threadpool(_mutate_setup, ctx, project_id, attach_thread)
     # The draft this one replaces is settled: its run is over and its
     # proposal superseded.
-    close_setup_task(ctx, previous)
+    await run_in_threadpool(close_setup_task, ctx, previous)
     return {"project": project, "threadId": session["id"]}
 
 

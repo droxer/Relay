@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
+
+from starlette.concurrency import run_in_threadpool
 
 from ..agents.routing import AgentRoutingError
 from ..teams.dispatch import TeamDispatchError
@@ -33,6 +35,15 @@ from ..security.actor import Actor
 from ..core.connections import ConnectionError
 
 
+@dataclass(frozen=True)
+class _RoundDispatch:
+    node_id: str
+    request: dict[str, Any]
+    # Approval resumes already carry their roster. Other rounds admit newly
+    # addressed agents only once dispatch has succeeded.
+    resolved: list[dict[str, Any]] | None = None
+
+
 class CollaborationConductor(
     RosterMixin, AssignmentsMixin, TaskScopeMixin, RoundRequestMixin, ApprovalRoundMixin
 ):
@@ -61,7 +72,8 @@ class CollaborationConductor(
             )
         try:
             if prepared.idempotency_key:
-                existing = self.ctx.backend.idempotent_run(
+                existing = await run_in_threadpool(
+                    self.ctx.backend.idempotent_run,
                     prepared.idempotency_key,
                     actor["userId"],
                     actor_is_admin=False,
@@ -70,7 +82,8 @@ class CollaborationConductor(
                 if existing:
                     return existing
             elif prepared.session_id:
-                existing = self.ctx.backend.idempotent_session_run(
+                existing = await run_in_threadpool(
+                    self.ctx.backend.idempotent_session_run,
                     prepared.session_id,
                     actor["userId"],
                     actor_is_admin=False,
@@ -103,11 +116,18 @@ class CollaborationConductor(
         return _prepare_run(intent)
 
     async def _submit_prepared(
-        self,
-        intent: _PreparedRound,
-        actor: Actor,
-        fingerprint: str,
+        self, intent: _PreparedRound, actor: Actor, fingerprint: str
     ) -> dict[str, Any]:
+        dispatch = await run_in_threadpool(self._prepare_dispatch, intent, actor, fingerprint)
+        dispatched = await self.ctx.backend.run(dispatch.node_id, dispatch.request)
+        if dispatch.resolved is None:
+            return dispatched
+        return await run_in_threadpool(self._admit_addressed_agents, dispatched, dispatch.resolved, actor)
+
+    def _prepare_dispatch(
+        self, intent: _PreparedRound, actor: Actor, fingerprint: str
+    ) -> _RoundDispatch:
+        """Resolve persisted state on one worker before asynchronous dispatch."""
         session = self._session_for_actor(intent.session_id, actor)
         session = self._backfill_runtime_affinity(session)
         answered_task = (
@@ -121,7 +141,7 @@ class CollaborationConductor(
             )
             if resumed is not None:
                 resumed = self._with_images(intent, actor, session, resumed, self.ctx.registry.monitor_nodes())
-                return await self.ctx.backend.run(resumed["daemonNodeId"], resumed)
+                return _RoundDispatch(resumed["daemonNodeId"], resumed)
         elif intent.approve:
             raise CollaborationError(
                 "approval_not_awaited", "An approval names the wait it answers."
@@ -185,8 +205,7 @@ class CollaborationConductor(
             answered_task=answered_task,
         )
         parsed = self._with_images(intent, actor, session, parsed, daemon_nodes)
-        dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
-        return self._admit_addressed_agents(dispatched, resolved, actor)
+        return _RoundDispatch(resolved[0]["daemonNodeId"], parsed, resolved)
 
     def _session_for_actor(
         self, session_id: str | None, actor: Actor
