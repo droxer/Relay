@@ -337,3 +337,44 @@ def test_open_manager_uses_a_normal_agent_thread_without_dispatch(setup_env):
     command=_take_command(app,node)
     assert command['logicalAgentId'] == planner['id']
     assert command['state']['project_manager']['projectId'] == project['id']
+
+
+def test_manager_handover_updates_thread_and_rejects_stale_target(setup_env):
+    app, client, node, project, first, second = setup_env
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId']
+    project = client.get(f"/api/v1/projects/{project['id']}").json()['project']
+    changed = client.put(f"/api/v1/projects/{project['id']}/manager", json={
+        'agentId':second['id'], 'expectedVersion':project['version'],
+    })
+    assert changed.status_code == 200, changed.text
+    thread = client.get(f'/api/v1/threads/{thread_id}').json()
+    assert thread['ownerAgentId'] == second['id']
+    assert set(thread['participantAgentIds']) == {first['id'],second['id']}
+    assert any(e['type'] == 'thread.project_manager_assigned' for e in thread['events'])
+    _ready(app,node)
+    stale = client.post(f'/api/v1/threads/{thread_id}/messages',json={
+        'text':'Update?', 'addressAgentIds':[first['id']], 'idempotencyKey':'old-manager-target',
+    })
+    assert stale.status_code == 409, stale.text
+    assert stale.json()['detail']['code'] == 'project_manager_target_changed'
+    assert client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId'] == thread_id
+
+
+def test_manager_role_grants_run_context_outside_canonical_thread(setup_env):
+    app,client,node,project,manager,*_ = setup_env
+    _ready(app,node)
+    thread = app.state.session_store.create_session({
+        'ownerUserId':project['ownerUserId'],'ownerAgentId':manager['id'],
+        'projectId':project['id'],'computerId':project['computerId'],
+        'workspaceLayout':'project','workspacePath':'','workspaceSubpath':project['workspaceSubpath'],
+        'participants':['human'],'taskGoal':'Another project conversation',
+    })
+    response = client.post(f"/api/v1/threads/{thread['id']}/messages", json={
+        'text':'Explain this project', 'addressAgentIds':[manager['id']], 'idempotencyKey':'role-scope',
+    })
+    assert response.status_code == 202,response.text
+    command = _take_command(app,node)
+    assert command['state']['project_manager']['agentId'] == manager['id']
+    assert command['state']['project_manager']['projectId'] == project['id']
+    read = _tool(setup_env,command,'overview')
+    assert read.status_code == 200,read.text

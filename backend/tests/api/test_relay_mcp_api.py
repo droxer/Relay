@@ -84,3 +84,29 @@ def test_expired_mcp_token_and_foreign_revocation_are_rejected(setup_env):
         connection.execute(update(mcp_tokens).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
     external = TestClient(app)
     assert external.get('/api/v1/mcp/projects', headers={"Authorization": f"Bearer {token['token']}"}).status_code == 401
+
+
+def test_computer_renews_expired_token_but_never_revives_revocation(setup_env):
+    from datetime import datetime, timedelta, UTC
+    from sqlalchemy import update
+    from relay.persistence.tables.mcp import mcp_tokens
+    app,client,node,*_ = setup_env
+    daemon = TestClient(app)
+    url = f"/api/v1/daemon-nodes/{node['id']}/mcp-token"
+    headers = {'Authorization':f"Bearer token_{node['id']}"}
+    original = daemon.post(url,headers=headers,json={}).json()
+    healthy = daemon.post(url,headers=headers,json={'existingToken':original['token']})
+    assert healthy.status_code == 201,healthy.text
+    assert healthy.json()['id'] == original['id']
+    assert healthy.json()['renewed'] is False
+    assert 'token' not in healthy.json()
+    with app.state.project_store.engine.begin() as connection:
+        connection.execute(update(mcp_tokens).where(mcp_tokens.c.id == original['id']).values(expires_at=datetime.now(UTC)-timedelta(seconds=1)))
+    renewed = daemon.post(url,headers=headers,json={'existingToken':original['token']})
+    assert renewed.status_code == 201,renewed.text
+    assert renewed.json()['id'] != original['id']
+    assert renewed.json()['token'] != original['token']
+    client.delete(f"/api/v1/mcp/tokens/{renewed.json()['id']}")
+    blocked = daemon.post(url,headers=headers,json={'existingToken':renewed.json()['token']})
+    assert blocked.status_code == 403,blocked.text
+    assert blocked.json()['detail'] == 'mcp_token_revoked'
