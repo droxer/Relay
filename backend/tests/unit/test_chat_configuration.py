@@ -79,3 +79,23 @@ def test_different_integrations_mutate_independently(same_store):
         finally:
             event.remove(first.engine, "before_cursor_execute", pause_write)
         assert first.get_integration(a["id"])["displayName"] == "first"
+
+
+@pytest.mark.parametrize("operation", ["list", "runtime", "get", "settings"])
+def test_unused_legacy_secrets_do_not_require_a_key(tmp_path, monkeypatch, operation):
+    from datetime import UTC, datetime
+    from sqlalchemy import insert
+    from relay.persistence.tables.chat import documents
+
+    monkeypatch.delenv("RELAY_CHAT_SECRET_KEY", raising=False)
+    store = make_chat_store(tmp_path)
+    envelope = Fernet(Fernet.generate_key()).encrypt(b'{"orphan":{"botToken":"old"}}').decode()
+    with store.engine.begin() as conn:
+        conn.execute(insert(documents).values(document_key="secrets", payload={"ciphertext": envelope}, updated_at=datetime.now(UTC)))
+    if operation == "list":
+        assert store.list_integrations() == []
+    elif operation == "runtime":
+        assert store.runtime_integrations() == []
+    else:
+        with pytest.raises(KeyError):
+            (store.get_integration if operation == "get" else store.connection_settings)("missing")
