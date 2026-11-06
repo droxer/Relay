@@ -82,3 +82,49 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
             for index in (1, 2):
                 result = first.get_conversation_session({**conversation, "conversationId": str(index)})
                 assert result["sessionId"] == f"thread-{index}"
+
+
+@pytest.mark.postgres
+def test_chat_reader_progresses_with_a_one_connection_pool(monkeypatch):
+    """A queued write must not consume the connection its preceding read needs."""
+    from sqlalchemy import create_engine, event
+
+    with disposable_postgres_url() as url:
+        store = DatabaseChatIntegrationStore(url)
+        integration = store.create_integration({"provider": "discord"})
+        engine = create_engine(url, pool_size=1, max_overflow=0, pool_timeout=0.5)
+        store.engine = engine
+        paused, release, attempted, acquired_connection = (Event() for _ in range(4))
+        original = store._read_document
+
+        def pause_read(key, default):
+            if key == "integrations" and not paused.is_set():
+                paused.set()
+                assert release.wait(5)
+            return original(key, default)
+
+        def observe_guard(conn, cursor, statement, *args):
+            if "pg_try_advisory_xact_lock" in statement:
+                acquired_connection.set()
+
+        monkeypatch.setattr(store, "_read_document", pause_read)
+        event.listen(engine, "before_cursor_execute", observe_guard)
+
+        def update():
+            attempted.set()
+            return store.update_integration(integration["id"], {"config": {"applicationId": "updated"}})
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                read = pool.submit(store.get_integration, integration["id"])
+                try:
+                    assert paused.wait(5)
+                    write = pool.submit(update)
+                    assert attempted.wait(5)
+                    acquired_connection.wait(0.2)
+                finally:
+                    release.set()
+                assert read.result(timeout=5)["id"] == integration["id"]
+                assert write.result(timeout=5)["config"]["applicationId"] == "updated"
+        finally:
+            engine.dispose()
