@@ -7,19 +7,8 @@ import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskLis
 import type { HomeItem } from "./homeQueue.ts";
 import { openPermissionRequests } from "./permissionRequests.ts";
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const HOME_PROJECT_LIMIT = 6;
 export const HOME_FINISHED_LIMIT = 5;
-
-/** Each count reads a task's own status, the way the Tasks queue of the same
- *  name does, so a count and the list it links to always agree. Work flow
- *  stages are not used: they file blocked and waiting work under "running". */
-export interface MyTaskCounts {
-  open: number;
-  running: number;
-  blocked: number;
-  doneThisWeek: number;
-}
 
 /** The statuses a project's progress bar draws, in the order it draws them. */
 export const PROJECT_PROGRESS = ["done", "review", "running", "blocked"] as const;
@@ -47,25 +36,6 @@ export interface RunningRow {
 const isIssue = (task: RelayTaskListItem) => !task.isRoutine && !task.deletedAt;
 const isMine = (task: RelayTaskListItem, userId: string) => (task.assigneeUserId ?? task.ownerUserId) === userId;
 const finishedAt = (task: RelayTaskListItem) => task.finishedAt ?? task.updatedAt;
-
-/** Work in an archived project leaves the Tasks page, so it leaves these
- *  counts too; otherwise a count would open a list shorter than itself. */
-export function myTaskCounts(
-  tasks: readonly RelayTaskListItem[],
-  userId: string,
-  now = Date.now(),
-  archivedProjectIds: ReadonlySet<string> = new Set(),
-): MyTaskCounts {
-  const mine = tasks.filter((task) => isIssue(task) && isMine(task, userId)
-    && !(task.projectId && archivedProjectIds.has(task.projectId)));
-  const withStatus = (status: RelayTaskListItem["status"]) => mine.filter((task) => task.status === status).length;
-  return {
-    open: mine.filter((task) => task.status !== "done").length,
-    running: withStatus("running"),
-    blocked: withStatus("blocked"),
-    doneThisWeek: mine.filter((task) => task.status === "done" && now - Date.parse(finishedAt(task)) <= WEEK_MS).length,
-  };
-}
 
 /** Live projects, the ones with something for the person first (in queue
  *  order), then the most recently touched. */

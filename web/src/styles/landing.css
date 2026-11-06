@@ -77,7 +77,12 @@
   margin-left: auto;
 }
 
+/* A full-height target, centred on the bar like the buttons beside it:
+   bare text links sat at 20px tall and rode above the button's midline. */
 .landing-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h-sm);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   color: var(--ld-muted);
@@ -558,6 +563,14 @@
     padding-top: var(--sp-8);
   }
 
+  /* The full window shrinks to unreadable at phone width; the hero shows the
+     part that carries the story — the rail and the Up next queue — larger. */
+  .landing-hero-shot .landing-shot > img {
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    object-position: 0 0;
+  }
+
   .landing-principles {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -570,6 +583,16 @@
 
   .landing-nav-actions {
     gap: var(--sp-3);
+  }
+
+  /* Three doors do not fit a phone bar without wrapping "Sign in"; GitHub
+     stays one scroll away in the open-source section and the footer. */
+  .landing-nav-github {
+    display: none;
+  }
+
+  .landing-nav-actions > a {
+    white-space: nowrap;
   }
 
   .landing-ctas {

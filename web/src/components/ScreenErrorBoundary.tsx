@@ -4,6 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { reloadForChunkError } from "../lib/chunkReload";
+import { APP_HOME_PATH } from "../lib/appRoute";
 
 function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   const { t } = useTranslation();
@@ -19,6 +20,9 @@ function ErrorFallback({ onRetry }: { onRetry: () => void }) {
           surfaces that use it would already be down. */}
       <Button variant="outline" type="button" onClick={onRetry}>{t("errors.try_again")}</Button>
       <Button variant="outline" type="button" onClick={() => window.location.reload()}>{t("errors.reload_app")}</Button>
+      {/* A full load, not client navigation: the app's own router may be
+          what failed, and Home is the one page every account can reach. */}
+      <a className="route-loading-link" href={APP_HOME_PATH}>{t("errors.go_home")}</a>
     </section>
   );
 }

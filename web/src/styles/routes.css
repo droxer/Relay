@@ -76,6 +76,17 @@
   max-width: var(--measure-tight);
 }
 
+.route-loading-link {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  min-height: var(--control-h);
+  display: inline-flex;
+  align-items: center;
+}
+
+.route-loading-link:hover { color: var(--ink-1); }
+
 /* Task conversations keep the Tasks destination and omit the thread directory. */
 .messenger-shell[data-task-thread="true"] {
   grid-template-columns: var(--shell-nav-track) minmax(0, 1fr) var(--shell-space-track);

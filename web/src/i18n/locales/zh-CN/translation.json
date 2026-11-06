@@ -59,7 +59,7 @@
   },
   "errors": {
     "screen_failed": "此页面无法加载",
-    "screen_failed_body": "请重试、重新加载应用，或打开其他页面。",
+    "screen_failed_body": "此页面的部分内容未能显示，没有任何数据被更改。请重试、重新加载应用，或返回主页。",
     "try_again": "重试",
     "reload_app": "重新加载应用",
     "rename_thread": "无法重命名对话。请刷新对话列表后重试。",
@@ -105,7 +105,8 @@
     "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
     "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
-    "save_prerequisites": "无法保存前置任务。请检查连接后重试。"
+    "save_prerequisites": "无法保存前置任务。请检查连接后重试。",
+    "go_home": "返回主页"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {
@@ -525,7 +526,9 @@
       "tokens_count": "{{tokens}} token",
       "tokens_unreported": "未报告 token",
       "runtime": "运行时"
-    }
+    },
+    "run_starting_on": "正在 {{computer}} 上启动。智能体一开始输出就会显示在这里。",
+    "run_starting": "正在启动运行。智能体一开始输出就会显示在这里。"
   },
   "composer": {
     "upload_client_outdated": "更新此电脑上的 Relay 客户端后，即可上传图片或文件。",
@@ -563,14 +566,15 @@
     }
   },
   "decision": {
-    "approve": "批准",
+    "title": "你已退回本轮",
+    "hint": "在下方回复中说明要修改什么，重新运行本轮，或仍然接受它。",
+    "request_changes": "请求修改",
+    "accept": "接受",
+    "more": "更多决定",
+    "mark_done": "将工作标记为完成",
+    "handoff": "移交给其他智能体…",
     "rerun": "重新运行",
-    "mark_done": "标记完成",
-    "reject": "拒绝",
-    "handoff": "移交",
-    "pending": "正在处理…",
-    "reject_confirm_title": "要拒绝本轮吗？",
-    "reject_confirm_message": "将拒绝本轮，智能体不会自动重新运行。"
+    "pending": "正在处理…"
   },
   "permission": {
     "title": "{{agent}} 请求使用 {{tool}}",
@@ -835,11 +839,13 @@
       "due_label": "截止 {{date}}。更改截止日期",
       "due_empty": "设置截止日期",
       "clear_due": "清除截止日期",
-      "assignee_label": "负责人：{{name}}。更改负责人"
+      "assignee_label": "负责人：{{name}}。更改负责人",
+      "due_overdue_label": "已逾期，截止于 {{date}}。更改截止日期"
     },
     "error_reopen": "请先将任务移至就绪状态，再继续处理。",
     "error_cancel": "无法取消此任务。请暂停自动化，或重新打开已完成的任务。",
-    "queued": "已排队"
+    "queued": "已排队",
+    "history_empty_live": "首次运行正在进行。"
   },
   "workspace": {
     "preview_missing": "此文件已不可用，可能已被移动或删除。",
@@ -1302,7 +1308,7 @@
       "dash_health_stale": "失联",
       "dash_health_unknown": "未知",
       "dash_health_total": "{{count}} 台电脑",
-      "dash_top_title": "最活跃用户",
+      "dash_top_title": "各用户的会话数",
       "dash_top_empty": "尚无用户对话。",
       "dash_feed_title": "最近动态",
       "dash_feed_empty": "暂无最近活动。",
@@ -1425,7 +1431,7 @@
       "node_execution_local": "本地电脑",
       "node_sandbox_boxlite": "BoxLite",
       "node_sandbox_boxlite_hint": "智能体在隔离的 BoxLite 虚拟机中运行。",
-      "node_sandbox_host": "直接在电脑上运行",
+      "node_sandbox_host": "在电脑本机运行",
       "node_sandbox_host_hint": "智能体直接在电脑上运行。",
       "node_sandbox_pending": "隔离方式待确认",
       "node_sandbox_pending_hint": "电脑尚未报告隔离方式。",
@@ -1612,7 +1618,7 @@
       "settings_rounds_hint": "取值范围 {{min}} 到 {{max}}。任务用完轮次后将等待人工处理，不再自动运行。",
       "settings_save": "保存",
       "settings_admin_token_title": "管理员令牌",
-      "settings_admin_token_sub": "用于初始化和 Supervisor 的 Bearer 令牌，首次启动时从 RELAY_ADMIN_TOKEN 导入。系统仅保存其哈希值，新令牌只显示一次。重新签发后旧令牌立即失效。",
+      "settings_admin_token_sub": "用于初始化脚本和 Supervisor 的密钥令牌，首次启动时从 RELAY_ADMIN_TOKEN 导入。系统仅保存其哈希值，新令牌只显示一次。重新签发后旧令牌立即失效。",
       "settings_admin_token_label": "管理员令牌",
       "settings_admin_token_copy": "复制管理员令牌",
       "settings_admin_token_reissue": "重新签发令牌",
@@ -1819,9 +1825,9 @@
     "runtimes": "支持 Codex、Claude Code、Pi、OpenCode 和 Kimi。",
     "page_title": "Relay — 让 AI 智能体在你自己的电脑上工作",
     "headline": "让 AI 智能体在你自己的电脑上工作",
-    "lede": "从首页掌握每天的工作：处理审批和问题，查看正在运行的任务，安排下一步。将工作交给你自己电脑上的智能体或团队，随时查看每条执行的命令。",
+    "lede": "在笔记本或服务器上安装 Relay，把工作交给在那里运行的智能体和团队。每条命令和结果都清晰可见，首页告诉你下一步需要处理什么。",
     "cta_secondary": "了解工作方式",
-    "hero_alt": "Relay 首页：待处理队列、任务统计、正在运行的工作和即将到来的安排",
+    "hero_alt": "Relay 首页：待处理队列、正在运行的工作和即将到来的安排",
     "how_title": "从需求到审查完成的结果",
     "step_enroll_title": "连接电脑",
     "step_enroll_body": "在笔记本或托管服务器上安装 Relay。智能体在那里运行（直接在主机上或在 BoxLite 沙箱中），绝不在 Relay 后端内运行。",
@@ -2612,7 +2618,8 @@
     "loading": "正在加载记录…",
     "not_found_title": "未找到记录",
     "not_found_body": "该任务或自动化已不存在。",
-    "run_not_of_routine": "该运行属于其他自动化。"
+    "run_not_of_routine": "该运行属于其他自动化。",
+    "watch_live": "查看实时进展"
   },
   "number_field": {
     "increase": "增加",
@@ -2679,7 +2686,7 @@
     "queues_label": "任务队列",
     "queues": {
       "needs_me": "待处理",
-      "untriaged": "待分拣",
+      "untriaged": "无项目",
       "blocked": "阻塞",
       "running": "进行中",
       "overdue": "已逾期",
@@ -2699,7 +2706,7 @@
     },
     "empty": {
       "needs_me": "没有等你处理的任务",
-      "untriaged": "没有待分拣的任务",
+      "untriaged": "每个任务都已归入项目",
       "blocked": "没有阻塞的任务",
       "running": "没有进行中的任务",
       "overdue": "没有逾期的任务",
@@ -2724,7 +2731,7 @@
     "all": "全部任务",
     "needs_project": "需要项目",
     "intake_hint": "开始工作前请加入项目",
-    "project_hint": "留空则稍后分拣。分配智能体或开始工作前需先加入项目。",
+    "project_hint": "留空则稍后选择。分配智能体或开始工作前需先加入项目。",
     "assignment_needs_project": "将此任务加入项目后才能分配智能体或团队。",
     "add_to_project": "加入项目",
     "move_to_project": "移入项目",
@@ -3107,12 +3114,6 @@
   },
   "home": {
     "up_next": "接下来",
-    "filter_label": "显示",
-    "filter": {
-      "all": "全部",
-      "needs_you": "待处理",
-      "other": "其他"
-    },
     "tier": {
       "paused": "待处理 · 运行已暂停",
       "needs_you": "待处理",
@@ -3129,7 +3130,7 @@
       "blocked": "已阻塞",
       "offline": "电脑离线",
       "overdue": "已逾期",
-      "untriaged": "待分拣",
+      "untriaged": "无项目",
       "suggested": "建议"
     },
     "why": {
@@ -3146,7 +3147,7 @@
       "offline_one": "它已离线，你有 {{count}} 个任务等待开始。",
       "offline_other": "它已离线，你有 {{count}} 个任务等待开始。",
       "overdue": "截止日期为 {{date}}，尚未完成。",
-      "untriaged": "未归入项目的任务无法运行。",
+      "untriaged": "加入项目之前无法运行。",
       "suggested": "建议下一步：{{step}}"
     },
     "next": {
@@ -3159,7 +3160,7 @@
       "blocked": "解除 {{ref}} 的阻塞",
       "overdue": "开始已逾期的 {{ref}}",
       "offline": "让电脑重新上线",
-      "untriaged": "分拣待处理任务",
+      "untriaged": "为任务选择项目",
       "suggested": "发送建议的后续消息"
     },
     "an_agent": "智能体",
@@ -3169,11 +3170,10 @@
     "open": "打开",
     "open_thread": "打开对话",
     "view_computer": "查看电脑",
-    "triage": "分拣",
+    "triage": "选择项目",
     "snooze": "稍后",
     "snooze_hint": "在它变化之前隐藏",
     "clear_title": "暂无待处理事项",
-    "clear_filtered": "这里暂时没有内容",
     "clear_body": "智能体的提问、审批和完成的工作会汇集在这里。",
     "ranked_hint": "按阻塞工作的时间排序",
     "all_tasks": "全部任务",
@@ -3181,13 +3181,6 @@
     "all_projects": "全部项目",
     "running_now": "正在运行",
     "paused_for_permission": "等待权限而暂停",
-    "my_tasks": "我的任务",
-    "count": {
-      "open": "未完成",
-      "running": "运行中",
-      "blocked": "已阻塞",
-      "doneThisWeek": "本周完成"
-    },
     "projects": "项目",
     "no_projects": "还没有项目。",
     "new_project": "新建项目",
@@ -3277,7 +3270,7 @@
       "blockers_jump": "协作阻塞 · {{count}}",
       "ready_jump": "可开始 · {{count}}"
     },
-    "all_needs_me": "所有待处理项",
+    "all_needs_me": "在任务中查看完整队列",
     "running_for": "已运行 {{duration}}",
     "setup": {
       "title": "你的设置",
@@ -3294,6 +3287,8 @@
   },
   "task_review": {
     "title": "审阅结果",
+    "ready_title": "等待你审阅",
+    "details": "查看验收标准、证据和产出",
     "loading": "正在加载已记录的结果…",
     "outcome": "预期目标",
     "criteria": "验收标准",
@@ -3348,14 +3343,14 @@
     "action": "导入 GitHub 议题",
     "title": "导入 GitHub 议题",
     "into_project": "议题将成为 {{project}} 的待办任务",
-    "into_intake": "议题将成为未归属项目的收件任务",
+    "into_intake": "议题将成为无项目的任务",
     "close": "关闭",
     "repository": "仓库",
     "repository_hint": "仅支持 GitHub 公开仓库：输入 owner/repository 或 github.com 仓库链接。",
     "token": "访问令牌",
     "token_hint": "私有仓库或更高的速率限制需要令牌。仅用于本次导入，不会保存。",
     "optional": "可选",
-    "project_hint": "导入的议题进入该项目的待办；不选则进入收件箱。",
+    "project_hint": "导入的议题进入该项目的待办；不选则不归入任何项目。",
     "state": "议题",
     "states": {
       "open": "未关闭",
@@ -3562,7 +3557,7 @@
     "open": "与 Relay 对话",
     "reason_manager_computer_busy": "项目计算机正在忙碌，执行容量释放后请重试。",
     "resize": "调整项目经理面板宽度",
-    "unassigned_role": "尚未给智能体分配项目经理角色。",
+    "unassigned_role": "还没有智能体管理此项目。项目经理会读取项目记录，并提出任务变更供你确认后应用。",
     "assign_role": "分配项目经理角色",
     "change": "更改"
   }

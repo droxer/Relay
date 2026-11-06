@@ -126,15 +126,13 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByRole("region", { name: "Running now" })).toContainText("paused for permission");
     await expect(page.getByRole("region", { name: "Running now" })).not.toContainText("Orphaned import");
     await expect(page.locator(".home-brief")).toContainText("1 thread running");
-    // The tabs count the Start here item too, so they agree with the header and the brief.
+    // The header counts the Start here item too, so it agrees with the brief.
+    // The bands already say which items need the person: no tabs restate them,
+    // and no status tiles repeat the queue.
     await expect(queue(page).locator(".home-section-count").first()).toHaveText("8");
-    await expect(queue(page).getByRole("button", { name: /^All/ })).toContainText("8");
-    await expect(queue(page).getByRole("button", { name: /^Needs attention/ })).toContainText("3");
-    // My tasks counts statuses, never a blocked task as running, and opens the matching queue.
-    const mine = page.getByRole("region", { name: "My tasks" });
-    await expect(mine.getByRole("link", { name: /Running/ })).toHaveText(/^1\s*Running$/);
-    await expect(mine.getByRole("link", { name: /Blocked/ })).toHaveAttribute("href", /queue=blocked&assignee=u$/);
-    // Your setup counts computers and agents, naming only what cannot work.
+    await expect(queue(page).getByRole("button", { name: /^All/ })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "My tasks" })).toHaveCount(0);
+    // Your setup speaks up because a computer is offline, naming only what cannot work.
     const setup = page.getByRole("region", { name: "Your setup" });
     await expect(setup.getByRole("link", { name: /1 of 2 computers online/ })).toHaveAttribute("href", "/computers");
     await expect(setup).toContainText("studio-linux offline");

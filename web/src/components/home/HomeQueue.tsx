@@ -9,16 +9,6 @@ import { HomeLink } from "./HomePanels";
 import { ShowAllToggle } from "./HomePlanningPanels";
 import type { HomeActions } from "./useHomeActions";
 
-const FILTERS = ["all", "needs_you", "other"] as const;
-type QueueFilter = (typeof FILTERS)[number];
-
-const needsYou = (item: HomeItem) => item.tier === "paused" || item.tier === "needs_you";
-const MATCHES: Record<QueueFilter, (item: HomeItem) => boolean> = {
-  all: () => true,
-  needs_you: needsYou,
-  other: (item) => !needsYou(item),
-};
-
 export interface HomeQueueProps {
   items: readonly HomeItem[];
   readyFocus?: ReactNode;
@@ -36,25 +26,20 @@ export interface HomeQueueProps {
 
 const PREVIEW = 5;
 
-/** "Up next": the ranked queue, banded by tier, with a filter for the
- *  items that hold someone's work up. A row the person snoozed leaves at
- *  once; the next data refresh confirms it. Every count includes the Start
- *  here item, so the header, the tabs, the brief, and the rail badge agree. */
+/** "Up next": the ranked queue, banded by tier. The bands already say which
+ *  items hold someone's work up, so there is no second filter restating them.
+ *  A row the person snoozed leaves at once; the next data refresh confirms
+ *  it. The count includes the Start here item, so the header, the brief, and
+ *  the rail badge agree. */
 export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName, projectName, sinceLabel, hrefFor, onOpen, needsMeHref, onOpenNeedsMe }: HomeQueueProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [filter, setFilter] = useState<QueueFilter>("all");
   const [resolved, setResolved] = useState<ReadonlySet<string>>(() => new Set());
   const live = useMemo(() => items.filter((item) => !resolved.has(`${item.key}@${item.stamp}`)), [items, resolved]);
   const focus = homeFocusItem(live);
   const remaining = live.filter(item => item.key !== focus?.key);
-  const shown = remaining.filter(MATCHES[filter]);
-  // A tab whose only match is Start here counts it, so it says "nothing
-  // else" rather than "nothing" beside a count of one.
-  const focusMatches = Boolean(focus && MATCHES[filter](focus));
-  const emptyTitle = filter === "all"
-    ? (focus || readyFocus ? "home.plan.no_other_items" : "home.clear_title")
-    : (focusMatches ? "home.plan.no_other_items" : "home.clear_filtered");
+  const shown = remaining;
+  const emptyTitle = focus || readyFocus ? "home.plan.no_other_items" : "home.clear_title";
   const bands = bandsOf(expanded ? shown : shown.slice(0, PREVIEW));
 
   return (
@@ -77,20 +62,6 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
       ) : readyFocus}
       {contextLinks}
       <div className="home-panel">
-        <div className="home-filters" role="group" aria-label={t("home.filter_label")}>
-          {FILTERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className="home-filter"
-              aria-pressed={filter === value}
-              onClick={() => setFilter(value)}
-            >
-              {t(`home.filter.${value}`)}
-              <span className="home-filter-count tnum">{live.filter(MATCHES[value]).length}</span>
-            </button>
-          ))}
-        </div>
         {bands.length === 0 ? (
           <div className="home-clear" role="status">
             <p className="home-clear-title">{t(emptyTitle)}</p>

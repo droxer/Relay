@@ -47,6 +47,7 @@ import { HandoffStatus } from "./HandoffStatus";
 import { TeamHandoffCue } from "./TeamHandoffCue";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
+import { RunStartingCue } from "./RunStartingCue";
 import { ProjectSetupCue } from "./ProjectSetupCue";
 import { ProjectManagerProposals } from "./ProjectManagerProposals";
 import { DecisionBar } from "./composer/DecisionBar";
@@ -602,6 +603,9 @@ export function ThreadsView({
                   logicalAgentImages={logicalAgentImages}
                   agentDisplayNames={agentDisplayNames}
                 />
+                {running && !displayMessages.some((message) => message.kind === "agent")
+                  ? <RunStartingCue node={activeRuntimeNode} />
+                  : null}
                 <HandoffStatus session={activeSession} />
                 {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} running={running} /> : null}
                 <CollaborationStatus session={activeSession} />
@@ -632,6 +636,7 @@ export function ThreadsView({
                     logicalAgents={selectableLogicalAgents}
                     sendDecision={sendDecision}
                     sendHandoff={sendHandoff}
+                    onRequestChanges={() => composerRef.current?.focus()}
                     deferPrimary={openPermissionRequests(activeSession).length > 0}
                   />
                 ) : null}
@@ -685,7 +690,7 @@ export function ThreadsView({
               onReply={() => composerRef.current?.focus()}
               onMarkDone={() => sendDecision("mark_done")}
             />
-          ) : actionTask?.status === "review" && !running ? (
+          ) : awaitingDecision ? null : actionTask?.status === "review" && !running ? (
             <TaskReviewPanel
               key={actionTask.id}
               taskId={actionTask.id}

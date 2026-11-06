@@ -113,7 +113,9 @@ test("work in review docks a revision-bound review on the composer", async ({ pa
   await page.goto(`/threads/${session.id}`);
 
   const bar = page.getByRole("region", { name: "Review result" });
-  await expect(bar).toContainText("Review result");
+  // The decision leads: who delivered what is in view before the evidence opens.
+  await expect(bar.getByRole("heading", { name: "Ready for your review" })).toBeVisible();
+  await expect(bar.locator(".task-review-lede")).toContainText("Delivered the explanation.");
   await bar.locator("summary").click();
   await expect(bar).toContainText("Agent-reported evidence");
   await expect(bar).toContainText("no independently recorded check results");

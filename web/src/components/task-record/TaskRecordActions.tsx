@@ -24,6 +24,7 @@ export function TaskRecordActions({
   onCancel,
   onEdit,
   onDelete,
+  onWatchLive,
 }: {
   task: RelayTaskListItem;
   /** The task's project is closed for work — the record is readable, not actionable. */
@@ -36,6 +37,8 @@ export function TaskRecordActions({
   onDone: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Opens the thread the running round streams into; absent when none. */
+  onWatchLive?: () => void;
 }) {
   const { t } = useTranslation();
   const phone = useMediaQuery(PHONE_QUERY);
@@ -66,6 +69,13 @@ export function TaskRecordActions({
         <Button type="button" variant="default" size="dense" loading={busyAction === "retry"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.retry_run")}
+        </Button>
+      ) : null}
+      {/* A running task's work is visible only in its thread; the record
+          would otherwise show a status with no way to watch it. */}
+      {task.status === "running" && onWatchLive ? (
+        <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onWatchLive}>
+          {t("record.watch_live")}
         </Button>
       ) : null}
       {/* Cancelling stops a live run at once, unconfirmed. On a phone it would

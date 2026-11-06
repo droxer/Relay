@@ -36,6 +36,9 @@
 
 .relay-search input,
 .adm-search-input {
+  /* The whole box is the target: the field fills its height, so a click
+     anywhere in the bordered row lands in the input, not on padding. */
+  align-self: stretch;
   min-width: 0;
   flex: 1;
   border: 0;

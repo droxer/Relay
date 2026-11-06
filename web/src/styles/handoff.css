@@ -1,13 +1,40 @@
 /* ============================ decision bar / handoff ============================ */
 
+/* The sent-back turn's decision: a heading that says what is being decided,
+   one line on how, and at most three verbs — the rest live in the menu. */
+.decision-card {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+}
+
+.decision-card-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.decision-card-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 .decision-bar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 0;
-  border-radius: var(--r-3);
-  background: var(--surface-1);
+  margin-top: var(--sp-1);
+}
+
+.decision-bar button[aria-haspopup] {
+  padding: 0;
+  margin-inline-start: auto;
 }
 
 /* Layout only — per-button chrome comes from the shadcn <Button> variants

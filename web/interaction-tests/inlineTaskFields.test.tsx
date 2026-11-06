@@ -134,10 +134,20 @@ it("sets a missing due date and clears an existing one", () => {
   fireEvent.click(screen.getByRole("button", { name: "pick-oct-1" }));
   expect(onChange).toHaveBeenLastCalledWith("2026-10-01");
 
-  rerender(<InlineDue task={{ ...base, dueDate: "2026-09-30" }} onChange={onChange} />);
+  rerender(<InlineDue task={{ ...base, dueDate: "2999-09-30" }} onChange={onChange} />);
   expect(screen.getByRole("button", { name: "backlog.inline.due_label" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "backlog.inline.clear_due" }));
   expect(onChange).toHaveBeenLastCalledWith("");
+});
+
+it("says past due in words, not only in red", () => {
+  render(<InlineDue task={{ ...base, dueDate: "2000-01-01" }} onChange={vi.fn()} readOnly />);
+  expect(screen.getByText("backlog.overdue:", { exact: false })).toBeTruthy();
+});
+
+it("names an overdue date in the due control's label", () => {
+  render(<InlineDue task={{ ...base, dueDate: "2000-01-01" }} onChange={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "backlog.inline.due_overdue_label" })).toBeTruthy();
 });
 
 

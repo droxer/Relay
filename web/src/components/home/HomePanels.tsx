@@ -5,8 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ICON, StatusOk } from "../icons";
 import { StateMark } from "../StateMark";
-import { PROJECT_PROGRESS, type HomeProjectRow, type MyTaskCounts, type RunningRow } from "../../lib/homeSummary";
-import type { IssueQueue } from "../../lib/issueQueues";
+import { PROJECT_PROGRESS, type HomeProjectRow, type RunningRow } from "../../lib/homeSummary";
 import { taskRef } from "../../lib/taskRef";
 import type { RelayTaskListItem } from "../../types";
 
@@ -27,46 +26,6 @@ function SectionHeader({ id, title, count, more }: { id: string; title: string; 
       {count !== undefined ? <span className="home-section-count tnum">{count}</span> : null}
       {more ? <span className="home-section-more">{more}</span> : null}
     </header>
-  );
-}
-
-/** A cell links only to a Tasks queue holding exactly the tasks it counts
- *  (narrowed to the person). No queue holds just this week's finished work,
- *  so that count stays plain text rather than open a longer list. */
-const COUNT_CELLS: readonly { cell: keyof MyTaskCounts; queue?: IssueQueue }[] = [
-  { cell: "open", queue: "open" },
-  { cell: "running", queue: "running" },
-  { cell: "blocked", queue: "blocked" },
-  { cell: "doneThisWeek" },
-];
-
-export function MyTasksPanel({ counts, hrefFor, onOpen }: {
-  counts: MyTaskCounts;
-  hrefFor: (queue: IssueQueue) => string;
-  onOpen: (queue: IssueQueue) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <section className="home-section" aria-labelledby="home-mine-title">
-      <SectionHeader id="home-mine-title" title={t("home.my_tasks")} />
-      <ul className="home-panel home-counts">
-        {COUNT_CELLS.map(({ cell, queue }) => {
-          const content = (
-            <>
-              <span className="home-count-number tnum">{counts[cell]}</span>
-              <span className="home-count-label">{t(`home.count.${cell}`)}</span>
-            </>
-          );
-          return (
-            <li key={cell} data-cell={cell} data-empty={counts[cell] === 0 ? "" : undefined}>
-              {queue
-                ? <HomeLink className="home-count" href={hrefFor(queue)} onOpen={() => onOpen(queue)}>{content}</HomeLink>
-                : <div className="home-count">{content}</div>}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 

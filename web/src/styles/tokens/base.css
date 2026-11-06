@@ -218,6 +218,13 @@ summary:focus-visible,
   outline-offset: var(--focus-offset);
 }
 
+/* A heading focus is moved to — so a screen reader starts reading at a new
+   decision — is a landing point, not a control: nothing there can be pressed,
+   and a ring around a line of text read as an input. Controls keep the ring. */
+:is(h1, h2, h3)[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 /* The danger ring. The contract above is in @layer relay, AFTER Tailwind's
    utilities, so the destructive Button's own `focus-visible:[outline:…danger]`
    utility always lost to it and a focused Delete showed the plain link-ink ring.
