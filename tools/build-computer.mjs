@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 // What the packaged daemon advertises; the backend checks it at startup so a
 // stale bundle cannot silently leave every updated computer reading outdated.
 const { DAEMON_ADVERTISED_CAPABILITIES } = await import(pathToFileURL(resolve('packages/relay-daemon/dist/capabilities.js')).href);
+const { RELAY_CLIENT_VERSION } = await import(pathToFileURL(resolve('packages/relay-daemon/dist/client-version.js')).href);
 const staging = mkdtempSync(join(tmpdir(), 'relay-computer-'));
 const output = resolve('backend/relay/computer/daemon.tar.gz');
 try {
@@ -22,7 +23,7 @@ try {
   }
   writeFileSync(
     join(staging, 'node_modules/relay-daemon/capabilities.json'),
-    JSON.stringify({ capabilities: [...DAEMON_ADVERTISED_CAPABILITIES].sort() }),
+    JSON.stringify({ clientVersion: RELAY_CLIENT_VERSION, capabilities: [...DAEMON_ADVERTISED_CAPABILITIES].sort() }),
   );
   for (const dependency of ['smol-toml', 'jsonc-parser']) {
     cpSync(resolve(`node_modules/${dependency}`), join(staging, 'node_modules', dependency), { recursive: true });

@@ -45,6 +45,15 @@ class RuntimeRefreshAcknowledgement(RelayModel):
     lease_id: str
 
 
+_VERSION_NUMBER = r"(?:0|[1-9][0-9]*)"
+_VERSION_PRERELEASE = rf"(?:{_VERSION_NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+CLIENT_VERSION_PATTERN = (
+    rf"^{_VERSION_NUMBER}\.{_VERSION_NUMBER}\.{_VERSION_NUMBER}"
+    rf"(?:-{_VERSION_PRERELEASE}(?:\.{_VERSION_PRERELEASE})*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+
+
 class DaemonNodeRegistration(RelayModel):
     runtime_refresh_commands: list[RuntimeRefreshAcknowledgement] = Field(default_factory=list, max_length=50)
     # Runs a restarted daemon admitted before it crashed and will not resume.
@@ -55,6 +64,8 @@ class DaemonNodeRegistration(RelayModel):
     workspace_path: str | None = None
     workspace_id: str | None = None
     sandbox_mode: Literal["none", "boxlite"] | None = None
+    # Release identity is optional for older daemons; unrelated to wire version.
+    client_version: str | None = Field(default=None, max_length=128, pattern=CLIENT_VERSION_PATTERN)
     protocol_version: int
     supported_agents: list[AgentName] = []
     executor_capabilities: list[dict[str, Any]] | None = None

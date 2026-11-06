@@ -25,6 +25,8 @@ export interface SandboxRecord {
   sandboxMode?: DaemonNodeSandboxMode;
   /** The OS the daemon reported; absent until a daemon that knows it registers. */
   hostOs?: DaemonHostOs;
+  /** Relay client release; absent for daemons predating release reporting. */
+  clientVersion?: string;
   capabilities?: DaemonNodeCapability[];
   nodeLocation?: DaemonNodeLocation;
   managedNodeId?: string;

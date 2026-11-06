@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { homedir } from "node:os";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -53,7 +54,7 @@ Options:
 }
 
 function showVersion(): void {
-  console.log("relay-daemon 0.1.0");
+  console.log(`relay-daemon ${RELAY_CLIENT_VERSION}`);
 }
 
 export interface DaemonCliArgs {
