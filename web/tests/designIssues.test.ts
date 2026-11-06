@@ -42,11 +42,10 @@ describe("reviewed design regressions", () => {
   });
 
   it("keeps project member actions discoverable without hover", () => {
-    const styles = readWeb("src/styles/project-page.css");
-    assert.match(
-      styles,
-      /@media \(hover: none\)[\s\S]*?\.project-member-tile-edit\s*\{[^}]*opacity:\s*1/s,
-    );
+    // The whole row is the edit button, with a chevron that never hides.
+    const panel = readWeb("src/components/ProjectMembersPanel.tsx");
+    assert.match(panel, /<button type="button" className=\{className\}[^>]*onClick=\{onEdit\}/);
+    assert.match(panel, /<RowOpen className="project-member-row-open"/);
   });
 
   it("does not treat failed artifact downloads as copied content", () => {

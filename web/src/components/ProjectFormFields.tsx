@@ -98,19 +98,14 @@ export function ProjectGoalField({
  *  constraints, and what done means. */
 export function ProjectContextField({
   value,
-  revision,
   onChange,
 }: {
   value: string;
-  revision?: number;
   onChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
-  const hint = revision
-    ? `${t("project.context_hint")} ${t("project.context_revision", { revision })}`
-    : t("project.context_hint");
   return (
-    <Field label={t("project.context")} hint={hint}>
+    <Field label={t("project.context")} hint={t("project.context_hint")}>
       <Textarea
         name="project-context"
         rows={8}
