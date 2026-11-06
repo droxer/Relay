@@ -10,6 +10,10 @@ This document defines Relay's target architecture, strategic technology choices,
 
 For implementation-level service boundaries, data models, APIs, runtime flows, and phased engineering work, see [implementation-plan.md](implementation-plan.md).
 
+This is a target architecture, not a list of deployed services. Section 4
+separately describes the implemented MCP boundary; its source map is in the
+[Codex Navigation Guide](CODEX-NAVIGATION-GUIDE.md).
+
 ## 0. Executive Summary
 
 Relay should not be designed as "a chatbot plus several tool calls." It should be designed as infrastructure for an enterprise hybrid workforce platform. It needs durable identity, resumable tasks, auditable execution, sandbox isolation, enterprise permissions, organizational memory, and multi-agent collaboration.
@@ -99,7 +103,91 @@ In V2, Relay incorporates lessons from general-purpose agents such as Manus, whi
 
 ## 4. Tool Layer: MCP Gateway and CLI Adapter
 
-Relay constrains agent behavior not only through sandboxing, but through interfaces. Relay must support both MCP and CLI access. MCP defines an open standard for connecting AI applications to external data sources, making it central to Relay's ability to integrate with legacy internal enterprise systems.
+### 4.1 Implemented MCP boundaries
+
+Relay currently exposes two distinct MCP tool surfaces. Both keep application
+authority in the Python control plane while Agent Runtimes execute on Computers.
+
+| Surface | Purpose | Backend boundary | Runtime access |
+| --- | --- | --- | --- |
+| Relay MCP | Read Project records and stage Task proposals for owner review | `backend/relay/mcp/`, `POST /api/v1/mcp` | Codex, Claude Code, OpenCode, Kimi and Pi through the local bridge or daemon run proxy |
+| Service Connections | Call external services within explicitly selected work Grants; currently GitHub issue reads | `backend/relay/api/connections/tools.py`, `POST /api/v1/connection-tools` | Per-run stdio proxy for Codex and Claude; requires `service-connections` |
+
+These endpoints have separate catalogs, credentials and authorization rules.
+A Relay MCP token does not grant access to a Connection or its provider secrets.
+The general enterprise MCP Gateway remains a target, rather than an additional
+deployed service implied by these interfaces.
+
+### 4.2 Relay MCP ownership and request flow
+
+The official MCP Python SDK serves stateless JSON Streamable HTTP inside the
+existing FastAPI deployment. `app.py` starts and stops it with the backend
+lifespan. Python owns the protocol, tool schemas, bearer authorization and
+Project operation dispatch; the backend calls application operations directly
+without HTTP calls back into itself. Computers need no Python installation or
+additional MCP service or port.
+
+```text
+Standalone local Agent Runtime
+  -> Node stdio bridge (relay-mcp.ts / relay-mcp-http.ts)
+  -> POST /api/v1/mcp with Computer- or owner-scoped MCP token
+
+Relay-managed Agent Runtime (native or isolated)
+  -> run transport -> daemon proxy (relay-mcp-managed.ts)
+  -> exchange command/lease for MCP token held in daemon memory
+  -> POST /api/v1/mcp with command-bound MCP token
+
+Python MCP protocol -> Project authorization -> Project application operations
+  -> scoped reads or pending proposal -> owner reviews and applies in the web UI
+```
+
+The Node bridge handles newline stdio framing and HTTP forwarding, including
+negotiated protocol metadata; it owns no second tool catalog. The older
+`GET /api/v1/mcp/projects` and `POST /api/v1/mcp/projects/{id}/tools` routes are
+compatibility adapters over the same Python authorization and operations.
+
+The catalog has eight read tools and one proposal tool. A Project roster member's
+run sees the read tools; only its Project Manager's run receives proposal access.
+Owner and standalone Computer grants can also stage proposals within their
+scope. `relay_propose_task_changes` never applies changes, starts work, accepts
+outcomes or reconciles execution. Apply requires the owner's browser session
+and normal domain validation. See the [tool catalog and capability rules](project-manager-design.md#mcp-tools).
+
+### 4.3 Credentials and transport guarantees
+
+| Credential | Scope and lifetime | Storage and lifecycle |
+| --- | --- | --- |
+| Owner-issued MCP token | Explicit list of owned Projects; 90 days | Returned once; owner stores it privately and can revoke it |
+| Standalone Computer MCP token | Owner's Projects on that Computer; 90 days | Private daemon credential file; renewal within seven days of expiry or after expiry; revoked/unknown tokens require explicit reconnection |
+| Managed run MCP token | Admitted Project and assignment's reader/manager access; at most 24 hours | Daemon memory only; authentication also requires the command to remain dispatched and its run request active |
+
+The database stores only token digests (`persistence/account/mcp_tokens.py`,
+`persistence/tables/mcp.py`; migration `20261106_0115`). The daemon credential
+authorizes token issuance, not Project tool calls. Managed processes receive
+`RELAY_MCP_RUN_CONTEXT` transport metadata, never the run token; runs without
+Project roster access receive a disabled context and cannot fall back to the
+standalone grant. Admitted rounds retain their pinned roster context on manager
+handover; subsequent rounds resolve the new holder.
+
+Every hosted MCP request authenticates independently, including initialization
+and notifications. Browser cookies alone confer no MCP authority. Grants remain
+request-local, Origin policy is enforced, and responses use `no-store`.
+Authenticated GET/DELETE return 405: this endpoint has no server event stream or
+resumable session. Requests are bounded to 128 KiB and serialized tool results to
+1 MiB. The local bridge refuses redirects and requires HTTPS except for loopback
+HTTP. Errors hide credentials and internal exception details.
+
+Native processes still share the owner's OS account; run-scoped tool requests do
+not provide host filesystem isolation. Use a sandbox for that boundary.
+See the [API contract](api.md#relay-mcp-bearer-token-api),
+[runtime installation and token lifecycle](project-manager-design.md#local-agent-runtimes),
+and [Service Connections](connections.md) for their separate Grant model.
+
+### 4.4 Target enterprise gateway
+
+Relay's broader Tool Layer should support both MCP and CLI access to enterprise
+systems, extending the implemented boundaries above with centrally governed
+tool registration and policy:
 
 - **Tool Registry**: every tool must be discoverable, authorizable, and auditable.
 - **MCP Gateway**: proxy internal systems through centralized authentication, rate limiting, and tenant isolation.
