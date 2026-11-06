@@ -54,7 +54,7 @@ test('real stdio process forwards initialization, discovery and calls to the Pyt
    {jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'python_defined_tool',arguments:{}}},
   ].map(m=>JSON.stringify(m)).join('\n')+'\n');
   const code=await new Promise<number|null>((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
-  assert.equal(code,0,stderr);const replies=output.trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(code,0,stderr);const replies=output.trim().split('\n').map(line=>JSON.parse(line)).sort((a,b)=>a.id-b.id);
   assert.equal(replies.length,3);assert.equal(replies[0].result.serverInfo.name,'python-server');
   assert.deepEqual(replies[1].result.tools,tools);assert.deepEqual(replies[2].result.structuredContent.projects,[{id:'one'}]);
   assert.ok(!output.includes(token));assert.ok(!stderr.includes(token));

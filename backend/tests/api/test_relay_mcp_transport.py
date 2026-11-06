@@ -134,7 +134,7 @@ def test_real_local_node_bridge_round_trips_to_python_with_scope_enforced(setup_
             check=False,
         )
         assert process.returncode == 0, process.stderr
-        replies = [json.loads(line) for line in process.stdout.splitlines()]
+        replies = sorted((json.loads(line) for line in process.stdout.splitlines()), key=lambda reply: reply["id"])
         assert len(replies) == 4
         assert len(replies[1]["result"]["tools"]) == 9
         assert replies[2]["result"]["structuredContent"]["project"]["id"] == project["id"]
@@ -260,7 +260,7 @@ try{
             check=False,
         )
         assert process.returncode == 0, process.stderr
-        replies = [json.loads(line) for line in process.stdout.splitlines()]
+        replies = sorted((json.loads(line) for line in process.stdout.splitlines()), key=lambda reply: reply["id"])
         assert len(replies) == 3
         assert replies[1]["result"]["isError"] is True
         proposal = replies[2]["result"]["structuredContent"]["proposal"]

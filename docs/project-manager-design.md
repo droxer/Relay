@@ -105,6 +105,12 @@ a token-file path. Neither runtime config nor Project workspace contains the tok
 
 The local bridge forwards MCP messages to `POST /api/v1/mcp` with
 `Authorization: Bearer <MCP token>`.
+It permits up to eight outstanding requests, pausing stdin at that limit.
+Initialization and its initialized notification remain ordered; subsequent
+responses can arrive out of order and clients must match their JSON-RPC IDs.
+Clients must await a call before sending another that depends on its result or mutations.
+The managed-run file bridge also permits eight active requests, so a slow tool
+does not hold up unrelated calls. Shutdown waits for accepted work to settle.
 It does not forward the daemon credential or use a browser cookie. The backend
 stores only a SHA-256 digest; issuance returns plaintext once with `no-store`.
 

@@ -6,6 +6,7 @@ import { listWorkspace, readWorkspaceFile } from "./workspace-read.js";
 type Arguments = Record<string, unknown>;
 const MAX_REQUEST_BYTES = 128 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_IN_FLIGHT = 8;
 
 // Paths are relative to this script, so the same helper works on the host and
 // inside a guest whose mount path differs. No backend credential enters it.
@@ -55,45 +56,51 @@ export function createProjectManagerBridge(
   };
   writeFileSync(join(dir, "tool.cjs"), HELPER_SOURCE, { mode: 0o600, flag: "wx" });
   let closed = false;
-  let pending: Promise<void> | undefined;
+  const pending = new Set<Promise<void>>();
   const seen = new Set<string>();
-  async function tick(): Promise<void> {
-    safeDirectory();
-    for (const name of readdirSync(dir).filter(name => /^[a-f0-9-]{36}\.request$/.test(name)).slice(0, 20)) {
-      if (closed) return;
-      if (seen.size >= 1000) throw new Error("Manager tool call limit exceeded.");
-      if (seen.has(name)) continue;
-      seen.add(name);
-      const request = join(dir, name);
-      let result: unknown;
-      let error: string | undefined;
-      try {
-        safeDirectory();
-        if (lstatSync(request).isSymbolicLink()) throw new Error("Invalid manager request.");
-        const fd = openSync(request, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-        let raw: string;
-        try {
-          const stat = fstatSync(fd);
-          if (!stat.isFile() || stat.size > MAX_REQUEST_BYTES) throw new Error("Invalid manager request.");
-          const buffer = Buffer.alloc(MAX_REQUEST_BYTES + 1);
-          const bytes = readSync(fd, buffer, 0, buffer.length, 0);
-          if (bytes > MAX_REQUEST_BYTES) throw new Error("Manager request too large.");
-          raw = buffer.subarray(0, bytes).toString("utf8");
-        } finally { closeSync(fd); }
-        const body = JSON.parse(raw) as { tool?: unknown; arguments?: unknown };
-        if (typeof body.tool !== "string" || !body.arguments || typeof body.arguments !== "object" || Array.isArray(body.arguments)) throw new Error("Invalid manager tool arguments.");
-        result = await invoke(body.tool, body.arguments as Arguments);
-        if (Buffer.byteLength(JSON.stringify(result) ?? "null") > MAX_RESPONSE_BYTES) throw new Error("Tool result too large; narrow the query.");
-      } catch (cause) { error = cause instanceof Error ? cause.message : "Manager tool failed."; }
-      if (closed) return;
+  async function handle(name: string): Promise<void> {
+    if (closed) return;
+    if (seen.size >= 1000) throw new Error("Manager tool call limit exceeded.");
+    seen.add(name);
+    const request = join(dir, name);
+    let result: unknown;
+    let error: string | undefined;
+    try {
       safeDirectory();
-      writeFileSync(join(dir, name.replace(/\.request$/, ".response")), JSON.stringify(error ? { error } : { result }), { flag: "wx", mode: 0o600 });
-      unlinkSync(request);
-    }
+      if (lstatSync(request).isSymbolicLink()) throw new Error("Invalid manager request.");
+      const fd = openSync(request, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      let raw: string;
+      try {
+        const stat = fstatSync(fd);
+        if (!stat.isFile() || stat.size > MAX_REQUEST_BYTES) throw new Error("Invalid manager request.");
+        const buffer = Buffer.alloc(MAX_REQUEST_BYTES + 1);
+        const bytes = readSync(fd, buffer, 0, buffer.length, 0);
+        if (bytes > MAX_REQUEST_BYTES) throw new Error("Manager request too large.");
+        raw = buffer.subarray(0, bytes).toString("utf8");
+      } finally { closeSync(fd); }
+      const body = JSON.parse(raw) as { tool?: unknown; arguments?: unknown };
+      if (typeof body.tool !== "string" || !body.arguments || typeof body.arguments !== "object" || Array.isArray(body.arguments)) throw new Error("Invalid manager tool arguments.");
+      result = await invoke(body.tool, body.arguments as Arguments);
+      if (Buffer.byteLength(JSON.stringify(result) ?? "null") > MAX_RESPONSE_BYTES) throw new Error("Tool result too large; narrow the query.");
+    } catch (cause) { error = cause instanceof Error ? cause.message : "Manager tool failed."; }
+    if (closed) return;
+    safeDirectory();
+    writeFileSync(join(dir, name.replace(/\.request$/, ".response")), JSON.stringify(error ? { error } : { result }), { flag: "wx", mode: 0o600 });
+    unlinkSync(request);
   }
   const timer = setInterval(() => {
-    if (closed || pending) return;
-    pending = tick().catch(() => { closed = true; clearInterval(timer); }).finally(() => { pending = undefined; });
+    if (closed || pending.size >= MAX_IN_FLIGHT) return;
+    try {
+      safeDirectory();
+      const names = readdirSync(dir)
+        .filter(name => /^[a-f0-9-]{36}\.request$/.test(name) && !seen.has(name))
+        .slice(0, MAX_IN_FLIGHT - pending.size);
+      for (const name of names) {
+        const task = handle(name).catch(() => { closed = true; clearInterval(timer); });
+        pending.add(task);
+        void task.finally(() => pending.delete(task));
+      }
+    } catch { closed = true; clearInterval(timer); }
   }, 75);
   const toolPath = relative(root, join(dir, "tool.cjs")).split(sep).join("/");
   return {
@@ -101,7 +108,7 @@ export function createProjectManagerBridge(
     async dispose() {
       clearInterval(timer);
       closed = true;
-      await pending;
+      await Promise.all(pending);
       // Never recursively delete agent-controlled directories on the host.
       safeDirectory();
       if (!existsSync(join(dir, "closed"))) writeFileSync(join(dir, "closed"), "", { flag: "wx", mode: 0o600 });
