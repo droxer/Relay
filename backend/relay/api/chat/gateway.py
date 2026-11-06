@@ -17,7 +17,7 @@ def _resolve_owner(ctx: AppContextDep, body: dict[str, Any]) -> dict[str, Any]:
         identity = ctx.chat_store.resolve_identity(body)
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    if not identity:
+    if not identity or not isinstance(identity.get("userId"), str) or not identity["userId"]:
         raise HTTPException(404, "No active chat identity link is available for this conversation.")
     return identity
 
