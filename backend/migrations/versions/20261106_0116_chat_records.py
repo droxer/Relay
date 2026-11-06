@@ -28,10 +28,11 @@ def upgrade() -> None:
     op.create_table(
         "chat_conversations",
         sa.Column("sequence", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("key_hash", sa.Text(), nullable=False),
         sa.Column("conversation_key", sa.Text(), nullable=False),
         sa.Column("session_id", sa.Text(), nullable=False),
         sa.Column("payload", postgresql.JSONB(), nullable=False),
-        sa.UniqueConstraint("conversation_key", name="uq_chat_conversations_key"),
+        sa.UniqueConstraint("key_hash", name="uq_chat_conversations_key_hash"),
     )
     op.execute("""
         DO $$ BEGIN
@@ -88,8 +89,9 @@ def upgrade() -> None:
         WHERE d.document_key = 'audit'
     """)
     op.execute("""
-        INSERT INTO chat_conversations (sequence, conversation_key, session_id, payload)
-        SELECT e.sequence, e.payload->>'key', e.payload->>'sessionId', e.payload
+        INSERT INTO chat_conversations (sequence, key_hash, conversation_key, session_id, payload)
+        SELECT e.sequence, encode(sha256(convert_to(e.payload->>'key', 'UTF8')), 'hex'),
+          e.payload->>'key', e.payload->>'sessionId', e.payload
         FROM chat_documents d,
           LATERAL jsonb_array_elements(d.payload) WITH ORDINALITY e(payload, sequence)
         WHERE d.document_key = 'conversations'

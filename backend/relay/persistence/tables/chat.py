@@ -30,9 +30,10 @@ conversations = Table(
     "chat_conversations",
     metadata,
     Column("sequence", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("key_hash", Text, nullable=False),
     Column("conversation_key", Text, nullable=False),
     Column("session_id", Text, nullable=False),
     Column("payload", json_type(), nullable=False),
-    UniqueConstraint("conversation_key", name="uq_chat_conversations_key"),
+    UniqueConstraint("key_hash", name="uq_chat_conversations_key_hash"),
     Index("ix_chat_conversations_session", "session_id"),
 )

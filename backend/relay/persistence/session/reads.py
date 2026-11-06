@@ -20,6 +20,7 @@ from sqlalchemy import (
 from .output_compaction import compact_completed_run_output
 from ..db_time import format_db_time
 from ..engine import store_transaction
+from .. import sql
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
@@ -90,6 +91,8 @@ class SessionReadRows(SessionStoreState):
             self.sessions.c.updated_at.desc(), self.sessions.c.id.desc()
         )
         if owner_user_id is not None:
+            if sql.names_no_uuid_row(self.engine, owner_user_id):
+                return []
             statement = statement.where(self.sessions.c.owner_user_id == owner_user_id)
         if not include_archived:
             statement = statement.where(self.sessions.c.snapshot["archived"].as_boolean().is_not(True))

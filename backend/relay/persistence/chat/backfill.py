@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import delete, insert, select
 
+from .conversations import conversation_key_hash
 from ..resource_lock import resource_transaction
 from ..tables.chat import audit_events, conversations, documents
 
@@ -42,7 +43,7 @@ def convert_sqlite_records(engine: Any) -> None:
                 batch = [
                     {"sequence": offset + index + 1, "payload": item, **(
                         {"integration_id": item.get("integrationId")} if key == "audit"
-                        else {"conversation_key": item["key"], "session_id": item["sessionId"]}
+                        else {"key_hash": conversation_key_hash(item["key"]), "conversation_key": item["key"], "session_id": item["sessionId"]}
                     )}
                     for index, item in enumerate(records[offset:offset + 500])
                 ]

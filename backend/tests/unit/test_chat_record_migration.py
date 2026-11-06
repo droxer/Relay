@@ -1,6 +1,7 @@
 """Legacy chat arrays migrate losslessly and round-trip through new writes."""
 
 from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,8 @@ def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrate
         {"id": "same-id", "integrationId": owner, "timestamp": timestamp, "extension": index}
         for index, (owner, timestamp) in enumerate([("a", "later"), ("b", "same"), ("a", "earlier"), ("a", "same")])
     ]
-    binding = {"key": "discord::org::channel::thread", "provider": "discord", "tenantId": "org", "conversationId": "channel", "threadId": "thread", "sessionId": "old-thread", "ownerUserId": "owner", "extra": "keep"}
+    channel = "".join(hashlib.sha256(str(i).encode()).hexdigest() for i in range(128)) + "é"
+    binding = {"key": f"discord::org::{channel}::thread", "provider": "discord", "tenantId": "org", "conversationId": channel, "threadId": "thread", "sessionId": "old-thread", "ownerUserId": "owner", "extra": "keep"}
     try:
         command.downgrade(config(), OLD_REVISION)
         put_documents(engine, {
