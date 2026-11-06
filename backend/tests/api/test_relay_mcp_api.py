@@ -122,3 +122,28 @@ def test_computer_renews_expired_token_but_never_revives_revocation(setup_env):
     blocked = daemon.post(url,headers=headers,json={'existingToken':renewed.json()['token']})
     assert blocked.status_code == 403,blocked.text
     assert blocked.json()['detail'] == 'mcp_token_revoked'
+
+
+def test_a_roster_members_run_token_reads_but_never_proposes(managed_env):
+    from test_project_manager_api import _join, _run_task
+    app, client, node, project, _, builder = managed_env
+    _join(managed_env, builder)
+    command = _run_task(managed_env, {"title": "Build the page", "assignedAgentId": builder["id"]})
+    external = TestClient(app)
+    issued = external.post(f"/api/v1/daemon-nodes/{node['id']}/mcp-token",
+                           headers={"Authorization": f"Bearer token_{node['id']}"},
+                           json={"commandId": command["id"], "leaseId": command["leaseId"]})
+    assert issued.status_code == 201, issued.text
+    run_auth = {"Authorization": f"Bearer {issued.json()['token']}"}
+    tools = f"/api/v1/mcp/projects/{project['id']}/tools"
+    assert external.post(tools, headers=run_auth, json={"tool": "tasks"}).status_code == 200
+    refused = external.post(tools, headers=run_auth, json={
+        "tool": "propose", "arguments": {"operations": [{"kind": "create", "fields": {"title": "Sneak"}}]},
+    })
+    assert refused.status_code == 403, refused.text
+    with TestClient(app) as running:  # the lifespan starts the MCP session manager
+        listed = running.post("/api/v1/mcp", headers={**run_auth, "Accept": "application/json, text/event-stream"},
+                              json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+    assert listed.status_code == 200, listed.text
+    names = {tool["name"] for tool in listed.json()["result"]["tools"]}
+    assert "relay_list_tasks" in names and "relay_propose_task_changes" not in names

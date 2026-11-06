@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
+from ...core.project_roles import command_project_access
 from ...projects.runtime import project_work_error
 from ...tasks.requests import TaskRequestError
 from ...tasks.prerequisites import PrerequisiteError
@@ -120,9 +121,9 @@ def manager_tool(sandbox_id: str, request: Request, ctx: AppContextDep, *, _requ
     active = ctx.daemon_store.active_run_request_for_session_any_node(command["sessionId"])
     if not active or active.get("currentCommandId") != command_id or active.get("status") != "running":
         raise HTTPException(409, "manager_command_inactive")
-    scope = command.get("state", {}).get("project_manager") or {}
-    project = ctx.project_store.get_project(scope.get("projectId", "")) if scope else None
-    if not project or command.get("logicalAgentId") != scope.get("agentId"):
+    access = command_project_access(command.get("state", {}), command.get("logicalAgentId"))
+    project = ctx.project_store.get_project(access[0].get("projectId", "")) if access else None
+    if not access or not project:
         raise HTTPException(403, "manager_scope_required")
     if code := project_work_error(project):
         raise HTTPException(409, code)
@@ -135,6 +136,8 @@ def manager_tool(sandbox_id: str, request: Request, ctx: AppContextDep, *, _requ
         if _request_body.get("tool") == "workspace":
             return {"authorized": True}
         if _request_body.get("tool") == "propose":
+            if access[1] != "manage":
+                raise HTTPException(403, "project_manager_required")
             return {"proposal": stage_proposal(ctx, project, command, arguments.get("operations"))}
         return read_manager_tool(ctx, project, _request_body.get("tool", ""), arguments)
     except ManagerError as error:

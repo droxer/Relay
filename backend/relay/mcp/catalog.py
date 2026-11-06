@@ -66,9 +66,12 @@ _INPUTS = {
 }
 
 
-def tool_definitions() -> list[Tool]:
+def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
+    """The tools a grant can call; a read-only grant never sees ``propose``."""
     tools = []
     for name, operation in TOOL_OPERATIONS.items():
+        if operation == "propose" and not may_manage:
+            continue
         properties: dict[str, Any] = (
             {}
             if operation == "projects"

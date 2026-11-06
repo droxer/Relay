@@ -50,6 +50,16 @@ Manager capability does not depend on the Thread; proposals appear in the
 Thread of the run that produced them. Project setup drafts keep their separate
 setup workflow and drop the context.
 
+Every other enabled roster member reads the Project through the same tools.
+Its run carries a `project_reader` scope (`project_reader_context`), so it can
+read the overview, Tasks, review evidence, activity and Threads, but never
+stage changes: the run token's grant reads `access: "read"`, `tools/list`
+omits `relay_propose_task_changes`, and a propose call answers 403
+`project_manager_required`. Only the holder's `project_manager` scope grants
+`access: "manage"`. An Agent assigned Project work without being on the roster
+gets neither. Reader scopes go only to Computers advertising
+`project-reader-mcp`; older ones run those Agents without the tools.
+
 Holding the role never stops an Agent from running. On a Computer that does not
 advertise `project-manager-mcp`, the holder runs without the tools and the
 manager view reports `project_manager_update_required` to the owner.
@@ -130,7 +140,7 @@ token health. Revoking a standalone token does not substitute a new broad grant
 or prevent a separately authorized managed run from using its own scope.
 
 An installed Relay MCP server in a managed process uses only that run context.
-Other Projects/backends are refused. Non-manager managed runs receive a disabled
+Other Projects/backends are refused. Runs outside the roster receive a disabled
 context; none of these processes fall back to the standalone Computer credential.
 The daemon proxy lazily obtains a command-bound MCP token and calls the same
 MCP API using that token. Isolated runtimes use their host/guest transport to the
@@ -185,7 +195,9 @@ adapters over the same Python operations for older clients and workspace helpers
   fabricate a daemon run. Pi adds the installed server suffix to tool names.
 
 Every Project tool requires `projectId`; the API checks token scope and owner
-again for every call. There is no Apply, acceptance, run-start, or reconciliation
+again for every call. A roster member's run token is read-only; only the
+Project Manager's run (or an owner/Computer token) may call
+`relay_propose_task_changes`. There is no Apply, acceptance, run-start, or reconciliation
 MCP tool. Browser owner authentication is required for Apply.
 
 ## Verification and rollout

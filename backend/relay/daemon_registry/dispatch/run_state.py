@@ -22,11 +22,14 @@ from ...collaboration.policy import (
 from ...projects.context import (
     project_context_brief,
 )
+from ...core.project_roles import project_reader_context
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_AGENT_MODEL,
     DAEMON_CAPABILITY_AGENT_RESUME,
     DAEMON_CAPABILITY_DOT_THREAD_RECORDS,
     DAEMON_CAPABILITY_HANDOFF_VALIDATION,
+    DAEMON_CAPABILITY_PROJECT_MANAGER_MCP,
+    DAEMON_CAPABILITY_PROJECT_READER_MCP,
     DAEMON_CAPABILITY_PROJECT_SETUP,
     DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
     DAEMON_CAPABILITY_THREAD_WORKSPACES,
@@ -276,13 +279,24 @@ def _project_state(
     """The project brief and, for a setup draft, where to write the proposal."""
     next_state = dict(state)
     manager = manifest.get("projectManager")
-    if manager and assignment.get("agentId") == manager.get("agentId") and has_capability(sandbox, "project-manager-mcp"):
+    if manager and assignment.get("agentId") == manager.get("agentId") and has_capability(sandbox, DAEMON_CAPABILITY_PROJECT_MANAGER_MCP):
         next_state["project_manager"] = manager
     else:
         # Holding the role never stops an Agent from running: an older
         # computer runs it without the tools, and the owner's manager view
         # reports `project_manager_update_required`.
         next_state.pop("project_manager", None)
+    # Every other enabled roster member reads the Project's Tasks and records
+    # through the same tools; a setup draft keeps its own workflow instead.
+    reader = (
+        None
+        if manifest.get("projectSetup") or not has_capability(sandbox, DAEMON_CAPABILITY_PROJECT_READER_MCP)
+        else project_reader_context(manifest.get("projectSnapshot"), assignment.get("agentId"))
+    )
+    if reader:
+        next_state["project_reader"] = reader
+    else:
+        next_state.pop("project_reader", None)
     project_brief = project_context_brief(
         manifest.get("projectSnapshot") or assignment.get("projectSnapshot"),
         {

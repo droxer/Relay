@@ -8,6 +8,7 @@ from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, TextContent, Tool
 from starlette.concurrency import run_in_threadpool
+from .access import may_manage
 from .catalog import TOOL_OPERATIONS, tool_definitions
 from .errors import McpError
 from .operations import invoke, list_projects
@@ -22,7 +23,8 @@ def create_server(ctx: Any) -> StreamableHTTPSessionManager:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return tool_definitions()
+        grant = CURRENT_GRANT.get()
+        return tool_definitions(may_manage=grant is None or may_manage(grant))
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:

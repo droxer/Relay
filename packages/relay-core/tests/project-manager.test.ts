@@ -28,3 +28,12 @@ test('every runtime receives daemon-owned managed MCP context outside the prompt
     assert.equal(invoked,true);
   }
 });
+
+test('a roster member gets the read-only project contract, never the propose tool', () => {
+  const state={...initialAgentState('Build the page'), project_reader:{projectId:'p',agentId:'b',bindingRevision:1,toolCommand:'node ".relay/manager-test/tool.cjs"'}};
+  const prompt=agentTaskPrompt(state);
+  assert.match(prompt,/Relay project records/);
+  assert.match(prompt,/relay_list_tasks/);
+  assert.match(prompt,/you cannot change them/);
+  assert.doesNotMatch(prompt,/relay_propose_task_changes|Relay project manager/);
+});
