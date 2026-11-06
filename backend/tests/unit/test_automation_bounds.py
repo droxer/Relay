@@ -251,7 +251,7 @@ def test_multiple_broadcasts_share_the_routing_budget_and_all_recipients_progres
     with store.engine.begin() as conn:
         insert_outbox_rows(conn, [
             {"kind": "task_event", "event_type": "task.status_changed", "depth": 0,
-             "payload": {"subject": {"title": title, "status": "blocked"}, "to": "blocked"}}
+             "payload": {"subject": {"id": title, "title": title, "status": "blocked"}, "to": "blocked"}}
             for title in ("first", "second")
         ])
     for _ in range(10):
