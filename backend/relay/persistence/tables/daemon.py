@@ -56,6 +56,7 @@ nodes = Table(
     Column("last_error", Text, nullable=True),
     # The operating system the daemon reported at registration.
     Column("host_os", Text, nullable=True),
+    Column("client_version", Text, nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("last_seen_at", DateTime(timezone=True), nullable=True),

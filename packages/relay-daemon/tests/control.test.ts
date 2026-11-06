@@ -148,3 +148,21 @@ describe('relay control CLI', () => {
     } finally { cleanup(); }
   });
 });
+
+describe('relay client version', () => {
+  for (const command of ['--version', '-v', 'version']) {
+    it(`reports ${command} without discovering or controlling services`, async () => {
+      const { RELAY_CLIENT_VERSION } = await import('../src/client-version.js');
+      const { deps, calls, lines, cleanup } = fixture('linux', []);
+      try {
+        assert.equal(runControl([command], deps), 0);
+        assert.deepEqual(lines, [`relay ${RELAY_CLIENT_VERSION}`]);
+        assert.deepEqual(calls, []);
+        lines.length = 0;
+        assert.equal(runControl([command], { ...deps, brand: RELAY_DEV_BRAND }), 0);
+        assert.deepEqual(lines, [`relay-dev ${RELAY_CLIENT_VERSION}`]);
+        assert.deepEqual(calls, []);
+      } finally { cleanup(); }
+    });
+  }
+});

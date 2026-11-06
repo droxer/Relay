@@ -1,3 +1,4 @@
+import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { createHash } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
 import { formatDaemonLog } from "./daemon-log-format.js";
@@ -406,6 +407,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     sandboxMode,
     ...(hostOs ? { hostOs } : {}),
     protocolVersion: DAEMON_NODE_PROTOCOL_VERSION,
+    clientVersion: RELAY_CLIENT_VERSION,
     supportedAgents: readyAgents(agentHealth),
     executorCapabilities: Object.entries(agentHealth).map(([executorKind, health]) => ({
       executorKind: executorKind as AgentName,

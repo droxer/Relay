@@ -116,6 +116,15 @@ browsing and work only from its owner. The admin workspace browser and legacy
 sandbox read, run, and adoption routes do not grant another administrator
 control over that personal Computer. Managed hardware retains its admin policy.
 
+Daemon registration accepts optional `clientVersion`: a SemVer 2.0 release string
+(maximum 128 characters), separate from `protocolVersion`. The daemon derives it
+from its installed `relay-daemon/package.json`; registration responses and
+Computer records return it. Each registration replaces the value; a legacy
+daemon that omits it clears any previous value. Existing rows remain unknown
+until registration after migration `20261106_0120`. `clientOutdated` and dispatch
+compatibility continue to use capabilities, rather than release ordering.
+The computer bundle's `capabilities.json` includes the same `clientVersion`.
+
 Daemon registration proves execution-plane authority only. An unauthenticated
 daemon cannot set or replace a browser UI credential through its bearer header.
 Node credentials never authenticate human operations, including when an older

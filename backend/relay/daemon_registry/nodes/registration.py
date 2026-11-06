@@ -184,6 +184,8 @@ def registered_node_record(
             authorized_node_location=authorized_node_location,
         ),
         "capabilities": registered_capabilities(payload),
+        # Do not retain a newer release identity if an older daemon registers.
+        **_present("clientVersion", payload.get("clientVersion")),
         "status": registered_status(payload, retired_at),
         **agent_fields,
         **_present("displayName", display_name),

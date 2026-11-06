@@ -734,3 +734,20 @@ create another session need separate reconciliation; neither a heartbeat nor
 silence can certify that those processes stopped. Deploy the updated daemon
 for new executions; an agent already running under an older daemon does not
 acquire the new supervisor retroactively.
+
+
+## Relay client release version
+
+Run `relay --version` (also `relay -v` or `relay version`) to inspect the
+installed client release; `relay-dev` supports the same commands.
+`relay-daemon --version` reports the daemon release without connecting to the
+backend. These commands report the package they run, so restart after updating
+to have the running daemon register the new version.
+
+`packages/relay-daemon/package.json` is the release version source. When cutting
+a client release, update that package's version and matching workspace dependency
+and lockfile entries, then run `npm run build:computer`. The CLI, daemon
+registration's `clientVersion`, and bundle manifest all read that package version.
+Release versions are independent of `DAEMON_NODE_PROTOCOL_VERSION` and capability
+names; bumping a release does not change protocol compatibility or the
+capability-based Outdated Client check.

@@ -258,6 +258,8 @@ export interface DaemonNodeRegistration {
   sandboxMode?: DaemonNodeSandboxMode;
   hostOs?: DaemonHostOs;
   protocolVersion: number;
+  /** Relay client release; absent for daemons predating release reporting. */
+  clientVersion?: string;
   supportedAgents: AgentName[];
   executorCapabilities?: DaemonExecutorCapability[];
   capabilities?: DaemonNodeCapability[];
