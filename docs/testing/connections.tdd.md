@@ -4,11 +4,39 @@ Source: [Connections design](../connections-design.md), expanded by the User's
 explicit request for implementation and verification. Operational scope and
 limitations are in [Connections setup](../connections.md).
 
+## GitHub-only scope verification — 2026-11-06
+
+The User narrowed the release to GitHub only. Gmail, Slack, and Google Drive
+are unavailable. Their adapters and picker copy have been removed. Historical
+records are hidden and cannot authorize, obtain tokens, or receive new Grants;
+owner cleanup still removes their encrypted secrets.
+
+- RED: `uv run --project backend --extra dev pytest backend/tests/unit/test_connection_providers.py -q`
+  returned **3 failed, 3 passed** because the catalog still offered other providers.
+  Checkpoint: `1bb7b00c`.
+- GREEN: the provider, service, and API suites returned **33 passed** after the
+  implementation change. Checkpoint: `fa0538cc`.
+- Added stored-record cleanup regressions for all three excluded providers.
+  `uv run --project backend --extra dev --with pytest-cov pytest backend/tests/unit/test_connection_service.py backend/tests/unit/test_connection_providers.py backend/tests/api/test_connections.py --cov=relay.connections --cov=relay.core.connections --cov=relay.persistence.connection --cov-report=term-missing -q`
+  returned **36 passed**, **88% statement coverage** across those modules.
+- Layering, module size, and route-auth suites returned **11 passed**.
+- `npm run test:react -w web -- interaction-tests/connections.test.tsx` returned
+  **4 passed**.
+- `npx playwright test -c playwright.recovery.config.ts connections.spec.ts githubConnection.spec.ts --workers=2`
+  from `web/` returned **11 passed**, covering desktop, mobile, Chinese,
+  disconnect, initial Thread/Task/Automation Grants, and public GitHub imports.
+- `npm run build -w web` passed. Commit hooks passed backend lint/typecheck and
+  web typecheck/ESLint. `git diff --check` passed.
+
+Provider calls use mocked HTTP transports; a real GitHub OAuth account was not
+used. The complete-suite counts below are historical evidence from the broader
+implementation before this scope reduction.
+
 ## Journeys and guarantees
 
 | Journey | Evidence |
 | --- | --- |
-| Authenticate a service and retain the right external identity | Provider HTTP transport tests for GitHub, Slack and Google Drive; session-bound single-use state; consent-scope validation; reconnect identity checks |
+| Authenticate a service and retain the right external identity | Provider HTTP transport tests for GitHub; session-bound single-use state; consent-scope validation; reconnect identity checks |
 | Give a new Thread, Task, or Automation bounded access | API tests verify initial save before command delivery; browser tests inspect each initial submission's explicit resource/action Grants |
 | Use services during execution | Backend broker test executes a granted GitHub read through JSON-RPC under an actual database command lease; core test launches the real stdio proxy against a local HTTP server |
 | Keep automated runs bounded | Occurrence creation copies Grants in its transaction; generated Tasks cannot edit them; unavailable access pauses before firing and prevents Resume |

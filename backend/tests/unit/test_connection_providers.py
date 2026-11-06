@@ -49,3 +49,27 @@ def test_configuration_requires_complete_credentials_and_valid_callback(monkeypa
     monkeypatch.setenv("RELAY_CONNECTIONS_GITHUB_CALLBACK_URL", "https://evil.example/wrong")
     with pytest.raises(ValueError, match="CALLBACK_URL"):
         connections_config_from_env()
+
+
+@pytest.mark.parametrize("provider", ["slack", "google-drive", "gmail"])
+def test_retired_records_are_unavailable_but_remain_removable(tmp_path, provider):
+    config = ConnectionConfig(provider, "id", "secret", "https://relay.example")
+    service = ConnectionService(DatabaseConnectionStore(f"sqlite:///{tmp_path}/db"),
+        {provider: config}, Fernet.generate_key().decode())
+    record = {"id": "retired", "provider": provider, "status": "connected", "revision": 1,
+        "actions": [f"{provider}.read"]}
+    service.store.save("owner", record, service._seal({"access_token": "old-secret"}))
+    assert service.list("owner") == []
+    assert not service.catalog()[0]["configured"]
+    with pytest.raises(ConnectionError, match="connection_provider_not_configured"):
+        service.start("owner", "session", provider, "/settings/connections")
+    with pytest.raises(ConnectionError, match="connection_unavailable"):
+        service.token("owner", "retired")
+    with pytest.raises(ConnectionError, match="connection_grants_invalid"):
+        service.set_grants("owner", "task", "task", [{"connectionId": "retired",
+            "resources": ["resource"], "actions": record["actions"]}])
+    assert service.store.get("owner", "retired")["sealedSecret"]
+    service.disconnect_all("owner")
+    deleted = service.store.get("owner", "retired")
+    assert deleted["status"] == "disconnected"
+    assert deleted["sealedSecret"] is None
