@@ -16,12 +16,13 @@ import secrets
 from datetime import datetime, timedelta, UTC
 from typing import Any
 
-from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy import delete, func, insert, inspect, or_, select, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ...core.ids import new_database_id
 from ..tables.automations import automation_outbox, automation_state, automation_webhook_secrets
 from ..tables.tasks import tasks, task_sessions
+from .discovery import candidate_ids, routing_page
 
 AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
@@ -144,6 +145,32 @@ class DatabaseAutomationStore:
         if create_schema:
             create_all_tables(self.engine)
 
+    def verify_schema(self) -> None:
+        with self.engine.connect() as conn:
+            schema = inspect(conn)
+            if "automation_scan_cursors" not in schema.get_table_names() or not {
+                "routing_before", "routing_after_created_at", "routing_after_id", "routed_at"
+            } <= {column["name"] for column in schema.get_columns("automation_outbox")}:
+                raise RuntimeError("Automation discovery requires migrations through 20261106_0118.")
+
+    def candidate_ids(self, *, limit: int, now: datetime) -> list[str]:
+        return candidate_ids(self.engine, limit=limit, now=now)
+
+    def routing_page(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return routing_page(self.engine, **kwargs)
+
+    def advance_routing(self, row_id: str, before: datetime, last: dict[str, Any]) -> None:
+        with store_transaction(self.engine) as conn:
+            conn.execute(update(automation_outbox).where(automation_outbox.c.id == row_id).values(
+                routing_before=before, routing_after_created_at=last["createdAt"], routing_after_id=last["id"],
+                routed_at=datetime.now(UTC),
+            ))
+
+    def release_outbox(self, ids: list[str]) -> None:
+        if ids:
+            with store_transaction(self.engine) as conn:
+                conn.execute(update(automation_outbox).where(automation_outbox.c.id.in_(ids)).values(claimed_at=None))
+
     def enqueue_webhook(self, routine_id: str, payload: Any) -> None:
         row = _row("webhook", "webhook", target_routine_id=routine_id, payload={"body": payload})
         with store_transaction(self.engine) as conn:
@@ -158,7 +185,7 @@ class DatabaseAutomationStore:
         claimed: list[dict[str, Any]] = []
         with store_transaction(self.engine) as conn:
             rows = conn.execute(
-                select(automation_outbox).where(claimable).order_by(automation_outbox.c.created_at).limit(limit)
+                select(automation_outbox).where(claimable).order_by(func.coalesce(automation_outbox.c.routed_at, automation_outbox.c.created_at), automation_outbox.c.id).limit(limit)
             ).mappings().all()
             for row in rows:
                 won = conn.execute(
@@ -173,9 +200,11 @@ class DatabaseAutomationStore:
             with store_transaction(self.engine) as conn:
                 conn.execute(delete(automation_outbox).where(automation_outbox.c.id.in_(ids)))
 
-    def prune_outbox(self, before: datetime) -> int:
+    def prune_outbox(self, before: datetime, *, limit: int = 1000) -> int:
         with store_transaction(self.engine) as conn:
-            return conn.execute(delete(automation_outbox).where(automation_outbox.c.created_at < before)).rowcount
+            expired = select(automation_outbox.c.id).where(automation_outbox.c.created_at < before).order_by(
+                automation_outbox.c.created_at, automation_outbox.c.id).limit(limit)
+            return conn.execute(delete(automation_outbox).where(automation_outbox.c.id.in_(expired))).rowcount
 
     def get_state(self, routine_id: str) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:

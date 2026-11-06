@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Table, Text
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, Table, Text, text
 from ..sql import database_id_column, json_type, metadata
 
 
@@ -19,7 +19,13 @@ automation_outbox = Table(
     Column("depth", Integer, nullable=False, default=0),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("claimed_at", DateTime(timezone=True), nullable=True),
+    Column("routing_before", DateTime(timezone=True), nullable=True),
+    Column("routing_after_created_at", DateTime(timezone=True), nullable=True),
+    Column("routing_after_id", Text, nullable=True),
+    Column("routed_at", DateTime(timezone=True), nullable=True),
     Index("ix_automation_outbox_claim", "claimed_at", "created_at"),
+    Index("ix_automation_outbox_routing", text("COALESCE(routed_at, created_at)"), "id"),
+    Index("ix_automation_outbox_created", "created_at", "id"),
 )
 
 automation_state = Table(
@@ -42,4 +48,11 @@ automation_webhook_secrets = Table(
     Column("routine_id", Text, primary_key=True),
     Column("secret_hash", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+
+automation_scan_cursors = Table(
+    "automation_scan_cursors", metadata,
+    Column("name", Text, primary_key=True),
+    Column("after_id", Text, nullable=True),
 )

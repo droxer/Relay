@@ -156,7 +156,9 @@ def task_store_from_env(root_dir: Path) -> DatabaseTaskStore:
 
 def automation_store_from_env() -> DatabaseAutomationStore:
     url = database_url_from_env(setting="database-only automation storage")
-    return DatabaseAutomationStore(url, create_schema=url.startswith("sqlite"))
+    store = DatabaseAutomationStore(url, create_schema=url.startswith("sqlite"))
+    store.verify_schema()
+    return store
 
 
 def notification_store_from_env() -> DatabaseNotificationStore:
