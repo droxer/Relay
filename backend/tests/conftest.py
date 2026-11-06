@@ -58,3 +58,25 @@ def postgres_store_backend(clear_storage_env, monkeypatch, tmp_path, request):
         monkeypatch.setenv(
             "RELAY_DATABASE_URL", database_url_for(f"sqlite:///{tmp_path}/relay-sessions.db"))
         yield
+
+
+@pytest.fixture
+def database_io_off_event_loop():
+    """Assert real SQL stays off asyncio loops throughout an HTTP scenario."""
+    import asyncio
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    def check(*args):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        raise AssertionError("Synchronous SQL executed on the application event loop")
+
+    event.listen(Engine, "before_cursor_execute", check)
+    try:
+        yield
+    finally:
+        event.remove(Engine, "before_cursor_execute", check)
