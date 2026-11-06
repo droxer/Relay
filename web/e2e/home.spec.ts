@@ -274,3 +274,32 @@ test("a first-run account is pointed at setup, not told it is caught up", async 
  await focus.getByRole("button",{name:/Get started|Continue/}).click();
  await expect(page).toHaveURL(/\/threads/);
 });
+
+for (const width of [1440, 375]) {
+  test(`Up next keeps long automation prompts in equal rows at ${width}px`, async ({ page }, testInfo) => {
+    await serve(page, "dark");
+    await page.setViewportSize({ width, height: 1000 });
+    const longPrompt = "每日进展 每天总结 Relay 项目的开发进展与任务看板状态，形成日报。 ## 1. 开发进展 " + "读取仓库与 PR 变化。".repeat(100);
+    const suggestions = [
+      thread("s-long", { title: longPrompt, nextSteps: ["合并 PR 并确认日报文件的位置。".repeat(30)] }),
+      thread("s-short", { title: "Cleanup Branches", nextSteps: ["Prune local branches"] }),
+    ];
+    await page.route("**/api/v1/tasks?*", route => route.fulfill({ json: { tasks: [] } }));
+    await page.route("**/api/v1/threads?*", route => route.fulfill({ json: { sessions: suggestions } }));
+    await page.goto("/home");
+    const rows = queue(page).locator('.home-item[data-kind="suggested"]');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first().locator(".home-item-title")).not.toContainText("## 1.");
+    await expect(rows.first().locator(".home-item-title")).toHaveAttribute("title", longPrompt);
+    const sizes = await rows.evaluateAll(elements => elements.map(element => {
+      const rect = element.getBoundingClientRect();
+      return { height: rect.height, right: rect.right };
+    }));
+    // The separator border is the only height difference between siblings.
+    expect(Math.abs(sizes[0].height - sizes[1].height)).toBeLessThanOrEqual(1);
+    expect(sizes[0].height).toBeLessThan(160);
+    expect(sizes.every(size => size.right <= width)).toBe(true);
+    await expect(rows.first().getByRole("button", { name: "Snooze", exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`home-summary-${width}.png`), fullPage: true });
+  });
+}

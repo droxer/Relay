@@ -234,11 +234,16 @@
 }
 
 .home-item-title {
+  display: -webkit-box;
+  block-size: 2lh;
+  overflow: hidden;
   color: var(--ink-1);
   font: var(--type-name);
   letter-spacing: var(--type-name-track);
   text-decoration: none;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .home-item-title:hover {
@@ -258,18 +263,32 @@
   color: var(--ink-2);
   font: var(--type-body-sm);
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  block-size: 1lh;
+  -webkit-line-clamp: 1;
   overflow-wrap: anywhere;
 }
 
 .home-item-meta {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1) var(--sp-2);
   margin: var(--sp-1-5) 0 0;
   color: var(--ink-3);
   font: var(--type-meta);
+  block-size: 1lh;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.home-item-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-item-kind,
+.home-item-meta > span:last-child {
+  flex-shrink: 0;
 }
 
 .home-item-kind {
@@ -826,7 +845,7 @@ a.home-count:hover .home-count-label {
   }
 
   .home-item-title {
-    display: inline-block;
     padding-block: var(--sp-1);
+    block-size: calc(2lh + var(--sp-1) * 2);
   }
 }
