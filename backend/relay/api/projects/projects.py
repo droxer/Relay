@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from ...projects.manager import initial_manager_id, ManagerError
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -165,6 +166,10 @@ async def create_project(
         )
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
+    try:
+        payload["managerAgentId"] = initial_manager_id(ctx, {**payload, "ownerUserId": actor["userId"]}, body.get("managerAgentId"))
+    except ManagerError as error:
+        raise HTTPException(error.status, error.code) from error
     if host_path is not None:
         # The computer validates and records the link before the project
         # exists, so the project's first run already finds its directory.

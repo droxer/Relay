@@ -88,3 +88,20 @@ events_table = Table(
     Column("payload", json_type(), nullable=False),
     UniqueConstraint("project_id", "sequence", name="uq_project_events_sequence"),
 )
+
+manager_proposals = Table(
+    "project_manager_proposals", metadata, database_id_column(),
+    Column("project_id", entity_uuid_type(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("state", Text, nullable=False),
+    Column("snapshot", json_type(), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Index("ix_project_manager_proposals_project", "project_id", "created_at"),
+)
+
+manager_events = Table(
+    "project_manager_events", metadata, database_id_column(),
+    Column("proposal_id", entity_uuid_type(), ForeignKey("project_manager_proposals.id", ondelete="CASCADE"), nullable=False),
+    Column("sequence", Integer, nullable=False),
+    Column("payload", json_type(), nullable=False),
+    UniqueConstraint("proposal_id", "sequence", name="uq_project_manager_events_sequence"),
+)

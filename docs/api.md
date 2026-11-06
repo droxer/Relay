@@ -1427,3 +1427,42 @@ claiming that an executing agent has exited. Run-scoped MCP calls use
 
 See [Connections](connections.md) for all routes, resource pagination, provider
 configuration, supported runtime adapters, and deployment verification limits.
+
+## Project manager
+
+Every Project has a stable Relay manager binding and one lazily created manager
+Thread. Selecting the manager does not change the lead or roster. These routes
+require the Project Owner; admin status and daemon credentials do not confer
+owner authority.
+
+- `GET /api/v1/projects/{id}/manager` returns the binding, eligible candidates,
+  availability reason, existing Thread ID, and recent proposal cards. Reading
+  creates no Thread or run. Archived history remains readable.
+- `PUT /api/v1/projects/{id}/manager` accepts `agentId` and `expectedVersion`.
+  Project creation also accepts an optional `managerAgentId`.
+- `POST /api/v1/projects/{id}/manager/messages` accepts nonempty `text` and an
+  `idempotencyKey`, and returns `threadId` with HTTP 202 after ordinary conductor
+  admission. It addresses the configured manager alone. The Thread's execution
+  projection determines whether execution is queued, running, or requires recovery.
+- `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
+  complete task counts, recent tasks, capacity, and retrieval coverage.
+- `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/apply` accepts an
+  `idempotencyKey`, optional `expectedRevision`, optional `operationIds`, and an
+  optional `fields` map keyed by operation ID. It atomically applies selected
+  edits through ordinary task operations. A stale Task or invalid prerequisite
+  rejects the whole batch. Retrying an identical application key and payload
+  returns the recorded result; reusing the key for a different payload conflicts.
+- `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/dismiss` settles a
+  pending proposal without changing tasks.
+
+New tasks stay in backlog. Applying changes does not start work, accept review,
+answer a Wait, or reconcile execution. Disabled and archived Projects refuse
+new manager work and proposal applications.
+
+`POST /api/v1/daemon-nodes/{id}/project-manager/tools` is the execution-plane
+bridge. It requires node authentication plus the currently dispatched command
+and lease, and validates its active manager run and canonical Project Thread.
+It exposes scoped reads, workspace authorization, and proposal staging, never
+owner Apply. The runtime invokes its per-run Node helper; node credentials and
+leases remain in the daemon. See [the design](project-manager-design.md) and
+[verification evidence](testing/project-manager.tdd.md).

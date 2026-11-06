@@ -53,6 +53,7 @@ export interface AgentState {
   /** The project this run works in: name, goal, crew, and standing context,
    *  rendered by the backend from the round's pinned project snapshot. */
   project_brief?: string;
+  project_manager?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };
   /** Stable identity for this assignment across at-least-once delivery. */
   assignment_id?: string;
   /** Stable conductor-owned delegated-subtask identity. */

@@ -129,3 +129,25 @@ smoke tests require the operator's OAuth applications and consent setup. Native
 service-event subscriptions and provider-side revocation jobs remain outside
 the implemented first-release capability; existing Automation triggers can
 already use the Connections tools.
+
+## PR integration with main — 2026-11-06
+
+Integrated main at `6b19890a` before opening the PR. Resolved shared API docs,
+capability declarations, browser test registration, and English/Chinese locale
+additions while retaining both features. Renumbered the Connections migration
+to `20261106_0114`, following main's project-manager revision `20261106_0113`.
+
+- Connections service/provider/API, project-manager API, schema drift, layering,
+  and route-auth suites: **77 passed**. PostgreSQL migration checks include the
+  newly sequenced migration.
+- `npm run build`: passed. After correcting locale merge omissions caught by
+  the GitHub importer browser tests, `npm run build -w web` passed again.
+- Connections, project-manager, and GitHub importer React suites: **8 passed**.
+- Connections, GitHub importer, and project-manager browser suites: **14 passed**.
+- Built Connection proxy and project-manager core/daemon suites: **6 passed**.
+- npm and Python dependency audits: no known vulnerabilities; the unpublished
+  local Python `relay` package is excluded from PyPI auditing.
+
+These are focused integration results; the complete-suite results above were
+not rerun after merging main. No live OAuth account or production deployment was
+used for these checks.

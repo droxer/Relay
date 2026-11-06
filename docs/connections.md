@@ -27,7 +27,7 @@ external requests cannot be recalled.
 ## Deployment setup
 
 Run database migrations before deploying this code (`make backend-migrate`).
-Revision `20261106_0113` adds service Connections, authorization attempts, Grants,
+Revision `20261106_0114` adds service Connections, authorization attempts, Grants,
 and their event records. New Computers need the updated installer bundle.
 
 Set `RELAY_CONNECTIONS_ENCRYPTION_KEY` to a Fernet key in your secret manager.

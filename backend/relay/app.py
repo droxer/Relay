@@ -41,6 +41,8 @@ from .api.computers import (
 )
 from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
+from .api.projects import manager as project_manager_routes
+from .migrations_runtime.project_managers import initialize_project_managers
 from .api.tasks import (
     automations as automation_routes,
     github as task_github_routes,
@@ -245,6 +247,8 @@ def create_app(
         password_reset=password_reset,
         connections=connections,
     )
+    if settings.startup_repairs_enabled:
+        initialize_project_managers(app.state.context)
     _mount_routes(app, settings)
     return app
 
@@ -367,6 +371,7 @@ API_ROUTERS = (
     agent_routes.router,
     team_routes.router,
     project_routes.router,
+    project_manager_routes.router,
     project_plan_routes.router,
     skill_routes.router,
     node_workspace_routes.router,

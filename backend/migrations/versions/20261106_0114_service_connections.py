@@ -1,14 +1,14 @@
 """Encrypted service connections and explicitly scoped work access.
 
-Revision ID: 20261106_0113
-Revises: 20261104_0112
+Revision ID: 20261106_0114
+Revises: 20261106_0113
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261106_0113"
-down_revision = "20261104_0112"
+revision = "20261106_0114"
+down_revision = "20261106_0113"
 branch_labels = None
 depends_on = None
 ID = sa.Uuid(as_uuid=False).with_variant(sa.Text(), "sqlite")

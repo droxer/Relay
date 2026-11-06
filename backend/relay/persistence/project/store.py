@@ -18,6 +18,7 @@ from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
+from .manager import ManagerRows
 
 PROJECT_NAME_MAX_LENGTH = 120
 # A project that links an existing directory on its computer names it under
@@ -38,7 +39,7 @@ class _ProjectWriteConflict(RuntimeError):
     pass
 
 
-class DatabaseProjectStore:
+class DatabaseProjectStore(ManagerRows):
     """Event-authoritative projects with roster rows as a query projection."""
 
     metadata = shared_metadata
@@ -435,6 +436,9 @@ def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             else {}
         ),
         "leadAgentId": payload.get("leadAgentId"),
+        "managerAgentId": payload.get("managerAgentId"),
+        "managerInitialized": "managerAgentId" in payload,
+        "managerThreadId": None,
         "members": list(payload["members"]),
         "enabled": payload.get("enabled") is not False,
         "version": 1,
@@ -455,6 +459,9 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
         "leadAgentId",
         "members",
         "enabled",
+        "managerAgentId",
+        "managerThreadId",
+        "managerInitialized",
     }
     unknown = set(patch) - allowed
     if unknown:
