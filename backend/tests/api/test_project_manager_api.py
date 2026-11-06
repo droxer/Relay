@@ -11,13 +11,13 @@ from test_project_setup_api import _take_command, _complete
 setup_env = setup_api.setup_env
 
 
-def _ready(app, node, *, tools=True):
+def _ready(app, node, *, tools=True, setup=False):
     app.state.registry.register({
         "sandboxId": node["id"], "userId": node["userId"],
         "token": f"token_{node['id']}", "protocolVersion": 1,
         "supportedAgents": ["codex", "claude"],
         "capabilities": ["thread-workspaces", "project-workspaces", "project-manager",
-                         *(["project-manager-mcp"] if tools else [])],
+                         *(["project-manager-mcp"] if tools else []), *(["project-setup"] if setup else [])],
         "status": "ready", "workspacePath": "/workspace/relay",
         "workspaceId": node["workspaceId"],
     })
@@ -490,3 +490,55 @@ def test_manager_keeps_its_tools_in_a_round_with_other_agents(managed_env):
         command = _take_command(app, node)
     assert command['logicalAgentId'] == planner['id']
     assert command['state']['project_manager']['agentId'] == planner['id']
+
+
+def _run_task(env, body):
+    app, client, node, project, *_ = env
+    _ready(app, node)
+    created = client.post("/api/v1/tasks", json={"projectId": project["id"], **body})
+    assert created.status_code == 201, created.text
+    started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
+    assert started.status_code == 202, started.text
+    assert started.json()["dispatch"]["state"] == "started", started.json()
+    return _take_command(app, node)
+
+
+def test_manager_brings_its_tools_to_its_own_task_runs(managed_env):
+    _, _, _, project, planner, builder = managed_env
+    command = _run_task(managed_env, {"title": "Groom the backlog", "assignedAgentId": planner["id"]})
+    assert command["logicalAgentId"] == planner["id"]
+    assert command["state"]["project_manager"] == {
+        **command["state"]["project_manager"], "projectId": project["id"], "agentId": planner["id"],
+    }
+    assert _tool(managed_env, command, "overview").status_code == 200
+
+
+def test_another_agents_task_run_gets_no_manager_tools(managed_env):
+    _, _, _, _, _, builder = managed_env
+    command = _run_task(managed_env, {"title": "Build the page", "assignedAgentId": builder["id"]})
+    assert command["logicalAgentId"] == builder["id"]
+    assert "project_manager" not in command["state"]
+    assert _tool(managed_env, command, "overview").status_code == 403
+
+
+def test_manager_brings_its_tools_to_its_own_automation_runs(managed_env):
+    from automation_helpers import WEEKLY_TRIGGERS
+    _, _, _, project, planner, _ = managed_env
+    command = _run_task(managed_env, {
+        "title": "Weekly status digest", "assignedAgentId": planner["id"],
+        "isRoutine": True, "routineState": "active", "routineTriggers": WEEKLY_TRIGGERS,
+    })
+    assert command["logicalAgentId"] == planner["id"]
+    assert command["state"]["project_manager"]["projectId"] == project["id"]
+
+
+def test_a_setup_draft_by_the_manager_keeps_its_own_workflow(managed_env):
+    app, client, node, project, planner, _ = managed_env
+    _ready(app, node, setup=True)
+    started = client.post(f"/api/v1/projects/{project['id']}/setup", json={
+        "intent": "Plan the launch", "agentId": planner["id"],
+    })
+    assert started.status_code == 202, started.text
+    command = _take_command(app, node)
+    assert command["logicalAgentId"] == planner["id"]
+    assert "project_manager" not in command["state"]

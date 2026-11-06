@@ -1447,8 +1447,8 @@ credentials do not confer owner authority.
   omitted, the lead holds the role when it is eligible; `null` leaves it open.
 - `POST /api/v1/projects/{id}/manager/conversation` returns the Project's
   manager Thread, starting it (with the holder as its first participant) on
-  first use. It dispatches nothing; the owner talks to the holder through the
-  ordinary `POST /api/v1/threads/{id}/messages`, addressing whoever they mean.
+  first use. It dispatches nothing. The web app no longer calls it; the
+  manager works through the Tasks and Automations it runs.
 - `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
   complete task counts, recent tasks, capacity, and retrieval coverage.
 - `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/apply` accepts an
@@ -1525,10 +1525,10 @@ returns its replacement once with `renewed: true`. Revoked/unknown grants return
 Manager reassignment, whether through PUT manager or PATCH Project members,
 changes only the roster. It writes nothing to any Thread: the manager Thread
 keeps its participants and history, and the former holder stays an ordinary
-Agent that may still be addressed there. Every round resolves manager
-capability from the enabled roster role, for the holder's assignment only —
-alone or beside other Agents — and proposals keep their own Thread/run
-identity. A computer without `project-manager-mcp` still runs the holder,
+Agent that may still be addressed there. Every round in a Project — Task
+run, Automation occurrence, Thread message, or continuation — resolves manager
+capability from its pinned roster, for the holder's assignment only, alone or
+beside other Agents; proposals keep their own Thread/run identity. A computer without `project-manager-mcp` still runs the holder,
 without the tools, and the manager view reports
 `project_manager_update_required`. Older Threads may carry the retired
 `thread.project_manager_assigned` event; it still replays.

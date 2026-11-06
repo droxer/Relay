@@ -1,26 +1,44 @@
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
-import {ProjectManagerAgentCard} from '../src/components/ProjectManagerAgentCard';
+import {ProjectManagerLine} from '../src/components/ProjectManagerLine';
 import {ManagerProposalCard} from '../src/components/ManagerProposalCard';
 
-const api=vi.hoisted(()=>({get:vi.fn(),open:vi.fn(),apply:vi.fn(),dismiss:vi.fn()}));
-vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,openManagerConversation:api.open,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss}));
+const api=vi.hoisted(()=>({get:vi.fn(),apply:vi.fn(),dismiss:vi.fn()}));
+vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss}));
+const nav=vi.hoisted(()=>vi.fn(async()=>{}));
+vi.mock('../src/lib/appRoute',async(original)=>({...await original<typeof import('../src/lib/appRoute')>(),navigateToAppPath:nav}));
 const proposal={id:'proposal',projectId:'p',threadId:'thread',agentId:'a',runId:'run',state:'pending' as const,revision:1,createdAt:'2026-11-06T00:00:00Z',operations:[
  {id:'0',kind:'create' as const,key:'design',fields:{title:'Design login'},after:[],afterTaskIds:[]},
  {id:'1',kind:'update' as const,taskId:'task',title:'Build login',fields:{priority:'high'},before:{priority:'normal'},after:[],afterTaskIds:[]},
 ]};
 const wrap=(ui:React.ReactNode)=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}>{ui}</QueryClientProvider>);
-beforeEach(()=>{vi.clearAllMocks();api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:null,reason:null,toolsAvailable:true,candidates:[{id:'a',displayName:'Ada'}]},proposals:[]});api.open.mockResolvedValue({threadId:'thread'});api.apply.mockResolvedValue({proposal:{...proposal,state:'applied'},tasks:[]});});
+beforeEach(()=>{vi.clearAllMocks();api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:null,reason:null,toolsAvailable:true,candidates:[{id:'a',displayName:'Ada'}]},proposals:[]});api.apply.mockResolvedValue({proposal:{...proposal,state:'applied'},tasks:[]});});
 
-it('shows the real Agent with its Project Manager role and opens a normal conversation',async()=>{
- const onOpen=vi.fn();wrap(<ProjectManagerAgentCard projectId="p" onOpenThread={onOpen} onManageRole={vi.fn()} />);
- expect((await screen.findByRole('link',{name:'Ada'})).getAttribute('href')).toBe('/agents/a');
- expect(screen.queryByRole('complementary')).toBeNull();
- expect(api.open).not.toHaveBeenCalled();
- fireEvent.click(screen.getByRole('button',{name:'project_manager.chat'}));
- await waitFor(()=>expect(onOpen).toHaveBeenCalledWith('thread'));
- expect(api.open).toHaveBeenCalledWith('p');
+const ada={id:'a',displayName:'Ada',executorKind:'codex',enabled:true,availability:'ready',placements:[]} as any;
+const managed=(member:Record<string,unknown>={})=>({id:'p',version:1,members:[{agentId:'a',role:'reviewer',responsibilities:'Review',enabled:true,projectManager:true,...member}]}) as any;
+
+it('names the Project Manager on the dashboard without a chat to open',()=>{
+ const onManage=vi.fn();
+ wrap(<ProjectManagerLine project={managed()} agents={[ada]} onManage={onManage} />);
+ const line=screen.getByRole('group',{name:'project.roles.project_manager'});
+ expect(line.textContent).toContain('project.roles.reviewer');
+ expect(screen.queryByRole('button',{name:'project_manager.chat'})).toBeNull();
+ expect(api.get).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('link',{name:'Ada'}));
+ expect(nav).toHaveBeenCalledWith('/agents/a');
+ fireEvent.click(screen.getByRole('button',{name:'project_manager.change'}));
+ expect(onManage).toHaveBeenCalled();
+});
+
+it('says when the role is open, and when its holder cannot work',()=>{
+ const view=wrap(<ProjectManagerLine project={{id:'p',version:1,members:[]} as any} agents={[]} onManage={vi.fn()} />);
+ expect(screen.getByText('project_manager.unassigned_role')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'project_manager.assign_role'})).toBeTruthy();
+ view.unmount();
+ wrap(<ProjectManagerLine project={managed({enabled:false})} agents={[ada]} />);
+ expect(screen.getByText('project.member_disabled')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'project_manager.change'})).toBeNull();
 });
 
 it('allows editing and selecting proposal items before applying the exact batch',async()=>{

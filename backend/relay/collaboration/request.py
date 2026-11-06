@@ -6,7 +6,6 @@ from copy import deepcopy
 from typing import Any
 
 from ..core.ids import new_relay_id
-from ..core.project_roles import manager_run_context
 from ..agents.delegation import delegation_candidates
 from ..sessions.handoff_context import capture_handoff_context
 from ..security.actor import Actor
@@ -51,15 +50,8 @@ class RoundRequestMixin(ConductorState):
             round_id=round_id,
         )
         if intent.project_setup is not None:
-            manifest = {**manifest, "projectSetup": intent.project_setup}
-        if intent.project_setup is None and project_snapshot:
-            # The role holder gets its tools in every round it takes part in;
-            # the registry hands them only to that Agent's assignment.
-            project = self.ctx.project_store.get_project(project_snapshot["projectId"])
-            manager_context = next((context for assignment in resolved
-                if (context := manager_run_context(project, assignment.get("agentId")))), None) if project else None
-            if manager_context:
-                manifest = {**manifest, "projectManager": manager_context}
+            # A setup draft keeps its own workflow, without the manager tools.
+            manifest = {**{k: v for k, v in manifest.items() if k != "projectManager"}, "projectSetup": intent.project_setup}
         task_id, scope_fields = self._round_work_scope(
             intent, session, is_recovery, answered_task
         )

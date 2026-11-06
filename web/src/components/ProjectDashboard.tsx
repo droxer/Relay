@@ -1,7 +1,7 @@
 "use client";
 
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,8 @@ import { formatDueDate } from "./task-board/BacklogChrome";
 import { WorkspaceEmpty } from "./workspace/WorkspacePrimitives";
 
 interface ProjectDashboardProps {
+  /** Who runs the project, shown above its numbers (`ProjectManagerLine`). */
+  steward?: ReactNode;
   tasks: RelayTaskListItem[];
   onOpenRecord: (taskId: string) => void;
   onOpenBoard: () => void;
@@ -34,7 +36,7 @@ interface ProjectDashboardProps {
  *  Flow readings (cycle time, throughput) and a per-stage breakdown used to
  *  sit here too; for a project of a handful of issues they restated these
  *  four tiles, so the board's own columns carry the stages instead. */
-export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
+export function ProjectDashboard({ steward, tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => projectIssueMetrics(tasks), [tasks]);
   const attention = useMemo(() => projectAttentionIssues(tasks, undefined, Infinity), [tasks]);
@@ -63,6 +65,7 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
   if (metrics.total === 0) {
     return (
       <div className="project-dashboard project-dashboard--empty">
+        {steward}
         {capacity}
         <WorkspaceEmpty
           title={t("project.dashboard_empty")}
@@ -80,6 +83,7 @@ export function ProjectDashboard({ tasks, onOpenRecord, onOpenBoard }: ProjectDa
 
   return (
     <div className="project-dashboard">
+      {steward}
       <div className="adm-dash-kpis" role="group" aria-label={t("backlog.metrics")}>
         <KpiTile
           eyebrow={t("backlog.metric_total")}
