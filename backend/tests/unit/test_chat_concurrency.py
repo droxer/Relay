@@ -7,7 +7,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from postgres_backend import disposable_postgres_url
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 
 
 @pytest.mark.postgres

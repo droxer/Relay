@@ -69,6 +69,7 @@ MODULE_LAYERS = {
 }
 POLICY_MODULES = frozenset(
     {
+        "relay.chat.rules",
         "relay.automations.context",
         "relay.automations.model",
         "relay.automations.schedule",

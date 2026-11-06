@@ -10,7 +10,7 @@ from alembic.config import Config
 from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, delete, insert, inspect, select, text
 
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from relay.persistence.tables.chat import documents
 from test_schema_drift import migrated_schema as _migrated_schema
 

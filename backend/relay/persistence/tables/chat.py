@@ -37,3 +37,26 @@ conversations = Table(
     UniqueConstraint("key_hash", name="uq_chat_conversations_key_hash"),
     Index("ix_chat_conversations_session", "session_id"),
 )
+
+
+integrations = Table(
+    "chat_integrations",
+    metadata,
+    Column("sequence", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("integration_id", Text, nullable=False),
+    Column("provider", Text, nullable=True),
+    Column("status", Text, nullable=True),
+    Column("tenant_id", Text, nullable=True),
+    Column("payload", json_type(), nullable=False),
+    UniqueConstraint("integration_id", name="uq_chat_integrations_id"),
+    Index("ix_chat_integrations_routing", "provider", "status", "tenant_id", "sequence"),
+)
+
+integration_secrets = Table(
+    "chat_integration_secrets",
+    metadata,
+    # No FK: legacy maps can include orphan IDs, which must survive conversion.
+    Column("integration_id", Text, primary_key=True),
+    Column("ciphertext", Text, nullable=False),
+    Column("secret_keys", json_type(), nullable=False),
+)

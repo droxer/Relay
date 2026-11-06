@@ -85,7 +85,7 @@ from .core.environment import DEFAULT_RELAY_DATA_DIR
 from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
-from .chat.integrations import DatabaseChatIntegrationStore
+from .persistence.chat.store import DatabaseChatIntegrationStore
 from .realtime.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
     KeyedEventNotifier,

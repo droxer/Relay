@@ -4,7 +4,7 @@ import pytest
 from datetime import UTC, datetime
 from sqlalchemy import event, insert, inspect, select, text
 
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from relay.persistence.engine import create_all_tables, shared_engine
 from relay.persistence.tables.chat import documents
 from store_fixtures import make_chat_store
@@ -125,7 +125,7 @@ def test_sqlite_legacy_conversion_rejects_invalid_records_atomically(tmp_path, k
 
 
 def test_integration_mutation_and_audit_append_roll_back_together(tmp_path, monkeypatch):
-    from relay.chat import integrations
+    from relay.persistence.chat import store as integrations
 
     store = make_chat_store(tmp_path)
     integration = store.create_integration({"provider": "discord", "displayName": "before"})

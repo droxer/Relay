@@ -15,7 +15,7 @@ from typing import Any
 
 from sqlalchemy import update
 
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from relay.persistence.agent.placements import DatabaseAgentPlacementStore
 from relay.persistence.agent.store import DatabaseAgentStore
 from relay.persistence.daemon.managed_nodes import DatabaseManagedNodeStore

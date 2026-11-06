@@ -8,7 +8,7 @@ import os
 
 from loguru import logger
 
-from ..chat.integrations import DatabaseChatIntegrationStore
+from ..persistence.chat.store import DatabaseChatIntegrationStore
 from ..core.storage_config import database_url_from_env
 from ..persistence.agent.placements import DatabaseAgentPlacementStore
 from ..persistence.agent.store import DatabaseAgentStore

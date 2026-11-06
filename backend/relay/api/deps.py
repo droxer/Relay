@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
-from ..chat.integrations import DatabaseChatIntegrationStore
+from ..persistence.chat.store import DatabaseChatIntegrationStore
 from ..daemon_registry.registry import DaemonNodeRegistry
 from ..daemon_registry.node_backend import ServerDaemonNodeBackend
 from ..persistence.protocols import (

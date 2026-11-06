@@ -9,7 +9,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import event
 
 from postgres_backend import disposable_postgres_url
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from store_fixtures import make_chat_store
 
 

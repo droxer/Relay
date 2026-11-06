@@ -12,7 +12,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.app import create_app
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from store_fixtures import make_chat_store
 from relay.chat.provider_health import (
     probe_chat_integration,
