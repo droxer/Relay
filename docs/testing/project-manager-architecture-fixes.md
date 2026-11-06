@@ -100,6 +100,7 @@ and the missing opaque Node forwarder at compile time. GREEN verification:
 | Hosted protocol, token lifecycle and real transports | 14 passed on SQLite. Official SDK client and actual standalone/managed Node subprocesses reach the Python endpoint. |
 | PostgreSQL MCP, manager, Connections and schema checks | 63 passed. |
 | New Python MCP module statement coverage | 89%. |
+| Full Python regression suite | 3,689 passed, 10 skipped in 8m 31s. |
 | Built Node regression suite | 2,953 passed. |
 | React regression suite | 831 passed across 142 files. |
 | Project Manager browser workflows | Four passed: desktop/mobile, English/Chinese. |
