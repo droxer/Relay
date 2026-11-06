@@ -59,3 +59,28 @@ def test_routing_upgrade_and_downgrade_preserve_outbox_and_fence_partial_work(mi
         DatabaseAutomationStore(url).verify_schema()
     finally:
         engine.dispose()
+
+
+def test_concurrent_index_upgrade_repairs_invalid_leftover(migrated_schema):
+    from sqlalchemy.exc import IntegrityError
+    from relay.persistence.task.store import DatabaseTaskStore
+
+    url, _ = migrated_schema
+    engine = create_engine(url)
+    try:
+        command.downgrade(config(), "20261106_0118")
+        tasks = DatabaseTaskStore(url)
+        tasks.create_task({"title": "first"})
+        tasks.create_task({"title": "second"})
+        # A failed concurrent UNIQUE build leaves a real invalid index. Use
+        # the migration's name to reproduce the state a cancelled build leaves.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            with pytest.raises(IntegrityError):
+                conn.execute(text("CREATE UNIQUE INDEX CONCURRENTLY ix_tasks_automation_routing ON tasks (is_routine)"))
+            assert conn.scalar(text("SELECT indisvalid FROM pg_index WHERE indexrelid = 'ix_tasks_automation_routing'::regclass")) is False
+        command.upgrade(config(), "head")
+        with engine.connect() as conn:
+            assert conn.scalar(text("SELECT indisvalid FROM pg_index WHERE indexrelid = 'ix_tasks_automation_routing'::regclass")) is True
+            assert conn.scalar(text("SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_tasks_automation_routing'"))
+    finally:
+        engine.dispose()

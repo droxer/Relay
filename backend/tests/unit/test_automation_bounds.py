@@ -243,3 +243,26 @@ def test_outbox_retention_deletes_a_bounded_page(tmp_path):
     assert store.prune_outbox(NOW - timedelta(days=7), limit=2) == 2
     with store.engine.connect() as conn:
         assert conn.scalar(select(func.count()).select_from(automation_outbox)) == 5
+
+
+def test_multiple_broadcasts_share_the_routing_budget_and_all_recipients_progress(tmp_path):
+    tasks, _, store, service = world(tmp_path)
+    ids = [routine(tasks)["id"] for _ in range(5)]
+    with store.engine.begin() as conn:
+        insert_outbox_rows(conn, [
+            {"kind": "task_event", "event_type": "task.status_changed", "depth": 0,
+             "payload": {"subject": {"title": title, "status": "blocked"}, "to": "blocked"}}
+            for title in ("first", "second")
+        ])
+    for _ in range(10):
+        service.tick(NOW)
+    for record_id in ids:
+        [occurrence_id] = tasks.get_task(record_id)["occurrenceIds"]
+        occurrence = tasks.get_task(occurrence_id)
+        state = store.get_state(record_id)
+        assert occurrence["routineTriggerSummary"]["eventCount"] + len(state["pending_events"]) == 2
+        titles = {event["subject"]["title"] for event in state["pending_events"]}
+        titles.update(title for title in ("first", "second") if f'"{title}"' in occurrence["description"])
+        assert titles == {"first", "second"}
+    with store.engine.connect() as conn:
+        assert conn.scalar(select(automation_outbox.c.id)) is None
