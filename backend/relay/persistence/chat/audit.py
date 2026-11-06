@@ -17,7 +17,7 @@ def append_audit_event(engine: Any, event: dict[str, Any]) -> None:
 
 def read_audit_events(engine: Any, integration_id: str | None, limit: int) -> list[dict[str, Any]]:
     statement = select(audit_events.c.payload).order_by(audit_events.c.sequence.desc())
-    if integration_id is not None:
+    if integration_id:
         statement = statement.where(audit_events.c.integration_id == integration_id)
     statement = statement.limit(max(1, min(limit, 200)))
     with store_transaction(engine) as conn:

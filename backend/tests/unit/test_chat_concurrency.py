@@ -11,7 +11,7 @@ from relay.chat.integrations import DatabaseChatIntegrationStore
 
 
 @pytest.mark.postgres
-@pytest.mark.parametrize("operation", ["create", "update", "conversation", "secrets"])
+@pytest.mark.parametrize("operation", ["create", "update", "secrets"])
 def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation):
     monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     with disposable_postgres_url() as url:
@@ -19,9 +19,7 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
         second = DatabaseChatIntegrationStore(url)
         seed = first.create_integration({"provider": "discord", "displayName": "original"})
         other = first.create_integration({"provider": "discord"}) if operation == "secrets" else None
-        conversation = {"provider": "discord", "conversationId": "seed"}
-        first.set_conversation_session(conversation, "seed-thread", "owner")
-        document_key = "conversations" if operation == "conversation" else "integrations"
+        document_key = "integrations"
         paused, release, attempted, second_read = (Event() for _ in range(4))
         original_first, original_second = first._read_document, second._read_document
 
@@ -51,9 +49,7 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
             if operation == "update":
                 patch = {"displayName": "updated"} if index == 1 else {"tenantId": "tenant"}
                 return store.update_integration(seed["id"], patch)
-            return store.set_conversation_session(
-                {**conversation, "conversationId": str(index)}, f"thread-{index}", "owner"
-            )
+            raise AssertionError("unknown mutation")
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             a = pool.submit(mutate, first, 1)
@@ -78,10 +74,6 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
             assert first.connection_settings(seed["id"])["secrets"]["botToken"] == "token-1"
             assert first.connection_settings(other["id"])["secrets"]["botToken"] == "token-2"
             assert len(first.audit_events()) == 4
-        else:
-            for index in (1, 2):
-                result = first.get_conversation_session({**conversation, "conversationId": str(index)})
-                assert result["sessionId"] == f"thread-{index}"
 
 
 @pytest.mark.postgres
@@ -128,3 +120,53 @@ def test_chat_reader_progresses_with_a_one_connection_pool(monkeypatch):
                 assert write.result(timeout=5)["config"]["applicationId"] == "updated"
         finally:
             engine.dispose()
+
+
+@pytest.mark.postgres
+@pytest.mark.parametrize("same_key", [False, True])
+def test_conversation_upserts_lock_only_the_selected_key(same_key):
+    from threading import get_ident
+    from concurrent.futures import TimeoutError
+    from sqlalchemy import event
+
+    with disposable_postgres_url() as url:
+        first, second = DatabaseChatIntegrationStore(url), DatabaseChatIntegrationStore(url)
+        paused, release, attempted = Event(), Event(), Event()
+        first_thread = []
+        a_payload = {"provider": "discord", "conversationId": "a"}
+        b_payload = a_payload if same_key else {**a_payload, "conversationId": "b"}
+
+        def pause_selected_read(conn, cursor, statement, *args):
+            if first_thread and get_ident() == first_thread[0] and "FROM chat_conversations" in statement and not paused.is_set():
+                paused.set()
+                assert release.wait(5)
+
+        def write_first():
+            first_thread.append(get_ident())
+            return first.set_conversation_session(a_payload, "thread-a", "owner")
+
+        def write_second():
+            attempted.set()
+            return second.set_conversation_session(b_payload, "thread-b", "owner")
+
+        event.listen(first.engine, "before_cursor_execute", pause_selected_read)
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                a = pool.submit(write_first)
+                try:
+                    assert paused.wait(5)
+                    b = pool.submit(write_second)
+                    assert attempted.wait(5)
+                    if same_key:
+                        with pytest.raises(TimeoutError):
+                            b.result(timeout=0.2)
+                    else:
+                        assert b.result(timeout=5)["sessionId"] == "thread-b"
+                finally:
+                    release.set()
+                a.result(timeout=5)
+                b.result(timeout=5)
+        finally:
+            event.remove(first.engine, "before_cursor_execute", pause_selected_read)
+        assert first.get_conversation_session(a_payload)["sessionId"] == ("thread-b" if same_key else "thread-a")
+        assert second.get_conversation_session(b_payload)["sessionId"] == "thread-b"
