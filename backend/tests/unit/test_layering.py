@@ -119,6 +119,7 @@ EMPTY_PACKAGES = (
     "execution",
     "ops",
     "persistence",
+    "persistence/chat",
     "projects",
     "realtime",
     "sessions",

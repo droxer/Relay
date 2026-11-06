@@ -69,8 +69,8 @@ Downgrading `0086` rebuilds the dropped indexes; `0085` has nothing to undo; dow
 
 Revision `20261106_0116` moves audit entries and conversation bindings out of
 shared JSON arrays into indexed records. It preserves full payloads and order,
-including new writes when downgrading. Configuration and encrypted secrets stay
-in their current format. Stop old backend and worker processes before running
+including new writes when downgrading. Revision `20261106_0117` subsequently
+normalizes configuration and credentials as described below. Stop old backend and worker processes before running
 `make backend-migrate`; startup requires the new tables. SQLite development
 installs convert their legacy arrays automatically after metadata table creation.
 
@@ -83,3 +83,32 @@ responses retain the selected records and histories.
 See the [rollout, downgrade, validation, and remaining work](testing/backend-chat-records.tdd.md).
 The backfill retains source data until commit and needs maintenance time/disk
 headroom. Invalid legacy records abort conversion rather than being dropped.
+
+
+## Per-integration chat configuration and credentials
+
+Revision `20261106_0117` replaces the shared configuration array with ordered
+integration records and creates a separate encrypted credential row per
+integration. Public metadata uses credential-key names without decrypting values;
+settings decrypt only the selected integration, and runtime discovery decrypts
+only active integrations. Independent integration writes use independent database
+transactions and advisory locks, including when they share a store instance.
+Provider-operation exclusion still applies per integration across replicas.
+
+Stop all old backend and worker processes before `make backend-migrate`, then
+start the new code with the existing `RELAY_CHAT_SECRET_KEY`. Upgrade preserves
+the old credential envelope unchanged. The first access needing those credentials
+converts the map atomically under a one-time database lock. Missing/wrong keys or
+malformed input preserve the source for retry. SQLite converts configuration at
+schema initialization and uses the same credential bridge. Startup permits the
+pending encrypted envelope, but requires the normalized configuration tables.
+
+Downgrading converted credentials requires the same encryption key in the
+migration environment. It rebuilds the encrypted legacy map, including orphan
+entries, and restores configuration in original order with subsequent writes.
+A missing/wrong key aborts rollback atomically. Stop the new processes before
+rollback and restore the old code only after downgrade succeeds.
+
+See [configuration migration and validation evidence](testing/backend-chat-configuration.tdd.md).
+These checks establish bounded reads and concurrent progress, not production
+throughput or latency targets.

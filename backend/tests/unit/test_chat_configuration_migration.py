@@ -29,10 +29,13 @@ def config():
 def seed(engine, records, envelope):
     with engine.begin() as conn:
         conn.execute(delete(documents).where(documents.c.document_key.in_(("integrations", "secrets"))))
-        conn.execute(insert(documents), [
-            {"document_key": key, "payload": payload, "updated_at": datetime.now(UTC)}
-            for key, payload in [("integrations", records), ("secrets", envelope)]
-        ])
+        conn.execute(
+            insert(documents),
+            [
+                {"document_key": key, "payload": payload, "updated_at": datetime.now(UTC)}
+                for key, payload in [("integrations", records), ("secrets", envelope)]
+            ],
+        )
 
 
 def test_configuration_upgrade_and_encrypted_downgrade_preserve_new_writes(migrated_schema, monkeypatch):
@@ -56,11 +59,13 @@ def test_configuration_upgrade_and_encrypted_downgrade_preserve_new_writes(migra
         assert store.get_integration("chat-old")["extension"] == {"preserve": True}
         assert store.connection_settings("chat-old")["secrets"] == secrets["chat-old"]
         store.update_integration("chat-old", {"secrets": {"signingSecret": "new-secret"}})
+        created = store.create_integration({"provider": "discord"})
         with engine.begin() as conn:
             assert conn.scalar(select(documents.c.document_key).where(documents.c.document_key == "secrets")) is None
         command.downgrade(config(), PREVIOUS)
         with engine.begin() as conn:
             restored = dict(conn.execute(select(documents.c.document_key, documents.c.payload)).all())
+        assert [record["id"] for record in restored["integrations"]] == ["chat-old", created["id"]]
         assert restored["integrations"][0]["extension"] == {"preserve": True}
         decoded = json.loads(cipher.decrypt(restored["secrets"]["ciphertext"].encode()))
         assert decoded == {**secrets, "chat-old": {**secrets["chat-old"], "signingSecret": "new-secret"}}

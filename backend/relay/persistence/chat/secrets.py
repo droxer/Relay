@@ -70,8 +70,12 @@ def write_secret(engine: Any, cipher: Fernet | None, integration_id: str, values
 
 
 def ensure_legacy_secrets_converted(
-    engine: Any, cipher: Fernet | None, *, integration_id: str | None = None,
-    active_only: bool = False, force: bool = False,
+    engine: Any,
+    cipher: Fernet | None,
+    *,
+    integration_id: str | None = None,
+    active_only: bool = False,
+    force: bool = False,
 ) -> None:
     # Steady-state calls perform a small indexed existence read, with no global
     # lock or credential payload. Only the one-time conversion takes that lock.

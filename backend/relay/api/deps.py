@@ -46,7 +46,7 @@ class AppContext:
     task_store: TaskStore
     daemon_store: DaemonStore
     # Concrete: routes use the integration admin surface, which the read-only
-    # ``ChatStore`` protocol does not declare; every store subclasses this one.
+    # ``ChatStore`` protocol does not declare; this is the database implementation.
     chat_store: DatabaseChatIntegrationStore
     registry: DaemonNodeRegistry
     backend: ServerDaemonNodeBackend

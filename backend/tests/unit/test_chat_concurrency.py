@@ -4,76 +4,60 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 import pytest
-from cryptography.fernet import Fernet
 
 from postgres_backend import disposable_postgres_url
 from relay.persistence.chat.store import DatabaseChatIntegrationStore
 
 
 @pytest.mark.postgres
-@pytest.mark.parametrize("operation", ["create", "update", "secrets"])
-def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation):
-    monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
+@pytest.mark.parametrize("same_store", [False, True])
+def test_same_integration_patches_preserve_both_writers(same_store):
+    from threading import get_ident
+    from sqlalchemy import event
+
     with disposable_postgres_url() as url:
         first = DatabaseChatIntegrationStore(url)
-        second = DatabaseChatIntegrationStore(url)
-        seed = first.create_integration({"provider": "discord", "displayName": "original"})
-        other = first.create_integration({"provider": "discord"}) if operation == "secrets" else None
-        document_key = "integrations"
+        second = first if same_store else DatabaseChatIntegrationStore(url)
+        integration = first.create_integration({"provider": "discord", "displayName": "original"})
         paused, release, attempted, second_read = (Event() for _ in range(4))
-        original_first, original_second = first._read_document, second._read_document
+        writer = []
 
-        def pause_first(key, default):
-            result = original_first(key, default)
-            if key == document_key and not paused.is_set():
+        def pause_selected(conn, cursor, statement, *args):
+            if not statement.startswith("SELECT chat_integrations.payload"):
+                return
+            if writer and get_ident() == writer[0] and not paused.is_set():
                 paused.set()
-                assert release.wait(5), "first writer was not released"
-            return result
-
-        def observe_second(key, default):
-            if key == document_key:
+                assert release.wait(5)
+            elif writer and get_ident() != writer[0]:
                 second_read.set()
-            return original_second(key, default)
 
-        monkeypatch.setattr(first, "_read_document", pause_first)
-        monkeypatch.setattr(second, "_read_document", observe_second)
+        def change_first():
+            writer.append(get_ident())
+            return first.update_integration(integration["id"], {"displayName": "updated"})
 
-        def mutate(store, index):
-            if index == 2:
-                attempted.set()
-            if operation == "create":
-                return store.create_integration({"provider": "discord", "displayName": str(index)})
-            if operation == "secrets":
-                record_id = seed["id"] if index == 1 else other["id"]
-                return store.update_integration(record_id, {"secrets": {"botToken": f"token-{index}"}})
-            if operation == "update":
-                patch = {"displayName": "updated"} if index == 1 else {"tenantId": "tenant"}
-                return store.update_integration(seed["id"], patch)
-            raise AssertionError("unknown mutation")
+        def change_second():
+            attempted.set()
+            return second.update_integration(integration["id"], {"tenantId": "tenant"})
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            a = pool.submit(mutate, first, 1)
-            try:
-                assert paused.wait(5)
-                b = pool.submit(mutate, second, 2)
-                assert attempted.wait(5)
-                read_stale_state = second_read.wait(0.2)
-            finally:
-                release.set()
-            a.result(timeout=5)
-            b.result(timeout=5)
-        assert not read_stale_state, "another store read mutable state before the first committed"
-        if operation == "create":
-            assert {i["displayName"] for i in first.list_integrations()} == {"original", "1", "2"}
-            assert len(first.audit_events()) == 3
-        elif operation == "update":
-            result = first.get_integration(seed["id"])
-            assert (result["displayName"], result["tenantId"]) == ("updated", "tenant")
-            assert len(first.audit_events()) == 3
-        elif operation == "secrets":
-            assert first.connection_settings(seed["id"])["secrets"]["botToken"] == "token-1"
-            assert first.connection_settings(other["id"])["secrets"]["botToken"] == "token-2"
-            assert len(first.audit_events()) == 4
+        event.listen(first.engine, "before_cursor_execute", pause_selected)
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                one = pool.submit(change_first)
+                try:
+                    assert paused.wait(5)
+                    two = pool.submit(change_second)
+                    assert attempted.wait(5)
+                    stale_read = second_read.wait(0.2)
+                finally:
+                    release.set()
+                one.result(timeout=5)
+                two.result(timeout=5)
+            assert not stale_read
+        finally:
+            event.remove(first.engine, "before_cursor_execute", pause_selected)
+        result = first.get_integration(integration["id"])
+        assert (result["displayName"], result["tenantId"]) == ("updated", "tenant")
+        assert len(first.audit_events()) == 3
 
 
 @pytest.mark.postgres
@@ -87,19 +71,14 @@ def test_chat_reader_progresses_with_a_one_connection_pool(monkeypatch):
         engine = create_engine(url, pool_size=1, max_overflow=0, pool_timeout=0.5)
         store.engine = engine
         paused, release, attempted, acquired_connection = (Event() for _ in range(4))
-        original = store._read_document
-
-        def pause_read(key, default):
-            if key == "integrations" and not paused.is_set():
-                paused.set()
-                assert release.wait(5)
-            return original(key, default)
 
         def observe_guard(conn, cursor, statement, *args):
+            if statement.startswith("SELECT chat_integrations.payload") and not paused.is_set():
+                paused.set()
+                assert release.wait(5)
             if "pg_try_advisory_xact_lock" in statement:
                 acquired_connection.set()
 
-        monkeypatch.setattr(store, "_read_document", pause_read)
         event.listen(engine, "before_cursor_execute", observe_guard)
 
         def update():
@@ -137,7 +116,12 @@ def test_conversation_upserts_lock_only_the_selected_key(same_key):
         b_payload = a_payload if same_key else {**a_payload, "conversationId": "b"}
 
         def pause_selected_read(conn, cursor, statement, *args):
-            if first_thread and get_ident() == first_thread[0] and "FROM chat_conversations" in statement and not paused.is_set():
+            if (
+                first_thread
+                and get_ident() == first_thread[0]
+                and "FROM chat_conversations" in statement
+                and not paused.is_set()
+            ):
                 paused.set()
                 assert release.wait(5)
 

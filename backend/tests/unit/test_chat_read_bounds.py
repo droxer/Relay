@@ -1,4 +1,4 @@
-"""Chat lists read/decrypt the shared secret document once, regardless of size."""
+"""Public metadata avoids decryption; runtime lists decrypt only selected rows."""
 
 import json
 
@@ -14,9 +14,13 @@ def test_chat_lists_batch_secret_document_reads(tmp_path, monkeypatch, view):
     monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     store = make_chat_store(tmp_path)
     for index in range(8):
-        integration = store.create_integration({
-            "provider": "discord", "displayName": str(index), "secrets": {"botToken": f"credential-{index}"},
-        })
+        integration = store.create_integration(
+            {
+                "provider": "discord",
+                "displayName": str(index),
+                "secrets": {"botToken": f"credential-{index}"},
+            }
+        )
         store.add_identity_link(integration["id"], {"externalUserId": "external", "userId": "owner"})
         store.add_allowed_conversation(integration["id"], {"conversationId": "conversation"})
         store.check_integration(integration["id"], provider_health=(True, "healthy"))
@@ -29,7 +33,7 @@ def test_chat_lists_batch_secret_document_reads(tmp_path, monkeypatch, view):
         return decrypt(*args, **kwargs)
 
     def record_sql(conn, cursor, statement, *args):
-        if "FROM chat_documents" in statement:
+        if statement.startswith("SELECT"):
             statements.append(statement)
 
     monkeypatch.setattr(store._secret_cipher, "decrypt", record_decrypt)
@@ -39,8 +43,8 @@ def test_chat_lists_batch_secret_document_reads(tmp_path, monkeypatch, view):
     finally:
         event.remove(store.engine, "before_cursor_execute", record_sql)
     assert len(result) == 8
-    assert len(statements) <= 2, "one integration document and one secret document per list"
-    assert len(decryptions) == 1, "the encrypted map must not be decrypted per integration"
+    assert len(statements) <= 2, "one legacy marker lookup and one joined record query per list"
+    assert len(decryptions) == (0 if view == "public" else 8)
     if view == "public":
         assert all(item["secretConfigured"] and item["secretKeys"] == ["botToken"] for item in result)
         assert "credential-" not in json.dumps(result)

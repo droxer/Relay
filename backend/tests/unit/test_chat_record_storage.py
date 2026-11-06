@@ -11,13 +11,13 @@ from store_fixtures import make_chat_store
 
 
 def reject_legacy_records(store, monkeypatch):
-    original = store._read_document
+    original = store.engine.dialect.do_execute
 
-    def read(key, default):
-        assert key not in {"audit", "conversations"}, "operation loaded a growing legacy document"
-        return original(key, default)
+    def execute(cursor, statement, parameters, context=None):
+        assert "chat_documents.payload" not in statement, "operation loaded a legacy document payload"
+        return original(cursor, statement, parameters, context)
 
-    monkeypatch.setattr(store, "_read_document", read)
+    monkeypatch.setattr(store.engine.dialect, "do_execute", execute)
 
 
 def test_audit_appends_and_filtered_tail_do_not_load_history(tmp_path, monkeypatch):

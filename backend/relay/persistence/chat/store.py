@@ -78,7 +78,11 @@ class DatabaseChatIntegrationStore:
         self, integration_id: str | None = None, *, active_only: bool = False, force: bool = False
     ) -> None:
         credentials.ensure_legacy_secrets_converted(
-            self.engine, self._secret_cipher, integration_id=integration_id, active_only=active_only, force=force,
+            self.engine,
+            self._secret_cipher,
+            integration_id=integration_id,
+            active_only=active_only,
+            force=force,
         )
 
     @contextmanager

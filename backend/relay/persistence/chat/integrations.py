@@ -85,9 +85,15 @@ def identity_candidates(engine: Any, provider: str, tenant_id: str | None) -> li
 
 
 def settings_record(engine: Any, integration_id: str) -> tuple[dict[str, Any], str | None]:
-    statement = select(integrations.c.payload, integration_secrets.c.ciphertext).select_from(
-        integrations.outerjoin(integration_secrets, integrations.c.integration_id == integration_secrets.c.integration_id)
-    ).where(integrations.c.integration_id == integration_id)
+    statement = (
+        select(integrations.c.payload, integration_secrets.c.ciphertext)
+        .select_from(
+            integrations.outerjoin(
+                integration_secrets, integrations.c.integration_id == integration_secrets.c.integration_id
+            )
+        )
+        .where(integrations.c.integration_id == integration_id)
+    )
     with store_transaction(engine) as conn:
         row = conn.execute(statement).first()
     if row is None:

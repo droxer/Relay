@@ -13,6 +13,8 @@ from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.persistence.chat.store import DatabaseChatIntegrationStore
+from relay.persistence.chat.secrets import write_secret
+from relay.persistence.tables.chat import integration_secrets
 from store_fixtures import make_chat_store
 from relay.chat.provider_health import (
     probe_chat_integration,
@@ -418,11 +420,7 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
         assert forbidden_patch.status_code == 400
 
         chat_store = client.app.state.chat_store
-        replaced_secrets = json.dumps({integration_id: {"botToken": "token"}})
-        chat_store._write_document(
-            "secrets",
-            {"ciphertext": chat_store._secret_cipher.encrypt(replaced_secrets.encode()).decode()},
-        )
+        write_secret(chat_store.engine, chat_store._secret_cipher, integration_id, {"botToken": "token"})
         client.patch(
             f"/api/v1/admin/chat-integrations/{integration_id}",
             json={
@@ -542,7 +540,7 @@ def test_chat_integrations_require_admin(monkeypatch) -> None:
         assert response.status_code == 403
 
 
-def test_chat_integration_store_serializes_concurrent_creates() -> None:
+def test_chat_integration_store_preserves_concurrent_creates() -> None:
     with TemporaryDirectory() as root:
         store = make_chat_store(root)
 
@@ -608,13 +606,5 @@ def test_database_chat_integration_store_encrypts_secrets(monkeypatch) -> None:
         )
         assert not (Path(root) / "chat").exists()
         with store.engine.begin() as connection:
-            encrypted = (
-                connection.execute(
-                    store.documents.select().where(
-                        store.documents.c.document_key == "secrets"
-                    )
-                )
-                .mappings()
-                .one()["payload"]
-            )
-        assert "secret-token" not in json.dumps(encrypted)
+            encrypted = connection.execute(integration_secrets.select()).mappings().one()["ciphertext"]
+        assert "secret-token" not in encrypted

@@ -13,6 +13,7 @@ from sqlalchemy.exc import DBAPIError
 
 from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from relay.persistence.tables.chat import documents
+from relay.persistence.chat.audit import append_audit_event
 from test_schema_drift import migrated_schema as _migrated_schema
 
 # Reuse the same scratch-schema fixture without importing a name shadowed by test parameters.
@@ -74,12 +75,14 @@ def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrate
                 "integrations": [{"id": "a", "provider": "discord", "displayName": "before"}],
             },
         )
-        command.upgrade(config(), "head")
+        command.upgrade(config(), "20261106_0116")
         assert {"chat_audit_events", "chat_conversations"} <= set(inspect(engine).get_table_names())
         store = DatabaseChatIntegrationStore(url)
         assert store.audit_events("a", limit=2) == history[-2:]
         assert store.get_conversation_session(binding) == binding
-        store.update_integration("a", {"displayName": "after"}, actor="operator")
+        append_audit_event(
+            engine, {"id": "new-write", "integrationId": "a", "type": "chat.integration.updated", "actor": "operator"}
+        )
         all_history = store.audit_events()
         assert all_history[:4] == history
         assert len(all_history) == 5, "the sequence advances after importing explicit ordinals"
@@ -90,7 +93,7 @@ def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrate
         assert restored["audit"] == all_history
         assert restored["conversations"] == [binding]
         assert restored["secrets"] == encrypted
-        command.upgrade(config(), "head")
+        command.upgrade(config(), "20261106_0116")
         assert store.audit_events() == all_history
     finally:
         engine.dispose()
@@ -113,13 +116,13 @@ def test_chat_records_migration_rejects_bad_legacy_data_atomically(migrated_sche
         command.downgrade(config(), OLD_REVISION)
         put_documents(engine, {record_key: invalid})
         with pytest.raises(DBAPIError, match="Legacy chat"):
-            command.upgrade(config(), "head")
+            command.upgrade(config(), "20261106_0116")
         with engine.begin() as conn:
             assert conn.scalar(select(documents.c.payload).where(documents.c.document_key == record_key)) == invalid
             assert conn.scalar(text("SELECT version_num FROM alembic_version")) == OLD_REVISION
         assert "chat_audit_events" not in inspect(engine).get_table_names()
         put_documents(engine, {record_key: []})
-        command.upgrade(config(), "head")
+        command.upgrade(config(), "20261106_0116")
         assert "chat_audit_events" in inspect(engine).get_table_names()
     finally:
         engine.dispose()

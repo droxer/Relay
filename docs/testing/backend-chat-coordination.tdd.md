@@ -5,6 +5,11 @@ refactor. It addresses shared chat documents, provider side effects, bounded
 connection pools, and repeated secret reads. It does not establish production
 throughput or complete the broader backend audit.
 
+Current storage follow-ups: [indexed audit/conversations](backend-chat-records.tdd.md)
+and [per-integration configuration/credentials](backend-chat-configuration.tdd.md)
+replace the shared document locks and list-decryption behavior described below.
+Provider-operation guards remain in use.
+
 ## User journeys
 
 - Two backend replicas can create/update chat integrations, secrets, audit

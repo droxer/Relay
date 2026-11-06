@@ -17,7 +17,9 @@ from store_fixtures import make_chat_store
 def test_chat_reads_and_writes_use_only_selected_credentials(tmp_path, monkeypatch, operation):
     monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     store = make_chat_store(tmp_path)
-    integrations = [store.create_integration({"provider": "discord", "secrets": {"botToken": f"credential-{i}"}}) for i in range(8)]
+    integrations = [
+        store.create_integration({"provider": "discord", "secrets": {"botToken": f"credential-{i}"}}) for i in range(8)
+    ]
     decrypted = []
     decrypt = store._secret_cipher.decrypt
 
@@ -42,7 +44,9 @@ def test_chat_reads_and_writes_use_only_selected_credentials(tmp_path, monkeypat
 
 @pytest.mark.postgres
 @pytest.mark.parametrize("same_store", [False, True])
-def test_different_integrations_mutate_independently(same_store):
+@pytest.mark.parametrize("with_credentials", [False, True])
+def test_different_integrations_mutate_independently(same_store, with_credentials, monkeypatch):
+    monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     with disposable_postgres_url() as url:
         first = DatabaseChatIntegrationStore(url)
         second = first if same_store else DatabaseChatIntegrationStore(url)
@@ -58,11 +62,15 @@ def test_different_integrations_mutate_independently(same_store):
 
         def change_first():
             writer.append(get_ident())
-            return first.update_integration(a["id"], {"displayName": "first"})
+            return first.update_integration(
+                a["id"], {"displayName": "first", **({"secrets": {"botToken": "first"}} if with_credentials else {})}
+            )
 
         def change_second():
             attempted.set()
-            return second.update_integration(b["id"], {"displayName": "second"})
+            return second.update_integration(
+                b["id"], {"displayName": "second", **({"secrets": {"botToken": "second"}} if with_credentials else {})}
+            )
 
         event.listen(first.engine, "before_cursor_execute", pause_write)
         try:
@@ -79,6 +87,9 @@ def test_different_integrations_mutate_independently(same_store):
         finally:
             event.remove(first.engine, "before_cursor_execute", pause_write)
         assert first.get_integration(a["id"])["displayName"] == "first"
+        if with_credentials:
+            assert first.connection_settings(a["id"])["secrets"]["botToken"] == "first"
+            assert second.connection_settings(b["id"])["secrets"]["botToken"] == "second"
 
 
 @pytest.mark.parametrize("operation", ["list", "runtime", "get", "settings"])
@@ -91,7 +102,11 @@ def test_unused_legacy_secrets_do_not_require_a_key(tmp_path, monkeypatch, opera
     store = make_chat_store(tmp_path)
     envelope = Fernet(Fernet.generate_key()).encrypt(b'{"orphan":{"botToken":"old"}}').decode()
     with store.engine.begin() as conn:
-        conn.execute(insert(documents).values(document_key="secrets", payload={"ciphertext": envelope}, updated_at=datetime.now(UTC)))
+        conn.execute(
+            insert(documents).values(
+                document_key="secrets", payload={"ciphertext": envelope}, updated_at=datetime.now(UTC)
+            )
+        )
     if operation == "list":
         assert store.list_integrations() == []
     elif operation == "runtime":

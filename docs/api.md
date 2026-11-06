@@ -303,6 +303,10 @@ integration across PostgreSQL backend replicas. A conflicting operation, or a
 `PATCH /api/v1/admin/chat-integrations/{id}` changing `tenantId`, `config`,
 `secrets`, or `status` during one, returns 409; retry after the active operation
 finishes. Display-only edits and operations on other integrations can proceed.
+Configuration and encrypted credentials are stored per integration. Public
+metadata returns credential key names without decrypting values; settings and
+runtime access decrypt only the selected or active integrations. See the
+[migration 0117 rollout and rollback requirements](backend-scalability.md#per-integration-chat-configuration-and-credentials).
 
 An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
 checking that no dispatch claim or run request owns it. It records the status

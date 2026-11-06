@@ -109,8 +109,8 @@ The final conversation/auth run appended coverage at the same source locations.
 
 ## Remaining scope
 
-The larger refactoring goal stays active. Integration configuration and encrypted
-secrets remain shared documents. Legacy full thread responses still transfer the
+The larger refactoring goal stays active. The [configuration follow-up](backend-chat-configuration.tdd.md)
+replaces the remaining shared configuration and credential documents. Legacy full thread responses still transfer the
 selected user's complete histories; explicit summary/pagination contracts can
 reduce those payloads further. Production capacity, p95 latency, and pool wait
 under an intended workload have not been established by these correctness and
