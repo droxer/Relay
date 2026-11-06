@@ -31,6 +31,7 @@ from .rows import (
     task_to_row,
 )
 from .state import TaskStoreState
+from ..connection.snapshots import copy_automation_grants
 
 
 class TaskRoutineRows(TaskStoreState):
@@ -72,6 +73,7 @@ class TaskRoutineRows(TaskStoreState):
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
             conn.execute(insert(self.tasks).values(**occurrence_row))
+            copy_automation_grants(conn, routine.get("ownerUserId") or "", routine_id, occurrence["id"])
             for sequence, occurrence_event in enumerate(occurrence_events):
                 conn.execute(
                     insert(self.events).values(

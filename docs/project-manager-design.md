@@ -150,7 +150,7 @@ MCP tool. Browser owner authentication is required for Apply.
 
 See [architecture-fix verification](testing/project-manager-architecture-fixes.md)
 and [the initial feature evidence](testing/project-manager.tdd.md). Migrations 0113
-(proposals) and 0114 (MCP token digests) must run before serving this version.
+(proposals), 0114 (Connections) and 0115 (MCP token digests) must run before serving this version.
 Rebuild and install the Computer client advertising `project-manager-mcp`; older
 clients are refused for manager runs until updated. Native provider
 sessions are not simulated by the browser fixtures; actual stdio/API transport,

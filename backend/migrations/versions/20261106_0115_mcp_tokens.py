@@ -1,14 +1,14 @@
 """Scoped, expiring API tokens for local Relay MCP clients.
 
-Revision ID: 20261106_0114
-Revises: 20261106_0113
+Revision ID: 20261106_0115
+Revises: 20261106_0114
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "20261106_0114"
-down_revision = "20261106_0113"
+revision = "20261106_0115"
+down_revision = "20261106_0114"
 branch_labels = None
 depends_on = None
 

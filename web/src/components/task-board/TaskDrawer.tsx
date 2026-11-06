@@ -5,6 +5,8 @@ import { AutomationPauseBanner } from "./AutomationPauseBanner";
 import { ScheduleFields } from "./ScheduleFields";
 import { WebhookSecretPanel } from "./WebhookSecretPanel";
 import { TaskTagsField } from "./TaskTagsField";
+import { ConnectionGrantField } from "../connections/ConnectionGrantField";
+import { validConnectionGrants } from "../../api-client/connections";
 import { describeTrigger } from "../../lib/automationTrigger";
 import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -264,6 +266,7 @@ export function TaskDrawer({
       projectTriggerRef.current?.focus();
       return;
     }
+    if (!validConnectionGrants(form.connectionGrants)) return;
     onSubmit(event);
   }
 
@@ -381,6 +384,9 @@ export function TaskDrawer({
           />
         </Field>
         {form.variant === "routine" ? projectField : null}
+        <ConnectionGrantField key={form.id ?? "new"} targetType={form.variant === "routine" ? "automation" : "task"}
+          targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
+          onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
         {/* Two-up pairs only — acceptance with priority, status with due — so
             no field is ever left alone in half a row. */}
         <div className="task-drawer-form-grid">

@@ -88,6 +88,7 @@ export type TaskRunAssignment = Omit<RunInput["assignments"][number], "agent"> &
 };
 
 export interface TaskMutationInput {
+  connectionGrants?: import("./connections.ts").ConnectionGrant[];
   /** Accept only the recorded work shown in this review revision. */
   reviewRevision?: string;
   collaborationStyle?: CollaborationStyle | "" | null;

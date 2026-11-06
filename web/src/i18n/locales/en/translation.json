@@ -2904,7 +2904,8 @@
       "rate_limited": "Paused by Relay after too many runs in an hour. Turn it back on when ready.",
       "failing": "Paused by Relay after its runs kept failing. Fix the cause, then turn it back on.",
       "no_target": "Paused by Relay because it has no agent, team, or open project to run it. Assign one, then turn it back on.",
-      "invalid_schedule": "Paused by Relay because its schedule can no longer run. Change the schedule, then turn it back on."
+      "invalid_schedule": "Paused by Relay because its schedule can no longer run. Change the schedule, then turn it back on.",
+      "connection_unavailable": "A required connection is unavailable. Reconnect it, then resume."
     },
     "preview_next": "next {{time}}"
   },
@@ -3483,7 +3484,9 @@
     "reconnect_hint": "Your GitHub authorization needs to be renewed. Connect again to continue.",
     "permissions_error": "Relay’s GitHub App needs read-only issue access. Ask your Relay administrator to check its permissions.",
     "coming_soon": "Coming soon",
-    "public_only": "Import issues from public repositories now. GitHub connection for private repositories is coming soon."
+    "public_only": "Import public issues without authentication. Private repository imports are not available. Use Connections to give your work authenticated service access.",
+    "import_title": "Public issue import",
+    "public_repositories": "Public repositories"
   },
   "delegation": {
     "can_delegate_to": "Can delegate to",
@@ -3515,6 +3518,59 @@
       "blocked": "Blocked"
     },
     "all_eligible": "All eligible agents (including new ones)"
+  },
+  "connections": {
+    "title": "Connections",
+    "intro": "Connect a service once, then choose what each thread, task, or automation can use.",
+    "loading": "Loading connections…",
+    "load_failed": "Connections could not load. Try again.",
+    "retry": "Try again",
+    "yours": "Your connections",
+    "empty": "No services connected yet. Connect a service below to get started.",
+    "available": "Available services",
+    "not_configured": "Not available on this Relay deployment.",
+    "connect": "Connect",
+    "add_another": "Add another account",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "confirm_disconnect": "Disconnect service",
+    "cancel": "Cancel",
+    "disconnect_body": "Disconnect {{identity}}? New service calls will stop and dependent automations will pause. Work history will remain.",
+    "usage_failed": "Usage could not load. Disconnect will still stop access to this service.",
+    "action_failed": "The service or its access could not be updated. Reload the page and try again, or reconnect if authorization was revoked.",
+    "selected": "{{count}} selected",
+    "none_selected": "None selected",
+    "grant_hint": "Choose an identity, resources, and actions. Access is limited to this work.",
+    "resources": "Resources",
+    "actions": "Allowed actions",
+    "no_resources": "No accessible resources found.",
+    "resources_failed": "Resources could not load. Check the service connection and try again.",
+    "selection_required": "Select at least one resource and action for each connection.",
+    "load_more": "Load more",
+    "missing": "A selected connection is unavailable. Reconnect it or remove it.",
+    "remove": "Remove",
+    "inherited": "This run uses the access saved by its automation.",
+    "task_managed": "This thread uses its task’s connections. Edit them on the task.",
+    "connect_new_tab": "Connect a service in Settings (opens a new tab)",
+    "status": {
+      "connected": "Connected",
+      "reconnect_required": "Reconnect needed",
+      "disconnected": "Disconnected"
+    },
+    "provider_hint": {
+      "github": "Authorize GitHub repository access. Relay exposes issue reads only for the repositories you choose."
+    },
+    "action": {
+      "github_list_issues": "Read issues"
+    },
+    "targets": {
+      "thread": "Thread",
+      "task": "Task",
+      "automation": "Automation"
+    },
+    "review_access": "Review access",
+    "used_by_one": "Used by {{count}} work item",
+    "used_by_other": "Used by {{count}} work items"
   },
   "project_manager": {
     "title": "Relay",

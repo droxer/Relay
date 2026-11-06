@@ -41,6 +41,7 @@ class _PreparedRound:
     question_id: str | None = None
     approve: bool = False
     attachment_ids: tuple[str, ...] = ()
+    connection_grants: list[dict[str, Any]] | None = None
 
 
 # What a caller may say about a participant it names. Identity (`assignmentId`)
@@ -76,6 +77,8 @@ def _scoped_idempotency_key(
 def _request_fingerprint(intent: _PreparedRound) -> str:
     payload = asdict(intent)
     payload.pop("idempotency_key", None)
+    if payload.get("connection_grants") is None:
+        payload.pop("connection_grants", None)
     if not payload.get("attachment_ids"):
         payload.pop("attachment_ids", None)
     # Each setup draft creates its own task, so like the draft id below it is
@@ -214,6 +217,7 @@ def _prepare_run(intent: RunIntent) -> _PreparedRound:
     ]
     return _PreparedRound(
         task_goal=intent.task_goal,
+        connection_grants=intent.connection_grants,
         attachment_ids=intent.attachment_ids,
         session_id=intent.session_id,
         raw_assignments=raw_assignments,

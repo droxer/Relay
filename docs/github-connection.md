@@ -1,7 +1,12 @@
-# GitHub connection — coming soon
+# Public issue import and the legacy Account connection
 
-GitHub issue imports currently support **public repositories only**. Account
-connections and private repository access are coming soon.
+GitHub issue imports currently support **public repositories only**. Private
+imports and the legacy Account GitHub App installation flow remain unavailable.
+
+The separate [Connections feature](connections.md) supports configured service
+authentication and bounded use by Threads, Tasks, and Automations. It does not
+change the public-only importer or enable the legacy Account GitHub App flow
+described here.
 
 To import public issues:
 
@@ -13,7 +18,7 @@ No GitHub App registration or access token is needed. Relay checks the repositor
 public visibility and reads its issues anonymously. Supplied tokens are rejected;
 previously saved credentials are not used.
 
-Settings → Account and the import drawer show **GitHub connection — Coming soon**.
+Settings → Account links to Connections; the import drawer says **Public repositories**.
 The `RELAY_GITHUB_*` settings do not enable it in this release and are ignored at
 startup. Connection and authorization callback endpoints answer
 `501 github_connection_coming_soon` to a signed-in caller.

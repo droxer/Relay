@@ -26,6 +26,9 @@ from ..persistence.account.waitlist import DatabaseWaitlistStore
 from ..persistence.notification.store import DatabaseNotificationStore
 from ..accounts.waitlist import WaitlistService, waitlist_config_from_env
 from ..accounts.github_connection import GitHubConnectionService
+from ..connections.service import ConnectionService
+from ..core.connections import connections_config_from_env
+from ..persistence.connection.store import DatabaseConnectionStore
 from ..persistence.account.github import DatabaseGitHubConnectionStore
 from ..notifications.mailer import Mailer
 from ..persistence.automation.store import DatabaseAutomationStore
@@ -166,6 +169,12 @@ def github_connection_service_from_env() -> GitHubConnectionService:
     # and ignore App settings so they cannot enable authorization implicitly.
     url = database_url_from_env(setting="database-only GitHub connections")
     return GitHubConnectionService(DatabaseGitHubConnectionStore(url), None)
+
+
+def connection_service_from_env() -> ConnectionService:
+    configs, key = connections_config_from_env()
+    url = database_url_from_env(setting="database-only service connections")
+    return ConnectionService(DatabaseConnectionStore(url), configs, key)
 
 
 def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:

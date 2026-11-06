@@ -286,6 +286,17 @@ class AssignmentDeliveryMixin(RegistryState):
             handoff_validation=handoff_validation,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
+        if self.connection_grant_resolver:
+            try:
+                connection_grants = self.connection_grant_resolver(session_snapshot)
+            except ValueError as error:
+                raise _DeliveryRefused(str(error)) from error
+            if connection_grants:
+                if not has_capability(sandbox, "service-connections"):
+                    raise _DeliveryRefused("connection_client_update_required")
+                if assignment["executorKind"] not in ("codex", "claude"):
+                    raise _DeliveryRefused("connection_runtime_unsupported")
+                command["connections"] = connection_grants
         follow_up = run_follow_up(request_state, assignment, state)
         return {
             **command,

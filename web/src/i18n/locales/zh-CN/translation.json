@@ -2841,7 +2841,8 @@
       "rate_limited": "一小时内运行次数过多，Relay 已将其暂停。准备好后可重新启用。",
       "failing": "运行持续失败，Relay 已将其暂停。排除原因后可重新启用。",
       "no_target": "没有可运行的位置，Relay 已将其暂停。分配智能体、团队或开放的项目后可重新启用。",
-      "invalid_schedule": "计划已无法运行，Relay 已将其暂停。修改计划后可重新启用。"
+      "invalid_schedule": "计划已无法运行，Relay 已将其暂停。修改计划后可重新启用。",
+      "connection_unavailable": "所需服务连接不可用。请重新连接后恢复自动化。"
     },
     "preview_next": "下次 {{time}}"
   },
@@ -3418,7 +3419,9 @@
     "reconnect_hint": "GitHub 授权需要更新，请重新连接以继续。",
     "permissions_error": "Relay 的 GitHub App 需要只读 Issue 权限，请联系管理员检查配置。",
     "coming_soon": "即将推出",
-    "public_only": "目前支持导入公开仓库的 Issue。用于私有仓库的 GitHub 连接即将推出。"
+    "public_only": "无需授权即可导入公开议题。暂不支持私有仓库导入。若要让工作访问已授权的服务，请使用「连接」。",
+    "import_title": "公开议题导入",
+    "public_repositories": "公开仓库"
   },
   "delegation": {
     "can_delegate_to": "可以委派给",
@@ -3450,6 +3453,58 @@
       "blocked": "受阻"
     },
     "all_eligible": "所有符合条件的智能体（包括新建的）"
+  },
+  "connections": {
+    "title": "连接",
+    "intro": "授权连接服务，然后选择每个对话、任务或自动化可使用的资源和操作。",
+    "loading": "正在加载连接…",
+    "load_failed": "无法加载连接，请重试。",
+    "retry": "重试",
+    "yours": "已连接的服务",
+    "empty": "尚未连接服务。请在下方选择一个服务开始。",
+    "available": "可用服务",
+    "not_configured": "当前 Relay 部署未配置此服务。",
+    "connect": "连接",
+    "add_another": "添加其他账号",
+    "reconnect": "重新连接",
+    "disconnect": "断开连接",
+    "confirm_disconnect": "断开服务",
+    "cancel": "取消",
+    "disconnect_body": "断开 {{identity}}？后续服务调用将停止，依赖此服务的自动化将暂停。工作历史记录会保留。",
+    "used_by": "{{count}} 项工作正在使用",
+    "usage_failed": "无法加载使用情况。断开连接仍会停止此服务的访问。",
+    "action_failed": "无法更新服务或授权。请刷新页面后重试；若授权已失效，请重新连接。",
+    "selected": "已选择 {{count}} 个",
+    "none_selected": "未选择",
+    "grant_hint": "选择账号、资源和操作。授权仅用于当前工作。",
+    "resources": "资源",
+    "actions": "允许的操作",
+    "no_resources": "未找到可访问的资源。",
+    "resources_failed": "无法加载资源。请检查服务连接后重试。",
+    "selection_required": "请为每个连接至少选择一项资源和一项操作。",
+    "load_more": "加载更多",
+    "missing": "已选择的连接不可用，请重新连接或移除。",
+    "remove": "移除",
+    "inherited": "本次运行使用自动化保存的授权。",
+    "task_managed": "此对话使用所属任务的连接，请在任务中修改。",
+    "connect_new_tab": "在设置中连接服务（在新标签页打开）",
+    "status": {
+      "connected": "已连接",
+      "reconnect_required": "需要重新连接",
+      "disconnected": "已断开"
+    },
+    "provider_hint": {
+      "github": "授权 GitHub 仓库访问。Relay 仅开放所选仓库的议题读取操作。"
+    },
+    "action": {
+      "github_list_issues": "读取议题"
+    },
+    "targets": {
+      "thread": "对话",
+      "task": "任务",
+      "automation": "自动化"
+    },
+    "review_access": "查看授权"
   },
   "project_manager": {
     "title": "Relay",

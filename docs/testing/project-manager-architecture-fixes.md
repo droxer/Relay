@@ -68,7 +68,17 @@ and the ordinary-Thread attribution scenario were rerun after that addition.
 
 Install the rebuilt Computer client advertising `project-manager-mcp`; older
 clients are refused for these manager runs. No new schema migration is required
-beyond 0114. Restart open standalone Agent Runtimes to load the updated MCP
+beyond 0115 (MCP tokens, sequenced after Connections revision 0114). Restart open standalone Agent Runtimes to load the updated MCP
 configuration. Managed launches verify forwarding configuration before execution.
 See [the current design](../project-manager-design.md) for credential scope,
 renewal/revocation, runtime configuration and handover semantics.
+
+## Integration with Connections on main
+
+Merged main at `b9c4d61f`, preserving both `service-connections` and
+`project-manager-mcp` capabilities and their runtime paths. Main already owns
+migration 0114 for Connections, so the unmerged MCP token migration is now 0115,
+with 0114 as its parent. The merged application passes the full production build,
+51 backend checks (manager/MCP/Connections APIs, layering, module size and client
+capability parity), 16 focused Node checks, 16 React interactions and 17 PostgreSQL
+migration/schema checks. Dependency audit reports zero vulnerabilities.

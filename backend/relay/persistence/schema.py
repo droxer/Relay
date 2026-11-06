@@ -16,6 +16,7 @@ from .tables import agents as _agents  # noqa: F401
 from .tables import auth as _auth  # noqa: F401
 from .tables import automations as _automations  # noqa: F401
 from .tables import chat as _chat  # noqa: F401
+from .tables import connections as _connections  # noqa: F401
 from .tables import github as _github  # noqa: F401
 from .tables import daemon as _daemon  # noqa: F401
 from .tables import device_authorizations as _device_authorizations  # noqa: F401

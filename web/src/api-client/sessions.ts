@@ -59,6 +59,7 @@ export function runLogicalAgents(input: AgentRunInput): Promise<RelaySession> {
     method: "POST",
     body: {
       taskGoal: input.taskGoal,
+      ...(input.connectionGrants !== undefined ? { connectionGrants: input.connectionGrants } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
       ...(input.daemonNodeId ? { daemonNodeId: input.daemonNodeId } : {}),

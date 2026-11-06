@@ -70,7 +70,7 @@ Fixture data, captured in the normal Agent conversation and visually inspected:
 
 ## Rollout
 
-Run migrations 0113 and 0114, then install the rebuilt Computer client. On a local
+Run migrations through 0115 (0114 is Connections; 0115 is MCP tokens), then install the rebuilt Computer client. On a local
 Computer, ready runtimes get Relay MCP during daemon registration. Restart open
 Agent Runtimes to load it. Existing runtime configuration is preserved, and token
 revocation/rotation instructions are in [the implementation design](../project-manager-design.md).
