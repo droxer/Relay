@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from relay.app import create_app
 from relay.persistence.events import relay_event
 
@@ -286,3 +287,25 @@ def test_dashboard_tokens_aggregate_runs_without_double_counting_sessions(monkey
         body = client.get("/api/v1/admin/dashboard/tokens").json()
 
         assert body["total"] == 47
+
+
+def test_token_dashboard_does_not_transfer_unused_run_metadata(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_grouped", {"input": 10, "output": 5})
+        ledger_reads = []
+
+        def capture(conn, cursor, statement, *args):
+            if statement.lstrip().upper().startswith("SELECT") and "session_run_token_usage" in statement:
+                ledger_reads.append(statement.lower())
+
+        event.listen(app.state.session_store.engine, "before_cursor_execute", capture)
+        try:
+            response = client.get("/api/v1/admin/dashboard/tokens")
+        finally:
+            event.remove(app.state.session_store.engine, "before_cursor_execute", capture)
+        assert response.status_code == 200
+        assert response.json()["total"] == 15
+        assert ledger_reads
+        assert all("task_goal" not in statement and "group by" in statement for statement in ledger_reads)
