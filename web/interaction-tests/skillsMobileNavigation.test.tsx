@@ -21,10 +21,12 @@ vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 
 function MobileSkills() {
   const [lead, setLead] = useState<HTMLDivElement | null>(null);
+  // The open skill lives in the URL; this state stands in for the router.
+  const [skillId, setSkillId] = useState<string | null>(null);
   return <>
     <div ref={setLead} />
     <MobileTopbarSlotContext.Provider value={{ lead, actions: null, title: null }}>
-      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as CurrentUser} /></DialogProvider>
+      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as CurrentUser} skillId={skillId} onSelectSkill={setSkillId} /></DialogProvider>
     </MobileTopbarSlotContext.Provider>
   </>;
 }

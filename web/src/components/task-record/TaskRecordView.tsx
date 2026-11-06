@@ -33,7 +33,6 @@ export function TaskRecordView({
   currentUser,
   tasks,
   drawer,
-  originLabel,
   tabSearchKey,
   hrefForRecord,
   onEdit,
@@ -55,9 +54,6 @@ export function TaskRecordView({
     /** Fires after the drawer's exit animation — release the mirrored record here. */
     onClosed?: () => void;
   };
-  /** Where this record was opened from, when that is not one of the boards —
-   *  a record riding over a project must not claim the backlog as its origin. */
-  originLabel?: string;
   tabSearchKey?: "tab" | "recordTab";
   hrefForRecord?: (taskId: string, runId?: string | null) => string;
   onEdit: (task: RelayTaskListItem) => void;
@@ -205,9 +201,9 @@ export function TaskRecordView({
 
   if (!drawer) return body;
 
-  /* The drawer's header speaks for the record: the routine breadcrumb for a
-     run, the board's name otherwise — the page presentation carries the same
-     words in its own header. */
+  /* A run's drawer carries its routine as a breadcrumb back to it. Any other
+     record gets no line above its title: the drawer opens over the list it
+     came from, so naming that list only restated what is still in view. */
   const kicker = parentRoutine ? (
     <a
       className="record-back"
@@ -220,7 +216,7 @@ export function TaskRecordView({
     >
       {parentRoutine.title}
     </a>
-  ) : originLabel ?? t(task && recordVariant(task) === "task" ? "nav.backlog" : "nav.routine");
+  ) : undefined;
 
   return (
     <Drawer

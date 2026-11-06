@@ -72,6 +72,29 @@
   max-width: 100%;
 }
 
+/* In a list row the title is the fact and the tags are a hint, so the tags
+   give way first: they shrink a thousand times faster than the title, and
+   wrap inside a one-chip-high box (a badge is --avatar-xs tall, task-tags.css)
+   so a later chip that no longer fits drops out whole instead of being cut
+   mid-name. The first chip has no line to wrap to, so it ellipsizes like the
+   title does. The record lists every tag. */
+.backlog-row-lead-main > .tag-list {
+  flex: 0 1000 auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  height: var(--avatar-xs);
+  overflow: hidden;
+}
+
+.backlog-row-lead-main > .tag-list > li { flex: none; }
+
+.backlog-row-lead-main > .tag-list > li:first-child { flex: 0 1 auto; }
+
+.backlog-row-lead-main > .tag-list > li:first-child > .tag-badge {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
 .backlog-row-title {
   min-width: 0;
   /* Two Button base utilities have to be undone for the title to truncate.
@@ -716,7 +739,6 @@ tr[data-selected="true"] > td:first-child {
   .task-table .task-col-ref,
   .task-table .issue-col-project,
   .task-table .task-col-priority,
-  .task-table .task-col-mark--priority,
   .task-table .task-col-assignee,
   .task-table .task-col-due {
     display: block;
@@ -729,7 +751,6 @@ tr[data-selected="true"] > td:first-child {
   }
 
   .task-table > tbody > tr > td[data-slot="table-cell"].task-col-ref { order: 10; min-width: 0; }
-  .task-table .task-col-mark--priority,
   .task-table .task-col-priority { order: 11; }
   .task-table .task-col-due { order: 12; }
   .task-table .issue-col-project { order: 13; }

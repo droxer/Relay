@@ -44,7 +44,7 @@ export function MobileMoreSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   routes: readonly MoreSheetRoute[];
-  currentRoute: AppRoute;
+  currentRoute: AppRoute | null;
   hrefForRoute: (route: AppRoute) => string;
   onNavigate: (event: MouseEvent<HTMLAnchorElement>, route: AppRoute) => void;
   onSearch: () => void;

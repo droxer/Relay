@@ -499,7 +499,10 @@ tr.is-pulse > td:first-child::after {
 }
 
 /* Phones: the list toolbar every other route uses — the filter chips as one
-   sideways strip, then search across the full width, then the sort menu.
+   sideways strip with the sort menu at its end, then search across the full
+   width. Sort had a row of its own, which with the section tabs, the
+   Users/Invites tabs, the chips, and search put ~300px of controls above
+   the first card.
    The search used to keep its desktop 320px basis (cutting its own
    placeholder off), the sort menu sat at its text width, and a card/list
    switch offered a table no phone can show (AdminPage pins cards). */
@@ -510,7 +513,7 @@ tr.is-pulse > td:first-child::after {
   }
 
   .adm-view-controls > .adm-fleet-filters {
-    flex: 1 1 100%;
+    flex: 1 1 0;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
@@ -521,6 +524,7 @@ tr.is-pulse > td:first-child::after {
   }
 
   .adm-view-controls > .adm-search {
+    order: 1;
     flex: 1 1 100%;
     max-width: none;
     min-width: 0;
@@ -528,13 +532,16 @@ tr.is-pulse > td:first-child::after {
     background: var(--control-fill);
   }
 
-  .adm-view-controls > :not(.adm-fleet-filters):not(.adm-search):not(.adm-layout-toggle) {
+  .adm-view-controls > :not(.adm-fleet-filters):not(.adm-search):not(.adm-layout-toggle):not(.list-sort-menu) {
     flex: 1 1 100%;
     min-width: 0;
   }
 
+  .adm-view-controls > .list-sort-menu {
+    flex: none;
+  }
+
   .adm-view-controls button[data-slot="select-trigger"] {
-    width: 100%;
     border-color: transparent;
     background: var(--control-fill);
   }

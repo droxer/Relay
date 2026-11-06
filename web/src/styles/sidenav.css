@@ -437,8 +437,8 @@
    Expanded rail only (SideNav renders it conditionally) — the collapsed
    rail is a fixed icon column with nothing for a drag to reveal. Absolute
    rather than a flex sibling because .sidenav-panel is a column flex whose
-   children are full-width rows; the thread rail's handle can be a sibling
-   because that panel is a row. Same geometry and affordance as
+   children are full-width rows; the thread rail's handle is laid over its
+   edge the same way (thread.css). Same geometry and affordance as
    .thread-panel-resize so the two edges behave identically. */
 .sidenav-resize {
   position: absolute;

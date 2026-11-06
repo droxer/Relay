@@ -31,7 +31,7 @@ it.each([
   ["zh-CN" as const, "技能库还是空的", "新建技能"],
 ])("renders the %s library workflow from the real locale resource", async (language, emptyTitle, publish) => {
   const instance = await locale(language);
-  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>));
+  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider>));
   expect(screen.getByRole("heading", { name: emptyTitle })).toBeTruthy();
   expect(screen.getAllByRole("button", { name: publish }).length).toBeGreaterThan(0);
   expect(screen.queryByText("Your skills library is empty")).toBeNull();

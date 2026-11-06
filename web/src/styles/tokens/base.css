@@ -71,6 +71,14 @@ body {
   letter-spacing: var(--track-body);
 }
 
+/* The browser's own scrollbar, drawn from the palette: the thumb in the
+   strong hairline, the track left to the surface it sits on, so a scrolled
+   list does not carry a grey OS gutter in either theme. Inherited, so set
+   once here for every scroll container. */
+html {
+  scrollbar-color: var(--line-strong) transparent;
+}
+
 ::selection {
   background: var(--action);
   color: var(--on-action);

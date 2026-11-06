@@ -261,33 +261,8 @@ export function BacklogTaskList({
         );
       }}</BacklogCells.Read>,
     },
-    {
-      id: "priority",
-      meta: { headClass: "w-2 task-col-mark--priority", cellClass: "w-2 task-col-mark--priority" } satisfies ColumnChrome,
-      header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.priority")}</span>}</BacklogCells.Read>,
-      cell: ({ row }) => <BacklogCells.Read>{(s) => (
-        <InlinePriority
-          priority={row.original.priority}
-          readOnly={!s.edits}
-          onChange={(priority) => s.edits?.changePriority(row.original, priority)}
-        />
-      )}</BacklogCells.Read>,
-    },
-    {
-      id: "status",
-      meta: { headClass: "w-2 task-col-mark", cellClass: "w-2 task-col-mark" } satisfies ColumnChrome,
-      /* Named, not blank: a columnheader with no accessible name leaves the
-         cells under it reading as a column of nothing. */
-      header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.status")}</span>}</BacklogCells.Read>,
-      cell: ({ row }) => <BacklogCells.Read>{(s) => (
-        <InlineStatus
-          task={row.original}
-          readOnly={!s.edits}
-          onChange={(status) => s.edits?.changeStatus(row.original, status)}
-          onToggleHold={() => { void s.edits?.toggleHold(row.original); }}
-        />
-      )}</BacklogCells.Read>,
-    },
+    /* The same columns, in the same order, as the Tasks page table
+       (IssuesTable): a task reads the same wherever it is listed. */
     {
       id: "issue-id",
       meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
@@ -325,14 +300,28 @@ export function BacklogTaskList({
       }}</BacklogCells.Read>,
     },
     {
-      id: "due",
-      meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
-      header: () => <BacklogCells.Read>{(s) => sortHead("due", s.t("backlog.due"))}</BacklogCells.Read>,
+      id: "status",
+      meta: { headClass: "issue-col-status", cellClass: "issue-col-status" } satisfies ColumnChrome,
+      header: () => <BacklogCells.Read>{(s) => sortHead("status", s.t("backlog.status"))}</BacklogCells.Read>,
       cell: ({ row }) => <BacklogCells.Read>{(s) => (
-        <InlineDue
+        <InlineStatus
           task={row.original}
+          labeled
           readOnly={!s.edits}
-          onChange={(dueDate) => s.edits?.changeDue(row.original, dueDate)}
+          onChange={(status) => s.edits?.changeStatus(row.original, status)}
+          onToggleHold={() => { void s.edits?.toggleHold(row.original); }}
+        />
+      )}</BacklogCells.Read>,
+    },
+    {
+      id: "priority",
+      meta: { headClass: "task-col-priority", cellClass: "task-col-priority" } satisfies ColumnChrome,
+      header: () => <BacklogCells.Read>{(s) => sortHead("priority", s.t("backlog.priority"))}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <InlinePriority
+          priority={row.original.priority}
+          readOnly={!s.edits}
+          onChange={(priority) => s.edits?.changePriority(row.original, priority)}
         />
       )}</BacklogCells.Read>,
     },
@@ -355,6 +344,18 @@ export function BacklogTaskList({
           />
         );
       }}</BacklogCells.Read>,
+    },
+    {
+      id: "due",
+      meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
+      header: () => <BacklogCells.Read>{(s) => sortHead("due", s.t("backlog.due"))}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <InlineDue
+          task={row.original}
+          readOnly={!s.edits}
+          onChange={(dueDate) => s.edits?.changeDue(row.original, dueDate)}
+        />
+      )}</BacklogCells.Read>,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [sort]);

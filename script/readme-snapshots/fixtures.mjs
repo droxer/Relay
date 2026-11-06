@@ -637,6 +637,32 @@ function workspaceFiles(extra) {
 /* Anything not enumerated below answers with every list key present and
    empty, so an endpoint this file does not know about renders an empty
    state instead of crashing the surface. */
+/** A project with no Project Manager yet: the dashboard offers to assign one. */
+function projectManager(projectId) {
+  return {
+    project: byId(projects, projectId),
+    manager: { agentId: null, agentName: null, threadId: null, toolsAvailable: false, reason: null, candidates: [] },
+    proposals: [],
+  };
+}
+
+/** The evidence a reviewer reads before accepting a task in review. */
+function taskReview(taskId) {
+  const task = byId(tasks, taskId);
+  return {
+    taskId, revision: "7c1e".padEnd(64, "a"), status: task.status, canAccept: task.status === "review",
+    goal: task.title, description: task.description, sessionId: task.linkedSessionIds?.[0] ?? null, roundId: null,
+    criteria: ["Limits apply per tenant, not per API key", "Over-limit requests answer 429 with Retry-After"],
+    reports: [{
+      runId: "run_rate_limit_2", agent: "claude", agentId: "agent_aria", agentName: "Aria", role: "implementer",
+      status: "completed", exitCode: 0, completedAt: ago(18 * MINUTE), workStatus: "done",
+      note: "Token-bucket limiter keyed by tenant, with a 429 and Retry-After past the limit.",
+      evidence: ["tests/api/test_rate_limit.py: 12 passed"], findings: [],
+    }],
+    artifacts: [], verification: "not_recorded", missing: [],
+  };
+}
+
 const FALLBACK = {
   sessions: [], tasks: [], agents: [], teams: [], projects: [], nodes: [], sandboxes: [], skills: [],
   users: [], integrations: [], artifacts: [], events: [], runs: [], entries: [], produced: [],
@@ -667,6 +693,7 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (head === "tasks" && tail === "runs") return { taskId: id, runs: [] };
   if (head === "tasks" && tail === "events") return { events: [] };
   if (head === "tasks" && tail === "artifacts") return { taskId: id, artifacts: [] };
+  if (head === "tasks" && tail === "review") return taskReview(id);
   if (head === "tasks" && tail === "workspace" && leaf === "files") return workspaceFiles({ taskId: id, workspaceLayout: "task" });
 
   if (path === "/agents") return { agents };
@@ -678,6 +705,10 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (path === "/projects") return { projects };
   if (head === "projects" && id && !tail) return { project: byId(projects, id) };
   if (head === "projects" && tail === "workspace" && leaf === "files") return workspaceFiles({ projectId: id });
+  if (head === "projects" && tail === "manager") return projectManager(id);
+
+  if (path === "/connections") return { connections: [] };
+  if (path === "/connection-providers") return { providers: [] };
 
   if (path === "/daemon-nodes") return { nodes };
   if (path === "/sandboxes") return { sandboxes: nodes };
@@ -695,6 +726,7 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (path === "/admin/users") return { users };
   if (path === "/admin/agents") return { agents };
   if (path === "/admin/settings") return { settings: { maxLocalComputersPerUser: 3, maxTaskRounds: 3, updatedAt: ago(12 * DAY) }, capabilities: { userEdits: true } };
+  if (path === "/admin/waitlist") return { entries: [], total: 0, counts: { waiting: 0, invited: 0, joined: 0, declined: 0 } };
   if (path === "/admin/dashboard/sessions") return dashboardSessions;
   if (path === "/admin/dashboard/tokens") return dashboardTokens;
 

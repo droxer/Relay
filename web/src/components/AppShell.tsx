@@ -290,7 +290,7 @@ export function AppShell({
         width={sidenavWidth}
         onResize={onSidenavResize}
         onResizeActive={onSidenavResizeActive}
-        route={route}
+        route={notFound ? null : route}
         onNavigateRoute={onNavigateRoute}
         hrefForRoute={hrefForRoute}
         isAdmin={isAdmin}

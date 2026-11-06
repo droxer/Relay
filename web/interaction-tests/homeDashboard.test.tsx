@@ -38,7 +38,9 @@ it("takes every Up next row to its thread instead of acting from Home", async ()
     onOpen={onOpen} onResolved={vi.fn()} />);
   expect(screen.queryByRole("button", { name: "home.allow" })).toBeNull();
   expect(screen.queryByRole("button", { name: "home.deny" })).toBeNull();
-  await userEvent.setup().click(screen.getByRole("button", { name: "home.open_thread" }));
+  // Below Start here a row carries no Open button; its title is the way in.
+  expect(screen.queryByRole("button", { name: "home.open_thread" })).toBeNull();
+  await userEvent.setup().click(screen.getByRole("link", { name: "Migrate billing" }));
   expect(onOpen).toHaveBeenCalledOnce();
   expect(answerPermission).not.toHaveBeenCalled();
 });

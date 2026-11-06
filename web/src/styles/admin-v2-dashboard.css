@@ -122,7 +122,11 @@
 .adm-dash-tile--nodes { --tile-key: var(--live); }
 .adm-dash-tile--tokens { --tile-key: var(--series-1); }
 
-.adm-dash-tile[class*="adm-dash-tile--"] .adm-dash-tile-key {
+/* Keyed on the slot itself. A class*= match also caught --toned, so a
+   project's red Blocked and Overdue tiles reserved an invisible swatch and
+   their labels sat a step right of Total's. A slotted tile with no series
+   (agents) keeps the swatch's width, unpainted, so the row's labels align. */
+.adm-dash-tile[data-kpi-slot] .adm-dash-tile-key {
   display: inline-block;
   width: var(--dot-sm);
   height: var(--dot-sm);

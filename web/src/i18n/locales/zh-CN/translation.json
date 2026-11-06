@@ -2215,6 +2215,7 @@
     "title": "技能",
     "count_other": "{{count}} 个技能",
     "load_failed": "无法加载技能库",
+    "not_found": "此技能已不存在，或链接已失效。",
     "eyebrow": "托管技能",
     "create_action": "新建技能",
     "publish_title": "发布技能",
@@ -3116,7 +3117,7 @@
       "paused": "待处理 · 运行已暂停",
       "needs_you": "待处理",
       "stuck": "阻塞",
-      "worth_doing": "接下来"
+      "worth_doing": "有空时处理"
     },
     "kind": {
       "permission": "权限",

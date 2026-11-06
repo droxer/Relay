@@ -491,7 +491,6 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
             <TaskRecordView
               taskId={drawerRecord.taskId}
               tabSearchKey={projectId ? "recordTab" : "tab"}
-              originLabel={projectId ? projects.find((project) => project.id === projectId)?.name : undefined}
               hrefForRecord={hrefForRecord}
               currentUser={currentUser}
               runId={drawerRecord.runId}

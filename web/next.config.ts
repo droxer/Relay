@@ -42,6 +42,7 @@ const CLIENT_ROUTES = [
   "/teams/:path*",
   "/computers",
   "/skills",
+  "/skills/:path*",
   "/settings",
   "/settings/:path*",
   "/projects",

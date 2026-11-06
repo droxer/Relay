@@ -202,6 +202,10 @@ export function FiltersBar({
           onQueryChange={changeQuery}
           labels={labels}
           size="sm"
+          /* A phone's one-row toolbar cannot spare the label: at 390px it
+             cut the search placeholder off mid-word. The icon keeps the
+             accessible name. */
+          compactTrigger={phone}
         />
       </FilterRuleMenuOptionsContext.Provider>
       {activeCount > 0 ? (

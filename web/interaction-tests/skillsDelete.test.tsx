@@ -29,7 +29,7 @@ it.each([false, true])("does not reselect a deleted publication (another skill: 
   api.deleteSkill.mockImplementation(async () => { deleted = true; inventory = inventory.filter((item) => item.id !== "temporary-upload"); });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const user = userEvent.setup();
-  render(<QueryClientProvider client={client}><DialogProvider><SkillsPage currentUser={{ userId: "user" } as any} /></DialogProvider></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><DialogProvider><SkillsPage currentUser={{ userId: "user" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider></QueryClientProvider>);
   await screen.findByRole("heading", { name: "temporary-upload" });
   await user.click(screen.getByRole("button", { name: "skills.delete_skill" }));
   const dialog = await screen.findByRole("alertdialog");

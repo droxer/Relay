@@ -115,7 +115,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByRole("link", { name: "Home, 3 items need attention" })).toBeVisible();
 
     await expect(queue(page).locator(".home-band-title")).toHaveText([
-      "Needs attention", "Blocked", "Up next",
+      "Needs attention", "Blocked", "When you have time",
     ]);
     await expect(queue(page).getByRole("heading", {name:"Start here"})).toBeVisible();
     await expect(queue(page).locator(".home-item-title").filter({hasText:"Migrate billing tables"})).toHaveCount(1);
@@ -163,7 +163,9 @@ test("takes a waiting question to its thread instead of answering from Home", as
   const row = queue(page).locator(".home-item").filter({ hasText: "Should the annual plan" });
   await expect(row.getByRole("button", { name: "Yearly total" })).toHaveCount(0);
   await expect(row.getByRole("textbox")).toHaveCount(0);
-  await row.getByRole("button", { name: "Open thread", exact: true }).click();
+  // Below Start here a row is opened by its title, the one link it carries.
+  await expect(row.getByRole("button", { name: "Open thread", exact: true })).toHaveCount(0);
+  await row.locator(".home-item-title").click();
   // A project thread opens in its project room.
   await expect(page).toHaveURL(/projects\/p-site|s-pricing/);
   expect(wire.filter((call) => call.path.endsWith("/threads/s-pricing/messages"))).toHaveLength(0);
@@ -183,7 +185,7 @@ test("opens finished work for review and snoozes the rest until it changes", asy
   });
   await expect(blocked).toHaveCount(0);
 
-  await review.getByRole("button", { name: "Open", exact: true }).click();
+  await review.locator(".home-item-title").click();
   await expect(page).toHaveURL(/t-retry/);
   expect(wire.filter((call) => call.path.endsWith("/tasks/t-retry"))).toHaveLength(0);
 });

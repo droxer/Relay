@@ -9,6 +9,7 @@ import {
   reviseSkill,
   updateSkill,
 } from "../api";
+import { RelayApiError } from "../api-client/client";
 import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
@@ -71,7 +72,12 @@ async function encodeFiles(list: FileList): Promise<SkillFileInput[]> {
   );
 }
 
-export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
+export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
+  currentUser: CurrentUser;
+  /** The skill named in the URL; `null` lets the first one open on a wide screen. */
+  skillId: string | null;
+  onSelectSkill: (skillId: string | null) => void;
+}) {
   const { t, i18n } = useTranslation();
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
@@ -79,13 +85,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const skillsQuery = useSkills();
   const { agents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
-  const [pickedId, setSelectedId] = useState<string | null>(null);
   // Until the reader picks one, the list's first skill is the selection.
   /* A phone shows one pane at a time, as the agent and team rosters do: the
      library until a skill is picked, then that skill alone. Wider screens open
      on the first skill beside the list. */
   const phone = useMediaQuery(PHONE_QUERY);
-  const selectedId = pickedId ?? (phone ? null : skillsQuery.data?.skills[0]?.id ?? null);
+  const selectedId = skillId ?? (phone ? null : skillsQuery.data?.skills[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
@@ -175,7 +180,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               files: draft.files,
             });
       resetCreate();
-      setSelectedId(created.id);
+      onSelectSkill(created.id);
       await refresh(created.id);
     } catch (err) {
       setError(errorText(err));
@@ -236,7 +241,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       queryClient.setQueryData<SkillsResponse>([SKILLS_QUERY_KEY], (current) => current
         ? { ...current, skills: current.skills.filter((item) => item.id !== skill.id) }
         : current);
-      setSelectedId(null);
+      onSelectSkill(null);
       await refresh();
     } catch (err) {
       setError(errorText(err));
@@ -361,7 +366,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                   type="button"
                   className="skills-roster-row-select"
                   aria-current={selectedId === item.id ? "page" : undefined}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => onSelectSkill(item.id)}
                 >
                   <span className="skills-roster-row-name">{item.displayName}</span>
                   <span className="skills-roster-row-meta">
@@ -375,19 +380,24 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       </nav>
       <section className="skill-detail">
         {phone && selectedId ? (
-          <MobileTopbarBack label={t("skills.title")} onBack={() => setSelectedId(null)} fallback={null} />
+          <MobileTopbarBack label={t("skills.title")} onBack={() => onSelectSkill(null)} fallback={null} />
         ) : null}
         {detailQuery.isLoading ? (
           <p className="route-loading" role="status">{t("skills.loading_detail")}</p>
         ) : detailQuery.error ? (
-          <p className="route-loading" role="alert">{errorText(detailQuery.error)}</p>
+          <p className="route-loading" role="alert">
+            {/* A skill is addressable now, so a stale link lands here: say it
+                is gone rather than reporting a failed import. */}
+            {detailQuery.error instanceof RelayApiError && detailQuery.error.status === 404
+              ? t("skills.not_found")
+              : errorText(detailQuery.error)}
+          </p>
         ) : skill ? (
           <>
             {/* One header vocabulary for the whole route: the record variant a
                 detail pane under a roster takes, demoted to h2 so the rail's
                 title stays the page's only h1. */}
             <PageHeader
-              kicker={`${t(`skills.source.${skill.source}`)} · ${t(`skills.visibility.${skill.visibility}`)}`}
               title={skill.displayName}
               topbarTitle={skill.displayName}
               /* The slug rides beside the name rather than under it: a third
@@ -408,6 +418,10 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             {/* One quiet meta line, not a stat band: three small counts do not
                 earn display-size numerals between two hairlines. */}
             <p className="skill-meta tnum">
+              {/* Where it came from and who can see it ride here, with the
+                  counts, rather than as a kicker over the name. */}
+              <span>{t(`skills.source.${skill.source}`)}</span>
+              <span>{t(`skills.visibility.${skill.visibility}`)}</span>
               <span title={t("skills.current_revision")}>v{skill.revisions[0]?.revision ?? 1}</span>
               <span>{t("skills.file_count", { count: skill.files.length })}</span>
               <span>{t("skills.granted_count", { count: skill.grantedAgentIds.length })}</span>

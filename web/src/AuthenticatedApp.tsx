@@ -256,6 +256,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     recordTaskId,
     recordRunId,
     teamWorkspaceId,
+    skillId,
     settingsSection,
     adminSection,
     notFound,
@@ -269,6 +270,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     navigateToSettings,
     navigateToAdminSection,
     navigateToTeamWorkspace,
+    navigateToSkill,
     navigateToProject,
     navigateToLogin,
   } = useAppRouter({
@@ -703,6 +705,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onOpenRoutineRecord={navigateToRoutineRecord}
             teamWorkspaceId={teamWorkspaceId}
             onSelectTeam={navigateToTeamWorkspace}
+            skillId={skillId}
+            onSelectSkill={navigateToSkill}
             detailAgent={detailAgent}
             onOpenAgent={navigateToAgent}
             settingsSection={settingsSection}

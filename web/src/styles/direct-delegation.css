@@ -8,11 +8,24 @@
   border-top: 1px solid var(--line-1);
 }
 
-.agent-delegation-settings legend,
 .direct-delegation h3 {
   padding: 0;
   color: var(--ink-1);
   font: var(--type-label);
+}
+
+/* The profile's second section head, set like the first (Personality,
+   workspace-dossier.css). A legend otherwise sits ON the fieldset's top
+   border, so the rule ran out beside the words instead of above them. A
+   floated legend is no longer drawn into the border; in this grid it is
+   simply the first row, under the rule like any heading. */
+.agent-delegation-settings legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
 }
 
 .agent-delegation-settings p,
