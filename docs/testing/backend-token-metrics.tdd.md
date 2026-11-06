@@ -93,6 +93,7 @@ this change bounds transferred data and Python materialization, not database CPU
 or production p95 latency. Unreported grouping depends on distinct runtime names.
 The old summary treatment of future-dated usage is preserved explicitly; changing
 it would be a separate contract decision. No provider or daemon protocol changes
-are required. Full-history API response sizes, automation tick discovery and
-lock duration, and representative deployment-load measurements remain part of
-the active backend refactoring goal.
+are required. The [automation discovery follow-up](backend-automation-discovery.tdd.md) addresses
+the next identified tick-discovery issue. Full-history API response sizes and
+representative deployment-load measurements remain part of the active backend
+refactoring goal.

@@ -330,7 +330,10 @@ migration.
     malformed task is logged and skipped, never stalls the queue. It sits one
     layer above the rest of `tasks/`, which never imports it.
   - `backend/relay/automations/` — automation triggers, schedule, clock,
-    matcher, and firing (see the Automations invariant).
+    matcher, and firing (see the Automations invariant). Discovery is bounded by
+    the configured outbox batch: `persistence/automation/discovery.py` reads
+    routing projections and persists the round-robin candidate cursor. Broadcast
+    routing progress commits with deliveries; it must never be advanced alone.
   - `backend/relay/persistence/chat/store.py` — chat integration storage, with
     per-integration encrypted credentials and indexed configuration, audit, and
     conversation records. Pure shared rules live in `chat/rules.py`;

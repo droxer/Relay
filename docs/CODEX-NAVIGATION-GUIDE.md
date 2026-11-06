@@ -61,6 +61,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task/store.py` | `api/tasks/`, `tasks/dispatch.py`, backlog/routine UI |
+| Automation discovery and delivery | `backend/relay/automations/service.py`, `matcher.py`; `persistence/automation/discovery.py`, `store.py` | migrations `20261106_0118`/`0119`, bounds/migration/matcher tests; `docs/testing/backend-automation-discovery.tdd.md` |
 | Routine scheduling | `backend/relay/tasks/scheduler.py` | task store claim queries and scheduler tests |
 | Agent routing and placement | `backend/relay/agents/routing.py` | agent routes, placement store, daemon registry scheduling |
 | Daemon admission and dispatch | `backend/relay/daemon_registry/node_backend.py` | `registry.py` and its mixins (`admission.py`, `delivery.py`, `progression.py`, …), `scheduling.py`, daemon protocol tests |

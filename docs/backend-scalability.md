@@ -156,3 +156,47 @@ observation first, then runtime name for deterministic equal timestamps.
 The full `list_token_usage` reader still returns every retained run with its
 metadata. No migration is required; the existing completion-time index supports
 the window predicate. See [work-bound, timezone, and regression evidence](testing/backend-token-metrics.tdd.md).
+
+
+## Bounded automation discovery and routing
+
+Each automation tick claims at most `RELAY_AUTOMATION_OUTBOX_BATCH` outbox rows
+(default 200), visits at most that many listener projections across broadcasts,
+and selects at most that many schedule/pending candidate IDs. Targeted manual,
+webhook, retry, and outcome rows read their recipient directly. The union can
+process at most three times the configured batch in distinct routines; it no
+longer hydrates every routine or pending state under the global transaction lock.
+A persisted round-robin candidate cursor advances even past in-flight or failing
+routines, so another replica resumes fairly. Candidate queries transfer IDs,
+not task snapshots, histories, or pending-event payloads.
+
+Broadcasts page in `(created_at, id)` order and freeze the creation cutoff when
+routing starts. Routines created afterward do not join that broadcast. Each page
+rechecks current ownership, trigger, active-state, loop, and resume-cutoff rules.
+The page cursor, pending deliveries, occurrences, failed-recipient retries, and
+candidate cursor commit together. A failed recipient gets a targeted retry;
+a failed outer transaction retries the same page. Standalone matcher drains now
+use the same locked transaction. Partial broadcasts move behind work that has
+waited longer, while all broadcasts share one projection budget per tick. Page
+boundaries may defer events into a later tick; events delivered before a firing
+still coalesce, and events arriving during a run remain pending for its next run.
+Outbox retention deletes at most one configured batch per tick.
+
+Stop old backend and worker processes before migrating. Revision `20261106_0118`
+adds nullable routing progress and the candidate cursor table, retaining existing
+outbox payloads. `20261106_0119` builds routing/retention indexes concurrently and
+replaces the single-column listener index with `(created_at, id)`. Its separate
+autocommit boundary permits retry from 0118; invalid indexes left by a failed
+concurrent build are dropped and rebuilt. Run migrations through head before
+starting the new processes. Startup rejects a missing discovery schema. Existing
+SQLite databases with older automation tables also fail this check; metadata
+creation does not upgrade their existing tables. Preserve their data rather than
+treating a fresh SQLite fixture as a migration path.
+
+Before rollback, let new workers finish partial broadcast routing, then stop
+them. Both downgrade revisions refuse a partial cursor before changing indexes
+or dropping progress fields, because old code would replay completed pages.
+Unprocessed broadcasts and targeted retries can remain. No credential key is
+required. See [migration, fairness, rollback, and bounded-work evidence](testing/backend-automation-discovery.tdd.md).
+The database still filters/sorts eligible IDs and scans matching routing pages;
+these work bounds do not establish production latency or capacity.

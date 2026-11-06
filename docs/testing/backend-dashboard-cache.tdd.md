@@ -76,11 +76,6 @@ The [token metrics follow-up](backend-token-metrics.tdd.md) resolves the raw-led
 transfer identified during this audit. The full-ledger reader retains its
 existing contract; dashboard routes use grouped metrics instead.
 
-`automations/service.py::tick` collects unseeded/due routines, deliveries, and all
-pending states into one Python collection under the global automation transaction
-lock. `persistence/automation/store.py::list_pending_states` has no limit. The
-scheduler waits for that tick before dispatch. Bounded discovery and fair progress
-need review together with event delivery, occurrence atomicity, and replica
-exclusion; adding a limit alone could starve routines or lose claimed events.
-These observations are source evidence, not yet a regression reproduction or
-performance measurement, and the overall refactoring goal remains active.
+The [automation discovery follow-up](backend-automation-discovery.tdd.md) replaces
+the unbounded candidate lists and broadcast catalog read with persisted bounded
+scans. Production-load measurements remain part of the active refactoring goal.
