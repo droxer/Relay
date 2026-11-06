@@ -340,9 +340,9 @@ const ComposerView = forwardRef<ComposerHandle, {
       {prompt}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
-          <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
+          {connectionQueryClient && <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
             disabled={readOnly || running || sendPending}
-            onChange={grants => setConnectionDrafts(previous => ({ ...previous, [connectionKey]: grants }))} />
+            onChange={grants => setConnectionDrafts(previous => ({ ...previous, [connectionKey]: grants }))} />}
           {connectionError && <p role="alert">{t("connections.action_failed")}</p>}
           <ComposerImagePreviews input={imageInput} />
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>

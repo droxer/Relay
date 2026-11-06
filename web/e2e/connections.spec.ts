@@ -100,3 +100,14 @@ test("new Thread sends selected connection access with its first message", async
   await expect.poll(() => runs.length).toBe(1);
   expect(runs[0].connectionGrants).toEqual([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]);
 });
+
+test("the composer offers no connections until a service is connected", async ({ page }) => {
+  await serve(page);
+  await page.route("**/api/v1/connections", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ connections: [] }) }));
+  const listed = page.waitForResponse(response => response.url().endsWith("/api/v1/connections"));
+  await page.goto("/threads");
+  await listed;
+  const composer = page.locator(".composer").last();
+  await expect(composer.getByRole("textbox")).toBeVisible();
+  await expect(composer.locator(".connection-grants")).toHaveCount(0);
+});

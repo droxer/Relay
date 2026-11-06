@@ -17,6 +17,12 @@ interface Props {
 export function ConnectionGrantField(props: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const connections = useQuery({ queryKey: ["connections", "list"], queryFn: listConnections });
+  // Nothing to grant until the person connects a service in Settings. A failed
+  // load still shows the field, so its body can say the list did not load; a
+  // draft that already holds grants stays visible so they can be removed.
+  const nothingToGrant = connections.isPending || (connections.isSuccess && !connections.data.connections.length);
+  if (nothingToGrant && !props.value?.length) return null;
   return <details className="connection-grants" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>{t("connections.title")} <span className="connections-hint">{props.value?.length
       ? t("connections.selected", { count: props.value.length })
