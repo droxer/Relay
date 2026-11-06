@@ -9,11 +9,14 @@ from threading import RLock
 from typing import Any, Literal
 from urllib.parse import urlparse, urlunsplit
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, inspect, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.chat.coordination import chat_operation, provider_operation
+from ..persistence.chat.audit import append_audit_event, read_audit_events
+from ..persistence.chat.conversations import bind_conversation, clear_conversations, get_conversation
+from ..persistence.chat.backfill import convert_sqlite_records
 from ..persistence.resource_lock import resource_transaction
 from ..persistence.db_time import parse_db_time
 from ..persistence.engine import create_all_tables, shared_engine, store_transaction
@@ -40,8 +43,8 @@ SECRET_FIELDS = {
 class DatabaseChatIntegrationStore:
     """Chat integration configuration in the shared database.
 
-    Each concern is one JSON document row (integrations, conversations, audit,
-    secrets). Provider credentials are Fernet-encrypted with
+    Configuration and secrets remain shared documents. Conversation bindings
+    and append-only audit entries have indexed rows. Credentials are Fernet-encrypted with
     ``RELAY_CHAT_SECRET_KEY`` and never returned through the public admin API.
     """
 
@@ -57,6 +60,19 @@ class DatabaseChatIntegrationStore:
         self._secret_cipher = Fernet(raw_key.encode()) if raw_key else None
         if create_schema:
             create_all_tables(self.engine)
+            if self.engine.dialect.name == "sqlite":
+                convert_sqlite_records(self.engine)
+
+    def verify_schema(self) -> None:
+        with self.engine.connect() as conn:
+            missing = {"chat_documents", "chat_audit_events", "chat_conversations"} - set(inspect(conn).get_table_names())
+            if missing:
+                raise RuntimeError(f"Database is missing chat record tables: {', '.join(sorted(missing))}. Run backend migrations.")
+            legacy = conn.scalar(select(self.documents.c.document_key).where(
+                self.documents.c.document_key.in_(("audit", "conversations")),
+            ).limit(1))
+            if legacy:
+                raise RuntimeError("Legacy chat records require migration 20261106_0116 before startup.")
 
     def list_integrations(self) -> list[dict[str, Any]]:
         with self._atomic_scope():
@@ -349,60 +365,28 @@ class DatabaseChatIntegrationStore:
 
     def get_conversation_session(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         """Return the session binding for a conversation thread, if any."""
-        with self._lock:
-            key = _conversation_key(payload)
-            for record in self._read_conversations():
-                if record.get("key") == key:
-                    return record
-            return None
+        return get_conversation(self.engine, _conversation_key(payload))
 
     def clear_conversation_sessions(self, session_id: str) -> int:
-        """Drop bindings that point at a permanently deleted session."""
-        with self._atomic_scope("conversations"):
-            records = self._read_conversations()
-            remaining = [
-                record
-                for record in records
-                if record.get("sessionId") != session_id
-            ]
-            removed = len(records) - len(remaining)
-            if removed:
-                self._write_conversations(remaining)
-            return removed
+        """Drop only bindings that point at a permanently deleted session."""
+        return clear_conversations(self.engine, session_id)
 
     def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
         """Bind a conversation thread to a Relay session (upsert by thread key)."""
-        with self._atomic_scope("conversations"):
-            key = _conversation_key(payload)
-            now = now_iso()
-            records = self._read_conversations()
-            for index, record in enumerate(records):
-                if record.get("key") == key:
-                    updated = {
-                        **record,
-                        "sessionId": session_id,
-                        "ownerUserId": owner_user_id,
-                        "providerMessageId": _string(payload.get("messageId")) or record.get("providerMessageId"),
-                        "updatedAt": now,
-                    }
-                    records[index] = updated
-                    self._write_conversations(records)
-                    return updated
-            record = {
-                "key": key,
-                "provider": _provider(payload.get("provider")),
-                "tenantId": _string(payload.get("tenantId")),
-                "conversationId": _required_string(payload.get("conversationId"), "conversationId"),
-                "threadId": _string(payload.get("threadId")),
-                "providerMessageId": _string(payload.get("messageId")),
-                "sessionId": session_id,
-                "ownerUserId": owner_user_id,
-                "createdAt": now,
-                "updatedAt": now,
-            }
-            records.append(record)
-            self._write_conversations(records)
-            return record
+        key = _conversation_key(payload)
+        now = now_iso()
+        return bind_conversation(self.engine, {
+            "key": key,
+            "provider": _provider(payload.get("provider")),
+            "tenantId": _string(payload.get("tenantId")),
+            "conversationId": _required_string(payload.get("conversationId"), "conversationId"),
+            "threadId": _string(payload.get("threadId")),
+            "providerMessageId": _string(payload.get("messageId")),
+            "sessionId": session_id,
+            "ownerUserId": owner_user_id,
+            "createdAt": now,
+            "updatedAt": now,
+        })
 
     def _find_integration(self, integration_id: str) -> dict[str, Any]:
         for integration in self._read_integrations():
@@ -477,17 +461,7 @@ class DatabaseChatIntegrationStore:
         raise KeyError(integration_id)
 
     def audit_events(self, integration_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-        with self._lock:
-            events = self._read_document("audit", [])
-            if integration_id:
-                events = [event for event in events if event.get("integrationId") == integration_id]
-            return events[-max(1, min(limit, 200)):]
-
-    def _read_conversations(self) -> list[dict[str, Any]]:
-        return self._read_document("conversations", [])
-
-    def _write_conversations(self, records: list[dict[str, Any]]) -> None:
-        self._write_document("conversations", records)
+        return read_audit_events(self.engine, integration_id, limit)
 
     def _read_integrations(self) -> list[dict[str, Any]]:
         return self._read_document("integrations", [])
@@ -546,8 +520,7 @@ class DatabaseChatIntegrationStore:
         self._read_secrets()
 
     def _audit(self, event_type: str, integration_id: str, actor: str | None, payload: dict[str, Any]) -> None:
-        events = self._read_document("audit", [])
-        events.append({
+        append_audit_event(self.engine, {
             "id": new_relay_id("cae"),
             "type": event_type,
             "integrationId": integration_id,
@@ -555,7 +528,6 @@ class DatabaseChatIntegrationStore:
             "timestamp": now_iso(),
             **payload,
         })
-        self._write_document("audit", events)
 
     def _read_document(self, key: str, default: Any) -> Any:
         conn = self._transaction_connection

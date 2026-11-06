@@ -186,7 +186,9 @@ def waitlist_service_from_env(mailer: Mailer) -> WaitlistService:
 
 def chat_store_from_env() -> ChatStore:
     url, create_schema = _aggregate_database_url("chat")
-    return DatabaseChatIntegrationStore(url, create_schema=create_schema)
+    store = DatabaseChatIntegrationStore(url, create_schema=create_schema)
+    store.verify_schema()
+    return store
 
 
 @dataclass(frozen=True)
