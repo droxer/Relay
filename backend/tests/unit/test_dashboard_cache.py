@@ -7,7 +7,7 @@ import weakref
 
 import pytest
 
-from relay.api.admin.dashboard import DashboardCache
+from relay.api.admin.dashboard_cache import DashboardCache
 
 
 class Store:

@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-import threading
-import time
-import weakref
-from collections import Counter, OrderedDict
-from collections.abc import Callable
-from concurrent.futures import Future
-from dataclasses import dataclass, field
+from collections import Counter
 from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -14,8 +8,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Request
 
 from ...core.token_usage import split_cache_tokens
+from ...persistence.protocols import SessionStore
 from ...security.request_auth import require_admin_session
 from ..deps import AppContextDep
+from .dashboard_cache import DashboardCache
 
 router = APIRouter()
 
@@ -27,80 +23,6 @@ router = APIRouter()
 _DAY_WINDOW = 14
 _SUMMARY_DAYS = 7
 _TOKEN_KEYS = ("input", "output", "cacheRead", "cacheWrite")
-# The dashboard is admin-only and its windows span days, so an answer a few
-# seconds old is as good as a fresh one; both endpoints walk their whole
-# window, which this keeps off the hot path while the page polls.
-DASHBOARD_CACHE_TTL_SECONDS = 30.0
-
-
-@dataclass
-class _StoreAnswers:
-    completed: OrderedDict[tuple[Any, ...], tuple[float, dict[str, Any]]] = field(default_factory=OrderedDict)
-    pending: dict[tuple[Any, ...], Future[dict[str, Any]]] = field(default_factory=dict)
-
-
-class DashboardCache:
-    """Share one build per store/key and retain at most 64 completed answers.
-
-    Builds and waiters run outside the cache lock, allowing unrelated keys to
-    progress. A clear detaches pending builds: existing callers finish, while
-    subsequent requests start fresh and old results cannot repopulate the cache.
-    Weak store keys keep discarded application instances collectible.
-    """
-
-    def __init__(
-        self,
-        *,
-        ttl_seconds: float = DASHBOARD_CACHE_TTL_SECONDS,
-        clock: Callable[[], float] = time.monotonic,
-    ) -> None:
-        self.ttl_seconds = ttl_seconds
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._stores: weakref.WeakKeyDictionary[Any, _StoreAnswers] = weakref.WeakKeyDictionary()
-
-    def get_or_build(
-        self, store: Any, key: tuple[Any, ...], build: Callable[[], dict[str, Any]]
-    ) -> dict[str, Any]:
-        with self._lock:
-            state = self._stores.setdefault(store, _StoreAnswers())
-            now = self._clock()
-            for expired in [key for key, (deadline, _) in state.completed.items() if deadline <= now]:
-                del state.completed[expired]
-            entry = state.completed.get(key)
-            if entry is not None:
-                state.completed.move_to_end(key)
-                return entry[1]
-            pending = state.pending.get(key)
-            owns_build = pending is None
-            if pending is None:
-                pending = Future()
-                state.pending[key] = pending
-        if not owns_build:
-            return pending.result()
-        try:
-            value = build()
-        except BaseException as error:
-            # Wake every waiter even if the builder is interrupted; failures
-            # are never retained, so a subsequent request can retry.
-            with self._lock:
-                state.pending.pop(key, None)
-            pending.set_exception(error)
-            raise
-        with self._lock:
-            state.pending.pop(key, None)
-            if self._stores.get(store) is state:
-                state.completed[key] = (self._clock() + self.ttl_seconds, value)
-                while len(state.completed) > 64:
-                    state.completed.popitem(last=False)
-        pending.set_result(value)
-        return value
-
-    def clear(self) -> None:
-        with self._lock:
-            self._stores.clear()
-
-
 DASHBOARD_CACHE = DashboardCache()
 
 
@@ -123,67 +45,8 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return DASHBOARD_CACHE.get_or_build(
         ctx.session_store,
         ("sessions", _DAY_WINDOW),
-        lambda: _session_metrics(ctx.session_store),
+        lambda: ctx.session_store.dashboard_session_metrics(day_window=_DAY_WINDOW),
     )
-
-
-def _session_metrics(session_store: Any) -> dict[str, Any]:
-    if hasattr(session_store, "dashboard_session_metrics"):
-        return session_store.dashboard_session_metrics(day_window=_DAY_WINDOW)
-    sessions = session_store.list_sessions()
-    now = datetime.now(UTC)
-    window_start = (now - timedelta(days=_DAY_WINDOW - 1)).date()
-
-    buckets: dict[str, dict[str, int]] = {
-        (window_start + timedelta(days=offset)).isoformat(): {"count": 0, "completed": 0, "failed": 0}
-        for offset in range(_DAY_WINDOW)
-    }
-
-    total = len(sessions)
-    last_24h = 0
-    last_7d = 0
-    status_counts: Counter[str] = Counter()
-    per_user: Counter[str] = Counter()
-
-    one_day = now - timedelta(hours=24)
-    seven_day = now - timedelta(days=7)
-
-    for session in sessions:
-        created = _parse_timestamp(session.get("createdAt"))
-        status = str(session.get("status") or "unknown")
-        status_counts[status] += 1
-        owner = session.get("ownerUserId")
-        if owner:
-            per_user[str(owner)] += 1
-        if created is None:
-            continue
-        if created >= one_day:
-            last_24h += 1
-        if created >= seven_day:
-            last_7d += 1
-        day_key = created.date().isoformat()
-        if day_key in buckets:
-            bucket = buckets[day_key]
-            bucket["count"] += 1
-            if status == "completed":
-                bucket["completed"] += 1
-            elif status == "failed":
-                bucket["failed"] += 1
-
-    daily_counts = [{"date": day, **stats} for day, stats in buckets.items()]
-    top_users = [
-        {"userId": user_id, "sessionCount": count}
-        for user_id, count in per_user.most_common(5)
-    ]
-
-    return {
-        "total": total,
-        "last24h": last_24h,
-        "last7d": last_7d,
-        "statusCounts": dict(status_counts),
-        "dailyCounts": daily_counts,
-        "topUsers": top_users,
-    }
 
 
 @router.get("/admin/dashboard/tokens")
@@ -205,16 +68,12 @@ def dashboard_tokens(
     )
 
 
-def _token_metrics(session_store: Any, zone: tzinfo) -> dict[str, Any]:
+def _token_metrics(session_store: SessionStore, zone: tzinfo) -> dict[str, Any]:
     today = datetime.now(zone).date()
     window_start = today - timedelta(days=_DAY_WINDOW - 1)
     summary_start = today - timedelta(days=_SUMMARY_DAYS - 1)
     usage_since = datetime.combine(window_start, datetime.min.time(), tzinfo=zone)
-    usage_rows = (
-        session_store.list_dashboard_token_usage(since=usage_since)
-        if hasattr(session_store, "list_dashboard_token_usage")
-        else session_store.list_token_usage()
-    )
+    usage_rows = session_store.list_dashboard_token_usage(since=usage_since)
     buckets = {
         (window_start + timedelta(days=offset)).isoformat(): _empty_token_counts()
         for offset in range(_DAY_WINDOW)
