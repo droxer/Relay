@@ -74,12 +74,16 @@ class DatabaseChatIntegrationStore:
             if legacy:
                 raise RuntimeError("Legacy chat records require migrations through 20261106_0117 before startup.")
 
-    def _prepare_credentials(self) -> None:
-        credentials.ensure_legacy_secrets_converted(self.engine, self._secret_cipher)
+    def _prepare_credentials(
+        self, integration_id: str | None = None, *, active_only: bool = False, force: bool = False
+    ) -> None:
+        credentials.ensure_legacy_secrets_converted(
+            self.engine, self._secret_cipher, integration_id=integration_id, active_only=active_only, force=force,
+        )
 
     @contextmanager
-    def _mutation(self, integration_id: str) -> Iterator[None]:
-        self._prepare_credentials()
+    def _mutation(self, integration_id: str, *, create: bool = False) -> Iterator[None]:
+        self._prepare_credentials(integration_id, force=create)
         with resource_transaction(self.engine, f"chat-integration:{integration_id}"):
             yield
 
@@ -88,7 +92,7 @@ class DatabaseChatIntegrationStore:
         return [self._public(item, keys) for item, keys in records.public_records(self.engine)]
 
     def get_integration(self, integration_id: str) -> dict[str, Any]:
-        self._prepare_credentials()
+        self._prepare_credentials(integration_id)
         rows = records.public_records(self.engine, integration_id)
         if not rows:
             raise KeyError(integration_id)
@@ -128,7 +132,7 @@ class DatabaseChatIntegrationStore:
             "createdAt": now,
             "updatedAt": now,
         }
-        with self._mutation(integration["id"]):
+        with self._mutation(integration["id"], create=True):
             records.write_integration(self.engine, integration, create=True)
             self._write_secret_patch(integration["id"], values)
             self._audit("chat.integration.created", integration["id"], actor, {"provider": provider})
@@ -187,7 +191,7 @@ class DatabaseChatIntegrationStore:
             public_callback_base_url(integration)
 
     def validate_activation(self, integration_id: str) -> None:
-        self._prepare_credentials()
+        self._prepare_credentials(integration_id)
         with store_transaction(self.engine):
             self._validate_activation_integration(records.read_integration(self.engine, integration_id))
 
@@ -204,7 +208,7 @@ class DatabaseChatIntegrationStore:
         return provider_operation(self.engine, integration_id)
 
     def validate_telegram_webhook_rotation(self, integration_id: str) -> None:
-        self._prepare_credentials()
+        self._prepare_credentials(integration_id)
         with store_transaction(self.engine):
             integration = records.read_integration(self.engine, integration_id)
             if integration.get("provider") != "telegram":
@@ -268,12 +272,12 @@ class DatabaseChatIntegrationStore:
         }
 
     def connection_settings(self, integration_id: str) -> dict[str, Any]:
-        self._prepare_credentials()
+        self._prepare_credentials(integration_id)
         integration, ciphertext = records.settings_record(self.engine, integration_id)
         return self._connection_settings(integration, credentials.decrypt_secret(self._secret_cipher, ciphertext))
 
     def runtime_integrations(self) -> list[dict[str, Any]]:
-        self._prepare_credentials()
+        self._prepare_credentials(active_only=True)
         return [
             {
                 "id": integration["id"],

@@ -8,7 +8,7 @@ from sqlalchemy import delete, insert, select, update
 
 from ..engine import store_transaction
 from ..resource_lock import resource_transaction
-from ..tables.chat import documents, integration_secrets
+from ..tables.chat import documents, integration_secrets, integrations
 
 
 def decrypt_secret(cipher: Fernet | None, ciphertext: str | None) -> dict[str, Any]:
@@ -69,11 +69,22 @@ def write_secret(engine: Any, cipher: Fernet | None, integration_id: str, values
             )
 
 
-def ensure_legacy_secrets_converted(engine: Any, cipher: Fernet | None) -> None:
+def ensure_legacy_secrets_converted(
+    engine: Any, cipher: Fernet | None, *, integration_id: str | None = None,
+    active_only: bool = False, force: bool = False,
+) -> None:
     # Steady-state calls perform a small indexed existence read, with no global
     # lock or credential payload. Only the one-time conversion takes that lock.
+    statement = select(documents.c.id).where(documents.c.document_key == "secrets")
+    if not force:
+        needed = select(integrations.c.integration_id)
+        if integration_id is not None:
+            needed = needed.where(integrations.c.integration_id == integration_id)
+        if active_only:
+            needed = needed.where(integrations.c.status == "active")
+        statement = statement.where(needed.exists())
     with store_transaction(engine) as conn:
-        legacy = conn.scalar(select(documents.c.id).where(documents.c.document_key == "secrets"))
+        legacy = conn.scalar(statement)
     if legacy is None:
         return
     with resource_transaction(engine, "chat-legacy-secrets") as conn:
