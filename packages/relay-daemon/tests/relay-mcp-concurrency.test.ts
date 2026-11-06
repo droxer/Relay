@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -57,7 +58,6 @@ test('stdio overlaps tool calls, preserves initialization order and drains EOF',
       assert.equal(req.headers['mcp-protocol-version'], '2025-11-25');
     }
     if (message.id === 2) await release.promise;
-    if (message.id === 3) fast.resolve();
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: message.method === 'initialize' ? { protocolVersion: '2025-11-25' } : {} }));
   });
@@ -69,7 +69,12 @@ test('stdio overlaps tool calls, preserves initialization order and drains EOF',
   const child = spawn(process.execPath, [fileURLToPath(new URL('../src/relay-mcp.js', import.meta.url)), '--config', config], { env: { ...process.env, RELAY_MCP_RUN_CONTEXT: '' } });
   let output = '';
   let stderr = '';
-  child.stdout.on('data', chunk => { output += chunk; });
+  // The server receiving the request is too early: its response may still be
+  // in transit. Release the slow call only after the bridge emits the fast reply.
+  createInterface({ input: child.stdout }).on('line', line => {
+    output += line + '\n';
+    if (JSON.parse(line).id === 3) fast.resolve();
+  });
   child.stderr.on('data', chunk => { stderr += chunk; });
   const exit = new Promise(resolve => child.on('exit', resolve));
   const timeout = setTimeout(() => fast.reject(new Error(`Fast MCP request blocked by the slow call: ${output} ${stderr}`)), 2000);
