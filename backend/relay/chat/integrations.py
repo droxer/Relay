@@ -59,9 +59,15 @@ class DatabaseChatIntegrationStore:
             create_all_tables(self.engine)
 
     def list_integrations(self) -> list[dict[str, Any]]:
-        with self._lock:
+        with self._atomic_scope():
             integrations = self._read_integrations()
-            return [self._public_integration(integration) for integration in integrations]
+            if not integrations:
+                return []
+            secrets = self._read_secrets()
+            return [
+                self._public_integration(integration, secret_values=secrets.get(integration["id"], {}))
+                for integration in integrations
+            ]
 
     def get_integration(self, integration_id: str) -> dict[str, Any]:
         with self._lock:
@@ -244,21 +250,28 @@ class DatabaseChatIntegrationStore:
             raise KeyError(integration_id)
 
     def connection_settings(self, integration_id: str) -> dict[str, Any]:
-        with self._lock:
+        with self._atomic_scope():
             integration = self._find_integration(integration_id)
-            return {
-                "provider": integration.get("provider"),
-                "tenantId": integration.get("tenantId"),
-                "config": dict(integration.get("config") or {}),
-                "secrets": dict(self._read_secrets().get(integration_id) or {}),
-            }
+            return self._connection_settings(integration, self._read_secrets().get(integration_id, {}))
+
+    @staticmethod
+    def _connection_settings(integration: dict[str, Any], secret_values: dict[str, str]) -> dict[str, Any]:
+        return {
+            "provider": integration.get("provider"),
+            "tenantId": integration.get("tenantId"),
+            "config": dict(integration.get("config") or {}),
+            "secrets": dict(secret_values),
+        }
 
     def runtime_integrations(self) -> list[dict[str, Any]]:
-        with self._lock:
+        with self._atomic_scope():
+            integrations = [item for item in self._read_integrations() if item.get("status") == "active"]
+            if not integrations:
+                return []
+            secrets = self._read_secrets()
             return [
-                {"id": integration["id"], **self.connection_settings(integration["id"])}
-                for integration in self._read_integrations()
-                if integration.get("status") == "active"
+                {"id": integration["id"], **self._connection_settings(integration, secrets.get(integration["id"], {}))}
+                for integration in integrations
             ]
 
     def add_identity_link(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
@@ -410,8 +423,10 @@ class DatabaseChatIntegrationStore:
         if integration.get("provider") == "telegram":
             public_callback_base_url(integration)
 
-    def _public_integration(self, integration: dict[str, Any]) -> dict[str, Any]:
-        secrets = self._read_secrets().get(str(integration.get("id")), {})
+    def _public_integration(
+        self, integration: dict[str, Any], *, secret_values: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        secrets = secret_values if secret_values is not None else self._read_secrets().get(str(integration.get("id")), {})
         identity_links = list_field(integration, "identityLinks")
         allowed_conversations = list_field(integration, "allowedConversations")
         return {
