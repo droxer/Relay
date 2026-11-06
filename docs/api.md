@@ -1430,20 +1430,25 @@ configuration, supported runtime adapters, and deployment verification limits.
 
 ## Project manager
 
-Every Project has a stable Relay manager binding and one lazily created manager
-Thread. Selecting the manager assigns the `project_manager` roster role to the actual Agent. These routes
-require the Project Owner; admin status and daemon credentials do not confer
-owner authority.
+The Project Manager is an ordinary roster member carrying `projectManager: true`
+beside its own `role` (one of the Agent Roles); at most one member carries it,
+and the Project's `managerAgentId` is derived from the roster. A legacy member
+`role: "project_manager"` is still accepted and reads back as `role: "planner"`
+with the flag. These routes require the Project Owner; admin status and daemon
+credentials do not confer owner authority.
 
 - `GET /api/v1/projects/{id}/manager` returns the binding, eligible candidates,
   availability reason, existing Thread ID, and recent proposal cards. Reading
-  creates no Thread or run. Archived history remains readable.
-- `PUT /api/v1/projects/{id}/manager` accepts `agentId` and `expectedVersion`.
-  Project creation also accepts an optional `managerAgentId`.
-- `POST /api/v1/projects/{id}/manager/messages` accepts nonempty `text` and an
-  `idempotencyKey`, and returns `threadId` with HTTP 202 after ordinary conductor
-  admission. It addresses the configured manager alone. The Thread's execution
-  projection determines whether execution is queued, running, or requires recovery.
+  writes nothing: it never assigns the role and creates no Thread or run.
+  Archived history remains readable.
+- `PUT /api/v1/projects/{id}/manager` accepts `agentId` and `expectedVersion`
+  and moves the flag; every member keeps its role. An Agent outside the roster
+  joins with its default role. Project creation accepts `managerAgentId`:
+  omitted, the lead holds the role when it is eligible; `null` leaves it open.
+- `POST /api/v1/projects/{id}/manager/conversation` returns the Project's
+  manager Thread, starting it (with the holder as its first participant) on
+  first use. It dispatches nothing; the owner talks to the holder through the
+  ordinary `POST /api/v1/threads/{id}/messages`, addressing whoever they mean.
 - `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
   complete task counts, recent tasks, capacity, and retrieval coverage.
 - `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/apply` accepts an
@@ -1518,10 +1523,12 @@ returns its replacement once with `renewed: true`. Revoked/unknown grants return
 403 and cannot be renewed. Renewal cannot be combined with a command scope.
 
 Manager reassignment, whether through PUT manager or PATCH Project members,
-records `thread.project_manager_assigned` in the canonical Thread in the same
-transaction. Historical participants/runs remain; the current owner becomes the
-new role holder. An addressed message to an obsolete canonical manager target
-returns 409 `project_manager_target_changed`. Other Project conversation rounds
-resolve manager capability from the enabled roster role and retain their own
-Thread/run identity in MCP proposals. Clients require `project-manager-mcp` for
-this command-scoped behavior.
+changes only the roster. It writes nothing to any Thread: the manager Thread
+keeps its participants and history, and the former holder stays an ordinary
+Agent that may still be addressed there. Every round resolves manager
+capability from the enabled roster role, for the holder's assignment only —
+alone or beside other Agents — and proposals keep their own Thread/run
+identity. A computer without `project-manager-mcp` still runs the holder,
+without the tools, and the manager view reports
+`project_manager_update_required`. Older Threads may carry the retired
+`thread.project_manager_assigned` event; it still replays.

@@ -91,6 +91,14 @@ it("allows assigning another enabled member as lead", async () => {
   expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBe("b");
 });
 
+it("hands over the Project Manager role without changing anyone's role", async () => {
+  editor([{ ...lead, projectManager: true } as typeof lead, other], other);
+  fireEvent.click(screen.getByRole("checkbox", { name: "project.member_make_manager" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0].input.members).toEqual([lead, { ...other, projectManager: true }]);
+});
+
 it("recovers a stale save while retaining other members and unedited fields", async () => {
   const base = { id: "p", version: 1, name: "Project", computerId: "c", members: [lead], leadAgentId: "a", enabled: true } as any;
   getProject.mockResolvedValue({ project: { ...base, version: 2, members: [{ ...lead, instructions: "Concurrent instructions" }, other] } });

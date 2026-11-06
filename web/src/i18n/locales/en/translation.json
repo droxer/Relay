@@ -105,8 +105,7 @@
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
-    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
-    "project_manager_target_changed": "The Project Manager changed. Refresh the conversation and send your message to the current Agent."
+    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -416,7 +415,8 @@
     "setup_task_after_existing_other": "After {{count}} existing tasks",
     "setup_tasks_failed": "Some tasks could not be added: {{message}} Apply again to add the rest; tasks already added are not duplicated.",
     "dashboard_user_wip": "Your WIP across projects: {{count}} / {{limit}}",
-    "dashboard_view_user_tasks": "View your tasks across projects"
+    "dashboard_view_user_tasks": "View your tasks across projects",
+    "member_make_manager": "Project manager"
   },
   "thread": {
     "project_indicator": "Project: {{name}}",

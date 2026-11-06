@@ -275,11 +275,13 @@ def _project_state(
 ) -> dict[str, Any]:
     """The project brief and, for a setup draft, where to write the proposal."""
     next_state = dict(state)
-    if manifest.get("projectManager") and assignment.get("agentId") == manifest["projectManager"].get("agentId"):
-        if not has_capability(sandbox, "project-manager-mcp"):
-            raise _DeliveryRefused("Update this computer to use the project manager tools.")
-        next_state["project_manager"] = manifest["projectManager"]
+    manager = manifest.get("projectManager")
+    if manager and assignment.get("agentId") == manager.get("agentId") and has_capability(sandbox, "project-manager-mcp"):
+        next_state["project_manager"] = manager
     else:
+        # Holding the role never stops an Agent from running: an older
+        # computer runs it without the tools, and the owner's manager view
+        # reports `project_manager_update_required`.
         next_state.pop("project_manager", None)
     project_brief = project_context_brief(
         manifest.get("projectSnapshot") or assignment.get("projectSnapshot"),
