@@ -155,3 +155,38 @@ def test_conversation_mapping_requires_service_token(monkeypatch) -> None:
 
         unauth = client.post("/api/v1/internal/chat/conversation/session", json=CONVERSATION)
         assert unauth.status_code == 401
+
+
+@pytest.mark.parametrize("view", ["chat", "threads"])
+def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
+    from relay.persistence.events import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_secret")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _active_integration(client)
+        visible = _create_session(client, user_id("alice"))
+        archived = _create_session(client, user_id("alice"))
+        app.state.session_store.append_event(archived, relay_event("session.archived", archived, {}))
+        _create_session(client, user_id("bob"))
+        original = app.state.session_store.list_sessions
+
+        def scoped(**kwargs):
+            assert kwargs.get("owner_user_id") == user_id("alice"), "history must be scoped in storage"
+            if view == "chat":
+                assert kwargs.get("include_archived") is False
+            return original(**kwargs)
+
+        monkeypatch.setattr(app.state.session_store, "list_sessions", scoped)
+        if view == "chat":
+            response = client.post("/api/v1/internal/chat/conversation/sessions", headers=CHAT_HEADERS, json=CONVERSATION)
+        else:
+            assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "harbor-quartz-8830"}).status_code == 200
+            response = client.get("/api/v1/threads")
+        assert response.status_code == 200, response.text
+        expected = {visible} if view == "chat" else {visible, archived}
+        assert {s["id"] for s in response.json()["sessions"]} == expected
+        assert all(s["events"] for s in response.json()["sessions"])
