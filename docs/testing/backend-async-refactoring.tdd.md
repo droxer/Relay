@@ -119,3 +119,9 @@ Further review must cover:
 
 Existing architecture constraints and work bounds remain enforced by the
 layering, module-size, reducer-isolation, performance, and scalability tests.
+
+
+Follow-up: the [final refactoring audit](backend-refactoring-audit.md) records the
+resolution of this phase's remaining-work items and the retained operational
+limits. The [local workload probe](backend-control-plane-probe.md) supplies
+current latency, query, connection, event-loop, and process-memory measurements.

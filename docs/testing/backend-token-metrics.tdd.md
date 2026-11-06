@@ -97,3 +97,9 @@ are required. The [automation discovery follow-up](backend-automation-discovery.
 the next identified tick-discovery issue. Full-history API response sizes and
 representative deployment-load measurements remain part of the active backend
 refactoring goal.
+
+
+Follow-up: the [final refactoring audit](backend-refactoring-audit.md) records the
+resolution of this phase's remaining-work items and the retained operational
+limits. The [local workload probe](backend-control-plane-probe.md) supplies
+current latency, query, connection, event-loop, and process-memory measurements.

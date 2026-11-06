@@ -117,3 +117,9 @@ A selected routine can still have a large full detail record or history. The
 candidate union still filters/sorts eligible IDs in the database. Representative
 load measurements and the broader backend audit remain active; these checks do
 not establish supported throughput, p95 latency, or production capacity.
+
+
+Follow-up: the [final refactoring audit](backend-refactoring-audit.md) records the
+resolution of this phase's remaining-work items and the retained operational
+limits. The [local workload probe](backend-control-plane-probe.md) supplies
+current latency, query, connection, event-loop, and process-memory measurements.

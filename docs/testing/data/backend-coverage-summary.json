@@ -1,0 +1,11 @@
+{
+  "runtimeFiles": 449,
+  "coveredStatements": 27825,
+  "statements": 30284,
+  "missingStatements": 2459,
+  "percentStatementsCovered": 91.8802007660811,
+  "testsPassed": 3811,
+  "testDurationSeconds": 473.28,
+  "runtimeSourceState": "a2e5ba9c",
+  "note": "Runtime and migration trees are unchanged; no branch coverage collected."
+}

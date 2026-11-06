@@ -1,5 +1,10 @@
 # Backend scalability changes
 
+The [completed refactoring audit](testing/backend-refactoring-audit.md) consolidates
+current source, test, coverage, build, migration, and local workload evidence.
+For pool/batch sizing experiments, use the [isolated local probe](testing/backend-control-plane-probe.md);
+its raw results characterize the recorded workload rather than production capacity.
+
 The control plane keeps agent execution on daemons. This change addresses blocking task operations, historical-log write amplification, replica-local managed capacity and images, fleet-wide recovery contention, and SSE reconnect lookups.
 
 ## Implementation
