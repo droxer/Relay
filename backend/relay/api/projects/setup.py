@@ -146,23 +146,29 @@ def _prepare_project_setup(
 
     project = _mutate_setup(ctx, project_id, claim_with_task)
     draft = project["setup"]
-    intent_record = RunIntent(
-        task_goal=goal,
-        task_id=draft["taskId"],
-        session_id=thread_id,
-        raw_assignments=[{"agentId": agent_id, "mode": "action"}],
-        requested_project_id=project_id,
-        idempotency_key=body.get("idempotencyKey") if isinstance(body.get("idempotencyKey"), str) else None,
-        source="project_setup",
-        project_setup=setup_manifest_block(
-            intent=intent,
-            candidates=candidates,
-            previous_proposal=previous_proposal,
-            draft_id=draft["draftId"],
-            mode=mode,
-            open_tasks=open_tasks,
-        ),
-    )
+    try:
+        intent_record = RunIntent(
+            task_goal=goal,
+            task_id=draft["taskId"],
+            session_id=thread_id,
+            raw_assignments=[{"agentId": agent_id, "mode": "action"}],
+            requested_project_id=project_id,
+            idempotency_key=body.get("idempotencyKey") if isinstance(body.get("idempotencyKey"), str) else None,
+            source="project_setup",
+            project_setup=setup_manifest_block(
+                intent=intent,
+                candidates=candidates,
+                previous_proposal=previous_proposal,
+                draft_id=draft["draftId"],
+                mode=mode,
+                open_tasks=open_tasks,
+            ),
+        )
+    except Exception:
+        # Preparation now runs before the route's dispatch try block. Preserve
+        # its cleanup guarantee if building the manifest fails after claiming.
+        _undo_draft(ctx, project_id, draft, previous if revising else None, "project_setup_dispatch_failed")
+        raise
     return _PreparedSetup(actor, intent_record, draft, previous, revising)
 
 
