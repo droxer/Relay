@@ -159,7 +159,7 @@ def test_daemon_output_batch_preserves_order(monkeypatch) -> None:
         ]
 
 
-def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch) -> None:
+def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch, database_io_off_event_loop) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
