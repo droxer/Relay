@@ -1,4 +1,4 @@
-"""Reading threads: snapshots, headers, summaries, token usage, and dashboard metrics.
+"""Reading threads: snapshots, headers, summaries, and token usage.
 
 A mixin of ``DatabaseSessionStore``; it shares the store's engine and tables
 (declared on ``SessionStoreState``) and is not used on its own.
@@ -7,15 +7,12 @@ A mixin of ``DatabaseSessionStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, UTC
+from datetime import datetime
 from functools import partial
 from typing import Any
 from sqlalchemy import (
-    case,
-    func,
     literal_column,
     select,
-    text,
 )
 from .output_compaction import compact_completed_run_output
 from ..db_time import format_db_time
@@ -239,92 +236,7 @@ class SessionReadRows(SessionStoreState):
         return [row["snapshot"] or {} for row in rows]
 
     def list_token_usage(self) -> list[dict[str, Any]]:
-        return self._read_token_usage(None)
-
-    def dashboard_session_metrics(
-        self, *, day_window: int = 14, now: datetime | None = None
-    ) -> dict[str, Any]:
-        """Aggregate dashboard counters in SQL without hydrating session events."""
-        now = now or datetime.now(UTC)
-        one_day = now - timedelta(hours=24)
-        seven_days = now - timedelta(days=7)
-        window_start = (now - timedelta(days=day_window - 1)).date()
-        window_start_at = datetime.combine(
-            window_start, datetime.min.time(), tzinfo=UTC
-        )
-        day = func.date(self.sessions.c.created_at)
-        completed = func.sum(case((self.sessions.c.status == "completed", 1), else_=0))
-        failed = func.sum(case((self.sessions.c.status == "failed", 1), else_=0))
-        created = self.sessions.c.created_at
-        with store_transaction(self.engine) as conn:
-            # Totals, both windows, and the status breakdown in one grouped pass.
-            status_rows = conn.execute(
-                select(
-                    self.sessions.c.status,
-                    func.count(),
-                    func.sum(case((created >= one_day, 1), else_=0)),
-                    func.sum(case((created >= seven_days, 1), else_=0)),
-                ).group_by(self.sessions.c.status)
-            ).all()
-            total = sum(int(row[1] or 0) for row in status_rows)
-            last_24h = sum(int(row[2] or 0) for row in status_rows)
-            last_7d = sum(int(row[3] or 0) for row in status_rows)
-            user_rows = conn.execute(
-                select(self.sessions.c.owner_user_id, func.count().label("count"))
-                .where(self.sessions.c.owner_user_id.is_not(None))
-                .group_by(self.sessions.c.owner_user_id)
-                .order_by(text("count DESC"))
-                .limit(5)
-            ).all()
-            daily_rows = (
-                conn.execute(
-                    select(
-                        day.label("day"),
-                        func.count().label("count"),
-                        completed.label("completed"),
-                        failed.label("failed"),
-                    )
-                    .where(self.sessions.c.created_at >= window_start_at)
-                    .group_by(day)
-                    .order_by(day)
-                )
-                .mappings()
-                .all()
-            )
-        daily_by_day = {
-            str(row["day"]): {
-                "count": int(row["count"] or 0),
-                "completed": int(row["completed"] or 0),
-                "failed": int(row["failed"] or 0),
-            }
-            for row in daily_rows
-        }
-        return {
-            "total": total,
-            "last24h": last_24h,
-            "last7d": last_7d,
-            "statusCounts": {str(row[0]): int(row[1]) for row in status_rows},
-            "dailyCounts": [
-                {
-                    "date": (window_start + timedelta(days=offset)).isoformat(),
-                    **daily_by_day.get(
-                        (window_start + timedelta(days=offset)).isoformat(),
-                        {"count": 0, "completed": 0, "failed": 0},
-                    ),
-                }
-                for offset in range(day_window)
-            ],
-            "topUsers": [
-                {"userId": str(user_id), "sessionCount": int(count)}
-                for user_id, count in user_rows
-            ],
-        }
-
-    def list_dashboard_token_usage(self, *, since: datetime) -> list[dict[str, Any]]:
-        """Read the ledger rows of runs that finished inside the reporting window."""
-        return self._read_token_usage(since)
-
-    def _read_token_usage(self, since: datetime | None) -> list[dict[str, Any]]:
+        """Full retained run ledger, including metadata for non-dashboard callers."""
         query = (
             select(
                 self.run_token_usage,
@@ -338,8 +250,6 @@ class SessionReadRows(SessionStoreState):
             )
             .order_by(self.run_token_usage.c.completed_at.desc())
         )
-        if since is not None:
-            query = query.where(self.run_token_usage.c.completed_at >= since)
         with store_transaction(self.engine) as conn:
             rows = conn.execute(query).mappings().all()
         return [

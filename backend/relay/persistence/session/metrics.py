@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, text
 
 from ..engine import store_transaction
 from .state import SessionStoreState
@@ -43,14 +43,14 @@ class SessionMetricRows(SessionStoreState):
         dates = [start + timedelta(days=index) for index in range(day_window + 1)]
         boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
         ledger = self.run_token_usage.c
-        day = case(*[
-            (ledger.completed_at < boundaries[index + 1], dates[index].isoformat())
-            for index in range(day_window)
-        ]).label("day")
+        day = case(
+            *[(ledger.completed_at < boundaries[index + 1], dates[index].isoformat()) for index in range(day_window)]
+        ).label("day")
         agent = case((ledger.reported.is_(False), ledger.agent), else_=None).label("agent")
         statement = (
             select(
-                day, agent,
+                day,
+                agent,
                 *[
                     func.sum(case((ledger.reported.is_(True), ledger[column]), else_=0)).label(key)
                     for key, column in _TOKEN_COLUMNS.items()
@@ -82,17 +82,96 @@ class SessionMetricRows(SessionStoreState):
                         observed = observed.replace(tzinfo=UTC)
                     count, latest = unreported.get(row["agent"], (0, observed))
                     unreported[row["agent"]] = (count + int(row["unreported"]), max(latest, observed))
-        missing = sorted(unreported, key=lambda agent: (
-            -unreported[agent][0],
-            -unreported[agent][1].timestamp(),
-            agent,
-        ))
+        missing = sorted(
+            unreported,
+            key=lambda agent: (
+                -unreported[agent][0],
+                -unreported[agent][1].timestamp(),
+                agent,
+            ),
+        )
         return {
             "available": any(counts["total"] > 0 for counts in buckets.values()),
             "timeZone": str(zone),
-            "totalInput": totals["input"], "totalOutput": totals["output"],
-            "totalCacheRead": totals["cacheRead"], "totalCacheWrite": totals["cacheWrite"],
-            "totalCache": totals["cache"], "total": totals["total"], "fresh": totals["fresh"],
+            "totalInput": totals["input"],
+            "totalOutput": totals["output"],
+            "totalCacheRead": totals["cacheRead"],
+            "totalCacheWrite": totals["cacheWrite"],
+            "totalCache": totals["cache"],
+            "total": totals["total"],
+            "fresh": totals["fresh"],
             "daily": [{"date": day, **counts} for day, counts in buckets.items()],
             "unreportedRuns": [{"agent": agent, "runs": unreported[agent][0]} for agent in missing],
+        }
+
+    def dashboard_session_metrics(self, *, day_window: int = 14, now: datetime | None = None) -> dict[str, Any]:
+        """Aggregate dashboard counters in SQL without hydrating session events."""
+        now = now or datetime.now(UTC)
+        one_day = now - timedelta(hours=24)
+        seven_days = now - timedelta(days=7)
+        window_start = (now - timedelta(days=day_window - 1)).date()
+        window_start_at = datetime.combine(window_start, datetime.min.time(), tzinfo=UTC)
+        day = func.date(self.sessions.c.created_at)
+        completed = func.sum(case((self.sessions.c.status == "completed", 1), else_=0))
+        failed = func.sum(case((self.sessions.c.status == "failed", 1), else_=0))
+        created = self.sessions.c.created_at
+        with store_transaction(self.engine) as conn:
+            # Totals, both windows, and the status breakdown in one grouped pass.
+            status_rows = conn.execute(
+                select(
+                    self.sessions.c.status,
+                    func.count(),
+                    func.sum(case((created >= one_day, 1), else_=0)),
+                    func.sum(case((created >= seven_days, 1), else_=0)),
+                ).group_by(self.sessions.c.status)
+            ).all()
+            total = sum(int(row[1] or 0) for row in status_rows)
+            last_24h = sum(int(row[2] or 0) for row in status_rows)
+            last_7d = sum(int(row[3] or 0) for row in status_rows)
+            user_rows = conn.execute(
+                select(self.sessions.c.owner_user_id, func.count().label("count"))
+                .where(self.sessions.c.owner_user_id.is_not(None))
+                .group_by(self.sessions.c.owner_user_id)
+                .order_by(text("count DESC"))
+                .limit(5)
+            ).all()
+            daily_rows = (
+                conn.execute(
+                    select(
+                        day.label("day"),
+                        func.count().label("count"),
+                        completed.label("completed"),
+                        failed.label("failed"),
+                    )
+                    .where(self.sessions.c.created_at >= window_start_at)
+                    .group_by(day)
+                    .order_by(day)
+                )
+                .mappings()
+                .all()
+            )
+        daily_by_day = {
+            str(row["day"]): {
+                "count": int(row["count"] or 0),
+                "completed": int(row["completed"] or 0),
+                "failed": int(row["failed"] or 0),
+            }
+            for row in daily_rows
+        }
+        return {
+            "total": total,
+            "last24h": last_24h,
+            "last7d": last_7d,
+            "statusCounts": {str(row[0]): int(row[1]) for row in status_rows},
+            "dailyCounts": [
+                {
+                    "date": (window_start + timedelta(days=offset)).isoformat(),
+                    **daily_by_day.get(
+                        (window_start + timedelta(days=offset)).isoformat(),
+                        {"count": 0, "completed": 0, "failed": 0},
+                    ),
+                }
+                for offset in range(day_window)
+            ],
+            "topUsers": [{"userId": str(user_id), "sessionCount": int(count)} for user_id, count in user_rows],
         }
