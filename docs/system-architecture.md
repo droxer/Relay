@@ -8,7 +8,10 @@ Enterprise AI Workforce Platform / Agent Runtime / Sandbox / Memory / Governance
 
 This document defines Relay's target architecture, strategic technology choices, and architectural decision direction. It explains what the system should become and why.
 
-For implementation-level service boundaries, data models, APIs, runtime flows, and phased engineering work, see [implementation-plan.md](implementation-plan.md).
+For current implementation boundaries and source ownership, see the
+[code navigation guide](CODEX-NAVIGATION-GUIDE.md). The [API reference](api.md)
+describes implemented HTTP contracts; [unfinished designs](proposals/README.md)
+track remaining proposals.
 
 This is a target architecture, not a list of deployed services. Section 4
 separately describes the implemented MCP boundary; its source map is in the
@@ -151,7 +154,7 @@ run sees the read tools; only its Project Manager's run receives proposal access
 Owner and standalone Computer grants can also stage proposals within their
 scope. `relay_propose_task_changes` never applies changes, starts work, accepts
 outcomes or reconciles execution. Apply requires the owner's browser session
-and normal domain validation. See the [tool catalog and capability rules](project-manager-design.md#mcp-tools).
+and normal domain validation. See the [tool catalog and capability rules](guides/project-manager.md#mcp-tools).
 
 ### 4.3 Credentials and transport guarantees
 
@@ -180,8 +183,8 @@ HTTP. Errors hide credentials and internal exception details.
 Native processes still share the owner's OS account; run-scoped tool requests do
 not provide host filesystem isolation. Use a sandbox for that boundary.
 See the [API contract](api.md#relay-mcp-bearer-token-api),
-[runtime installation and token lifecycle](project-manager-design.md#local-agent-runtimes),
-and [Service Connections](connections.md) for their separate Grant model.
+[runtime installation and token lifecycle](guides/project-manager.md#local-agent-runtimes),
+and [Service Connections](guides/connections.md) for their separate Grant model.
 
 ### 4.4 Target enterprise gateway
 

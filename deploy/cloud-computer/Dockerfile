@@ -1,5 +1,5 @@
 # Relay cloud computer image: one Fly Machine per managed computer
-# (relay-supervisor's "fly-machines" provider; see docs/deployment.md).
+# (relay-supervisor's "fly-machines" provider; see docs/guides/deployment.md).
 #
 # The machine is the sandbox, so the daemon runs agents directly in it
 # (sandboxMode "none") with the same agent CLIs the BoxLite devbox ships.

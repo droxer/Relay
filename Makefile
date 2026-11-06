@@ -34,7 +34,7 @@ devbox-image:
 	docker build --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t $(DEVBOX_IMAGE) -f $(DOCKERFILE) .
 
 # Fly Machines run linux/amd64. Push the result to registry.fly.io/<app>:<tag>
-# and point the supervisor's RELAY_FLY_IMAGE at it (docs/deployment.md).
+# and point the supervisor's RELAY_FLY_IMAGE at it (docs/guides/deployment.md).
 CLOUD_COMPUTER_IMAGE ?= relay-cloud-computer:latest
 cloud-computer-image:
 	docker build --platform linux/amd64 --build-arg DEVBOX_BASE_IMAGE="$(DEVBOX_BASE_IMAGE)" -t relay-devbox:amd64 -f $(DOCKERFILE) .

@@ -1,0 +1,593 @@
+# Deploying Relay on Vercel + Railway
+
+This guide deploys Relay as a hosted product: the **web UI on Vercel** and the
+**backend control plane on Railway** with Railway Postgres. It covers the two
+origin models, the settings each one needs, and what deliberately stays off both
+platforms.
+
+To put Cloudflare in front of Railway instead of Vercel — one origin, with
+Cloudflare as CDN, TLS edge, and WAF — see
+[deployment-cloudflare.md](deployment-cloudflare.md).
+
+## What goes where
+
+Relay splits into a control plane and an execution plane, and that split decides
+the hosting:
+
+| Component | Host | Why |
+| --- | --- | --- |
+| `web/` (Next.js UI) | **Vercel**, a **Cloudflare Worker**, or its own **Railway** service (`web/Dockerfile`) | Static/edge-friendly client app; no server state. For Cloudflare or Railway, see [deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui). |
+| `backend/` (FastAPI + Procrastinate) | **Railway** | Supervised API and background-worker processes sharing the database and local skill files. |
+| Postgres | **Railway** | Sessions, tasks, events, auth, daemon registry. |
+| `relay-daemon` | **Neither** | On users' own machines, or on Fly Machines for [cloud computers](#cloud-computers-on-fly-machines) — see below. |
+| `relay-supervisor` | **Depends on its provider** | Control plane with `--provider command`, execution plane with `--provider local`. See [The supervisor](#the-supervisor). |
+
+**Daemons do not belong on Vercel or Railway.** The backend never executes
+agents; it queues commands that daemons poll for. Daemons run on user machines
+(`SANDBOX_MODE=none`) or, for cloud computers, on Fly Machines, and they connect
+*out* to the Railway backend URL — so the backend needs a public URL, but
+daemons never need inbound ports.
+
+**BoxLite is for local development only.** It boots a microVM per workspace,
+which needs hardware virtualization that Railway, Vercel, and Fly containers do
+not provide. Locally, the supervisor's default `local-process` provider runs a
+managed computer as a BoxLite-sandboxed daemon on your own machine — the
+development stand-in for a cloud computer. In production a cloud computer is a
+Fly Machine, which is its own VM, so it runs with `sandboxMode` `none`;
+`deploy/deploy.sh` sets `RELAY_MANAGED_NODE_PROVIDER=fly-machines` for that.
+
+You *can* run a daemon in a plain container with `--sandbox none`, where agents
+are host processes rather than VM guests. That trades the sandbox boundary for
+container isolation only, and you must supply each agent CLI's credentials in
+the image. Relay requires `--allow-host-agent-execution` (or
+`RELAY_ALLOW_HOST_AGENT_EXECUTION=1`) so this trust decision cannot happen by
+accident. Treat it as a deliberate choice, not the default.
+
+### The supervisor
+
+`relay-supervisor` reconciles requested managed computers into running daemons.
+Where it can be hosted depends entirely on which provider it uses, because the
+two providers put it on opposite sides of the control/execution split:
+
+- **`--provider local`** (the default) spawns `relay-daemon` as a child process
+  on its own host (`LocalProcessProvider`), and defaults to `--sandbox boxlite`.
+  That makes it an execution-plane component: it inherits every daemon
+  constraint, including hardware virtualization, and does not belong on Railway.
+- **`--provider command`** renders a command template — `gcloud workstations
+  ssh …`, `ssh`, a cloud API call — that starts the daemon on infrastructure
+  you control. The supervisor itself then runs no agents and no sandbox, so it
+  is deployable next to the backend as a second Railway service.
+
+Either way it is **never a Vercel workload**: it is a reconcile loop
+(`--interval-ms`, default 10s), and in command mode it holds a live child
+process per launched daemon rather than dispatching and forgetting.
+
+If you deploy it on Railway with `--provider command`:
+
+- It authenticates to the backend with `RELAY_ADMIN_TOKEN` as a bearer token,
+  so that variable must stay set on the backend and be given to the supervisor
+  service. That is a standing admin credential — see
+  [Secrets](#secrets).
+- Node tokens are interpolated into a shell command line (`shell: true`), so
+  they are visible in the process table of whatever host runs the template.
+  Keep that host dedicated.
+- Restarts kill the child processes it is holding. Reconciliation restarts them
+  on the next pass, but a redeploy is a disruption, not a no-op.
+- Run one replica, for the same reason the backend does: two supervisors
+  reconcile the same desired state against the same nodes.
+
+`--once` runs a single reconcile pass and exits, which suits a scheduled job
+better than a long-lived service if your provider template is fully
+fire-and-forget.
+
+```
+   browser
+      │
+      ▼
+┌───────────────┐   /api/*  ┌──────────────────┐      ┌────────────┐
+│ Vercel (web)  │──────────▶│ Railway (backend)│─────▶│  Postgres  │
+└───────────────┘           └──────────────────┘      └────────────┘
+                                     ▲
+                          poll commands │ post run events
+                                     │
+                      ┌──────────────────────────────┐
+                      │ daemons: laptops / VM hosts   │
+                      │ (BoxLite sandbox + agent CLIs)│
+                      └──────────────────────────────┘
+```
+
+### Cloud computers on Fly Machines
+
+For computers Relay runs in the cloud on a user's behalf, the supervisor's
+`fly-machines` provider gives each managed computer one
+[Fly Machine](https://fly.io/docs/machines/) and one Fly volume. The machine is
+a Firecracker microVM — the computer's isolation boundary — so the daemon runs
+agents directly in it (`sandboxMode: "none"`); BoxLite could not boot there,
+because Fly exposes no `/dev/kvm`. The volume, mounted at `/data`, holds the
+node workspace, the daemon's private state, and agent logins (`HOME` is
+`/data/home`), so they survive restarts, image upgrades, and new provisioning
+attempts. The supervisor needs no virtualization itself and can run beside the
+backend as a second Railway service.
+
+One-time setup:
+
+1. Create a Fly app for the computers and a token scoped to it:
+   `fly apps create relay-computers` and
+   `fly tokens create deploy -a relay-computers`.
+2. Build and push the image (Fly runs `linux/amd64`):
+   ```bash
+   make cloud-computer-image CLOUD_COMPUTER_IMAGE=registry.fly.io/relay-computers:v1
+   fly auth docker
+   docker push registry.fly.io/relay-computers:v1
+   ```
+   The image is the devbox (`dockerfile`, the same pinned agent CLIs) plus the
+   packaged client from `make backend`'s installer bundle.
+3. On the **backend**, set `RELAY_MANAGED_NODE_PROVIDER=fly-machines`
+   (`deploy/deploy.sh` does this for the hosted deploy). Every
+   managed computer created after that — from the admin console or from
+   on-demand capacity — uses Fly, with `sandboxMode` `none`. Existing
+   `local-process` computers are left alone, and on-demand capacity no longer
+   counts them, so a user who had one gets a Fly computer beside it; stop or
+   delete the old ones once their work is done. The name is not checked at
+   startup: a typo shows up as a `ProviderUnavailable` condition on each new
+   computer.
+4. Run the **supervisor** with the provider configured:
+
+   | Variable | Default | Purpose |
+   | --- | --- | --- |
+   | `RELAY_FLY_APP` | unset | Fly app the machines live in. Unset, the provider is not offered. |
+   | `FLY_API_TOKEN` / `RELAY_FLY_API_TOKEN` | — | Machines API token for that app. |
+   | `RELAY_FLY_IMAGE` | — | The pushed image, e.g. `registry.fly.io/relay-computers:v1`. |
+   | `RELAY_FLY_REGION` | — | Region for machines and volumes, e.g. `iad`. |
+   | `RELAY_FLY_CPU_KIND` | `shared` | `shared` or `performance`. |
+   | `RELAY_FLY_CPUS` | `2` | vCPUs per computer. |
+   | `RELAY_FLY_MEMORY_MB` | `4096` | Memory per computer. |
+   | `RELAY_FLY_VOLUME_GB` | `20` | Volume size for a new computer (extend later with `fly volumes extend`). |
+
+   It also needs `RELAY_BACKEND_URL` (the backend's public URL — the machines
+   connect out to it) and `RELAY_ADMIN_TOKEN`.
+
+How the lifecycle maps:
+
+- **Provision** creates the volume and the machine, passing the attempt's
+  single-use enrollment grant in the machine's environment; the daemon enrolls
+  and keeps its runtime token under `/data/home/.relay`. A later attempt — a
+  restart, a generation change, an image upgrade — updates the same machine
+  with the new grant instead of creating a second one.
+- **Stop** (`desiredState: "stopped"`) stops the machine; the volume and the
+  user's files stay. Starting it again is a cold boot of a few seconds plus
+  enrollment.
+- **Delete** destroys the machine and then the volume. Fly keeps the volume's
+  daily snapshots for their retention period.
+
+What to decide before opening it to users:
+
+- **Agent credentials.** Each computer starts with no agent logins. A person can
+  sign in once over `fly ssh console` (the login persists on the volume), or an
+  organization-wide API key can be set as a Fly app secret. Never bake a key into
+  the image.
+- **Permission prompts.** The daemon's default `native` permission policy asks a
+  person before each command and edit. Set `RELAY_LOCAL_PERMISSION_POLICY=trusted`
+  in the image only if unattended runs are the intent.
+- **Idle cost.** Machines run until stopped. Waking a computer when work is
+  queued for it, and suspending an idle one, are not automated yet: a stopped
+  computer is offline, so work sent to it is refused until it is started.
+
+## Pick an origin model first
+
+Relay authenticates with an HTTP-only session cookie. Where the browser sends
+that cookie is the only real decision in this deployment, and everything else
+follows from it.
+
+### Option A — Proxied (recommended; no custom domain needed)
+
+Vercel rewrites `/api/*` and `/profile-images/*` to the Railway backend. The
+browser only ever talks to the Vercel origin, so the cookie stays same-origin:
+default `SameSite=Lax`, no CORS, nothing to configure on the cookie at all.
+
+Use this to get running on `*.vercel.app` and `*.up.railway.app` without owning
+a domain. The cost is that every API call takes an extra network hop, and
+long-lived SSE streams pass through Vercel's proxy — cap them (see
+[SSE through a proxy](#sse-through-a-proxy)).
+
+### Option B — Direct, on sibling subdomains
+
+Point `app.example.com` at Vercel and `api.example.com` at Railway. The browser
+calls the backend directly: no proxy hop, and SSE streams go straight to Railway.
+Sibling subdomains of one registrable domain are *same-site*, so the cookie stays
+`SameSite=Lax` — it just needs `Domain=.example.com`. The backend needs CORS
+because the origins differ.
+
+This is the better steady state once you have a domain. Requires DNS.
+
+> **Not recommended: direct across unrelated domains.** `relay.vercel.app` →
+> `relay.up.railway.app` is *cross-site* (both are public suffixes), so the
+> cookie needs `SameSite=None; Secure`, which browser tracking-prevention modes
+> increasingly block outright. Relay supports it
+> (`RELAY_SESSION_COOKIE_SAMESITE=none`), but expect Safari and hardened Chrome
+> profiles to drop the session. Use Option A instead.
+
+## 1. Railway: Postgres + backend
+
+1. **Create the project and database.** New project → *Provision Postgres*.
+   Railway exposes `DATABASE_URL` on the database service.
+
+2. **Create an empty backend service** with the repository root as its
+   root directory. Connect this repo after configuring the settings and
+   variables below. Set `RAILWAY_DOCKERFILE_PATH=backend/Dockerfile` before its
+   first build, and configure these service settings (the automated deploy
+   script sets them through the API):
+   - builder `RAILPACK`, with Dockerfile path `backend/Dockerfile` (Railway
+     builds the Dockerfile when present; no agent CLIs or BoxLite);
+   - start command `relay serve-with-worker`;
+   - pre-deploy commands `alembic -c backend/alembic.ini upgrade head`, then
+     `relay worker-schema`, so domain and queue schemas are ready before startup;
+   - health check `/healthz`, timeout 120 seconds;
+   - one replica, sleeping disabled, restart on failure (10 retries).
+
+   `railway.json` and `railway.toml` are deprecated and cannot be enabled for
+   new services. This repository uses explicit API settings in
+   `deploy/services/backend.json` and `deploy/services/web.json`. These are
+   script inputs, not Railway Config as Code files. For CLI-managed IaC,
+   migrate/import the existing project into one `.railway/railway.ts` and
+   review the plan before applying it; Railway does not read that file during
+   ordinary deploys. See [Railway's migration guide](https://docs.railway.com/infrastructure-as-code#migrating-from-config-as-code).
+
+3. **Reference the database.** In the backend service's variables, add
+   `DATABASE_URL` as a reference to the Postgres service
+   (`${{Postgres.DATABASE_URL}}`). Railway issues a bare `postgresql://` URL;
+   Relay pins the psycopg 3 driver on it automatically
+   (`relay.core.storage_config.normalize_database_url`), so paste it unedited.
+
+4. **Set the backend variables.** The image already sets `HOST`,
+   `RELAY_BACKGROUND_MODE`, and `RELAY_DATA_DIR`; `PORT` comes from Railway.
+   Every store, accounts included, lives in the referenced database, so there
+   is no storage switch to set (`RELAY_STORAGE` and `RELAY_AUTH_STORE` are
+   retired; a service that still has them only logs a warning at boot, so
+   delete them from its variables). Add:
+
+   | Variable | Value | Notes |
+   | --- | --- | --- |
+   | `RELAY_ADMIN_TOKEN` | a long random string | Seeds the admin bearer token on first boot. Its SHA-256 is then stored in Postgres and the env var no longer changes it; rotate from the admin console (`POST /api/v1/admin/admin-token/reissue`), which shows the new token once. |
+   | `RELAY_CORS_ALLOW_ORIGINS` | `https://app.example.com` | **Option B only.** Exact origins, comma-separated. `*` is rejected. |
+   | `RELAY_CORS_ALLOW_ORIGIN_REGEX` | `https://relay-web-[a-z0-9-]+\.vercel\.app` | **Option B only**, if you want Vercel preview deployments to reach the API. |
+   | `RELAY_SESSION_COOKIE_DOMAIN` | `.example.com` | **Option B only.** Shares the cookie across `app.` and `api.`. |
+   | `RELAY_SESSION_COOKIE_SAMESITE` | `lax` | Default. Only set to `none` for the unrelated-domains case. |
+   | `RELAY_TRUST_PROXY_HEADERS` | `1` | Trust forwarded scheme/client headers from the deployment edge. |
+   | `RELAY_FORWARDED_ALLOW_IPS` | comma-separated proxy IPs/CIDRs | Required with proxy trust. Use the socket-peer addresses or networks assigned to your edge; `*` is rejected. |
+   | `RELAY_STREAM_MAX_SECONDS` | `240` | **Option A only.** See [SSE through a proxy](#sse-through-a-proxy). |
+   | `RELAY_LOG_LEVEL` | `INFO` | |
+   | `RELAY_PUBLIC_BACKEND_URL` | `https://api.example.com` | Public backend origin used in computer connection commands. Use your Railway/custom API domain, without `/api/v1`. Required for reliable copy-out URLs behind proxies. |
+   | `RELAY_PUBLIC_WEB_URL` | `https://relay.example.com` | Web UI origin when it is not the backend. Browser routes opened on the API host, including the computer-approval link the installer prints, redirect here. |
+
+   TLS terminates at Railway's edge, so the app sees plain HTTP. Enable proxy
+   headers and restrict them to the edge's socket-peer IPs/CIDRs; Relay then
+   marks session cookies `Secure` from `X-Forwarded-Proto`. If you cannot obtain
+   a stable trusted-proxy range, leave proxy headers disabled and set
+   `RELAY_FORCE_SECURE_COOKIES=1` instead.
+
+5. **Decide on a volume.** Everything but skill bundles lives in Postgres —
+   profile images, managed-node records, and the admin token's hash. Skill
+   bundle bytes are written to `/data/skills/objects` unless a blob store is
+   configured:
+
+   - **With R2** (`RELAY_BLOB_STORE=r2`, see
+     [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional)),
+     no volume is needed.
+   - **Without R2**, attach a volume at `/data` (Railway → service →
+     *Volumes*); without one, published skills lose their bundles on every
+     deploy.
+
+   **Upgrading** a deployment that already has a volume: keep it attached
+   for the first boot on this version, which imports the legacy
+   `auth/admin-token` file into Postgres as a hash. To retire the volume,
+   enable R2 and run `relay migrate-blobs-to-r2 --data-dir /data` until it
+   reports nothing left to move.
+
+6. **Generate a domain.** Service → *Settings* → *Networking* → *Generate
+   Domain*, or attach `api.example.com` for Option B. This URL is what both the
+   web app and every daemon will use. Set `RELAY_PUBLIC_BACKEND_URL` on the
+   backend to this HTTPS origin and redeploy. For a single-domain deployment,
+   use the domain serving Relay's API. This setting is independent of proxy
+   header trust and prevents internal HTTP URLs from appearing in commands.
+
+## 2. Vercel: the web UI
+
+To host the UI on Cloudflare Workers or Railway instead, skip this section and
+follow [deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui).
+
+Create a Vercel project from the same repo with **Root Directory = `web`**.
+Vercel detects Next.js and installs the npm workspace from the repo root, so
+`relay-core` builds via the `prebuild` script. `web/vercel.json` supplies the
+build command and response headers.
+
+Then set environment variables for **Production, Preview, and Development**:
+
+**Option A (proxied):**
+
+| Variable | Value |
+| --- | --- |
+| `RELAY_WEB_HOST` | `proxy` |
+| `RELAY_BACKEND_URL` | `https://relay-backend.up.railway.app` |
+| `NEXT_PUBLIC_RELAY_BACKEND_ORIGIN` | `https://relay-backend.up.railway.app` |
+
+`RELAY_WEB_HOST=proxy` switches the build from a static export to a Node build
+whose rewrites forward `/api/*` and `/profile-images/*` to `RELAY_BACKEND_URL`.
+`NEXT_PUBLIC_RELAY_BACKEND_ORIGIN` does not affect request routing — it is the
+origin printed in values a human copies out of the UI (daemon start commands,
+chat webhook base URLs), which must address the backend directly rather than
+going through the proxy.
+
+**Option B (direct):**
+
+| Variable | Value |
+| --- | --- |
+| `NEXT_PUBLIC_RELAY_API_ORIGIN` | `https://api.example.com` |
+
+Leave `RELAY_WEB_HOST` unset: the build stays a static export and the client
+calls the backend origin directly with `credentials: "include"`.
+
+> Both are build-time values. Changing either requires a redeploy, not just a
+> restart.
+
+## 3. First run
+
+1. **Bootstrap the admin.** With `RELAY_ADMIN_TOKEN` set on the backend:
+
+   ```bash
+   curl -X POST https://<backend>/api/v1/auth/bootstrap \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<RELAY_ADMIN_TOKEN>","username":"admin","password":"<password>"}'
+   ```
+
+   Then keep `RELAY_ADMIN_TOKEN` in the service variables only as the
+   first-boot seed. Once the backend has booted, the token's SHA-256 is stored
+   in Postgres and that stored value is authoritative — deleting or changing
+   the env var afterwards has no effect. Without `RELAY_ADMIN_TOKEN` no token
+   is generated and bootstrap answers `503`; set it before the first boot.
+   A supervisor authenticates with the persisted value (see
+   [The supervisor](#the-supervisor)).
+
+   This token is **not** only a bootstrap credential. `require_admin_session`
+   accepts it as a bearer token on every admin route, so it is a standing
+   admin bypass that no user account, password change, or session revocation
+   affects. Treat it as a break-glass key: rotate it from the admin console
+   (or `POST /api/v1/admin/admin-token/reissue`) once the first admin exists
+   and whenever it leaks — env var edits alone do not revoke it.
+
+2. **Sign in** at the Vercel URL and confirm the admin dashboard loads.
+
+3. **Connect a computer.** Open *Computers → Connect this computer*, register
+   the workspace, and copy the **Install and connect** command to that computer.
+   The browser-approved setup is a bare `curl -fsSL <origin>/install.sh | bash`,
+   where `<origin>` is `RELAY_PUBLIC_WEB_URL` when set (the web host must answer
+   `/install.sh`: the proxy build rewrites it and the standalone web image
+   redirects it to the API) and the backend origin otherwise;
+   a command for an already enrolled computer appends its computer ID, owner ID
+   and workspace path (`… | bash -s -- …`) and asks for the node token at a
+   hidden terminal prompt. Credentials are never embedded in the copied command.
+   Configure `RELAY_PUBLIC_BACKEND_URL` to your public HTTPS API origin; keep
+   the web build's `NEXT_PUBLIC_*` settings aligned. Loopback HTTP is supported
+   for local development only.
+
+   The installer supports macOS and Linux on x64/arm64. It downloads a SHA-256
+   verified archive of compiled JavaScript, so users do not need repository
+   access, Git, npm, or a compiler. If Node.js 22.19+ is missing it downloads a
+   private Node.js 24 runtime from nodejs.org and checks its published SHA-256.
+   It requires curl, tar, and shasum or sha256sum. Agent CLIs and their login
+   credentials must already be installed separately.
+
+   Nothing is installed as root or system-wide, so the command needs no `sudo`:
+   every file and the service below belong to the account that runs it, and the
+   service sees that terminal's environment. Commands copied while the published
+   form was `| sudo bash` still work: the script hands the install to the
+   invoking account (`$SUDO_USER`) through `su -l` (a nested `sudo` would garble
+   the terminal output), a root shell with no invoking user is refused, and that
+   hand-off needs bash. Agent settings exported only from an interactive rc file
+   need `… | bash -s -- --runtime-env-file <private JSON file>`.
+
+   After checking backend registration and the workspace, the installer creates
+   a per-computer LaunchAgent (macOS) or systemd user service (Linux). The service
+   starts at user login and restarts after failures. Linux requires an active
+   systemd user session; append `--foreground` to the copied command to run in
+   the terminal instead. It does not enable system-wide startup or Linux linger;
+   when linger is off it prints the `sudo loginctl enable-linger <user>` command
+   that keeps the service running without a login. On macOS a workspace under
+   Desktop, Documents, Downloads, iCloud Drive, cloud storage or `/Volumes` gets
+   a notice that the background `node` process needs Files and Folders access,
+   and an install over SSH (no GUI session for launchd) points to `--foreground`.
+   The workspace is recorded by its canonical path (symlinks resolved, the
+   volume's spelling; Windows compares it without case), so re-running setup
+   with a differently spelled path upgrades the same computer.
+   Control the service afterwards with `relay stop`, `relay start`,
+   `relay restart`, `relay status`, and `relay logs [--follow]`. `stop` keeps the
+   service off across logins until `relay start` (or re-running the installer);
+   with several connected computers, `--computer <node-id>` narrows any command.
+   `relay update` upgrades in place: it fetches `<backend>/install.sh` (or
+   `install.ps1`) and re-runs it with the backend, workspace, permission policy and
+   complete saved runtime profile, including any runtime env file reference, so
+   the same computer keeps its saved token and agent settings. It pauses new
+   work before checking for runs in flight and holds that pause through the
+   restart. It refuses active runs or a daemon that cannot acknowledge the pause
+   unless given `--force`. Failed updates release the pause; use `relay status`
+   to check service health afterward. An update also puts the invoking shell's
+   PATH in front of the saved one, so agent CLIs installed since setup are found.
+   On macOS and Windows, `service.log` rotates to `service.log.1` past 10 MB.
+
+   **Windows** (10 version 1803 or newer, x64/arm64) gets a PowerShell twin:
+   `irm <origin>/install.ps1 | iex`, or for an enrolled computer
+   `& ([scriptblock]::Create((irm '<origin>/install.ps1'))) '--sandbox-id' …`.
+   It needs no administrator window and installs under `%LOCALAPPDATA%\Relay`
+   with the same SHA-256 checks (the private Node.js runtime is the `win-*.zip`
+   build). Relay launches agents and readiness checks natively with Node, so
+   connecting and running a computer does not require Git Bash or WSL. Installed
+   agent CLIs may have their own prerequisites. Native executables and npm's
+   `.cmd` launchers are supported; npm launchers resolve to their Node entrypoint
+   without passing prompts through `cmd.exe`. Arbitrary batch wrappers are
+   rejected with an actionable error. Node-based CLIs receive arguments through
+   a private preload file, allowing long prompts and preserving quotes, Unicode
+   and shell metacharacters. The same execution supervisor streams output and
+   tracks the run's process tree. Windows model and skill/MCP discovery use Node
+   filesystem and HTTP APIs. The background service is a Task Scheduler
+   logon task for the installing account that starts a hidden PowerShell, which
+   runs `windows-service-host.js`; that host appends to `service.log` and
+   restarts the daemon 10 seconds after a crash, matching launchd and systemd.
+   Windows has no process groups, so a run's processes are found through
+   `ParentProcessId` and creation times (`windows-process-tree.ts`): cancelling
+   or finishing a run ends everything its bash script started, orphans
+   included, and a restarted daemon settles a run once that tree is gone.
+   `relay.cmd` lands in `%USERPROFILE%\.local\bin`; the installer prints its
+   full path for `stop`, `start`, `restart`, `status`, and `logs`.
+   Confirm that the
+   computer becomes online in Relay; an accepted registration alone is not an
+   online heartbeat.
+
+   Client versions live in `~/.local/share/relay/releases/<sha256>/`, private
+   runtimes in `~/.local/share/relay/runtimes/` (a successful install removes
+   those no installed service uses, keeping the two newest others), and launchers in
+   `~/.local/bin/relay` (service control) and `~/.local/bin/relay-daemon`. Services use absolute paths, so no PATH edit is
+   needed to connect. Node credentials remain in the existing private
+   `~/.relay/daemon-nodes/<node-id>/credentials/` storage, not service definitions.
+   Re-running the command installs the current release and restarts that node's
+   service; stop active agent work before updating. Existing unrelated launchers
+   are preserved. Add `~/.local/bin` to PATH to type `relay` without its full
+   path; the installer always prints commands using the quoted full path.
+
+   `backend/Dockerfile` builds and ships the archive automatically. For source
+   deployments run `npm run build:computer` before starting the backend (also
+   included in `make build-packages` and `npm run build`). The default archive is
+   `backend/relay/computer/daemon.tar.gz`; `RELAY_COMPUTER_BUNDLE` can override it.
+   A missing archive returns HTTP 503 with an actionable build instruction.
+   Keep `/install.sh` and `/computer/daemon-<sha256>.tar.gz` reachable without
+   login at the origin named by `RELAY_PUBLIC_BACKEND_URL` (the script also bakes
+   that origin in as its backend). A separately hosted web build
+   (`RELAY_WEB_HOST=proxy`) proxies both paths to the backend. Archives are
+   immutable by digest; the script is not cached. This change does not publish a
+   CDN release or alter token expiry.
+
+## Operational notes
+
+### Background processing
+
+The Railway deployment scripts run the API (`relay serve`) and Procrastinate
+worker (`relay worker`) as separate services, sharing PostgreSQL and R2.
+Both use `RELAY_BACKGROUND_MODE=external` so the API starts no embedded periodic
+loops. The worker deploys after API migrations and health checks succeed.
+For other container hosts, the image's default `relay serve-with-worker`
+supervises both processes together and supports local `/data` skill files.
+The worker invokes the existing task
+scheduler for automations and project tasks, plus notification and execution
+recovery checks. See [Background jobs](background-jobs.md).
+
+Keep one replica initially, as the backend and worker service profiles configure.
+Procrastinate coordinates normal checks through database locks, and domain
+claims remain necessary for recovery after heartbeat loss. Do not disable
+`RELAY_TASK_SCHEDULER_ENABLED` merely to select external mode: that setting
+also stops automation event production.
+
+The supervisor stops both processes on termination and restarts the service
+through the platform if either child exits unexpectedly. Set
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS=35` or higher to allow its 30-second
+shutdown period; the deployment script sets this minimum automatically.
+
+### SSE through a proxy
+
+Thread streaming is Server-Sent Events. The backend caps a single connection at
+`RELAY_STREAM_MAX_SECONDS` (default 1800) and the client reconnects with
+`Last-Event-ID`, so a capped connection costs a reconnect and nothing else.
+
+Under Option A the stream crosses Vercel's proxy, which enforces its own
+duration limit. Set `RELAY_STREAM_MAX_SECONDS` *below* that limit (240 is a safe
+starting point) so the server closes the stream cleanly with a resumable `done`
+frame instead of the proxy cutting it mid-frame. Option B streams directly from
+Railway and can keep the default.
+
+### Cold starts and sleeping
+
+If the Railway service is allowed to sleep, the first request after idle pays
+the container start. That also stops the task scheduler while asleep, so due
+automations fire late. Keep the backend always-on for any deployment where automations
+matter.
+
+### Secrets
+
+`RELAY_ADMIN_TOKEN`, `DATABASE_URL`, and chat integration credentials belong in
+the platform's variable store, never in `backend/.env` — that file is
+git-ignored and is a local-development convenience only. Daemon tokens are
+issued per computer by the backend and are never set as service variables.
+
+`RELAY_ADMIN_TOKEN` deserves separate care: `require_admin_session` accepts it
+as a bearer token on every admin route, ahead of any session check. The env
+var only seeds the token on first boot; the hash stored in Postgres is
+authoritative afterwards, and the token grants full admin access unaffected by
+user accounts, password changes, or session revocation. Only the hash is
+stored, so a database dump does not reveal it — and the console cannot show it
+again either: rotate it from the admin console (`POST
+/api/v1/admin/admin-token/reissue`), which returns the new value once, if it
+is ever exposed or lost. Removing the env var does not revoke the stored token.
+
+### Local development is unchanged
+
+None of these settings apply locally. With no deployment variables set, the
+backend binds `127.0.0.1:8790`, issues host-only `SameSite=Lax` cookies, adds no
+CORS headers, and `npm run build -w web` still produces the static export that
+the backend serves at `/`. See [local-development.md](../local-development.md).
+
+## Environment variable reference
+
+**Backend (Railway)**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` / `BACKEND_PORT` | `8790` | Listen port; Railway injects `PORT`. `BACKEND_PORT` wins if both are set. |
+| `HOST` / `BACKEND_HOST` | `127.0.0.1` | Listen interface; the image sets `0.0.0.0`. |
+| `DATABASE_URL` / `RELAY_DATABASE_URL` | — | Postgres URL. Bare `postgres://` and `postgresql://` are normalized to psycopg 3. |
+| `RELAY_BACKGROUND_MODE` | `external` in the image | API periodic work is handled by the separate Procrastinate worker; local installs default to `embedded`. |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | at least `35` from deploy scripts | Grace period for each API/worker service to finish store writes. |
+| `RELAY_PUBLIC_BACKEND_URL` | request base URL | Public HTTPS API origin for enrollment/reconnect commands and daemon environment. No path, credentials, query, or fragment. HTTP allowed only for loopback development. |
+| `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
+| `RELAY_CORS_ALLOW_ORIGINS` | unset | Exact browser origins allowed to send credentials. |
+| `RELAY_CORS_ALLOW_ORIGIN_REGEX` | unset | Anchored origin pattern for preview deployments. |
+| `RELAY_SESSION_COOKIE_DOMAIN` | unset (host-only) | Cookie `Domain`, e.g. `.example.com`. |
+| `RELAY_SESSION_COOKIE_SAMESITE` | `lax` | `lax`, `strict`, or `none`. `none` forces `Secure`. |
+| `RELAY_FORCE_SECURE_COOKIES` | `0` | Mark cookies `Secure` regardless of request scheme. |
+| `RELAY_TRUST_PROXY_HEADERS` | `0` | Honor trusted `X-Forwarded-Proto`/`X-Forwarded-For` values. |
+| `RELAY_FORWARDED_ALLOW_IPS` | unset | Required comma-separated IP/CIDR allowlist when proxy headers are enabled; `*` is rejected. |
+| `RELAY_EDGE_SECRET` | unset | Comma-separated secrets (32+ chars) a CDN edge sends as `X-Relay-Edge`. Set, requests without one get `403` (except `/healthz`). See [deployment-cloudflare.md](deployment-cloudflare.md). |
+| `RELAY_CLIENT_IP_HEADER` | unset | Header naming the real client on edge-verified requests (e.g. `CF-Connecting-IP`), used by rate limits. Requires `RELAY_EDGE_SECRET`. |
+| `RELAY_BLOB_STORE` | `database` | `r2` keeps Thread image attachments, workspace-artifact snapshots, and skill bundle bytes in Cloudflare R2 instead of Postgres and the data dir; needs `RELAY_R2_ACCOUNT_ID`, `RELAY_R2_ACCESS_KEY_ID`, `RELAY_R2_SECRET_ACCESS_KEY`, `RELAY_R2_BUCKET` (optional `RELAY_R2_ENDPOINT`). See [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional). |
+| `RELAY_BACKUP_R2_BUCKET` | unset | Bucket for `relay backup-database` (the nightly `pg_dump` cron service). Uses `RELAY_BACKUP_R2_ACCESS_KEY_ID`/`RELAY_BACKUP_R2_SECRET_ACCESS_KEY`, falling back to the `RELAY_R2_*` keys. See [deployment-cloudflare.md](deployment-cloudflare.md#7-nightly-database-backups-to-r2). |
+| `PG_CLIENT_MAJOR` | `18` | Image build arg: the `pg_dump` major version installed for backups; must be at least the server's. |
+| `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
+| `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
+| `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |
+| `RELAY_MANAGED_NODE_PROVIDER` | `local-process` | Provider for new managed computers; `fly-machines` for [cloud computers](#cloud-computers-on-fly-machines). |
+| `RELAY_DATA_DIR` | `.relay` | File-store state for local installs, and where a legacy `auth/admin-token` is imported from; `/data` in the image. |
+
+**Web (Vercel)**
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RELAY_WEB_HOST` | unset (static export) | `proxy` builds a Node app that rewrites `/api` to the backend. |
+| `RELAY_BACKEND_URL` | `http://127.0.0.1:8790` | Proxy target for `RELAY_WEB_HOST=proxy` and for `next dev`. |
+| `NEXT_PUBLIC_RELAY_API_ORIGIN` | unset (same-origin) | Backend origin the browser calls directly. |
+| `NEXT_PUBLIC_RELAY_BACKEND_ORIGIN` | unset | Backend origin shown in copy-out values under proxied mode. |
+| `NEXT_PUBLIC_RELAY_SITE_URL` | unset (not indexable) | Public origin of a site meant for search engines, e.g. `https://get-relay.cc`. Adds canonical, Open Graph, and JSON-LD tags and a robots.txt/sitemap.xml that admit crawlers; unset, robots.txt disallows everything. |
+
+### Daemon credential and transport upgrade
+
+Stop old backend processes, apply Alembic revision `20261010_0089` to clear
+legacy `daemon_nodes.node_token_secret` values, and start the updated backend. The
+nullable column remains for schema compatibility, but updated code always writes
+NULL and never reads it. Existing daemon authentication hashes remain valid;
+reconnection through the Token drawer now requires explicit reissue. File-backed
+node records are scrubbed when the store starts. Downgrading does not restore
+erased secrets; older backend code can write new plaintext again.
+
+The daemon host state directory must survive process restarts. Managed bootstrap
+identity files are mode 0600 under a mode 0700 directory, scoped to the backend
+and grant. Keep this state outside guest workspaces. A new provisioning attempt
+uses a new grant and its own identity. Upgrade the backend before the daemon so
+heartbeats honor the configured command lease and transient event failures return
+retryable 503 responses. Updated daemons exit successfully on revoked credentials,
+so reconnect them through setup after token reissue.

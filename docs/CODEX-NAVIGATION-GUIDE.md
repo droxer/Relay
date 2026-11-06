@@ -51,18 +51,18 @@ relational columns, list summaries, and dashboard rows are projections.
 | FastAPI construction, middleware, lifespan | `backend/relay/app.py`, `backend/relay/bootstrap/` | `backend/relay/core/settings.py`, `backend/relay/api/deps.py`, API tests |
 | Public URL and response contract | `backend/relay/api/contract.py`, domain route in `backend/relay/api/` | `docs/api.md`, `web/src/api.ts`, `packages/relay-core/src/api-url.ts` |
 | Authentication and record access | `backend/relay/security/request_auth.py`, `backend/relay/api/actors.py` | `security/auth.py` (account store mixins), auth API tests and daemon-token tests |
-| Relay MCP protocol and tools | `backend/relay/mcp/` (`http.py`, `server.py`, `catalog.py`, `access.py`, `credentials.py`, `operations.py`) | `app.py` ASGI route/lifespan, `api/projects/mcp.py` compatibility/token routes, `persistence/account/mcp_tokens.py`, daemon `relay-mcp*.ts` transport; `docs/system-architecture.md` §4 and `docs/project-manager-design.md` |
-| Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/connections.md` |
+| Relay MCP protocol and tools | `backend/relay/mcp/` (`http.py`, `server.py`, `catalog.py`, `access.py`, `credentials.py`, `operations.py`) | `app.py` ASGI route/lifespan, `api/projects/mcp.py` compatibility/token routes, `persistence/account/mcp_tokens.py`, daemon `relay-mcp*.ts` transport; `docs/system-architecture.md` §4 and `docs/guides/project-manager.md` |
+| Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/guides/connections.md` |
 | Project setup drafts | `backend/relay/api/projects/setup.py`, `projects/setup.py` | `api/projects/setup_task.py`, collaboration round preparation, setup and plan API tests |
-| Chat provider coordination | `backend/relay/persistence/chat/coordination.py`, `persistence/chat/store.py` | `api/chat/integrations.py`, chat concurrency/coordination/query-bound tests; `docs/testing/backend-chat-coordination.tdd.md` |
-| Chat configuration and credentials | `backend/relay/persistence/chat/store.py`, `integrations.py`, `secrets.py`; pure `chat/rules.py` | migration `20261106_0117`, configuration concurrency/legacy/migration tests; `docs/testing/backend-chat-configuration.tdd.md` |
+| Chat provider coordination | `backend/relay/persistence/chat/coordination.py`, `persistence/chat/store.py` | `api/chat/integrations.py`, chat concurrency/coordination/query-bound tests; `docs/guides/chat-integrations.md` |
+| Chat configuration and credentials | `backend/relay/persistence/chat/store.py`, `integrations.py`, `secrets.py`; pure `chat/rules.py` | migration `20261106_0117`, configuration concurrency/legacy/migration tests; `docs/guides/backend-operations.md` |
 | Chat audit and conversation records | `backend/relay/persistence/chat/audit.py`, `conversations.py` | `persistence/chat/store.py`, `api/chat/gateway.py`, migration `20261106_0116`, chat record tests |
-| Backend refactoring evidence and load characterization | `docs/testing/backend-refactoring-audit.md`, `backend/tests/benchmarks/control_plane.py` | `docs/testing/backend-control-plane-probe.md`, raw measurements under `docs/testing/data/`; use a disposable local PostgreSQL for the manual probe |
-| Admin dashboard reads | `backend/relay/api/admin/dashboard.py`, `dashboard_cache.py`; `persistence/session/metrics.py` | dashboard/cache/token-metrics/request-latency tests; `docs/testing/backend-dashboard-cache.tdd.md`, `backend-token-metrics.tdd.md` |
+| Backend workload characterization | `backend/tests/benchmarks/control_plane.py` | `docs/guides/backend-benchmark.md`; use disposable local PostgreSQL and save generated measurements outside the repository |
+| Admin dashboard reads | `backend/relay/api/admin/dashboard.py`, `dashboard_cache.py`; `persistence/session/metrics.py` | dashboard/cache/token-metrics/request-latency tests; `docs/guides/backend-operations.md` |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task/store.py` | `api/tasks/`, `tasks/dispatch.py`, backlog/routine UI |
-| Automation discovery and delivery | `backend/relay/automations/service.py`, `matcher.py`; `persistence/automation/discovery.py`, `store.py` | migrations `20261106_0118`/`0119`, bounds/migration/matcher tests; `docs/testing/backend-automation-discovery.tdd.md` |
+| Automation discovery and delivery | `backend/relay/automations/service.py`, `matcher.py`; `persistence/automation/discovery.py`, `store.py` | migrations `20261106_0118`/`0119`, bounds/migration/matcher tests; `docs/guides/automations.md` |
 | Routine scheduling | `backend/relay/tasks/scheduler.py` | task store claim queries and scheduler tests |
 | Agent routing and placement | `backend/relay/agents/routing.py` | agent routes, placement store, daemon registry scheduling |
 | Daemon admission and dispatch | `backend/relay/daemon_registry/node_backend.py` | `registry.py` and its mixins (`admission.py`, `delivery.py`, `progression.py`, …), `scheduling.py`, daemon protocol tests |
@@ -231,7 +231,9 @@ Use the owning test area:
 - `docs/adr/`: accepted durable decisions.
 - `docs/system-architecture.md`: target architecture; verify implemented claims
   against code before relying on them.
-- `docs/implementation-plan.md`: broader planned work, not proof of completion.
+- `docs/guides/`: current operational and feature contracts.
+- `docs/proposals/`: unfinished designs; each status distinguishes shipped
+  foundations from remaining work.
 
 When documentation and executable code disagree, treat tests and current code
 as implementation evidence, then update stale documentation in the same change.

@@ -27,7 +27,7 @@ type OnboardingPanelProps = {
  * The step shown is the first unfinished one unless the person picked
  * another; when real progress moves the wizard on, it says so politely and
  * moves focus to the new step's heading — never into a form.
- * See docs/onboarding-wizard-design.md.
+ * See docs/guides/accounts.md.
  */
 export function OnboardingPanel({
   controls,

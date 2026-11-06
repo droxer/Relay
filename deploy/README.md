@@ -1,6 +1,6 @@
 # Deploying to Railway and Cloudflare
 
-`deploy.sh` automates [docs/deployment-cloudflare.md](../docs/deployment-cloudflare.md):
+`deploy.sh` automates [docs/guides/deployment-cloudflare.md](../docs/guides/deployment-cloudflare.md):
 it provisions Relay on Railway, puts Cloudflare in front of it, deploys, and
 checks the result. It calls the Railway GraphQL API and the Cloudflare v4 API
 directly, so it needs only `curl`, `jq`, `openssl`, `git`, `python3`, and
@@ -33,7 +33,7 @@ needed.
    commit them.
 4. **R2:** the API and worker share skill files and artifact snapshots through
    R2. Create the bucket and its token by hand
-   ([§ 6](../docs/deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional))
+   ([§ 6](../docs/guides/deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional))
    and set the four `RELAY_R2_*` keys.
 
 ## Running it
@@ -275,7 +275,7 @@ else, the run stops and says which record to remove.
 Cloudflare Universal SSL and Railway's origin certificates are free and renewed
 automatically by their providers. No renewal job is needed. Keep Universal SSL
 enabled and preserve Railway's DNS verification and ACME records; see
-[Domain and TLS](../docs/deployment-cloudflare.md#1-domain-and-tls).
+[Domain and TLS](../docs/guides/deployment-cloudflare.md#1-domain-and-tls).
 
 ## Rotating the edge secret
 

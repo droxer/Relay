@@ -2,77 +2,42 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-This index identifies the owner for each documentation topic. Overview files
-summarize and link; they should not copy operational detail from the owning
-document.
-
 ## Start here
 
-- [`../README.md`](../README.md) — product overview and shortest path to a
-  running development environment.
-- [`local-development.md`](local-development.md) — canonical environment,
-  setup, service, data-layout, and test workflow.
-- [`deployment.md`](deployment.md) — canonical hosted deployment procedure
-  (web UI on Vercel, backend and Postgres on Railway) and the origin, cookie,
-  and proxy settings it requires.
-- [`deployment-cloudflare.md`](deployment-cloudflare.md) — Railway backend
-  behind Cloudflare (single origin, edge secret, cache rules, SSE).
-- [`../backend/migrations/README.md`](../backend/migrations/README.md) —
-  canonical database migration and legacy-session import procedure.
-- [`api.md`](api.md) — current browser-route and HTTP API contract.
-- [`../AGENTS.md`](../AGENTS.md) — the single agent guide (Codex, Claude Code,
-  and others): commands, architecture, invariants, and verification guidance.
-- [`../CONTEXT.md`](../CONTEXT.md) — short canonical product terminology.
-- [`CODEX-NAVIGATION-GUIDE.md`](CODEX-NAVIGATION-GUIDE.md) — where behavior
-  lives, which neighboring surfaces move with it, and what a review diff
-  packet must show.
+- [Local development](local-development.md) — setup, services, troubleshooting, and tests.
+- [API reference](api.md) — browser URLs, HTTP contracts, and feature behavior.
+- [Code navigation](CODEX-NAVIGATION-GUIDE.md) — implementation ownership and verification.
+- [Product direction](product.md) and [target architecture](system-architecture.md) — strategy; proposed capabilities are not a list of shipped features.
+- [Design system](design-system.md) — UI tokens and component contracts.
+- [Domain glossary](../CONTEXT.md) and [agent instructions](../AGENTS.md).
 
-## Product and architecture
+## Guides
 
-- [`product.md`](product.md) owns product direction, users, scenarios, and
-  roadmap.
-- [`agent-facing-product-design.md`](agent-facing-product-design.md) owns the
-  user-facing agent model and vocabulary boundary.
-- [`system-architecture.md`](system-architecture.md) owns target architecture
-  and strategic technology choices.
-- [`implementation-plan.md`](implementation-plan.md) translates that target
-  into service boundaries, data models, APIs, runtime flows, and phases.
-- [`agent-first-runtime-design.md`](agent-first-runtime-design.md) owns the
-  logical-agent runtime design.
-- [`managed-node-provisioning.md`](managed-node-provisioning.md) owns managed
-  computer desired state, enrollment, reconciliation, and provider lifecycle.
-- [`node-heartbeats.md`](node-heartbeats.md) owns the execution-plane liveness
-  lease.
-- [`chat-integrations.md`](chat-integrations.md) owns provider setup, identity
-  mapping, commands, security, and operations for chat channels, a feature
-  that is disabled by default (`RELAY_CHANNELS_ENABLED`).
-- The [`relay-daemon` README](../packages/relay-daemon/README.md) owns the
-  daemon environment and delivery contract.
+| Topic | Guide |
+| --- | --- |
+| Hosted deployment | [Deployment scripts](../deploy/README.md), [Cloudflare + Railway](guides/deployment-cloudflare.md), [Vercel alternative](guides/deployment.md) |
+| Database upgrades | [Migrations](../backend/migrations/README.md), [backend operations and rollout cautions](guides/backend-operations.md) |
+| Background processing | [Background jobs](guides/background-jobs.md) |
+| Accounts and first run | [Invitations, password reset, and onboarding](guides/accounts.md) |
+| Agents and execution | [Agent model](guides/agents.md), [daemon reference](../packages/relay-daemon/README.md), [heartbeat leases](guides/node-heartbeats.md) |
+| Tasks and automation | [Task lifecycle](guides/task-lifecycle.md), [automations](guides/automations.md), [Project Manager and MCP](guides/project-manager.md) |
+| External services | [Connections](guides/connections.md), [public GitHub issue import](guides/github-connection.md), [chat integration backend](guides/chat-integrations.md) |
+| Skills | [Published skills](guides/skills.md) |
+| Interface | [Typography](guides/typography.md), [product copy](guides/product-copy.md), [installable app](guides/pwa.md), [brand assets](../assets/brand/README.md) |
+| Performance investigation | [Local backend benchmark](guides/backend-benchmark.md) |
 
-## Decisions and design
+## Decisions and proposals
 
-- [`adr/README.md`](adr/README.md) indexes accepted architecture decisions.
-  ADRs preserve why a decision was made; living guides above describe the
-  current contract.
-- [`design-system.md`](design-system.md) is the sole living visual-system and
-  token reference.
-- [`../assets/brand/README.md`](../assets/brand/README.md) describes asset files
-  and usage without repeating design tokens.
+- [Architecture decisions](adr/README.md) preserve durable rationale and each decision's status.
+- [Proposals](proposals/README.md) collect unfinished designs. Read their status before treating them as implemented behavior.
+- [Product screenshots](images/) support the English and Chinese project READMEs.
 
-## Ownership rules
+## Keeping this small
 
-1. Put current commands and configuration in the nearest operational owner,
-   then link to it from overview documents.
-2. Put durable rationale in an ADR; do not restate the complete current
-   contract there.
-3. Keep an active implementation or migration plan only while work remains.
-   Give it a dated status, and remove it after the living contract and tests
-   describe the shipped behavior.
-4. Do not keep completed implementation diaries, dated audits, design
-   explorations, or test evidence in the living docs tree. Git history and the
-   executable test suite retain that record.
-5. When replacing a design, update the living owner and remove the superseded
-   document after preserving any durable rationale in an ADR.
-6. Agent-specific instruction files may repeat critical commands and invariants
-   so each agent receives complete context without following another agent's
-   bootstrap file.
+Update the existing guide for a topic instead of adding a parallel design or
+implementation diary. Keep an unfinished proposal only while work remains,
+with an explicit status. Preserve durable rationale in an ADR. Remove completed
+plans, dated reviews, test transcripts, and generated measurements once current
+guides and executable tests cover the result; Git history retains those records.
+When moving or deleting a document, update its incoming links and remove unused
+images in the same change.

@@ -58,7 +58,7 @@ Options:
 Managed computers on Fly Machines (provider "fly-machines") are offered when
 RELAY_FLY_APP is set; they also need FLY_API_TOKEN, RELAY_FLY_IMAGE, and
 RELAY_FLY_REGION, and take RELAY_FLY_CPU_KIND, RELAY_FLY_CPUS,
-RELAY_FLY_MEMORY_MB, and RELAY_FLY_VOLUME_GB. See docs/deployment.md.
+RELAY_FLY_MEMORY_MB, and RELAY_FLY_VOLUME_GB. See docs/guides/deployment.md.
 
 Command templates can use:
   {{userId}} {{sandboxId}} {{nodeToken}} {{workspacePath}} {{backendUrl}}
