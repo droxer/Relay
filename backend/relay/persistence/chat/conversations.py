@@ -1,7 +1,7 @@
 """Indexed conversation bindings; upserts serialize only the selected key."""
 
-from typing import Any
 import hashlib
+from typing import Any
 
 from sqlalchemy import delete, insert, select, update
 
@@ -18,14 +18,20 @@ def conversation_key_hash(key: str) -> str:
 
 def get_conversation(engine: Any, key: str) -> dict[str, Any] | None:
     with store_transaction(engine) as conn:
-        return conn.scalar(select(conversations.c.payload).where(conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key))
+        return conn.scalar(
+            select(conversations.c.payload).where(
+                conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key
+            )
+        )
 
 
 def bind_conversation(engine: Any, record: dict[str, Any]) -> dict[str, Any]:
     key = record["key"]
     with resource_transaction(engine, f"chat-conversation:{key}") as conn:
         existing = conn.scalar(
-            select(conversations.c.payload).where(conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key).with_for_update()
+            select(conversations.c.payload)
+            .where(conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key)
+            .with_for_update()
         )
         if existing is not None:
             # Retain creation time and legacy extension fields. A missing/blank
@@ -37,12 +43,24 @@ def bind_conversation(engine: Any, record: dict[str, Any]) -> dict[str, Any]:
                 "providerMessageId": record.get("providerMessageId") or existing.get("providerMessageId"),
                 "updatedAt": record["updatedAt"],
             }
-            conn.execute(update(conversations).where(conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key).values(
-                session_id=result["sessionId"], payload=result,
-            ))
+            conn.execute(
+                update(conversations)
+                .where(conversations.c.key_hash == conversation_key_hash(key), conversations.c.conversation_key == key)
+                .values(
+                    session_id=result["sessionId"],
+                    payload=result,
+                )
+            )
         else:
             result = record
-            conn.execute(insert(conversations).values(key_hash=conversation_key_hash(key), conversation_key=key, session_id=record["sessionId"], payload=record))
+            conn.execute(
+                insert(conversations).values(
+                    key_hash=conversation_key_hash(key),
+                    conversation_key=key,
+                    session_id=record["sessionId"],
+                    payload=record,
+                )
+            )
     return result
 
 

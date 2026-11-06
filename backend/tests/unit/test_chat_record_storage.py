@@ -72,13 +72,23 @@ def test_sqlite_startup_converts_legacy_records_without_touching_secrets(tmp_pat
     engine = shared_engine(url)
     create_all_tables(engine)
     history = [{"id": "duplicate-id", "integrationId": "chat-old", "timestamp": str(i), "extra": i} for i in range(3)]
-    binding = {"key": "discord::::channel::", "provider": "discord", "conversationId": "channel", "sessionId": "old-thread", "ownerUserId": "owner", "extra": "keep"}
+    binding = {
+        "key": "discord::::channel::",
+        "provider": "discord",
+        "conversationId": "channel",
+        "sessionId": "old-thread",
+        "ownerUserId": "owner",
+        "extra": "keep",
+    }
     encrypted = {"ciphertext": "untouched-envelope"}
     with engine.begin() as conn:
-        conn.execute(insert(documents), [
-            {"document_key": key, "payload": value, "updated_at": datetime.now(UTC)}
-            for key, value in [("audit", history), ("conversations", [binding]), ("secrets", encrypted)]
-        ])
+        conn.execute(
+            insert(documents),
+            [
+                {"document_key": key, "payload": value, "updated_at": datetime.now(UTC)}
+                for key, value in [("audit", history), ("conversations", [binding]), ("secrets", encrypted)]
+            ],
+        )
     store = DatabaseChatIntegrationStore(url, create_schema=True)
     assert {"chat_audit_events", "chat_conversations"} <= set(inspect(engine).get_table_names())
     assert store.audit_events() == history
@@ -90,18 +100,47 @@ def test_sqlite_startup_converts_legacy_records_without_touching_secrets(tmp_pat
     assert DatabaseChatIntegrationStore(url, create_schema=True).audit_events() == history
 
 
-def test_sqlite_legacy_conversion_rolls_back_on_duplicate_binding_keys(tmp_path):
+@pytest.mark.parametrize(
+    "key,payload,match",
+    [
+        ("audit", {"invalid": "object"}, "array"),
+        ("audit", [1], "array"),
+        ("audit", [{"integrationId": 123}], "integrationId"),
+        ("conversations", [{"key": "k", "sessionId": ""}], "nonempty"),
+        ("conversations", [{"key": "k", "sessionId": "s"}] * 2, "duplicate"),
+    ],
+)
+def test_sqlite_legacy_conversion_rejects_invalid_records_atomically(tmp_path, key, payload, match):
     url = f"sqlite:///{tmp_path}/legacy.db"
     engine = shared_engine(url)
     create_all_tables(engine)
-    binding = {"key": "duplicate", "sessionId": "thread"}
     with engine.begin() as conn:
-        conn.execute(insert(documents).values(document_key="conversations", payload=[binding, binding], updated_at=datetime.now(UTC)))
-    with pytest.raises(ValueError, match="duplicate"):
+        conn.execute(insert(documents).values(document_key=key, payload=payload, updated_at=datetime.now(UTC)))
+    with pytest.raises(ValueError, match=match):
         DatabaseChatIntegrationStore(url, create_schema=True)
     with engine.begin() as conn:
-        assert conn.scalar(select(documents.c.payload)) == [binding, binding]
+        assert conn.scalar(select(documents.c.payload)) == payload
         assert conn.scalar(text("SELECT count(*) FROM chat_conversations")) == 0
+        assert conn.scalar(text("SELECT count(*) FROM chat_audit_events")) == 0
+
+
+def test_integration_mutation_and_audit_append_roll_back_together(tmp_path, monkeypatch):
+    from relay.chat import integrations
+
+    store = make_chat_store(tmp_path)
+    integration = store.create_integration({"provider": "discord", "displayName": "before"})
+    history = store.audit_events()
+    append = integrations.append_audit_event
+
+    def fail_after_append(*args):
+        append(*args)
+        raise RuntimeError("abort after audit insert")
+
+    monkeypatch.setattr(integrations, "append_audit_event", fail_after_append)
+    with pytest.raises(RuntimeError, match="abort after audit"):
+        store.update_integration(integration["id"], {"displayName": "after"})
+    assert store.get_integration(integration["id"]) == integration
+    assert store.audit_events() == history
 
 
 @pytest.mark.postgres

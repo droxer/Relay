@@ -1,7 +1,7 @@
 """Legacy chat arrays migrate losslessly and round-trip through new writes."""
 
-from datetime import UTC, datetime
 import hashlib
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -32,9 +32,13 @@ def config():
 def put_documents(engine, values):
     with engine.begin() as conn:
         conn.execute(delete(documents).where(documents.c.document_key.in_(values)))
-        conn.execute(insert(documents), [
-            {"document_key": key, "payload": payload, "updated_at": datetime.now(UTC)} for key, payload in values.items()
-        ])
+        conn.execute(
+            insert(documents),
+            [
+                {"document_key": key, "payload": payload, "updated_at": datetime.now(UTC)}
+                for key, payload in values.items()
+            ],
+        )
 
 
 def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrated_schema, monkeypatch):
@@ -43,19 +47,33 @@ def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrate
     key = Fernet.generate_key()
     cipher = Fernet(key)
     monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", key.decode())
-    encrypted = {"ciphertext": cipher.encrypt(b'{}').decode()}
+    encrypted = {"ciphertext": cipher.encrypt(b"{}").decode()}
     history = [
         {"id": "same-id", "integrationId": owner, "timestamp": timestamp, "extension": index}
         for index, (owner, timestamp) in enumerate([("a", "later"), ("b", "same"), ("a", "earlier"), ("a", "same")])
     ]
     channel = "".join(hashlib.sha256(str(i).encode()).hexdigest() for i in range(128)) + "é"
-    binding = {"key": f"discord::org::{channel}::thread", "provider": "discord", "tenantId": "org", "conversationId": channel, "threadId": "thread", "sessionId": "old-thread", "ownerUserId": "owner", "extra": "keep"}
+    binding = {
+        "key": f"discord::org::{channel}::thread",
+        "provider": "discord",
+        "tenantId": "org",
+        "conversationId": channel,
+        "threadId": "thread",
+        "sessionId": "old-thread",
+        "ownerUserId": "owner",
+        "extra": "keep",
+    }
     try:
         command.downgrade(config(), OLD_REVISION)
-        put_documents(engine, {
-            "audit": history, "conversations": [binding], "secrets": encrypted,
-            "integrations": [{"id": "a", "provider": "discord", "displayName": "before"}],
-        })
+        put_documents(
+            engine,
+            {
+                "audit": history,
+                "conversations": [binding],
+                "secrets": encrypted,
+                "integrations": [{"id": "a", "provider": "discord", "displayName": "before"}],
+            },
+        )
         command.upgrade(config(), "head")
         assert {"chat_audit_events", "chat_conversations"} <= set(inspect(engine).get_table_names())
         store = DatabaseChatIntegrationStore(url)
@@ -78,21 +96,47 @@ def test_chat_records_migration_preserves_order_extensions_and_downgrade(migrate
         engine.dispose()
 
 
-def test_chat_records_migration_rejects_bad_legacy_data_atomically(migrated_schema):
+@pytest.mark.parametrize(
+    "record_key,invalid",
+    [
+        ("audit", {"unexpected": "object, not an array"}),
+        ("audit", [1]),
+        ("audit", [{"integrationId": 123}]),
+        ("conversations", [{"key": "k"}]),
+        ("conversations", [{"key": "k", "sessionId": "thread"}] * 2),
+    ],
+)
+def test_chat_records_migration_rejects_bad_legacy_data_atomically(migrated_schema, record_key, invalid):
     url, _ = migrated_schema
     engine = create_engine(url)
-    invalid = {"unexpected": "object, not an array"}
     try:
         command.downgrade(config(), OLD_REVISION)
-        put_documents(engine, {"audit": invalid})
+        put_documents(engine, {record_key: invalid})
         with pytest.raises(DBAPIError, match="Legacy chat"):
             command.upgrade(config(), "head")
         with engine.begin() as conn:
-            assert conn.scalar(select(documents.c.payload).where(documents.c.document_key == "audit")) == invalid
+            assert conn.scalar(select(documents.c.payload).where(documents.c.document_key == record_key)) == invalid
             assert conn.scalar(text("SELECT version_num FROM alembic_version")) == OLD_REVISION
         assert "chat_audit_events" not in inspect(engine).get_table_names()
-        put_documents(engine, {"audit": []})
+        put_documents(engine, {record_key: []})
         command.upgrade(config(), "head")
         assert "chat_audit_events" in inspect(engine).get_table_names()
+    finally:
+        engine.dispose()
+
+
+def test_chat_startup_requires_record_migration_and_no_stale_legacy_copies(migrated_schema):
+    url, _ = migrated_schema
+    engine = create_engine(url)
+    store = DatabaseChatIntegrationStore(url)
+    try:
+        store.verify_schema()
+        command.downgrade(config(), OLD_REVISION)
+        with pytest.raises(RuntimeError, match="Run backend migrations"):
+            store.verify_schema()
+        command.upgrade(config(), "head")
+        put_documents(engine, {"audit": []})
+        with pytest.raises(RuntimeError, match="Legacy chat records require"):
+            store.verify_schema()
     finally:
         engine.dispose()

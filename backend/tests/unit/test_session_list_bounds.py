@@ -18,6 +18,7 @@ def test_full_thread_list_filters_owner_and_archive_before_hydration(tmp_path, m
     unowned = store.create_session({"workspacePath": "/work", "taskGoal": "unowned"})
     hydrated = []
     from relay.persistence.session import reads
+
     original = reads.hydrate_session_logs
 
     def hydrate(snapshot, events):

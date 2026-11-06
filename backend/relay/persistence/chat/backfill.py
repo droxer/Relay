@@ -33,19 +33,30 @@ def _records(key: str, value: Any) -> list[dict[str, Any]]:
 
 def convert_sqlite_records(engine: Any) -> None:
     with resource_transaction(engine, "chat-legacy-records") as conn:
-        rows = conn.execute(select(documents.c.document_key, documents.c.payload).where(
-            documents.c.document_key.in_(("audit", "conversations")),
-        )).all()
+        rows = conn.execute(
+            select(documents.c.document_key, documents.c.payload).where(
+                documents.c.document_key.in_(("audit", "conversations")),
+            )
+        ).all()
         source = {key: _records(key, value) for key, value in rows}
         for key, records in source.items():
             target = audit_events if key == "audit" else conversations
             for offset in range(0, len(records), 500):
                 batch = [
-                    {"sequence": offset + index + 1, "payload": item, **(
-                        {"integration_id": item.get("integrationId")} if key == "audit"
-                        else {"key_hash": conversation_key_hash(item["key"]), "conversation_key": item["key"], "session_id": item["sessionId"]}
-                    )}
-                    for index, item in enumerate(records[offset:offset + 500])
+                    {
+                        "sequence": offset + index + 1,
+                        "payload": item,
+                        **(
+                            {"integration_id": item.get("integrationId")}
+                            if key == "audit"
+                            else {
+                                "key_hash": conversation_key_hash(item["key"]),
+                                "conversation_key": item["key"],
+                                "session_id": item["sessionId"],
+                            }
+                        ),
+                    }
+                    for index, item in enumerate(records[offset : offset + 500])
                 ]
                 conn.execute(insert(target), batch)
         if source:
