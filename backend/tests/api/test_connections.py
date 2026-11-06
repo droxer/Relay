@@ -81,7 +81,7 @@ def test_catalog_advertises_only_configured_providers(context):
     response = client.get("/api/v1/connection-providers")
     assert response.status_code == 200
     assert {p["id"]: p["configured"] for p in response.json()["providers"]} == {
-        "github": True, "slack": False, "google-drive": False}
+        "github": True}
 
 
 def test_automation_occurrence_snapshots_grants_and_cannot_expand_them(context):
