@@ -203,7 +203,7 @@
       "planner": "架构师",
       "tester": "测试工程师",
       "fixer": "缺陷修复工程师",
-      "project_manager": "项目经理"
+      "project_manager": "项目负责人"
     },
     "unclassified": "未分类",
     "archived": "已归档",
@@ -409,7 +409,7 @@
     "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。",
     "dashboard_user_wip": "你在所有项目中的进行中任务：{{count}} / {{limit}}",
     "dashboard_view_user_tasks": "查看你在所有项目中的任务",
-    "member_make_manager": "项目经理"
+    "member_make_manager": "项目负责人"
   },
   "thread": {
     "project_indicator": "项目：{{name}}",
@@ -3505,12 +3505,12 @@
     "ask": "询问 Relay",
     "back": "返回",
     "retry": "重试",
-    "agent": "项目经理 Agent",
+    "agent": "项目负责人 Agent",
     "choose": "选择智能体",
     "agent_unavailable": "当前智能体不可用",
     "setup": "配置智能体",
     "update_computer": "更新计算机",
-    "conversation": "项目经理对话",
+    "conversation": "项目负责人对话",
     "intro": "询问项目信息、最新进展或下一步工作。我可以为你拟定任务变更，供你审阅。",
     "open_thread": "打开完整对话",
     "send": "发送",
@@ -3537,10 +3537,10 @@
     "proposal_dismissed": "已忽略",
     "proposal_superseded": "已有新建议替代此项",
     "proposal_expired": "已过期",
-    "reason_manager_unconfigured": "将项目经理角色分配给一个 Agent。",
+    "reason_manager_unconfigured": "将项目负责人角色分配给一个 Agent。",
     "reason_manager_agent_unavailable": "当前智能体已停用、移除或位于其他计算机，请重新选择。",
     "reason_project_computer_offline": "项目计算机离线，仍可查看已记录的对话。",
-    "reason_project_manager_update_required": "更新项目计算机以启用项目经理工具。",
+    "reason_project_manager_update_required": "更新项目计算机以启用项目负责人工具。",
     "reason_project_disabled": "项目已停用，对话为只读。",
     "reason_project_not_found": "项目已归档，对话为只读。",
     "field_title": "标题",
@@ -3553,9 +3553,9 @@
     "reason_manager_runtime_unavailable": "智能体运行环境尚未就绪，请检查项目计算机或选择其他智能体。",
     "open": "与 Relay 对话",
     "reason_manager_computer_busy": "项目计算机正在忙碌，执行容量释放后请重试。",
-    "resize": "调整项目经理面板宽度",
-    "unassigned_role": "还没有智能体管理此项目。项目经理会读取项目记录，并提出任务变更供你确认后应用。",
-    "assign_role": "分配项目经理角色",
+    "resize": "调整项目负责人面板宽度",
+    "unassigned_role": "还没有智能体负责此项目。项目负责人会读取项目记录，并提出任务变更供你确认后应用。",
+    "assign_role": "分配项目负责人角色",
     "change": "更改"
   }
 }

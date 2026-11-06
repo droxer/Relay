@@ -76,23 +76,23 @@ describe("setup drafts", () => {
     assert.equal(input.leadAgentId, "ada");
   });
 
-  it("keeps the current Project Manager when the owner keeps them", () => {
+  it("gives management to the chosen lead even when a former manager is kept", () => {
     const managed = { ...project, managerAgentId: "bo" } as ProjectRecord;
     const input = setupApplyInput(managed, setupDraftFromProposal(proposal, managed));
-    assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [false, true]);
+    assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [true, false]);
   });
 
-  it("hands the role to the member the proposal names", () => {
+  it("keeps management with the chosen lead when a legacy proposal names another manager", () => {
     const managed = { ...project, managerAgentId: "bo" } as ProjectRecord;
-    const named = { ...proposal, members: proposal.members?.map((m) => (m.agentId === "ada" ? { ...m, projectManager: true } : m)) };
+    const named = { ...proposal, members: proposal.members?.map((m) => (m.agentId === "bo" ? { ...m, projectManager: true } : m)) };
     const input = setupApplyInput(managed, setupDraftFromProposal(named, managed));
     assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [true, false]);
   });
 
-  it("leaves the role open when the holder is not kept", () => {
+  it("gives the lead management when the former manager is not kept", () => {
     const managed = { ...project, managerAgentId: "someone-else" } as ProjectRecord;
     const input = setupApplyInput(managed, setupDraftFromProposal(proposal, managed));
-    assert.ok(input.members?.every((m) => !m.projectManager));
+    assert.equal(input.members?.find((m) => m.projectManager)?.agentId, input.leadAgentId);
   });
 
   it("leaves the roster alone when the owner keeps no members", () => {

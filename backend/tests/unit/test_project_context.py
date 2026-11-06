@@ -52,7 +52,7 @@ def test_brief_names_goal_crew_and_context() -> None:
     assert brief is not None
     assert brief.splitlines()[0] == "Project: Website launch"
     assert "Goal: Ship the site by Friday" in brief
-    assert "- Ada (planner, lead): Plan the launch" in brief
+    assert "- Ada (planner, project lead): Plan the launch" in brief
     assert "- Bo (implementer): Build pages" in brief
     assert "Test" not in brief.split("Project context")[0], "disabled members stay off the crew"
     assert brief.rstrip().endswith("Lighthouse score above 90.")
@@ -62,7 +62,7 @@ def test_brief_falls_back_to_role_never_raw_agent_id() -> None:
     brief = project_context_brief(project_runtime_snapshot(_project()))
 
     assert brief is not None
-    assert "- planner, lead: Plan the launch" in brief
+    assert "- planner, project lead: Plan the launch" in brief
     assert "builder:" not in brief
 
 

@@ -59,7 +59,7 @@ export function ProjectMembersPanel({
 }
 
 /** One agent as one row: who (name, lead mark), what they are (role,
- *  manager, runtime) on one quiet line, and what they own. Only an
+ *  runtime) on one quiet line, and what they own. Only an
  *  exceptional state — disabled, unavailable — earns a pill. Instructions
  *  live in the editor; the whole row opens it. */
 function ProjectMemberRow({
@@ -78,7 +78,6 @@ function ProjectMemberRow({
   const name = agent?.displayName || t("project.member_unavailable");
   const meta = [
     t(`project.roles.${member.role}`),
-    member.projectManager ? t("project.roles.project_manager") : null,
     agent ? agentLabel(agent.executorKind) : null,
   ].filter(Boolean).join(" · ");
   const state = !available

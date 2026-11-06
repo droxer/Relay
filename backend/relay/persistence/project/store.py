@@ -19,7 +19,7 @@ from ..sql import metadata as shared_metadata
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
-from ...core.project_roles import project_manager_id, project_with_manager
+from ...core.project_roles import project_with_manager
 
 PROJECT_NAME_MAX_LENGTH = 120
 # A project that links an existing directory on its computer names it under
@@ -56,7 +56,7 @@ class DatabaseProjectStore(ManagerRows):
     def create_project(
         self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        project = _new_project(owner_user_id, payload)
+        project = project_with_manager(_new_project(owner_user_id, payload))
         event = _project_event(project["id"], "project.created", {"project": project})
         try:
             with store_transaction(self.engine) as conn:
@@ -143,6 +143,7 @@ class DatabaseProjectStore(ManagerRows):
                 "version": int(current["version"]) + 1,
                 "updatedAt": now_iso(),
             }
+            updated = project_with_manager(updated)
             return updated, {"patch": normalized, "project": updated}
 
         return self._mutate(
@@ -437,7 +438,7 @@ def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             else {}
         ),
         "leadAgentId": payload.get("leadAgentId"),
-        "managerAgentId": project_manager_id(payload["members"]),
+        "managerAgentId": payload.get("leadAgentId"),
         "managerThreadId": None,
         "members": list(payload["members"]),
         "enabled": payload.get("enabled") is not False,
@@ -464,8 +465,6 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise ProjectValidationError("project_patch_unsupported")
     normalized = dict(patch)
-    if "members" in normalized:
-        normalized["managerAgentId"] = project_manager_id(normalized["members"])
     if "name" in normalized:
         normalized["name"] = _required_text(
             normalized["name"],

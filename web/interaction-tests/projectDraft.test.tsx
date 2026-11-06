@@ -91,12 +91,14 @@ it("allows assigning another enabled member as lead", async () => {
   expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBe("b");
 });
 
-it("hands over the Project Manager role without changing anyone's role", async () => {
+it("hands over Project Lead management without changing execution roles", async () => {
   editor([{ ...lead, projectManager: true } as typeof lead, other], other);
-  fireEvent.click(screen.getByRole("checkbox", { name: "project.member_make_manager" }));
+  expect(screen.queryByRole("checkbox", { name: "project.member_make_manager" })).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "project.member_make_lead" }));
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
-  expect(mutateAsync.mock.calls[0][0].input.members).toEqual([lead, { ...other, projectManager: true }]);
+  expect(mutateAsync.mock.calls[0][0].input.members).toEqual([lead, other]);
+  expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBe("b");
 });
 
 it("recovers a stale save while retaining other members and unedited fields", async () => {

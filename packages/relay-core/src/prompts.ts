@@ -171,8 +171,8 @@ function promptPreludes(state: AgentState): string[] {
   if (state.project_manager?.toolCommand) {
     const tool = state.project_manager.toolCommand;
     preludes.push([
-      "[Relay project manager]",
-      "You hold this Project's Project Manager role. Keep your Agent identity. Answer project questions, explain updates and the backlog, recommend next work, and help manage Tasks.",
+      "[Relay project lead]",
+      "You hold this Project's Project Lead role. Keep your Agent identity. Answer project questions, explain updates and the backlog, recommend next work, and help manage Tasks.",
       `Project ID: ${state.project_manager.projectId}. On a local Computer, use the installed Relay MCP tools (relay_project_overview, relay_list_tasks, relay_get_task, relay_project_activity, relay_project_threads, relay_get_thread, relay_task_review, relay_propose_task_changes) with this projectId. Pi tool names include the installed server suffix. MCP calls authenticate through a private token file; never request or print its token.`,
       "At the beginning of EVERY turn read fresh project data. Conversation summaries and previous answers never override current records. Distinguish recorded facts, Agent reports, accepted outcomes, and recommendations. Cite returned Task/Thread links and workspace paths. State the exact time window for updates and disclose incomplete search coverage.",
       `If native Relay MCP tools are unavailable in an isolated runtime, the run-scoped transport is: ${tool} overview '{}'`,
@@ -187,7 +187,7 @@ function promptPreludes(state: AgentState): string[] {
     const tool = state.project_reader.toolCommand;
     preludes.push([
       "[Relay project records]",
-      "You work in this Project. You can read its current Tasks, activity, and Threads; you cannot change them. Only the Project Manager stages Task changes, so suggest a change to the Project Manager or the owner in your answer instead.",
+      "You work in this Project. You can read its current Tasks, activity, and Threads; you cannot change them. Only the Project Lead stages Task changes, so suggest a change to the Project Lead or the owner in your answer instead.",
       `Project ID: ${state.project_reader.projectId}. On a local Computer, use the installed Relay MCP read tools (relay_project_overview, relay_list_tasks, relay_get_task, relay_task_review, relay_project_activity, relay_project_threads, relay_get_thread) with this projectId. Pi tool names include the installed server suffix. MCP calls authenticate through a private token file; never request or print its token.`,
       "Read fresh records when Task state matters; conversation summaries never override them. Task reports are claims, not acceptance.",
       `If native Relay MCP tools are unavailable in an isolated runtime, the run-scoped transport is: ${tool} <tool> '<JSON object>'. Quote JSON for your shell.`,

@@ -227,7 +227,7 @@
       "planner": "Architect",
       "tester": "QA Engineer",
       "fixer": "Bug Fixer",
-      "project_manager": "Project Manager"
+      "project_manager": "Project Lead"
     },
     "unclassified": "Unclassified",
     "archived": "Archived",
@@ -414,7 +414,7 @@
     "setup_tasks_failed": "Some tasks could not be added: {{message}} Apply again to add the rest; tasks already added are not duplicated.",
     "dashboard_user_wip": "Your WIP across projects: {{count}} / {{limit}}",
     "dashboard_view_user_tasks": "View your tasks across projects",
-    "member_make_manager": "Project manager"
+    "member_make_manager": "Project lead"
   },
   "thread": {
     "project_indicator": "Project: {{name}}",
@@ -3571,12 +3571,12 @@
     "ask": "Ask Relay",
     "back": "Back",
     "retry": "Retry",
-    "agent": "Project Manager agent",
+    "agent": "Project Lead agent",
     "choose": "Choose an agent",
     "agent_unavailable": "Configured agent unavailable",
     "setup": "Set up an agent",
     "update_computer": "Update computer",
-    "conversation": "Project manager conversation",
+    "conversation": "Project lead conversation",
     "intro": "Ask about this project, recent changes, or what to do next. I can draft task changes for you to review.",
     "open_thread": "Open full conversation",
     "send": "Send",
@@ -3603,10 +3603,10 @@
     "proposal_dismissed": "Dismissed",
     "proposal_superseded": "Replaced by a newer proposal",
     "proposal_expired": "Expired",
-    "reason_manager_unconfigured": "Assign the Project Manager role to an Agent.",
+    "reason_manager_unconfigured": "Assign the Project Lead role to an Agent.",
     "reason_manager_agent_unavailable": "The configured agent is disabled, removed, or on another computer. Choose another agent.",
     "reason_project_computer_offline": "The project computer is offline. Recorded conversation remains available.",
-    "reason_project_manager_update_required": "Update the project computer to enable manager tools.",
+    "reason_project_manager_update_required": "Update the project computer to enable project lead tools.",
     "reason_project_disabled": "This project is disabled. Conversation is read only.",
     "reason_project_not_found": "This project is archived. Conversation is read only.",
     "field_title": "Title",
@@ -3619,9 +3619,9 @@
     "reason_manager_runtime_unavailable": "The agent runtime is not ready. Check the project computer or choose another agent.",
     "open": "Talk to Relay",
     "reason_manager_computer_busy": "The project computer is busy. Try again when capacity is available.",
-    "resize": "Resize project manager",
-    "unassigned_role": "No agent manages this project yet. A manager reads its records and proposes task changes for you to apply.",
-    "assign_role": "Assign Project Manager",
+    "resize": "Resize project lead",
+    "unassigned_role": "No agent leads this project yet. The Project Lead reads its records and proposes task changes for you to apply.",
+    "assign_role": "Assign Project Lead",
     "change": "Change"
   }
 }

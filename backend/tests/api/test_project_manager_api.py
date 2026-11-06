@@ -150,7 +150,7 @@ def test_manager_configuration_is_stable_and_disabled_projects_are_read_only(man
     changed = client.put(url, json={"agentId": builder["id"], "expectedVersion": initial["project"]["version"]})
     assert changed.status_code == 200, changed.text
     assert changed.json()["manager"]["agentId"] == builder["id"]
-    assert changed.json()["project"]["leadAgentId"] == initial["project"]["leadAgentId"]
+    assert changed.json()["project"]["leadAgentId"] == builder["id"]
     assert client.put(url, json={"agentId": planner["id"], "expectedVersion": initial["project"]["version"]}).status_code == 409
     current = changed.json()["project"]
     client.patch(f"/api/v1/projects/{project['id']}", json={"enabled": False, "expectedVersion": current["version"]})
@@ -278,7 +278,7 @@ def test_archived_history_remains_readable_and_new_work_is_refused(managed_env):
     assert _say(client, started['threadId'], 'More work', project['managerAgentId'], 'archived').status_code in (404, 409)
 
 
-def test_legacy_manager_role_reads_as_the_flag_and_nobody_is_picked(setup_env):
+def test_legacy_manager_role_upgrades_but_management_follows_the_lead(setup_env):
     app, client, _, project, planner, builder = setup_env
     legacy = app.state.project_store.create_project(project['ownerUserId'], {
         'name': 'Legacy project', 'computerId': project['computerId'], 'leadAgentId': builder['id'],
@@ -288,9 +288,10 @@ def test_legacy_manager_role_reads_as_the_flag_and_nobody_is_picked(setup_env):
         ],
     })
     read = client.get(f"/api/v1/projects/{legacy['id']}").json()['project']
-    assert read['managerAgentId'] == planner['id']
+    assert read['managerAgentId'] == builder['id']
     assert read['members'][0]['role'] == 'planner'
-    assert read['members'][0]['projectManager'] is True
+    assert 'projectManager' not in read['members'][0]
+    assert read['members'][1]['projectManager'] is True
     assert 'managerInitialized' not in read
     unassigned = app.state.project_store.create_project(project['ownerUserId'], {
         'name': 'Never assigned', 'computerId': project['computerId'], 'leadAgentId': None, 'members': [],
@@ -304,11 +305,11 @@ def test_crewed_project_manager_does_not_dispatch_the_roster(setup_env):
     from test_project_plan_api import _crewed
     app,client,node,project,planner,builder=setup_env
     crewed=_crewed(client,project,planner,builder)
-    assert crewed['managerAgentId'] is None
+    assert crewed['managerAgentId'] == planner['id']
     view=client.get(f"/api/v1/projects/{project['id']}/manager").json()
     response=client.put(f"/api/v1/projects/{project['id']}/manager",json={'agentId':builder['id'],'expectedVersion':view['project']['version']})
     assert response.status_code == 200
-    assert response.json()['project']['leadAgentId'] == planner['id']
+    assert response.json()['project']['leadAgentId'] == builder['id']
     assert [m['role'] for m in response.json()['project']['members']] == ['planner','implementer']
     _,command=_start(setup_env)
     assert command['logicalAgentId'] == builder['id']
@@ -330,7 +331,7 @@ def test_project_creation_accepts_manager_choice_without_executing(setup_env):
     assert led['managerAgentId'] == builder['id']
     assert led['members'][0]['role'] == 'reviewer'
     open_role=client.post('/api/v1/projects',json={'name':'Open role','daemonNodeId':node['id'],'members':crew,'leadAgentId':builder['id'],'managerAgentId':None}).json()['project']
-    assert open_role['managerAgentId'] is None
+    assert open_role['managerAgentId'] == builder['id']
     assert not app.state.session_store.list_sessions()
 
 
@@ -345,7 +346,7 @@ def test_project_updates_include_agent_reports_from_project_conversations(manage
     assert any(item['event'].get('type') == 'agent.completed' and 'Drafted the setup.' in item['event'].get('agentLog','') for item in activity['events'])
 
 
-def test_project_manager_is_a_project_roster_role_not_a_global_agent_role(setup_env):
+def test_project_lead_management_preserves_execution_and_global_agent_roles(setup_env):
     app,client,node,project,planner,builder=setup_env
     current=client.get(f"/api/v1/projects/{project['id']}").json()['project']
     response=client.patch(f"/api/v1/projects/{project['id']}",json={
@@ -357,8 +358,10 @@ def test_project_manager_is_a_project_roster_role_not_a_global_agent_role(setup_
     })
     assert response.status_code == 200,response.text
     saved=response.json()['project']
-    assert saved['managerAgentId'] == planner['id']
-    assert saved['members'][0] == {**saved['members'][0],'role':'planner','projectManager':True}
+    assert saved['managerAgentId'] == builder['id']
+    assert saved['members'][0]['role'] == 'planner'
+    assert 'projectManager' not in saved['members'][0]
+    assert saved['members'][1]['projectManager'] is True
     assert saved['leadAgentId'] == builder['id']
     assert app.state.agent_store.get_agent(planner['id'])['defaultRole'] == 'implementer'
     reviewer=client.patch(f"/api/v1/projects/{project['id']}",json={
@@ -369,7 +372,7 @@ def test_project_manager_is_a_project_roster_role_not_a_global_agent_role(setup_
     })
     assert reviewer.status_code == 200,reviewer.text
     assert reviewer.json()['project']['members'][0]['role'] == 'reviewer'
-    assert reviewer.json()['project']['managerAgentId'] == planner['id']
+    assert reviewer.json()['project']['managerAgentId'] == builder['id']
     duplicate=client.patch(f"/api/v1/projects/{project['id']}",json={
         'expectedVersion':reviewer.json()['project']['version'],'leadAgentId':builder['id'],
         'members':[{**m,'projectManager':True} for m in reviewer.json()['project']['members']],
@@ -404,9 +407,9 @@ def test_handover_keeps_the_thread_and_roles_and_the_former_manager_stays_normal
     project = client.get(f"/api/v1/projects/{project['id']}").json()['project']
     first_role = next(m for m in project['members'] if m['agentId'] == first['id'])['role']
     changed = client.patch(f"/api/v1/projects/{project['id']}",json={
-        'expectedVersion':project['version'],'members':[
+        'expectedVersion':project['version'],'leadAgentId':second['id'],'members':[
             {k:v for k,v in m.items() if k != 'projectManager'} for m in project['members']
-        ]+[{'agentId':second['id'],'role':'implementer','projectManager':True,'responsibilities':'Coordinate','enabled':True}],
+        ]+[{'agentId':second['id'],'role':'implementer','responsibilities':'Coordinate','enabled':True}],
     }) if via_roster else client.put(f"/api/v1/projects/{project['id']}/manager", json={
         'agentId':second['id'], 'expectedVersion':project['version'],
     })
@@ -582,3 +585,24 @@ def test_a_setup_draft_by_the_manager_keeps_its_own_workflow(managed_env):
     assert command["logicalAgentId"] == planner["id"]
     assert "project_manager" not in command["state"]
     assert "project_reader" not in command["state"]
+
+
+def test_changing_only_the_lead_transfers_management_tools(managed_env):
+    _, client, _, project, former, successor = managed_env
+    _join(managed_env, successor, role="reviewer")
+    current = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
+    response = client.patch(f"/api/v1/projects/{project['id']}", json={
+        "expectedVersion": current["version"], "leadAgentId": successor["id"],
+    })
+    assert response.status_code == 200, response.text
+    saved = response.json()["project"]
+    assert saved["managerAgentId"] == successor["id"]
+    assert next(m for m in saved["members"] if m["agentId"] == successor["id"])["role"] == "reviewer"
+    assert not next(m for m in saved["members"] if m["agentId"] == former["id"]).get("projectManager")
+    command = _run_task(managed_env, {"title": "Plan next steps", "assignedAgentId": successor["id"]})
+    assert command["state"]["project_manager"]["agentId"] == successor["id"]
+    staged = _tool(managed_env, command, "propose", {
+        "operations": [{"kind": "create", "fields": {"title": "Proposed by lead"}}],
+    })
+    assert staged.status_code == 200, staged.text
+    assert staged.json()["proposal"]["state"] == "pending"

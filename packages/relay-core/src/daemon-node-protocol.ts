@@ -78,7 +78,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  */
 export type DaemonNodeCapability = "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records";
 export const DAEMON_CAPABILITY_PROJECT_MANAGER_MCP: DaemonNodeCapability = "project-manager-mcp";
-/** Roster members other than the Project Manager get read-only Relay MCP tools. */
+/** Roster members other than the Project Lead get read-only Relay MCP tools. */
 export const DAEMON_CAPABILITY_PROJECT_READER_MCP: DaemonNodeCapability = "project-reader-mcp";
 export const DAEMON_CAPABILITY_PROJECT_MANAGER: DaemonNodeCapability = "project-manager";
 /** The daemon can materialize and isolate skill revisions attached to a run. */

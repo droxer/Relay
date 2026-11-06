@@ -1,10 +1,7 @@
-"""Who holds a Project's manager role, and the Project's manager conversation.
+"""Project Lead management and its ordinary Project conversation.
 
-The holder is an ordinary roster member carrying the ``projectManager`` flag
-(``core/project_roles.py``); nothing here gives that Agent another identity.
-Only the owner picks it: creation takes an explicit choice, else the Project's
-lead, and no read ever assigns one. The conversation is an ordinary Project
-Thread the owner opens; reassigning the role never rewrites who owns it.
+Legacy manager API names remain compatible; assigning through them changes the
+Project Lead. The lead keeps its Agent identity and execution role.
 """
 from __future__ import annotations
 
@@ -43,8 +40,7 @@ def manager_role_patch(ctx: Any, project: dict[str, Any], agent_id: str) -> dict
     members = manager_roster(project.get("members", []), agent_id, defaults)
     if len(members) > PROJECT_MEMBER_MAX_COUNT:
         raise ManagerError("project_members_too_many", 400)
-    # A roster that was empty has no lead; its only member must become it.
-    return {"members": members, "leadAgentId": project.get("leadAgentId") or agent_id}
+    return {"members": members, "leadAgentId": agent_id}
 
 
 def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None) -> str | None:
@@ -129,7 +125,7 @@ def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, 
         session = ctx.session_store.create_session({
             "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
             "ownerUserId": project["ownerUserId"], "computerId": project["computerId"], "projectId": project["id"],
-            "taskGoal": f"{project['name']} · Project Manager", "participants": ["human"],
+            "taskGoal": f"{project['name']} · Project Lead", "participants": ["human"],
         })
         agent_id = project.get("managerAgentId")
         if agent_id:

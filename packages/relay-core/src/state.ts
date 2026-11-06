@@ -54,7 +54,7 @@ export interface AgentState {
    *  rendered by the backend from the round's pinned project snapshot. */
   project_brief?: string;
   project_manager?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };
-  /** Read-only Relay MCP access for a roster member other than the Project Manager. */
+  /** Read-only Relay MCP access for a roster member other than the Project Lead. */
   project_reader?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };
   /** Stable identity for this assignment across at-least-once delivery. */
   assignment_id?: string;

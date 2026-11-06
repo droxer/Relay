@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {AGENT_NAMES, getAgent, initialAgentState, agentTaskPrompt} from '../src/index.js';
 
-test('all runtime commands receive the same live project manager tool contract', () => {
+test('all runtime commands receive the same live project lead tool contract', () => {
   const state={...initialAgentState('What should we do next?'), project_manager:{projectId:'p',agentId:'a',bindingRevision:1,toolCommand:'node ".relay/manager-test/tool.cjs"'}};
   const prompt=agentTaskPrompt(state);
   assert.match(prompt,/EVERY turn read fresh project data/);
@@ -10,7 +10,7 @@ test('all runtime commands receive the same live project manager tool contract',
   assert.match(prompt,/taskId,fields/);
   for(const kind of AGENT_NAMES) {
     const command=getAgent(kind).buildCommand(state);
-    assert.match(command,/Relay project manager/);
+    assert.match(command,/Relay project lead/);
     assert.match(command,/manager-test\/tool.cjs/);
   }
 });
@@ -35,5 +35,5 @@ test('a roster member gets the read-only project contract, never the propose too
   assert.match(prompt,/Relay project records/);
   assert.match(prompt,/relay_list_tasks/);
   assert.match(prompt,/you cannot change them/);
-  assert.doesNotMatch(prompt,/relay_propose_task_changes|Relay project manager/);
+  assert.doesNotMatch(prompt,/relay_propose_task_changes|Relay project lead/);
 });

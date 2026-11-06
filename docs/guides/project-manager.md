@@ -1,20 +1,18 @@
-# Project Manager Agent and Relay MCP
+# Project Lead Agent and Relay MCP
 
-The Project Manager is an ordinary Logical Agent that holds one responsibility
-in a Project: the `projectManager` flag on its roster entry. The flag sits
-beside the member's `role`, which stays one of the Agent Roles (planner,
-implementer, reviewer, tester, fixer), so a reviewer can also manage the
-Project, and handing the responsibility over never changes anyone's role. At
-most one member holds it. The roster is the only record; the Project's
-`managerAgentId` is derived from it on read. A legacy member stored with
-`role: "project_manager"` reads back as a planner holding the flag
-(`core/project_roles.py`).
+The Project Lead is the ordinary Logical Agent selected by `leadAgentId`.
+It coordinates the roster and manages the Project beside its execution role
+(planner, implementer, reviewer, tester or fixer). Changing the lead transfers
+management without changing any Agent's role or identity. Only the owner
+assigns it, and it must be an enabled member on the Project's Computer.
 
-Only the owner assigns the role. A new Project takes the owner's
-`managerAgentId`, else its lead when the lead is eligible; `null` leaves it
-open. The creation drawer preselects the oldest eligible Agent and sends that
-choice explicitly. No read, startup repair or conversation assigns a manager
-afterwards, and nobody joins the roster except the Agent the owner chose.
+The lead is the only source of management authority. Historical
+`managerAgentId` and member `projectManager` fields are derived aliases for
+compatibility with existing clients and daemons. Reading an existing Project
+uses its lead even if a different member carried the old manager flag; this
+does not write a new event or revision. The legacy manager assignment endpoint
+now changes the lead. At creation a legacy `managerAgentId` choice assigns the
+lead; null does not clear an explicitly supplied lead.
 
 The manager does its job through the work it is given: the Tasks and
 Automations it runs in the Project. The Dashboard only names it, as one line
@@ -28,7 +26,7 @@ A Project may still have a manager Thread from earlier releases (and
 `POST /projects/{id}/manager/conversation` can still start one). It is an
 ordinary Project Conversation that no Agent owns: each message goes to whoever
 it addresses, and the composer defaults to the current holder. Reassigning the
-role changes only the roster. It writes nothing to any Thread, and the former
+lead changes its Project assignment. It writes nothing to any Thread, and the former
 holder stays an ordinary Agent that can still be addressed, without the
 manager tools.
 
@@ -202,7 +200,7 @@ adapters over the same Python operations for older clients and workspace helpers
 
 Every Project tool requires `projectId`; the API checks token scope and owner
 again for every call. A roster member's run token is read-only; only the
-Project Manager's run (or an owner/Computer token) may call
+Project Lead's run (or an owner/Computer token) may call
 `relay_propose_task_changes`. There is no Apply, acceptance, run-start, or reconciliation
 MCP tool. Browser owner authentication is required for Apply.
 

@@ -7,7 +7,6 @@ import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
-import { omit } from "../lib/omit";
 import {
   PROJECT_ROLE_OPTIONS,
   type ProjectRole,
@@ -37,7 +36,6 @@ type MemberDraft = {
   instructions: string;
   enabled: boolean;
   lead: boolean;
-  projectManager: boolean;
 };
 
 const EMPTY_DRAFT: MemberDraft = {
@@ -47,7 +45,6 @@ const EMPTY_DRAFT: MemberDraft = {
   instructions: "",
   enabled: true,
   lead: false,
-  projectManager: false,
 };
 
 function draftKey(draft: MemberDraft): string {
@@ -63,7 +60,6 @@ function rosterPayload(project: ProjectRecord) {
     responsibilities: member.responsibilities,
     ...(member.instructions ? { instructions: member.instructions } : {}),
     enabled: member.enabled,
-    ...(member.projectManager ? { projectManager: true } : {}),
   }));
 }
 
@@ -98,7 +94,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
         instructions: member.instructions ?? "",
         enabled: member.enabled,
         lead: member.agentId === project.leadAgentId,
-        projectManager: member.projectManager === true,
       }
     : { ...EMPTY_DRAFT, lead: project.members.length === 0 });
   const [leadError, setLeadError] = useState<string | null>(null);
@@ -180,16 +175,12 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
       responsibilities: draft.responsibilities.trim(),
       ...(draft.instructions.trim() ? { instructions: draft.instructions.trim() } : {}),
       enabled: draft.enabled,
-      ...(draft.projectManager ? { projectManager: true } : {}),
     };
     const baseProject = initialProject;
     const base = rosterPayload(baseProject);
-    let members = member
+    const members = member
       ? base.map((item) => (item.agentId === member.agentId ? payload : item))
       : [...base, payload];
-    // One member holds the responsibility; handing it over keeps every role.
-    if (draft.projectManager) members = members.map((item) => item.agentId === draft.agentId
-      ? item : omit(item, "projectManager"));
     const leadAgentId = draft.lead
       ? draft.agentId
       : baseProject.leadAgentId === draft.agentId
@@ -334,13 +325,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
                   onCheckedChange={(value) => patch({ lead: value === true })}
                 />
                 <span>{t("project.member_make_lead")}</span>
-              </label>
-              <label className="project-member-flag">
-                <Checkbox
-                  checked={draft.projectManager}
-                  onCheckedChange={(value) => patch({ projectManager: value === true })}
-                />
-                <span>{t("project.member_make_manager")}</span>
               </label>
               <label className="project-member-flag">
                 <Checkbox

@@ -21,7 +21,7 @@ export function ProjectManagerLine({ project, agents, onManage }: {
   onManage?: () => void;
 }) {
   const { t } = useTranslation();
-  const member = project.members.find((candidate) => candidate.projectManager);
+  const member = project.members.find((candidate) => candidate.agentId === project.leadAgentId);
   const label = t("project.roles.project_manager");
 
   if (!member) {
