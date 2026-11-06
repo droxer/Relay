@@ -7,7 +7,8 @@ from ..sql import database_id_column, json_type, metadata
 
 
 automation_outbox = Table(
-    "automation_outbox", metadata,
+    "automation_outbox",
+    metadata,
     database_id_column(),
     Column("kind", Text, nullable=False),
     Column("event_type", Text, nullable=False),
@@ -29,7 +30,8 @@ automation_outbox = Table(
 )
 
 automation_state = Table(
-    "automation_state", metadata,
+    "automation_state",
+    metadata,
     Column("routine_id", Text, primary_key=True),
     Column("pending", Boolean, nullable=False, default=False),
     Column("pending_events", json_type(), nullable=False),
@@ -44,7 +46,8 @@ automation_state = Table(
 )
 
 automation_webhook_secrets = Table(
-    "automation_webhook_secrets", metadata,
+    "automation_webhook_secrets",
+    metadata,
     Column("routine_id", Text, primary_key=True),
     Column("secret_hash", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
@@ -52,7 +55,8 @@ automation_webhook_secrets = Table(
 
 
 automation_scan_cursors = Table(
-    "automation_scan_cursors", metadata,
+    "automation_scan_cursors",
+    metadata,
     Column("name", Text, primary_key=True),
     Column("after_id", Text, nullable=True),
 )
