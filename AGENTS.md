@@ -254,7 +254,7 @@ migration.
     `protocols.py`. Only code that reads or writes storage belongs here: a
     pure rule a store applies lives in its domain package as a layering-test
     policy module (`tasks/flow.py`, `tasks/claims.py`, `tasks/execution.py`,
-    `skills/rules.py`) or in `core/` (`daemon_records.py`, `validation.py`,
+    `skills/rules.py`, `chat/rules.py`) or in `core/` (`daemon_records.py`, `validation.py`,
     `token_usage.py`, `workspace_artifacts.py`), and operator tooling — backups, the storage
     report, blob and handle backfills — lives in `backend/relay/ops/`, which
     only the CLI and migrations import. Reducers live with their aggregate
@@ -262,8 +262,8 @@ migration.
     stores are assembled from one mixin per concern in their package —
     `daemon/` (nodes, commands, run requests, workspace responses,
     maintenance, plus `rows.py`/`rules.py`), `session/` (lifecycle, events,
-    deletion, artifacts, reads), `task/` (writes, dispatch, routines, links,
-    reads, plus `events.py`/`rules.py`) — each with a `state.py` declaring
+    deletion, artifacts, attachments, reads, metrics), `task/` (writes, dispatch,
+    routines, links, reads, plus `events.py`/`rules.py`) — each with a `state.py` declaring
     the shared engine and tables. Import from the defining module; there is
     no re-export facade. Every
     aggregate (accounts, sessions, tasks, daemon nodes, agents, teams,
@@ -330,8 +330,14 @@ migration.
     malformed task is logged and skipped, never stalls the queue. It sits one
     layer above the rest of `tasks/`, which never imports it.
   - `backend/relay/automations/` — automation triggers, schedule, clock,
-    matcher, and firing (see the Automations invariant).
-  - `backend/relay/chat/integrations.py` — chat provider integration glue.
+    matcher, and firing (see the Automations invariant). Discovery is bounded by
+    the configured outbox batch: `persistence/automation/discovery.py` reads
+    routing projections and persists the round-robin candidate cursor. Broadcast
+    routing progress commits with deliveries; it must never be advanced alone.
+  - `backend/relay/persistence/chat/store.py` — chat integration storage, with
+    per-integration encrypted credentials and indexed configuration, audit, and
+    conversation records. Pure shared rules live in `chat/rules.py`;
+    `chat/provider_health.py` probes and provisions provider connections.
   - `backend/relay/migrations_runtime/startup.py` — idempotent record repairs
     run at boot (`RELAY_STARTUP_REPAIRS=0` skips them); schema changes belong
     in Alembic. `abandoned_sessions.py` settles a thread an older flow opened

@@ -11,7 +11,7 @@ from test_thread_same_computer_targets import _world, _agent, _sync, _thread
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=")
 
 
-def test_upload_and_private_download(monkeypatch):
+def test_upload_and_private_download(monkeypatch, database_io_off_event_loop):
     with _world(monkeypatch) as (_, client, _, _):
         response = client.post("/api/v1/thread-attachments", content=PNG, headers={"Content-Type": "image/png"})
         assert response.status_code == 201, response.text
@@ -31,7 +31,7 @@ def test_rejects_fake_image(monkeypatch):
         assert response.status_code == 400
 
 
-def test_message_carries_attachment_to_authorized_command(monkeypatch):
+def test_message_carries_attachment_to_authorized_command(monkeypatch, database_io_off_event_loop):
     with _world(monkeypatch) as (app, client, here, there):
         agent = _agent(app, here, "Vision", "codex")
         app.state.registry.register(
@@ -148,7 +148,7 @@ def _image_ready(app, here, there):
     return agent
 
 
-def test_opening_image_and_idempotent_new_thread(monkeypatch):
+def test_opening_image_and_idempotent_new_thread(monkeypatch, database_io_off_event_loop):
     with _world(monkeypatch) as (app, client, here, there):
         agent = _image_ready(app, here, there)
         image = client.post("/api/v1/thread-attachments", content=PNG, headers={"Content-Type": "image/png"}).json()

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from starlette.concurrency import run_in_threadpool
+
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
@@ -125,10 +127,10 @@ def get_sandbox(
 async def run_sandbox(
     sandbox_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    sandbox = ctx.backend.get(sandbox_id)
+    sandbox = await run_in_threadpool(ctx.backend.get, sandbox_id)
     if not sandbox:
         raise HTTPException(404, "Sandbox not found.")
-    actor = require_sandbox_access(sandbox, request, ctx)
+    actor = await run_in_threadpool(require_sandbox_access, sandbox, request, ctx)
     body = await json_body(request)
     task_goal = string_field(body, "taskGoal") or string_field(body, "task_goal")
     assignments = assignment_list(body.get("assignments"))
@@ -137,11 +139,13 @@ async def run_sandbox(
     session_id = string_field(body, "sessionId") or string_field(body, "session_id")
     user_id = actor["userId"] if actor else sandbox.get("userId")
     if session_id:
-        session_actor = actor or request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-        get_session_for_actor(ctx.session_store, session_id, session_actor)
+        session_actor = actor if actor is not None else await run_in_threadpool(
+            request_actor_or_sandbox, request, ctx.auth_store, ctx.registry
+        )
+        await run_in_threadpool(get_session_for_actor, ctx.session_store, session_id, session_actor)
     if user_id:
         assignments = [
-            _resolve_legacy_assignment(ctx, user_id, sandbox_id, assignment)
+            await run_in_threadpool(_resolve_legacy_assignment, ctx, user_id, sandbox_id, assignment)
             for assignment in assignments
         ]
     parsed: dict[str, Any] = {

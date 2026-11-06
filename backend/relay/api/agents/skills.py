@@ -120,7 +120,7 @@ def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 @router.post("/skills", status_code=201)
 async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await skill_body(request, {
         "name", "namespace", "displayName", "description", "visibility", "source", "files",
     })
@@ -131,7 +131,7 @@ async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     # impersonate another publisher by providing ownerHandle in the request.
     payload["ownerHandle"] = actor["userId"]
     try:
-        return ctx.skill_store.create_skill(actor["userId"], payload)
+        return await run_in_threadpool(ctx.skill_store.create_skill, actor["userId"], payload)
     except SkillValidationError as error:
         raise skill_error(error) from error
 
@@ -166,9 +166,10 @@ async def import_files(ctx: AppContextDep, source: dict[str, Any]) -> list[dict[
     if not isinstance(source.get("subpath", ""), str):
         raise HTTPException(422, "invalid-subpath")
     try:
+        settings = await run_in_threadpool(ctx.org_settings_store.get_settings)
         return await run_in_threadpool(
             skill_import.fetch_skill_bundle, source["url"], source["ref"], source.get("subpath", ""),
-            allowed_hosts=ctx.org_settings_store.get_settings()["skillImportAllowedHosts"],
+            allowed_hosts=settings["skillImportAllowedHosts"],
         )
     except skill_import.SkillImportError as error:
         size_errors = _SIZE_ERRORS | {"archive-too-large", "bundle-too-large"}
@@ -177,7 +178,7 @@ async def import_files(ctx: AppContextDep, source: dict[str, Any]) -> list[dict[
 
 @router.post("/skills/import", status_code=201)
 async def import_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await skill_body(request, {
         "name", "namespace", "displayName", "description", "visibility", "url", "ref", "subpath",
     })
@@ -186,20 +187,22 @@ async def import_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     payload = {key: value for key, value in body.items() if key not in source}
     payload.update(source="git", sourceRef=source, files=files, ownerHandle=actor["userId"])
     try:
-        return ctx.skill_store.create_skill(actor["userId"], payload)
+        return await run_in_threadpool(ctx.skill_store.create_skill, actor["userId"], payload)
     except SkillValidationError as error:
         raise skill_error(error) from error
 
 
 @router.post("/skills/{skill_id}/import", status_code=201)
 async def reimport_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    skill = owned_skill(ctx, skill_id, actor["userId"])
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    skill = await run_in_threadpool(owned_skill, ctx, skill_id, actor["userId"])
     if skill["source"] != "git" or not isinstance(skill.get("sourceRef"), dict):
         raise HTTPException(422, "not-git-source")
     files = await import_files(ctx, skill["sourceRef"])
     try:
-        return ctx.skill_store.add_revision(skill_id, actor["userId"], files, "Re-imported from Git")
+        return await run_in_threadpool(
+            ctx.skill_store.add_revision, skill_id, actor["userId"], files, "Re-imported from Git"
+        )
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -208,14 +211,14 @@ async def reimport_skill(skill_id: str, request: Request, ctx: AppContextDep) ->
 
 @router.post("/skills/{skill_id}/revisions", status_code=201)
 async def add_revision(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["userId"])
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    await run_in_threadpool(owned_skill, ctx, skill_id, actor["userId"])
     body = await skill_body(request, {"files", "note"})
     if body.get("note") is not None and (not isinstance(body["note"], str) or len(body["note"]) > 4096):
         raise HTTPException(422, "invalid-note")
     files = decode_files(body.get("files"))
     try:
-        return ctx.skill_store.add_revision(skill_id, actor["userId"], files, body.get("note"))
+        return await run_in_threadpool(ctx.skill_store.add_revision, skill_id, actor["userId"], files, body.get("note"))
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -226,12 +229,12 @@ async def add_revision(skill_id: str, request: Request, ctx: AppContextDep) -> d
 async def promote_revision(
     skill_id: str, revision_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["userId"])
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    await run_in_threadpool(owned_skill, ctx, skill_id, actor["userId"])
     # Consume and validate the JSON envelope consistently with other writes.
     await skill_body(request, set())
     try:
-        return ctx.skill_store.promote_revision(skill_id, revision_id)
+        return await run_in_threadpool(ctx.skill_store.promote_revision, skill_id, revision_id)
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -319,11 +322,11 @@ def export_skill(
 
 @router.patch("/skills/{skill_id}")
 async def update_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["userId"])
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    await run_in_threadpool(owned_skill, ctx, skill_id, actor["userId"])
     body = await skill_body(request, {"displayName", "description", "visibility"})
     try:
-        return ctx.skill_store.update_skill(skill_id, body)
+        return await run_in_threadpool(ctx.skill_store.update_skill, skill_id, body)
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -357,7 +360,7 @@ def assignment_error(error: skill_assignments.SkillAssignmentError) -> HTTPExcep
 async def assign_skill(
     skill_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await skill_body(
         request, {"targetType", "targetId", "mode", "pin", "invocation"}
     )
@@ -403,7 +406,7 @@ def revoke_assignment(
 
 @router.post("/skills/{skill_id}/grants")
 async def grant_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await skill_body(request, {"agentIds", "pin"})
     agent_ids = body.get("agentIds")
     if not isinstance(agent_ids, list) or len(agent_ids) > 300:

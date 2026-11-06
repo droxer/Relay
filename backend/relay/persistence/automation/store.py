@@ -16,12 +16,13 @@ import secrets
 from datetime import datetime, timedelta, UTC
 from typing import Any
 
-from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy import delete, func, insert, inspect, or_, select, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ...core.ids import new_database_id
 from ..tables.automations import automation_outbox, automation_state, automation_webhook_secrets
 from ..tables.tasks import tasks, task_sessions
+from .discovery import candidate_ids, routing_page
 
 AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
@@ -31,10 +32,17 @@ MAX_PENDING_EVENTS = 20
 # Occurrences run one at a time, so a re-count can only come from a recent one
 # flipping again (a retry); twenty covers that without growing forever.
 MAX_COUNTED_OCCURRENCES = 20
-SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerUserId", "assigneeUserId")
-
-
-
+SUBJECT_KEYS = (
+    "id",
+    "title",
+    "status",
+    "priority",
+    "projectId",
+    "assignedAgentId",
+    "assignedTeamId",
+    "ownerUserId",
+    "assigneeUserId",
+)
 
 
 def subject_of(task: dict[str, Any]) -> dict[str, Any]:
@@ -52,7 +60,9 @@ def task_outbox_rows(before: dict[str, Any] | None, after: dict[str, Any]) -> li
         return []
     origin = after.get("sourceRoutineId")
     provenance = {
-        "source_type": "task", "source_id": after["id"], "origin_automation_id": origin,
+        "source_type": "task",
+        "source_id": after["id"],
+        "origin_automation_id": origin,
         "depth": int(after.get("routineTriggerDepth") or 0) + 1 if origin else 0,
     }
     if before is None:
@@ -62,8 +72,9 @@ def task_outbox_rows(before: dict[str, Any] | None, after: dict[str, Any]) -> li
     rows = []
     outcome = occurrence_outcome(before, after) if origin else None
     if outcome:
-        rows.append(_row("occurrence_outcome", f"occurrence.{outcome}",
-                         payload={"occurrenceId": after["id"]}, **provenance))
+        rows.append(
+            _row("occurrence_outcome", f"occurrence.{outcome}", payload={"occurrenceId": after["id"]}, **provenance)
+        )
     if before.get("status") != after.get("status"):
         payload = {"subject": subject_of(after), "from": before.get("status"), "to": after.get("status")}
         rows.append(_row("task_event", "task.status_changed", payload=payload, **provenance))
@@ -108,11 +119,15 @@ def record_session_outbox(conn: Any, session_id: str, session: dict[str, Any], e
     if not rows:
         return
     task = conn.scalar(
-        select(tasks.c.snapshot).join(task_sessions, task_sessions.c.task_id == tasks.c.id)
+        select(tasks.c.snapshot)
+        .join(task_sessions, task_sessions.c.task_id == tasks.c.id)
         .where(task_sessions.c.session_id == session_id, tasks.c.is_routine.is_(False), tasks.c.deleted_at.is_(None))
-        .order_by(tasks.c.id).limit(1)
+        .order_by(tasks.c.id)
+        .limit(1)
     )
-    subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
+    subject = (
+        subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
+    )
     run: dict[str, Any] = next((run for run in session.get("agentRuns", []) if run.get("id") == event.get("runId")), {})
     if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
         subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
@@ -129,9 +144,18 @@ def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
 
 
 def _empty_state(routine_id: str) -> dict[str, Any]:
-    return {"routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
-            "pending_since": None, "fired_window_start": None, "fired_count": 0,
-            "consecutive_failures": 0, "counted_occurrence_ids": [], "events_after": None}
+    return {
+        "routine_id": routine_id,
+        "pending": False,
+        "pending_events": [],
+        "pending_dropped": 0,
+        "pending_since": None,
+        "fired_window_start": None,
+        "fired_count": 0,
+        "consecutive_failures": 0,
+        "counted_occurrence_ids": [],
+        "events_after": None,
+    }
 
 
 def _hash(token: str) -> str:
@@ -143,6 +167,50 @@ class DatabaseAutomationStore:
         self.engine = shared_engine(database_url)
         if create_schema:
             create_all_tables(self.engine)
+
+    def verify_schema(self) -> None:
+        with self.engine.connect() as conn:
+            schema = inspect(conn)
+            if not {
+                "automation_outbox",
+                "automation_state",
+                "automation_webhook_secrets",
+                "automation_scan_cursors",
+            } <= set(schema.get_table_names()) or not {
+                "routing_before",
+                "routing_after_created_at",
+                "routing_after_id",
+                "routed_at",
+            } <= {column["name"] for column in schema.get_columns("automation_outbox")}:
+                raise RuntimeError("Automation discovery requires migrations through 20261106_0118.")
+
+    def candidate_ids(self, *, limit: int, now: datetime) -> list[str]:
+        return candidate_ids(self.engine, limit=limit, now=now)
+
+    def routing_page(
+        self, *, limit: int, before: datetime, after_created_at: datetime | None = None, after_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        return routing_page(
+            self.engine, limit=limit, before=before, after_created_at=after_created_at, after_id=after_id
+        )
+
+    def advance_routing(self, row_id: str, before: datetime, last: dict[str, Any]) -> None:
+        with store_transaction(self.engine) as conn:
+            conn.execute(
+                update(automation_outbox)
+                .where(automation_outbox.c.id == row_id)
+                .values(
+                    routing_before=before,
+                    routing_after_created_at=last["createdAt"],
+                    routing_after_id=last["id"],
+                    routed_at=datetime.now(UTC),
+                )
+            )
+
+    def release_outbox(self, ids: list[str]) -> None:
+        if ids:
+            with store_transaction(self.engine) as conn:
+                conn.execute(update(automation_outbox).where(automation_outbox.c.id.in_(ids)).values(claimed_at=None))
 
     def enqueue_webhook(self, routine_id: str, payload: Any) -> None:
         row = _row("webhook", "webhook", target_routine_id=routine_id, payload={"body": payload})
@@ -157,13 +225,28 @@ class DatabaseAutomationStore:
         claimable = or_(automation_outbox.c.claimed_at.is_(None), automation_outbox.c.claimed_at < now - STALE_CLAIM)
         claimed: list[dict[str, Any]] = []
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(
-                select(automation_outbox).where(claimable).order_by(automation_outbox.c.created_at).limit(limit)
-            ).mappings().all()
+            rows = (
+                conn.execute(
+                    select(automation_outbox)
+                    .where(claimable)
+                    .order_by(
+                        func.coalesce(automation_outbox.c.routed_at, automation_outbox.c.created_at),
+                        automation_outbox.c.id,
+                    )
+                    .limit(limit)
+                )
+                .mappings()
+                .all()
+            )
             for row in rows:
-                won = conn.execute(
-                    update(automation_outbox).where(automation_outbox.c.id == row["id"], claimable).values(claimed_at=now)
-                ).rowcount == 1
+                won = (
+                    conn.execute(
+                        update(automation_outbox)
+                        .where(automation_outbox.c.id == row["id"], claimable)
+                        .values(claimed_at=now)
+                    ).rowcount
+                    == 1
+                )
                 if won:
                     claimed.append({key: row[key] for key in row.keys() if key != "claimed_at"})
         return claimed
@@ -173,15 +256,23 @@ class DatabaseAutomationStore:
             with store_transaction(self.engine) as conn:
                 conn.execute(delete(automation_outbox).where(automation_outbox.c.id.in_(ids)))
 
-    def prune_outbox(self, before: datetime) -> int:
+    def prune_outbox(self, before: datetime, *, limit: int = 1000) -> int:
         with store_transaction(self.engine) as conn:
-            return conn.execute(delete(automation_outbox).where(automation_outbox.c.created_at < before)).rowcount
+            expired = (
+                select(automation_outbox.c.id)
+                .where(automation_outbox.c.created_at < before)
+                .order_by(automation_outbox.c.created_at, automation_outbox.c.id)
+                .limit(limit)
+            )
+            return conn.execute(delete(automation_outbox).where(automation_outbox.c.id.in_(expired))).rowcount
 
     def get_state(self, routine_id: str) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:
-            row = conn.execute(
-                select(automation_state).where(automation_state.c.routine_id == routine_id)
-            ).mappings().first()
+            row = (
+                conn.execute(select(automation_state).where(automation_state.c.routine_id == routine_id))
+                .mappings()
+                .first()
+            )
         if not row:
             return _empty_state(routine_id)
         return {**dict(row), "counted_occurrence_ids": list(row["counted_occurrence_ids"] or [])}
@@ -206,31 +297,47 @@ class DatabaseAutomationStore:
                 events = [*events, event]
             else:
                 dropped += 1
-            self.save_state(routine_id, {
-                **state, "pending": True, "pending_events": events, "pending_dropped": dropped,
-                "pending_since": state["pending_since"] or now,
-            })
+            self.save_state(
+                routine_id,
+                {
+                    **state,
+                    "pending": True,
+                    "pending_events": events,
+                    "pending_dropped": dropped,
+                    "pending_since": state["pending_since"] or now,
+                },
+            )
 
     def clear_state(self, routine_id: str) -> None:
         """Forget pending events but keep the rate window and the failure
         streak: a fired automation still counts toward its hourly cap, and
         dropping stale events says nothing about how its runs went."""
         current = self.get_state(routine_id)
-        self.save_state(routine_id, {**_empty_state(routine_id),
-                                     "fired_window_start": current["fired_window_start"],
-                                     "fired_count": current["fired_count"],
-                                     "consecutive_failures": current["consecutive_failures"],
-                                     "events_after": current["events_after"],
-                                     "counted_occurrence_ids": current["counted_occurrence_ids"]})
+        self.save_state(
+            routine_id,
+            {
+                **_empty_state(routine_id),
+                "fired_window_start": current["fired_window_start"],
+                "fired_count": current["fired_count"],
+                "consecutive_failures": current["consecutive_failures"],
+                "events_after": current["events_after"],
+                "counted_occurrence_ids": current["counted_occurrence_ids"],
+            },
+        )
 
     def reset_rate_window(self, routine_id: str) -> None:
         """Start over completely: pending events, the rate window, and the
         failure streak. Which occurrences were counted stays, so an old one
         flipping again after a resume still counts only once."""
         current = self.get_state(routine_id)
-        self.save_state(routine_id, {**_empty_state(routine_id),
-                                     "events_after": current["events_after"],
-                                     "counted_occurrence_ids": current["counted_occurrence_ids"]})
+        self.save_state(
+            routine_id,
+            {
+                **_empty_state(routine_id),
+                "events_after": current["events_after"],
+                "counted_occurrence_ids": current["counted_occurrence_ids"],
+            },
+        )
 
     def set_events_after(self, routine_id: str, after: datetime) -> None:
         """A resume ignores older outbox deliveries, including broadcast retries."""
@@ -247,18 +354,25 @@ class DatabaseAutomationStore:
             if occurrence_id in counted:
                 return None
             count = int(state.get("consecutive_failures") or 0) + 1 if failed else 0
-            self.save_state(routine_id, {
-                **state, "consecutive_failures": count,
-                "counted_occurrence_ids": [*counted, occurrence_id][-MAX_COUNTED_OCCURRENCES:],
-            })
+            self.save_state(
+                routine_id,
+                {
+                    **state,
+                    "consecutive_failures": count,
+                    "counted_occurrence_ids": [*counted, occurrence_id][-MAX_COUNTED_OCCURRENCES:],
+                },
+            )
         return count
 
     def reset_failures(self, routine_id: str) -> None:
         """A resumed automation starts its failure count over; its rate window
         stays, so pausing and resuming cannot bypass the hourly cap."""
         with store_transaction(self.engine) as conn:
-            conn.execute(update(automation_state).where(automation_state.c.routine_id == routine_id)
-                         .values(consecutive_failures=0))
+            conn.execute(
+                update(automation_state)
+                .where(automation_state.c.routine_id == routine_id)
+                .values(consecutive_failures=0)
+            )
 
     def list_pending_states(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
@@ -268,26 +382,39 @@ class DatabaseAutomationStore:
     def set_webhook_secret(self, routine_id: str) -> str:
         token = secrets.token_urlsafe(32)
         with store_transaction(self.engine) as conn:
-            conn.execute(delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id))
-            conn.execute(insert(automation_webhook_secrets).values(
-                routine_id=routine_id, secret_hash=_hash(token), created_at=datetime.now(UTC)))
+            conn.execute(
+                delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id)
+            )
+            conn.execute(
+                insert(automation_webhook_secrets).values(
+                    routine_id=routine_id, secret_hash=_hash(token), created_at=datetime.now(UTC)
+                )
+            )
         return token
 
     def verify_webhook_secret(self, routine_id: str, token: str) -> bool:
         with store_transaction(self.engine) as conn:
-            stored = conn.scalar(select(automation_webhook_secrets.c.secret_hash)
-                                 .where(automation_webhook_secrets.c.routine_id == routine_id))
+            stored = conn.scalar(
+                select(automation_webhook_secrets.c.secret_hash).where(
+                    automation_webhook_secrets.c.routine_id == routine_id
+                )
+            )
         return bool(stored) and hmac.compare_digest(stored, _hash(token))
 
     def has_webhook_secret(self, routine_id: str) -> bool:
         with store_transaction(self.engine) as conn:
-            found = conn.scalar(select(automation_webhook_secrets.c.routine_id)
-                                .where(automation_webhook_secrets.c.routine_id == routine_id))
+            found = conn.scalar(
+                select(automation_webhook_secrets.c.routine_id).where(
+                    automation_webhook_secrets.c.routine_id == routine_id
+                )
+            )
         return found is not None
 
     def delete_webhook_secret(self, routine_id: str) -> None:
         with store_transaction(self.engine) as conn:
-            conn.execute(delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id))
+            conn.execute(
+                delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id == routine_id)
+            )
 
     def forget_routines(self, routine_ids: list[str]) -> None:
         """Drop every trace of hard-deleted routines: state, rate window, and webhook secret."""
@@ -295,5 +422,6 @@ class DatabaseAutomationStore:
             return
         with store_transaction(self.engine) as conn:
             conn.execute(delete(automation_state).where(automation_state.c.routine_id.in_(routine_ids)))
-            conn.execute(delete(automation_webhook_secrets)
-                         .where(automation_webhook_secrets.c.routine_id.in_(routine_ids)))
+            conn.execute(
+                delete(automation_webhook_secrets).where(automation_webhook_secrets.c.routine_id.in_(routine_ids))
+            )

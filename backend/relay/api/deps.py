@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date
@@ -8,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
-from ..chat.integrations import DatabaseChatIntegrationStore
+from ..persistence.chat.store import DatabaseChatIntegrationStore
 from ..daemon_registry.registry import DaemonNodeRegistry
 from ..daemon_registry.node_backend import ServerDaemonNodeBackend
 from ..persistence.protocols import (
@@ -47,7 +46,7 @@ class AppContext:
     task_store: TaskStore
     daemon_store: DaemonStore
     # Concrete: routes use the integration admin surface, which the read-only
-    # ``ChatStore`` protocol does not declare; every store subclasses this one.
+    # ``ChatStore`` protocol does not declare; this is the database implementation.
     chat_store: DatabaseChatIntegrationStore
     registry: DaemonNodeRegistry
     backend: ServerDaemonNodeBackend
@@ -82,8 +81,6 @@ class AppContext:
     password_reset_rate_limiter: AuthRateLimiter
     chat_probe: ChatProbe
     chat_provision: ChatProvision
-    # Shared and mutable on purpose: one lock per integration, process-wide.
-    chat_rotation_locks: dict[str, asyncio.Lock]
     github_connection: GitHubConnectionService | None = None
     connections: ConnectionService | None = None
 

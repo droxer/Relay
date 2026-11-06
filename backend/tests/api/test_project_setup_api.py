@@ -88,7 +88,7 @@ def _proposal(planner, builder) -> dict:
     }
 
 
-def test_setup_drafts_a_proposal_the_owner_applies(setup_env):
+def test_setup_drafts_a_proposal_the_owner_applies(setup_env, database_io_off_event_loop):
     app, client, node, project, planner, builder = setup_env
 
     started = client.post(f"/api/v1/projects/{project['id']}/setup", json={
@@ -211,7 +211,7 @@ def test_setup_cannot_be_applied_before_it_is_proposed(setup_env):
     assert response.json()["detail"] == "project_setup_not_proposed"
 
 
-def test_a_revise_that_cannot_dispatch_restores_the_proposal(setup_env, monkeypatch):
+def test_a_revise_that_cannot_dispatch_restores_the_proposal(setup_env, monkeypatch, database_io_off_event_loop):
     from relay.collaboration.errors import CollaborationError
     from relay.collaboration.service import CollaborationConductor
 
@@ -235,7 +235,7 @@ def test_a_revise_that_cannot_dispatch_restores_the_proposal(setup_env, monkeypa
     assert [task["id"] for task in tasks] == [setup["taskId"]], "the undispatched task is discarded"
 
 
-def test_an_unexpected_dispatch_error_discards_the_task_and_fails_the_draft(setup_env, monkeypatch):
+def test_an_unexpected_dispatch_error_discards_the_task_and_fails_the_draft(setup_env, monkeypatch, database_io_off_event_loop):
     from relay.collaboration.service import CollaborationConductor
 
     _app, client, _node, project, planner, _builder = setup_env
@@ -496,5 +496,23 @@ def test_a_draft_that_never_dispatched_names_no_deleted_task(setup_env, monkeypa
     assert refused.status_code == 409
     setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
     assert setup["state"] == "failed"
+    assert "taskId" not in setup
+    assert client.get("/api/v1/tasks").json()["tasks"] == []
+
+
+def test_manifest_preparation_failure_discards_claimed_draft_task(setup_env, monkeypatch, database_io_off_event_loop):
+    _app, client, _node, project, planner, _builder = setup_env
+
+    def fail_manifest(**kwargs):
+        raise RuntimeError("manifest preparation failed")
+
+    monkeypatch.setattr("relay.api.projects.setup.setup_manifest_block", fail_manifest)
+    with pytest.raises(RuntimeError, match="manifest preparation failed"):
+        client.post(f"/api/v1/projects/{project['id']}/setup", json={
+            "intent": "Launch", "agentId": planner["id"],
+        })
+
+    setup = client.get(f"/api/v1/projects/{project['id']}").json()["project"]["setup"]
+    assert (setup["state"], setup["error"]) == ("failed", "project_setup_dispatch_failed")
     assert "taskId" not in setup
     assert client.get("/api/v1/tasks").json()["tasks"] == []

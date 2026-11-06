@@ -405,7 +405,7 @@ def test_agent_policies_are_rejected_until_runtime_enforcement_exists(
         assert "runtime enforcement" in rejected_update.json()["detail"]
 
 
-def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch) -> None:
+def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch, database_io_off_event_loop) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)

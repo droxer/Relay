@@ -143,12 +143,11 @@ class AutomationService:
                 # never commit independently of this outer transaction.
                 if conn.dialect.name == "sqlite" and not conn.connection.driver_connection.in_transaction:
                     conn.exec_driver_sql("BEGIN")
-                rows, deliveries = self.matcher.prepare(now)
+                batch = self.matcher.prepare(now)
+                deliveries = batch.deliveries
                 routine_ids = dict.fromkeys([
-                    *(task["id"] for task in self.task_store.list_unseeded_schedules()),
-                    *(task["id"] for task in self.task_store.list_due_schedules(now)),
                     *deliveries,
-                    *(state["routine_id"] for state in self.automation_store.list_pending_states()),
+                    *self.automation_store.candidate_ids(limit=self.matcher.batch, now=now),
                 ])
                 fired = 0
                 failed = {}
@@ -165,7 +164,7 @@ class AutomationService:
                     except Exception:  # noqa: BLE001 - isolate a failed automation after savepoint rollback
                         logger.exception("Automation processing failed", routine_id=routine_id)
                         failed[routine_id] = deliveries.get(routine_id, [])
-                self.matcher.finish(rows, failed, now)
+                self.matcher.finish(batch, failed, now)
                 return fired
         except Exception:  # noqa: BLE001 - tick supervisor: a failed tick logs and retries next interval
             logger.exception("Automation tick failed")

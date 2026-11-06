@@ -294,6 +294,30 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
+Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
+The chat-service conversation list likewise returns the resolved owner's full
+open threads. Ownership and archive filtering occur in storage before event
+histories are loaded; neither list silently truncates records or replaces them
+with summaries.
+
+Admin token reporting at `GET /api/v1/admin/dashboard/tokens?tz=Asia/Shanghai`
+uses the viewer's local calendar dates (UTC for a missing/invalid timezone).
+It returns fourteen daily buckets and seven-day totals; `fresh` excludes cache
+reads, and `unreportedRuns` identifies runtimes that completed without reporting
+usage. Totals include retained usage after thread deletion. The backend groups
+the ledger in storage and caches each reporting window briefly. See
+[dashboard reporting storage and timezone behavior](backend-scalability.md#grouped-dashboard-token-metrics).
+
+Chat activation, health checks, and webhook-secret rotation are exclusive per
+integration across PostgreSQL backend replicas. A conflicting operation, or a
+`PATCH /api/v1/admin/chat-integrations/{id}` changing `tenantId`, `config`,
+`secrets`, or `status` during one, returns 409; retry after the active operation
+finishes. Display-only edits and operations on other integrations can proceed.
+Configuration and encrypted credentials are stored per integration. Public
+metadata returns credential key names without decrypting values; settings and
+runtime access decrypt only the selected or active integrations. See the
+[migration 0117 rollout and rollback requirements](backend-scalability.md#per-integration-chat-configuration-and-credentials).
+
 An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
 checking that no dispatch claim or run request owns it. It records the status
 change through task events. For an automation definition, Run now queues a fresh

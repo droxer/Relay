@@ -471,7 +471,7 @@ async def daemon_events(
         raise HTTPException(400, str(error)) from error
     try:
         if event.get("type") in WORKSPACE_EVENT_TYPES:
-            ctx.registry.assert_node_event_authorized(sandbox_id, bearer_token(request))
+            await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
             await run_in_threadpool(
                 ctx.daemon_store.record_workspace_response, sandbox_id, event
             )

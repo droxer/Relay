@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Any, Literal, Protocol, TypedDict
 
-from ..chat.integrations import DatabaseChatIntegrationStore
+from ..persistence.chat.store import DatabaseChatIntegrationStore
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.resource_lock import resource_transaction
 from .claims import TaskExecutionActiveError, dispatch_claim_active

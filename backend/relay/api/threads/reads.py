@@ -47,11 +47,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
         sessions = ctx.execution_lifecycle.annotate(sessions)
         return {"sessions": [session_brief_item(session) for session in sessions]}
-    visible = [
-        session
-        for session in ctx.session_store.list_sessions()
-        if session.get("ownerUserId") == actor["userId"]
-    ]
+    visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
     return {"sessions": sessions}
@@ -84,27 +80,12 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         raise HTTPException(403, "Cannot list artifacts for another user.")
     workspace_path = request.query_params.get("workspacePath")
     limit = artifact_index_limit(request.query_params.get("limit"))
-    if hasattr(ctx.session_store, "list_artifact_summaries"):
-        return {
-            "artifacts": ctx.session_store.list_artifact_summaries(
-                owner_user_id=requested_user or actor["userId"],
-                workspace_path=workspace_path,
-                limit=limit,
-            )
-        }
-    artifacts: list[dict[str, Any]] = []
-    for session in ctx.session_store.list_sessions():
-        owner = session.get("ownerUserId")
-        if owner != (requested_user or actor["userId"]):
-            continue
-        if workspace_path and session.get("workspacePath") != workspace_path:
-            continue
-        for artifact in workspace_artifacts(session):
-            artifacts.append(artifact_index_item(session, artifact))
-    ordered = sorted(
-        artifacts, key=lambda item: item.get("createdAt") or "", reverse=True
-    )
-    return {"artifacts": ordered[:limit]}
+    return {
+        "artifacts": ctx.session_store.list_artifact_summaries(
+            owner_user_id=requested_user or actor["userId"], workspace_path=workspace_path, limit=limit,
+        )
+    }
+
 
 
 @router.get("/workspace/brief")

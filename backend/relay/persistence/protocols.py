@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import Any, Protocol
 
 from ..core.models import AgentName
@@ -70,7 +70,9 @@ class SessionStore(Protocol):
         self, session_id: str, task_store: Any, *, deleted_by: str | None = None
     ) -> bool: ...
     def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]: ...
-    def list_sessions(self) -> list[dict[str, Any]]: ...
+    def list_sessions(
+        self, *, owner_user_id: str | None = None, include_archived: bool = True
+    ) -> list[dict[str, Any]]: ...
     def list_open_sessions_idle_since(self, cutoff: datetime) -> list[dict[str, Any]]: ...
     def list_session_summaries(
         self, *, owner_user_id: str | None = None, limit: int = 100
@@ -91,7 +93,16 @@ class SessionStore(Protocol):
         self, session_id: str, artifact_id: str
     ) -> bytes | None: ...
     def read_artifact(self, session_id: str, artifact_id: str) -> str: ...
+    def list_artifact_summaries(
+        self, *, owner_user_id: str | None = None, workspace_path: str | None = None, limit: int = 200
+    ) -> list[dict[str, Any]]: ...
     def list_token_usage(self) -> list[dict[str, Any]]: ...
+    def dashboard_session_metrics(
+        self, *, day_window: int = 14, now: datetime | None = None
+    ) -> dict[str, Any]: ...
+    def dashboard_token_metrics(
+        self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None
+    ) -> dict[str, Any]: ...
 
 
 class TaskStore(Protocol):

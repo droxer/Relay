@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Table, Text
+from sqlalchemy import BigInteger, Column, DateTime, Index, Integer, Table, Text, UniqueConstraint
 from ..sql import database_id_column, json_type, metadata
 
 
@@ -13,4 +13,50 @@ documents = Table(
     Column("document_key", Text, nullable=False, unique=True),
     Column("payload", json_type(), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+
+# Sequence preserves append order even when timestamps tie or clocks move back.
+audit_events = Table(
+    "chat_audit_events",
+    metadata,
+    Column("sequence", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("integration_id", Text, nullable=True),
+    Column("payload", json_type(), nullable=False),
+    Index("ix_chat_audit_events_integration_sequence", "integration_id", "sequence"),
+)
+
+conversations = Table(
+    "chat_conversations",
+    metadata,
+    Column("sequence", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("key_hash", Text, nullable=False),
+    Column("conversation_key", Text, nullable=False),
+    Column("session_id", Text, nullable=False),
+    Column("payload", json_type(), nullable=False),
+    UniqueConstraint("key_hash", name="uq_chat_conversations_key_hash"),
+    Index("ix_chat_conversations_session", "session_id"),
+)
+
+
+integrations = Table(
+    "chat_integrations",
+    metadata,
+    Column("sequence", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("integration_id", Text, nullable=False),
+    Column("provider", Text, nullable=True),
+    Column("status", Text, nullable=True),
+    Column("tenant_id", Text, nullable=True),
+    Column("payload", json_type(), nullable=False),
+    UniqueConstraint("integration_id", name="uq_chat_integrations_id"),
+    Index("ix_chat_integrations_routing", "provider", "status", "tenant_id", "sequence"),
+)
+
+integration_secrets = Table(
+    "chat_integration_secrets",
+    metadata,
+    # No FK: legacy maps can include orphan IDs, which must survive conversion.
+    Column("integration_id", Text, primary_key=True),
+    Column("ciphertext", Text, nullable=False),
+    Column("secret_keys", json_type(), nullable=False),
 )

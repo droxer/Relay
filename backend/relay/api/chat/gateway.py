@@ -17,7 +17,7 @@ def _resolve_owner(ctx: AppContextDep, body: dict[str, Any]) -> dict[str, Any]:
         identity = ctx.chat_store.resolve_identity(body)
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    if not identity:
+    if not identity or not isinstance(identity.get("userId"), str) or not identity["userId"]:
         raise HTTPException(404, "No active chat identity link is available for this conversation.")
     return identity
 
@@ -71,11 +71,7 @@ def chat_conversation_sessions(
     require_chat_service_request(request)
     body = _request_body
     identity = _resolve_owner(ctx, body)
-    sessions = [
-        session
-        for session in ctx.session_store.list_sessions()
-        if not session.get("archived") and session.get("ownerUserId") == identity["userId"]
-    ]
+    sessions = ctx.session_store.list_sessions(owner_user_id=identity["userId"], include_archived=False)
     return {"sessions": sessions}
 
 

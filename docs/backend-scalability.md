@@ -1,5 +1,10 @@
 # Backend scalability changes
 
+The [completed refactoring audit](testing/backend-refactoring-audit.md) consolidates
+current source, test, coverage, build, migration, and local workload evidence.
+For pool/batch sizing experiments, use the [isolated local probe](testing/backend-control-plane-probe.md);
+its raw results characterize the recorded workload rather than production capacity.
+
 The control plane keeps agent execution on daemons. This change addresses blocking task operations, historical-log write amplification, replica-local managed capacity and images, fleet-wide recovery contention, and SSE reconnect lookups.
 
 ## Implementation
@@ -17,7 +22,7 @@ The control plane keeps agent execution on daemons. This change addresses blocki
 2. Installations with unmigrated local operational state must import it with an earlier release before upgrading; the legacy file importers and startup checks have been removed.
 3. Start the new backend. For independent replicas, use the same PostgreSQL database across replicas; every store, accounts included, lives there. Run schedulers/recovery through the application lifespan.
 
-Budget database connections across processes: each process has its own configured pool and notification connection. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
+Budget database connections across processes: each process has its own configured pool and notification connection. Chat activation, health checks, and secret rotation also retain one dedicated coordination connection per in-flight operation; see the [chat coordination deployment notes](testing/backend-chat-coordination.tdd.md#deployment-and-remaining-scope), including the requirement to restart replicas together. These fixes do not establish a supported number of users or daemons; measure event-loop lag, pool wait time, stream latency, dispatch latency, recovery backlog, and database load under the intended workload.
 
 ## Rollback
 
@@ -63,3 +68,140 @@ Streamed output no longer advances a thread's `updatedAt` (its run's start and c
 ### Rollback
 
 Downgrading `0086` rebuilds the dropped indexes; `0085` has nothing to undo; downgrading `0084` drops the new columns and tables. Code from before this change ignores the new columns, but it would again rewrite snapshots per output chunk. Compacted output cannot be restored.
+
+
+## Indexed chat records and scoped histories
+
+Revision `20261106_0116` moves audit entries and conversation bindings out of
+shared JSON arrays into indexed records. It preserves full payloads and order,
+including new writes when downgrading. Revision `20261106_0117` subsequently
+normalizes configuration and credentials as described below. Stop old backend and worker processes before running
+`make backend-migrate`; startup requires the new tables. SQLite development
+installs convert their legacy arrays automatically after metadata table creation.
+
+Audit appends no longer read/rewrite history; tail reads filter/limit in SQL.
+Conversation lookups and clears use indexed keys/session IDs, and different
+conversation keys no longer share a write lock. Full thread lists scope ownership
+before hydrating events and split event-ID binds into batches of 500. Full
+responses retain the selected records and histories.
+
+See the [rollout, downgrade, validation, and remaining work](testing/backend-chat-records.tdd.md).
+The backfill retains source data until commit and needs maintenance time/disk
+headroom. Invalid legacy records abort conversion rather than being dropped.
+
+
+## Per-integration chat configuration and credentials
+
+Revision `20261106_0117` replaces the shared configuration array with ordered
+integration records and creates a separate encrypted credential row per
+integration. Public metadata uses credential-key names without decrypting values;
+settings decrypt only the selected integration, and runtime discovery decrypts
+only active integrations. Independent integration writes use independent database
+transactions and advisory locks, including when they share a store instance.
+Provider-operation exclusion still applies per integration across replicas.
+
+Stop all old backend and worker processes before `make backend-migrate`, then
+start the new code with the existing `RELAY_CHAT_SECRET_KEY`. Upgrade preserves
+the old credential envelope unchanged. The first access needing those credentials
+converts the map atomically under a one-time database lock. Missing/wrong keys or
+malformed input preserve the source for retry. SQLite converts configuration at
+schema initialization and uses the same credential bridge. Startup permits the
+pending encrypted envelope, but requires the normalized configuration tables.
+
+Downgrading converted credentials requires the same encryption key in the
+migration environment. It rebuilds the encrypted legacy map, including orphan
+entries, and restores configuration in original order with subsequent writes.
+A missing/wrong key aborts rollback atomically. Stop the new processes before
+rollback and restore the old code only after downgrade succeeds.
+
+See [configuration migration and validation evidence](testing/backend-chat-configuration.tdd.md).
+These checks establish bounded reads and concurrent progress, not production
+throughput or latency targets.
+
+
+## Dashboard polling and cache retention
+
+Admin dashboard routes require the session store's scoped metrics queries;
+retired full-history fallbacks have been removed. `api/admin/dashboard_cache.py`
+shares one in-flight build per store/endpoint/timezone/window within a backend
+process. Unrelated keys progress independently. Completed answers expire 30
+seconds after the build finishes; expired answers are pruned on access, and each
+store retains at most 64 answers using least-recently-used eviction. Pending
+builds exist only for active requests and are removed on success or failure.
+
+Failures reach current waiters and allow the next request to retry. Clearing the
+cache detaches old builds: existing callers finish, but their results cannot
+repopulate the cleared cache. Store keys are weak references so discarded app
+instances are collectible. This cache remains process-local; replicas may each
+build an answer, and no distributed consistency or production capacity claim is
+made. The dashboard's authorization, response, and timezone contracts are
+unchanged. No database migration is required.
+
+See [concurrency and retention evidence](testing/backend-dashboard-cache.tdd.md).
+
+
+## Grouped dashboard token metrics
+
+`persistence/session/metrics.py` owns session and token dashboard projections.
+Token reporting uses one query over the indexed `completed_at` ledger window,
+with no session join or task-goal/record metadata transfer. The query returns at
+most `(day_window + 1) * (1 + distinct unreported runtimes)` groups; reporting
+work in the database still scales with the matching ledger rows. Reported runs
+share a single group per day, while unreported runs retain their runtime counts.
+The extra day group preserves the existing summary-only treatment of future
+observations. Retained ledger usage survives thread deletion.
+
+Local calendar midnights are converted to UTC query boundaries in Python,
+including 23-hour and 25-hour daylight-saving days, so SQLite and PostgreSQL
+follow the same reporting contract without timezone database extensions. The
+fourteen-day series, seven-day totals, fresh/cache arithmetic, and runtime
+coverage notices are unchanged. Ties among equal missing-run counts use latest
+observation first, then runtime name for deterministic equal timestamps.
+
+The full `list_token_usage` reader still returns every retained run with its
+metadata. No migration is required; the existing completion-time index supports
+the window predicate. See [work-bound, timezone, and regression evidence](testing/backend-token-metrics.tdd.md).
+
+
+## Bounded automation discovery and routing
+
+Each automation tick claims at most `RELAY_AUTOMATION_OUTBOX_BATCH` outbox rows
+(default 200), visits at most that many listener projections across broadcasts,
+and selects at most that many schedule/pending candidate IDs. Targeted manual,
+webhook, retry, and outcome rows read their recipient directly. The union can
+process at most three times the configured batch in distinct routines; it no
+longer hydrates every routine or pending state under the global transaction lock.
+A persisted round-robin candidate cursor advances even past in-flight or failing
+routines, so another replica resumes fairly. Candidate queries transfer IDs,
+not task snapshots, histories, or pending-event payloads.
+
+Broadcasts page in `(created_at, id)` order and freeze the creation cutoff when
+routing starts. Routines created afterward do not join that broadcast. Each page
+rechecks current ownership, trigger, active-state, loop, and resume-cutoff rules.
+The page cursor, pending deliveries, occurrences, failed-recipient retries, and
+candidate cursor commit together. A failed recipient gets a targeted retry;
+a failed outer transaction retries the same page. Standalone matcher drains now
+use the same locked transaction. Partial broadcasts move behind work that has
+waited longer, while all broadcasts share one projection budget per tick. Page
+boundaries may defer events into a later tick; events delivered before a firing
+still coalesce, and events arriving during a run remain pending for its next run.
+Outbox retention deletes at most one configured batch per tick.
+
+Stop old backend and worker processes before migrating. Revision `20261106_0118`
+adds nullable routing progress and the candidate cursor table, retaining existing
+outbox payloads. `20261106_0119` builds routing/retention indexes concurrently and
+replaces the single-column listener index with `(created_at, id)`. Its separate
+autocommit boundary permits retry from 0118; invalid indexes left by a failed
+concurrent build are dropped and rebuilt. Run migrations through head before
+starting the new processes. Startup rejects a missing discovery schema. Existing
+SQLite databases with older automation tables also fail this check; metadata
+creation does not upgrade their existing tables. Preserve their data rather than
+treating a fresh SQLite fixture as a migration path.
+
+Before rollback, let new workers finish partial broadcast routing, then stop
+them. Both downgrade revisions refuse a partial cursor before changing indexes
+or dropping progress fields, because old code would replay completed pages.
+Unprocessed broadcasts and targeted retries can remain. No credential key is
+required. See [migration, fairness, rollback, and bounded-work evidence](testing/backend-automation-discovery.tdd.md).
+The database still filters/sorts eligible IDs and scans matching routing pages;
+these work bounds do not establish production latency or capacity.

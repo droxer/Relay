@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from .integrations import dict_field, public_callback_base_url
+from .rules import dict_field, public_callback_base_url
 
 
 async def probe_chat_integration(

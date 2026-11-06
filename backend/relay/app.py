@@ -43,6 +43,7 @@ from .api.computers import (
 )
 from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
+from .api.projects import setup as project_setup_routes
 from .api.projects import manager as project_manager_routes
 from .api.projects import mcp as project_mcp_routes
 from .api.tasks import (
@@ -84,7 +85,7 @@ from .core.environment import DEFAULT_RELAY_DATA_DIR
 from .notifications.watcher import ComputerNotificationWatcher, watch_interval_from_env
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
-from .chat.integrations import DatabaseChatIntegrationStore
+from .persistence.chat.store import DatabaseChatIntegrationStore
 from .realtime.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
     KeyedEventNotifier,
@@ -354,7 +355,6 @@ def _publish_state(
         password_reset_rate_limiter=rate_limiter(settings.password_reset_limit),
         chat_probe=probe_chat_integration,
         chat_provision=provision_chat_integration,
-        chat_rotation_locks={},
         github_connection=github_connection_service_from_env(),
         connections=connections,
     )
@@ -378,6 +378,7 @@ API_ROUTERS = (
     agent_routes.router,
     team_routes.router,
     project_routes.router,
+    project_setup_routes.router,
     project_manager_routes.router,
     project_mcp_routes.router,
     project_plan_routes.router,

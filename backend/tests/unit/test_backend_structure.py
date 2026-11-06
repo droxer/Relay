@@ -8,7 +8,7 @@ import pytest
 from relay.api.computers.daemon_events import daemon_node_event
 from relay.api.bodies import token_usage_field
 from relay.app import create_app
-from relay.chat.integrations import DatabaseChatIntegrationStore
+from relay.persistence.chat.store import DatabaseChatIntegrationStore
 from relay.core.models import DaemonNodeRegistration
 from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend

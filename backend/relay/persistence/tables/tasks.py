@@ -125,8 +125,8 @@ tasks = Table(
         sqlite_where=routine_index_where("sqlite"),
     ),
     Index(
-        "ix_tasks_listening_routines",
-        "created_at",
+        "ix_tasks_automation_routing",
+        "created_at", "id",
         postgresql_where=routine_index_where("postgresql", "routine_listens IS {true}"),
         sqlite_where=routine_index_where("sqlite", "routine_listens IS {true}"),
     ),
