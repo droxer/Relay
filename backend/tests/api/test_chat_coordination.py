@@ -2,6 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
+from contextlib import nullcontext
 
 import pytest
 from cryptography.fernet import Fernet
@@ -13,12 +14,13 @@ from relay.api.chat import integrations as routes
 from relay.chat.integrations import DatabaseChatIntegrationStore
 
 
-@pytest.fixture
-def chat_replicas(monkeypatch):
+@pytest.fixture(params=["sqlite", pytest.param("postgres", marks=pytest.mark.postgres)])
+def chat_replicas(monkeypatch, tmp_path, request):
     monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(routes, "require_admin_session", lambda *args: {"username": "admin"})
-    with disposable_postgres_url() as url:
-        first, second = (DatabaseChatIntegrationStore(url) for _ in range(2))
+    database = disposable_postgres_url() if request.param == "postgres" else nullcontext(f"sqlite:///{tmp_path}/chat.db")
+    with database as url:
+        first, second = (DatabaseChatIntegrationStore(url, create_schema=request.param == "sqlite") for _ in range(2))
         integration = first.create_integration({
             "provider": "telegram", "config": {"publicBaseUrl": "https://relay.example"},
             "secrets": {"botToken": "test-token"},
@@ -37,7 +39,6 @@ def context(store, provision):
     )
 
 
-@pytest.mark.postgres
 @pytest.mark.parametrize("operation", ["rotation", "activation", "health", "update"])
 def test_provider_operation_refuses_conflicting_replica_work(chat_replicas, operation):
     first, second, integration_id = chat_replicas
@@ -84,7 +85,6 @@ def test_provider_operation_refuses_conflicting_replica_work(chat_replicas, oper
     asyncio.run(exercise())
 
 
-@pytest.mark.postgres
 @pytest.mark.parametrize("outcome", ["cancel", "error"])
 def test_provider_operation_releases_after_interruption(chat_replicas, outcome):
     first, second, integration_id = chat_replicas
@@ -114,5 +114,44 @@ def test_provider_operation_releases_after_interruption(chat_replicas, outcome):
             routes.rotate_telegram_webhook_secret(integration_id, object(), context(second, healthy)), 5
         )
         assert result["provisioning"]["ok"]
+
+    asyncio.run(exercise())
+
+
+def test_provider_wait_allows_unrelated_operations_and_display_edits(chat_replicas):
+    first, second, integration_id = chat_replicas
+    other = first.create_integration({
+        "provider": "telegram", "config": {"publicBaseUrl": "https://relay.example"},
+        "secrets": {"botToken": "another-test-token"},
+    })
+
+    async def exercise():
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def provision(settings, record_id):
+            if record_id == integration_id:
+                entered.set()
+                await release.wait()
+            return True, "registered"
+
+        a, b = context(first, provision), context(second, provision)
+        task = asyncio.create_task(routes.rotate_telegram_webhook_secret(integration_id, object(), a))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            result = await asyncio.wait_for(routes.rotate_telegram_webhook_secret(other["id"], object(), b), 5)
+            assert result["provisioning"]["ok"]
+            edited = await asyncio.wait_for(run_in_threadpool(
+                second.update_integration, integration_id, {"displayName": "renamed"},
+            ), 5)
+            assert edited["displayName"] == "renamed"
+            # Conversation bindings use their own short document transaction.
+            binding = await asyncio.wait_for(run_in_threadpool(
+                second.set_conversation_session,
+                {"provider": "telegram", "conversationId": "another"}, "thread", "owner",
+            ), 5)
+            assert binding["sessionId"] == "thread"
+        finally:
+            release.set()
+            await task
 
     asyncio.run(exercise())

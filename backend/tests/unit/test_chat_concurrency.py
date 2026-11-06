@@ -4,18 +4,21 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 import pytest
+from cryptography.fernet import Fernet
 
 from postgres_backend import disposable_postgres_url
 from relay.chat.integrations import DatabaseChatIntegrationStore
 
 
 @pytest.mark.postgres
-@pytest.mark.parametrize("operation", ["create", "update", "conversation"])
+@pytest.mark.parametrize("operation", ["create", "update", "conversation", "secrets"])
 def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation):
+    monkeypatch.setenv("RELAY_CHAT_SECRET_KEY", Fernet.generate_key().decode())
     with disposable_postgres_url() as url:
         first = DatabaseChatIntegrationStore(url)
         second = DatabaseChatIntegrationStore(url)
         seed = first.create_integration({"provider": "discord", "displayName": "original"})
+        other = first.create_integration({"provider": "discord"}) if operation == "secrets" else None
         conversation = {"provider": "discord", "conversationId": "seed"}
         first.set_conversation_session(conversation, "seed-thread", "owner")
         document_key = "conversations" if operation == "conversation" else "integrations"
@@ -42,6 +45,9 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
                 attempted.set()
             if operation == "create":
                 return store.create_integration({"provider": "discord", "displayName": str(index)})
+            if operation == "secrets":
+                record_id = seed["id"] if index == 1 else other["id"]
+                return store.update_integration(record_id, {"secrets": {"botToken": f"token-{index}"}})
             if operation == "update":
                 patch = {"displayName": "updated"} if index == 1 else {"tenantId": "tenant"}
                 return store.update_integration(seed["id"], patch)
@@ -68,6 +74,10 @@ def test_chat_document_mutations_serialize_before_reading(monkeypatch, operation
             result = first.get_integration(seed["id"])
             assert (result["displayName"], result["tenantId"]) == ("updated", "tenant")
             assert len(first.audit_events()) == 3
+        elif operation == "secrets":
+            assert first.connection_settings(seed["id"])["secrets"]["botToken"] == "token-1"
+            assert first.connection_settings(other["id"])["secrets"]["botToken"] == "token-2"
+            assert len(first.audit_events()) == 4
         else:
             for index in (1, 2):
                 result = first.get_conversation_session({**conversation, "conversationId": str(index)})
