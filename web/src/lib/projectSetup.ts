@@ -19,7 +19,7 @@ export interface SetupMemberDraft {
   instructions?: string;
   include: boolean;
   issue?: ProjectSetupMemberIssue;
-  /** The proposal named this member the Project Manager. */
+  /** Legacy proposal hint; the applied leadAgentId determines management. */
   projectManager?: boolean;
 }
 
@@ -113,7 +113,7 @@ export function effectiveLead(members: readonly SetupMemberDraft[], leadAgentId:
  *  leaves the current roster alone. */
 export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): UpdateProjectInput {
   const kept = draft.members.filter(memberKept);
-  const managerId = setupManagerId(kept, project.managerAgentId ?? null);
+  const managerId = effectiveLead(draft.members, draft.leadAgentId);
   const members = kept.map(({ agentId, role, responsibilities, instructions }) => ({
     agentId,
     role,
@@ -132,15 +132,6 @@ export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): Upda
     ...(members.length ? { members, leadAgentId: effectiveLead(draft.members, draft.leadAgentId) } : {}),
     setupResolution: "applied",
   };
-}
-
-/** Who manages the Project once the roster is replaced: the kept member the
- *  proposal names, else the current holder if the owner kept them. Applying a
- *  setup never silently drops the role. */
-export function setupManagerId(kept: readonly SetupMemberDraft[], currentManagerId: string | null): string | null {
-  const proposed = kept.find((member) => member.projectManager);
-  if (proposed) return proposed.agentId;
-  return kept.some((member) => member.agentId === currentManagerId) ? currentManagerId : null;
 }
 
 /** The apply request for the tasks the owner kept. An assignee survives only

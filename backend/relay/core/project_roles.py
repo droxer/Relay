@@ -1,10 +1,8 @@
-"""The Project Manager: a responsibility a roster member holds beside its role.
+"""Project Lead management, with legacy manager wire fields for compatibility.
 
-A member's ``role`` stays one of the execution roles every Agent can take
-(``AGENT_ROLES``). Managing the Project is a separate ``projectManager`` flag,
-held by at most one member, so taking or handing over the responsibility never
-changes what the Agent does in the Project's rounds. The roster is the only
-source: a Project's ``managerAgentId`` is derived from it on read.
+The Project's leadAgentId is authoritative. projectManager and managerAgentId
+are derived aliases so existing daemons and clients keep the same tool contract.
+Execution roles remain independent of project leadership.
 """
 from typing import Any
 
@@ -41,7 +39,12 @@ def project_manager_id(members: list[dict[str, Any]]) -> str | None:
 
 def project_with_manager(project: dict[str, Any]) -> dict[str, Any]:
     """A stored Project as clients see it: upgraded roster, derived holder."""
-    members = upgrade_members(project.get("members") or [])
+    lead_id = project.get("leadAgentId")
+    members = [
+        {**{k: v for k, v in member.items() if k != "projectManager"},
+         **({"projectManager": True} if member["agentId"] == lead_id else {})}
+        for member in upgrade_members(project.get("members") or [])
+    ]
     current = {k: v for k, v in project.items() if k not in RETIRED_MANAGER_FIELDS}
     return {**current, "members": members, "managerAgentId": project_manager_id(members)}
 
@@ -71,7 +74,9 @@ def manager_roster(members: list[dict[str, Any]], agent_id: str | None, default_
 
 def manager_run_context(project: dict[str, Any], agent_id: str | None) -> dict[str, Any] | None:
     """Resolve capability from the enabled Project role, independently of a Thread."""
-    holder = project_manager_id([m for m in project.get("members", []) if m.get("enabled", True)])
+    holder = project.get("leadAgentId")
+    if not any(m["agentId"] == holder and m.get("enabled", True) for m in project.get("members", [])):
+        return None
     if not holder or agent_id != holder:
         return None
     return {"projectId": project["id"], "agentId": holder, "bindingRevision": project["version"]}
@@ -87,7 +92,7 @@ def round_manager_context(project_snapshot: dict[str, Any] | None, assignments: 
     if not project_snapshot:
         return None
     project = {"id": project_snapshot["projectId"], "version": project_snapshot["projectRevision"],
-               "members": project_snapshot.get("members") or []}
+               "members": project_snapshot.get("members") or [], "leadAgentId": project_snapshot.get("leadAgentId")}
     return next((context for assignment in assignments
                  if (context := manager_run_context(project, assignment.get("agentId")))), None)
 
@@ -102,7 +107,7 @@ def project_reader_context(project_snapshot: dict[str, Any] | None, agent_id: st
     if not project_snapshot or not agent_id:
         return None
     members = [m for m in project_snapshot.get("members") or [] if m.get("enabled", True)]
-    if not any(m.get("agentId") == agent_id for m in members) or project_manager_id(members) == agent_id:
+    if not any(m.get("agentId") == agent_id for m in members) or project_snapshot.get("leadAgentId") == agent_id:
         return None
     return {"projectId": project_snapshot["projectId"], "agentId": agent_id,
             "bindingRevision": project_snapshot["projectRevision"]}

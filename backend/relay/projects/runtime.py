@@ -349,7 +349,7 @@ def _phase(role: str) -> str:
 def _member_brief(member: dict[str, Any]) -> str:
     parts = [
         role_charter(member.get("role")),
-        *([f"Project manager: {PROJECT_MANAGER_RESPONSIBILITIES}"] if is_project_manager(member) else []),
+        *([f"Project lead: {PROJECT_MANAGER_RESPONSIBILITIES}"] if is_project_manager(member) else []),
         f"Responsibilities: {member['responsibilities']}.",
     ]
     if member.get("instructions"):

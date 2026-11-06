@@ -1,5 +1,5 @@
 import type { AgentRole } from "relay-core";
-/** What a member does in the Project's rounds; managing it is `projectManager`. */
+/** What a member does in the Project's rounds; the Project Lead manages it. */
 export type ProjectRole = AgentRole;
 export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = ["planner", "implementer", "reviewer", "tester", "fixer"];
 
@@ -9,7 +9,7 @@ export interface ProjectMember {
   responsibilities: string;
   instructions?: string;
   enabled: boolean;
-  /** Holds the Project Manager responsibility; at most one member does. */
+  /** Compatibility alias derived from the Project's leadAgentId. */
   projectManager?: boolean;
 }
 

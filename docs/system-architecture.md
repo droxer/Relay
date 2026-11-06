@@ -150,7 +150,7 @@ negotiated protocol metadata; it owns no second tool catalog. The older
 compatibility adapters over the same Python authorization and operations.
 
 The catalog has eight read tools and one proposal tool. A Project roster member's
-run sees the read tools; only its Project Manager's run receives proposal access.
+run sees the read tools; only its Project Lead's run receives proposal access.
 Owner and standalone Computer grants can also stage proposals within their
 scope. `relay_propose_task_changes` never applies changes, starts work, accepts
 outcomes or reconciles execution. Apply requires the owner's browser session

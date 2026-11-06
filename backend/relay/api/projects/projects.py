@@ -139,8 +139,8 @@ async def create_project(
         raise _project_error(error) from error
     try:
         candidate = {**payload, "ownerUserId": actor["userId"]}
-        # An explicit null leaves the role open; omitted, the lead holds it.
-        selected = None if "managerAgentId" in body and body["managerAgentId"] is None else initial_manager_id(ctx, candidate, body.get("managerAgentId"))
+        # The legacy manager choice assigns the Project Lead; null keeps the supplied lead.
+        selected = initial_manager_id(ctx, candidate, body.get("managerAgentId"))
         if selected:
             payload.update(manager_role_patch(ctx, candidate, selected))
     except ManagerError as error:

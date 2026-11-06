@@ -210,22 +210,18 @@ A Thread that belongs to one Project and therefore shares that Project's
 persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
-**Project Manager**:
-A responsibility one Project Agent holds beside its Project role (the member's
-`projectManager` flag), so a reviewer or planner can also manage the Project and
-handing it over never changes anyone's role. The holder is an ordinary
-user-owned Logical Agent with an active Placement on that Project's Computer: it
-keeps its name, profile, global Agent Role, and roles in other Projects. Only
-the owner assigns it — at creation the owner's choice, else the Project's lead —
-and nothing reads it into place later. The roster is its only record; the
-Project's `managerAgentId` is derived. The holder works through the Tasks and
-Automations it runs: every round it takes part in carries the manager tools,
-so it reads live Project records and stages Task changes for the Project Owner
-to review and apply. The Project dashboard only names it; there is no chat to
-open there. It does not gain acceptance or execution authority. Every other
-enabled Project Agent reads the same records read-only; only the holder may
-stage Task changes.
-_Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
+**Project Lead**:
+The Project Agent selected by `leadAgentId` coordinates the roster and manages
+its Project beside its execution role. Changing the lead transfers both
+responsibilities without changing any Agent's role, identity, or Placement.
+Only the owner assigns the lead, which must be an enabled roster member. It
+reads live Project records, explains progress and priorities, and stages Task
+changes for the owner to review and apply through its Tasks and Automations.
+Other enabled Project Agents have read-only access. The lead does not gain
+acceptance or execution authority. The dashboard names it; there is no separate
+chat to open there. Historical `managerAgentId` and member `projectManager`
+wire fields are derived aliases of the lead for client compatibility.
+_Avoid_: Project Manager, Project Owner, global Agent Role
 
 **Relay MCP**:
 A Python MCP module hosted in the Relay backend, reached through a local Node

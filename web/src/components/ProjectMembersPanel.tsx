@@ -95,7 +95,6 @@ function ProjectMemberLane({
             {/* The role is a chip beside the name, as on a team member card —
                 not the tail of the runtime line. */}
             <TonePill tone="neutral" label={t(`project.roles.${member.role}`)} />
-            {member.projectManager ? <TonePill tone="neutral" label={t("project.roles.project_manager")} /> : null}
             {!member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}
             {!available ? <TonePill tone="warn" label={t("project.member_missing")} /> : null}
           </span>

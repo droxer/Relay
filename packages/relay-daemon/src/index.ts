@@ -1461,7 +1461,7 @@ async function executeCommand(
   const managerToolAbort = new AbortController();
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   try {
-    // The Project Manager stages Task changes; every other roster member
+    // The Project Lead stages Task changes; every other roster member
     // reads through the same run-scoped transport, and the backend refuses
     // its proposals.
     const projectScope = state.project_manager ?? state.project_reader;

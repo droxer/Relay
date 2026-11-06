@@ -1463,23 +1463,25 @@ claiming that an executing agent has exited. Run-scoped MCP calls use
 See [Connections](guides/connections.md) for all routes, resource pagination, provider
 configuration, supported runtime adapters, and deployment verification limits.
 
-## Project manager
+## Project Lead management
 
-The Project Manager is an ordinary roster member carrying `projectManager: true`
-beside its own `role` (one of the Agent Roles); at most one member carries it,
-and the Project's `managerAgentId` is derived from the roster. A legacy member
-`role: "project_manager"` is still accepted and reads back as `role: "planner"`
-with the flag. These routes require the Project Owner; admin status and daemon
-credentials do not confer owner authority.
+The Project Lead selected by `leadAgentId` holds management responsibility
+beside its execution role. Legacy `managerAgentId` and member `projectManager`
+fields are derived aliases of that lead, including on existing Projects.
+A legacy `role: "project_manager"` still upgrades to `role: "planner"`, but does
+not override the lead. These routes require the Project Owner; admin status
+and daemon credentials do not confer owner authority. Wire names remain
+unchanged for compatibility.
 
 - `GET /api/v1/projects/{id}/manager` returns the binding, eligible candidates,
   availability reason, existing Thread ID, and recent proposal cards. Reading
   writes nothing: it never assigns the role and creates no Thread or run.
   Archived history remains readable.
 - `PUT /api/v1/projects/{id}/manager` accepts `agentId` and `expectedVersion`
-  and moves the flag; every member keeps its role. An Agent outside the roster
-  joins with its default role. Project creation accepts `managerAgentId`:
-  omitted, the lead holds the role when it is eligible; `null` leaves it open.
+  and changes `leadAgentId`; every member keeps its execution role. An Agent
+  outside the roster joins with its default role. Project creation accepts
+  legacy `managerAgentId` as a lead choice; omitted or `null`, the supplied
+  lead holds management responsibility.
 - `POST /api/v1/projects/{id}/manager/conversation` returns the Project's
   manager Thread, starting it (with the holder as its first participant) on
   first use. It dispatches nothing. The web app no longer calls it; the
@@ -1520,7 +1522,7 @@ metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
 and returns a separate MCP token scoped to its owner and Computer. Optional
 `{commandId, leaseId}` restricts it to a currently dispatched Project roster
 member's command and Project; authentication stops when that run ends (maximum
-24 hours). Reader runs receive `access: "read"`; the Project Manager's run
+24 hours). Reader runs receive `access: "read"`; the Project Lead's run
 receives `access: "manage"`. `tools/list` omits `relay_propose_task_changes` for
 readers, and attempting it still returns a tool error `project_manager_required`.
 

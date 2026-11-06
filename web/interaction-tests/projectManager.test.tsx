@@ -2,7 +2,9 @@ import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {ProjectManagerLine} from '../src/components/ProjectManagerLine';
+import {ProjectDashboard} from '../src/components/ProjectDashboard';
 import {ManagerProposalCard} from '../src/components/ManagerProposalCard';
+import type {RelayTaskListItem} from '../src/types';
 
 const api=vi.hoisted(()=>({get:vi.fn(),apply:vi.fn(),dismiss:vi.fn()}));
 vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss}));
@@ -16,9 +18,22 @@ const wrap=(ui:React.ReactNode)=>render(<QueryClientProvider client={new QueryCl
 beforeEach(()=>{vi.clearAllMocks();api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:null,reason:null,toolsAvailable:true,candidates:[{id:'a',displayName:'Ada'}]},proposals:[]});api.apply.mockResolvedValue({proposal:{...proposal,state:'applied'},tasks:[]});});
 
 const ada={id:'a',displayName:'Ada',executorKind:'codex',enabled:true,availability:'ready',placements:[]} as any;
-const managed=(member:Record<string,unknown>={})=>({id:'p',version:1,members:[{agentId:'a',role:'reviewer',responsibilities:'Review',enabled:true,projectManager:true,...member}]}) as any;
+const managed=(member:Record<string,unknown>={})=>({id:'p',version:1,leadAgentId:'a',members:[{agentId:'a',role:'reviewer',responsibilities:'Review',enabled:true,projectManager:true,...member}]}) as any;
 
-it('names the Project Manager on the dashboard without a chat to open',()=>{
+it.each([false,true])('keeps the Project Lead visible on the dashboard with tasks=%s',(hasTasks)=>{
+ const tasks=hasTasks?[{id:'task',title:'Build login',status:'backlog',priority:'normal',createdAt:'2026-11-06T00:00:00Z',updatedAt:'2026-11-06T00:00:00Z'} as RelayTaskListItem]:[];
+ const onManage=vi.fn();
+ const view=wrap(<ProjectDashboard tasks={tasks} onOpenRecord={vi.fn()} onOpenBoard={vi.fn()}
+  steward={<ProjectManagerLine project={managed()} agents={[ada]} onManage={onManage} />} />);
+ const lead=screen.getByRole('group',{name:'project.roles.project_manager'});
+ expect(lead.querySelector('a')?.textContent).toBe('Ada');
+ expect(view.container.querySelector('.project-dashboard')?.firstElementChild).toBe(lead);
+ expect(hasTasks?screen.getByRole('group',{name:'backlog.metrics'}):screen.getByText('project.dashboard_empty')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'project_manager.change'}));
+ expect(onManage).toHaveBeenCalledOnce();
+});
+
+it('names the Project Lead on the dashboard without a chat to open',()=>{
  const onManage=vi.fn();
  wrap(<ProjectManagerLine project={managed()} agents={[ada]} onManage={onManage} />);
  const line=screen.getByRole('group',{name:'project.roles.project_manager'});
@@ -29,6 +44,13 @@ it('names the Project Manager on the dashboard without a chat to open',()=>{
  expect(nav).toHaveBeenCalledWith('/agents/a');
  fireEvent.click(screen.getByRole('button',{name:'project_manager.change'}));
  expect(onManage).toHaveBeenCalled();
+});
+
+it('shows the lead even when a legacy manager flag points to another agent',()=>{
+ const project={...managed(),leadAgentId:'b',members:[...managed().members,{agentId:'b',role:'implementer',enabled:true,responsibilities:'Build'}]};
+ wrap(<ProjectManagerLine project={project} agents={[ada,{...ada,id:'b',displayName:'Bea'}]} />);
+ expect(screen.getByRole('link',{name:'Bea'})).toBeTruthy();
+ expect(screen.queryByRole('link',{name:'Ada'})).toBeNull();
 });
 
 it('says when the role is open, and when its holder cannot work',()=>{

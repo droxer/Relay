@@ -2,12 +2,12 @@ import {expect,test} from '@playwright/test';
 
 for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:true,zh:true}]) {
   const {mobile,zh}=variant;
-  test(`Project Manager is an Agent role named on the dashboard (${mobile ? 'mobile' : 'desktop'} ${zh ? 'Chinese' : 'English'})`, async ({page}) => {
+  test(`Project Lead is an Agent role named on the dashboard (${mobile ? 'mobile' : 'desktop'} ${zh ? 'Chinese' : 'English'})`, async ({page}) => {
     await page.setViewportSize(mobile ? {width:390,height:844} : {width:1440,height:900});
     const stamp='2026-11-06T00:00:00Z';
     const agent={id:'ada',displayName:'Ada',executorKind:'codex',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:'placement',agentId:'ada',computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp};
     const project={id:'launch',name:'Autumn launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',projectManager:true,enabled:true,responsibilities:'Coordinate the launch'}],managerAgentId:'ada',managerThreadId:'manager-thread' as string|null,leadAgentId:'ada',version:1,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
-    const session={id:'manager-thread',taskGoal:'Autumn launch · Project Manager',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada'],participants:['human'],status:'completed',phase:'done',events:[],agentRuns:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
+    const session={id:'manager-thread',taskGoal:'Autumn launch · Project Lead',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada'],participants:['human'],status:'completed',phase:'done',events:[],agentRuns:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
     let sent=0; let managerReads=0;
     const applications: unknown[]=[];const tasks: Array<Record<string,unknown>>=[];
     const proposal={id:'proposal',projectId:'launch',threadId:'manager-thread',agentId:'ada',runId:'run',state:'pending',revision:1,createdAt:stamp,operations:[{id:'0',kind:'create',key:'design',fields:{title:'Design login',description:'List accepted login states.',priority:'high'},after:[],afterTaskIds:[]}]};
@@ -24,7 +24,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     });
     await page.goto('/projects/launch');
     // The dashboard names the holder from the project it already loaded: no chat, no manager fetch.
-    const line=page.getByRole('group',{name:zh?'项目经理':'Project Manager',exact:true});
+    const line=page.getByRole('group',{name:zh?'项目负责人':'Project Lead',exact:true});
     await expect(line.getByRole('link',{name:'Ada'})).toBeVisible();
     await expect(line).toContainText(zh?'架构师':'Architect');
     await expect(page.getByRole('button',{name:zh?'对话':'Chat',exact:true})).toHaveCount(0);
@@ -45,8 +45,8 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
 test('manager handover replaces a saved target when reopening the normal Thread',async({page})=>{
  const stamp='2026-11-06T00:00:00Z';
  const agents=['ada','bea'].map(id=>({id,displayName:id==='ada'?'Ada':'Bea',executorKind:id==='ada'?'codex':'claude',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:`p-${id}`,agentId:id,computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp}));
- const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'implementer',projectManager:true,responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'ada',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
- const session={id:'manager-thread',taskGoal:'Launch · Project Manager',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada','bea'],participants:['human'],computerId:'computer',daemonNodeId:'node',status:'completed',phase:'done',agentRuns:[],events:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
+ const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'implementer',projectManager:true,responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'bea',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
+ const session={id:'manager-thread',taskGoal:'Launch · Project Lead',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada','bea'],participants:['human'],computerId:'computer',daemonNodeId:'node',status:'completed',phase:'done',agentRuns:[],events:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
  const node={id:'node',userId:'u',workspaceId:'host',computerId:'computer',name:'Computer',activeRuns:[],online:true,stale:false,status:'ready',agents:{codex:'ready',claude:'ready'},capabilities:['thread-workspaces','project-workspaces','project-manager','project-manager-mcp']};
  const sent:unknown[]=[];
  await page.addInitScript(()=>localStorage.setItem('relay-web.threadComposerPicks',JSON.stringify({'manager-thread':{kind:'agent',agent:{id:'ada',executorKind:'codex'}}})));
