@@ -293,7 +293,7 @@ def test_token_dashboard_does_not_transfer_unused_run_metadata(monkeypatch) -> N
     with TemporaryDirectory() as root:
         app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
-        _record_run(app, session_id, "run_grouped", {"input": 10, "output": 5})
+        _record_run(app, session_id, "run_grouped", {"input": 10, "output": 5, "cache": 0, "total": 15})
         ledger_reads = []
 
         def capture(conn, cursor, statement, *args):
