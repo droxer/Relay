@@ -56,6 +56,8 @@ def set_manager(project_id: str, request: Request, ctx: AppContextDep, *, _reque
         project = ctx.project_store.update_project(project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
     except ProjectVersionConflict as error:
         raise HTTPException(409, "project_version_conflict") from error
+    except ManagerError as error:
+        raise HTTPException(error.status, error.code) from error
     return manager_view(ctx, project)
 
 
