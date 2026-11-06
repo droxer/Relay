@@ -82,7 +82,7 @@ describe("describeAgentPlacements", () => {
     const labels = {
       nodeName: "Alice’s MacBook",
       ownership: "Local computer",
-      sandboxLabel: "Direct on computer",
+      sandboxLabel: "On the computer itself",
       status: "Ready",
     };
 
@@ -175,7 +175,7 @@ describe("placement wording", () => {
       "utf8",
     )) as { admin: { v2: Record<string, string> } };
 
-    assert.equal(translation.admin.v2.node_sandbox_host, "Direct on computer");
+    assert.equal(translation.admin.v2.node_sandbox_host, "On the computer itself");
     assert.equal(
       translation.admin.v2.profile_local_desc,
       "Agents run directly on this computer and reuse this user’s agent authentication.",

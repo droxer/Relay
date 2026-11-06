@@ -28,7 +28,7 @@
    lengths, not scale steps: the design grid bans arbitrary bracket values in
    component classes, so the tracks live here where column geometry always
    lived. */
-.task-col-ref { width: 96px; min-width: 96px; white-space: nowrap; }
+.task-col-ref { width: 76px; min-width: 76px; white-space: nowrap; }
 .task-col-priority { width: 104px; }
 .task-col-due { width: 150px; }
 .task-col-assignee { width: 172px; }
@@ -90,9 +90,35 @@
 
 .backlog-row-lead-main > .tag-list > li:first-child { flex: 0 1 auto; }
 
+/* The first chip may ellipsize, but never below a readable stub: a chip cut
+   to its bare "#" said nothing, so the title gives way past this floor. */
 .backlog-row-lead-main > .tag-list > li:first-child > .tag-badge {
   flex-shrink: 1;
-  min-width: 0;
+  min-width: 7ch;
+}
+
+.backlog-row-lead-main > .tag-list { min-width: min-content; }
+
+/* Past due carries a mark beside the red date, so it is not colour alone. */
+.due-value,
+.inline-field:has(> .due-overdue-mark) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.due-overdue-mark { flex: none; }
+
+/* A rank that departs from the default names itself; "normal" stays a quiet
+   glyph so the column is not a wall of the same word. */
+.task-table .inline-field--icon:has(.priority-glyph:not([data-priority="normal"])) .priority-label,
+.task-table .priority-badge:has(.priority-glyph:not([data-priority="normal"])) .priority-label {
+  display: inline;
+}
+
+.task-table .inline-field--icon:has(.priority-glyph:not([data-priority="normal"])) {
+  gap: var(--sp-1);
+  padding-inline: var(--sp-1);
 }
 
 .backlog-row-title {

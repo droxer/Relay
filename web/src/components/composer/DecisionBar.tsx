@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { UserAgent } from "../../types";
 import { isUserAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
@@ -10,6 +10,7 @@ import {
   ActionHandoff,
   ActionRoute,
   ICON,
+  NavMore,
 } from "../icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,15 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useDialogs } from "@/components/ui/DialogProvider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useHandoffStore } from "@/lib/handoffStore";
 
-type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
+type DecisionAction = "approve" | "rerun" | "mark_done" | "handoff";
 
-export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPrimary = false }: {
+/** Something being written: the card must not pull focus out of it. */
+const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"]';
+
+/**
+ * The decision a sent-back turn waits on. It only mounts after a reject, so
+ * rejecting again is not offered: the person either says what to change (the
+ * reply box), runs the turn again, or accepts it after all. Rarer moves —
+ * closing the work outright, handing it to another agent — sit in the menu so
+ * no more than three verbs compete for one decision.
+ */
+export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, onRequestChanges, deferPrimary = false }: {
   logicalAgents: UserAgent[];
-  sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<unknown>;
+  sendDecision: (kind: "approve" | "rerun" | "mark_done") => Promise<unknown>;
   sendHandoff: () => Promise<void>;
+  /** Moves the caret to the reply box, where the change request is written. */
+  onRequestChanges: () => void;
   /** Set while a permission prompt above holds the view's primary action. */
   deferPrimary?: boolean;
 }) {
@@ -39,15 +57,19 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPri
   const setHandoffAgentId = useHandoffStore((s) => s.setAgentId);
   const handoffNote = useHandoffStore((s) => s.note);
   const setHandoffNote = useHandoffStore((s) => s.setNote);
-  const { confirm } = useDialogs();
-  const approveRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingId = useId();
   const [pendingAction, setPendingAction] = useState<DecisionAction | null>(null);
   const pendingLabel = t("decision.pending");
 
-  // The bar mounts when a turn starts awaiting a decision; move keyboard and
-  // screen-reader focus to its primary action so it is not missed.
+  // The card mounts when a turn starts awaiting a decision. Focus its heading,
+  // not a verb: a stray Enter must never decide, and a person mid-sentence
+  // keeps the caret.
   useEffect(() => {
-    approveRef.current?.focus();
+    headingRef.current?.scrollIntoView?.({ block: "nearest" });
+    const focused = document.activeElement;
+    const typing = focused instanceof Element && focused !== document.body && focused.closest(TYPING_TARGET);
+    if (!typing) headingRef.current?.focus();
   }, []);
 
   const runAction = async (action: DecisionAction, run: () => Promise<unknown>) => {
@@ -58,20 +80,6 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPri
     } finally {
       setPendingAction(null);
     }
-  };
-
-  // Reject discards the turn, so it confirms first — approve/rerun/mark_done
-  // stay one-click since they are recoverable.
-  const handleReject = async () => {
-    if (pendingAction) return;
-    const ok = await confirm({
-      title: t("decision.reject_confirm_title"),
-      message: t("decision.reject_confirm_message"),
-      confirmLabel: t("decision.reject"),
-      tone: "danger",
-    });
-    if (!ok) return;
-    await runAction("reject", () => sendDecision("reject"));
   };
 
   const busy = pendingAction !== null;
@@ -89,18 +97,36 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, deferPri
 
   return (
     <>
-      <div className="decision-bar">
-        {/* One accent fill per view: while the handoff panel is open its Send
-            is the action in hand, and while a permission prompt is open its
-            Allow is, so Approve steps down to the outline tier. */}
-        <Button variant={handoffOpen || deferPrimary ? "outline" : "default"} type="button" ref={approveRef} disabled={busy} loading={pendingAction === "approve"} loadingLabel={pendingLabel} onClick={() => void runAction("approve", () => sendDecision("approve"))}><ActionApprove size={ICON.sm} /> {t("decision.approve")}</Button>
-        <Button variant="ghost" type="button" disabled={busy} loading={pendingAction === "rerun"} loadingLabel={pendingLabel} onClick={() => void runAction("rerun", () => sendDecision("rerun"))}>{t("decision.rerun")}</Button>
-        <Button variant="ghost" type="button" disabled={busy} loading={pendingAction === "mark_done"} loadingLabel={pendingLabel} onClick={() => void runAction("mark_done", () => sendDecision("mark_done"))}>{t("decision.mark_done")}</Button>
-        <Button variant="destructive" type="button" disabled={busy} loading={pendingAction === "reject"} loadingLabel={pendingLabel} onClick={() => void handleReject()}>{t("decision.reject")}</Button>
-        <Button variant="ghost" type="button" disabled={busy} aria-controls={handoffOpen ? "handoff-panel" : undefined} aria-expanded={handoffOpen} onClick={() => setHandoffOpen(!handoffOpen)}>
-          <ActionHandoff size={ICON.sm} /> {t("decision.handoff")}
-        </Button>
-      </div>
+      <section className="decision-card" aria-labelledby={headingId}>
+        <h3 id={headingId} ref={headingRef} tabIndex={-1} className="decision-card-title">{t("decision.title")}</h3>
+        <p className="decision-card-hint">{t("decision.hint")}</p>
+        <div className="decision-bar">
+          {/* One accent fill per view: while the handoff panel is open its Send
+              is the action in hand, and while a permission prompt is open its
+              Allow is, so Request changes steps down to the outline tier. */}
+          <Button variant={handoffOpen || deferPrimary ? "outline" : "default"} type="button" disabled={busy} onClick={onRequestChanges}>{t("decision.request_changes")}</Button>
+          <Button variant="outline" type="button" disabled={busy} loading={pendingAction === "rerun"} loadingLabel={pendingLabel} onClick={() => void runAction("rerun", () => sendDecision("rerun"))}>{t("decision.rerun")}</Button>
+          <Button variant="ghost" type="button" disabled={busy} loading={pendingAction === "approve"} loadingLabel={pendingLabel} onClick={() => void runAction("approve", () => sendDecision("approve"))}><ActionApprove size={ICON.sm} /> {t("decision.accept")}</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button type="button" variant="icon" size="icon" disabled={busy} aria-label={t("decision.more")} title={t("decision.more")}>
+                  <NavMore size={ICON.md} aria-hidden="true" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void runAction("mark_done", () => sendDecision("mark_done"))}>
+                {t("decision.mark_done")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setHandoffOpen(!handoffOpen)}>
+                <ActionHandoff size={ICON.sm} aria-hidden="true" />
+                {t("decision.handoff")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </section>
       {handoffOpen ? (
         <div id="handoff-panel" className="handoff-panel">
           <div className="handoff-panel-head">

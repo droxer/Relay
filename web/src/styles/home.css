@@ -13,13 +13,15 @@
   background: var(--surface-0);
 }
 
+/* The brief and each row's reason are what Home says to its reader, so they
+   read at body size rather than as captions. */
 .home-brief {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .home-brief-status {
@@ -138,42 +140,6 @@
 
 /* ── Up next ─────────────────────────────────────────────────────────── */
 
-.home-filters {
-  display: flex;
-  gap: var(--sp-4);
-  padding: 0 var(--sp-5);
-  border-bottom: var(--sp-hairline) solid var(--line-1);
-}
-
-.home-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1-5);
-  margin-bottom: calc(-1 * var(--sp-hairline));
-  min-height: var(--control-h);
-  padding: var(--sp-3) 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--ink-3);
-  font: var(--type-label);
-  cursor: pointer;
-}
-
-.home-filter:hover {
-  color: var(--ink-1);
-}
-
-.home-filter[aria-pressed="true"] {
-  border-bottom-color: var(--ink-1);
-  color: var(--ink-1);
-}
-
-.home-filter-count {
-  color: var(--ink-3);
-  font: var(--type-meta);
-}
-
 .home-band { --tone: var(--ink-3); }
 .home-band[data-tier="paused"] { --tone: var(--warn); }
 .home-band[data-tier="needs_you"] { --tone: var(--warn); }
@@ -261,7 +227,8 @@
   margin: var(--sp-0-5) 0 0;
   overflow: hidden;
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
   -webkit-box-orient: vertical;
   block-size: 1lh;
   -webkit-line-clamp: 1;
@@ -402,18 +369,6 @@
   color: var(--warn);
 }
 
-/* ── My tasks ────────────────────────────────────────────────────────── */
-
-.home-counts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.home-panel.home-counts > li + li {
-  border-top: 0;
-  border-left: var(--sp-hairline) solid var(--line-2);
-}
-
 .home-count {
   display: flex;
   flex-direction: column;
@@ -429,10 +384,6 @@ a.home-count:hover {
 
 a.home-count:hover .home-count-label {
   color: var(--ink-1);
-}
-
-.home-counts [data-empty] .home-count-number {
-  color: var(--ink-3);
 }
 
 .home-count-number {
@@ -606,19 +557,6 @@ a.home-count:hover .home-count-label {
     min-height: var(--touch-target);
   }
 
-  .home-filters {
-    gap: var(--sp-2);
-    padding-inline: 0;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-  }
-
-  .home-filter {
-    flex: 0 0 auto;
-    white-space: nowrap;
-  }
-
-  .home-filter,
   .home-item-actions > button {
     min-height: var(--touch-target);
   }

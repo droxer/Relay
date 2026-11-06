@@ -35,6 +35,9 @@ export function HomeSetupPanel({ setup, computersHref, agentsHref, onOpenCompute
   const agentNote = agents.total === 0
     ? { tone: "warn", text: t("home.setup.no_agents") }
     : agents.unavailable.length ? { tone: "err", text: t("home.setup.unavailable", { names: namedList(agents.unavailable, t) }) } : null;
+  // A healthy setup is not news: Home speaks up only when a computer or an
+  // agent needs the person, and stays quiet otherwise.
+  if (!computerNote && !agentNote) return null;
   const cells = [
     {
       key: "computers",

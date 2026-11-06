@@ -11,7 +11,6 @@ import { homeUpcoming, readyHomeTasks, homeBlockers, homeFocusItem } from "../..
 import type { ProjectCollectionStatus } from "../../lib/projectPage";
 import { ReadyTask, ShowAllToggle, UpcomingPanel, BlockersPanel } from "./HomePlanningPanels";
 import { ListSkeleton } from "../ListSkeleton";
-import type { IssueQueue } from "../../lib/issueQueues";
 import { formatRunDuration } from "../../lib/taskRuns";
 import { PageHeader } from "../PageHeader";
 import { useMinuteClock } from "../../hooks/useMinuteClock";
@@ -20,14 +19,14 @@ import { hrefForRoute, navigateToAppPath, pathForAppState } from "../../lib/appR
 import { computerName, computerId } from "../../lib/createAgent";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
 import { homeNeedsYouCount, type HomeItem } from "../../lib/homeQueue";
-import { homeProjects, myTaskCounts, recentlyFinished, runningNow, type HomeProjectRow, type RunningRow } from "../../lib/homeSummary";
+import { homeProjects, recentlyFinished, runningNow, type HomeProjectRow, type RunningRow } from "../../lib/homeSummary";
 import { taskRef } from "../../lib/taskRef";
 import { formatThreadStamp } from "../../lib/threadStamp";
 import { greetingName, greetingPeriod } from "../../lib/welcomeRecap";
 import type { AgentName } from "relay-core";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../../types";
 import { HomeQueue } from "./HomeQueue";
-import { FinishedPanel, HomeLink, MyTasksPanel, ProjectsPanel, RunningPanel } from "./HomePanels";
+import { FinishedPanel, HomeLink, ProjectsPanel, RunningPanel } from "./HomePanels";
 import { HomeSetupFocus, HomeSetupPanel } from "./HomeSetupPanel";
 import type { HomeSetupProgress } from "../../lib/onboarding";
 import { homeSetup } from "../../lib/homeSetup";
@@ -91,11 +90,6 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  const archivedProjectIds = useMemo(
-    () => new Set(projects.filter((project) => project.archivedAt).map((project) => project.id)),
-    [projects],
-  );
-  const counts = useMemo(() => myTaskCounts(tasks, userId, now, archivedProjectIds), [archivedProjectIds, now, tasks, userId]);
   const projectRows = useMemo(() => homeProjects(projects, tasks, items), [items, projects, tasks]);
   const running = useMemo(() => runningNow(sessions, nodes, userId), [nodes, sessions, userId]);
   const setup = useMemo(() => homeSetup(nodes, agents, userId), [agents, nodes, userId]);
@@ -107,10 +101,6 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   const runningFor = useCallback((iso: string) => t("home.running_for", {
     duration: formatRunDuration(Math.max(1, Math.floor((now - Date.parse(iso)) / MINUTE_MS)) * MINUTE_MS),
   }), [now, t]);
-  const queuePath = useCallback(
-    (queue: IssueQueue) => tasksPath(`?queue=${queue}&assignee=${encodeURIComponent(userId)}`),
-    [userId],
-  );
   const agentName = useCallback((agentId: string | undefined, executor?: string) => {
     const named = agentId ? agentNames.get(agentId) : undefined;
     if (named) return named;
@@ -239,11 +229,6 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
             <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
           </div>
           <div className="home-column">
-            <MyTasksPanel
-              counts={counts}
-              hrefFor={queuePath}
-              onOpen={(queue) => void navigateToAppPath(queuePath(queue))}
-            />
             <HomeSetupPanel
               setup={setup}
               computersHref={hrefForRoute("computers")}

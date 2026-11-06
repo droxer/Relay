@@ -64,7 +64,7 @@ export function RecordHistory({
       ) : !events ? (
         <p className="record-panel-note" role="status" aria-live="polite">{t("backlog.history_loading")}</p>
       ) : entries.length === 0 ? (
-        <p className="record-panel-note">{t("backlog.history_empty")}</p>
+        <p className="record-panel-note">{t(live ? "backlog.history_empty_live" : "backlog.history_empty")}</p>
       ) : (
         /* Every entry has happened, so every step is complete: the timeline's
            step state carries no meaning here and is not styled. */

@@ -59,7 +59,7 @@
   },
   "errors": {
     "screen_failed": "This screen could not load",
-    "screen_failed_body": "Try again, reload the app, or open another page.",
+    "screen_failed_body": "Part of this page failed to render. Nothing was changed. Try again, reload the app, or go to Home.",
     "try_again": "Try again",
     "reload_app": "Reload app",
     "rename_thread": "Could not rename the thread. Refresh the thread list and try again.",
@@ -105,7 +105,8 @@
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
-    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again."
+    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
+    "go_home": "Go to Home"
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -531,7 +532,9 @@
       "tokens_count": "{{tokens}} tokens",
       "tokens_unreported": "Tokens not reported",
       "runtime": "Runtime"
-    }
+    },
+    "run_starting_on": "Starting on {{computer}}. Output appears here as soon as the agent begins.",
+    "run_starting": "Starting the run. Output appears here as soon as the agent begins."
   },
   "composer": {
     "upload_client_outdated": "Update the Relay client on this Computer to upload images or files.",
@@ -569,14 +572,15 @@
     }
   },
   "decision": {
-    "approve": "Approve",
+    "title": "You sent this turn back",
+    "hint": "Say what to change in the reply below, run the turn again, or accept it after all.",
+    "request_changes": "Request changes",
+    "accept": "Accept",
+    "more": "More decisions",
+    "mark_done": "Mark the work done",
+    "handoff": "Hand off to another agent…",
     "rerun": "Rerun",
-    "mark_done": "Mark done",
-    "reject": "Reject",
-    "handoff": "Hand off",
-    "pending": "Working…",
-    "reject_confirm_title": "Reject this turn?",
-    "reject_confirm_message": "This rejects the current turn. The agent won’t rerun automatically."
+    "pending": "Working…"
   },
   "permission": {
     "title": "{{agent}} wants to use {{tool}}",
@@ -852,11 +856,13 @@
       "due_label": "Due {{date}}. Change due date",
       "due_empty": "Set due date",
       "clear_due": "Clear due date",
-      "assignee_label": "Assignee: {{name}}. Change assignee"
+      "assignee_label": "Assignee: {{name}}. Change assignee",
+      "due_overdue_label": "Overdue, was due {{date}}. Change due date"
     },
     "error_reopen": "Move this task to Ready before continuing it.",
     "error_cancel": "This task cannot be cancelled. Pause automations or reopen completed work instead.",
-    "queued": "Queued"
+    "queued": "Queued",
+    "history_empty_live": "The first run is under way."
   },
   "workspace": {
     "preview_missing": "This file is no longer available. It may have been moved or deleted.",
@@ -1332,7 +1338,7 @@
       "dash_health_unknown": "Unknown",
       "dash_health_total_one": "{{count}} computer",
       "dash_health_total_other": "{{count}} computers",
-      "dash_top_title": "Most active users",
+      "dash_top_title": "Threads by user",
       "dash_top_empty": "No user threads yet.",
       "dash_feed_title": "Recent activity",
       "dash_feed_empty": "No recent activity.",
@@ -1456,7 +1462,7 @@
       "node_execution_local": "Local computer",
       "node_sandbox_boxlite": "BoxLite",
       "node_sandbox_boxlite_hint": "Agents run inside an isolated BoxLite VM.",
-      "node_sandbox_host": "Direct on computer",
+      "node_sandbox_host": "On the computer itself",
       "node_sandbox_host_hint": "Agents run directly on the computer.",
       "node_sandbox_pending": "Isolation pending",
       "node_sandbox_pending_hint": "The computer has not reported its isolation yet.",
@@ -1646,7 +1652,7 @@
       "settings_rounds_hint": "Between {{min}} and {{max}}. When a task runs out of rounds, it waits for a person instead of running again.",
       "settings_save": "Save",
       "settings_admin_token_title": "Admin token",
-      "settings_admin_token_sub": "Bearer token for bootstrap and the supervisor, seeded from RELAY_ADMIN_TOKEN on first boot. Only a hash is stored, so a new token is shown once. Reissuing it revokes the old one immediately.",
+      "settings_admin_token_sub": "Secret token for setup scripts and the supervisor, seeded from RELAY_ADMIN_TOKEN on first boot. Only a hash is stored, so a new token is shown once. Reissuing it revokes the old one immediately.",
       "settings_admin_token_label": "Admin token",
       "settings_admin_token_copy": "Copy admin token",
       "settings_admin_token_reissue": "Reissue token",
@@ -1855,9 +1861,9 @@
     "runtimes": "Works with Codex, Claude Code, Pi, OpenCode, and Kimi.",
     "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
-    "lede": "Start on Home: see what needs you, follow running work, and plan what comes next. Assign tasks to agents and teams on your own computers, with every command and result in view.",
+    "lede": "Install Relay on a laptop or a server, then hand work to agents and teams that run there. Every command and result stays in view, and Home shows what needs you next.",
     "cta_secondary": "See how it works",
-    "hero_alt": "Relay Home with an Up next queue, task counts, running work, and upcoming dates",
+    "hero_alt": "Relay Home with an Up next queue, running work, and upcoming dates",
     "how_title": "From request to reviewed result",
     "step_enroll_title": "Connect a computer",
     "step_enroll_body": "Install Relay on a laptop or a managed server. Agents run on the computer you connect, directly or in a BoxLite sandbox, never inside the Relay backend.",
@@ -2666,7 +2672,8 @@
     "loading": "Loading record…",
     "not_found_title": "Record not found",
     "not_found_body": "This task or automation no longer exists.",
-    "run_not_of_routine": "This run belongs to a different automation."
+    "run_not_of_routine": "This run belongs to a different automation.",
+    "watch_live": "Watch live"
   },
   "number_field": {
     "increase": "Increase",
@@ -2737,7 +2744,7 @@
     "queues_label": "Task queues",
     "queues": {
       "needs_me": "Needs attention",
-      "untriaged": "Untriaged",
+      "untriaged": "No project",
       "blocked": "Blocked",
       "running": "Running",
       "overdue": "Overdue",
@@ -2757,7 +2764,7 @@
     },
     "empty": {
       "needs_me": "Nothing is waiting on you",
-      "untriaged": "Nothing to triage",
+      "untriaged": "Every task has a project",
       "blocked": "Nothing is blocked",
       "running": "Nothing is running",
       "overdue": "Nothing is overdue",
@@ -2782,7 +2789,7 @@
     "all": "All tasks",
     "needs_project": "Needs project",
     "intake_hint": "Add to a project before starting work",
-    "project_hint": "Leave empty to triage later. Add a project before assigning an agent or starting work.",
+    "project_hint": "Leave empty to choose later. Add a project before assigning an agent or starting work.",
     "assignment_needs_project": "Add this task to a project to assign an agent or team.",
     "add_to_project": "Add to project",
     "move_to_project": "Move to project",
@@ -3172,12 +3179,6 @@
   },
   "home": {
     "up_next": "Up next",
-    "filter_label": "Show",
-    "filter": {
-      "all": "All",
-      "needs_you": "Needs attention",
-      "other": "Everything else"
-    },
     "tier": {
       "paused": "Needs attention · run paused",
       "needs_you": "Needs attention",
@@ -3194,7 +3195,7 @@
       "blocked": "Blocked",
       "offline": "Computer offline",
       "overdue": "Overdue",
-      "untriaged": "Untriaged",
+      "untriaged": "No project",
       "suggested": "Suggested"
     },
     "why": {
@@ -3211,7 +3212,7 @@
       "offline_one": "It is offline while {{count}} of your tasks waits to start.",
       "offline_other": "It is offline while {{count}} of your tasks wait to start.",
       "overdue": "Was due {{date}} and is not done.",
-      "untriaged": "Intake can't run until it joins a project.",
+      "untriaged": "It can't run until it joins a project.",
       "suggested": "Suggested next: {{step}}"
     },
     "next": {
@@ -3224,7 +3225,7 @@
       "blocked": "unblock {{ref}}",
       "overdue": "start {{ref}}, which is overdue",
       "offline": "bring a computer back online",
-      "untriaged": "triage intake",
+      "untriaged": "give a task a project",
       "suggested": "send a suggested follow-up"
     },
     "an_agent": "An agent",
@@ -3234,11 +3235,10 @@
     "open": "Open",
     "open_thread": "Open thread",
     "view_computer": "View computer",
-    "triage": "Triage",
+    "triage": "Choose a project",
     "snooze": "Snooze",
     "snooze_hint": "Hide this until it changes",
     "clear_title": "Nothing needs attention",
-    "clear_filtered": "Nothing here right now",
     "clear_body": "Questions, approvals, and finished work from your agents collect here.",
     "ranked_hint": "Ranked by what holds work up the longest",
     "all_tasks": "All tasks",
@@ -3246,13 +3246,6 @@
     "all_projects": "All projects",
     "running_now": "Running now",
     "paused_for_permission": "paused for permission",
-    "my_tasks": "My tasks",
-    "count": {
-      "open": "Open",
-      "running": "Running",
-      "blocked": "Blocked",
-      "doneThisWeek": "Done this week"
-    },
     "projects": "Projects",
     "no_projects": "No projects yet.",
     "new_project": "New project",
@@ -3342,7 +3335,7 @@
       "blockers_jump": "Shared blockers · {{count}}",
       "ready_jump": "Ready · {{count}}"
     },
-    "all_needs_me": "All needing attention",
+    "all_needs_me": "Open the full queue in Tasks",
     "running_for": "Running {{duration}}",
     "setup": {
       "title": "Your setup",
@@ -3359,6 +3352,8 @@
   },
   "task_review": {
     "title": "Review result",
+    "ready_title": "Ready for your review",
+    "details": "See criteria, evidence, and outputs",
     "loading": "Loading the recorded result…",
     "outcome": "Requested outcome",
     "criteria": "Acceptance criteria",
@@ -3413,14 +3408,14 @@
     "action": "Import GitHub issues",
     "title": "Import GitHub issues",
     "into_project": "Issues become backlog tasks in {{project}}",
-    "into_intake": "Issues become intake tasks with no project",
+    "into_intake": "Issues become tasks with no project",
     "close": "Close",
     "repository": "Repository",
     "repository_hint": "Public GitHub repositories only: owner/repository or its github.com URL.",
     "token": "Access token",
     "token_hint": "Needed for private repositories and higher rate limits. Used only for this import and never saved.",
     "optional": "Optional",
-    "project_hint": "Imported issues land in this project's backlog, or in intake without one.",
+    "project_hint": "Imported issues land in this project's backlog, or with no project if none is chosen.",
     "state": "Issues",
     "states": {
       "open": "Open",
@@ -3628,7 +3623,7 @@
     "open": "Talk to Relay",
     "reason_manager_computer_busy": "The project computer is busy. Try again when capacity is available.",
     "resize": "Resize project manager",
-    "unassigned_role": "No Agent has the Project Manager role.",
+    "unassigned_role": "No agent manages this project yet. A manager reads its records and proposes task changes for you to apply.",
     "assign_role": "Assign Project Manager",
     "change": "Change"
   }

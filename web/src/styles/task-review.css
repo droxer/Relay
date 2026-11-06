@@ -81,3 +81,38 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
+
+/* Docked review: the verdict's subject stays visible above the evidence. */
+.task-review-lede {
+  display: grid;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+
+.task-review-lede-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.task-review-lede-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  white-space: pre-line;
+}
+
+.task-review-lede-agent {
+  color: var(--ink-1);
+  font-weight: var(--font-weight-medium);
+}
+
+.task-review--compact summary {
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}

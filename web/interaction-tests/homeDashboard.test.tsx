@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { HomeQueueItem } from "../src/components/home/HomeQueueItem";
 import { HomeQueue } from "../src/components/home/HomeQueue";
-import { MyTasksPanel } from "../src/components/home/HomePanels";
 import type { HomeItem } from "../src/lib/homeQueue";
 import type { HomeActions } from "../src/components/home/useHomeActions";
 
@@ -43,19 +42,6 @@ it("takes every Up next row to its thread instead of acting from Home", async ()
   await userEvent.setup().click(screen.getByRole("link", { name: "Migrate billing" }));
   expect(onOpen).toHaveBeenCalledOnce();
   expect(answerPermission).not.toHaveBeenCalled();
-});
-
-it("links each status count to the Tasks queue that lists exactly those tasks", () => {
-  const hrefFor = (queue: string) => `/tasks?queue=${queue}&assignee=me`;
-  render(<MyTasksPanel counts={{ open: 4, running: 1, blocked: 2, doneThisWeek: 5 }} hrefFor={hrefFor} onOpen={vi.fn()} />);
-  const links = screen.getAllByRole("link");
-  expect(links.map((link) => link.getAttribute("href"))).toEqual([
-    "/tasks?queue=open&assignee=me",
-    "/tasks?queue=running&assignee=me",
-    "/tasks?queue=blocked&assignee=me",
-  ]);
-  // No queue holds only this week's finished work, so that count opens nothing.
-  expect(screen.getByText("home.count.doneThisWeek").closest("a")).toBeNull();
 });
 
 it("keeps Start available after a network failure and prevents duplicate submissions", async () => {

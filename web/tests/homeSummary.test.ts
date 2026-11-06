@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { homeQueue } from "../src/lib/homeQueue.js";
-import { homeProjects, myTaskCounts, recentlyFinished, runningNow } from "../src/lib/homeSummary.js";
+import { homeProjects, recentlyFinished, runningNow } from "../src/lib/homeSummary.js";
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../src/types.js";
 
 const ME = "alice";
@@ -27,31 +27,6 @@ function task(input: Partial<RelayTaskListItem> & { id: string }): RelayTaskList
 function project(id: string, name: string, extra: Partial<ProjectRecord> = {}): ProjectRecord {
   return { id, name, ownerUserId: ME, updatedAt: "2026-10-01T00:00:00.000Z", ...extra } as ProjectRecord;
 }
-
-describe("myTaskCounts", () => {
-  it("counts my tasks by their own status, matching the Tasks queues", () => {
-    const tasks = [
-      task({ id: "a", status: "backlog" }),
-      task({ id: "b", status: "assigned" }),
-      task({ id: "c", status: "blocked", workflowStage: "running" }),
-      task({ id: "d", status: "review" }),
-      task({ id: "e", status: "done", finishedAt: "2026-10-30T00:00:00.000Z" }),
-      task({ id: "f", status: "done", finishedAt: "2026-10-01T00:00:00.000Z" }),
-      task({ id: "g", status: "review", assigneeUserId: "bob" }),
-      task({ id: "h", status: "assigned", isRoutine: true }),
-    ];
-
-    // A blocked task the server files under the running stage is still blocked:
-    // Home never calls work running that is not.
-    assert.deepEqual(myTaskCounts(tasks, ME, NOW), { open: 4, running: 0, blocked: 1, doneThisWeek: 1 });
-  });
-
-  it("leaves out work in archived projects, as the Tasks page does", () => {
-    const tasks = [task({ id: "live", status: "running" }), task({ id: "shelved", status: "running", projectId: "old" })];
-
-    assert.equal(myTaskCounts(tasks, ME, NOW, new Set(["old"])).running, 1);
-  });
-});
 
 describe("homeProjects", () => {
   it("puts projects that want you first and names each one's next step", () => {

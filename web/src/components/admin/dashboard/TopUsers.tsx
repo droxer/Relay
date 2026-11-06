@@ -51,10 +51,11 @@ export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
       ) : (
         // The panel caps its height, so the list scrolls; a scroller with no
         // focusable content is unreachable by keyboard without a tab stop.
-        <ol className="adm-dash-top-list" tabIndex={0} aria-labelledby={titleId}>
-          {rows.map((row, index) => (
+        // Adoption, not a leaderboard: who is using Relay and how much, with
+        // no rank numbers — a manager's view is not a surveillance tool.
+        <ul className="adm-dash-top-list" tabIndex={0} aria-labelledby={titleId}>
+          {rows.map((row) => (
             <li key={row.id} className="adm-dash-top-row">
-              <span className="adm-dash-top-rank tnum">{index + 1}</span>
               <UserAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
               {/* Name over a share bar scaled to the leader, so the gap between
                   ranks reads at a glance; the count stays the exact figure. */}
@@ -67,7 +68,7 @@ export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
               <span className="adm-dash-top-count tnum">{row.sessionCount}</span>
             </li>
           ))}
-        </ol>
+        </ul>
       )}
     </Card>
   );

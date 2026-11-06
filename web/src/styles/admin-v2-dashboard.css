@@ -527,8 +527,11 @@
   min-width: 0;
 }
 
-/* A state nobody is in stays listed — "0 failed" is news — but recedes. */
-.adm-dash-stat[data-empty] { opacity: var(--opacity-dormant); }
+/* A state nobody is in stays listed — "0 failed" is news — but recedes. Only
+   the mark and the count recede: dimming the whole stat took its label to
+   3:1, under the 4.5:1 text floor, and the label is what names the state. */
+.adm-dash-stat[data-empty] .adm-dash-stat-dot { opacity: var(--opacity-dormant); }
+.adm-dash-stat[data-empty] .adm-dash-stat-value { color: var(--ink-3); }
 
 .adm-dash-stat-label {
   display: inline-flex;
@@ -617,15 +620,9 @@
   display: grid;
   /* The avatar column is the UserAvatar it holds (AVATAR.md, 32px); it was
      a 28px column that the avatar overflowed. */
-  grid-template-columns: 1.25rem var(--avatar-md) minmax(0, 1fr) auto;
+  grid-template-columns: var(--avatar-md) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
-}
-
-.adm-dash-top-rank {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  color: var(--ink-4);
 }
 
 .adm-dash-top-who {

@@ -188,6 +188,7 @@ export function TaskRecordPage({
       ))}
     </TabsList>
   );
+  const liveThreadId = task.status === "running" ? task.linkedSessionIds.at(-1) : undefined;
   const actions = (
     <TaskRecordActions
       readingFile={tab === "artifacts"}
@@ -199,6 +200,7 @@ export function TaskRecordPage({
       onDone={onDone}
       onEdit={onEdit}
       onDelete={onDelete}
+      onWatchLive={liveThreadId ? () => onOpenThread(liveThreadId) : undefined}
     />
   );
 

@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ActionCalendar, CheckIcon, ICON } from "../icons";
+import { ActionCalendar, CheckIcon, ICON, StatusWarn } from "../icons";
 import { PriorityBadge, PriorityGlyph } from "../PriorityBadge";
 import { TaskStatusIcon } from "../TaskStatusIcon";
 import { TASK_PRIORITIES, dueTone } from "../../lib/backlog";
@@ -252,10 +252,18 @@ export function InlineDue({
   const tone = dueTone(task);
   const formatted = task.dueDate ? formatDueDate(task.dueDate) : null;
 
+  // Past due is said with a shape and a word, not with red alone.
+  const overdueMark = tone === "bad" ? (
+    <>
+      <StatusWarn size={ICON.xs} className="due-overdue-mark" aria-hidden="true" />
+      <span className="sr-only">{t("backlog.overdue")}: </span>
+    </>
+  ) : null;
+
   if (readOnly) {
     return (
-      <span className={cn(tone !== "neutral" && tone)} data-empty={!task.dueDate || undefined}>
-        {formatted ?? "—"}
+      <span className={cn("due-value", tone !== "neutral" && tone)} data-empty={!task.dueDate || undefined}>
+        {overdueMark}{formatted ?? "—"}
       </span>
     );
   }
@@ -277,8 +285,11 @@ export function InlineDue({
             size="xs"
             className={cn("inline-field", tone !== "neutral" && tone)}
             data-empty={!formatted || undefined}
-            aria-label={formatted ? t("backlog.inline.due_label", { date: formatted }) : t("backlog.inline.due_empty")}
+            aria-label={formatted
+              ? t(tone === "bad" ? "backlog.inline.due_overdue_label" : "backlog.inline.due_label", { date: formatted })
+              : t("backlog.inline.due_empty")}
           >
+            {tone === "bad" ? <StatusWarn size={ICON.xs} className="due-overdue-mark" aria-hidden="true" /> : null}
             {formatted ?? <ActionCalendar size={ICON.sm} aria-hidden="true" />}
           </Button>
         }

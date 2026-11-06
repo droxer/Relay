@@ -4,9 +4,10 @@
   },
   "errors": {
     "screen_failed": "This screen could not load",
-    "screen_failed_body": "Try again, reload the app, or open another page.",
+    "screen_failed_body": "Part of this page failed to render. Nothing was changed. Try again, reload the app, or go to Home.",
     "try_again": "Try again",
-    "reload_app": "Reload app"
+    "reload_app": "Reload app",
+    "go_home": "Go to Home"
   },
   "landing": {
     "nav_label": "Relay",
@@ -19,9 +20,9 @@
     "runtimes": "Works with Codex, Claude Code, Pi, OpenCode, and Kimi.",
     "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
-    "lede": "Start on Home: see what needs you, follow running work, and plan what comes next. Assign tasks to agents and teams on your own computers, with every command and result in view.",
+    "lede": "Install Relay on a laptop or a server, then hand work to agents and teams that run there. Every command and result stays in view, and Home shows what needs you next.",
     "cta_secondary": "See how it works",
-    "hero_alt": "Relay Home with an Up next queue, task counts, running work, and upcoming dates",
+    "hero_alt": "Relay Home with an Up next queue, running work, and upcoming dates",
     "how_title": "From request to reviewed result",
     "step_enroll_title": "Connect a computer",
     "step_enroll_body": "Install Relay on a laptop or a managed server. Agents run on the computer you connect, directly or in a BoxLite sandbox, never inside the Relay backend.",
