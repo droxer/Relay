@@ -111,7 +111,9 @@ class DatabaseChatIntegrationStore:
             if {"tenantId", "config", "secrets", "status"}.intersection(payload)
             else nullcontext()
         )
-        with guard, self._atomic_scope():
+        # Take the local lock before checking out a connection: a queued writer
+        # must not exhaust the pool while a preceding reader still needs it.
+        with self._lock, guard, self._atomic_scope():
             integration = self._find_integration(integration_id)
             secret_patch = payload.get("secrets")
             if (
