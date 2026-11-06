@@ -295,3 +295,45 @@ def test_project_updates_include_agent_reports_from_project_conversations(setup_
     command=_take_command(app,node)
     activity=_tool(setup_env,command,'activity').json()
     assert any(item['event'].get('type') == 'agent.completed' and 'Drafted the setup.' in item['event'].get('agentLog','') for item in activity['events'])
+
+
+def test_project_manager_is_a_project_roster_role_not_a_global_agent_role(setup_env):
+    app,client,node,project,planner,builder=setup_env
+    current=client.get(f"/api/v1/projects/{project['id']}").json()['project']
+    response=client.patch(f"/api/v1/projects/{project['id']}",json={
+        'expectedVersion':current['version'],'leadAgentId':builder['id'],
+        'members':[
+            {'agentId':planner['id'],'role':'project_manager','responsibilities':'Manage this project','enabled':True},
+            {'agentId':builder['id'],'role':'implementer','responsibilities':'Build','enabled':True},
+        ],
+    })
+    assert response.status_code == 200,response.text
+    saved=response.json()['project']
+    assert saved['managerAgentId'] == planner['id']
+    assert saved['leadAgentId'] == builder['id']
+    assert app.state.agent_store.get_agent(planner['id'])['defaultRole'] == 'implementer'
+    duplicate=client.patch(f"/api/v1/projects/{project['id']}",json={
+        'expectedVersion':saved['version'],'leadAgentId':builder['id'],
+        'members':[{**m,'role':'project_manager'} for m in saved['members']],
+    })
+    assert duplicate.status_code == 400
+
+
+def test_open_manager_uses_a_normal_agent_thread_without_dispatch(setup_env):
+    app,client,node,project,planner,_=setup_env
+    response=client.post(f"/api/v1/projects/{project['id']}/manager/conversation")
+    assert response.status_code == 200,response.text
+    thread_id=response.json()['threadId']
+    session=client.get(f'/api/v1/threads/{thread_id}').json()
+    assert session['ownerAgentId'] == planner['id']
+    assert session['participantAgentIds'] == [planner['id']]
+    assert not session['agentRuns']
+    assert client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId'] == thread_id
+    _ready(app,node)
+    message=client.post(f'/api/v1/threads/{thread_id}/messages',json={
+        'text':'What changed in the project?','intent':'accomplish','idempotencyKey':'normal-manager-message',
+    })
+    assert message.status_code == 202,message.text
+    command=_take_command(app,node)
+    assert command['logicalAgentId'] == planner['id']
+    assert command['state']['project_manager']['projectId'] == project['id']
