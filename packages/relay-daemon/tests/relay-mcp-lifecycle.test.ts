@@ -107,7 +107,7 @@ test('real managed stdio forwards Python responses without reading a persistent 
   let output='';child.stdout.on('data',chunk=>{output+=chunk;});let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk;});
   child.stdin.end(['a','b'].map((projectId,id)=>JSON.stringify({jsonrpc:'2.0',id,method:'tools/call',params:{name:'relay_project_overview',arguments:{projectId}}})).join('\n')+'\n');
   const code=await new Promise<number|null>((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
-  assert.equal(code,0,stderr);const results=output.trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(code,0,stderr);const results=output.trim().split('\n').map(line=>JSON.parse(line)).sort((a,b)=>a.id-b.id);
   assert.equal(results[0].result.structuredContent.agentId,'manager');assert.equal(results[1].result.isError,true);assert.deepEqual(calls,['mcp','mcp']);
  }finally{await bridge.dispose();rmSync(home,{recursive:true,force:true});}
 });

@@ -3,11 +3,44 @@ import { test } from 'node:test';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createProjectManagerBridge, managerWorkspaceTool } from '../src/project-manager.js';
 
 const exec = promisify(execFile);
+
+test('managed MCP calls progress independently with bounded concurrency and disposal drains work', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-manager-concurrent-'));
+  const release = Promise.withResolvers<void>();
+  const calls: number[] = [];
+  let active = 0;
+  let peak = 0;
+  const bridge = createProjectManagerBridge(root, async (_tool, args) => {
+    calls.push(Number(args.id));
+    peak = Math.max(peak, ++active);
+    if (args.id !== 1) await release.promise;
+    active--;
+    return args;
+  });
+  const dir = join(root, bridge.toolPath, '..');
+  const ids = Array.from({ length: 20 }, (_, id) => `00000000-0000-0000-0000-${String(id).padStart(12, '0')}`);
+  try {
+    for (const [id, name] of ids.entries()) {
+      writeFileSync(join(dir, name + '.request'), JSON.stringify({ tool: 'mcp', arguments: { id } }));
+    }
+    const deadline = Date.now() + 2000;
+    while ((peak < 8 || !calls.includes(1)) && Date.now() < deadline) await delay(10);
+    assert.ok(calls.includes(1), 'fast managed call must not wait for held calls');
+    assert.equal(peak, 8);
+    assert.ok(calls.length <= 9, 'only the completed fast call frees a slot');
+  } finally {
+    release.resolve();
+    await bridge.dispose();
+    assert.equal(active, 0);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('every runtime can invoke the file bridge without backend credentials in its helper', async () => {
   const root = mkdtempSync(join(tmpdir(), 'relay-manager-'));
