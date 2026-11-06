@@ -112,3 +112,24 @@ rollback and restore the old code only after downgrade succeeds.
 See [configuration migration and validation evidence](testing/backend-chat-configuration.tdd.md).
 These checks establish bounded reads and concurrent progress, not production
 throughput or latency targets.
+
+
+## Dashboard polling and cache retention
+
+Admin dashboard routes require the session store's scoped metrics queries;
+retired full-history fallbacks have been removed. `api/admin/dashboard_cache.py`
+shares one in-flight build per store/endpoint/timezone/window within a backend
+process. Unrelated keys progress independently. Completed answers expire 30
+seconds after the build finishes; expired answers are pruned on access, and each
+store retains at most 64 answers using least-recently-used eviction. Pending
+builds exist only for active requests and are removed on success or failure.
+
+Failures reach current waiters and allow the next request to retry. Clearing the
+cache detaches old builds: existing callers finish, but their results cannot
+repopulate the cleared cache. Store keys are weak references so discarded app
+instances are collectible. This cache remains process-local; replicas may each
+build an answer, and no distributed consistency or production capacity claim is
+made. The dashboard's authorization, response, and timezone contracts are
+unchanged. No database migration is required.
+
+See [concurrency and retention evidence](testing/backend-dashboard-cache.tdd.md).

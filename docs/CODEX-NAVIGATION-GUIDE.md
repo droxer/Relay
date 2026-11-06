@@ -57,6 +57,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Chat provider coordination | `backend/relay/persistence/chat/coordination.py`, `persistence/chat/store.py` | `api/chat/integrations.py`, chat concurrency/coordination/query-bound tests; `docs/testing/backend-chat-coordination.tdd.md` |
 | Chat configuration and credentials | `backend/relay/persistence/chat/store.py`, `integrations.py`, `secrets.py`; pure `chat/rules.py` | migration `20261106_0117`, configuration concurrency/legacy/migration tests; `docs/testing/backend-chat-configuration.tdd.md` |
 | Chat audit and conversation records | `backend/relay/persistence/chat/audit.py`, `conversations.py` | `persistence/chat/store.py`, `api/chat/gateway.py`, migration `20261106_0116`, chat record tests |
+| Admin dashboard reads | `backend/relay/api/admin/dashboard.py`, `dashboard_cache.py`; `persistence/session/reads.py` | dashboard/cache/request-latency tests; `docs/testing/backend-dashboard-cache.tdd.md` |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task/store.py` | `api/tasks/`, `tasks/dispatch.py`, backlog/routine UI |
