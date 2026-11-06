@@ -266,7 +266,6 @@
     "member_disabled": "Disabled",
     "member_missing": "Unavailable",
     "member_unavailable": "Unavailable agent",
-    "instructions_short": "Project instructions",
     "member_add": "Add agent",
     "member_edit": "Edit agent",
     "member_edit_name": "Edit {{name}}",
