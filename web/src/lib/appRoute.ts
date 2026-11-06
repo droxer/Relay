@@ -488,6 +488,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
       copyPageParams(head, source, target);
     }
   } else if (head === "projects" && entityId && rest.length === 0) {
+    if (source.get("manager") === "open") target.set("manager", "open");
     /* A legacy `?task=` link — bare, or on a retired tab like Activities —
        predates the Agents default and meant the tasks board, so it still
        lands there rather than losing its task. */

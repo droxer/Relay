@@ -210,6 +210,18 @@ A Thread that belongs to one Project and therefore shares that Project's
 persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
+**Project Manager**:
+Relay's default conversational responsibility for one Project, backed by a
+user-owned Logical Agent with an active Placement on that Project's Computer.
+The Project keeps its manager binding and canonical Project Conversation;
+changing the backing Agent preserves the conversation and standing context.
+The manager reads live Project records and stages Task changes for the Project
+Owner to apply through ordinary domain operations. Selecting it does not change
+the Project's lead, roster, or Task execution ownership. Its visible identity
+is Relay, with the backing Agent attributed on each answer.
+_Avoid_: Agent Role (this is a Project responsibility), Project Owner,
+Default Agent (an ordinary Logical Agent offered per runtime)
+
 **Prerequisite**:
 A Task in the same Project that must be done before another Task may run.
 A Task waiting on one keeps its status; "waiting on" is derived, never stored.

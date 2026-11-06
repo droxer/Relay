@@ -102,6 +102,7 @@ import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.j
 import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeImages } from "./image-attachments.js";
+import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
 import { materializeSkills } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
 import { permissionAdapterLaunch } from "./permission-adapters/index.js";
@@ -1428,10 +1429,26 @@ async function executeCommand(
   // The lease pins the guest that mounts this workspace for the whole run, so
   // a concurrent run on another thread cannot recycle it mid-execution.
   const execution = await environment.acquireWorkspace(threadWorkspace.hostPath, signal);
+  const managerToolAbort = new AbortController();
+  let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   try {
+    managerBridge = state.project_manager ? createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
+      const workspaceTool = ["files", "file", "search"].includes(tool);
+      const response = await fetchFn(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/project-manager/tools`), {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ commandId: command.id, leaseId: command.leaseId, tool: workspaceTool ? "workspace" : tool, arguments: args }),
+        signal: AbortSignal.any([managerToolAbort.signal, ...(signal ? [signal] : []), AbortSignal.timeout(60_000)]),
+      });
+      if (!response.ok) throw new Error(`Manager tool failed (${response.status}): ${await responseErrorDetail(response)}`);
+      const result: unknown = await response.json();
+      return workspaceTool ? managerWorkspaceTool(threadWorkspace.hostPath, tool, args) : result;
+    }) : undefined;
+    if (managerBridge && state.project_manager) state.project_manager = { ...state.project_manager, toolCommand: managerBridge.toolCommand };
     return await runInWorkspace(execution);
   } finally {
-    execution.release();
+    managerToolAbort.abort();
+    try { await managerBridge?.dispose(); }
+    finally { execution.release(); }
   }
 
   /**

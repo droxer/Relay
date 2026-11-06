@@ -51,6 +51,13 @@ class RoundRequestMixin(ConductorState):
         )
         if intent.project_setup is not None:
             manifest = {**manifest, "projectSetup": intent.project_setup}
+        if project_snapshot and session and len(resolved) == 1:
+            project = self.ctx.project_store.get_project(project_snapshot["projectId"])
+            if project and session["id"] == project.get("managerThreadId") and resolved[0].get("agentId") == project.get("managerAgentId"):
+                manifest = {**manifest, "projectManager": {
+                    "projectId": project["id"], "agentId": project["managerAgentId"],
+                    "bindingRevision": project["version"],
+                }}
         task_id, scope_fields = self._round_work_scope(
             intent, session, is_recovery, answered_task
         )
