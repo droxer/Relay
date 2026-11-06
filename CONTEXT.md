@@ -211,16 +211,28 @@ persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
 **Project Manager**:
-Relay's default conversational responsibility for one Project, backed by a
-user-owned Logical Agent with an active Placement on that Project's Computer.
-The Project keeps its manager binding and canonical Project Conversation;
-changing the backing Agent preserves the conversation and standing context.
+A Project roster role (`project_manager`) held by one user-owned Logical Agent
+with an active Placement on that Project's Computer. It is local to the Project:
+the Agent retains its name, profile, global Agent Role, and roles in other
+Projects. Chat opens an ordinary Thread with that Agent. The Project records its
+role holder and canonical conversation; changing the holder preserves history.
 The manager reads live Project records and stages Task changes for the Project
-Owner to apply through ordinary domain operations. Selecting it does not change
-the Project's lead, roster, or Task execution ownership. Its visible identity
-is Relay, with the backing Agent attributed on each answer.
-_Avoid_: Agent Role (this is a Project responsibility), Project Owner,
-Default Agent (an ordinary Logical Agent offered per runtime)
+Owner to review and apply. It does not gain acceptance or execution authority.
+_Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
+
+**Relay MCP**:
+A Python MCP module hosted in the Relay backend, reached through a local Node
+stdio bridge installed in an Agent Runtime. Python owns tool discovery, schemas,
+protocol and Project operations. The bridge forwards messages using a private,
+revocable bearer token scoped to the user's Projects or Computer.
+It exposes current Project records and Task proposals; owner approval remains a
+separate authenticated action. Runtime configuration references a private token
+file rather than embedding credentials in a Project workspace or prompt. Managed
+runs use a separate Project/run-scoped grant held by the Daemon Node; the
+standalone Computer grant is never a fallback for a managed run. Capability is
+resolved from the Agent's enabled Project role and pinned in its run context,
+independently of which Thread carries the conversation.
+_Avoid_: daemon token (a separate execution-plane credential), shell helper as MCP
 
 **Prerequisite**:
 A Task in the same Project that must be done before another Task may run.

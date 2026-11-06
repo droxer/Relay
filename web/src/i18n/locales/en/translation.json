@@ -105,7 +105,8 @@
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
-    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again."
+    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
+    "project_manager_target_changed": "The Project Manager changed. Refresh the conversation and send your message to the current Agent."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -226,7 +227,8 @@
       "reviewer": "Code Reviewer",
       "planner": "Architect",
       "tester": "QA Engineer",
-      "fixer": "Bug Fixer"
+      "fixer": "Bug Fixer",
+      "project_manager": "Project Manager"
     },
     "unclassified": "Unclassified",
     "archived": "Archived",
@@ -3578,7 +3580,7 @@
     "back": "Back",
     "loading": "Loading project manager…",
     "retry": "Retry",
-    "agent": "Agent answering as Relay",
+    "agent": "Project Manager agent",
     "choose": "Choose an agent",
     "agent_unavailable": "Configured agent unavailable",
     "setup": "Set up an agent",
@@ -3610,7 +3612,7 @@
     "proposal_dismissed": "Dismissed",
     "proposal_superseded": "Replaced by a newer proposal",
     "proposal_expired": "Expired",
-    "reason_manager_unconfigured": "Choose an agent to answer as Relay.",
+    "reason_manager_unconfigured": "Assign the Project Manager role to an Agent.",
     "reason_manager_agent_unavailable": "The configured agent is disabled, removed, or on another computer. Choose another agent.",
     "reason_project_computer_offline": "The project computer is offline. Recorded conversation remains available.",
     "reason_project_manager_update_required": "Update the project computer to enable manager tools.",
@@ -3626,6 +3628,10 @@
     "reason_manager_runtime_unavailable": "The agent runtime is not ready. Check the project computer or choose another agent.",
     "open": "Talk to Relay",
     "reason_manager_computer_busy": "The project computer is busy. Try again when capacity is available.",
-    "resize": "Resize project manager"
+    "resize": "Resize project manager",
+    "chat": "Chat",
+    "agent_description": "Project updates, backlog, and task coordination.",
+    "unassigned_role": "No Agent has the Project Manager role.",
+    "assign_role": "Assign Project Manager"
   }
 }

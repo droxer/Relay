@@ -74,7 +74,7 @@ export async function runAgentNode(
       // Output reaches the daemon through a pipe, where a Python CLI block-buffers
       // stdout and the transcript arrives in bursts; `stdbuf` (BoxLite only) does
       // not reach Python's own buffering, so ask for it on every computer.
-      env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)) },
+      env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)), ...options.runtimeEnv },
     });
     return { result, runtimeSessionId: sessionStream.finish() ?? extractRuntimeSessionId(result.stdout, agent) };
   };

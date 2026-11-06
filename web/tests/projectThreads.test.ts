@@ -74,6 +74,12 @@ describe("project thread buckets", () => {
     );
   });
 
+  it("lists the Project Manager conversation as an ordinary Thread", () => {
+    const managerProject = {...project("alpha", "Alpha"), managerThreadId:"manager"};
+    const items = [thread("manager", "alpha"), thread("room", "alpha")];
+    assert.deepEqual(threadsForDirectory(items, [managerProject], "threads").map(item=>item.session.id), ["manager"]);
+  });
+
   it("exposes separate Threads, Projects, and Tasks destinations", async () => {
     const sideNavSource = await readFile(resolve("web/src/components/SideNav.tsx"), "utf8");
 

@@ -1431,7 +1431,7 @@ configuration, supported runtime adapters, and deployment verification limits.
 ## Project manager
 
 Every Project has a stable Relay manager binding and one lazily created manager
-Thread. Selecting the manager does not change the lead or roster. These routes
+Thread. Selecting the manager assigns the `project_manager` roster role to the actual Agent. These routes
 require the Project Owner; admin status and daemon credentials do not confer
 owner authority.
 
@@ -1459,10 +1459,69 @@ New tasks stay in backlog. Applying changes does not start work, accept review,
 answer a Wait, or reconcile execution. Disabled and archived Projects refuse
 new manager work and proposal applications.
 
-`POST /api/v1/daemon-nodes/{id}/project-manager/tools` is the execution-plane
-bridge. It requires node authentication plus the currently dispatched command
-and lease, and validates its active manager run and canonical Project Thread.
-It exposes scoped reads, workspace authorization, and proposal staging, never
-owner Apply. The runtime invokes its per-run Node helper; node credentials and
-leases remain in the daemon. See [the design](project-manager-design.md) and
-[verification evidence](testing/project-manager.tdd.md).
+`POST /api/v1/daemon-nodes/{id}/project-manager/tools` remains a compatibility
+adapter. It requires node authentication plus the currently dispatched command
+and lease, and validates the pinned manager Project/Agent run context rather than
+a canonical Thread ID. New daemons route both native MCP and isolated host/guest
+calls through the MCP bearer-token API using a command-bound token held in daemon
+memory. Both paths expose scoped reads, workspace authorization and proposal
+staging, never owner Apply. See [the design](project-manager-design.md) and
+[current verification evidence](testing/project-manager-architecture-fixes.md).
+
+
+### Relay MCP bearer-token API
+
+`POST /api/v1/mcp/tokens` (owner session) accepts `{name, projectIds}` and returns
+`{id, token, ...metadata}` once, with `Cache-Control: no-store`. All Projects
+must belong to the caller. Tokens expire after 90 days. `GET /mcp/tokens` lists
+metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
+
+`POST /api/v1/daemon-nodes/{id}/mcp-token` uses the enrolled Computer credential
+and returns a separate MCP token scoped to its owner and Computer. Optional
+`{commandId, leaseId}` restricts it to a currently dispatched manager command and
+Project; authentication stops when that run ends (maximum 24 hours).
+
+`POST /api/v1/mcp` is the canonical MCP Streamable HTTP endpoint, hosted by
+`backend/relay/mcp/` using the official Python SDK. It supports initialization,
+notifications, `tools/list` and `tools/call` with stateless JSON responses. The
+Python catalog defines the nine Project read/proposal tools; the local Node
+stdio bridge forwards messages unchanged. No separate MCP deployment is needed.
+
+Every request requires `Authorization: Bearer <MCP token>`; browser cookies alone
+are refused. All responses are `no-store`, untrusted browser Origins are refused,
+and each concurrent request has its own grant. Requests are limited to 128 KiB;
+serialized tool results are limited to 1 MiB. Authenticated GET/DELETE return 405
+(`Allow: POST`); there is no resumable session or server event stream.
+
+Older JSON clients and workspace helpers retain these compatibility routes,
+which delegate to the same Python authorization and operations:
+
+| Route | Behavior |
+| --- | --- |
+| `GET /api/v1/mcp/projects` | List only Projects in token scope. |
+| `POST /api/v1/mcp/projects/{id}/tools` | `{tool, arguments}` for overview, tasks, task, review, activity, threads, thread, workspace metadata, or propose. Scope and ownership checked on every call. |
+| `POST /api/v1/projects/{id}/manager/conversation` | Owner session: open the canonical ordinary Agent Thread without dispatching a run. |
+
+`propose` accepts `arguments.operations` with the same validated operation format
+as manager proposals. Direct MCP proposals have `source: "mcp"`, token provenance
+and no fabricated run ID. They remain pending until the owner applies them with
+a browser session. MCP bearer tokens cannot use owner mutation endpoints.
+
+
+### MCP renewal and manager handover
+
+An enrolled Computer can check its standalone MCP credential with
+`POST /daemon-nodes/{id}/mcp-token` and `{existingToken}`. Healthy grants return
+metadata and `renewed: false`, with no plaintext token. Within seven days of
+expiry, or after expiry, the backend atomically revokes the old credential and
+returns its replacement once with `renewed: true`. Revoked/unknown grants return
+403 and cannot be renewed. Renewal cannot be combined with a command scope.
+
+Manager reassignment, whether through PUT manager or PATCH Project members,
+records `thread.project_manager_assigned` in the canonical Thread in the same
+transaction. Historical participants/runs remain; the current owner becomes the
+new role holder. An addressed message to an obsolete canonical manager target
+returns 409 `project_manager_target_changed`. Other Project conversation rounds
+resolve manager capability from the enabled roster role and retain their own
+Thread/run identity in MCP proposals. Clients require `project-manager-mcp` for
+this command-scoped behavior.

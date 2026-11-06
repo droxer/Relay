@@ -276,7 +276,7 @@ def _project_state(
     """The project brief and, for a setup draft, where to write the proposal."""
     next_state = dict(state)
     if manifest.get("projectManager") and assignment.get("agentId") == manifest["projectManager"].get("agentId"):
-        if not has_capability(sandbox, "project-manager"):
+        if not has_capability(sandbox, "project-manager-mcp"):
             raise _DeliveryRefused("Update this computer to use the project manager tools.")
         next_state["project_manager"] = manifest["projectManager"]
     else:

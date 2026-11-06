@@ -4733,6 +4733,16 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
         signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
         environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
           if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+          if (source === "wrong leases") {
+            // Keep the run alive until ownership loss aborts it. A fixed run
+            // duration races the one-second watchdog tick on busy CI hosts.
+            const signal = options?.signal;
+            assert.ok(signal);
+            if (!signal.aborted) await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+            return { exit_code: 0, stdout: "", stderr: "" };
+          }
           const end = Date.now() + 2200;
           while (Date.now() < end && !options?.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
           return { exit_code: 0, stdout: "done", stderr: "" };

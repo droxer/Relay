@@ -78,14 +78,15 @@ def stage_proposal(ctx: Any, project: dict[str, Any], command: dict[str, Any], r
             operations.append(op)
         proposal = {
             "id": new_database_id(), "projectId": current["id"], "threadId": command["sessionId"],
-            "agentId": command.get("logicalAgentId"), "runId": command["runId"],
+            "agentId": command.get("logicalAgentId"), "runId": command.get("runId"),
+            **({"source": "mcp", "mcpTokenId": command["mcpTokenId"]} if command.get("mcpTokenId") else {}),
             "sourceMessageId": next((event["id"] for event in reversed(ctx.session_store.get_session(command["sessionId"])["events"])
                                      if event["type"] == "user.message"), None),
             "operations": operations, "state": "pending", "revision": 1, "createdAt": now_iso(),
         }
         # A regenerated proposal for the same turn replaces its previous draft.
         for old in ctx.project_store.manager_proposals(current["id"]):
-            if old["state"] == "pending" and old["runId"] == command["runId"]:
+            if old["state"] == "pending" and command.get("runId") and old["runId"] == command["runId"]:
                 ctx.project_store.save_manager_proposal({**old, "state": "superseded", "revision": old["revision"] + 1})
         ctx.project_store.save_manager_proposal(proposal, new=True)
         return proposal

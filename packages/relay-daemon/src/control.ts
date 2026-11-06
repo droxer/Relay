@@ -52,6 +52,7 @@ Commands:
   stop      Stop ${product} and keep it stopped, also after login, until "${command} start".
   restart   Restart ${product} (for example after signing in to an agent CLI).
   status    Show whether ${product} is running.
+  mcp       Serve Relay MCP over stdio: --config <private-config.json>.
   logs      Show recent ${product} output. Add --follow to keep streaming.
   update    Install the latest ${product} release from your backend and restart.
             Also picks up agent CLIs installed since setup.
@@ -305,7 +306,9 @@ export function systemControlDeps(): ControlDeps {
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    process.exitCode = runControl(process.argv.slice(2), systemControlDeps());
+    if (process.argv[2] === "mcp") {
+      await (await import("./relay-mcp.js")).runMcp(process.argv.slice(3));
+    } else process.exitCode = runControl(process.argv.slice(2), systemControlDeps());
   } catch (error) {
     console.error(err.error(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;

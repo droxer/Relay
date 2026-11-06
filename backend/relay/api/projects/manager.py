@@ -7,7 +7,7 @@ from starlette.concurrency import run_in_threadpool
 from ...collaboration.models import RunIntent
 from ...collaboration.service import CollaborationConductor
 from ...collaboration.errors import CollaborationError
-from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_view
+from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view, update_project_with_manager
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
 from ...projects.runtime import project_work_error
@@ -47,21 +47,39 @@ def get_manager(project_id: str, request: Request, ctx: AppContextDep) -> dict[s
 def set_manager(project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep) -> dict[str, Any]:
     project = _owned(ctx, request, project_id, writable=True)
     agent_id = _request_body.get("agentId")
-    if agent_id not in [a["id"] for a in manager_candidates(ctx, project)]:
+    if not isinstance(agent_id, str) or agent_id not in [a["id"] for a in manager_candidates(ctx, project)]:
         raise HTTPException(400, "manager_agent_ineligible")
     version = _request_body.get("expectedVersion")
     if not isinstance(version, int) or isinstance(version, bool):
         raise HTTPException(400, "project_expected_version_required")
     try:
-        project = ctx.project_store.update_project(project_id, {"managerAgentId": agent_id, "managerInitialized": True}, expected_version=version)
+        project = update_project_with_manager(ctx, project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
     except ProjectVersionConflict as error:
         raise HTTPException(409, "project_version_conflict") from error
+    except ManagerError as error:
+        raise HTTPException(error.status, error.code) from error
     return manager_view(ctx, project)
 
 
 @router.get("/projects/{project_id}/manager/overview")
 def overview(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return manager_overview(ctx, _owned(ctx, request, project_id))
+
+
+@router.post("/projects/{project_id}/manager/conversation")
+def manager_conversation(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    project = _owned(ctx, request, project_id)
+    view = manager_view(ctx, project)
+    project = view["project"]
+    if project.get("managerThreadId"):
+        return {"threadId": project["managerThreadId"]}
+    if not project.get("managerAgentId"):
+        raise HTTPException(409, "manager_unconfigured")
+    try:
+        _, thread_id = ensure_manager_thread(ctx, project)
+    except ManagerError as error:
+        raise HTTPException(error.status, error.code) from error
+    return {"threadId": thread_id}
 
 
 @router.post("/projects/{project_id}/manager/messages", status_code=202)
@@ -134,7 +152,7 @@ def manager_tool(sandbox_id: str, request: Request, ctx: AppContextDep, *, _requ
         raise HTTPException(409, "manager_command_inactive")
     scope = command.get("state", {}).get("project_manager") or {}
     project = ctx.project_store.get_project(scope.get("projectId", "")) if scope else None
-    if not project or command.get("logicalAgentId") != scope.get("agentId") or command["sessionId"] != project.get("managerThreadId"):
+    if not project or command.get("logicalAgentId") != scope.get("agentId"):
         raise HTTPException(403, "manager_scope_required")
     if code := project_work_error(project):
         raise HTTPException(409, code)

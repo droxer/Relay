@@ -1,8 +1,10 @@
 import type { AgentRole } from "relay-core";
+export type ProjectRole = AgentRole | "project_manager";
+export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = ["project_manager", "planner", "implementer", "reviewer", "tester", "fixer"];
 
 export interface ProjectMember {
   agentId: string;
-  role: AgentRole;
+  role: ProjectRole;
   responsibilities: string;
   instructions?: string;
   enabled: boolean;
@@ -22,7 +24,7 @@ export interface ProjectSetupProposal {
   leadAgentId?: string;
   members?: Array<{
     agentId: string;
-    role: AgentRole;
+    role: ProjectRole;
     responsibilities: string;
     instructions?: string;
     issue?: ProjectSetupMemberIssue;
@@ -151,7 +153,7 @@ export interface CreateProjectInput {
   leadAgentId?: string | null;
   members: Array<{
     agentId: string;
-    role: AgentRole;
+    role: ProjectRole;
     responsibilities: string;
     instructions?: string;
     enabled?: boolean;

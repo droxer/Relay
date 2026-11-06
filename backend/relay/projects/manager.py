@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 from ..core.computer_identity import computer_id
+from ..core.project_roles import project_manager_id, manager_roster
+from ..persistence.events import relay_event
 from ..agents.routing import AgentRoutingError, resolve_agent_assignments
 from ..agents.location import agent_placed_on_computer
 from ..persistence.resource_lock import resource_transaction
@@ -27,14 +29,56 @@ def manager_candidates(ctx: Any, project: dict[str, Any]) -> list[dict[str, Any]
 
 
 def initialize_manager(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
-    if project.get("managerInitialized") or project.get("archivedAt"):
+    role_holder = project_manager_id(project.get("members", []))
+    if project.get("archivedAt"):
+        return project
+    if role_holder:
+        if project.get("managerAgentId") == role_holder and project.get("managerInitialized"):
+            return project
+        return ctx.project_store.mutate_manager(project["id"], lambda _latest: {"managerAgentId": role_holder, "managerInitialized": True})
+    if project.get("managerInitialized") and not project.get("managerAgentId"):
         return project
     candidates = manager_candidates(ctx, project)
     ids = [a["id"] for a in candidates]
-    selected = project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None)
-    return ctx.project_store.mutate_manager(project["id"], lambda latest: None if latest.get("managerInitialized") else {
-        "managerAgentId": selected, "managerInitialized": True,
-    })
+    selected = project.get("managerAgentId") or (project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None))
+    if not isinstance(selected, str) or selected not in ids:
+        return project
+    return ctx.project_store.mutate_manager(project["id"], lambda latest: manager_role_patch(ctx, latest, selected))
+
+
+def manager_role_patch(ctx: Any, project: dict[str, Any], agent_id: str) -> dict[str, Any]:
+    fallback = {a["id"]: a.get("defaultRole") or "planner" for a in ctx.agent_store.list_agents(supervisor_user_id=project["ownerUserId"])}
+    members = manager_roster(project.get("members", []), agent_id, fallback)
+    if len(members) > 32:
+        raise ManagerError("project_members_too_many", 400)
+    return {"members": members, "managerAgentId": agent_id, "managerInitialized": True,
+            "leadAgentId": project.get("leadAgentId") or agent_id}
+
+
+def update_project_with_manager(ctx: Any, project_id: str, patch: dict[str, Any], *, expected_version: int) -> dict[str, Any]:
+    """Commit the role and its conversation handover together."""
+    with resource_transaction(ctx.project_store.engine, f"project-manager:{project_id}"):
+        project = ctx.project_store.update_project(project_id, patch, expected_version=expected_version)
+        sync_manager_thread(ctx, project)
+        return project
+
+
+def sync_manager_thread(ctx: Any, project: dict[str, Any]) -> None:
+    thread_id = project.get("managerThreadId")
+    if not thread_id:
+        return
+    try:
+        header = ctx.session_store.get_session_header(thread_id)
+    except KeyError:
+        return
+    agent_id = project_manager_id(project.get("members", []))
+    if header.get("ownerAgentId") == agent_id:
+        return
+    ctx.session_store.append_event(thread_id, relay_event("thread.project_manager_assigned", thread_id, {
+        "agentId": agent_id, "previousAgentId": header.get("ownerAgentId"),
+        "projectId": project["id"], "projectVersion": project["version"],
+        "actorUserId": project["ownerUserId"],
+    }))
 
 
 def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None) -> str | None:
@@ -44,11 +88,12 @@ def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None)
         if not isinstance(requested, str) or requested not in ids:
             raise ManagerError("manager_agent_ineligible", 400)
         return requested
-    return project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None)
+    return project_manager_id(project.get("members", [])) or (project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None))
 
 
 def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
     project = initialize_manager(ctx, project)
+    sync_manager_thread(ctx, project)
     historical_ids: set[str] = set()
     if project.get("managerThreadId"):
         try:
@@ -67,7 +112,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
             names[agent_id] = previous["displayName"]
     agent = next((a for a in candidates if a["id"] == project.get("managerAgentId")), None)
     nodes = [n for n in ctx.registry.monitor_nodes() if n.get("online") and computer_id(n) == project["computerId"]]
-    tools = any("project-manager" in (n.get("capabilities") or []) for n in nodes)
+    tools = any("project-manager-mcp" in (n.get("capabilities") or []) for n in nodes)
     reason = project_work_error(project) or (
         "manager_unconfigured" if not project.get("managerAgentId") else
         "manager_agent_unavailable" if not agent else
@@ -102,6 +147,7 @@ def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, 
         if thread_id:
             try:
                 ctx.session_store.get_session_header(thread_id)
+                sync_manager_thread(ctx, project)
                 return project, thread_id
             except KeyError:
                 pass  # A deleted canonical Thread is replaced on the next message.
@@ -109,7 +155,10 @@ def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, 
             "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
             "ownerUserId": project["ownerUserId"], "ownerAgentId": project.get("managerAgentId"),
             "computerId": project["computerId"], "projectId": project["id"],
-            "taskGoal": f"Relay · {project['name']}", "participants": ["human"],
+            "taskGoal": f"{project['name']} · Project Manager", "participants": ["human"],
         })
+        agent_id = project.get("managerAgentId")
+        if agent_id:
+            ctx.session_store.append_event(session["id"], relay_event("thread.participants_joined", session["id"], {"agentIds": [agent_id], "actorUserId": project["ownerUserId"]}))
         project = ctx.project_store.mutate_manager(project["id"], lambda _latest: {"managerThreadId": session["id"]})
         return project, session["id"]

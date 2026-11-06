@@ -154,6 +154,8 @@ export interface PermissionPromptLaunch {
 }
 
 export interface AgentRunOptions {
+  /** Daemon-owned run metadata; never copied from backend/Agent state. */
+  runtimeEnv?: Record<string, string>;
   sink?: AgentOutputSink;
   signal?: AbortSignal;
   execStream?: AgentExecutor;

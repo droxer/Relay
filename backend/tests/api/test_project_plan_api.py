@@ -44,6 +44,7 @@ def _plan(app, client, node, project, tasks, **body) -> dict:
 
 def test_plan_mode_needs_a_crew(setup_env):
     _app, client, _node, project, _planner, _builder = setup_env
+    client.patch(f"/api/v1/projects/{project['id']}", json={"expectedVersion": project["version"], "members": []})
     response = client.post(f"/api/v1/projects/{project['id']}/setup", json={
         "intent": "Plan", "mode": "plan",
     })

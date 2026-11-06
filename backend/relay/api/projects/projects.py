@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
-from ...projects.manager import initial_manager_id, ManagerError
+from ...projects.manager import initial_manager_id, manager_role_patch, update_project_with_manager, ManagerError
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -167,7 +167,11 @@ async def create_project(
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     try:
-        payload["managerAgentId"] = initial_manager_id(ctx, {**payload, "ownerUserId": actor["userId"]}, body.get("managerAgentId"))
+        candidate = {**payload, "ownerUserId": actor["userId"]}
+        selected = initial_manager_id(ctx, candidate, body.get("managerAgentId")) if "managerAgentId" not in body or body["managerAgentId"] is not None else None
+        payload["managerAgentId"] = selected
+        if selected:
+            payload.update(manager_role_patch(ctx, candidate, selected))
     except ManagerError as error:
         raise HTTPException(error.status, error.code) from error
     if host_path is not None:
@@ -279,8 +283,8 @@ def update_project(
             placement_store=ctx.agent_placement_store,
             target_node_id=target_node_id,
         )
-        project = ctx.project_store.update_project(
-            project_id, patch, expected_version=expected_version
+        project = update_project_with_manager(
+            ctx, project_id, patch, expected_version=expected_version
         )
     except KeyError as error:
         raise HTTPException(404, "Project not found.") from error

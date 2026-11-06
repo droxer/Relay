@@ -91,8 +91,11 @@ class RosterMixin(ConductorState):
         project = self._round_project(project_id, session, actor)
         project_snapshot = project_runtime_snapshot(project)
         selected_ids = _project_selected_ids(intent.raw_assignments)
-        if selected_ids is None and session and session["id"] == project.get("managerThreadId"):
-            selected_ids = [project["managerAgentId"]] if project.get("managerAgentId") else []
+        if session and session["id"] == project.get("managerThreadId"):
+            manager_ids = [project["managerAgentId"]] if project.get("managerAgentId") else []
+            if selected_ids is not None and selected_ids != manager_ids:
+                raise CollaborationError("project_manager_target_changed", status=409)
+            selected_ids = manager_ids
         if selected_ids is None and answered_task is not None:
             selected_ids = self._asking_outside_agent_ids(
                 project, intent.question_id

@@ -9,7 +9,7 @@ export interface ManagerOperation {
   title?: string; fields: ManagerFields; before?: ManagerFields; after: string[]; afterTaskIds: string[];
 }
 export interface ManagerProposal {
-  id: string; projectId: string; threadId: string; agentId: string; runId: string;
+  id: string; projectId: string; threadId: string; agentId: string | null; runId: string | null; source?: "mcp"; mcpTokenId?: string;
   state: "pending" | "applied" | "dismissed" | "superseded" | "expired";
   revision: number; createdAt: string; operations: ManagerOperation[];
 }

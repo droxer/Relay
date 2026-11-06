@@ -222,16 +222,18 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
   const threadAgent = useMemo(() => {
-    const id = threadOwnAgentId(activeSession);
+    const manager = projects.find(project => project.managerThreadId === activeSession?.id);
+    const id = manager?.managerAgentId ?? threadOwnAgentId(activeSession);
     const agent = id ? logicalAgents.find((candidate) => candidate.id === id) : undefined;
     return agent ? { id: agent.id, executorKind: agent.executorKind } : null;
-  }, [activeSession, logicalAgents]);
+  }, [activeSession, logicalAgents, projects]);
   useThreadComposerSelection({
     sessionId: activeSession?.id,
     composingNew,
     targetsReady: agentsReady && teamsReady && nodesReady,
     teamIds: composerTeamIds,
     threadAgent,
+    roleBindingKey: projects.find(project => project.managerThreadId === activeSession?.id)?.managerAgentId ?? (projects.some(project => project.managerThreadId === activeSession?.id) ? "unassigned" : undefined),
   });
 
   const applySessionFromHash = useCallback((sessionId: string) => {
@@ -469,6 +471,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   }, [navigateToRoute, route, user.role]);
   const { openThread, startNewThread, selectProject } = useThreadNavigation({
     route,
+    projects,
+    projectsReady: projectsStatus === "ready",
     myThreads,
     tasks,
     tasksStatus,
@@ -718,7 +722,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             currentUser={user}
             onboardingPanel={onboardingPanel}
             filteredThreads={directoryThreads}
-            projects={route === "projects" ? directoryProjects : []}
+            projects={route === "projects" ? directoryProjects : projects}
             selectedProjectId={route === "projects" ? routedProjectId : null}
             projectsStatus={projectsStatus}
             projectsError={projectsError}

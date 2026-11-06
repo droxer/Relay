@@ -48,6 +48,7 @@ import { TeamHandoffCue } from "./TeamHandoffCue";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { ProjectSetupCue } from "./ProjectSetupCue";
+import { ProjectManagerProposals } from "./ProjectManagerProposals";
 import { DecisionBar } from "./composer/DecisionBar";
 import { PermissionPrompts } from "./composer/PermissionPrompts";
 import { openPermissionRequests } from "../lib/permissionRequests";
@@ -602,6 +603,7 @@ export function ThreadsView({
                   agentDisplayNames={agentDisplayNames}
                 />
                 <HandoffStatus session={activeSession} />
+                {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} /> : null}
                 <CollaborationStatus session={activeSession} />
                 {/* A setup thread only drafts; the owner applies on the dashboard. */}
                 {!projectReadOnly ? (

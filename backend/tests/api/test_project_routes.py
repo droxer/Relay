@@ -1516,7 +1516,7 @@ def test_empty_project_can_add_and_remove_its_last_member(monkeypatch) -> None:
         lead = _agent(client, app, computer, "Lead", "codex")
         _login_alice(client)
         created = client.post("/api/v1/projects", json={
-            "name": "Empty project", "daemonNodeId": computer["id"],
+            "name": "Empty project", "daemonNodeId": computer["id"], "managerAgentId": None,
             "leadAgentId": None, "members": [],
         })
         assert created.status_code == 201, created.text
@@ -1572,7 +1572,7 @@ def test_crewless_project_task_thread_continues_with_the_agent_that_ran_it(
         _login_alice(client)
         created = client.post(
             "/api/v1/projects",
-            json={"name": "No crew", "daemonNodeId": computer["id"], "members": []},
+            json={"name": "No crew", "daemonNodeId": computer["id"], "members": [], "managerAgentId": None},
         )
         assert created.status_code == 201, created.text
         project = created.json()["project"]

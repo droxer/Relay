@@ -51,6 +51,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | FastAPI construction, middleware, lifespan | `backend/relay/app.py`, `backend/relay/bootstrap/` | `backend/relay/core/settings.py`, `backend/relay/api/deps.py`, API tests |
 | Public URL and response contract | `backend/relay/api/contract.py`, domain route in `backend/relay/api/` | `docs/api.md`, `web/src/api.ts`, `packages/relay-core/src/api-url.ts` |
 | Authentication and record access | `backend/relay/security/request_auth.py`, `backend/relay/api/actors.py` | `security/auth.py` (account store mixins), auth API tests and daemon-token tests |
+| Relay MCP protocol and tools | `backend/relay/mcp/` | `api/projects/mcp.py` compatibility/token routes, daemon `relay-mcp*.ts` transport, MCP protocol/transport tests; `docs/project-manager-design.md` |
 | Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/connections.md` |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |

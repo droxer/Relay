@@ -79,9 +79,10 @@ export function threadsForDirectory(
   mode: ThreadDirectoryMode,
 ): ThreadItem[] {
   const projectIds = new Set(projects.map((project) => project.id));
+  const managerThreads = new Set(projects.map(project => project.managerThreadId).filter(Boolean));
   return threads.filter((thread) => {
     const projectId = thread.session.projectId;
-    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : Boolean(thread.origin) || !projectId || !projectIds.has(projectId);
+    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : managerThreads.has(thread.session.id) || Boolean(thread.origin) || !projectId || !projectIds.has(projectId);
   });
 }
 

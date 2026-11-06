@@ -1,304 +1,175 @@
-# Relay project manager
+# Project Manager Agent and Relay MCP
 
-Status: Implemented. See [verification evidence](testing/project-manager.tdd.md).
+The Project Manager is an actual Logical Agent holding the `project_manager`
+role in a Project roster. The Agent retains its name, profile, global execution
+role and roles in other Projects. There is one holder per Project. New Projects
+select their eligible lead, or the first eligible Agent, and put that Agent in
+the roster. Explicit `managerAgentId: null` leaves the role unassigned.
 
-Bindings are stored in the existing event-backed Project snapshot. Migration
-`20261106_0113` adds proposal projections and authoritative proposal events.
-The runtime bridge uses an opaque per-run mailbox and the daemon-held command
-lease, authenticated by the node credential outside the Agent workspace. Its
-shared command helper supports every existing Agent Runtime. Workspace search
-is a bounded text search; it does not build a semantic index.
+The Dashboard shows the Agent and its Project role. Chat opens its normal Thread;
+opening it does not dispatch a run. The normal composer, transcript, permission
+prompts and Agent attribution apply. There is no manager chat drawer or alternate
+Relay persona. The role can be reassigned through the Project Agents editor.
+The Project's canonical manager Thread and standing context survive reassignment.
+Reassignment commits the roster update and a `thread.project_manager_assigned`
+event together. That event changes the current Thread owner and joins the new
+Agent without rewriting past runs or removing historical participants. The
+composer reconciles saved targets against the current role holder after its
+Agent directory loads. Stale targets in the role's canonical conversation return
+409 instead of silently dispatching the former manager.
 
-Every Project has a Relay project manager: a persistent place to ask what is
-happening, understand the backlog, decide what to do next, and manage Tasks in
-conversation. The manager knows which Project the person is asking about and
-retrieves its current records before answering.
+The role reads fresh Project records, explains progress and the backlog, and
+stages Task changes. An owner reviews the proposal in the Thread, edits individual
+fields, selects operations, and applies or dismisses it. New Tasks enter backlog.
+Apply uses normal domain validation, revision checks, idempotency and an atomic
+transaction. It cannot silently start work, accept an outcome or reconcile a run.
 
-The product identity is **Relay**, with the subtitle **Project manager**. Its
-execution is backed by a user-owned Logical Agent on the Project's Computer.
-The binding, conversation, and memory belong to the Project, even when the same
-Logical Agent serves several Projects.
+## Capability resolution
 
-## What a person can ask
+`manager_run_context` resolves the enabled Project roster role for the selected
+Logical Agent. A conversation round pins that Project/Agent/binding revision in
+its run manifest. Manager capability does not depend on the canonical Thread ID;
+addressing the role holder in another Project conversation receives the same
+scoped tools, and proposals appear in the conversation that produced them.
+Project setup drafts keep their separate setup workflow. The canonical manager
+Thread is the role's default conversation and navigation destination.
 
-| Request | Expected result |
-| --- | --- |
-| “What is this project trying to achieve?” | Summarize its goal, brief, standing context, and relevant workspace documents, linking sources. |
-| “What changed since Monday?” | Summarize recorded Task changes and Agent reports in that time window, with links and an explicit cutoff. |
-| “What is left to do?” | Show open Tasks grouped by meaningful next action, including backlog, work awaiting a person, blocked work, and Prerequisites. |
-| “What should I work on next?” | Recommend a short ordered list based on readiness, priority, dates, Prerequisites, and available Agents. Explain the ordering. |
-| “Break the onboarding work into tasks.” | Draft editable Tasks with acceptance criteria and Prerequisites; let the owner apply the selected Tasks. |
-| “Make the login fix urgent and give it to Ada.” | Resolve the Task and eligible Agent, then present the exact assignment and priority changes for Apply. |
-| “Start the login fix.” | Present a Start action for the identified Task, using ordinary admission and Task Capacity rules. |
-| “Why is this task stuck?” | Distinguish a Prerequisite, Wait, impediment, capacity queue, unavailable Computer, and execution requiring recovery; link the actual next action. |
-| “Remember that releases require a migration check.” | Propose an addition to standing Project context for the owner to adopt. |
+## Local Agent Runtimes
 
-“Todos” maps to existing Tasks. A checklist in an answer becomes tracked work
-only when applied as Tasks. Relay must not maintain a competing private backlog.
-“Any project information” means information Relay can access in this Project;
-unconnected services and unrecorded conversations remain unknown.
+After registering a local Computer (`sandboxMode: none`), the daemon installs
+Relay MCP into each ready Codex, Claude Code, OpenCode, Kimi or Pi runtime.
+Codex uses its TOML `mcp_servers`; Claude and Kimi use `mcpServers`; OpenCode uses
+its local `mcp` configuration. Pi receives a user extension that connects to the
+same stdio MCP server and registers its advertised tools. Restart an already open
+Agent Runtime to load the configuration. Direct local CLI sessions can use it,
+as can Relay-started local sessions.
 
-## Manager identity and defaults
+Every installed server has a stable `relay-projects-<computer/backend hash>`
+name, avoiding the permission broker's `relay` server and other Computers. The
+installer preserves other servers, settings and JSONC comments. It records the
+entries it owns and refuses an unowned or edited entry with the same name.
+Concurrent installers use an exclusive installation lock with an owner PID;
+a dead owner's lock is reclaimed, while an active installer remains exclusive.
+An unowned lock abandoned before its owner file was written becomes reclaimable
+after two minutes. Configuration conflicts preserve user changes and report the
+affected runtime. Other runtimes are still configured.
 
-Add a Project Manager binding with `managerAgentId` and a canonical
-`managerThreadId`. This is a Project responsibility, separate from the existing
-Agent Role vocabulary and `leadAgentId`. The lead still coordinates roster work;
-selecting a manager does not change Task assignment or the roster pipeline.
+Setup reconciles beside command polling: transient failures retry with backoff,
+ready configurations are rechecked every 15 minutes, and newly ready runtimes
+trigger immediate reconciliation. The daemon records `mcp-status.json` in its
+private state directory; `relay-daemon doctor` reports ready, retrying, blocked or
+stale status. Revocation stays blocked until explicit reconnection. Managed
+launches verify their own runtime configuration before execution and fail closed
+on configuration conflicts.
 
-For a new Project, use its eligible lead as the initial manager; otherwise use
-the first eligible Agent ordered by creation time and ID. Default Agents are
-ordinary Logical Agents and follow this same ordering. Show the selected name during
-creation with an optional Change action. Do not create runtime-specific Agent
-clones for every Project. An Agent outside the roster may serve as manager under
-the existing same-Computer rule; Direct Delegation remains roster constrained.
+The installed process is the bundled Node executable and `relay-mcp.js`, with
+`--config <private-config.json>`. `relay mcp --config <path>` is also available
+through the installed Relay control CLI. The config contains a backend URL and
+a token-file path. Neither runtime config nor Project workspace contains the token.
 
-Every Project gets the manager entry point, including Projects without a crew
-and Linked Directory Projects. If no Agent qualifies, show “Choose an agent for
-Relay” with eligible choices or a link to Agent setup. This is a configuration
-state, not a fictitious available assistant. Once selected, never silently
-switch to another Agent because the current one is busy, offline, moved, or
-disabled. Offer Change agent with the reason and preserve history.
+## Token authentication
 
-Eligibility requires the same owner, an enabled Logical Agent, and an active
-Placement on the Project's Computer. A disabled roster entry cannot be selected.
-Dispatch additionally checks live runtime readiness and required capabilities.
-Changing the manager applies to the next turn; an active turn pins its Agent
-and binding revision. The UI records who actually answered as “Relay · via Ada”.
+The local bridge forwards MCP messages to `POST /api/v1/mcp` with
+`Authorization: Bearer <MCP token>`.
+It does not forward the daemon credential or use a browser cookie. The backend
+stores only a SHA-256 digest; issuance returns plaintext once with `no-store`.
 
-## Project experience
+For standalone local CLI sessions, an enrolled Computer obtains a 90-day token
+using its existing daemon credential.
+That token can access only its owner's Projects on that Computer, and stops
+working if the Computer is retired or ownership changes. Tokens can be revoked
+individually. Reconciliation checks the saved credential with the backend and
+renews it within seven days of expiry, including recovery after expiry. Renewal
+revokes the old token and issues its replacement atomically. Existing server
+processes read the token file for each call, so rotation needs no runtime restart.
+A revoked or unknown credential is never automatically replaced. After checking
+the reason, explicit reconnection removes only that Computer's
+`credentials/mcp.token` and restarts its daemon; enrollment is the authority to
+request a fresh credential.
 
-Keep the existing Dashboard, Tasks, Automations, Workspace, Agents, and Settings
-surfaces. Add a prominent **Ask Relay** action in the Project header and a compact
-manager entry on the Dashboard. Opening it reveals the canonical manager
-conversation with the current Project name visible. Do not replace the dashboard
-or force a conversation to read the board.
+Owners can also issue a 90-day token restricted to an explicit list of owned
+Project IDs using `POST /api/v1/mcp/tokens`. Save the returned token in a private
+file (mode `0600`), outside the Project, and point a private server config at it.
+List token metadata with `GET /api/v1/mcp/tokens`; revoke with
+`DELETE /api/v1/mcp/tokens/{id}`. Metadata never returns the token or its hash.
 
-On desktop, use a resizable side panel so Task links can open the existing Task
-drawer while keeping the conversation accessible. On mobile, use a full-width
-conversation view; Back returns to the prior Project tab and scroll position.
-Use the addressable Project view at
-`/projects/{projectId}?manager=open`, consistent with canonical URL handling.
-The underlying Thread remains available through existing Thread navigation.
+## Managed run credentials
 
-The initial conversation offers “Project update”, “What needs me?”, “Next tasks”,
-and “Plan work”. These are ordinary editable prompts. Opening the panel does not
-start an Agent run. “Project update” defaults to the last seven calendar days
-in the person's timezone and displays the exact range; the person can change it.
+Relay-managed native processes receive daemon-owned `RELAY_MCP_RUN_CONTEXT`
+metadata in their execution environment. It contains a Project ID and a path to
+the run's host transport, never a credential. Codex configuration explicitly
+forwards that environment variable, and Claude configuration expands it into the
+MCP child's environment. Kimi and OpenCode inherit the process environment; Pi's
+extension spawns its MCP process with the same environment. Before each managed
+launch, Relay checks its owned runtime configuration independently of standalone
+token health. Revoking a standalone token does not substitute a new broad grant
+or prevent a separately authorized managed run from using its own scope.
 
-Answers lead with the useful conclusion, then links to Tasks, Threads, decisions,
-and files. A status answer separates recorded facts from Agent reports and
-recommendations. For example: “Two Tasks need your input. The API Task is waiting
-on your answer; the release Task is awaiting review.” A successful Agent run is
-not proof that the requested outcome was accepted.
+An installed Relay MCP server in a managed process uses only that run context.
+Other Projects/backends are refused. Non-manager managed runs receive a disabled
+context; none of these processes fall back to the standalone Computer credential.
+The daemon proxy lazily obtains a command-bound MCP token and calls the same
+MCP API using that token. Isolated runtimes use their host/guest transport to the
+same proxy. The run token stays in daemon memory, outside the workspace and
+Agent environment. It is limited to the admitted Project and stops authenticating
+when the run ends, with a maximum lifetime of 24 hours. Proposals retain the
+actual Logical Agent, run and producing Thread. Existing admitted runs retain
+their pinned context when a role is reassigned; subsequent rounds resolve the new
+holder. No backend process executes an Agent.
 
-Task changes appear as an inline card with target links, before/after values,
-editable fields, and **Apply changes** / **Dismiss**. A plan supports selecting
-individual proposed Tasks. Apply is the owner's mutation request; there is no
-second generic confirmation dialog. Starting work, accepting a Task Review,
-answering a Wait, and reconciling execution retain their existing specific
-actions and requirements. Relay links to those flows instead of treating them
-as ordinary status edits.
+These are tool-request scope guarantees. Native runtimes share the owner's OS
+account; host filesystem isolation requires a sandbox rather than file modes
+alone. Configuration forwarding is checked against the runtime sources:
+[Codex](https://github.com/openai/codex/blob/main/codex-rs/rmcp-client/src/utils.rs),
+[Claude](https://code.claude.com/docs/en/mcp),
+[Kimi](https://github.com/MoonshotAI/kimi-code/blob/main/packages/agent-core-v2/src/mcpCore/client-stdio.ts),
+[OpenCode](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/mcp/index.ts).
 
-Preserve existing visual tokens and chat components. Support keyboard access,
-named controls, announced asynchronous results, English and Simplified Chinese,
-long translated labels, and light/dark themes. Keep input reachable on short
-mobile screens. Retain ordinary Thread stop, retry, Permission Prompt, and
-recovery controls.
+## MCP tools
 
-## Information and memory
+The dedicated `backend/relay/mcp/` module owns the catalog, schemas, MCP protocol,
+authorization and dispatch. It uses the official MCP Python SDK with stateless
+JSON Streamable HTTP at `POST /api/v1/mcp`, inside the existing backend deployment
+and lifespan. It calls existing Project application operations directly; no
+additional service, port or Python installation on Computers is required.
 
-The source of truth is the existing event-backed Project, Task, and Thread
-records. At every manager turn, build a bounded Project overview containing the
-brief and context revision, roster and manager identity, Task counts, attention
-items, recent changes, and Computer availability. Include a read timestamp and
-source revisions. Full records and older history are retrieved on demand.
-Use a consistent database snapshot for each overview and an event watermark for
-activity pagination. Later tool reads identify their own revision/time; if a
-material fact changes during a turn, refresh it before making a recommendation.
+The local Node process handles newline stdio framing and authenticated HTTP
+forwarding. It forwards messages and negotiated protocol metadata without a
+second catalog or tool dispatch table. Managed messages travel through the
+existing daemon transport with a daemon-held run token. Pi discovers tools from
+the hosted catalog.
 
-Provide Project-scoped read operations for overview, filtered/paginated Tasks,
-Task details and review evidence, activity by time range, relevant Thread
-messages, and workspace search/read. Return stable cursors, deterministic
-ordering, source links, and coverage metadata. Counts cover the full authorized
-set; truncated samples must never be described as the entire backlog. Keep
-Automation definitions distinct from their generated Tasks.
+Every HTTP request authenticates independently, including initialization and
+notifications. Cookies do not grant MCP authority. Request-local grants remain
+isolated across concurrent calls. Origin checks use the backend policy; all
+responses carry `Cache-Control: no-store`. Authenticated GET/DELETE return 405
+because this endpoint offers no server event stream or resumable session.
+Requests are bounded to 128 KiB and tool responses to 1 MiB, including both text
+and structured content. HTTP redirects are refused; errors exclude credentials
+and internal exception details. Backend URLs require HTTPS, except loopback HTTP
+for local development. Existing `/mcp/projects` JSON routes remain compatibility
+adapters over the same Python operations for older clients and workspace helpers.
 
-Task activity comes from persisted history rather than an Agent's recollection.
-Workspace access goes through daemon workspace commands on the Project's
-Computer, including Linked Directory mappings. Workspace text and Agent reports
-are source material, not authority to change instructions or permissions. File
-search is an explicit implementation addition; current workspace listing/read
-alone does not provide semantic search over the whole Project.
+- `relay_list_projects`: discover token-visible Projects.
+- `relay_project_overview`: current brief, roster, counts, flow and availability.
+- `relay_list_tasks`, `relay_get_task`, `relay_task_review`: current Task records
+  and evidence, including revisions for proposed edits.
+- `relay_project_activity`, `relay_project_threads`, `relay_get_thread`: scoped
+  activity and conversation history with bounded coverage.
+- `relay_propose_task_changes`: stage create, update and prerequisite operations
+  for owner review. Direct local proposals record MCP provenance and do not
+  fabricate a daemon run. Pi adds the installed server suffix to tool names.
 
-Memory has three layers: authoritative live records; owner-adopted standing
-Project context; and a bounded conversation summary carrying decisions and
-source references. The summary is a retrieval aid and never overrides live
-status. Propose durable lessons through the existing context suggestion flow.
-Changing manager Agent retains the Project's context and conversation. New
-turns retrieve current records even after a long conversation is compacted.
+Every Project tool requires `projectId`; the API checks token scope and owner
+again for every call. There is no Apply, acceptance, run-start, or reconciliation
+MCP tool. Browser owner authentication is required for Apply.
 
-No model runs continuously. Task updates become visible to the next read without
-an Agent run for every event. Scheduled digests can later use an explicit
-Automation; they are outside the first release.
+## Verification and rollout
 
-## Applying task changes
-
-Use typed, persisted proposals, not executable prose. The initial operation set
-is Task creation, title/description and acceptance-criteria edits, priority,
-due date, tags, assignment, and Prerequisites. Unclear Task references, relative
-dates, or ambiguous Agent names require a focused clarification before staging.
-Display normalized dates in the owner's timezone.
-Keep acceptance criteria in the Task description initially; this does not
-change the Task's acceptance policy or bypass Task Review.
-
-Each proposal records its Project, proposing Agent/run/Thread, source message,
-operations, expected revisions, and state: `pending`, `applied`, `dismissed`,
-`superseded`, or `expired`. Applying records the owner, timestamp, resulting
-entity IDs, and emitted event references. Regenerating supersedes the old
-proposal. Selecting/editing a subset creates a validated application payload
-with its own idempotency key; the card shows exactly which items were applied.
-
-The backend rechecks ownership, Project membership of every target Task,
-assignment eligibility, prerequisite cycles, and current revisions under locks.
-Apply a metadata/plan batch in one database transaction through the ordinary
-domain operations. A stale or invalid operation rejects the batch without
-partial changes; refresh and show the changed values for a revised proposal.
-Persist the application result with the idempotency key in that transaction so
-repeated clicks or network retries return the same result and created IDs.
-
-Creating a Task leaves it in backlog. It does not queue or start work, preserving
-the current Project Plan contract. A requested Start is a separate explicit
-action through normal Task dispatch, and may result in Queued due to capacity.
-Never promise a process has started merely because a request was accepted.
-Task deletion, cancellation, review acceptance, and execution reconciliation use
-existing dedicated flows in this release. Suggestions can link to those flows.
-
-## Runtime and API design
-
-All API names here are under `/api/v1`; implementation behavior is linked
-below. Keep orchestration in Python and execute the manager through
-`CollaborationConductor` and the ordinary daemon queue.
-
-| Surface | Contract |
-| --- | --- |
-| `GET /projects/{id}/manager` | Binding, effective configuration/availability, existing Thread ID, and manager capability availability. A read creates no Thread or run. |
-| `PUT /projects/{id}/manager` | Owner selects `agentId` with expected Project version. Does not rewrite the lead or roster. |
-| `POST /projects/{id}/manager/messages` | Lazily ensure the canonical Thread and submit an idempotent message, returning Thread/run identity. |
-| `GET /projects/{id}/manager/overview` | Bounded factual projection with timestamps, source revisions, totals, and coverage. |
-| `POST /projects/{id}/manager/proposals/{proposalId}/apply` | Apply owner-selected operations with expected proposal revision and idempotency key; return affected records. |
-| `POST /projects/{id}/manager/proposals/{proposalId}/dismiss` | Settle a pending proposal without changing Tasks. |
-
-Manager messages target only the configured manager unless the owner explicitly
-addresses another eligible Agent. This route overrides the existing bare
-Project message behavior that selects the crew. Other Project Conversations and
-Task Threads retain their existing routing. A manager turn has Thread scope;
-it does not acquire execution ownership over any Task it discusses.
-
-Use the authenticated run-scoped daemon tool bridge for the read operations and
-proposal staging. The daemon retains the opaque command lease and node credential;
-the server checks its active command, manager Agent, Project, canonical Thread,
-and allowed operation set on each invocation. Do not expose
-browser cookies or node credentials inside the agent sandbox. The daemon holds
-the backend credential and provides a local invocation interface to its Agent
-Runtime. Validate that the bound command is still active on each call, revoke
-on completion/cancellation, and reject cross-Project IDs regardless of prompt
-content. Only the authenticated owner can apply a proposal. Agent tools cannot
-invoke owner apply endpoints.
-
-Advertise a new daemon capability for manager tools. Show a client update action
-when it is missing; never simulate successful tools or silently fall back to
-workspace-only answers. Implement an adapter for each supported Agent Runtime;
-release availability follows verified adapter support, not just Computer online
-state. This bridge is new work; Project snapshots alone do not provide live
-backlog access or Task management.
-
-## Persistence and lifecycle
-
-Persist nullable manager Agent/Thread references on Projects, with an event for
-binding changes. Add proposal/application records and indexes for Project,
-Thread, pending state, and idempotency lookup. References and snapshots change
-together with their authoritative events. Use Alembic for schema changes.
-
-Backfill bindings deterministically using the selection policy above, without
-creating conversations or dispatching runs. Projects lacking an eligible Agent
-remain visibly unconfigured. Create the canonical Thread under a Project row
-lock on the first message so concurrent tabs cannot create competing canonical
-Threads. Serialize active turns with existing Thread run admission; a second
-message sees Busy with retry rather than launching a competing run.
-
-Changing the manager during a run does not transfer that run or authorize its
-pending proposals differently. Applying always validates current authority and
-revisions. If the canonical Thread is deleted, clear its binding and lazily
-create the next one; retain existing adopted Project context and proposal audit
-records according to record retention. Do not silently replace a deleted Agent.
-
-Archived or disabled Projects retain readable history and recorded overview but
-cannot start manager turns or apply pending proposals. Restore requires renewed
-validation. Project deletion includes the canonical Thread, in-flight execution,
-and proposals in the ordinary deletion/recovery checks. Deleting a Linked
-Directory Project still leaves its directory in place.
-
-## Delivery and acceptance
-
-Implement the complete initial experience in these dependent slices:
-
-1. Binding, migration/backfill, canonical conversation, manager-only routing,
-   availability, and existing Thread execution controls.
-2. Authorized read bridge, fresh overview and activity retrieval, source links,
-   pagination, and conversation memory. Ship together with verified runtime
-   adapters before claiming project-wide answers.
-3. Typed proposal staging, editable cards, transactional owner apply, and links
-   to Start, Wait, review, and recovery actions. Read-only chat alone does not
-   fulfill the task-management feature.
-4. Project entry points, URL/cache behavior, translations, responsive layout,
-   and integration verification across the three slices.
-
-The initial release is complete when the following scenarios pass:
-
-- A new, existing, crewless, and Linked Directory Project each has a visible
-  manager; missing configuration has a real recovery path. Opening it runs no
-  model, and concurrent first messages create one canonical Thread.
-- Ask about goal, updates, backlog, todos, and next work. Answers use current
-  records with usable source links. A Task changed in another tab appears on
-  the next read; a large Project is not silently summarized from one page.
-- Draft Tasks and edit assignment, priority, due dates, and Prerequisites in
-  conversation. Apply changes once, observe the ordinary event history and
-  board update, and verify that newly created Tasks have not started.
-- Duplicate Apply creates no duplicate Tasks. Stale revisions, invalid
-  assignments, and prerequisite cycles leave the entire batch unchanged.
-- Another owner's Project, Task, Thread, or file cannot be read or changed by
-  forged IDs, an admin role, tool calls, or a credential from another run.
-- Offline, busy, moved, disabled, unsupported, archived, and deleted states
-  produce accurate outcomes and retain execution stop/recovery paths. Recorded
-  data remains readable offline; fresh manager inference waits for execution
-  availability rather than running in the backend.
-- Waits, queued work, reported completion, accepted work, and lost execution
-  remain distinct. A status answer cannot accidentally finish a linked Task.
-- Manager, Task drawer, and Project navigation work with keyboard and mobile
-  layouts in both supported languages. Mutations invalidate Project, Task,
-  overview, and proposal caches; SSE/poll responses cannot overwrite newer data.
-
-Use backend API/domain tests for access, transactions, lifecycle, and event
-history; daemon/protocol tests for tool credential scope and runtime adapters;
-web tests for proposal/cache behavior; and end-to-end tests for ask, source
-navigation, edit/apply, concurrent tabs, and recovery. Run layering, schema drift,
-module-size, and route-auth checks with implementation changes.
-
-## Implementation anchors
-
-Current behavior to reuse or extend:
-
-- [Domain glossary](../CONTEXT.md): Project, Logical Agent, Project Conversation,
-  Project Plan, Project Manager, Wait, Task Review, and Task Capacity.
-- [Project routing and snapshots](../backend/relay/projects/runtime.py) and
-  [context rendering](../backend/relay/projects/context.py).
-- [Project API](../backend/relay/api/projects/projects.py),
-  [plan application](../backend/relay/api/projects/plan.py), and
-  [Project store](../backend/relay/persistence/project/store.py).
-- [Task updates](../backend/relay/tasks/update.py) and
-  [delegation eligibility](../backend/relay/agents/delegation.py).
-- [Project page](../web/src/components/ProjectWorkspacePage.tsx) and
-  [Dashboard](../web/src/components/ProjectDashboard.tsx).
-- [ADR 024](adr/024-task-prerequisites-and-project-plans.md): proposals,
-  Prerequisites, transactional apply, and owner-controlled starts. The new
-  manager extends these contracts; it does not replace them.
+See [architecture-fix verification](testing/project-manager-architecture-fixes.md)
+and [the initial feature evidence](testing/project-manager.tdd.md). Migrations 0113
+(proposals), 0114 (Connections) and 0115 (MCP token digests) must run before serving this version.
+Rebuild and install the Computer client advertising `project-manager-mcp`; older
+clients are refused for manager runs until updated. Native provider
+sessions are not simulated by the browser fixtures; actual stdio/API transport,
+configuration preservation and authorization have separate tests.

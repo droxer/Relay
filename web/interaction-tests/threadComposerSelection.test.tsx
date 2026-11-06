@@ -78,3 +78,22 @@ it("waits for the linked session before validating a deep-linked team", () => {
   rerender({ sessionId: "thread", composingNew: false, targetsReady: true, teamIds: ["team"] });
   expect(useComposerTargetStore.getState().pendingThreadTeamId).toBe("team");
 });
+
+it('replaces a remembered manager target when the Project role holder changes',()=>{
+  const store=useComposerTargetStore.getState();
+  store.rememberThreadPick('manager-thread',{kind:'agent',agent:{id:'old',executorKind:'codex'}});
+  const {rerender}=renderHook(({id})=>useThreadComposerSelection({sessionId:'manager-thread',composingNew:false,targetsReady:true,teamIds:[],threadAgent:{id,executorKind:'codex'},roleBindingKey:id}),{initialProps:{id:'old'}});
+  rerender({id:'new'});
+  expect(useComposerTargetStore.getState().activeLogicalAgentId).toBe('new');
+  store.restoreThreadPick('manager-thread');
+  expect(useComposerTargetStore.getState().activeLogicalAgentId).toBe('new');
+});
+
+it('waits for the Agent directory before reconciling a manager handover',()=>{
+  const store=useComposerTargetStore.getState();
+  store.rememberThreadPick('manager-thread',{kind:'agent',agent:{id:'old',executorKind:'codex'}});
+  const {rerender}=renderHook(({ready})=>useThreadComposerSelection({sessionId:'manager-thread',composingNew:false,targetsReady:ready,teamIds:[],threadAgent:ready?{id:'new',executorKind:'codex'}:null,roleBindingKey:'new'}),{initialProps:{ready:false}});
+  expect(useComposerTargetStore.getState().activeLogicalAgentId).toBe('old');
+  rerender({ready:true});
+  expect(useComposerTargetStore.getState().activeLogicalAgentId).toBe('new');
+});

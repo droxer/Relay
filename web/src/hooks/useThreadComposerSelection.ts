@@ -8,12 +8,14 @@ interface ThreadComposerSelectionInput {
   targetsReady: boolean;
   teamIds: readonly string[];
   /** The agent the open thread runs (`threadOwnAgentId`), once the roster knows it. */
-  threadAgent: { id: string; executorKind: AgentName } | null;
+  roleBindingKey?: string;
+  threadAgent?: { id: string; executorKind: AgentName } | null;
 }
 
 /** Restore automatic thread selection too, and validate only a loaded roster. */
-export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, teamIds, threadAgent }: ThreadComposerSelectionInput) {
+export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, teamIds, threadAgent, roleBindingKey }: ThreadComposerSelectionInput) {
   const restoredSessionId = useRef<string | undefined>(undefined);
+  const restoredBinding = useRef<string | undefined>(undefined);
   const defaultedSessionId = useRef<string | undefined>(undefined);
   const pendingTeamId = useComposerTargetStore((s) => s.pendingThreadTeamId);
   const restoreThreadPick = useComposerTargetStore((s) => s.restoreThreadPick);
@@ -25,6 +27,21 @@ export function useThreadComposerSelection({ sessionId, composingNew, targetsRea
     defaultedSessionId.current = undefined;
     if (nextId) restoreThreadPick(nextId);
   }, [composingNew, restoreThreadPick, sessionId]);
+
+  useEffect(() => {
+    if (composingNew || !sessionId || roleBindingKey === undefined || !targetsReady) return;
+    const key = `${sessionId}:${roleBindingKey}`;
+    if (restoredBinding.current === key) return;
+    restoredBinding.current = key;
+    const state = useComposerTargetStore.getState();
+    if (threadAgent) {
+      state.pickAgent(threadAgent);
+      state.rememberThreadPick(sessionId, {kind:"agent",agent:threadAgent});
+    } else {
+      state.pickRoom();
+      state.rememberThreadPick(sessionId, {kind:"room"});
+    }
+  }, [composingNew, sessionId, roleBindingKey, threadAgent, targetsReady]);
 
   // A thread started by a task, an automation, or another tab has no saved
   // pick; open it on its own agent, once, so a later run or roster refresh

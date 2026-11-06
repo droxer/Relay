@@ -1,5 +1,5 @@
 import type {
-  AgentRole,
+  ProjectRole,
   ApplySetupTasksInput,
   ProjectRecord,
   ProjectSetup,
@@ -14,7 +14,7 @@ const PROVISIONAL_NAME_MAX = 60;
 
 export interface SetupMemberDraft {
   agentId: string;
-  role: AgentRole;
+  role: ProjectRole;
   responsibilities: string;
   instructions?: string;
   include: boolean;
