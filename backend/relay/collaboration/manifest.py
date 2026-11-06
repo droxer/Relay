@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.ids import new_relay_id
+from ..core.project_roles import round_manager_context
 from .styles import LEAD_LED
 from .templates import STYLE_POLICIES
 
@@ -61,6 +62,7 @@ def create_round_manifest(
     result_owner = _result_owner_work_item(compiled_assignments)
     style = (team_snapshot or {}).get("collaborationStyle")
     fallback_from = (team_snapshot or {}).get("styleFallbackFrom")
+    manager = round_manager_context(project_snapshot, compiled_assignments)
     return {
         "contract": {
             "name": "relay.collaboration.round",
@@ -77,6 +79,7 @@ def create_round_manifest(
         "address": address,
         **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
         **({"projectSnapshot": project_snapshot} if project_snapshot else {}),
+        **({"projectManager": manager} if manager else {}),
         "assignments": [
             {
                 key: assignment[key]

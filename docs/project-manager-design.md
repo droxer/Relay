@@ -16,15 +16,21 @@ open. The creation drawer preselects the oldest eligible Agent and sends that
 choice explicitly. No read, startup repair or conversation assigns a manager
 afterwards, and nobody joins the roster except the Agent the owner chose.
 
-The Dashboard shows the Agent and its Project role. Chat opens the Project's
-manager Thread, an ordinary Project Conversation; opening it does not dispatch a
-run. No Agent owns that Thread: the holder is its first participant, and each
-message goes to whoever it addresses, through the ordinary Thread message route.
-The composer defaults to the current holder. Reassigning the role changes only
-the roster. It writes nothing to the Thread, which keeps its participants and
-history, and the former holder stays an ordinary Agent that can still be
-addressed there, without the manager tools. There is no manager chat drawer,
-dedicated message route or alternate Relay persona.
+The manager does its job through the work it is given: the Tasks and
+Automations it runs in the Project. The Dashboard only names it, as one line
+above the Project's numbers (`ProjectManagerLine`) — the Agent, its role,
+whether it can work, and a way to the Agents tab where the role changes hands.
+It is drawn from the project and agents the page already loaded, and offers no
+chat. There is no manager chat drawer, dedicated message route or alternate
+Relay persona.
+
+A Project may still have a manager Thread from earlier releases (and
+`POST /projects/{id}/manager/conversation` can still start one). It is an
+ordinary Project Conversation that no Agent owns: each message goes to whoever
+it addresses, and the composer defaults to the current holder. Reassigning the
+role changes only the roster. It writes nothing to any Thread, and the former
+holder stays an ordinary Agent that can still be addressed, without the
+manager tools.
 
 The role reads fresh Project records, explains progress and the backlog, and
 stages Task changes. An owner reviews the proposal in the Thread, edits individual
@@ -34,12 +40,15 @@ transaction. It cannot silently start work, accept an outcome or reconcile a run
 
 ## Capability resolution
 
-`manager_run_context` resolves the enabled Project roster role for each
-Logical Agent in a round. A round that includes the holder, alone or beside
-other Agents, pins that Project/Agent/binding revision in its run manifest, and
-the registry hands the tools to the holder's assignment only. Manager
-capability does not depend on the Thread; proposals appear in the conversation
-that produced them. Project setup drafts keep their separate setup workflow.
+`create_round_manifest` attaches the manager context
+(`round_manager_context` in `core/project_roles.py`) to every round in a
+Project whose pinned snapshot names an enabled holder among its assignments:
+a Task run, an Automation occurrence, a Thread message, or a continuation,
+alone or beside other Agents. The context pins that Project/Agent/binding
+revision, and the registry hands the tools to the holder's own assignment only.
+Manager capability does not depend on the Thread; proposals appear in the
+Thread of the run that produced them. Project setup drafts keep their separate
+setup workflow and drop the context.
 
 Holding the role never stops an Agent from running. On a Computer that does not
 advertise `project-manager-mcp`, the holder runs without the tools and the

@@ -75,3 +75,18 @@ def manager_run_context(project: dict[str, Any], agent_id: str | None) -> dict[s
     if not holder or agent_id != holder:
         return None
     return {"projectId": project["id"], "agentId": holder, "bindingRevision": project["version"]}
+
+
+def round_manager_context(project_snapshot: dict[str, Any] | None, assignments: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The manager context a round carries, from its pinned project snapshot.
+
+    Any round in a Project that includes the role holder carries it: a thread
+    message, a task run, an automation occurrence, or a continuation. The
+    registry hands the tools to the holder's own assignment only.
+    """
+    if not project_snapshot:
+        return None
+    project = {"id": project_snapshot["projectId"], "version": project_snapshot["projectRevision"],
+               "members": project_snapshot.get("members") or []}
+    return next((context for assignment in assignments
+                 if (context := manager_run_context(project, assignment.get("agentId")))), None)

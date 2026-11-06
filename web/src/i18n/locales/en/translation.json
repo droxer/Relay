@@ -3574,11 +3574,9 @@
   },
   "project_manager": {
     "title": "Relay",
-    "role": "Project manager",
     "via": "via {{name}}",
     "ask": "Ask Relay",
     "back": "Back",
-    "loading": "Loading project manager…",
     "retry": "Retry",
     "agent": "Project Manager agent",
     "choose": "Choose an agent",
@@ -3629,9 +3627,8 @@
     "open": "Talk to Relay",
     "reason_manager_computer_busy": "The project computer is busy. Try again when capacity is available.",
     "resize": "Resize project manager",
-    "chat": "Chat",
-    "agent_description": "Project updates, backlog, and task coordination.",
     "unassigned_role": "No Agent has the Project Manager role.",
-    "assign_role": "Assign Project Manager"
+    "assign_role": "Assign Project Manager",
+    "change": "Change"
   }
 }

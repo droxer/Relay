@@ -3508,11 +3508,9 @@
   },
   "project_manager": {
     "title": "Relay",
-    "role": "项目经理",
     "via": "由 {{name}} 提供支持",
     "ask": "询问 Relay",
     "back": "返回",
-    "loading": "正在加载项目经理…",
     "retry": "重试",
     "agent": "项目经理 Agent",
     "choose": "选择智能体",
@@ -3563,9 +3561,8 @@
     "open": "与 Relay 对话",
     "reason_manager_computer_busy": "项目计算机正在忙碌，执行容量释放后请重试。",
     "resize": "调整项目经理面板宽度",
-    "chat": "对话",
-    "agent_description": "了解项目进展、待办事项并协调任务。",
     "unassigned_role": "尚未给智能体分配项目经理角色。",
-    "assign_role": "分配项目经理角色"
+    "assign_role": "分配项目经理角色",
+    "change": "更改"
   }
 }

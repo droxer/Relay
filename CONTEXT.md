@@ -218,11 +218,11 @@ user-owned Logical Agent with an active Placement on that Project's Computer: it
 keeps its name, profile, global Agent Role, and roles in other Projects. Only
 the owner assigns it — at creation the owner's choice, else the Project's lead —
 and nothing reads it into place later. The roster is its only record; the
-Project's `managerAgentId` is derived. The manager conversation is an ordinary
-Project Conversation that no Agent owns; a message goes to whoever it
-addresses. The holder gets the manager tools in every round it takes part in,
-reads live Project records, and stages Task changes for the Project Owner to
-review and apply. It does not gain acceptance or execution authority.
+Project's `managerAgentId` is derived. The holder works through the Tasks and
+Automations it runs: every round it takes part in carries the manager tools,
+so it reads live Project records and stages Task changes for the Project Owner
+to review and apply. The Project dashboard only names it; there is no chat to
+open there. It does not gain acceptance or execution authority.
 _Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
 
 **Relay MCP**:

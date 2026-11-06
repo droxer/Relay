@@ -1,7 +1,55 @@
-.project-manager-agent { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); padding-block: var(--sp-4); border-bottom: 1px solid var(--line-1); }
-.project-manager-agent-identity { flex: 1; min-width: 0; }
-.project-manager-agent-identity a { font-weight: 700; }
-.project-manager-agent p { margin: var(--sp-1) 0; color: var(--ink-2); }
+/* Who manages the project: one quiet line above the dashboard's numbers,
+   shaped like a member tile's head (mark, name, meta) without its card. */
+.project-manager-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.project-dashboard--empty > .project-manager-line {
+  justify-self: stretch;
+  margin-bottom: var(--sp-6);
+}
+
+.project-manager-line-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.project-manager-line-name {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-manager-line-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.project-manager-line-role,
+.project-manager-line-empty {
+  overflow: hidden;
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unassigned: the role names the line and the sentence says it is open. */
+.project-manager-line.is-open .project-manager-line-role {
+  color: var(--ink-2);
+}
+
 .manager-proposal h3 { margin: 0; font-size: var(--text-lg); }
 .manager-before { margin: var(--sp-1) 0; color: var(--ink-2); font-size: var(--text-sm); }
 .manager-proposal { border-top: 1px solid var(--line-1); padding-block: var(--sp-4); }

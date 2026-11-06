@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
-import { ProjectManagerAgentCard } from "./ProjectManagerAgentCard";
+import { ProjectManagerLine } from "./ProjectManagerLine";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
 /* The header's subtitle says what the open tab is for. It used to describe
@@ -203,7 +203,6 @@ export function ProjectWorkspacePage({
 
       <div className="workspace-body">
         <TabsContent value="dashboard">
-          <ProjectManagerAgentCard projectId={project.id} onOpenThread={onOpenThread} onManageRole={()=>setPageTab("members")} />
           {setupNeedsAttention(project.setup) && !membersReadOnly ? (
             <ProjectSetupPanel
               project={project}
@@ -215,6 +214,7 @@ export function ProjectWorkspacePage({
             />
           ) : null}
           <ProjectDashboard
+            steward={<ProjectManagerLine project={project} agents={agents} onManage={membersReadOnly ? undefined : () => setPageTab("members")} />}
             tasks={boardTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
             onOpenBoard={() => setPageTab("tasks")}
