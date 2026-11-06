@@ -306,7 +306,7 @@ It returns fourteen daily buckets and seven-day totals; `fresh` excludes cache
 reads, and `unreportedRuns` identifies runtimes that completed without reporting
 usage. Totals include retained usage after thread deletion. The backend groups
 the ledger in storage and caches each reporting window briefly. See
-[dashboard reporting storage and timezone behavior](backend-scalability.md#grouped-dashboard-token-metrics).
+[dashboard reporting storage and timezone behavior](guides/backend-operations.md#grouped-dashboard-token-metrics).
 
 Chat activation, health checks, and webhook-secret rotation are exclusive per
 integration across PostgreSQL backend replicas. A conflicting operation, or a
@@ -316,7 +316,7 @@ finishes. Display-only edits and operations on other integrations can proceed.
 Configuration and encrypted credentials are stored per integration. Public
 metadata returns credential key names without decrypting values; settings and
 runtime access decrypt only the selected or active integrations. See the
-[migration 0117 rollout and rollback requirements](backend-scalability.md#per-integration-chat-configuration-and-credentials).
+[migration 0117 rollout and rollback requirements](guides/backend-operations.md#per-integration-chat-configuration-and-credentials).
 
 An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
 checking that no dispatch claim or run request owns it. It records the status
@@ -946,7 +946,7 @@ to retry execution. Dispatch can return
 `workflowStage=queued`, consumes no WIP, and starts automatically once capacity
 opens. `PATCH {"status":"cancelled"}` preserves history and derives `cancelledAt`,
 releasing WIP only after execution is settled. Cancelled tasks do not contribute
-to delivery metrics; explicitly reopen to Ready to continue them. See [the task lifecycle](task-kanban-lifecycle.md) for
+to delivery metrics; explicitly reopen to Ready to continue them. See [the task lifecycle](guides/task-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
 
 ### Task review
@@ -1329,7 +1329,7 @@ requires `RELAY_WAITLIST_INVITE_EMAIL=1`, a configured mailer, and a public web
 URL (`RELAY_PUBLIC_WEB_URL`, else `RELAY_PUBLIC_BACKEND_URL`) —
 `capabilities.inviteEmail`. With invite email enabled and a configured mailer,
 an unconfigured public origin produces `delivery.status: "skipped"`.
-Rules and rationale: `docs/waitlist-design.md`.
+Rules and rationale: `docs/guides/accounts.md`.
 
 | Method and path | Auth | Answer |
 | :- | :- | :- |
@@ -1359,7 +1359,7 @@ Asking for a link needs email and a configured public origin:
 is never built from the request's `Host` — and `GET /api/v1/auth/status` reports it as
 `passwordResetEnabled`. Redeeming a link does not, so an admin-issued link
 works on an install without mail. Rules and rationale:
-`docs/password-reset-design.md`.
+`docs/guides/accounts.md`.
 
 | Method and path | Auth | Answer |
 | :- | :- | :- |
@@ -1451,7 +1451,7 @@ removes saved credentials and pauses dependent active Automations without
 claiming that an executing agent has exited. Run-scoped MCP calls use
 `POST /api/v1/connection-tools`; browser sessions cannot authorize those calls.
 
-See [Connections](connections.md) for all routes, resource pagination, provider
+See [Connections](guides/connections.md) for all routes, resource pagination, provider
 configuration, supported runtime adapters, and deployment verification limits.
 
 ## Project manager
@@ -1496,8 +1496,8 @@ and lease, and validates the pinned manager Project/Agent run context rather tha
 a canonical Thread ID. New daemons route both native MCP and isolated host/guest
 calls through the MCP bearer-token API using a command-bound token held in daemon
 memory. Both paths expose scoped reads, workspace authorization and proposal
-staging, never owner Apply. See [the design](project-manager-design.md) and
-[current verification evidence](testing/project-manager-architecture-fixes.md).
+staging, never owner Apply. See the [Project Manager guide](guides/project-manager.md)
+for runtime installation and rollout requirements.
 
 
 ### Relay MCP bearer-token API

@@ -2,9 +2,9 @@
 
 This directory records durable architecture decisions for Relay.
 
-The ADR numbering follows the decisions referenced in
-[`docs/system-architecture.md`](../system-architecture.md) and should be kept in
-sync with [`docs/implementation-plan.md`](../implementation-plan.md).
+Keep ADR numbers stable so code, issues, and historical references remain
+useful. Each record states its own acceptance or proposal status. Current
+operational contracts are indexed in the [documentation guide](../README.md).
 
 | ADR | Decision |
 | :- | :- |

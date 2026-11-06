@@ -158,7 +158,8 @@ devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
 
 ## 部署
 
-[`docs/deployment.md`](docs/deployment.md) 介绍如何将 Web 界面部署到 Vercel、将后端和 Postgres 部署到 Railway。将守护进程部署在执行智能体的计算机上，通过出站 HTTP(S) 连接后端。
+[部署脚本](deploy/README.md)介绍 Cloudflare + Railway 托管方案；
+[部署指南](docs/README.zh-CN.md#使用与运维指南)还提供 Vercel 替代方案。将守护进程部署在执行智能体的计算机上，通过出站 HTTP(S) 连接后端。
 
 ## 文档
 

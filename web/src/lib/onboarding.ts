@@ -14,7 +14,7 @@ import { countUserDeviceComputers, nodesAssignedToUser } from "./computerNodes.t
    stored: a step is done because its Computer, Agent, or finished run is
    there. The account keeps only the person's own choices (`onboarding` on
    /auth/me — see backend/relay/security/onboarding.py). Design:
-   docs/onboarding-wizard-design.md. */
+   docs/guides/accounts.md. */
 
 export const ONBOARDING_CARDS: readonly OnboardingCard[] = ["tasks", "projects", "teams", "automations"];
 

@@ -339,7 +339,7 @@ make backend BACKEND_PORT=9000
 ```
 
 For a separate Procrastinate background process, see
-[Background jobs](background-jobs.md). Point `RELAY_DATABASE_URL` at
+[Background jobs](guides/background-jobs.md). Point `RELAY_DATABASE_URL` at
 PostgreSQL, set `RELAY_BACKGROUND_MODE=external` in `backend/.env`, apply the Relay migrations,
 and start `make backend-worker` alongside `make backend`. The worker command
 initializes the queue schema if needed before starting. External mode stops the API's
@@ -601,13 +601,13 @@ Inspect `mcp-status.json` in the daemon's private state directory or run
 `relay-daemon doctor` for ready, retrying, blocked or stale setup. Configuration
 conflicts preserve user edits; revoked or unknown standalone credentials require
 explicit reconnection. Keep tokens outside Project workspaces. See
-[installation and recovery](project-manager-design.md#local-agent-runtimes)
+[installation and recovery](guides/project-manager.md#local-agent-runtimes)
 before changing runtime configuration or credential files.
 
 The bridge requires an HTTPS backend, except loopback HTTP for local development.
 Isolated runtimes need a backend reachable through their configured transport.
 Service Connections have their own credentials, runtime restrictions and
-[deployment setup](connections.md#deployment-setup).
+[deployment setup](guides/connections.md#deployment-setup).
 
 Focused backend verification (real Node interop checks require built packages):
 

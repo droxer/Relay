@@ -2,7 +2,7 @@
 #
 # The runtime image contains the backend and a downloadable client archive, with no agent CLIs or
 # BoxLite runtime: the backend never executes agents — it queues work for daemons, which
-# run on machines that own a sandbox. See docs/deployment.md.
+# run on machines that own a sandbox. See docs/guides/deployment.md.
 # Compile the downloadable personal-computer client; it is data in the final image.
 FROM node:24-bookworm-slim AS computer-client
 WORKDIR /build

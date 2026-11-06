@@ -4,7 +4,7 @@
 # Builds the static export in direct mode: the browser calls the backend origin
 # itself (NEXT_PUBLIC_RELAY_API_ORIGIN), so this image runs no Node and proxies
 # nothing. The backend must allow this origin in CORS and share its session
-# cookie with it. See docs/deployment-cloudflare.md § 8.
+# cookie with it. See docs/guides/deployment-cloudflare.md § 8.
 #
 # Build from the repo root: docker build -f web/Dockerfile .
 FROM node:24-bookworm-slim AS build

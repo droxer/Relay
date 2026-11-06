@@ -6,7 +6,7 @@ here is what a person chose: that they read the intro, that they dismissed the
 wizard, which "Explore next" cards they closed, and which default agents they
 declined when a Computer connected (`declinedDefaultAgents`, one
 `{computerId, executorKind}` per runtime). See
-`docs/onboarding-wizard-design.md`.
+`docs/guides/accounts.md`.
 
 A client never writes timestamps. It sends intents (`introSeen`, `dismissed`,
 `closedCards`, `declineDefaultAgents`) and the server stamps them, so the

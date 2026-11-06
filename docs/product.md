@@ -110,8 +110,6 @@ identity or replace the existing interface system.
 - [Product screenshots](images/): demonstrations generated from screenshot
   fixtures, available in English and Simplified Chinese. They are not customer
   results or testimonials.
-- [Mobile design review](testing/mobile-design-review.md): rendered-layout
-  findings, fixes, verification scope, and remaining environment limitations.
 - [LICENSE](../LICENSE): MIT license terms. Do not invent other licensing or
   purchasing commitments from the strategic business-model proposals below.
 
@@ -180,7 +178,8 @@ Goal: maximize user productivity and value creation, not replace users.
 
 This document defines Relay's product direction: target users, market thesis, positioning, scenarios, capability system, business model, roadmap, and product risks. It should stay focused on product planning and product strategy.
 
-For technical architecture, see [system-architecture.md](system-architecture.md). For build-level implementation details, see [implementation-plan.md](implementation-plan.md).
+For target architecture, see [system-architecture.md](system-architecture.md).
+For current implementation ownership, see [code navigation](CODEX-NAVIGATION-GUIDE.md).
 
 ---
 

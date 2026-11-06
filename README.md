@@ -172,7 +172,8 @@ Playwright suites remain separate from this workflow.
 
 ## Deployment
 
-[`docs/deployment.md`](docs/deployment.md) covers hosting the web UI on Vercel and the backend plus Postgres on Railway. Run daemons on the computers that execute your agents; they connect to the backend over outbound HTTP(S).
+[Deployment scripts](deploy/README.md) cover the hosted Cloudflare + Railway setup.
+The [deployment guides](docs/README.md#guides) also cover the Vercel alternative. Run daemons on the computers that execute your agents; they connect to the backend over outbound HTTP(S).
 
 ## Documentation
 
