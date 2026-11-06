@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from ..core.ids import now_iso
-from ..core.models import AGENT_ROLES
+from ..core.project_roles import PROJECT_ROLES
 
 
 SETUP_TASKS_MAX = 8
@@ -133,7 +133,7 @@ def _proposal_members(raw: Any) -> list[dict[str, Any]]:
         if agent_id in seen:
             continue
         seen.add(agent_id)
-        role = item.get("role") if item.get("role") in AGENT_ROLES else "implementer"
+        role = item.get("role") if item.get("role") in PROJECT_ROLES else "implementer"
         instructions = _clip(item.get("instructions"), _LIMITS["instructions"])
         members.append(
             {

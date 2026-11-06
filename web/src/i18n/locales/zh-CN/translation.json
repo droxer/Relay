@@ -202,7 +202,8 @@
       "reviewer": "代码评审员",
       "planner": "架构师",
       "tester": "测试工程师",
-      "fixer": "缺陷修复工程师"
+      "fixer": "缺陷修复工程师",
+      "project_manager": "项目经理"
     },
     "unclassified": "未分类",
     "archived": "已归档",
@@ -3457,7 +3458,7 @@
     "back": "返回",
     "loading": "正在加载项目经理…",
     "retry": "重试",
-    "agent": "代表 Relay 回答的智能体",
+    "agent": "项目经理 Agent",
     "choose": "选择智能体",
     "agent_unavailable": "当前智能体不可用",
     "setup": "配置智能体",
@@ -3489,7 +3490,7 @@
     "proposal_dismissed": "已忽略",
     "proposal_superseded": "已有新建议替代此项",
     "proposal_expired": "已过期",
-    "reason_manager_unconfigured": "选择一个智能体代表 Relay 回答。",
+    "reason_manager_unconfigured": "将项目经理角色分配给一个 Agent。",
     "reason_manager_agent_unavailable": "当前智能体已停用、移除或位于其他计算机，请重新选择。",
     "reason_project_computer_offline": "项目计算机离线，仍可查看已记录的对话。",
     "reason_project_manager_update_required": "更新项目计算机以启用项目经理工具。",
@@ -3505,6 +3506,10 @@
     "reason_manager_runtime_unavailable": "智能体运行环境尚未就绪，请检查项目计算机或选择其他智能体。",
     "open": "与 Relay 对话",
     "reason_manager_computer_busy": "项目计算机正在忙碌，执行容量释放后请重试。",
-    "resize": "调整项目经理面板宽度"
+    "resize": "调整项目经理面板宽度",
+    "chat": "对话",
+    "agent_description": "了解项目进展、待办事项并协调任务。",
+    "unassigned_role": "尚未给智能体分配项目经理角色。",
+    "assign_role": "分配项目经理角色"
   }
 }

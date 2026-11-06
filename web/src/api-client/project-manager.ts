@@ -11,6 +11,9 @@ export function setProjectManager(id: string, agentId: string, expectedVersion: 
 export function sendManagerMessage(id: string, body: { text: string; idempotencyKey: string }): Promise<{threadId: string}> {
   return apiJson(`${path(id)}/messages`, { method: "POST", body });
 }
+export function openManagerConversation(id: string): Promise<{threadId:string}> {
+  return apiJson(`${path(id)}/conversation`,{method:"POST",body:{}});
+}
 export function applyManagerProposal(id: string, proposalId: string, body: ApplyManagerInput): Promise<AppliedManagerProposal> {
   return apiJson(`${path(id)}/proposals/${encodeURIComponent(proposalId)}/apply`, { method: "POST", body });
 }

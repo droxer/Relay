@@ -24,7 +24,9 @@ try {
     join(staging, 'node_modules/relay-daemon/capabilities.json'),
     JSON.stringify({ capabilities: [...DAEMON_ADVERTISED_CAPABILITIES].sort() }),
   );
-  cpSync(resolve('node_modules/smol-toml'), join(staging, 'node_modules/smol-toml'), { recursive: true });
+  for (const dependency of ['smol-toml', 'jsonc-parser']) {
+    cpSync(resolve(`node_modules/${dependency}`), join(staging, 'node_modules', dependency), { recursive: true });
+  }
   mkdirSync(resolve('backend/relay/computer'), { recursive: true });
   execFileSync('tar', ['-czf', output + '.tmp', '-C', staging, 'node_modules']);
   renameSync(output + '.tmp', output);

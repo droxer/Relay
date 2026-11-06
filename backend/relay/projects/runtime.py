@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from ..core.project_roles import PROJECT_MANAGER_ROLE, PROJECT_MANAGER_RESPONSIBILITIES
 
 from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
@@ -224,7 +225,7 @@ def project_member_assignments(
     return [
         {
             "agentId": member["agentId"],
-            "role": member["role"],
+            "role": "planner" if member["role"] == PROJECT_MANAGER_ROLE else member["role"],
             "mode": mode,
             "phase": "discussion" if mode == "ask" else _phase(member["role"]),
             "coordinator": member["agentId"] == project["leadAgentId"],
@@ -347,7 +348,7 @@ def _phase(role: str) -> str:
 
 def _member_brief(member: dict[str, Any]) -> str:
     parts = [
-        role_charter(member.get("role")),
+        PROJECT_MANAGER_RESPONSIBILITIES if member.get("role") == PROJECT_MANAGER_ROLE else role_charter(member.get("role")),
         f"Responsibilities: {member['responsibilities']}.",
     ]
     if member.get("instructions"):

@@ -49,3 +49,16 @@ it("opens a project task conversation in Threads and returns to the thread list"
   await act(async () => result.current.navigateToMobileView("threads"));
   expect(window.location.pathname).toBe("/threads");
 });
+
+it("opens and retains a Project Manager's ordinary Thread", async () => {
+  const { useThreadNavigation } = await import('../src/hooks/useThreadNavigation');
+  const thread = {id:'manager',projectId:'project'} as never;
+  const project = {id:'project',managerThreadId:'manager'};
+  const sync = vi.fn(); const navigate = vi.fn();
+  const {result,rerender} = renderHook(({ready})=>useThreadNavigation({projectsReady:ready,route:'main',myThreads:[thread],projects:[project],tasks:[],tasksStatus:'ready',activeSession:thread,composingNew:false,routedSessionId:'manager',routedProjectId:'project',recordTaskId:null,threadComputers:[],assignableComputers:[],composerRef:{current:null},pinTranscriptToBottom:vi.fn(),showThreadList:vi.fn(),syncThreadUrl:sync,navigateToProject:navigate}),{initialProps:{ready:false}});
+  expect(navigate).not.toHaveBeenCalled();
+  rerender({ready:true});
+  act(()=>result.current.openThread('manager'));
+  expect(navigate).not.toHaveBeenCalled();
+  expect(sync).toHaveBeenCalledWith('manager',false,'project',null);
+});

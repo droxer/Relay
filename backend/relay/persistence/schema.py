@@ -25,6 +25,7 @@ from .tables import notifications as _notifications  # noqa: F401
 from .tables import org_settings as _org_settings  # noqa: F401
 from .tables import profile_images as _profile_images  # noqa: F401
 from .tables import projects as _projects  # noqa: F401
+from .tables import mcp as _mcp  # noqa: F401
 from .tables import sessions as _sessions  # noqa: F401
 from .tables import skills as _skills  # noqa: F401
 from .tables import tasks as _tasks  # noqa: F401

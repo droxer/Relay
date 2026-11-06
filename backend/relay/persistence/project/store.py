@@ -19,6 +19,7 @@ from ..sql import metadata as shared_metadata
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
+from ...core.project_roles import project_manager_id
 
 PROJECT_NAME_MAX_LENGTH = 120
 # A project that links an existing directory on its computer names it under
@@ -436,7 +437,7 @@ def _new_project(owner_user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             else {}
         ),
         "leadAgentId": payload.get("leadAgentId"),
-        "managerAgentId": payload.get("managerAgentId"),
+        "managerAgentId": project_manager_id(payload["members"]),
         "managerInitialized": "managerAgentId" in payload,
         "managerThreadId": None,
         "members": list(payload["members"]),
@@ -467,6 +468,8 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise ProjectValidationError("project_patch_unsupported")
     normalized = dict(patch)
+    if "members" in normalized:
+        normalized["managerAgentId"] = project_manager_id(normalized["members"])
     if "name" in normalized:
         normalized["name"] = _required_text(
             normalized["name"],

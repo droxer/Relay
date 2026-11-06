@@ -52,7 +52,7 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
       const label = op.title || fields.title || op.taskId || op.key || op.id;
       return <fieldset key={op.id} disabled={!pending || disabled || busy} className="manager-operation">
         <legend><label><input type="checkbox" checked={selected.includes(op.id)} onChange={event => setSelected(old => event.target.checked ? [...old, op.id] : old.filter(id => id !== op.id))} /> {label}</label></legend>
-        {op.taskId ? <a href={`/projects/${encodeURIComponent(projectId)}?task=${encodeURIComponent(op.taskId)}&manager=open`} onClick={event => {
+        {op.taskId ? <a href={`/projects/${encodeURIComponent(projectId)}?task=${encodeURIComponent(op.taskId)}`} onClick={event => {
           if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); void navigateToAppPath(event.currentTarget.getAttribute("href")!);
         }}>{t("project_manager.open_task")}</a> : null}

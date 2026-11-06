@@ -119,7 +119,7 @@ def test_manager_configuration_is_stable_and_disabled_projects_are_read_only(set
     changed = client.put(url, json={"agentId": builder["id"], "expectedVersion": initial["project"]["version"]})
     assert changed.status_code == 200, changed.text
     assert changed.json()["manager"]["agentId"] == builder["id"]
-    assert changed.json()["project"]["leadAgentId"] is None
+    assert changed.json()["project"]["leadAgentId"] == initial["project"]["leadAgentId"]
     assert client.put(url, json={"agentId": planner["id"], "expectedVersion": initial["project"]["version"]}).status_code == 409
     current = changed.json()["project"]
     client.patch(f"/api/v1/projects/{project['id']}", json={"enabled": False, "expectedVersion": current["version"]})

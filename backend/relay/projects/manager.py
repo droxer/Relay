@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 from ..core.computer_identity import computer_id
+from ..core.project_roles import project_manager_id, manager_roster
+from ..persistence.events import relay_event
 from ..agents.routing import AgentRoutingError, resolve_agent_assignments
 from ..agents.location import agent_placed_on_computer
 from ..persistence.resource_lock import resource_transaction
@@ -27,14 +29,30 @@ def manager_candidates(ctx: Any, project: dict[str, Any]) -> list[dict[str, Any]
 
 
 def initialize_manager(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
-    if project.get("managerInitialized") or project.get("archivedAt"):
+    role_holder = project_manager_id(project.get("members", []))
+    if project.get("archivedAt"):
+        return project
+    if role_holder:
+        if project.get("managerAgentId") == role_holder and project.get("managerInitialized"):
+            return project
+        return ctx.project_store.mutate_manager(project["id"], lambda _latest: {"managerAgentId": role_holder, "managerInitialized": True})
+    if project.get("managerInitialized") and not project.get("managerAgentId"):
         return project
     candidates = manager_candidates(ctx, project)
     ids = [a["id"] for a in candidates]
-    selected = project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None)
-    return ctx.project_store.mutate_manager(project["id"], lambda latest: None if latest.get("managerInitialized") else {
-        "managerAgentId": selected, "managerInitialized": True,
-    })
+    selected = project.get("managerAgentId") or (project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None))
+    if not isinstance(selected, str) or selected not in ids:
+        return project
+    return ctx.project_store.mutate_manager(project["id"], lambda latest: manager_role_patch(ctx, latest, selected))
+
+
+def manager_role_patch(ctx: Any, project: dict[str, Any], agent_id: str) -> dict[str, Any]:
+    fallback = {a["id"]: a.get("defaultRole") or "planner" for a in ctx.agent_store.list_agents(supervisor_user_id=project["ownerUserId"])}
+    members = manager_roster(project.get("members", []), agent_id, fallback)
+    if len(members) > 32:
+        raise ManagerError("project_members_too_many", 400)
+    return {"members": members, "managerAgentId": agent_id, "managerInitialized": True,
+            "leadAgentId": project.get("leadAgentId") or agent_id}
 
 
 def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None) -> str | None:
@@ -44,7 +62,7 @@ def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None)
         if not isinstance(requested, str) or requested not in ids:
             raise ManagerError("manager_agent_ineligible", 400)
         return requested
-    return project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None)
+    return project_manager_id(project.get("members", [])) or (project.get("leadAgentId") if project.get("leadAgentId") in ids else next(iter(ids), None))
 
 
 def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
@@ -109,7 +127,10 @@ def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, 
             "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
             "ownerUserId": project["ownerUserId"], "ownerAgentId": project.get("managerAgentId"),
             "computerId": project["computerId"], "projectId": project["id"],
-            "taskGoal": f"Relay · {project['name']}", "participants": ["human"],
+            "taskGoal": f"{project['name']} · Project Manager", "participants": ["human"],
         })
+        agent_id = project.get("managerAgentId")
+        if agent_id:
+            ctx.session_store.append_event(session["id"], relay_event("thread.participants_joined", session["id"], {"agentIds": [agent_id], "actorUserId": project["ownerUserId"]}))
         project = ctx.project_store.mutate_manager(project["id"], lambda _latest: {"managerThreadId": session["id"]})
         return project, session["id"]

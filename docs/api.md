@@ -1402,7 +1402,7 @@ per-process auth rate limiter with a separate per-User key.
 ## Project manager
 
 Every Project has a stable Relay manager binding and one lazily created manager
-Thread. Selecting the manager does not change the lead or roster. These routes
+Thread. Selecting the manager assigns the `project_manager` roster role to the actual Agent. These routes
 require the Project Owner; admin status and daemon credentials do not confer
 owner authority.
 
@@ -1437,3 +1437,29 @@ It exposes scoped reads, workspace authorization, and proposal staging, never
 owner Apply. The runtime invokes its per-run Node helper; node credentials and
 leases remain in the daemon. See [the design](project-manager-design.md) and
 [verification evidence](testing/project-manager.tdd.md).
+
+
+### Relay MCP bearer-token API
+
+`POST /api/v1/mcp/tokens` (owner session) accepts `{name, projectIds}` and returns
+`{id, token, ...metadata}` once, with `Cache-Control: no-store`. All Projects
+must belong to the caller. Tokens expire after 90 days. `GET /mcp/tokens` lists
+metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
+
+`POST /api/v1/daemon-nodes/{id}/mcp-token` uses the enrolled Computer credential
+and returns a separate MCP token scoped to its owner and Computer. Optional
+`{commandId, leaseId}` restricts it to a currently dispatched manager command and
+Project; authentication stops when that run ends (maximum 24 hours).
+
+MCP clients authenticate using `Authorization: Bearer <MCP token>`:
+
+| Route | Behavior |
+| --- | --- |
+| `GET /api/v1/mcp/projects` | List only Projects in token scope. |
+| `POST /api/v1/mcp/projects/{id}/tools` | `{tool, arguments}` for overview, tasks, task, review, activity, threads, thread, workspace metadata, or propose. Scope and ownership checked on every call. |
+| `POST /api/v1/projects/{id}/manager/conversation` | Owner session: open the canonical ordinary Agent Thread without dispatching a run. |
+
+`propose` accepts `arguments.operations` with the same validated operation format
+as manager proposals. Direct MCP proposals have `source: "mcp"`, token provenance
+and no fabricated run ID. They remain pending until the owner applies them with
+a browser session. MCP bearer tokens cannot use owner mutation endpoints.

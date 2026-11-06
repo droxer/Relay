@@ -16,6 +16,8 @@ type ThreadComputer = Parameters<typeof resolveNewThreadComputer>[1][number];
 interface ThreadNavigationInput {
   route: AppRoute;
   myThreads: RelaySession[];
+  projects?: readonly {id:string;managerThreadId?:string|null}[];
+  projectsReady?: boolean;
   tasks: RelayTaskSummary[];
   tasksStatus: string;
   activeSession: RelaySession | undefined;
@@ -37,6 +39,8 @@ interface ThreadNavigationInput {
 export function useThreadNavigation({
   route,
   myThreads,
+  projects = [],
+  projectsReady = true,
   tasks,
   tasksStatus,
   activeSession,
@@ -63,7 +67,8 @@ export function useThreadNavigation({
     const session = myThreads.find((candidate) => candidate.id === sessionId);
     const ownerTaskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
     const taskId = parentTaskId ?? (route === "main" ? null : ownerTaskId ?? (route === "backlog" ? recordTaskId : null));
-    if (session?.projectId && !ownerTaskId && !taskId) {
+    const managerThread = projects.some(project => project.managerThreadId === sessionId);
+    if (session?.projectId && !ownerTaskId && !taskId && !managerThread) {
       navigateToProject(session.projectId);
       return;
     }
@@ -83,6 +88,8 @@ export function useThreadNavigation({
   // project room.
   useEffect(() => {
     const projectId = routedProjectId ?? activeSession?.projectId;
+    if (!projectsReady) return;
+    if (activeSession && projects.some(project => project.managerThreadId === activeSession.id)) return;
     if ((route !== "projects" && route !== "main") || !projectId) return;
     if (route === "projects" && composingNew) {
       void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`, { replace: true });
@@ -96,7 +103,7 @@ export function useThreadNavigation({
         : `/projects/${encodeURIComponent(projectId)}`;
       void navigateToAppPath(path, { replace: true });
     }
-  }, [route, routedProjectId, routedSessionId, activeSession, composingNew, tasks, tasksStatus]);
+  }, [route, routedProjectId, routedSessionId, activeSession, composingNew, tasks, tasksStatus, projects, projectsReady]);
 
   function startNewThread(projectId: string | null = null) {
     if (projectId) {

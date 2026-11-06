@@ -102,6 +102,7 @@ import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.j
 import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeImages } from "./image-attachments.js";
+import { bootstrapRelayMcp } from "./relay-mcp-bootstrap.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
 import { materializeSkills } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
@@ -423,6 +424,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     maxConcurrentRuns,
     status: status ?? (activeRuns.size > 0 ? "busy" : "ready"),
   });
+  let mcpSetupAttempted = false;
   const register = async (): Promise<DaemonNodeHeartbeatSettings | undefined> => {
     const url = relayApiUrl(backendUrl, "/daemon-node-registrations");
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
@@ -438,6 +440,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       for (const rejected of projectLinks.replaceAll(response.projectLinks)) {
         logger.warn("linked project directory refused", { sandboxId, ...rejected });
       }
+    }
+    if (!mcpSetupAttempted && !options.environment && sandboxMode === "none") {
+      mcpSetupAttempted = true;
+      try {
+        const installed = await bootstrapRelayMcp({ home: homedir(), stateDir, sandboxId, backendUrl, nodeToken: token,
+          runtimes: readyAgents(agentHealth), fetchFn, signal: runtimeSignal });
+        logger.info("Relay MCP installed for local Agent Runtimes", { runtimes: installed });
+      } catch { logger.warn("Relay MCP setup failed; check runtime configuration conflicts or Computer enrollment", { sandboxId }); }
     }
     return validHeartbeatSettings(response.heartbeat);
   };

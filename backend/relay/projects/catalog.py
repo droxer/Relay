@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
-from ..core.models import AGENT_ROLES
+from ..core.project_roles import PROJECT_ROLES, PROJECT_MANAGER_ROLE, project_manager_id
 from ..persistence.project.store import ProjectValidationError
 from ..agents.location import agent_placed_on_computer
 from .setup import ProjectSetupError, resolved_setup
@@ -209,6 +209,8 @@ def update_project_payload(
         )
         if "members" in patch:
             patch["members"] = members
+            patch["managerAgentId"] = project_manager_id(members)
+            patch["managerInitialized"] = True
         # Clearing the last member also clears its lead, even when the caller
         # only supplies members. Keep the roster and lead as one valid update.
         patch["leadAgentId"] = lead_agent_id
@@ -233,6 +235,8 @@ def validate_project_roster(
     if len(raw_members) > PROJECT_MEMBER_MAX_COUNT:
         raise ProjectValidationError("project_members_too_many")
     members = [_normalize_member(member) for member in raw_members]
+    if sum(member["role"] == PROJECT_MANAGER_ROLE for member in members) > 1:
+        raise ProjectValidationError("project_manager_duplicate")
     agent_ids = [member["agentId"] for member in members]
     if len(set(agent_ids)) != len(agent_ids):
         raise ProjectValidationError("project_members_duplicate")
@@ -289,7 +293,7 @@ def _normalize_member(value: Any) -> dict[str, Any]:
         raise ProjectValidationError("project_member_invalid")
     agent_id = _required_text(value.get("agentId"), "project_member_not_found")
     role = _required_text(value.get("role"), "project_role_invalid")
-    if role not in AGENT_ROLES:
+    if role not in PROJECT_ROLES:
         raise ProjectValidationError("project_role_invalid")
     enabled = value.get("enabled", True)
     if not isinstance(enabled, bool):

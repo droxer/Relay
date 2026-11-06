@@ -8,8 +8,8 @@ import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import {
-  AGENT_ROLE_OPTIONS,
-  type AgentRole,
+  PROJECT_ROLE_OPTIONS,
+  type ProjectRole,
   type DaemonNodeMonitorRecord,
   type UserAgent,
   type ProjectMember,
@@ -31,7 +31,7 @@ import {
 
 type MemberDraft = {
   agentId: string;
-  role: AgentRole;
+  role: ProjectRole;
   responsibilities: string;
   instructions: string;
   enabled: boolean;
@@ -178,9 +178,11 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     };
     const baseProject = initialProject;
     const base = rosterPayload(baseProject);
-    const members = member
+    let members = member
       ? base.map((item) => (item.agentId === member.agentId ? payload : item))
       : [...base, payload];
+    if (draft.role === "project_manager") members = members.map(item => item.agentId !== draft.agentId && item.role === "project_manager"
+      ? {...item, role: agents.find(agent => agent.id === item.agentId)?.defaultRole ?? "planner"} : item);
     const leadAgentId = draft.lead
       ? draft.agentId
       : baseProject.leadAgentId === draft.agentId
@@ -279,12 +281,12 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
         {member || draft.agentId ? (
           <>
             <Field label={t("project.role")} labelId={roleLabelId} wrapper="div">
-              <Select value={draft.role} onValueChange={(value) => patch({ role: value as AgentRole })}>
+              <Select value={draft.role} onValueChange={(value) => patch({ role: value as ProjectRole })}>
                 <SelectTrigger className="w-full" aria-labelledby={roleLabelId}>
-                  <SelectValue>{(value: AgentRole) => t(`project.roles.${value}`)}</SelectValue>
+                  <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {AGENT_ROLE_OPTIONS.map((role) => (
+                  {PROJECT_ROLE_OPTIONS.map((role) => (
                     <SelectItem key={role} value={role}>{t(`project.roles.${role}`)}</SelectItem>
                   ))}
                 </SelectContent>

@@ -40,6 +40,7 @@ from .api.computers import (
 from .api.projects import plan as project_plan_routes
 from .api.projects import projects as project_routes
 from .api.projects import manager as project_manager_routes
+from .api.projects import mcp as project_mcp_routes
 from .migrations_runtime.project_managers import initialize_project_managers
 from .api.tasks import (
     automations as automation_routes,
@@ -362,6 +363,7 @@ API_ROUTERS = (
     team_routes.router,
     project_routes.router,
     project_manager_routes.router,
+    project_mcp_routes.router,
     project_plan_routes.router,
     skill_routes.router,
     node_workspace_routes.router,

@@ -1,102 +1,73 @@
-# Project manager implementation evidence
+# Project Manager and Relay MCP verification
 
-The [feature design](../project-manager-design.md) supplies the journeys: every
-Project has a durable default manager, answers use live Project records, and
-task changes are proposed in conversation and applied by the owner. Backend
-execution continues through the ordinary conductor and daemon queue.
+Verified locally on 2026-11-06. This evidence supersedes the original drawer
+implementation and its screenshots.
 
-## Behavior and ownership
+## Contract
 
-- `projects/manager.py` selects an eligible manager, preserves its binding,
-  checks availability, and ensures one canonical Thread. Project creation
-  accepts an explicit choice; the startup repair initializes existing Projects
-  without creating Threads or starting runs. Manager and lead remain separate.
-- `projects/manager_reads.py` exposes current overview, task records, review
-  evidence, activity, and Thread messages with scope checks and coverage. The
-  overview uses a consistent database read scope; pagination is deterministic.
-- `projects/manager_proposals.py` stages typed changes. The owner can select
-  and edit operations before a transaction applies them through existing Task
-  domain operations. Revision checks, prerequisite validation, and persisted
-  application keys protect against stale edits, partial changes, and retries.
-- `persistence/project/manager.py` stores proposal projections and proposal
-  events. Bindings live in Project snapshots/events. Alembic revision
-  `20261106_0113` adds the two proposal tables, their index, and constraints.
-- The daemon's `project-manager.ts` provides a real Node command helper in
-  each active run. Credentials remain outside the workspace. Every backend
-  request checks node authentication, command lease, active run, and Project
-  scope; local workspace tools are authorized through the same check first.
-- The project header and Dashboard open the manager without a model call.
-  The panel reuses transcript, permission, recovery, and resize components.
-  Mobile uses the existing modal surface to contain focus; desktop supports
-  pointer and keyboard resizing. Proposal cards preserve Apply errors and use
-  stable retry keys. English and Chinese copy are provided.
+- An actual Logical Agent holds the Project's `project_manager` roster role.
+  Its global Agent Role stays unchanged; duplicate Project managers are refused.
+- Chat opens an ordinary Agent Thread and queues no execution. Sending through
+  the ordinary Thread endpoint dispatches the role holder with manager context.
+- Proposals appear in that Thread. Owner Apply is editable, atomic and idempotent;
+  new Tasks remain in backlog.
+- Local Agent Runtimes receive a stdio MCP server. It invokes Relay API routes
+  with a scoped, expiring and revocable bearer token. No owner Apply tool exists.
 
-## TDD evidence
+## Red and green evidence
 
-The first backend tests ran before production code and failed with four 404
-responses for missing manager routes. Commit `c3ec50d7` records that RED gate.
-The same four scenarios passed after implementation in `e1dc72e4`.
+The role and ordinary-conversation tests were committed while failing (invalid
+role and missing conversation endpoint), before implementation. MCP API tests
+initially failed with missing routes. Installer tests initially failed to build
+because the installer module did not exist.
 
-The daemon test initially failed compilation because `project-manager.js` did
-not exist. The UI test initially failed import resolution for the missing panel.
-Both targets then passed after implementation. A later readback test exposed a
-real gap: Thread messages were being read from a nonexistent `messages` field.
-It failed before the tool was changed to reconstruct messages from authoritative
-Thread events and Agent reports; the corrected test passes. A final update-feed
-regression also failed before Project changes and Agent reports were added to
-the paginated activity feed alongside Task events.
+Browser verification then exposed two existing assumptions: Project conversations
+redirected to the Dashboard, and their directory excluded them from Threads.
+The manager Thread now participates in normal navigation and the Thread list.
+A reload race was reproduced on mobile Chinese: session data arrived before
+Project metadata and the old redirect won. Navigation waits for Project metadata;
+the three browser variants passed three consecutive runs (nine checks).
 
-The final API suite has 16 scenarios, covering defaults, explicit choice,
-idempotent legacy backfill, crew isolation, canonical Thread reuse, live reads,
-task creation/editing, subset apply, retry identity, concurrent creation/apply,
-stale revisions, cycle rollback, Project isolation, daemon-token limits, bad
-leases, pagination, unavailable Agents, disabled Projects, and archived history.
+## Results
 
-## Verification results
+| Verification | Result |
+| --- | --- |
+| Full Python regression run | 3,638 passed, 10 skipped; one old `planner` label assertion failed after automatic Project Manager assignment. Updated to the actual Project role; `pytest --lf` passed. |
+| Final manager, MCP and Project-context API scenarios | 25 passed on SQLite. |
+| Manager/MCP API and complete migration/schema checks on PostgreSQL 17 | 39 passed. Scratch database only. |
+| Role, manager, MCP API and token-store coverage | 87% aggregate; Project roles 100%, token store 95%, MCP API 80%. 22 scenarios passed. |
+| Built Node suites | 2,942 passed in the final full run; final Thread-directory suite 5 passed after its new scenario. |
+| React interactions | 825 passed; final navigation/manager checks 8 passed. |
+| Browser workflows | Desktop English, mobile English, mobile Chinese dark mode: opening, ordinary Thread navigation, reload, editing and owner Apply. Nine repeated checks passed after the reload fix. |
+| MCP transport | Actual spawned stdio process negotiates, lists tools and calls a local HTTP server with the exact bearer token. Protocol output contains no token. |
+| Runtime installation | Existing comments/settings/servers preserved; repeated installation adds no duplicates; edited or user-owned entries are refused. Fake home directories only. |
+| Pi adapter | Generated extension starts the actual MCP process, discovers its nine tools, registers their schemas and shuts down. |
+| Backend lint/types | Ruff passed; mypy zero errors across 417 source files. |
+| Production build | Full workspace build passed; web rebuilt after final navigation changes. |
+| Frontend lint | ESLint: zero errors, three pre-existing warnings. Stylelint passed. |
+| Dependency audit | Zero reported vulnerabilities. |
 
-Commands ran from the repository root unless stated otherwise.
+The initial broad Node run passed 2,940 scenarios and caught a missing bundled
+`jsonc-parser` dependency and an undefined CSS weight token. Both were corrected;
+the 48 affected bundle, MCP and palette checks passed. The final broad Node run passed all 2,942 scenarios. The Project Manager
+Thread-directory suite passed all five scenarios after its final addition.
 
-| Check | Command or target | Result |
-| --- | --- | --- |
-| Full Python suite | `uv run --project backend --extra dev pytest -q --tb=short` | 3,629 passed, 10 skipped |
-| New API scenarios on PostgreSQL | `RELAY_TEST_STORE_BACKEND=postgres` with `backend/tests/api/test_project_manager_api.py` | 16 passed |
-| PostgreSQL migration and schema checks | `backend/tests/unit/test_schema_drift.py` against a temporary local PostgreSQL 17 instance | 17 passed |
-| Manager backend coverage | The API scenarios with `pytest-cov` over the manager API, domain, persistence, and startup repair modules | 84% aggregate statement coverage |
-| Shared TypeScript suites | Built `relay-core`, daemon, supervisor, and `web/tests` with `node --test` | 2,938 passed |
-| React interaction suite | `npm run test:react -w web` | 824 passed |
-| Browser workflows | `npm exec -w web -- playwright test -c playwright.recovery.config.ts projectManager.spec.ts` | 3 passed: desktop English, mobile English, mobile Chinese dark mode |
-| Production build | `npm run build`, followed by the final web production build | Passed |
-| Backend lint and types | `ruff check backend`; backend `mypy` | Passed; zero type errors |
-| Frontend lint | `npm run lint -w web`; `npm run lint:css -w web` | No errors; three existing ESLint warnings outside manager code |
-| Dependency audit | `npm audit --registry=https://registry.npmjs.org --package-lock-only --omit=dev --audit-level=high` | Zero reported vulnerabilities |
-| Diff hygiene | `git diff --check` | Passed |
-
-The full Python suite ran before the final four additive feature tests; those
-16 feature scenarios were subsequently verified on both SQLite and PostgreSQL.
-Focused UI checks and browser flows were rerun after layout refinements.
-
-Browser tests exercise opening without dispatch, editable prompt selection,
-sending, reload persistence, editing, owner Apply, backlog preservation, Back
-navigation, viewport bounds, and desktop keyboard resizing. API responses are
-fixtures in those browser tests. Backend tests exercise real stores and daemon
-command admission; daemon tests execute the actual helper process. Shared
-command-builder checks prove the manager tool contract reaches all five Agent
-Runtimes. These checks do not launch authenticated third-party model sessions.
+Tests use real backend stores and real MCP/HTTP subprocess transport. Browser
+API responses and Pi's registration host are fixtures. Authenticated sessions
+against the five external model providers were not launched; these checks do
+not claim provider authentication or live model quality.
 
 ## Rendered evidence
 
-These captures use test fixtures, not production records. The desktop and mobile
-Chinese captures were inspected for layout, contrast, readable controls, and
-composer reachability.
+Fixture data, captured in the normal Agent conversation and visually inspected:
 
-- [Desktop manager](../images/project-manager-desktop.png)
-- [Mobile manager](../images/project-manager-mobile.png)
+- [Desktop](../images/project-manager-desktop.png)
+- [Mobile](../images/project-manager-mobile.png)
 - [Chinese dark mode](../images/project-manager-mobile-zh-CN.png)
 
 ## Rollout
 
-Run the normal backend migrations before starting this version, and install the
-rebuilt computer client to advertise `project-manager`. Older clients display
-an update action instead of accepting manager runs without tools. Task creation
-through Apply stays in backlog; Start, Wait, Task Review, cancellation, and
-execution reconciliation continue through their existing dedicated flows.
+Run migrations 0113 and 0114, then install the rebuilt Computer client. On a local
+Computer, ready runtimes get Relay MCP during daemon registration. Restart open
+Agent Runtimes to load it. Existing runtime configuration is preserved, and token
+revocation/rotation instructions are in [the implementation design](../project-manager-design.md).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
-import { ProjectManagerPanel } from "./ProjectManagerPanel";
+import { ProjectManagerAgentCard } from "./ProjectManagerAgentCard";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
 /* The header's subtitle says what the open tab is for. It used to describe
@@ -83,8 +83,6 @@ export function ProjectWorkspacePage({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const [managerOpen, setManagerOpen] = useUrlSearchState("manager", false, value => value === "open", value => value ? "open" : null, "push");
-  const askRelay = useRef<HTMLButtonElement>(null);
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   /* The tab is always written explicitly and left to canonicalization to
      drop when it is implied: an open `?task=` implies Tasks, so a bare
@@ -182,7 +180,6 @@ export function ProjectWorkspacePage({
         layout="stacked"
         actions={(
           <>
-            <Button ref={askRelay} type="button" size="dense" onClick={() => setManagerOpen(true)}>{t("project_manager.ask")}</Button>
             <Button type="button" variant="ghost" size="dense" className="project-mobile-back" onClick={onBack}>
               <NavBack size={ICON.sm} aria-hidden="true" />
               {t("project.back")}
@@ -206,10 +203,7 @@ export function ProjectWorkspacePage({
 
       <div className="workspace-body">
         <TabsContent value="dashboard">
-          <div className="manager-dashboard-entry">
-            <p><strong>Relay</strong> · {t("project_manager.role")}</p>
-            <Button variant="outline" size="dense" onClick={() => setManagerOpen(true)}>{t("project_manager.open")}</Button>
-          </div>
+          <ProjectManagerAgentCard projectId={project.id} onOpenThread={onOpenThread} onManageRole={()=>setPageTab("members")} />
           {setupNeedsAttention(project.setup) && !membersReadOnly ? (
             <ProjectSetupPanel
               project={project}
@@ -279,7 +273,6 @@ export function ProjectWorkspacePage({
         </TabsContent>
       </div>
 
-      {managerOpen ? <ProjectManagerPanel key={project.id} projectId={project.id} projectName={project.name} onClose={() => {setManagerOpen(false); askRelay.current?.focus();}} onOpenThread={onOpenThread} /> : null}
       <ProjectMemberEditor
         open={memberEditor !== null}
         member={memberEditor?.member ?? null}

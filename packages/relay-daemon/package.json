@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@boxlite-ai/boxlite": "^0.9.7",
+    "jsonc-parser": "^3.3.1",
     "relay-core": "0.1.0",
     "smol-toml": "^1.8.0"
   },

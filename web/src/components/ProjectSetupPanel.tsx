@@ -17,7 +17,7 @@ import {
   type SetupMemberDraft,
   type SetupTaskDraft,
 } from "../lib/projectSetup";
-import { AGENT_ROLE_OPTIONS, type AgentRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
+import { PROJECT_ROLE_OPTIONS, type ProjectRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -424,12 +424,12 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
           {agent ? <RosterAgentMark agent={agent} /> : null}
           <strong translate="no">{name}</strong>
         </label>
-        <Select value={member.role} disabled={inactive} onValueChange={(value) => onChange({ role: value as AgentRole })}>
+        <Select value={member.role} disabled={inactive} onValueChange={(value) => onChange({ role: value as ProjectRole })}>
           <SelectTrigger className="project-setup-role" aria-label={`${t("project.role")} · ${name}`}>
-            <SelectValue>{(value: AgentRole) => t(`project.roles.${value}`)}</SelectValue>
+            <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {AGENT_ROLE_OPTIONS.map((role) => (
+            {PROJECT_ROLE_OPTIONS.map((role) => (
               <SelectItem key={role} value={role}>{t(`project.roles.${role}`)}</SelectItem>
             ))}
           </SelectContent>
