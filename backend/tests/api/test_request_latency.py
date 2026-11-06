@@ -281,7 +281,7 @@ def test_dashboard_answers_are_cached_per_window_for_a_short_while(monkeypatch) 
         _bootstrap(client)
         DASHBOARD_CACHE.clear()
         sessions = _count_calls(monkeypatch, app.state.session_store, "dashboard_session_metrics")
-        tokens = _count_calls(monkeypatch, app.state.session_store, "list_dashboard_token_usage")
+        tokens = _count_calls(monkeypatch, app.state.session_store, "dashboard_token_metrics")
 
         first = client.get("/api/v1/admin/dashboard/sessions").json()
         assert client.get("/api/v1/admin/dashboard/sessions").json() == first

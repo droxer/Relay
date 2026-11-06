@@ -24,6 +24,7 @@ from .deletion import SessionDeletionRows
 from .artifacts import SessionArtifactRows
 from .attachments import SessionAttachmentRows
 from .reads import SessionReadRows
+from .metrics import SessionMetricRows
 from ..listeners import ChangeListener
 
 
@@ -35,6 +36,7 @@ class DatabaseSessionStore(
     SessionArtifactRows,
     SessionAttachmentRows,
     SessionReadRows,
+    SessionMetricRows,
 ):
     REQUIRED_SCHEMA_REVISION = "20261103_0109"
     metadata = shared_metadata
