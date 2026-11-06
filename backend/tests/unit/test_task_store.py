@@ -1017,7 +1017,7 @@ def test_schedule_queries_use_their_partial_indexes_on_sqlite() -> None:
         store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
         now = datetime(2026, 10, 13, tzinfo=UTC)
         expected = {
-            "ix_tasks_listening_routines": store.listening_query(),
+            "ix_tasks_automation_routing": store.listening_query(),
             "ix_tasks_due_schedules": store.due_schedules_query(now),
             "ix_tasks_unseeded_schedules": store.unseeded_schedules_query(),
         }
