@@ -163,11 +163,15 @@ export function Drawer({
                tabbable) landed on the close button, so every phone drawer
                opened wearing a focus ring and a "Close drawer" tooltip over
                its own tabs. A drawer opened by a route rather than a tap
-               (a deep link) reports no touch, so the pointer decides. */
+               (a deep link) reports no touch, so the pointer decides.
+               With no marked field, a fine pointer takes the panel too: the
+               close button would show that same tooltip over the record's
+               Edit and menu buttons, and take the first click. Tab from the
+               panel still reaches the close button first. */
             initialFocus={(openType) =>
               openType === "touch" || coarsePointer()
                 ? panelRef.current ?? true
-                : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? true
+                : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? panelRef.current ?? true
             }
           >
             <header className="adm-drawer-head">
