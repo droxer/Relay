@@ -19,7 +19,7 @@ import {
   type NodeOwnership,
 } from "./icons";
 import { ProjectContextField, ProjectDescriptionField, ProjectGoalField, ProjectNameField } from "./ProjectFormFields";
-import { contextWithSuggestion, ProjectContextSuggestions, ProjectRefineSection } from "./ProjectContextUpkeep";
+import { contextWithSuggestion, ProjectAskAgentSection, ProjectContextSuggestions } from "./ProjectContextUpkeep";
 
 type Draft = { name: string; description: string; goal: string; context: string };
 const briefFields = ["description", "goal", "context"] as const;
@@ -34,10 +34,10 @@ const draftOf = (project: ProjectRecord): Draft => ({
   context: project.context ?? "",
 });
 
-/** The Settings tab: the project's identity (name, description; its computer
- *  is fixed) and its danger zone. It replaced the edit mode of the settings
- *  drawer, which now only creates projects, and it absorbed the retired
- *  General tab's fixed facts: computer, workspace folder, and stamps.
+/** The Settings tab, three cards: the project's brief (its computer and
+ *  folder are fixed, shown as one line in the card head), one place to ask an
+ *  agent for a proposal, and the danger zone. It replaced the edit mode of
+ *  the settings drawer, which now only creates projects.
  *
  *  The draft is edited against a BASE — the record as it stood when editing
  *  began — so a save carries that revision and a concurrent change surfaces
@@ -181,9 +181,28 @@ export function ProjectSettingsPanel({
           <h2 id="project-settings-details" className="workspace-dossier-section-title">
             {t("project.settings_details")}
           </h2>
-          <p className="project-settings-hint">
-            {t(archived ? "project.settings_archived" : "project.edit_subtitle")}
-          </p>
+          {/* Fixed at creation: one quiet line of reference, never inputs. */}
+          <dl className="project-settings-facts">
+            <div className="project-settings-fact">
+              <dt>
+                <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} aria-hidden="true" />
+                <span className="sr-only">{t("project.computer")}</span>
+              </dt>
+              <dd title={project.computerId} translate="no">{computer.label}</dd>
+            </div>
+            {workspaceLabel ? (
+              <div className="project-settings-fact">
+                <dt>
+                  <WorkspaceFolder size={ICON.xs} aria-hidden="true" />
+                  <span className="sr-only">
+                    {t(project.workspaceHostPath ? "project.folder" : "project.shared_workspace")}
+                  </span>
+                </dt>
+                <dd className="code" title={workspaceLabel} translate="no">{workspaceLabel}</dd>
+              </div>
+            ) : null}
+          </dl>
+          {archived ? <p className="project-settings-hint">{t("project.settings_archived")}</p> : null}
         </header>
         <fieldset className="project-settings-fields" disabled={archived || busy}>
           <ProjectNameField
@@ -195,32 +214,6 @@ export function ProjectSettingsPanel({
               setNameError(null);
             }}
           />
-          {/* Fixed at creation: a spec well between the editable fields —
-              reference facts, never inputs. */}
-          <dl className="project-settings-facts">
-            <div className="project-settings-fact">
-              <dt>
-                <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} aria-hidden="true" />
-                {t("project.computer")}
-              </dt>
-              <dd title={project.computerId} translate="no">{computer.label}</dd>
-            </div>
-            {workspaceLabel ? (
-              <div className="project-settings-fact">
-                <dt>
-                  <WorkspaceFolder size={ICON.xs} aria-hidden="true" />
-                  {t(project.workspaceHostPath ? "project.folder" : "project.shared_workspace")}
-                </dt>
-                <dd className="code" title={workspaceLabel} translate="no">
-                  {workspaceLabel}
-                </dd>
-              </div>
-            ) : null}
-            <div className="project-settings-fact">
-              <dt>{t("project.band_id")}</dt>
-              <dd className="code" title={project.id} translate="no">{project.id}</dd>
-            </div>
-          </dl>
           <ProjectGoalField
             value={draft.goal}
             onChange={(goal) => setDraft((current) => ({ ...current, goal }))}
@@ -231,7 +224,6 @@ export function ProjectSettingsPanel({
           />
           <ProjectContextField
             value={draft.context}
-            revision={project.contextRevision}
             onChange={(context) => setDraft((current) => ({ ...current, context }))}
           />
           <ProjectContextSuggestions
@@ -269,8 +261,7 @@ export function ProjectSettingsPanel({
         </footer>
       </form>
 
-      <ProjectRefineSection project={project} mode="plan" onStarted={() => onSetupStarted?.()} />
-      <ProjectRefineSection project={project} onStarted={() => onSetupStarted?.()} />
+      <ProjectAskAgentSection project={project} onStarted={() => onSetupStarted?.()} />
 
       <section className="project-settings-section project-settings-section--danger" aria-labelledby="project-settings-danger">
         <header className="project-settings-head">

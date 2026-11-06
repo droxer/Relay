@@ -7,6 +7,7 @@ import { setupDraftingAllowed, setupNeedsAttention } from "../lib/projectSetup";
 import type { ProjectContextSuggestion, ProjectRecord, ProjectSetupMode } from "../types";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
 /** Context lines project runs proposed. Adopting or dismissing only stages
@@ -57,30 +58,35 @@ export function contextWithSuggestion(context: string, text: string): string {
   return base ? `${base}\n- ${text}` : `- ${text}`;
 }
 
-/** Ask an agent to review the crew, context, and goal against the work so
- *  far (`setup`), or to plan the project's next tasks in order (`plan`).
- *  Either proposal lands in the same review panel a new project's setup
- *  does; nothing changes until the owner applies it. */
-export function ProjectRefineSection({
+/** One place to ask an agent for a proposal: plan the project's next tasks
+ *  in order (`plan`, drafted by the lead), or review the crew, context, and
+ *  goal against the work so far (`setup`). Either proposal lands in the
+ *  review panel on the Dashboard; nothing changes until the owner applies it.
+ *  A linked project offers only the plan, so the choice hides. */
+export function ProjectAskAgentSection({
   project,
   onStarted,
-  mode = "setup",
 }: {
   project: ProjectRecord;
   onStarted: () => void;
-  mode?: ProjectSetupMode;
 }) {
   const { t } = useTranslation();
   const { startProjectSetupMutation } = useRelayMutations();
+  const modes = ASK_MODES.filter((mode) => setupDraftingAllowed(project, mode));
+  const [picked, setPicked] = useState<ProjectSetupMode>(modes[0] ?? "plan");
   const [note, setNote] = useState("");
+  const mode = modes.includes(picked) ? picked : modes[0];
+  if (!mode) return null;
   const keys = mode === "plan" ? PLAN_KEYS : REFINE_KEYS;
   const open = setupNeedsAttention(project.setup);
   const closed = Boolean(project.archivedAt) || !project.enabled;
   // A plan builds on the crew; the lead drafts it.
   const uncrewed = mode === "plan" && !project.leadAgentId;
   const blocked = open || closed || uncrewed;
+  const notice = open ? "project.refine_open" : uncrewed ? "project.plan_needs_crew" : null;
 
   async function start() {
+    if (!mode) return;
     try {
       await startProjectSetupMutation.mutateAsync({
         projectId: project.id,
@@ -93,24 +99,38 @@ export function ProjectRefineSection({
     }
   }
 
-  if (!setupDraftingAllowed(project, mode)) return null;
-
   return (
-    <section className="project-settings-section" aria-labelledby={`project-settings-${mode}`}>
+    <section className="project-settings-section" aria-labelledby="project-settings-ask">
       <header className="project-settings-head">
-        <h2 id={`project-settings-${mode}`} className="workspace-dossier-section-title">{t(keys.title)}</h2>
-        <p className="project-settings-hint">
-          {t(open ? "project.refine_open" : uncrewed ? "project.plan_needs_crew" : keys.hint)}
-        </p>
+        <h2 id="project-settings-ask" className="workspace-dossier-section-title">{t("project.ask_agent_title")}</h2>
+        <p className="project-settings-hint">{t("project.ask_agent_hint")}</p>
       </header>
-      <fieldset className="project-settings-fields" disabled={blocked || startProjectSetupMutation.isPending}>
-        <Field label={t(keys.note)}>
+      <fieldset className="project-settings-fields" disabled={closed || startProjectSetupMutation.isPending}>
+        {modes.length > 1 ? (
+          <RadioGroup
+            className="adm-profile-segment"
+            name="project-ask-mode"
+            aria-label={t("project.ask_agent_mode")}
+            value={mode}
+            onValueChange={(next) => setPicked(next as ProjectSetupMode)}
+          >
+            {modes.map((option) => (
+              <RadioGroupChoice key={option} className="adm-profile-segment-option" value={option}>
+                <span className="adm-profile-segment-btn" data-active={option === mode ? "true" : "false"}>
+                  {t(option === "plan" ? "project.plan_title" : "project.refine_title")}
+                </span>
+              </RadioGroupChoice>
+            ))}
+          </RadioGroup>
+        ) : null}
+        <Field label={t(keys.note)} hint={notice ? t(notice) : undefined}>
           <Textarea
-            name={`project-${mode}-note`}
+            name="project-ask-note"
             rows={2}
             maxLength={4000}
             placeholder={t(keys.placeholder)}
             value={note}
+            disabled={blocked}
             onChange={(event) => setNote(event.target.value)}
           />
         </Field>
@@ -127,9 +147,10 @@ export function ProjectRefineSection({
   );
 }
 
+const ASK_MODES: ProjectSetupMode[] = ["plan", "setup"];
+
 const REFINE_KEYS = {
   title: "project.refine_title",
-  hint: "project.refine_hint",
   note: "project.refine_note",
   placeholder: "project.refine_placeholder",
   start: "project.refine_start",
@@ -138,7 +159,6 @@ const REFINE_KEYS = {
 
 const PLAN_KEYS = {
   title: "project.plan_title",
-  hint: "project.plan_hint",
   note: "project.plan_note",
   placeholder: "project.plan_placeholder",
   start: "project.plan_start",

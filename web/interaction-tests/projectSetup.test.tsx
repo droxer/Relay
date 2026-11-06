@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
-import { ProjectRefineSection } from "../src/components/ProjectContextUpkeep";
+import { ProjectAskAgentSection } from "../src/components/ProjectContextUpkeep";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
@@ -285,10 +285,8 @@ it("offers fresh and existing projects and keeps drafting exclusive to fresh pro
 
 it("offers only planning on an existing project's settings", () => {
   const project = { ...created, workspaceHostPath: "/Users/alice/code/app" };
-  render(<>
-    <ProjectRefineSection project={project} onStarted={vi.fn()} />
-    <ProjectRefineSection project={project} mode="plan" onStarted={vi.fn()} />
-  </>);
+  render(<ProjectAskAgentSection project={project} onStarted={vi.fn()} />);
+  expect(screen.queryByRole("radio")).toBeNull();
   expect(screen.queryByRole("button", { name: "project.refine_start" })).toBeNull();
   expect(screen.getByRole("button", { name: "project.plan_start" })).toBeTruthy();
 });
