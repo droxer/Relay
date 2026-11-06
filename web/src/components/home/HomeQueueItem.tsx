@@ -20,6 +20,7 @@ import {
 } from "../icons";
 import { computerName } from "../../lib/createAgent";
 import type { HomeItem } from "../../lib/homeQueue";
+import { homeItemSummary } from "../../lib/homeItemSummary";
 import { permissionInputSummary } from "../../lib/permissionRequests";
 import { taskRef } from "../../lib/taskRef";
 import type { HomeActions } from "./useHomeActions";
@@ -57,16 +58,18 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
   const project = projectName(item.projectId);
   const agent = itemAgent(item, agentName);
   const ref = itemRef(item);
+  const title = itemTitle(item, t);
+  const why = itemWhy(item, t, agent);
 
   return (
     <li className="home-item" data-kind={item.kind} data-tone={tone} aria-busy={busy || undefined}>
       <span className="home-item-glyph" aria-hidden="true"><Icon size={ICON.sm} /></span>
       <div className="home-item-body">
-        <a className="home-item-title" href={href} onClick={(event) => { if (isPlainClick(event)) { event.preventDefault(); onOpen(); } }}>
+        <a className="home-item-title" href={href} title={title} onClick={(event) => { if (isPlainClick(event)) { event.preventDefault(); onOpen(); } }}>
           {ref ? <span className="home-item-ref">{ref}</span> : null}
-          {itemTitle(item, t)}
+          {homeItemSummary(title)}
         </a>
-        <p className="home-item-why">{itemWhy(item, t, agent)}</p>
+        <p className="home-item-why" title={why}>{homeItemSummary(why)}</p>
         <p className="home-item-meta">
           <span className="home-item-kind">{kindLabel}</span>
           {project ? <span>{project}</span> : null}
