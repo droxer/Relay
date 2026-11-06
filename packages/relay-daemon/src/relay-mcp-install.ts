@@ -1,5 +1,5 @@
 /** Scoped, idempotent runtime configuration. Unowned entries are never overwritten. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, statSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, statSync, rmSync, lstatSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
@@ -26,7 +26,21 @@ export function installRelayMcp(options: InstallOptions): string[] {
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const lock = join(root, 'install.lock');
   try { mkdirSync(lock, { mode: 0o700 }); }
-  catch { throw new Error('Another Relay MCP installer is active; retry setup after it finishes.'); }
+  catch {
+    const stat = lstatSync(lock);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Unsafe Relay MCP installation lock.');
+    let stale = false;
+    try {
+      const owner = JSON.parse(readFileSync(join(lock,'owner.json'),'utf8')) as {pid?:number};
+      if (Number.isInteger(owner.pid) && owner.pid! > 0) {
+        try { process.kill(owner.pid!,0); }
+        catch (error) { stale = (error as NodeJS.ErrnoException).code === 'ESRCH'; }
+      }
+    } catch { stale = Date.now() - stat.mtimeMs > 120_000; }
+    if (!stale) throw new Error('Another Relay MCP installer is active; retry setup after it finishes.');
+    rmSync(lock,{recursive:true}); mkdirSync(lock,{mode:0o700});
+  }
+  writeFileSync(join(lock,'owner.json'),JSON.stringify({pid:process.pid}),{mode:0o600,flag:'wx'});
   try { return install(options); } finally { rmSync(lock, { recursive: true }); }
 }
 function install(options: InstallOptions): string[] {
@@ -49,12 +63,12 @@ function install(options: InstallOptions): string[] {
       const marker = text.indexOf(begin); const endIndex = text.indexOf(end, marker);
       const key = `${path}:${serverName}`;
       if ((current || marker >= 0) && (!manifest[key] || digest(current) !== manifest[key] || marker < 0 || endIndex < 0)) throw new Error(`Relay MCP conflict: user owned or modified entry in ${path}`);
-      const block = `${begin}\n[mcp_servers.${serverName}]\ncommand = ${JSON.stringify(process.execPath)}\nargs = ${JSON.stringify(args)}\n${end}\n`;
+      const block = `${begin}\n[mcp_servers.${serverName}]\ncommand = ${JSON.stringify(process.execPath)}\nargs = ${JSON.stringify(args)}\nenv_vars = ["RELAY_MCP_RUN_CONTEXT"]\n${end}\n`;
       const next = marker >= 0 ? text.slice(0, marker) + block + text.slice(endIndex + end.length).replace(/^\r?\n/, '') : text + (text.endsWith('\n') || !text ? '' : '\n') + block;
       const updated = parseToml(next) as any;
       privateWrite(path, next); manifest[key] = digest(updated.mcp_servers[serverName]);
     } else {
-      if (runtime === 'claude') { path = join(home, '.claude.json'); keys = ['mcpServers', serverName]; entry = { type: 'stdio', command: process.execPath, args }; }
+      if (runtime === 'claude') { path = join(home, '.claude.json'); keys = ['mcpServers', serverName]; entry = { type: 'stdio', command: process.execPath, args, env: {RELAY_MCP_RUN_CONTEXT:'${RELAY_MCP_RUN_CONTEXT:-}'} }; }
       else if (runtime === 'kimi') { path = join(env.KIMI_CODE_HOME ?? join(home, '.kimi-code'), 'mcp.json'); keys = ['mcpServers', serverName]; entry = { command: process.execPath, args }; }
       else if (runtime === 'opencode') {
         const root = join(env.XDG_CONFIG_HOME ?? join(home, '.config'), 'opencode');

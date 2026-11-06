@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from ..core.ids import new_relay_id
+from ..core.project_roles import manager_run_context
 from ..agents.delegation import delegation_candidates
 from ..sessions.handoff_context import capture_handoff_context
 from ..security.actor import Actor
@@ -51,13 +52,11 @@ class RoundRequestMixin(ConductorState):
         )
         if intent.project_setup is not None:
             manifest = {**manifest, "projectSetup": intent.project_setup}
-        if project_snapshot and session and len(resolved) == 1:
+        if intent.project_setup is None and project_snapshot and session and len(resolved) == 1:
             project = self.ctx.project_store.get_project(project_snapshot["projectId"])
-            if project and session["id"] == project.get("managerThreadId") and resolved[0].get("agentId") == project.get("managerAgentId"):
-                manifest = {**manifest, "projectManager": {
-                    "projectId": project["id"], "agentId": project["managerAgentId"],
-                    "bindingRevision": project["version"],
-                }}
+            manager_context = manager_run_context(project, resolved[0].get("agentId")) if project else None
+            if manager_context:
+                manifest = {**manifest, "projectManager": manager_context}
         task_id, scope_fields = self._round_work_scope(
             intent, session, is_recovery, answered_task
         )

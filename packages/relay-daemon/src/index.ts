@@ -8,7 +8,7 @@ import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
 import { AgentNotInstalledError, AgentUnresponsiveError } from "./agent-preflight.js";
 import { responseErrorDetail } from "./http-error-detail.js";
 export { localProcessExecStream } from "./local-runtime.js";
-import { accessSync, chmodSync, constants, mkdirSync, statSync } from "node:fs";
+import { accessSync, chmodSync, constants, mkdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -102,7 +102,8 @@ import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.j
 import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeImages } from "./image-attachments.js";
-import { bootstrapRelayMcp } from "./relay-mcp-bootstrap.js";
+import { createRunMcpProxy, MANAGED_MCP_CONTEXT_ENV } from "./relay-mcp-managed.js";
+import { bootstrapRelayMcp, createMcpReconciler, configureRelayMcp } from "./relay-mcp-bootstrap.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
 import { materializeSkills } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
@@ -424,7 +425,20 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     maxConcurrentRuns,
     status: status ?? (activeRuns.size > 0 ? "busy" : "ready"),
   });
-  let mcpSetupAttempted = false;
+  const reconcileMcp = createMcpReconciler(runtimes => bootstrapRelayMcp({ home: homedir(), stateDir, sandboxId, backendUrl,
+    nodeToken: token, runtimes, fetchFn, signal: runtimeSignal }));
+  let lastMcpStatus = "";
+  const refreshMcp = async () => {
+    if (options.environment || sandboxMode !== "none" || stopping) return;
+    const status = await reconcileMcp(readyAgents(agentHealth));
+    const key = JSON.stringify(status);
+    if (key === lastMcpStatus) return;
+    lastMcpStatus = key;
+    try { (await import("./relay-mcp-install.js")).privateWrite(join(stateDir,"mcp-status.json"),key); }
+    catch { logger.warn("Could not persist Relay MCP setup status", {sandboxId}); }
+    if (status.status === "ready") logger.info("Relay MCP ready", {runtimes:status.runtimes});
+    else logger.warn("Relay MCP setup needs attention; it will reconcile again", {status:status.status,code:status.code});
+  };
   const register = async (): Promise<DaemonNodeHeartbeatSettings | undefined> => {
     const url = relayApiUrl(backendUrl, "/daemon-node-registrations");
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
@@ -441,14 +455,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         logger.warn("linked project directory refused", { sandboxId, ...rejected });
       }
     }
-    if (!mcpSetupAttempted && !options.environment && sandboxMode === "none") {
-      mcpSetupAttempted = true;
-      try {
-        const installed = await bootstrapRelayMcp({ home: homedir(), stateDir, sandboxId, backendUrl, nodeToken: token,
-          runtimes: readyAgents(agentHealth), fetchFn, signal: runtimeSignal });
-        logger.info("Relay MCP installed for local Agent Runtimes", { runtimes: installed });
-      } catch { logger.warn("Relay MCP setup failed; check runtime configuration conflicts or Computer enrollment", { sandboxId }); }
-    }
+    void refreshMcp();
     return validHeartbeatSettings(response.heartbeat);
   };
   if (options.preflight !== false) {
@@ -783,6 +790,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       });
     };
     while (!stopping) {
+      void refreshMcp();
       if (acknowledgeUpdatePause(stateDir)) {
         await delay(100, runtimeSignal);
         continue;
@@ -950,7 +958,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             },
           });
           const promise = Promise.resolve().then(() =>
-            workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => executeCommand(
+            workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => {
+              if (!options.environment && sandboxMode === "none") configureRelayMcp({home:homedir(),stateDir,sandboxId,backendUrl,runtimes:[command.agent],env:process.env});
+              return executeCommand(
               backendUrl,
               sandboxId,
               token,
@@ -962,7 +972,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               environment,
               controller.signal,
               echoAgentOutput,
-            ), command.reportWorkspaceStatus ? {
+            ); }, command.reportWorkspaceStatus ? {
               sessionId: command.sessionId,
               onWaiting: async (blockingSessionId) => {
                 await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
@@ -1200,6 +1210,13 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
     checks.push({ name, ok, detail });
     logger.info("daemon doctor check", { check: name, ok, detail, sandboxId });
   };
+  if (sandboxMode === "none" && existsSync(join(stateDir,"mcp-status.json"))) {
+    try {
+      const status = JSON.parse(readFileSync(join(stateDir,"mcp-status.json"),"utf8")) as {status:string;code?:string;checkedAt?:number};
+      const fresh = typeof status.checkedAt === "number" && Date.now() - status.checkedAt < 30*60_000;
+      add("relay-mcp",fresh && status.status === "ready",!fresh ? "Standalone Relay MCP status is stale; start the daemon to reconcile." : status.status === "ready" ? "Standalone Relay MCP is configured." : status.code ?? "Relay MCP setup is retrying.");
+    } catch { add("relay-mcp",false,"Relay MCP setup status is unreadable; restart the daemon to reconcile."); }
+  }
   if (!sandboxId) {
     add("sandbox-id", false, "--sandbox-id or RELAY_SANDBOX_ID is required.");
     return { ok: false, checks };
@@ -1442,15 +1459,12 @@ async function executeCommand(
   const managerToolAbort = new AbortController();
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   try {
-    managerBridge = state.project_manager ? createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
+    const invokeManager = state.project_manager ? createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
+      commandId:command.id,leaseId:command.leaseId,projectId:state.project_manager.projectId,fetchFn,
+      signal:AbortSignal.any([managerToolAbort.signal,...(signal?[signal]:[])])}) : undefined;
+    managerBridge = invokeManager ? createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
       const workspaceTool = ["files", "file", "search"].includes(tool);
-      const response = await fetchFn(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/project-manager/tools`), {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ commandId: command.id, leaseId: command.leaseId, tool: workspaceTool ? "workspace" : tool, arguments: args }),
-        signal: AbortSignal.any([managerToolAbort.signal, ...(signal ? [signal] : []), AbortSignal.timeout(60_000)]),
-      });
-      if (!response.ok) throw new Error(`Manager tool failed (${response.status}): ${await responseErrorDetail(response)}`);
-      const result: unknown = await response.json();
+      const result = await invokeManager(workspaceTool ? "workspace" : tool,args);
       return workspaceTool ? managerWorkspaceTool(threadWorkspace.hostPath, tool, args) : result;
     }) : undefined;
     if (managerBridge && state.project_manager) state.project_manager = { ...state.project_manager, toolCommand: managerBridge.toolCommand };
@@ -1714,6 +1728,9 @@ async function executeCommand(
     const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: recordsId };
     const options = {
       execStream: execution.execStream,
+      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge && state.project_manager
+        ? {backendUrl,projectId:state.project_manager.projectId,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
+        : {disabled:true})} : undefined,
       eventSink,
       runId: command.runId,
       agent: command.agent,

@@ -1,6 +1,9 @@
 """Relay API for MCP clients using scoped bearer tokens."""
 from __future__ import annotations
 from typing import Any
+from datetime import datetime, timedelta, UTC
+from ...persistence.engine import store_transaction
+from ...persistence.db_time import parse_db_time
 from fastapi import APIRouter, HTTPException, Request, Response
 from ...core.computer_identity import computer_id
 from ...persistence.account.mcp_tokens import DatabaseMcpTokenStore
@@ -87,6 +90,23 @@ def computer_mcp_token(sandbox_id: str, request: Request, response: Response, ct
     node = next((n for n in ctx.registry.monitor_nodes() if n["id"] == sandbox_id), None)
     if not node or not node.get("userId"):
         raise HTTPException(403, "MCP requires an owned Computer.")
+    existing = _request_body.get("existingToken")
+    if existing is not None:
+        if not isinstance(existing, str) or _request_body.get("commandId") is not None:
+            raise HTTPException(400, "Invalid MCP renewal request.")
+        store = _store(ctx)
+        with store_transaction(store.engine):
+            prior = store.credential_status(existing)
+            if not prior or prior["ownerUserId"] != node["userId"] or prior["computerId"] != computer_id(node) or prior.get("commandId") or prior.get("projectIds") is not None:
+                raise HTTPException(403, "mcp_token_unknown")
+            if prior.get("revokedAt"):
+                raise HTTPException(403, "mcp_token_revoked")
+            response.headers["Cache-Control"] = "no-store"
+            expiry = parse_db_time(prior["expiresAt"])
+            if expiry is not None and expiry > datetime.now(UTC) + timedelta(days=7):
+                return {**{k:v for k,v in prior.items() if k != "commandId"}, "renewed": False}
+            store.revoke(node["userId"], prior["id"])
+            return {**store.issue(node["userId"], "Local Computer MCP", computer_id=computer_id(node)), "renewed": True}
     ids = None
     command_id = _request_body.get("commandId")
     if command_id is not None:
@@ -96,7 +116,7 @@ def computer_mcp_token(sandbox_id: str, request: Request, response: Response, ct
         if not command or command["nodeId"] != sandbox_id or command["status"] != "dispatched" or command.get("leaseId") != _request_body.get("leaseId"):
             raise HTTPException(409, "Run lease is no longer active.")
         scope = command["command"].get("state", {}).get("project_manager")
-        if not scope:
+        if not scope or command["command"].get("logicalAgentId") != scope.get("agentId"):
             raise HTTPException(403, "Project Manager role required.")
         project = ctx.project_store.get_project(scope["projectId"])
         if not project or project["ownerUserId"] != node["userId"] or project["computerId"] != computer_id(node):
@@ -137,13 +157,15 @@ def mcp_tool(project_id: str, request: Request, ctx: AppContextDep, *, _request_
             project = initialize_manager(ctx, project)
             if not project.get("managerAgentId"):
                 raise ManagerError("manager_unconfigured")
-            project, thread_id = ensure_manager_thread(ctx, project)
-            command = {"sessionId": thread_id, "runId": None, "mcpTokenId": grant["id"]}
+            command: dict[str, Any]
             if grant.get("commandId"):
                 active_command = ctx.daemon_store.get_command(grant["commandId"])
                 if not active_command:
                     raise HTTPException(401, "This Relay run has ended.")
                 command = {**active_command["command"], "mcpTokenId": grant["id"]}
+            else:
+                project, thread_id = ensure_manager_thread(ctx, project)
+                command = {"sessionId": thread_id, "runId": None, "mcpTokenId": grant["id"]}
             return {"proposal": stage_proposal(ctx, project, command, arguments.get("operations"))}
         return read_manager_tool(ctx, project, tool, arguments)
     except ManagerError as error:

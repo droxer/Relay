@@ -39,3 +39,28 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     expect(applications).toHaveLength(1);expect(tasks[0].status).toBe('backlog');expect(tasks[0].title).toBe('Design sign in');
   });
 }
+
+test('manager handover replaces a saved target when reopening the normal Thread',async({page})=>{
+ const stamp='2026-11-06T00:00:00Z';
+ const agents=['ada','bea'].map(id=>({id,displayName:id==='ada'?'Ada':'Bea',executorKind:id==='ada'?'codex':'claude',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:`p-${id}`,agentId:id,computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp}));
+ const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'project_manager',responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'ada',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
+ const session={id:'manager-thread',taskGoal:'Launch · Project Manager',projectId:'launch',ownerUserId:'u',ownerAgentId:'bea',participantAgentIds:['ada','bea'],participants:['human'],computerId:'computer',daemonNodeId:'node',status:'completed',phase:'done',agentRuns:[],events:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
+ const node={id:'node',userId:'u',workspaceId:'host',computerId:'computer',name:'Computer',activeRuns:[],online:true,stale:false,status:'ready',agents:{codex:'ready',claude:'ready'},capabilities:['thread-workspaces','project-workspaces','project-manager','project-manager-mcp']};
+ const sent:unknown[]=[];
+ await page.addInitScript(()=>localStorage.setItem('relay-web.threadComposerPicks',JSON.stringify({'manager-thread':{kind:'agent',agent:{id:'ada',executorKind:'codex'}}})));
+ await page.route('**/api/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  let body:unknown={sessions:[session],agents,projects:[project],nodes:[node],teams:[],tasks:[],skills:[],sandboxes:[]};
+  if(path.endsWith('/auth/me'))body={authenticated:true,user:{id:'u',userId:'u',username:'Fei',role:'user',theme:'light',language:'en'}};
+  if(path.endsWith('/threads/manager-thread'))body=session;
+  if(path.endsWith('/manager'))body={project,manager:{agentId:'bea',agentName:'Bea',threadId:'manager-thread',reason:null,toolsAvailable:true,candidates:agents},proposals:[]};
+  if(path.endsWith('/messages')&&route.request().method()==='POST'){sent.push(route.request().postDataJSON());body=session;}
+  if(path.endsWith('/events')){await route.fulfill({status:200,contentType:'text/event-stream',body:''});return;}
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+ });
+ await page.goto('/threads/manager-thread');
+ const composer=page.getByRole('textbox',{name:'Message Bea',exact:true});await expect(composer).toBeVisible();
+ await composer.fill('What changed?');await page.getByRole('button',{name:'Send',exact:true}).click();
+ await expect.poll(()=>sent.length).toBe(1);
+ expect(sent[0]).toMatchObject({addressAgentIds:['bea']});
+});

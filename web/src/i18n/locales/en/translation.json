@@ -105,7 +105,8 @@
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
-    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again."
+    "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
+    "project_manager_target_changed": "The Project Manager changed. Refresh the conversation and send your message to the current Agent."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {

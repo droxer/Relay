@@ -233,6 +233,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     targetsReady: agentsReady && teamsReady && nodesReady,
     teamIds: composerTeamIds,
     threadAgent,
+    roleBindingKey: projects.find(project => project.managerThreadId === activeSession?.id)?.managerAgentId ?? (projects.some(project => project.managerThreadId === activeSession?.id) ? "unassigned" : undefined),
   });
 
   const applySessionFromHash = useCallback((sessionId: string) => {

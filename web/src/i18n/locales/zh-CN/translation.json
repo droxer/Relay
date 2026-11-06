@@ -105,7 +105,8 @@
     "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
     "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
-    "save_prerequisites": "无法保存前置任务。请检查连接后重试。"
+    "save_prerequisites": "无法保存前置任务。请检查连接后重试。",
+    "project_manager_target_changed": "项目经理已变更。请刷新对话并向当前 Agent 重新发送消息。"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {

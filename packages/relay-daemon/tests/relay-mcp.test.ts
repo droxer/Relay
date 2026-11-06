@@ -83,8 +83,9 @@ test('local runtime bootstrap uses its Computer credential once and stores only 
   try {
     let issued = 0;
     const options = { home, stateDir: join(home, 'private'), sandboxId: 'computer', backendUrl: 'https://relay.example', nodeToken: 'node-secret', env: {}, runtimes: ['codex', 'pi'], fetchFn: (async (_url: unknown, request: RequestInit) => {
-      issued++; assert.equal((request.headers as any).Authorization, 'Bearer node-secret');
-      return new Response(JSON.stringify({ token: 'relay_mcp_private' }), { status: 201 });
+      assert.equal((request.headers as any).Authorization, 'Bearer node-secret');
+      if (JSON.parse(String(request.body)).existingToken) return Response.json({renewed:false});
+      issued++; return Response.json({ token: 'relay_mcp_private' });
     }) as typeof fetch };
     await bootstrapRelayMcp(options); await bootstrapRelayMcp(options); assert.equal(issued, 1);
     assert.equal(statSync(join(home, 'private', 'credentials', 'mcp.token')).mode & 0o777, 0o600);

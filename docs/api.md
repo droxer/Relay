@@ -1463,3 +1463,22 @@ MCP clients authenticate using `Authorization: Bearer <MCP token>`:
 as manager proposals. Direct MCP proposals have `source: "mcp"`, token provenance
 and no fabricated run ID. They remain pending until the owner applies them with
 a browser session. MCP bearer tokens cannot use owner mutation endpoints.
+
+
+### MCP renewal and manager handover
+
+An enrolled Computer can check its standalone MCP credential with
+`POST /daemon-nodes/{id}/mcp-token` and `{existingToken}`. Healthy grants return
+metadata and `renewed: false`, with no plaintext token. Within seven days of
+expiry, or after expiry, the backend atomically revokes the old credential and
+returns its replacement once with `renewed: true`. Revoked/unknown grants return
+403 and cannot be renewed. Renewal cannot be combined with a command scope.
+
+Manager reassignment, whether through PUT manager or PATCH Project members,
+records `thread.project_manager_assigned` in the canonical Thread in the same
+transaction. Historical participants/runs remain; the current owner becomes the
+new role holder. An addressed message to an obsolete canonical manager target
+returns 409 `project_manager_target_changed`. Other Project conversation rounds
+resolve manager capability from the enabled roster role and retain their own
+Thread/run identity in MCP proposals. Clients require `project-manager-mcp` for
+this command-scoped behavior.

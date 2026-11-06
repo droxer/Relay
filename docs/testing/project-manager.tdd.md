@@ -1,5 +1,8 @@
 # Project Manager and Relay MCP verification
 
+For the subsequent architecture fixes and current regression evidence, see
+[Project Manager architecture fixes](project-manager-architecture-fixes.md).
+
 Verified locally on 2026-11-06. This evidence supersedes the original drawer
 implementation and its screenshots.
 

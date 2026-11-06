@@ -38,6 +38,16 @@ class DatabaseMcpTokenStore:
             )).mappings().first()
         return {**_public(row), "commandId": row["command_id"]} if row else None
 
+    def credential_status(self, token: str) -> dict[str, Any] | None:
+        """Inspect expiry/revocation for an authenticated Computer's renewal."""
+        if not token.startswith("relay_mcp_") or len(token) > 128:
+            return None
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(select(mcp_tokens).where(
+                mcp_tokens.c.token_hash == hashlib.sha256(token.encode()).hexdigest(),
+            ).with_for_update()).mappings().first()
+        return {**_public(row), "commandId": row["command_id"]} if row else None
+
     def list_tokens(self, owner: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = conn.execute(select(mcp_tokens).where(mcp_tokens.c.owner_user_id == owner,

@@ -55,6 +55,32 @@ def manager_role_patch(ctx: Any, project: dict[str, Any], agent_id: str) -> dict
             "leadAgentId": project.get("leadAgentId") or agent_id}
 
 
+def update_project_with_manager(ctx: Any, project_id: str, patch: dict[str, Any], *, expected_version: int) -> dict[str, Any]:
+    """Commit the role and its conversation handover together."""
+    with resource_transaction(ctx.project_store.engine, f"project-manager:{project_id}"):
+        project = ctx.project_store.update_project(project_id, patch, expected_version=expected_version)
+        sync_manager_thread(ctx, project)
+        return project
+
+
+def sync_manager_thread(ctx: Any, project: dict[str, Any]) -> None:
+    thread_id = project.get("managerThreadId")
+    if not thread_id:
+        return
+    try:
+        header = ctx.session_store.get_session_header(thread_id)
+    except KeyError:
+        return
+    agent_id = project_manager_id(project.get("members", []))
+    if header.get("ownerAgentId") == agent_id:
+        return
+    ctx.session_store.append_event(thread_id, relay_event("thread.project_manager_assigned", thread_id, {
+        "agentId": agent_id, "previousAgentId": header.get("ownerAgentId"),
+        "projectId": project["id"], "projectVersion": project["version"],
+        "actorUserId": project["ownerUserId"],
+    }))
+
+
 def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None) -> str | None:
     candidates = manager_candidates(ctx, project)
     ids = [agent["id"] for agent in candidates]
@@ -67,6 +93,7 @@ def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None)
 
 def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
     project = initialize_manager(ctx, project)
+    sync_manager_thread(ctx, project)
     historical_ids: set[str] = set()
     if project.get("managerThreadId"):
         try:
@@ -85,7 +112,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
             names[agent_id] = previous["displayName"]
     agent = next((a for a in candidates if a["id"] == project.get("managerAgentId")), None)
     nodes = [n for n in ctx.registry.monitor_nodes() if n.get("online") and computer_id(n) == project["computerId"]]
-    tools = any("project-manager" in (n.get("capabilities") or []) for n in nodes)
+    tools = any("project-manager-mcp" in (n.get("capabilities") or []) for n in nodes)
     reason = project_work_error(project) or (
         "manager_unconfigured" if not project.get("managerAgentId") else
         "manager_agent_unavailable" if not agent else
@@ -120,6 +147,7 @@ def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, 
         if thread_id:
             try:
                 ctx.session_store.get_session_header(thread_id)
+                sync_manager_thread(ctx, project)
                 return project, thread_id
             except KeyError:
                 pass  # A deleted canonical Thread is replaced on the next message.

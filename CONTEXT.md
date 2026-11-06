@@ -225,7 +225,11 @@ A local stdio MCP server installed in an Agent Runtime. It calls the Relay API
 using a private, revocable bearer token scoped to the user's Projects or Computer.
 It exposes current Project records and Task proposals; owner approval remains a
 separate authenticated action. Runtime configuration references a private token
-file rather than embedding credentials in a Project workspace or prompt.
+file rather than embedding credentials in a Project workspace or prompt. Managed
+runs use a separate Project/run-scoped grant held by the Daemon Node; the
+standalone Computer grant is never a fallback for a managed run. Capability is
+resolved from the Agent's enabled Project role and pinned in its run context,
+independently of which Thread carries the conversation.
 _Avoid_: daemon token (a separate execution-plane credential), shell helper as MCP
 
 **Prerequisite**:

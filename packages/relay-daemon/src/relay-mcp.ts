@@ -1,6 +1,7 @@
 /** Relay MCP stdio endpoint. Runtime configuration contains a token file path, never a token. */
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { managedMcpInvoker, MANAGED_MCP_CONTEXT_ENV } from './relay-mcp-managed.js';
 import { relayApiUrl } from 'relay-core/api-url';
 
 const toolMap: Record<string, string> = {
@@ -96,7 +97,8 @@ export async function runMcp(args: string[]): Promise<void> {
   const path = args[0] === '--config' ? args[1] : undefined;
   if (!path) throw new Error('Usage: relay mcp --config <private-config.json>');
   const config = JSON.parse(readFileSync(path, 'utf8')) as { backendUrl: string; tokenFile: string };
-  await serveMcp(apiInvoker(config.backendUrl, config.tokenFile));
+  const managed = process.env[MANAGED_MCP_CONTEXT_ENV]?.trim() || undefined;
+  await serveMcp(managed !== undefined ? managedMcpInvoker(config.backendUrl, managed) : apiInvoker(config.backendUrl, config.tokenFile));
 }
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runMcp(process.argv.slice(2)).catch(() => { process.stderr.write('Relay MCP could not start. Check its private configuration.\n'); process.exitCode = 1; });

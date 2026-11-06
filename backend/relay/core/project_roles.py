@@ -28,3 +28,11 @@ def manager_roster(members: list[dict[str, Any]], agent_id: str, fallback_roles:
     if not found:
         result.append({"agentId": agent_id, "role": PROJECT_MANAGER_ROLE, "enabled": True, "responsibilities": PROJECT_MANAGER_RESPONSIBILITIES})
     return result
+
+
+def manager_run_context(project: dict[str, Any], agent_id: str | None) -> dict[str, Any] | None:
+    """Resolve capability from the enabled Project role, independently of a Thread."""
+    holder = project_manager_id([m for m in project.get("members", []) if m.get("enabled", True)])
+    if not holder or agent_id != holder:
+        return None
+    return {"projectId": project["id"], "agentId": holder, "bindingRevision": project["version"]}

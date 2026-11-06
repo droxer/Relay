@@ -66,6 +66,16 @@ def test_computer_mcp_tokens_follow_computer_ownership_and_run_lifetime(setup_en
     assert issued.status_code == 201, issued.text
     run_auth = {"Authorization": f"Bearer {issued.json()['token']}"}
     assert external.get('/api/v1/mcp/projects', headers=run_auth).status_code == 200
+    other = client.post('/api/v1/projects', json={'name':'Other scope','daemonNodeId':node['id'],'members':[]}).json()['project']
+    refused = external.post(f"/api/v1/mcp/projects/{other['id']}/tools", headers=run_auth,json={'tool':'overview'})
+    assert refused.status_code == 403, refused.text
+    staged = external.post(f"/api/v1/mcp/projects/{project['id']}/tools",headers=run_auth,json={
+        'tool':'propose','arguments':{'operations':[{'kind':'create','fields':{'title':'Run attributed'}}]},
+    })
+    assert staged.status_code == 200, staged.text
+    assert staged.json()['proposal']['agentId'] == command['logicalAgentId']
+    assert staged.json()['proposal']['runId'] == command['runId']
+    assert staged.json()['proposal']['threadId'] == command['sessionId']
     setup_api._complete(app, node, command, result['threadId'])
     assert external.get('/api/v1/mcp/projects', headers=run_auth).status_code == 401
     assert external.get('/api/v1/mcp/projects', headers=auth).status_code == 200

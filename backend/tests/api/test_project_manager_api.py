@@ -1,5 +1,6 @@
 """Relay's manager reads live project records and stages owner-applied changes."""
 from fastapi.testclient import TestClient
+import pytest
 import test_project_setup_api as setup_api
 from test_project_setup_api import _take_command, _complete
 
@@ -11,7 +12,7 @@ def _ready(app, node):
         "sandboxId": node["id"], "userId": node["userId"],
         "token": f"token_{node['id']}", "protocolVersion": 1,
         "supportedAgents": ["codex", "claude"],
-        "capabilities": ["thread-workspaces", "project-workspaces", "project-manager"],
+        "capabilities": ["thread-workspaces", "project-workspaces", "project-manager", "project-manager-mcp"],
         "status": "ready", "workspacePath": "/workspace/relay",
         "workspaceId": node["workspaceId"],
     })
@@ -339,11 +340,16 @@ def test_open_manager_uses_a_normal_agent_thread_without_dispatch(setup_env):
     assert command['state']['project_manager']['projectId'] == project['id']
 
 
-def test_manager_handover_updates_thread_and_rejects_stale_target(setup_env):
+@pytest.mark.parametrize("via_roster", [False, True])
+def test_manager_handover_updates_thread_and_rejects_stale_target(setup_env, via_roster):
     app, client, node, project, first, second = setup_env
     thread_id = client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId']
     project = client.get(f"/api/v1/projects/{project['id']}").json()['project']
-    changed = client.put(f"/api/v1/projects/{project['id']}/manager", json={
+    changed = client.patch(f"/api/v1/projects/{project['id']}",json={
+        'expectedVersion':project['version'],'members':[
+            {**m,'role':'planner'} for m in project['members']
+        ]+[{'agentId':second['id'],'role':'project_manager','responsibilities':'Coordinate','enabled':True}],
+    }) if via_roster else client.put(f"/api/v1/projects/{project['id']}/manager", json={
         'agentId':second['id'], 'expectedVersion':project['version'],
     })
     assert changed.status_code == 200, changed.text
@@ -378,3 +384,37 @@ def test_manager_role_grants_run_context_outside_canonical_thread(setup_env):
     assert command['state']['project_manager']['projectId'] == project['id']
     read = _tool(setup_env,command,'overview')
     assert read.status_code == 200,read.text
+    external = TestClient(app)
+    grant = external.post(f"/api/v1/daemon-nodes/{node['id']}/mcp-token",headers={
+        'Authorization':f"Bearer token_{node['id']}",
+    },json={'commandId':command['id'],'leaseId':command['leaseId']})
+    assert grant.status_code == 201,grant.text
+    staged = external.post(f"/api/v1/mcp/projects/{project['id']}/tools",headers={
+        'Authorization':f"Bearer {grant.json()['token']}",
+    },json={'tool':'propose','arguments':{'operations':[{'kind':'create','fields':{'title':'Ordinary Thread proposal'}}]}})
+    assert staged.status_code == 200,staged.text
+    assert staged.json()['proposal']['threadId'] == thread['id']
+    assert staged.json()['proposal']['runId'] == command['runId']
+    assert app.state.project_store.get_project(project['id'])['managerThreadId'] is None
+
+
+def test_role_and_conversation_handover_roll_back_together(setup_env, monkeypatch):
+    app,client,_,project,first,second = setup_env
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId']
+    project = client.get(f"/api/v1/projects/{project['id']}").json()['project']
+    append = app.state.session_store.append_event
+
+    def fail_handover(session_id, event, **kwargs):
+        if event['type'] == 'thread.project_manager_assigned':
+            raise RuntimeError('Simulated handover storage fault')
+        return append(session_id,event,**kwargs)
+
+    monkeypatch.setattr(app.state.session_store,'append_event',fail_handover)
+    failing = TestClient(app,raise_server_exceptions=False)
+    failing.cookies.update(client.cookies)
+    response = failing.put(f"/api/v1/projects/{project['id']}/manager",json={
+        'agentId':second['id'],'expectedVersion':project['version'],
+    })
+    assert response.status_code == 500,response.text
+    assert app.state.project_store.get_project(project['id'])['managerAgentId'] == first['id']
+    assert app.state.session_store.get_session_header(thread_id)['ownerAgentId'] == first['id']

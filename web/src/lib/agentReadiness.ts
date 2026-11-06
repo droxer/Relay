@@ -50,6 +50,7 @@ const PLACEMENT_REJECTION_KEYS: Record<string, string> = {
 };
 
 export function formatDispatchError(error: unknown, t: TFunction): string | undefined {
+  if (errorCode(error) === "project_manager_target_changed") return t("errors.project_manager_target_changed");
   if (errorCode(error) === "question_superseded") return t("errors.question_superseded");
   const message = errorMessage(error);
   const match = message.match(NOT_READY_AGENTS_RE);

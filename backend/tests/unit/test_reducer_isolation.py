@@ -30,6 +30,7 @@ def test_session_reducers_leave_the_source_snapshot_untouched() -> None:
         {"type": "agent.completed", "timestamp": TS, "runId": "run_1", "status": "completed", "exitCode": 0},
         {"type": "artifact.created", "timestamp": TS, "artifact": {"id": "art_1", "agentRunId": "run_1"}},
         {"type": "human.decision", "timestamp": TS, "decision": {"kind": "approve"}},
+        {"type": "thread.project_manager_assigned", "timestamp": TS, "agentId": "a2"},
         {"type": "thread.participants_joined", "timestamp": TS, "agentIds": ["a2"]},
         {"type": "collaboration.round.started", "timestamp": TS, "manifest": {"roundId": "r1"}},
     ]

@@ -304,6 +304,16 @@ def _apply_participants_joined(session: dict[str, Any], event: dict[str, Any]) -
     session["participantAgentIds"] = roster
 
 
+def _apply_project_manager_assigned(session: dict[str, Any], event: dict[str, Any]) -> None:
+    agent_id = event.get("agentId")
+    if agent_id:
+        session["ownerAgentId"] = agent_id
+        _apply_participants_joined(session, {"agentIds": [agent_id]})
+    else:
+        session.pop("ownerAgentId", None)
+
+
+
 SessionEventHandler = Callable[[dict[str, Any], dict[str, Any]], None]
 SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "session.status": _apply_session_status,
@@ -319,6 +329,7 @@ SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "session.renamed": _apply_session_renamed,
     "session.deletion_requested": _apply_deletion_requested,
     "thread.participants_joined": _apply_participants_joined,
+    "thread.project_manager_assigned": _apply_project_manager_assigned,
     "agent.permission_requested": apply_permission_requested,
     "agent.permission_resolved": apply_permission_resolved,
 }

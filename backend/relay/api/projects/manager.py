@@ -7,7 +7,7 @@ from starlette.concurrency import run_in_threadpool
 from ...collaboration.models import RunIntent
 from ...collaboration.service import CollaborationConductor
 from ...collaboration.errors import CollaborationError
-from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view
+from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view, update_project_with_manager
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
 from ...projects.runtime import project_work_error
@@ -53,7 +53,7 @@ def set_manager(project_id: str, request: Request, ctx: AppContextDep, *, _reque
     if not isinstance(version, int) or isinstance(version, bool):
         raise HTTPException(400, "project_expected_version_required")
     try:
-        project = ctx.project_store.update_project(project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
+        project = update_project_with_manager(ctx, project_id, manager_role_patch(ctx, project, agent_id), expected_version=version)
     except ProjectVersionConflict as error:
         raise HTTPException(409, "project_version_conflict") from error
     except ManagerError as error:
@@ -152,7 +152,7 @@ def manager_tool(sandbox_id: str, request: Request, ctx: AppContextDep, *, _requ
         raise HTTPException(409, "manager_command_inactive")
     scope = command.get("state", {}).get("project_manager") or {}
     project = ctx.project_store.get_project(scope.get("projectId", "")) if scope else None
-    if not project or command.get("logicalAgentId") != scope.get("agentId") or command["sessionId"] != project.get("managerThreadId"):
+    if not project or command.get("logicalAgentId") != scope.get("agentId"):
         raise HTTPException(403, "manager_scope_required")
     if code := project_work_error(project):
         raise HTTPException(409, code)
