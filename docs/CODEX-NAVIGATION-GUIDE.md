@@ -53,6 +53,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Authentication and record access | `backend/relay/security/request_auth.py`, `backend/relay/api/actors.py` | `security/auth.py` (account store mixins), auth API tests and daemon-token tests |
 | Relay MCP protocol and tools | `backend/relay/mcp/` | `api/projects/mcp.py` compatibility/token routes, daemon `relay-mcp*.ts` transport, MCP protocol/transport tests; `docs/project-manager-design.md` |
 | Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/connections.md` |
+| Project setup drafts | `backend/relay/api/projects/setup.py`, `projects/setup.py` | `api/projects/setup_task.py`, collaboration round preparation, setup and plan API tests |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task/store.py` | `api/tasks/`, `tasks/dispatch.py`, backlog/routine UI |
