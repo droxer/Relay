@@ -82,24 +82,30 @@ class SessionReadRows(SessionStoreState):
             raise KeyError(session_id)
         return int(version)
 
-    def list_sessions(self) -> list[dict[str, Any]]:
+    def list_sessions(
+        self, *, owner_user_id: str | None = None, include_archived: bool = True
+    ) -> list[dict[str, Any]]:
+        """Full records for the selected scope; history binds stay bounded."""
+        statement = select(self.sessions.c.id, self.sessions.c.snapshot).order_by(
+            self.sessions.c.updated_at.desc(), self.sessions.c.id.desc()
+        )
+        if owner_user_id is not None:
+            statement = statement.where(self.sessions.c.owner_user_id == owner_user_id)
+        if not include_archived:
+            statement = statement.where(self.sessions.c.snapshot["archived"].as_boolean().is_not(True))
         with store_transaction(self.engine) as conn:
             rows = (
-                conn.execute(
-                    select(self.sessions.c.id, self.sessions.c.snapshot).order_by(
-                        self.sessions.c.updated_at.desc()
-                    )
-                )
+                conn.execute(statement)
                 .mappings()
                 .all()
             )
             session_ids = [row["id"] for row in rows]
             events_by_session: dict[Any, list[dict[str, Any]]] = defaultdict(list)
-            if session_ids:
+            for offset in range(0, len(session_ids), 500):
                 event_rows = (
                     conn.execute(
                         select(self.events.c.session_id, self.events.c.payload)
-                        .where(self.events.c.session_id.in_(session_ids))
+                        .where(self.events.c.session_id.in_(session_ids[offset:offset + 500]))
                         .order_by(self.events.c.session_id, self.events.c.sequence)
                     )
                     .mappings()

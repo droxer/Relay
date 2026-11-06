@@ -47,11 +47,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
         sessions = ctx.execution_lifecycle.annotate(sessions)
         return {"sessions": [session_brief_item(session) for session in sessions]}
-    visible = [
-        session
-        for session in ctx.session_store.list_sessions()
-        if session.get("ownerUserId") == actor["userId"]
-    ]
+    visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
     return {"sessions": sessions}

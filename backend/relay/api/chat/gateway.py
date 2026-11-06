@@ -71,11 +71,7 @@ def chat_conversation_sessions(
     require_chat_service_request(request)
     body = _request_body
     identity = _resolve_owner(ctx, body)
-    sessions = [
-        session
-        for session in ctx.session_store.list_sessions()
-        if not session.get("archived") and session.get("ownerUserId") == identity["userId"]
-    ]
+    sessions = ctx.session_store.list_sessions(owner_user_id=identity["userId"], include_archived=False)
     return {"sessions": sessions}
 
 
