@@ -1205,6 +1205,7 @@ test("relay daemon advertises only agents with passing capability preflight", as
 
   assert.equal(registrations[0].supportedAgents.includes("codex"), true);
   assert.equal(registrations[0].supportedAgents.includes("kimi"), false);
+  assert.match((registrations[0] as unknown as { clientVersion: string }).clientVersion, /^\d+\.\d+\.\d+/);
   assert.equal(registrations[0].sandboxMode, "boxlite");
   assert.equal(registrations[0].workspaceId, "repo:relay");
   assert.equal(registrations[0].agentHealth?.kimi?.status, "failed");

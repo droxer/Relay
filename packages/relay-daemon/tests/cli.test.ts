@@ -96,3 +96,18 @@ test("local permission policy is explicit and rejects invalid values", () => {
   assert.throws(() => parseArgs(["node", "relay-daemon", "--local-permission-policy", "typo"]), /policy/);
   assert.throws(() => parseArgs(["node", "relay-daemon", "--runtime-profile"]), /path/);
 });
+
+test("relay-daemon --version reports the package release without connecting", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { main } = await import("../src/cli.js");
+  const manifest = JSON.parse(readFileSync("packages/relay-daemon/package.json", "utf8"));
+  const messages: string[] = [];
+  const original = console.log;
+  console.log = (message: string) => messages.push(message);
+  try {
+    await main(["node", "relay-daemon", "--version"]);
+  } finally {
+    console.log = original;
+  }
+  assert.deepEqual(messages, [`relay-daemon ${manifest.version}`]);
+});
