@@ -40,6 +40,7 @@ def test_routing_upgrade_and_downgrade_preserve_outbox_and_fence_partial_work(mi
         DatabaseAutomationStore(url).verify_schema()
         with engine.begin() as conn:
             assert conn.scalar(text("SELECT payload FROM automation_outbox")) == {"extension": [1, 2]}
+            head_before_rejected_downgrade = conn.scalar(text("SELECT version_num FROM alembic_version"))
             conn.execute(
                 text("""UPDATE automation_outbox SET routing_after_id = 'progress',
                 routing_after_created_at = :now, routing_before = :now, routed_at = :now"""),
@@ -48,7 +49,7 @@ def test_routing_upgrade_and_downgrade_preserve_outbox_and_fence_partial_work(mi
         with pytest.raises(RuntimeError, match="Finish partial"):
             command.downgrade(config(), "20261106_0117")
         with engine.begin() as conn:
-            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_0119"
+            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == head_before_rejected_downgrade
             assert conn.scalar(text("SELECT routing_after_id FROM automation_outbox")) == "progress"
             conn.execute(text("UPDATE automation_outbox SET routing_after_id = NULL"))
         command.downgrade(config(), "20261106_0117")
