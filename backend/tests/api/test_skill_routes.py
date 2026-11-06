@@ -458,3 +458,52 @@ def test_preview_reports_binary_and_truncated_bundle_files(client):
     binary = client.get(url, params={"path": "logo.png", "channel": "latest"}).json()
     assert binary["binary"] is True
     assert binary["content"] == ""
+
+
+@pytest.mark.parametrize("operation", ["create", "import", "reimport", "revision", "promote", "update"])
+def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, operation):
+    import asyncio
+
+    from sqlalchemy import event
+
+    def fetch(url, ref, subpath, *, allowed_hosts):
+        return [{"path": "SKILL.md", "content": b"---\nname: imported\ndescription: Imported\n---\nBody"}]
+
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
+    source = {"url": "https://github.com/example/review", "ref": "main"}
+    if operation == "reimport":
+        response = client.post("/api/v1/skills/import", json=source)
+        assert response.status_code == 201
+        skill = response.json()
+    else:
+        skill = publish(client)
+    url = f"/api/v1/skills/{skill['id']}"
+    engine = client.app.state.skill_store.engine
+    checked = []
+
+    def assert_worker_thread(*args):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            checked.append(True)
+        else:
+            raise AssertionError("skill mutation executed SQL on the event loop")
+
+    event.listen(engine, "before_cursor_execute", assert_worker_thread)
+    try:
+        if operation == "create":
+            response = client.post("/api/v1/skills", json=bundle(name="another"))
+        elif operation == "import":
+            response = client.post("/api/v1/skills/import", json=source)
+        elif operation == "reimport":
+            response = client.post(f"{url}/import")
+        elif operation == "revision":
+            response = client.post(f"{url}/revisions", json={"files": bundle()["files"]})
+        elif operation == "promote":
+            response = client.post(f"{url}/revisions/{skill['currentRevisionId']}/promote", json={})
+        else:
+            response = client.patch(url, json={"displayName": "Updated"})
+        assert response.status_code == (201 if operation in {"create", "import", "reimport", "revision"} else 200), response.text
+        assert checked, "the mutation must actually exercise the database"
+    finally:
+        event.remove(engine, "before_cursor_execute", assert_worker_thread)
