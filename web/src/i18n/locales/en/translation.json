@@ -2264,6 +2264,7 @@
     "count_one": "{{count}} skill",
     "count_other": "{{count}} skills",
     "load_failed": "Could not load the skills library",
+    "not_found": "This skill no longer exists, or the link is no longer valid.",
     "eyebrow": "Managed skills",
     "create_action": "New skill",
     "publish_title": "Publish a skill",
@@ -3181,7 +3182,7 @@
       "paused": "Needs attention · run paused",
       "needs_you": "Needs attention",
       "stuck": "Blocked",
-      "worth_doing": "Up next"
+      "worth_doing": "When you have time"
     },
     "kind": {
       "permission": "Permission",

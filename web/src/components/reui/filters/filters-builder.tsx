@@ -206,6 +206,8 @@ function FieldStep<V, O>() {
 export interface FiltersBuilderProps {
   /** Replaces the default Add filter button. */
   trigger?: React.ReactNode
+  /** Icon-only even before any chip sits beside it. */
+  compact?: boolean
   className?: string
 }
 
@@ -216,6 +218,7 @@ export interface FiltersBuilderProps {
  */
 export function FiltersBuilder<V, O>({
   trigger,
+  compact: compactProp = false,
   className,
 }: FiltersBuilderProps) {
   const actions = useFilterActions<V, O>()
@@ -235,7 +238,7 @@ export function FiltersBuilder<V, O>({
   // so they share height and radius in every style at every bar size. The
   // hardcoded `icon`/`default` pair this replaced IS the `default` rung, so it
   // drifted the moment the bar was `sm`.
-  const compact = ruleCount > 0
+  const compact = compactProp || ruleCount > 0
 
   // Base UI's own microtask-then-rAF ordering hands focus to the new chip, NOT
   // anything this file arranges. Suppressing the close restore with

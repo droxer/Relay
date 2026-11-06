@@ -91,6 +91,8 @@ interface WorkRoutePageProps {
   onOpenRoutineRecord: (routineId: string | null, runId?: string | null) => void;
   teamWorkspaceId: string | null;
   onSelectTeam: (teamId: string | null) => void;
+  skillId: string | null;
+  onSelectSkill: (skillId: string | null) => void;
   detailAgent: UserAgent | null;
   onOpenAgent: (agentId: string | null) => void;
   settingsSection: SettingsSection;
@@ -204,7 +206,7 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
   ) : route === "computers" ? (
     <ComputerPage nodes={props.runtimeNodes} currentUser={user} onOpenThread={onOpenThread} />
   ) : route === "skills" ? (
-    <SkillsPage currentUser={user} />
+    <SkillsPage currentUser={user} skillId={props.skillId} onSelectSkill={props.onSelectSkill} />
   ) : route === "settings" ? (
     <SettingsPage
       user={user}

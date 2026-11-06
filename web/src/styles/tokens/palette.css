@@ -610,6 +610,10 @@
   --thread-w: 360px;
   --thread-w-min: 240px;
   --thread-w-cap: 26vw;
+  /* The record rosters (agents, teams, skills) are fixed-width list rails
+     beside a detail pane: the same default as the thread rail, so moving
+     between them never shifts the detail pane's left edge. */
+  --roster-track: minmax(300px, var(--thread-w));
   /* The transcript's floor, and the one floor that is itself adaptive: below
      ~875px there is no longer 420px to give after the rails take theirs, and
      a hard floor there would push the grid into overflow rather than into a

@@ -60,7 +60,7 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>
+      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider>
     </QueryClientProvider>,
   );
   const editorName = () => screen.getByLabelText(/^Display name/) as HTMLInputElement;
@@ -92,7 +92,7 @@ it("marks the editor's required fields and gates Save on them", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>
+      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider>
     </QueryClientProvider>,
   );
   const field = (label: string) =>

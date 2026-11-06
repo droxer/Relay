@@ -25,6 +25,7 @@ export function KpiTile({ eyebrow, value, slot, visual, delta, hint, tone }: Kpi
   return (
     <div
       className={`adm-dash-tile${slotClass}${toneClass}`}
+      data-kpi-slot={slot}
     >
       <div className="adm-dash-tile-eyebrow">
         <i className="adm-dash-tile-key" aria-hidden="true" />

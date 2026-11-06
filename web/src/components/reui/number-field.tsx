@@ -236,6 +236,7 @@ function NumberFieldScrubArea({
 function CursorGrowIcon(props: React.ComponentProps<"svg">) {
   return (
     <svg
+      aria-hidden="true"
       className="stroke-background"
       fill="currentColor"
       height="14"

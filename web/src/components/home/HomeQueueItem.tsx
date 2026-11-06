@@ -73,11 +73,16 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
           {agent ? <span>{agent}</span> : null}
           <span>{since}</span>
         </p>
-        <div className="home-item-actions" role="group">
-          <Button type="button" size="dense" variant={primary ? "default" : "outline"} disabled={busy} onClick={onOpen}>
-            {t(openLabel(item))}
-          </Button>
-        </div>
+        {/* Only the Start here row names its way forward as a button. Every
+            other row's title already links to the same place, and a bordered
+            Open under each one stacked a column of identical buttons. */}
+        {primary ? (
+          <div className="home-item-actions" role="group">
+            <Button type="button" size="dense" disabled={busy} onClick={onOpen}>
+              {t(openLabel(item))}
+            </Button>
+          </div>
+        ) : null}
       </div>
       <div className="home-item-trail">
         <Button
@@ -98,7 +103,7 @@ export function HomeQueueItem({ item, actions, agentName, projectName, since, hr
   );
 }
 
-/** The one control a row offers: where its answer is given. A row never
+/** The Start here row's control: where its answer is given. A row never
  *  answers, approves, or sends from Home; the thread or record it opens
  *  shows the whole story before the person acts. */
 function openLabel(item: HomeItem): string {

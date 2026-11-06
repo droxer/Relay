@@ -9,6 +9,7 @@
    outage. A guard narrows nothing — it returns the same object, typed. */
 
 import type { RelaySession, RelayTask, SessionSummariesResponse, TasksResponse, TaskReview } from "../types.ts";
+import type { ConnectionProvider, ServiceConnection } from "../domain-types/connections.ts";
 
 /** One place a body departed from the shape the UI relies on. `apiJson`
  *  turns it into a `RelayApiShapeError` naming the endpoint. */
@@ -117,4 +118,18 @@ export const taskReviewGuard: ResponseGuard<TaskReview> = (value) => {
     for (const key of ["evidence", "findings"]) expectArray(record, key, path);
   });
   return body as unknown as TaskReview;
+};
+
+/** The composer asks for this on every thread, so a drifted body must surface
+ *  as a failed query the field can word, never as a thrown render. */
+export const connectionsGuard: ResponseGuard<{ connections: ServiceConnection[] }> = (value) => {
+  const body = expectRecord(value, ROOT);
+  expectArray(body, "connections", ROOT);
+  return body as unknown as { connections: ServiceConnection[] };
+};
+
+export const connectionProvidersGuard: ResponseGuard<{ providers: ConnectionProvider[] }> = (value) => {
+  const body = expectRecord(value, ROOT);
+  expectArray(body, "providers", ROOT);
+  return body as unknown as { providers: ConnectionProvider[] };
 };

@@ -239,6 +239,9 @@ export interface FiltersProps<V = unknown, O = unknown> {
 
   /** Replaces the default Add filter button. */
   trigger?: React.ReactNode
+  /** Draws the Add filter button icon-only even with no chips, for a row
+   *  too narrow to spend on its label (a phone toolbar). */
+  compactTrigger?: boolean
   /** Renders a Clear button once the query holds anything. */
   showClear?: boolean
 
@@ -276,6 +279,7 @@ export function Filters<V = unknown, O = unknown>({
   pathCollapse = "none",
   maxPathSegments = 3,
   trigger,
+  compactTrigger = false,
   showClear = false,
   renderValue,
   renderChip,
@@ -972,6 +976,7 @@ export function Filters<V = unknown, O = unknown>({
                 ) : (
                   <FiltersRow
                     trigger={trigger}
+                    compactTrigger={compactTrigger}
                     showClear={showClear}
                     className={className}
                   />
@@ -990,6 +995,7 @@ export function Filters<V = unknown, O = unknown>({
 
 export interface FiltersRowProps {
   trigger?: React.ReactNode
+  compactTrigger?: boolean
   showClear?: boolean
   className?: string
 }
@@ -999,7 +1005,7 @@ export interface FiltersRowProps {
  * every segment of every chip its own tab stop. There is NO combinator here,
  * because a chip row can draw a word between two pills but not a parenthesis.
  */
-export function FiltersRow({ trigger, showClear, className }: FiltersRowProps) {
+export function FiltersRow({ trigger, compactTrigger, showClear, className }: FiltersRowProps) {
   const actions = useFilterActions()
   const sizes = filterControlSizes(actions)
   const { query, ruleCount, announcement, announcementSeq } = useFilterState()
@@ -1126,7 +1132,7 @@ export function FiltersRow({ trigger, showClear, className }: FiltersRowProps) {
         ))}
       </div>
 
-      <FiltersBuilder trigger={trigger} />
+      <FiltersBuilder trigger={trigger} compact={compactTrigger} />
 
       {showClear && ruleCount > 0 ? (
         // `ms-auto` and not `ml-auto`, so Clear stays on the trailing edge

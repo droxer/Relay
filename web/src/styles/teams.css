@@ -2,7 +2,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-columns: var(--roster-track) minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface-0);
 }

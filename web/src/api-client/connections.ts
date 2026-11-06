@@ -1,9 +1,10 @@
 import { apiJson } from "./client.ts";
+import { connectionProvidersGuard, connectionsGuard } from "./responseShape.ts";
 
 import type { ServiceConnection, ConnectionProvider, ConnectionGrant, ConnectionTarget } from "../domain-types/connections.ts";
 export type { ServiceConnection, ConnectionProvider, ConnectionGrant, ConnectionTarget } from "../domain-types/connections.ts";
-export const listConnections = () => apiJson<{ connections: ServiceConnection[] }>("/connections");
-export const listConnectionProviders = () => apiJson<{ providers: ConnectionProvider[] }>("/connection-providers");
+export const listConnections = () => apiJson<{ connections: ServiceConnection[] }>("/connections", { guard: connectionsGuard });
+export const listConnectionProviders = () => apiJson<{ providers: ConnectionProvider[] }>("/connection-providers", { guard: connectionProvidersGuard });
 export const startConnection = (provider: string, reconnectId?: string) => apiJson<{ url: string }>("/connections/authorizations", {
   method: "POST", body: { provider, reconnectId, returnTo: "/settings/connections" },
 });

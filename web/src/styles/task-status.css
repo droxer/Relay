@@ -490,10 +490,12 @@
 .task-holdup-text--none { color: var(--ink-3); }
 
 /* In a list row it sits after the title and takes the slack, so the title
-   keeps its width and the reason gives way first. */
+   keeps its width and the reason gives way first. Its floor is capped at
+   40% of the row: a bare 12ch floor held in a project's narrower Task
+   column and squeezed the title to its first letters ("Mi…"). */
 .backlog-row-lead-main > .task-holdup {
   flex: 1 1 0;
-  min-width: 12ch;
+  min-width: min(12ch, 40%);
 }
 
 /* On a tile it is its own line under the title. The tile's height is fixed,

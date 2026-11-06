@@ -62,7 +62,8 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   width: number;
   onResize: (width: number, commit: boolean) => void;
   onResizeActive: (active: boolean) => void;
-  route: AppRoute;
+  /** null on a page that is not found: no destination is current. */
+  route: AppRoute | null;
   onNavigateRoute: (route: AppRoute) => void;
   hrefForRoute: (route: AppRoute) => string;
   isAdmin: boolean;

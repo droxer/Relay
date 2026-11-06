@@ -159,6 +159,10 @@ export function useAppRouter({
     navigateToAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: teamId });
   }, [navigateToAppState]);
 
+  const navigateToSkill = useCallback((skillId: string | null) => {
+    navigateToAppState({ route: "skills", mobileView: "chat", sessionId: null, skillId });
+  }, [navigateToAppState]);
+
   const navigateToProject = useCallback((projectId: string | null) => {
     navigateToAppState({
       route: "projects",
@@ -181,6 +185,7 @@ export function useAppRouter({
     recordTaskId: locationState.taskId ?? null,
     recordRunId: locationState.runId ?? null,
     teamWorkspaceId: locationState.teamWorkspaceId ?? null,
+    skillId: locationState.skillId ?? null,
     settingsSection: locationState.settingsSection ?? DEFAULT_SETTINGS_SECTION,
     adminSection: locationState.adminSection ?? DEFAULT_ADMIN_SECTION,
     notFound: Boolean(locationState.notFound),
@@ -197,6 +202,7 @@ export function useAppRouter({
     navigateToSettings,
     navigateToAdminSection,
     navigateToTeamWorkspace,
+    navigateToSkill,
     navigateToProject,
     navigateToLogin,
   };

@@ -1,8 +1,9 @@
 /* ============================ thread rail ============================ */
 
 .thread-panel {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   border-right: 0.5px solid var(--line-1);
@@ -22,8 +23,16 @@
   min-height: 0;
 }
 
+/* Laid over the panel's right edge, as .sidenav-resize is (sidenav.css),
+   rather than in a column of its own: as a sibling track it ended the header
+   and filter hairlines 6px short of the border, a notch that read as a
+   second vertical line beside the rail. */
 .thread-panel-resize {
-  position: relative;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: var(--sp-1-5);
   cursor: col-resize;
   touch-action: none;
@@ -34,7 +43,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  right: calc(var(--sp-1) - 1px);
+  right: 0;
   width: 2px;
   background: transparent;
   transition: background var(--t-fast) var(--ease);

@@ -10,6 +10,7 @@ import {
   RelayApiError,
   RelayApiShapeError,
 } from "../src/api.js";
+import { listConnectionProviders, listConnections } from "../src/api-client/connections.js";
 
 const originalFetch = globalThis.fetch;
 const stamp = "2026-10-15T00:00:00Z";
@@ -207,6 +208,20 @@ describe("API response shape validation", () => {
       const error = await shapeError(() => getTask("task/1"));
       assert.equal(error.endpoint, "GET /tasks/task%2F1");
       assert.equal(error.field, "title");
+    });
+  });
+
+  describe("connections", () => {
+    it("reports a body without its list instead of handing the composer undefined", async () => {
+      respondWith({});
+      const error = await shapeError(listConnections);
+      assert.equal(error.endpoint, "GET /connections");
+      assert.equal(error.field, "connections");
+    });
+
+    it("passes a provider list through", async () => {
+      respondWith({ providers: [] });
+      assert.deepEqual(await listConnectionProviders(), { providers: [] });
     });
   });
 

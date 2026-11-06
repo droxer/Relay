@@ -133,6 +133,12 @@ describe("app pathname routes", () => {
     assert.equal(hrefForRoute("skills"), "/skills");
   });
 
+  it("gives a skill record its own address, like every other rail record", () => {
+    assert.deepEqual(parseAppPath("/skills/skill_billing"), { route: "skills", mobileView: "chat", sessionId: null, skillId: "skill_billing" });
+    assert.equal(pathForAppState({ route: "skills", mobileView: "chat", sessionId: null, skillId: "skill/1" }), "/skills/skill%2F1");
+    assert.equal(canonicalBrowserUrl("/skills/skill_billing"), "/skills/skill_billing");
+  });
+
   it("writes only the canonical settings path", () => {
     assert.equal(hrefForRoute("settings"), "/settings/notifications");
     assert.equal(hrefForSettingsSection("appearance"), "/settings/appearance");

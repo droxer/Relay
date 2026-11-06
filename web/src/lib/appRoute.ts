@@ -73,6 +73,8 @@ export type AppLocationState = {
   /** The occurrence open as a run, under the routine named by `taskId`. */
   runId?: string | null;
   teamWorkspaceId?: string | null;
+  /** The skill whose record is open — `/skills/<id>`. */
+  skillId?: string | null;
   settingsSection?: SettingsSection | null;
   adminSection?: AdminSection | null;
   composingNew?: boolean;
@@ -165,6 +167,9 @@ export function parseAppPath(pathname: string): AppLocationState {
   if (head === "teams" && second && rest.length === 0) {
     return { route: "teams", ...base, teamWorkspaceId: decodeSegment(second) };
   }
+  if (head === "skills" && second && rest.length === 0) {
+    return { route: "skills", ...base, skillId: decodeSegment(second) };
+  }
   const legacyInfraRoute = LEGACY_INFRA_PATHS[normalized];
   if (legacyInfraRoute) return { route: legacyInfraRoute, ...base };
   if (head === "settings" && rest.length === 0) {
@@ -193,6 +198,7 @@ export function pathForAppState({
   taskId,
   runId,
   teamWorkspaceId,
+  skillId,
   composingNew,
   login,
   publicPage,
@@ -213,6 +219,7 @@ export function pathForAppState({
     return runId ? `${routinePath}/runs/${encodeURIComponent(runId)}` : routinePath;
   }
   if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
+  if (route === "skills" && skillId) return `${WORK_PATHS.skills}/${encodeURIComponent(skillId)}`;
   if (route === "settings") {
     const section = settingsSection ?? DEFAULT_SETTINGS_SECTION;
     return `/settings/${section}`;
