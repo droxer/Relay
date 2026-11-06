@@ -17,5 +17,7 @@
 .connection-grant-options fieldset { display: grid; gap: var(--sp-1); min-width: 0; max-height: 16rem; overflow-y: auto; }
 .connection-grant-options legend { color: var(--ink-3); padding-bottom: var(--sp-2); }
 .connection-grants [role="alert"] { color: var(--warn); }
-.composer .connection-grants { margin: var(--sp-2) var(--sp-3); }
+/* Inside the composer card the block shares the draft's text edge, and the
+   card's own border frames its top, so only the divider above the draft stays. */
+.composer .connection-grants { margin-inline: var(--composer-inline); border-top: 0; }
 @media (max-width: 640px) { .connection-row { align-items: flex-start; } .connection-actions { width: 100%; } }

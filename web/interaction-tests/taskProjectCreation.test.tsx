@@ -86,7 +86,7 @@ it("offers every agent and team on the project's computer, not just its roster",
         { id: "split", name: "Split team", ownerUserId: "u", memberAgentIds: ["a", "c"] },
       ] as any} />;
   }
-  render(<Placed />);
+  render(<QueryClientProvider client={new QueryClient()}><Placed /></QueryClientProvider>);
   expect(screen.getByTestId("assignment-options").textContent).toBe("Member,NeighbourNear team");
 });
 
