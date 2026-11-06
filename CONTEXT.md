@@ -221,8 +221,10 @@ Owner to review and apply. It does not gain acceptance or execution authority.
 _Avoid_: Relay as a separate conversational identity, Project Owner, global Agent Role
 
 **Relay MCP**:
-A local stdio MCP server installed in an Agent Runtime. It calls the Relay API
-using a private, revocable bearer token scoped to the user's Projects or Computer.
+A Python MCP module hosted in the Relay backend, reached through a local Node
+stdio bridge installed in an Agent Runtime. Python owns tool discovery, schemas,
+protocol and Project operations. The bridge forwards messages using a private,
+revocable bearer token scoped to the user's Projects or Computer.
 It exposes current Project records and Task proposals; owner approval remains a
 separate authenticated action. Runtime configuration references a private token
 file rather than embedding credentials in a Project workspace or prompt. Managed

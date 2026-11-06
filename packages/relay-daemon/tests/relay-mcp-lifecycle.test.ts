@@ -4,20 +4,20 @@ import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createMcpReconciler, bootstrapRelayMcp} from '../src/relay-mcp-bootstrap.js';
-import {managedMcpInvoker} from '../src/relay-mcp-managed.js';
+import {managedMcpForwarder} from '../src/relay-mcp-managed.js';
 import {createProjectManagerBridge} from '../src/project-manager.js';
 
-test('managed MCP pins Project and backend and cannot fall back to the Computer credential',async()=>{
+test('managed bridge pins its backend and forwards Python protocol without a user credential',async()=>{
  const root=mkdtempSync(join(tmpdir(),'relay-scoped-mcp-'));const calls:unknown[]=[];
- const bridge=createProjectManagerBridge(root,async(tool,args)=>{calls.push([tool,args]);return {project:{id:'a'},agentId:'manager',runId:'run'};});
+ const message={jsonrpc:'2.0',id:1,method:'tools/list'};
+ const bridge=createProjectManagerBridge(root,async(tool,args)=>{calls.push([tool,args]);return {jsonrpc:'2.0',id:1,result:{tools:[]}};});
  try{
   const context={backendUrl:'https://relay.example',projectId:'a',bridgePath:join(root,bridge.toolPath)};
-  const invoke=managedMcpInvoker('https://relay.example',JSON.stringify(context));
-  assert.equal((await invoke('overview',{projectId:'a'}) as any).runId,'run');
-  await assert.rejects(invoke('overview',{projectId:'b'}),/scope/);
-  assert.equal(calls.length,1);
-  await assert.rejects(managedMcpInvoker('https://other.example',JSON.stringify(context))('overview',{projectId:'a'}),/scope|disabled/);
-  await assert.rejects(managedMcpInvoker('https://relay.example','{"disabled":true}')('projects',{}),/disabled/);
+  const forward=managedMcpForwarder('https://relay.example',JSON.stringify(context));
+  assert.deepEqual(await forward(message),{jsonrpc:'2.0',id:1,result:{tools:[]}});
+  assert.deepEqual(calls,[['mcp',{message}]]);
+  await assert.rejects(managedMcpForwarder('https://other.example',JSON.stringify(context))(message),/scope|disabled/);
+  await assert.rejects(managedMcpForwarder('https://relay.example','{"disabled":true}')(message),/disabled/);
  }finally{await bridge.dispose();rmSync(root,{recursive:true,force:true});}
 });
 
@@ -60,12 +60,13 @@ test('daemon proxy issues a command-bound token and uses it for every Project op
    return Response.json({token:'relay_mcp_run'});
   }
   assert.equal((request.headers as any).Authorization,'Bearer relay_mcp_run');
-  if(request.body)assert.equal(JSON.parse(String(request.body)).arguments.projectId,'a');
+  if(request.body&&path!=='/api/v1/mcp')assert.equal(JSON.parse(String(request.body)).arguments.projectId,'a');
   return Response.json({agentId:'manager',runId:'run'});
  }) as typeof fetch});
  await assert.rejects(invoke('overview',{projectId:'b'}),/scope/);assert.equal(calls.length,0);
- await invoke('overview',{});await invoke('propose',{operations:[]});assert.equal(issued,1);
- assert.deepEqual(calls,['/api/v1/daemon-nodes/node/mcp-token','/api/v1/mcp/projects/a/tools','/api/v1/mcp/projects/a/tools']);
+ await invoke('overview',{});await invoke('propose',{operations:[]});
+ await invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/list'}});assert.equal(issued,1);
+ assert.deepEqual(calls,['/api/v1/daemon-nodes/node/mcp-token','/api/v1/mcp/projects/a/tools','/api/v1/mcp/projects/a/tools','/api/v1/mcp']);
 });
 
 test('installer recovers a dead-owner lock and keeps an active installer exclusive',async()=>{
@@ -93,10 +94,12 @@ test('managed runtime configuration does not depend on or revive a standalone cr
  }finally{rmSync(home,{recursive:true,force:true});}
 });
 
-test('real managed stdio server cannot read a persistent token or cross its Project',async()=>{
+test('real managed stdio forwards Python responses without reading a persistent token',async()=>{
  const {spawn}=await import('node:child_process');const {fileURLToPath}=await import('node:url');const {writeFileSync}=await import('node:fs');
  const home=mkdtempSync(join(tmpdir(),'relay-managed-stdio-'));const calls:string[]=[];
- const bridge=createProjectManagerBridge(home,async(tool)=>{calls.push(tool);return {project:{id:'a'},agentId:'manager',runId:'run'};});
+ const bridge=createProjectManagerBridge(home,async(tool,args)=>{calls.push(tool);const message=args.message as any;
+  return {jsonrpc:'2.0',id:message.id,result:message.params.arguments.projectId==='a'?{structuredContent:{agentId:'manager'}}:{isError:true}};
+ });
  try{
   const config=join(home,'config.json');writeFileSync(config,JSON.stringify({backendUrl:'https://relay.example',tokenFile:join(home,'must-not-be-read')}));
   const context=JSON.stringify({backendUrl:'https://relay.example',projectId:'a',bridgePath:join(home,bridge.toolPath)});
@@ -105,6 +108,6 @@ test('real managed stdio server cannot read a persistent token or cross its Proj
   child.stdin.end(['a','b'].map((projectId,id)=>JSON.stringify({jsonrpc:'2.0',id,method:'tools/call',params:{name:'relay_project_overview',arguments:{projectId}}})).join('\n')+'\n');
   const code=await new Promise<number|null>((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
   assert.equal(code,0,stderr);const results=output.trim().split('\n').map(line=>JSON.parse(line));
-  assert.equal(results[0].result.structuredContent.agentId,'manager');assert.equal(results[1].result.isError,true);assert.deepEqual(calls,['overview']);
+  assert.equal(results[0].result.structuredContent.agentId,'manager');assert.equal(results[1].result.isError,true);assert.deepEqual(calls,['mcp','mcp']);
  }finally{await bridge.dispose();rmSync(home,{recursive:true,force:true});}
 });

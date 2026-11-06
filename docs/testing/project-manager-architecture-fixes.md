@@ -82,3 +82,43 @@ with 0114 as its parent. The merged application passes the full production build
 51 backend checks (manager/MCP/Connections APIs, layering, module size and client
 capability parity), 16 focused Node checks, 16 React interactions and 17 PostgreSQL
 migration/schema checks. Dependency audit reports zero vulnerabilities.
+
+## Hosted Python MCP extraction
+
+The MCP protocol, authoritative nine-tool catalog, schema validation, bearer
+scope and Project dispatch now live in `backend/relay/mcp/`. The official MCP
+Python SDK serves stateless JSON Streamable HTTP at `POST /api/v1/mcp` inside the
+existing backend deployment. Local Node code forwards stdio messages; it has no
+second catalog or public tool dispatch table. The legacy JSON routes delegate to
+the same operations, preserving installed clients and workspace helpers.
+
+RED commit `01362738` reproduced the missing hosted endpoint in four API tests
+and the missing opaque Node forwarder at compile time. GREEN verification:
+
+| Check | Result |
+| --- | --- |
+| Hosted protocol, token lifecycle and real transports | 14 passed on SQLite. Official SDK client and actual standalone/managed Node subprocesses reach the Python endpoint. |
+| PostgreSQL MCP, manager, Connections and schema checks | 63 passed. |
+| New Python MCP module statement coverage | 89%. |
+| Built Node regression suite | 2,953 passed. |
+| React regression suite | 831 passed across 142 files. |
+| Project Manager browser workflows | Four passed: desktop/mobile, English/Chinese. |
+| Architecture/auth invariants | 12 passed: layering, module size, API state ownership, route authorization. |
+| Production build and type checks | Full production build passes; package type check and mypy (437 modules) pass. |
+| Security | Ruff passes; npm audit and Python dependency audit report no known vulnerabilities (local Relay package is not a PyPI audit target). |
+
+The protocol tests exercise invalid schemas, foreign Projects, token revocation,
+run termination, concurrent grant isolation, request and actual wire-result
+bounds, Origin rejection and sanitized internal failures. The managed subprocess
+uses a nonexistent standalone token file; the daemon obtains the command-bound
+credential and proposals preserve the producing Agent/run. Neither path applies
+Tasks without owner approval. Provider-authenticated model sessions were not
+started.
+
+No new database migration or independently deployed service is required for this
+extraction. Deploy the backend before installing the rebuilt local bridge, which
+requires the new endpoint. Old clients keep their compatibility routes. Start a
+new standalone Agent Runtime session to load its updated local bridge. Python
+runs only in the backend. A clean backend-only checkout may skip the two Node
+interop tests until TypeScript packages are built; both were built and executed
+for this verification.

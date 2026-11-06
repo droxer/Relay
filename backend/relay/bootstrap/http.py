@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 from typing import ClassVar
 from fastapi import FastAPI, Request
@@ -14,6 +13,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from ..core import deploy_config
 from ..security.request_auth import USER_COOKIE_NAME
+from ..security.request_origin import request_origin_allowed as _request_origin_allowed
 
 
 CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
@@ -97,14 +97,6 @@ class CookieRequestGuardMiddleware:
         await self.app(scope, receive, send)
 
 
-def _request_origin_allowed(scope: Scope, headers: dict[str, str], origin: str) -> bool:
-    host = headers.get("host", "")
-    if host and origin == f"{scope.get('scheme', 'http')}://{host}":
-        return True
-    if origin in deploy_config.cors_allow_origins():
-        return True
-    pattern = deploy_config.cors_allow_origin_regex()
-    return bool(pattern and re.fullmatch(pattern, origin))
 
 
 class SecurityHeadersMiddleware:

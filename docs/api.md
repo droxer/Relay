@@ -1481,7 +1481,20 @@ and returns a separate MCP token scoped to its owner and Computer. Optional
 `{commandId, leaseId}` restricts it to a currently dispatched manager command and
 Project; authentication stops when that run ends (maximum 24 hours).
 
-MCP clients authenticate using `Authorization: Bearer <MCP token>`:
+`POST /api/v1/mcp` is the canonical MCP Streamable HTTP endpoint, hosted by
+`backend/relay/mcp/` using the official Python SDK. It supports initialization,
+notifications, `tools/list` and `tools/call` with stateless JSON responses. The
+Python catalog defines the nine Project read/proposal tools; the local Node
+stdio bridge forwards messages unchanged. No separate MCP deployment is needed.
+
+Every request requires `Authorization: Bearer <MCP token>`; browser cookies alone
+are refused. All responses are `no-store`, untrusted browser Origins are refused,
+and each concurrent request has its own grant. Requests are limited to 128 KiB;
+serialized tool results are limited to 1 MiB. Authenticated GET/DELETE return 405
+(`Allow: POST`); there is no resumable session or server event stream.
+
+Older JSON clients and workspace helpers retain these compatibility routes,
+which delegate to the same Python authorization and operations:
 
 | Route | Behavior |
 | --- | --- |

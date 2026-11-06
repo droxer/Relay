@@ -69,7 +69,8 @@ a token-file path. Neither runtime config nor Project workspace contains the tok
 
 ## Token authentication
 
-The MCP server invokes Relay's JSON API with `Authorization: Bearer <MCP token>`.
+The local bridge forwards MCP messages to `POST /api/v1/mcp` with
+`Authorization: Bearer <MCP token>`.
 It does not forward the daemon credential or use a browser cookie. The backend
 stores only a SHA-256 digest; issuance returns plaintext once with `no-store`.
 
@@ -126,11 +127,28 @@ alone. Configuration forwarding is checked against the runtime sources:
 
 ## MCP tools
 
-The stdio server supports legacy MCP initialization through revision 2025-11-25,
-newline JSON-RPC, `tools/list`, and `tools/call`. It does not advertise the newer
-stateless protocol. HTTP redirects are refused, requests and responses are
-bounded, and errors do not include credentials or HTTP response bodies. Backend
-URLs require HTTPS, except loopback HTTP for local development.
+The dedicated `backend/relay/mcp/` module owns the catalog, schemas, MCP protocol,
+authorization and dispatch. It uses the official MCP Python SDK with stateless
+JSON Streamable HTTP at `POST /api/v1/mcp`, inside the existing backend deployment
+and lifespan. It calls existing Project application operations directly; no
+additional service, port or Python installation on Computers is required.
+
+The local Node process handles newline stdio framing and authenticated HTTP
+forwarding. It forwards messages and negotiated protocol metadata without a
+second catalog or tool dispatch table. Managed messages travel through the
+existing daemon transport with a daemon-held run token. Pi discovers tools from
+the hosted catalog.
+
+Every HTTP request authenticates independently, including initialization and
+notifications. Cookies do not grant MCP authority. Request-local grants remain
+isolated across concurrent calls. Origin checks use the backend policy; all
+responses carry `Cache-Control: no-store`. Authenticated GET/DELETE return 405
+because this endpoint offers no server event stream or resumable session.
+Requests are bounded to 128 KiB and tool responses to 1 MiB, including both text
+and structured content. HTTP redirects are refused; errors exclude credentials
+and internal exception details. Backend URLs require HTTPS, except loopback HTTP
+for local development. Existing `/mcp/projects` JSON routes remain compatibility
+adapters over the same Python operations for older clients and workspace helpers.
 
 - `relay_list_projects`: discover token-visible Projects.
 - `relay_project_overview`: current brief, roster, counts, flow and availability.

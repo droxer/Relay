@@ -7,6 +7,7 @@ from dataclasses import fields
 from typing import Any, cast
 
 from fastapi import FastAPI
+from starlette.routing import Route
 from loguru import logger
 
 from .api.accounts import (
@@ -28,6 +29,7 @@ from .api.agents import (
 from .api.chat import gateway as chat_gateway_routes, integrations as chat_integration_routes
 from .api.connections import routes as connection_routes, tools as connection_tools_routes
 from .connections.service import ConnectionService
+from .mcp.http import RelayMcpHttp
 from .api.computers import (
     admin_nodes as admin_node_routes,
     daemon_wire as daemon_wire_routes,
@@ -212,13 +214,16 @@ def create_app(
     loops = (execution_lifecycle, computer_notifications, scheduler) if mode == "embedded" else ()
     services = [service for service in (notification_bridge, *loops) if service]
 
+    mcp_http: RelayMcpHttp
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         computer_installer_routes.warn_if_bundle_stale(settings.computer_bundle)
         for service in services:
             service.start()
         try:
-            yield
+            async with mcp_http.run():
+                yield
         finally:
             for service in reversed(services):
                 await service.stop()
@@ -250,6 +255,10 @@ def create_app(
     )
     if settings.startup_repairs_enabled:
         initialize_project_managers(app.state.context)
+    mcp_http = RelayMcpHttp(app.state.context)
+    # Exact transport route precedes the web catch-all without swallowing the
+    # existing /mcp/tokens and compatibility JSON routes.
+    app.router.routes.append(Route("/api/v1/mcp", mcp_http, methods=["GET", "POST", "DELETE"]))
     _mount_routes(app, settings)
     return app
 
