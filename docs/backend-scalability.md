@@ -63,3 +63,23 @@ Streamed output no longer advances a thread's `updatedAt` (its run's start and c
 ### Rollback
 
 Downgrading `0086` rebuilds the dropped indexes; `0085` has nothing to undo; downgrading `0084` drops the new columns and tables. Code from before this change ignores the new columns, but it would again rewrite snapshots per output chunk. Compacted output cannot be restored.
+
+
+## Indexed chat records and scoped histories
+
+Revision `20261106_0116` moves audit entries and conversation bindings out of
+shared JSON arrays into indexed records. It preserves full payloads and order,
+including new writes when downgrading. Configuration and encrypted secrets stay
+in their current format. Stop old backend and worker processes before running
+`make backend-migrate`; startup requires the new tables. SQLite development
+installs convert their legacy arrays automatically after metadata table creation.
+
+Audit appends no longer read/rewrite history; tail reads filter/limit in SQL.
+Conversation lookups and clears use indexed keys/session IDs, and different
+conversation keys no longer share a write lock. Full thread lists scope ownership
+before hydrating events and split event-ID binds into batches of 500. Full
+responses retain the selected records and histories.
+
+See the [rollout, downgrade, validation, and remaining work](testing/backend-chat-records.tdd.md).
+The backfill retains source data until commit and needs maintenance time/disk
+headroom. Invalid legacy records abort conversion rather than being dropped.

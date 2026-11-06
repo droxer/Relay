@@ -112,7 +112,7 @@ the existing store pools and notification connection. The guard uses transaction
 advisory locks rather than session locks, retaining a dedicated transaction
 through the provider wait; it holds no mutable document row lock.
 
-Shared document writes still transfer whole JSON documents. Normalizing large
-conversation/audit collections and bounding history reads remain scalability
-work. These tests establish concurrency behavior and query/decryption work
+The follow-up [indexed chat records change](backend-chat-records.tdd.md)
+normalizes conversation/audit collections and scopes full thread histories in
+SQL. Integration configuration and encrypted secrets still use shared documents. These tests establish concurrency behavior and query/decryption work
 bounds; they do not measure deployment p95 latency, pool wait, or fleet capacity.

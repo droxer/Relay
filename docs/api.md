@@ -292,6 +292,12 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
+Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
+The chat-service conversation list likewise returns the resolved owner's full
+open threads. Ownership and archive filtering occur in storage before event
+histories are loaded; neither list silently truncates records or replaces them
+with summaries.
+
 Chat activation, health checks, and webhook-secret rotation are exclusive per
 integration across PostgreSQL backend replicas. A conflicting operation, or a
 `PATCH /api/v1/admin/chat-integrations/{id}` changing `tenantId`, `config`,

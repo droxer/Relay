@@ -55,6 +55,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Service Connections and work access | `backend/relay/connections/`, `persistence/connection/`, `api/connections/` | `core/connections.py`, Automation occurrence snapshots, registry delivery, core MCP launcher, Settings and work pickers; `docs/connections.md` |
 | Project setup drafts | `backend/relay/api/projects/setup.py`, `projects/setup.py` | `api/projects/setup_task.py`, collaboration round preparation, setup and plan API tests |
 | Chat provider coordination | `backend/relay/persistence/chat/coordination.py`, `chat/integrations.py` | `api/chat/integrations.py`, chat concurrency/coordination/query-bound tests; `docs/testing/backend-chat-coordination.tdd.md` |
+| Chat audit and conversation records | `backend/relay/persistence/chat/audit.py`, `conversations.py` | `chat/integrations.py`, `api/chat/gateway.py`, migration `20261106_0116`, chat record tests |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |
 | Task transitions and persistence | `backend/relay/persistence/task/store.py` | `api/tasks/`, `tasks/dispatch.py`, backlog/routine UI |

@@ -107,10 +107,10 @@ The overall refactoring goal remains active. This change proves thread placement
 and behavior, not production throughput or replica safety for every aggregate.
 Further review must cover:
 
-- Chat document growth and history query bounds. The follow-up
-  [chat coordination change](backend-chat-coordination.tdd.md) addresses the
-  store/rotation replica races identified in this review, with live PostgreSQL
-  evidence, while retaining the shared JSON document representation.
+- Remaining configuration-document growth and full response sizes. Follow-up
+  [coordination](backend-chat-coordination.tdd.md) and
+  [indexed records/history scoping](backend-chat-records.tdd.md) address the
+  chat races and growing audit/conversation arrays identified in this review.
 - Async application/background operations beyond the HTTP scenarios exercised
   here, database query bounds, and contention under concurrent load.
 - PostgreSQL-specific behavior (the normal suite skips environment-dependent
