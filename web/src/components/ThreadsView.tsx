@@ -25,6 +25,7 @@ import { MessageQueue } from "./composer/MessageQueue";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
+import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProjectFilter";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
 import { NextSteps } from "./NextSteps";
@@ -112,6 +113,9 @@ type ThreadsViewProps = {
   showProjectDirectoryEmpty: boolean;
   threadQuery: string;
   setThreadQuery: Dispatch<SetStateAction<string>>;
+  threadProjectFilter: ThreadProjectFilter;
+  threadProjectOptions: readonly ThreadProjectOption[];
+  onThreadProjectFilterChange: (filter: ThreadProjectFilter) => void;
   activeSession: RelaySession | undefined;
   pendingUserMessage: { id: string; text: string } | null;
   displayMessages: DerivedMessage[];
@@ -201,6 +205,9 @@ export function ThreadsView({
   showProjectDirectoryEmpty,
   threadQuery,
   setThreadQuery,
+  threadProjectFilter,
+  threadProjectOptions,
+  onThreadProjectFilterChange,
   activeSession,
   pendingUserMessage,
   displayMessages,
@@ -423,6 +430,9 @@ export function ThreadsView({
         onRetryProjects={onRetryProjects}
         query={threadQuery}
         setQuery={setThreadQuery}
+        projectFilter={threadProjectFilter}
+        projectFilterOptions={threadProjectOptions}
+        onProjectFilterChange={onThreadProjectFilterChange}
         /* No thread is on screen while a project overview or a route state
            occupies the pane, so no thread row may claim selection — the
            active session outlives the route that opened it. */

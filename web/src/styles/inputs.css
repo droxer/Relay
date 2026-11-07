@@ -125,6 +125,35 @@
   color: var(--ink-3);
 }
 
+/* A quick-filter select sharing the band with the search (the thread rail's
+   project filter). The search keeps a usable floor and the select its natural
+   width; when the resizable rail is too narrow for both, the select drops to
+   a line of its own instead of crushing the search to nothing. A long project
+   name truncates rather than taking the row. */
+.list-filter-bar:has(.list-filter-select) {
+  flex-wrap: wrap;
+}
+
+.list-filter-bar:has(.list-filter-select) .list-filter-search {
+  flex: 1 1 9rem;
+}
+
+.list-filter-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, 14rem);
+}
+
+/* The primitive lays its value out as flex, which defeats line-clamp: a long
+   project name was cut mid-letter instead of ending in an ellipsis. */
+.list-filter-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Phones: a rail's Add filter is a soft chip, like the list toolbar's
    (backlog-list.css), not a framed field under the search. */
 @media (max-width: 820px) {

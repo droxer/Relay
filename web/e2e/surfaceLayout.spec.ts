@@ -115,6 +115,55 @@ test("project directory shows aligned names and Agent counts without Computer id
   await page.context().close();
 });
 
+/* The thread rail's project quick filter shares the filter band with the
+   search. At the rail's 240px floor the two cannot sit side by side, so the
+   select must wrap under the search rather than crush it or bleed past the
+   rail; on a phone it is a thumb-height control like the search beside it. */
+test("thread rail project filter fits the band and narrows the rail", async ({ browser }, testInfo) => {
+  const project = {
+    id: "p-launch", name: "Autumn launch with a long enough name to truncate",
+    ownerUserId: USER.id, computerId: "device:review-user:main", enabled: true, members: [], leadAgentId: null,
+    version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p-launch", createdAt: stamp, updatedAt: stamp,
+  };
+  // The project's room thread: the unfiltered Threads rail leaves it to the
+  // Projects directory; choosing the project must bring it in.
+  const room = { ...waiting, id: "room-thread", title: "Launch room", taskGoal: "Launch room", status: "completed", projectId: project.id };
+  const fixtures = { projects: [project], sessions: [session, waiting, room] };
+  for (const touch of [false, true]) {
+    const page = await openPage(browser, "/threads", touch, { "relay-web.threadListWidth": "240" }, undefined, fixtures);
+    const rail = page.locator("#thread-panel");
+    const filter = rail.getByRole("combobox", { name: "Filter threads by project" });
+    await expect(filter).toBeVisible();
+    await expect(rail.getByText("Launch room")).toHaveCount(0);
+    // In-flow children only: the select's hidden native input is fixed at x=0.
+    expect(await page.locator("#thread-panel .list-filter-bar").evaluate((bar) => {
+      const box = bar.getBoundingClientRect();
+      return Math.max(0, ...[...bar.querySelectorAll("*")]
+        .filter((child) => !["fixed", "absolute"].includes(getComputedStyle(child).position))
+        .map((child) => Math.max(child.getBoundingClientRect().right - box.right, box.left - child.getBoundingClientRect().left)));
+    })).toBeLessThanOrEqual(0);
+    const search = await rail.locator(".list-filter-search").boundingBox();
+    expect(search!.width).toBeGreaterThanOrEqual(120);
+    if (touch) expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    for (const theme of ["light", "dark"]) {
+      await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authenticated: true, user: { ...USER, theme } }) }));
+      await page.reload();
+      await expect(filter).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`thread-project-filter-${touch ? "phone" : "desktop"}-${theme}.png`) });
+    }
+    await filter.click();
+    await page.getByRole("option", { name: project.name }).click();
+    await expect(filter).toContainText("Autumn launch");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    expect((await rail.locator(".list-filter-search").boundingBox())!.width).toBeGreaterThanOrEqual(120);
+    await expect(rail.getByText("Launch room")).toBeVisible();
+    await expect(rail.getByText("Approve the pricing copy")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`thread-project-filter-${touch ? "phone" : "desktop"}-chosen.png`) });
+    await page.context().close();
+  }
+});
+
 /* The four collection rails — agents, teams, projects, skills — are one
    surface in four places: a roster heading its own list. They drifted apart
    one page at a time (a page-gutter header over a 12px band, a raw count here
