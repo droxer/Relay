@@ -15,15 +15,20 @@ now changes the lead. At creation a legacy `managerAgentId` choice assigns the
 lead; null does not clear an explicitly supplied lead.
 
 The manager does its job through the work it is given: the Tasks and
-Automations it runs in the Project. The Dashboard only names it, as one line
-above the Project's numbers (`ProjectManagerLine`) — the Agent, its role,
-whether it can work, and a way to the Agents tab where the role changes hands.
-It is drawn from the project and agents the page already loaded, and offers no
-chat. There is no manager chat drawer, dedicated message route or alternate
-Relay persona.
+Automations it runs in the Project. The Dashboard names it as one line above
+the Project's numbers (`ProjectManagerLine`) — the Agent, its role, whether it
+can work, and a way to the Agents tab where the role changes hands — drawn from
+the project and agents the page already loaded. For day-to-day management the
+owner of an active Project whose lead is enabled also gets **Discuss** there: it opens the
+Project's lead Thread (`useProjectLeadDiscussion` →
+`POST /projects/{id}/manager/conversation`), and its menu offers everyday
+topics (`web/src/lib/projectLeadTopics.ts`: project update over the last seven
+days, what needs me, next tasks, plan work) that open the same Thread with the
+question drafted in the composer. A topic never sends anything and never
+overwrites a draft already there. There is no manager chat drawer, dedicated
+message route or alternate Relay persona.
 
-A Project may still have a manager Thread from earlier releases (and
-`POST /projects/{id}/manager/conversation` can still start one). It is an
+The lead Thread is started on first use and reused afterwards. It is an
 ordinary Project Conversation that no Agent owns: each message goes to whoever
 it addresses, and the composer defaults to the current holder. Reassigning the
 lead changes its Project assignment. It writes nothing to any Thread, and the former

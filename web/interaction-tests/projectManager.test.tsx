@@ -1,13 +1,26 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {cloneElement,createElement} from 'react';
+import {act,fireEvent,render,renderHook,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {ProjectManagerLine} from '../src/components/ProjectManagerLine';
 import {ProjectDashboard} from '../src/components/ProjectDashboard';
 import {ManagerProposalCard} from '../src/components/ManagerProposalCard';
+import {useProjectLeadDiscussion} from '../src/hooks/useProjectLeadDiscussion';
+import {threadDraftKey} from '../src/hooks/useComposer';
+import {PROJECTS_QUERY_KEY} from '../src/hooks/useRelayData';
 import type {RelayTaskListItem} from '../src/types';
 
-const api=vi.hoisted(()=>({get:vi.fn(),apply:vi.fn(),dismiss:vi.fn()}));
-vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss}));
+// Floating popups do not open under jsdom; render the topic menu inline.
+vi.mock('@/components/ui/dropdown-menu',()=>({
+ DropdownMenu:({children}:any)=>createElement('div',null,children),
+ DropdownMenuTrigger:({render,disabled}:any)=>cloneElement(render,{disabled}),
+ DropdownMenuContent:({children}:any)=>createElement('div',{role:'menu'},children),
+ DropdownMenuItem:({children,onClick}:any)=>createElement('div',{role:'menuitem',onClick},children),
+}));
+const api=vi.hoisted(()=>({get:vi.fn(),apply:vi.fn(),dismiss:vi.fn(),open:vi.fn()}));
+vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss,openProjectLeadConversation:api.open}));
+const announce=vi.hoisted(()=>vi.fn());
+vi.mock('@/components/ui/DialogProvider',async(original)=>({...await original<typeof import('@/components/ui/DialogProvider')>(),useDialogs:()=>({announce})}));
 const nav=vi.hoisted(()=>vi.fn(async()=>{}));
 vi.mock('../src/lib/appRoute',async(original)=>({...await original<typeof import('../src/lib/appRoute')>(),navigateToAppPath:nav}));
 const proposal={id:'proposal',projectId:'p',threadId:'thread',agentId:'a',runId:'run',state:'pending' as const,revision:1,createdAt:'2026-11-06T00:00:00Z',operations:[
@@ -33,17 +46,81 @@ it.each([false,true])('keeps the Project Lead visible on the dashboard with task
  expect(onManage).toHaveBeenCalledOnce();
 });
 
-it('names the Project Lead on the dashboard without a chat to open',()=>{
+it('names the Project Lead on the dashboard and offers no discussion unless asked',()=>{
  const onManage=vi.fn();
  wrap(<ProjectManagerLine project={managed()} agents={[ada]} onManage={onManage} />);
  const line=screen.getByRole('group',{name:'project.roles.project_manager'});
  expect(line.textContent).toContain('project.roles.reviewer');
- expect(screen.queryByRole('button',{name:'project_manager.chat'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'project_manager.discuss'})).toBeNull();
  expect(api.get).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('link',{name:'Ada'}));
  expect(nav).toHaveBeenCalledWith('/agents/a');
  fireEvent.click(screen.getByRole('button',{name:'project_manager.change'}));
  expect(onManage).toHaveBeenCalled();
+});
+
+it('starts a discussion with the lead, plain or from an everyday topic',()=>{
+ const onDiscuss=vi.fn();
+ const view=wrap(<ProjectManagerLine project={managed()} agents={[ada]} onDiscuss={onDiscuss} />);
+ fireEvent.click(screen.getByRole('button',{name:'project_manager.discuss'}));
+ expect(onDiscuss).toHaveBeenLastCalledWith();
+ expect(screen.getAllByRole('menuitem').map(item=>item.textContent)).toEqual(
+  ['project_manager.quick_update','project_manager.quick_attention','project_manager.quick_next','project_manager.quick_plan']);
+ fireEvent.click(screen.getByRole('menuitem',{name:'project_manager.quick_attention'}));
+ expect(onDiscuss).toHaveBeenLastCalledWith('attention');
+ view.unmount();
+ wrap(<ProjectManagerLine project={managed()} agents={[ada]} onDiscuss={onDiscuss} discussing />);
+ expect((screen.getByRole('button',{name:'project_manager.discuss'}) as HTMLButtonElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'project_manager.quick_topics'}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('offers no discussion with a disabled lead',()=>{
+ wrap(<ProjectManagerLine project={managed({enabled:false})} agents={[ada]} onDiscuss={vi.fn()} />);
+ expect(screen.queryByRole('button',{name:'project_manager.discuss'})).toBeNull();
+});
+
+const owner={id:'u',userId:'u',username:'owner',role:'user'} as any;
+const hookWrapper=(client:QueryClient)=>({children}:{children:React.ReactNode})=>
+ <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+
+it('opens the lead Thread only after the project list names it, with a topic drafted',async()=>{
+ sessionStorage.clear();
+ const client=new QueryClient({defaultOptions:{mutations:{retry:false}}});
+ const order:string[]=[];
+ const invalidate=vi.spyOn(client,'invalidateQueries').mockImplementation(async(filters:any)=>{
+  if(filters?.queryKey===PROJECTS_QUERY_KEY) order.push('projects');
+ });
+ api.open.mockResolvedValue({threadId:'lead-thread'});
+ const onOpenThread=vi.fn(()=>order.push('open'));
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(client)});
+ act(()=>result.current.discuss('next'));
+ await waitFor(()=>expect(onOpenThread).toHaveBeenCalledWith('lead-thread'));
+ expect(api.open).toHaveBeenCalledWith('p');
+ expect(order).toEqual(['projects','open']);
+ expect(sessionStorage.getItem(`relay-web.draft:${threadDraftKey(owner,'lead-thread')}`)).toBe('project_manager.prompt_next');
+ invalidate.mockRestore();
+});
+
+it('never overwrites a draft the person already left in the lead Thread',async()=>{
+ sessionStorage.clear();
+ const key=`relay-web.draft:${threadDraftKey(owner,'lead-thread')}`;
+ sessionStorage.setItem(key,'my own question');
+ api.open.mockResolvedValue({threadId:'lead-thread'});
+ const onOpenThread=vi.fn();
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(new QueryClient())});
+ act(()=>result.current.discuss('plan'));
+ await waitFor(()=>expect(onOpenThread).toHaveBeenCalled());
+ expect(sessionStorage.getItem(key)).toBe('my own question');
+});
+
+it('reports a failed open and stays on the dashboard',async()=>{
+ api.open.mockRejectedValue(new Error('manager_unconfigured'));
+ const onOpenThread=vi.fn();
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(new QueryClient({defaultOptions:{mutations:{retry:false}}}))});
+ act(()=>result.current.discuss());
+ await waitFor(()=>expect(announce).toHaveBeenCalledWith(expect.objectContaining({message:'errors.open_project_lead',tone:'error'})));
+ expect(onOpenThread).not.toHaveBeenCalled();
+ await waitFor(()=>expect(result.current.pending).toBe(false));
 });
 
 it('shows the lead even when a legacy manager flag points to another agent',()=>{

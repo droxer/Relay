@@ -652,3 +652,65 @@ test("a drawer on a touch phone is dismissed by pulling its header down", async 
   await expect(drawer).toBeHidden();
   await context.close();
 });
+
+/* The Project Lead line carries the lead's name and, for the owner, Discuss,
+   its topic menu, and Change — three touch-height controls. On one row a 360px
+   phone left the name 30px and a 320px phone none, with Change past the edge,
+   so below 480px the controls take their own row and the topics open as the
+   phone's action sheet. */
+const leadAgent = {
+  id: "ada", displayName: "Ada Lovelace-Byron the Analytical", executorKind: "codex", defaultRole: "implementer",
+  supervisorUserId: "review-user", enabled: true, availability: "ready", version: 1, skills: [], placements: [],
+  createdAt: stamp, updatedAt: stamp,
+};
+const leadProject = {
+  id: "launch", name: "Autumn launch", ownerUserId: "review-user", computerId: "computer", enabled: true,
+  members: [{ agentId: "ada", role: "planner", projectManager: true, enabled: true }],
+  managerAgentId: "ada", managerThreadId: null, leadAgentId: "ada", version: 1,
+  workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp,
+};
+
+for (const width of [320, 390]) {
+  test(`the Project Lead line keeps the name and its discuss controls inside a ${width}px phone`, async ({ browser }) => {
+    const page = await openPage(browser, "/projects/launch", true, undefined, undefined, { agents: [leadAgent], projects: [leadProject], tasks: [], sessions: [] });
+    await page.setViewportSize({ width, height: 844 });
+    const line = page.getByRole("group", { name: "Project Lead", exact: true });
+    await expect(line.getByRole("button", { name: "Discuss", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    const metrics = await line.evaluate((element) => {
+      const box = (target: Element) => {
+        const r = target.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+      };
+      const role = element.querySelector<HTMLElement>(".project-manager-line-role")!;
+      return {
+        line: box(element),
+        text: box(element.querySelector(".project-manager-line-text")!),
+        roleClipped: role.scrollWidth > role.clientWidth + 1,
+        buttons: [...element.querySelectorAll("button")].map(box),
+      };
+    });
+    // The name keeps the row; the role line is read in full.
+    expect(metrics.text.width).toBeGreaterThan(width / 2);
+    expect(metrics.roleClipped, "role line is truncated").toBe(false);
+    expect(metrics.buttons).toHaveLength(3);
+    for (const button of metrics.buttons) {
+      expect(button.left).toBeGreaterThanOrEqual(metrics.line.left - 1);
+      expect(button.right).toBeLessThanOrEqual(metrics.line.right + 1);
+      expect(button.top, "controls share the name's row").toBeGreaterThanOrEqual(metrics.text.bottom - 1);
+      expect(button.height).toBeGreaterThanOrEqual(44);
+      expect(button.width).toBeGreaterThanOrEqual(44);
+    }
+    // The topics rise from the bottom edge, full width, with touch-height rows.
+    await line.getByRole("button", { name: "Start with a topic", exact: true }).click();
+    const items = page.getByRole("menuitem");
+    await expect(items).toHaveCount(4);
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    const sheet = await page.locator('[data-slot="dropdown-menu-content"]').boundingBox();
+    expect(Math.round(sheet!.width)).toBe(width);
+    expect(Math.round(sheet!.y + sheet!.height)).toBe(844);
+    for (const item of await items.all()) expect((await item.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}-lead-${width}.png` });
+    await page.context().close();
+  });
+}
