@@ -593,11 +593,15 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   await more.tap();
   const sheet = page.locator('[data-slot="dropdown-menu-content"]');
   await expect(sheet).toBeVisible();
-  await sheet.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+  // The slide-in may start a frame after the open (WebKit), so wait for the
+  // resting position rather than for the animations present right now.
+  await expect.poll(async () => {
+    const box = await sheet.boundingBox();
+    return box ? Math.round(box.y + box.height) : null;
+  }).toBe(844);
   const sheetBox = await sheet.boundingBox();
   expect(sheetBox!.x).toBeCloseTo(0, 0);
   expect(sheetBox!.width).toBeCloseTo(390, 0);
-  expect(sheetBox!.y + sheetBox!.height).toBeCloseTo(844, 0);
   const itemBox = await sheet.getByRole("menuitem").first().boundingBox();
   expect(itemBox!.height).toBeGreaterThanOrEqual(44);
   await context.close();
