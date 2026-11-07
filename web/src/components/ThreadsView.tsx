@@ -421,7 +421,6 @@ export function ThreadsView({
         projectsStatus={projectsStatus}
         projectsError={projectsError}
         onRetryProjects={onRetryProjects}
-        computers={runtimeNodes}
         query={threadQuery}
         setQuery={setThreadQuery}
         /* No thread is on screen while a project overview or a route state

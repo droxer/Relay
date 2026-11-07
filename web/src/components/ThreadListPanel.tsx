@@ -25,7 +25,7 @@ import {
   THREAD_LIST_WIDTH_MAX,
   THREAD_LIST_WIDTH_MIN,
 } from "../lib/threadList";
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../types";
+import type { ProjectRecord, RelaySession, RelayTaskListItem } from "../types";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
@@ -49,7 +49,6 @@ export function ThreadListPanel({
   projectsStatus,
   projectsError,
   onRetryProjects,
-  computers,
   query,
   setQuery,
   selectedSessionId,
@@ -77,7 +76,6 @@ export function ThreadListPanel({
   projectsStatus: ProjectCollectionStatus;
   projectsError: string;
   onRetryProjects: () => void;
-  computers: DaemonNodeMonitorRecord[];
   query: string;
   setQuery: Dispatch<SetStateAction<string>>;
   selectedSessionId: string | undefined;
@@ -227,8 +225,6 @@ export function ThreadListPanel({
         className={directoryMode === "projects" ? "conversation-list project-directory" : "conversation-list"}
       >
         {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
-          const computerLabel = computers.find((computer) => computer.id === project.computerId)?.displayName
-            || project.computerId.replace(/^device:[^:]+:/, "");
           const selection = projectFolderSelection({
             projectId: project.id,
             selectedProjectId,
@@ -250,17 +246,14 @@ export function ThreadListPanel({
                 type="button"
                 className="project-folder-select"
                 aria-current={selection === "selected" ? "page" : undefined}
-                tooltip={`${project.name} · ${t("project.member_count", { count: project.members.length })} · ${computerLabel}`}
-                aria-label={project.name}
+                tooltip={`${project.name} · ${t("project.member_count", { count: project.members.length })}`}
+                aria-label={`${project.name} · ${t("project.member_count", { count: project.members.length })}`}
                 onClick={() => onSelectProject(project.id)}
               >
                 <span className="project-folder-name">{project.name}</span>
-                {/* The crew and computer, which the tooltip says on a
-                    pointer. Touch has no tooltip, so on a phone this line is
-                    the only place a project row says anything but its name
-                    (thread.css shows it there only). */}
+                {/* Keep the roster count visible on touch and pointer layouts. */}
                 <span className="project-folder-meta" aria-hidden="true">
-                  {t("project.member_count", { count: project.members.length })} · {computerLabel}
+                  {t("project.member_count", { count: project.members.length })}
                 </span>
                 {/* State only when it adds something. Active is the resting
                     state of nearly every project, so printing it on every row

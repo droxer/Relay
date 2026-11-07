@@ -171,25 +171,23 @@
 }
 
 .project-folder-select {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-2);
+  column-gap: var(--sp-2);
+  row-gap: var(--sp-1);
   min-width: 0;
   flex: 1;
-  /* The same --sp-row / --sp-3 inset as every rail row, so the name lines up
-     with the thread, agent and team names in the rails beside it. */
-  padding: var(--sp-row) var(--sp-3);
+  /* Keep the rail's horizontal inset, with room for the two-line label. */
+  padding: var(--sp-3);
   border-radius: var(--r-2);
   text-align: left;
 }
 
 .project-folder-select > .project-folder-name {
   min-width: 0;
-  /* The name claims the row, so the leading edge is fixed whether or not the
-     trailing state renders. Without this the row inherits the Button's
-     centring the moment a project is in its resting state and has nothing to
-     say on the right. */
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
   overflow: hidden;
   color: var(--ink-1);
   /* Same medium-weight list-rail identity as the thread rail. */
@@ -200,33 +198,18 @@
 }
 
 .project-folder-meta {
-  display: none;
-}
-
-@media (hover: none) {
-  .project-folder-select {
-    flex-wrap: wrap;
-    row-gap: var(--sp-1);
-  }
-
-  /* Under the name, aligned with it: the 14px icon plus the row gap. */
-  .project-folder-meta {
-    display: block;
-    order: 3;
-    flex: 1 0 100%;
-    min-width: 0;
-    overflow: hidden;
-    padding-inline-start: calc(14px + var(--sp-2));
-    color: var(--ink-3);
-    font: var(--type-body-sm);
-    letter-spacing: var(--type-body-sm-track);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: start;
-  }
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-align: start;
 }
 
 .project-folder-count {
+  grid-column: 2;
+  grid-row: 1 / 3;
   margin-left: auto;
   color: var(--ink-4);
   font: var(--type-meta);
