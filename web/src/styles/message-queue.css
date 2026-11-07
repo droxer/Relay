@@ -27,9 +27,11 @@
 }
 
 .message-queue-title {
+  flex: none;
   margin: 0;
   color: var(--ink-1);
   font: var(--type-label);
+  white-space: nowrap;
   letter-spacing: var(--type-label-track);
 }
 
@@ -99,6 +101,11 @@
     --queue-inset: var(--sp-3);
     padding-inline: var(--sp-3);
   }
+
+  /* A touch screen shows no Steer tooltip, so the hint is the only place
+     Steer is explained: let it wrap under the title instead of truncating. */
+  .message-queue-head { flex-wrap: wrap; row-gap: 0; }
+  .message-queue-hint { white-space: normal; }
 
   /* No room for a trailing column: the actions drop under the message. */
   .message-queue-item { grid-template-columns: auto minmax(0, 1fr); }
