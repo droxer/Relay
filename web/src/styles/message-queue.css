@@ -1,0 +1,106 @@
+/* ============================= message queue ============================= */
+/* Messages written while a run is going. Docked on the composer card's top
+   edge with the awaiting-input prompt's geometry — they belong to the next
+   round, not the transcript — but on a neutral rail: nothing here is asking,
+   the person is. The head row is the next to go, so only its Steer is filled. */
+
+.message-queue {
+  --queue-inset: var(--composer-radius, var(--sp-5));
+  display: grid;
+  gap: var(--sp-2);
+  width: min(100% - var(--queue-inset) * 2, var(--thread-measure) - var(--queue-inset) * 2);
+  margin: 0 auto -1px;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + 1px);
+  border: 0.5px solid var(--line-1);
+  border-bottom: 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  animation: rise var(--t-slow) var(--ease) both;
+}
+
+.message-queue-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.message-queue-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.message-queue-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-queue-list {
+  display: grid;
+  gap: var(--sp-1);
+  /* A long queue scrolls inside the dock rather than pushing the card off
+     the screen. */
+  max-block-size: min(40vh, 16rem);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.message-queue-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+
+.message-queue-index {
+  min-inline-size: 1.5ch;
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--control-h-2xs);
+}
+
+.message-queue-item[data-head] .message-queue-index { color: var(--ink-2); }
+
+.message-queue-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: 400 var(--fs-transcript)/var(--leading-snug) var(--font-sans);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  /* Two lines are enough to recognise a message; Edit opens the rest. */
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.message-queue-item[data-head] .message-queue-text { color: var(--ink-1); }
+
+.message-queue-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+@media (max-width: 640px) {
+  .message-queue {
+    --queue-inset: var(--sp-3);
+    padding-inline: var(--sp-3);
+  }
+
+  /* No room for a trailing column: the actions drop under the message. */
+  .message-queue-item { grid-template-columns: auto minmax(0, 1fr); }
+  .message-queue-actions { grid-column: 2; }
+}

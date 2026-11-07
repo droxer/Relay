@@ -20,6 +20,8 @@ import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import { threadDraftKey } from "../hooks/useComposer";
+import { useThreadQueue } from "../hooks/useThreadQueue";
+import { MessageQueue } from "./composer/MessageQueue";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
@@ -335,6 +337,17 @@ export function ThreadsView({
     }),
     [activeSession, running, waiting, followUpWait, awaitingDecision],
   );
+  // What the person writes mid-run waits for the next round; a started
+  // thread only — staging a new one has no run to wait on.
+  const queueEnabled = Boolean(activeSession) && !initializingThread && !projectReadOnly;
+  const threadQueue = useThreadQueue({
+    queueKey: threadDraftKey(currentUser, activeSession?.id),
+    running,
+    awaitsPerson: (waiting !== null && !followUpWait) || awaitingDecision
+      || openPermissionRequests(activeSession).length > 0,
+    composerRef,
+    onCancelRun,
+  });
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
   const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
@@ -675,7 +688,17 @@ export function ThreadsView({
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
           onSend={sendAnswering}
-          onCancelRun={onCancelRun}
+          onCancelRun={queueEnabled ? threadQueue.stop : onCancelRun}
+          onQueue={queueEnabled ? threadQueue.enqueue : undefined}
+          queue={queueEnabled ? (
+            <MessageQueue
+              messages={threadQueue.messages}
+              running={running}
+              onSteer={threadQueue.steer}
+              onEdit={threadQueue.edit}
+              onRemove={threadQueue.remove}
+            />
+          ) : null}
           placeholder={waiting && !followUpWait
             ? t(waiting.kind === "approval" ? "awaiting.placeholder_changes" : "awaiting.placeholder", { agent: waitingAgentName })
             : landing && selectedUser && activeAgentDisplayName

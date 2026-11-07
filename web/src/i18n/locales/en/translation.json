@@ -567,7 +567,25 @@
     "mention_reason": {
       "unavailable": "unavailable",
       "unknown": "unknown agent"
-    }
+    },
+    "placeholder_queue": "Queue a follow-up for the next turn…",
+    "queue": "Queue",
+    "queue_shortcut": "{{shortcut}} to queue for the next turn"
+  },
+  "queue": {
+    "title_one": "{{count}} queued message",
+    "title_other": "{{count}} queued messages",
+    "hint_running": "Sends when this run ends. Steer stops the run and sends that message now.",
+    "hint_idle": "Waiting for you. Send one now, edit it, or remove it.",
+    "steer": "Steer",
+    "steer_hint": "Stop this run and send this message next",
+    "steer_item": "Steer with queued message {{number}}",
+    "send_now": "Send now",
+    "send_item": "Send queued message {{number}} now",
+    "edit": "Edit",
+    "edit_item": "Edit queued message {{number}}",
+    "remove": "Remove",
+    "remove_item": "Remove queued message {{number}}"
   },
   "decision": {
     "title": "You sent this turn back",

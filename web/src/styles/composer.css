@@ -472,6 +472,14 @@
   margin-left: auto;
 }
 
+/* Queue rides beside Stop, so the pair sits together at the trailing edge. */
+.composer-footer > .composer-queue-button {
+  flex: none;
+  margin-left: auto;
+}
+
+.composer-footer > .composer-queue-button + .send-button { margin-left: 0; }
+
 /* Send — a 32px disc in the neutral inverted fill (near-black on light,
    near-white on dark), the commit control of every agent app it is modelled
    on. The accent is the selection colour; on the composer it read as one more

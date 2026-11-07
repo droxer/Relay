@@ -46,6 +46,9 @@ export type ComposerSendOptions = {
   /** Approves the step an approval wait holds back, rather than asking for
    *  changes (ADR-023). Only an approval wait's own pick sets it. */
   approve?: boolean;
+  /** Read the text the way a typed draft is read — a leading `@` addresses
+   *  an agent — rather than as a picked answer. A queued message sets it. */
+  asTyped?: boolean;
 };
 
 /** How dispatch should read the box. `literal`: the text is a picked answer,
@@ -93,11 +96,16 @@ const ComposerView = forwardRef<ComposerHandle, {
   mentionCandidates?: MentionCandidate[];
   onSend: (style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
+  /** Takes a draft written while the run is going. Without it, the box
+   *  cannot send until the run ends. */
+  onQueue?: (text: string) => void;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
+  /** Docked under `prompt` — the messages waiting for the next round. */
+  queue?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
+}>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
   const { t } = useTranslation();
   const composer = useComposer(draftKey);
   const imageInput = useComposerImages(draftKey);
@@ -196,7 +204,15 @@ const ComposerView = forwardRef<ComposerHandle, {
     || (!composerText.trim() && !imageInput.images.length)
     || (initializingThread && !projectName && !runtimeNodeId);
   const cannotSend = cannotSendAsWritten || parsed.blocked;
+  // A draft written mid-run waits in the queue. Text only: an image is an
+  // upload bound to this box, so a draft carrying one waits here instead.
+  const canQueue = running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false): Promise<boolean> => {
+    if (running && !literal && canQueue && onQueue) {
+      onQueue(composerText);
+      setComposerText("");
+      return true;
+    }
     if (running || sendPending) return false;
     // The send button is disabled on a mention that resolves to nobody, and on
     // a staged thread with no computer, but the keyboard shortcut bypasses the
@@ -252,7 +268,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
-  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; approve?: boolean; resolve: (sent: boolean) => void } | null>(null);
+  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; approve?: boolean; literal: boolean; resolve: (sent: boolean) => void } | null>(null);
   // A pick's `literal` read reaches the send through the queue, never the box.
   const triggerSendRef = useRef(triggerSend);
   // Declared first so the queued send below sees this render's closure.
@@ -261,7 +277,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     const queued = queuedSendRef.current;
     if (!queued || queued.text !== composerText) return;
     queuedSendRef.current = null;
-    void triggerSendRef.current(queued.intent, true, queued.approve === true).then(queued.resolve);
+    void triggerSendRef.current(queued.intent, queued.literal, queued.approve === true).then(queued.resolve);
   }, [composerText]);
   useEffect(() => () => {
     queuedSendRef.current?.resolve(false);
@@ -277,6 +293,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       queuedSendRef.current = null;
       const intent = options?.intent;
       const approve = options?.approve === true;
+      const literal = options?.asTyped !== true;
       // Whatever the person had started typing is theirs: it goes back in the
       // box once the picked answer has gone. A pick that failed leaves the box
       // exactly as it was, empty included — the answer was never a draft, and
@@ -284,9 +301,9 @@ const ComposerView = forwardRef<ComposerHandle, {
       const previous = composerText;
       const draft = composerText.trim() && composerText !== text ? composerText : null;
       const sent = text === composerText
-        ? triggerSendRef.current(intent, true, approve)
+        ? triggerSendRef.current(intent, literal, approve)
         : new Promise<boolean>((resolve) => {
-          queuedSendRef.current = { text, intent, approve, resolve };
+          queuedSendRef.current = { text, intent, approve, literal, resolve };
           setComposerText(text);
         });
       return sent.then((ok) => {
@@ -338,6 +355,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>
       {prompt}
+      {queue}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
           {connectionQueryClient && <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
@@ -380,6 +398,8 @@ const ComposerView = forwardRef<ComposerHandle, {
               name="message"
               placeholder={placeholder ?? (!selectedUser
                 ? t("composer.placeholder_no_user")
+                : running && onQueue
+                  ? t("composer.placeholder_queue")
                 : targetName
                   ? t("composer.placeholder_named", { target: targetName })
                   : t("composer.placeholder"))}
@@ -457,6 +477,14 @@ const ComposerView = forwardRef<ComposerHandle, {
                   inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
               ) : null}
             </div>
+            {/* Mid-run, Enter queues the draft; the button says so beside
+                Stop, which keeps its place so focus survives the run. */}
+            {canQueue ? (
+              <Button variant="outline" type="submit" size="xs" className="composer-queue-button"
+                tooltip={t("composer.queue_shortcut", { shortcut: sendShortcutLabel() })}>
+                {t("composer.queue")}
+              </Button>
+            ) : null}
             {/* One mounted element for send↔stop so keyboard focus survives
                 the run starting. Send is a bare disc; Stop says its word,
                 because a square glyph alone read as decoration under a live
