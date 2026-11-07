@@ -34,6 +34,13 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { ListSkeleton } from "./ListSkeleton";
+import { FilterSelect } from "./FiltersBar";
+import {
+  THREAD_PROJECT_FILTER_ALL,
+  THREAD_PROJECT_FILTER_NONE,
+  type ThreadProjectFilter,
+  type ThreadProjectOption,
+} from "../lib/threadProjectFilter";
 
 /** Stable empty list for the rail window when the projects rail is showing. */
 const NO_THREADS: ThreadItem[] = [];
@@ -51,6 +58,9 @@ export function ThreadListPanel({
   onRetryProjects,
   query,
   setQuery,
+  projectFilter,
+  projectFilterOptions,
+  onProjectFilterChange,
   selectedSessionId,
   selectedProjectId,
   listOnScreen,
@@ -78,6 +88,10 @@ export function ThreadListPanel({
   onRetryProjects: () => void;
   query: string;
   setQuery: Dispatch<SetStateAction<string>>;
+  /** The threads rail's project quick filter; the projects rail ignores it. */
+  projectFilter: ThreadProjectFilter;
+  projectFilterOptions: readonly ThreadProjectOption[];
+  onProjectFilterChange: (filter: ThreadProjectFilter) => void;
   selectedSessionId: string | undefined;
   selectedProjectId: string | null;
   /** On a phone, whether this pane is the one showing. A selection outlives
@@ -127,7 +141,16 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const railWindow = useRailWindow(directoryMode === "threads" ? threads : NO_THREADS, tasks, selectedSessionId, query);
+  const projectFiltered = directoryMode === "threads" && projectFilter !== THREAD_PROJECT_FILTER_ALL;
+  const railWindow = useRailWindow(directoryMode === "threads" ? threads : NO_THREADS, tasks, selectedSessionId, `${projectFilter}\n${query}`);
+  const projectFilterChoices = useMemo(() => [
+    { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
+    { value: THREAD_PROJECT_FILTER_NONE, label: t("thread.project_filter_none") },
+    ...projectFilterOptions.map((option) => ({
+      value: option.value,
+      label: option.archived ? t("thread.project_filter_archived", { name: option.name }) : option.name,
+    })),
+  ], [projectFilterOptions, t]);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;
@@ -215,6 +238,19 @@ export function ThreadListPanel({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {/* Only once there is a project to choose — with none, "All projects"
+            and "No project" would be the same list twice. */}
+        {directoryMode === "threads" && (projectFilterOptions.length > 0 || projectFiltered) ? (
+          <FilterSelect
+            name="thread-project-filter"
+            label={t("thread.project_filter_label")}
+            value={projectFilter}
+            onValueChange={onProjectFilterChange}
+            options={projectFilterChoices}
+            size="sm"
+            className="list-filter-select"
+          />
+        ) : null}
       </div>
       {/* A plain scroller, not a second landmark: the enclosing <aside> already
           carries this exact name, and two landmarks with one name are ones a
@@ -305,6 +341,18 @@ export function ThreadListPanel({
               )}
             />
           ) : null
+        ) : threads.length === 0 && projectFiltered ? (
+          // The filter, not the account, emptied the list: offer the way back
+          // rather than a create that would not land under this filter.
+          <RelayEmptyState feature="threads"
+            className="conversation-empty"
+            title={query.trim() ? t("thread.no_matches") : t("thread.project_filter_empty")}
+            actions={(
+              <Button type="button" variant="outline" onClick={() => onProjectFilterChange(THREAD_PROJECT_FILTER_ALL)}>
+                {t("thread.project_filter_clear")}
+              </Button>
+            )}
+          />
         ) : threads.length === 0 ? (
           <RelayEmptyState feature="threads"
             className="conversation-empty"

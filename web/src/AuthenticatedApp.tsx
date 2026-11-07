@@ -33,6 +33,7 @@ import { useStableCallback as useStableEvent } from "./hooks/useStableCallback";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
 import { useThreadDirectory } from "./hooks/useThreadDirectory";
+import { THREAD_PROJECT_FILTER_ALL, type ThreadProjectFilter } from "./lib/threadProjectFilter";
 import { useThreadComposerSelection } from "./hooks/useThreadComposerSelection";
 import { useThreadTargets } from "./hooks/useThreadTargets";
 import type { useUserPreferences } from "./hooks/useUserPreferences";
@@ -120,6 +121,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
   const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
   const [threadQuery, setThreadQuery] = useState("");
+  const [threadProjectFilter, setThreadProjectFilter] = useState<ThreadProjectFilter>(THREAD_PROJECT_FILTER_ALL);
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
   const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId);
@@ -422,12 +424,13 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     && space.open
     && Boolean(activeSession);
 
-  const { directoryProjects, directoryThreads, threadItems } = useThreadDirectory({
+  const { directoryProjects, directoryThreads, threadItems, projectFilterOptions, projectFilter } = useThreadDirectory({
     route,
     myThreads,
     projects,
     routedProjectId,
     threadQuery,
+    threadProjectFilter,
     tasks,
     visibleNodes,
     runtimeNodes,
@@ -735,6 +738,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             showProjectDirectoryEmpty={showProjectDirectoryEmpty}
             threadQuery={threadQuery}
             setThreadQuery={setThreadQuery}
+            threadProjectFilter={projectFilter}
+            threadProjectOptions={projectFilterOptions}
+            onThreadProjectFilterChange={setThreadProjectFilter}
             activeSession={activeSession}
             pendingUserMessage={pendingUserMessage}
             displayMessages={displayMessages}

@@ -2,6 +2,14 @@ import { useMemo, useState } from "react";
 import type { ProjectRecord } from "../types";
 import { matchesThreadQuery, reuseThreadItems, runningAgentName, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
+import {
+  applyThreadProjectFilter,
+  resolveThreadProjectFilter,
+  THREAD_PROJECT_FILTER_ALL,
+  threadProjectOptions,
+  type ThreadProjectFilter,
+  type ThreadProjectOption,
+} from "../lib/threadProjectFilter";
 
 /**
  * What the thread rail shows: the user's threads decorated with live state,
@@ -33,6 +41,11 @@ interface ThreadDirectory {
   directoryProjects: ProjectRecord[];
   /** Threads to list, grouped for the active route. */
   directoryThreads: ThreadItem[];
+  /** The projects the threads rail's quick filter offers. */
+  projectFilterOptions: ThreadProjectOption[];
+  /** The quick filter in force — a remembered project that is gone reads as
+   *  `all`. Ignored on the projects route, which is grouped by project. */
+  projectFilter: ThreadProjectFilter;
 }
 
 interface ThreadDirectoryInput {
@@ -41,6 +54,8 @@ interface ThreadDirectoryInput {
   projects: readonly ProjectRecord[];
   routedProjectId: string | null;
   threadQuery: string;
+  /** The threads rail's project quick filter; every thread when omitted. */
+  threadProjectFilter?: ThreadProjectFilter;
   /** Tasks whose linked sessions mark a thread as backlog- or routine-driven. */
   tasks: Parameters<typeof threadOriginIndex>[0];
   visibleNodes: readonly DirectoryNode[];
@@ -54,6 +69,7 @@ export function useThreadDirectory({
   projects,
   routedProjectId,
   threadQuery,
+  threadProjectFilter = THREAD_PROJECT_FILTER_ALL,
   tasks,
   visibleNodes,
   runtimeNodes,
@@ -141,8 +157,20 @@ export function useThreadDirectory({
     );
   }, [projects, route, routedProjectId, threadItems, threadQuery]);
 
+  const projectFilterOptions = useMemo(
+    () => threadProjectOptions(projects, threadItems),
+    [projects, threadItems],
+  );
+  const projectFilter = resolveThreadProjectFilter(threadProjectFilter, projectFilterOptions);
+
   const directoryThreads = useMemo(() => {
-    if (route !== "projects") return threadsForDirectory(filteredThreads, projects, "threads");
+    if (route !== "projects") {
+      return applyThreadProjectFilter(
+        projectFilter,
+        threadsForDirectory(filteredThreads, projects, "threads"),
+        filteredThreads,
+      );
+    }
     const query = threadQuery.trim().toLowerCase();
     const matchingProjectIds = new Set(
       projects.filter((project) => project.name.toLowerCase().includes(query)).map((project) => project.id),
@@ -151,7 +179,7 @@ export function useThreadDirectory({
       if (!item.session.projectId || !projects.some((project) => project.id === item.session.projectId)) return false;
       return !query || matchingProjectIds.has(item.session.projectId) || matchesThreadQuery(item.session, threadQuery);
     });
-  }, [filteredThreads, projects, route, threadItems, threadQuery]);
+  }, [filteredThreads, projectFilter, projects, route, threadItems, threadQuery]);
 
-  return { threadItems, filteredThreads, directoryProjects, directoryThreads };
+  return { threadItems, filteredThreads, directoryProjects, directoryThreads, projectFilterOptions, projectFilter };
 }

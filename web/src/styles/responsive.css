@@ -673,6 +673,17 @@
     background: var(--control-fill);
   }
 
+  /* The project filter beside it is the same filled, thumb-height control —
+     a framed 28px select next to a 44px field read as two kinds of thing. */
+  #thread-panel .list-filter-select {
+    /* A long project name truncates before the search loses its placeholder. */
+    max-width: 40%;
+    height: var(--touch-target);
+    border-color: transparent;
+    border-radius: var(--r-2);
+    background: var(--control-fill);
+  }
+
   /* Rail groups sit one step apart on a phone rather than a full section
      rung. */
   .conversation-group + .conversation-group {
