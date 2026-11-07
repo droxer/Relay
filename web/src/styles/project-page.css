@@ -628,6 +628,27 @@ button.project-member-row:hover .project-member-row-open {
     align-items: stretch;
   }
 
+  /* Once the form holds a change, the footer docks to the bottom of the
+     scrolling pane, the way a native editor keeps Save in thumb reach —
+     otherwise it waited a screen of fields below the one being edited.
+     The stamps step aside so the docked bar is just the two choices. */
+  .project-settings-foot[data-dirty] {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    border-radius: 0 0 var(--r-3) var(--r-3);
+    background: var(--surface-0);
+  }
+
+  .project-settings-foot[data-dirty] .project-settings-stamps {
+    display: none;
+  }
+
+  .project-settings-actions [data-slot="button"] {
+    flex: 1 1 0;
+    min-height: var(--touch-target);
+  }
+
   .project-settings-danger-row {
     flex-direction: column;
     align-items: stretch;

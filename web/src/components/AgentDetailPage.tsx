@@ -143,7 +143,7 @@ export function AgentDetailPage({
         titleAs="h2"
         layout="stacked"
         toolbar={(
-          <TabsList className="workspace-page-tabs" aria-label={t("agents_page.detail_sections")}>
+          <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("agents_page.detail_sections")}>
             {DETAIL_TABS.map((tab) => {
               const count = tab === "activities"
                 ? brief ? brief.metrics.sessionCount || undefined : undefined

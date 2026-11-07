@@ -1,8 +1,13 @@
 "use client"
 
+import { useRef } from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 
+import { useStripScroll } from "@/hooks/useStripScroll"
 import { cn } from "@/lib/utils"
+
+/** A ref that never holds an element: `useStripScroll` then does nothing. */
+const NO_STRIP = { current: null }
 
 /* Tabs — base-ui primitive. Five surfaces (preferences, the agent record, the
    project and team workspaces, the thread space panel) each carried their own
@@ -24,9 +29,24 @@ const Tabs = TabsPrimitive.Root
  *  to manual activation, which is the better default when a panel is
  *  expensive — but changing how these five surfaces respond to an arrow key is
  *  not something a primitive swap should decide on its own. */
-function TabsList({ className, activateOnFocus = true, ...props }: TabsPrimitive.List.Props) {
+function TabsList({
+  className,
+  activateOnFocus = true,
+  stripKey,
+  ...props
+}: TabsPrimitive.List.Props & {
+  /** The selected tab's value, for a list that becomes a sideways strip on a
+   *  phone: the edge with more tabs behind it fades (`data-more-start` /
+   *  `data-more-end`), and the selected tab is brought into view whenever
+   *  this changes — a cut-off "Agents" otherwise gave no hint the row
+   *  scrolled. Leave unset for a list that never scrolls. */
+  stripKey?: string
+}) {
+  const stripRef = useRef<HTMLDivElement>(null)
+  useStripScroll(stripKey === undefined ? NO_STRIP : stripRef, stripKey, "[data-active]")
   return (
     <TabsPrimitive.List
+      ref={stripRef}
       data-slot="tabs-list"
       activateOnFocus={activateOnFocus}
       className={cn("flex items-center", className)}

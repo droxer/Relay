@@ -10,7 +10,7 @@ test("publishes an installable manifest and controls the page", async ({ page })
   });
   const manifest = await (await page.request.get("/manifest.webmanifest")).json();
   expect(manifest.display).toBe("standalone");
-  expect(manifest.start_url).toBe("/threads");
+  expect(manifest.start_url).toBe("/home");
   for (const icon of manifest.icons) expect((await page.request.get(icon.src)).ok()).toBeTruthy();
   const worker = await page.request.get("/sw.js");
   expect(worker.headers()["content-type"]).toContain("javascript");

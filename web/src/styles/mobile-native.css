@@ -1,0 +1,153 @@
+/* =====================================================================
+   Mobile native — the touch behaviours a phone app has and a page lacks
+
+   Scoped to a phone held in the hand: the 820px shell collapse AND a coarse
+   pointer, so a narrow desktop window keeps its pointer menus. Loaded after
+   mobile-overlays.css and before responsive.css / a11y.css.
+   ===================================================================== */
+
+@media (max-width: 820px) and (pointer: coarse) {
+  /* ── Touch, not click ──────────────────────────────────────────────
+     The grey flash WebKit paints over a tapped link is a page's tell; every
+     control here draws its own pressed state below. `manipulation` drops the
+     double-tap-to-zoom wait, so a tap acts on touch-up. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The shell is one fixed screen whose panes scroll inside it. Letting the
+     document overscroll bounced the top bar and tab bar with the content,
+     and Chrome's pull-to-refresh reloaded the whole app from a list. */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  a[href],
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  label {
+    touch-action: manipulation;
+  }
+
+  /* A long press on a control selects its label or opens the link preview
+     callout; on a native control it does neither. */
+  button,
+  [role="button"],
+  [role="tab"],
+  .sidenav-btn {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ── Pressed rows ──────────────────────────────────────────────────
+     A list row lights the instant a finger lands and fades back after, as
+     a native table cell does. Hover never fires on glass, so without this
+     a tap gave no sign it was taken until the next screen arrived. The
+     Button base's 1px press nudge reads as a jolt on a full-width row. */
+  .conversation-row-inner,
+  .project-folder-select,
+  .skills-roster-row-select,
+  .agents-roster-row-select,
+  .home-run,
+  .home-agenda-row,
+  .home-project,
+  .home-finished-row,
+  .project-member-row,
+  .backlog-row {
+    transition: background-color var(--t-slow) var(--ease);
+    translate: none;
+  }
+
+  .conversation-row-inner:active,
+  .project-folder-select:active,
+  .skills-roster-row-select:active,
+  .agents-roster-row-select:active,
+  .home-run:active,
+  .home-agenda-row:active,
+  .home-project:active,
+  .home-finished-row:active,
+  button.project-member-row:active,
+  .backlog-row:has(.backlog-row-title:active) {
+    background-color: var(--control-fill);
+    transition-duration: 0s;
+  }
+
+  /* A button dims under the finger, the platform's press for a control —
+     a plate would fight the filled variants. `filter`, not `opacity`:
+     loading and disabled states already own opacity. */
+  [data-slot="button"] {
+    transition-property: color, background-color, border-color, box-shadow, filter;
+  }
+
+  [data-slot="button"]:active:not(:disabled) {
+    filter: opacity(0.6);
+    transition-duration: 0s;
+  }
+
+  /* ── Menus and selects become action sheets ────────────────────────
+     Anchored under a 24px "⋯", a popover menu lands wherever the trigger
+     was, with 32px rows a thumb overshoots. On a phone the same menu rises
+     from the bottom edge, full width, with touch-height rows — the shape
+     every platform action sheet has. The positioner's inline placement is
+     what floating-ui computed for the anchor, hence !important. */
+  div:has(> [data-slot="dropdown-menu-content"]),
+  div:has(> [data-slot="select-content"]) {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"] {
+    width: 100%;
+    min-width: 0;
+    max-height: min(70dvh, calc(100dvh - env(safe-area-inset-top) - var(--sp-8)));
+    padding:
+      var(--sp-2)
+      max(env(safe-area-inset-right), var(--sp-2))
+      max(env(safe-area-inset-bottom), var(--sp-2))
+      max(env(safe-area-inset-left), var(--sp-2));
+    border-top: 0.5px solid var(--line-1);
+    border-radius: var(--r-3) var(--r-3) 0 0;
+    overscroll-behavior: contain;
+    /* The scrim is the sheet's own shadow: it dims the page behind without
+       another element to mount, and a tap on it is an outside press, which
+       already closes the menu. */
+    box-shadow: 0 0 0 100vmax var(--scrim);
+    scale: 1;
+    transform: translateY(0);
+    transition:
+      transform var(--t-slow) var(--ease),
+      box-shadow var(--t-slow) var(--ease),
+      opacity var(--t-slow) var(--ease);
+  }
+
+  [data-slot="dropdown-menu-content"][data-starting-style],
+  [data-slot="dropdown-menu-content"][data-ending-style],
+  [data-slot="select-content"][data-starting-style],
+  [data-slot="select-content"][data-ending-style] {
+    opacity: 1;
+    transform: translateY(100%);
+    box-shadow: 0 0 0 100vmax transparent;
+  }
+
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-link-item"],
+  [data-slot="select-item"] {
+    min-height: var(--touch-target);
+    align-items: center;
+    padding-inline: var(--sp-3);
+    font-size: var(--fs-4);
+  }
+
+  [data-slot="select-item"] {
+    padding-right: var(--sp-8);
+  }
+}

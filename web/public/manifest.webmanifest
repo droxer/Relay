@@ -3,7 +3,7 @@
   "name": "Relay",
   "short_name": "Relay",
   "description": "Coordinate your agents, tasks, and computers in one workspace.",
-  "start_url": "/threads",
+  "start_url": "/home",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -12,5 +12,28 @@
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Threads",
+      "url": "/threads",
+      "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "url": "/tasks",
+      "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Projects",
+      "url": "/projects",
+      "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
   ]
 }

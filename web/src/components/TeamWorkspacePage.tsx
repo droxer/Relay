@@ -509,7 +509,7 @@ export function TeamWorkspacePage({
         titleAs="h2"
         layout="stacked"
         toolbar={(
-          <TabsList className="workspace-page-tabs" aria-label={t("teams.sections")}>
+          <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("teams.sections")}>
             {TEAM_PAGE_TABS.map((tab) => (
               <TabsTrigger
                 key={tab}
