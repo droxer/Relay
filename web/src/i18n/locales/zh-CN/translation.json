@@ -568,14 +568,11 @@
   },
   "queue": {
     "title_other": "{{count}} 条排队消息",
-    "hint_running": "本次运行结束后自动发送。Steer 会停止运行并立即发送该消息。",
-    "hint_idle": "等你决定：立即发送、编辑或移除。",
     "steer": "Steer",
     "steer_hint": "停止本次运行，接着发送这条消息",
     "steer_item": "用第 {{number}} 条排队消息 Steer",
     "send_now": "立即发送",
     "send_item": "立即发送第 {{number}} 条排队消息",
-    "edit": "编辑",
     "edit_item": "编辑第 {{number}} 条排队消息",
     "remove": "移除",
     "remove_item": "移除第 {{number}} 条排队消息"
