@@ -23,6 +23,29 @@ def test_upload_and_private_download(monkeypatch, database_io_off_event_loop):
         assert client.get(f"/api/v1/thread-attachments/{attachment['id']}").status_code == 401
 
 
+def test_two_full_composer_batches_upload_without_throttling(monkeypatch, database_io_off_event_loop):
+    # A composer sends one request per image, up to four at once; the
+    # sign-in limiter's five attempts a minute refused the second batch.
+    with _world(monkeypatch) as (_, client, _, _):
+        statuses = [
+            client.post("/api/v1/thread-attachments", content=PNG, headers={"Content-Type": "image/png"}).status_code
+            for _ in range(8)
+        ]
+        assert statuses == [201] * 8
+
+
+def test_image_upload_limit_is_its_own_bucket(monkeypatch, database_io_off_event_loop):
+    monkeypatch.setenv("RELAY_THREAD_IMAGE_RATE_LIMIT", "1")
+    with _world(monkeypatch) as (_, client, _, _):
+        def upload():
+            return client.post("/api/v1/thread-attachments", content=PNG, headers={"Content-Type": "image/png"})
+
+        assert upload().status_code == 201
+        refused = upload()
+        assert refused.status_code == 429
+        assert refused.headers["Retry-After"]
+
+
 def test_rejects_fake_image(monkeypatch):
     with _world(monkeypatch) as (_, client, _, _):
         response = client.post(

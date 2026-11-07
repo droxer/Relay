@@ -79,6 +79,7 @@ class AppContext:
     automation_webhook_failure_limiter: AuthRateLimiter
     waitlist_rate_limiter: AuthRateLimiter
     password_reset_rate_limiter: AuthRateLimiter
+    thread_image_rate_limiter: AuthRateLimiter
     chat_probe: ChatProbe
     chat_provision: ChatProvision
     github_connection: GitHubConnectionService | None = None

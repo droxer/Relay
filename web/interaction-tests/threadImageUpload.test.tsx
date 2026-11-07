@@ -1,6 +1,8 @@
 import { File } from "node:buffer";
 import { expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 import { uploadThreadImage } from "../src/api-client/sessions";
+import { useComposerImages } from "../src/components/composer/ComposerImages";
 
 it.each(["image/jpeg", "image/png", "image/webp"])("uploads complete %s bytes without File or Blob serialization", async (type) => {
   const bytes = new Uint8Array([0, 1, 127, 128, 255]);
@@ -46,6 +48,25 @@ it("does not upload if the draft is cancelled while reading the photo", async ()
   vi.stubGlobal("fetch", fetch);
   await expect(uploadThreadImage(file as unknown as globalThis.File, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it("explains a dropped upload instead of showing the browser's network error", async () => {
+  // Safari rejects fetch with a bare TypeError("Load failed") when the
+  // connection drops mid-upload, which is common on a phone's uplink.
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Load failed"); }));
+  const file = new File(["photo"], "photo.jpg", { type: "image/jpeg" });
+  const { result } = renderHook(() => useComposerImages("thread-1"));
+  await act(() => result.current.add([file as unknown as globalThis.File]));
+  expect(result.current.error).toBe("composer.image_failed"); // setup's t() returns the key
+  expect(result.current.busy).toBe(false);
+});
+
+it("shows the server's reason when it refuses an upload", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Too many image uploads. Try again shortly." }), { status: 429 })));
+  const file = new File(["photo"], "photo.jpg", { type: "image/jpeg" });
+  const { result } = renderHook(() => useComposerImages("thread-1"));
+  await act(() => result.current.add([file as unknown as globalThis.File]));
+  expect(result.current.error).toBe("Too many image uploads. Try again shortly.");
 });
 
 it("preserves server upload errors", async () => {

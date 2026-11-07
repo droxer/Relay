@@ -163,6 +163,9 @@ class AppSettings:
     automation_webhook_failure_limit: RateLimit
     waitlist_limit: RateLimit
     password_reset_limit: RateLimit
+    # Per user, per minute. A composer posts one request per image (up to
+    # four at a time), so this cannot share the sign-in limiter's budget.
+    thread_image_limit: RateLimit
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> AppSettings:
@@ -202,6 +205,9 @@ class AppSettings:
             password_reset_limit=RateLimit(
                 env.integer("RELAY_PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", 5, minimum=1),
                 env.integer("RELAY_PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS", 900, minimum=1),
+            ),
+            thread_image_limit=RateLimit(
+                env.integer("RELAY_THREAD_IMAGE_RATE_LIMIT", 30, minimum=1), 60
             ),
         )
         env.raise_if_invalid()
