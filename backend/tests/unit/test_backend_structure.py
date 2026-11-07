@@ -59,6 +59,7 @@ def test_app_factory_wires_backend_state_and_routes() -> None:
 
 
 def test_app_factory_requires_database_for_thread_storage(monkeypatch) -> None:
+    monkeypatch.setattr("relay.core.settings.load_backend_env", lambda: None)
     monkeypatch.delenv("RELAY_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with TemporaryDirectory() as root, pytest.raises(

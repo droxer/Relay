@@ -38,6 +38,7 @@ tasks = Table(
     metadata,
     database_id_column(),
     Column("title", Text, nullable=False),
+    Column("title_casefold", Text, nullable=False, server_default=""),
     Column("description", Text, nullable=False),
     Column("priority", Text, nullable=False),
     Column("status", Text, nullable=False),
@@ -87,6 +88,8 @@ tasks = Table(
     Index("ix_tasks_assigned_agent_id", "assigned_agent_id"),
     Index("ix_tasks_assigned_team_id", "assigned_team_id"),
     Index("ix_tasks_project_id", "project_id"),
+    Index("ix_tasks_project_live_id", "project_id", "owner_user_id", "id",
+          postgresql_where=text("deleted_at IS NULL"), sqlite_where=text("deleted_at IS NULL")),
     Index(
         "ix_tasks_external_ref",
         "external_ref",
@@ -159,6 +162,7 @@ events = Table(
     # (task_id, sequence) serves history reads and the FK cascade.
     UniqueConstraint("task_id", "sequence", name="uq_task_events_task_sequence"),
     Index("ix_task_events_task_type_sequence", "task_id", "type", "sequence"),
+    Index("ix_task_events_task_time", "task_id", "timestamp", "sequence"),
 )
 
 number_counters = Table(

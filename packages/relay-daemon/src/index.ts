@@ -104,6 +104,7 @@ import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeImages } from "./image-attachments.js";
 import { createRunMcpProxy, MANAGED_MCP_CONTEXT_ENV } from "./relay-mcp-managed.js";
+import { startNativeMcpBridge } from "./relay-mcp-native.js";
 import { bootstrapRelayMcp, createMcpReconciler, configureRelayMcp } from "./relay-mcp-bootstrap.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
 import { materializeSkills } from "./agent-skills.js";
@@ -1460,6 +1461,7 @@ async function executeCommand(
   const execution = await environment.acquireWorkspace(threadWorkspace.hostPath, signal);
   const managerToolAbort = new AbortController();
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
+  let nativeMcpBridge: Awaited<ReturnType<typeof startNativeMcpBridge>> | undefined;
   try {
     // The Project Lead stages Task changes; every other roster member
     // reads through the same run-scoped transport, and the backend refuses
@@ -1473,12 +1475,16 @@ async function executeCommand(
       const result = await invokeManager(workspaceTool ? "workspace" : tool,args);
       return workspaceTool ? managerWorkspaceTool(threadWorkspace.hostPath, tool, args) : result;
     }) : undefined;
+    if (invokeManager && environment.sandboxMode === "none") nativeMcpBridge = await startNativeMcpBridge(invokeManager);
     if (managerBridge && state.project_manager) state.project_manager = { ...state.project_manager, toolCommand: managerBridge.toolCommand };
     else if (managerBridge && state.project_reader) state.project_reader = { ...state.project_reader, toolCommand: managerBridge.toolCommand };
     return await runInWorkspace(execution);
   } finally {
     managerToolAbort.abort();
-    try { await managerBridge?.dispose(); }
+    try {
+      try { await nativeMcpBridge?.dispose(); }
+      finally { await managerBridge?.dispose(); }
+    }
     finally { execution.release(); }
   }
 
@@ -1736,7 +1742,7 @@ async function executeCommand(
     const options = {
       execStream: execution.execStream,
       runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge && (state.project_manager ?? state.project_reader)
-        ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)!.projectId,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
+        ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)!.projectId,native:nativeMcpBridge?.address,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
         : {disabled:true})} : undefined,
       eventSink,
       runId: command.runId,

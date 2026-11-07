@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { relayApiUrl } from 'relay-core/api-url';
 import { boundedJsonResponse, negotiatedVersion } from './relay-mcp-http.js';
+import { nativeMcpForwarder, type NativeMcpAddress } from './relay-mcp-native.js';
 const exec = promisify(execFile);
 export const MANAGED_MCP_CONTEXT_ENV = 'RELAY_MCP_RUN_CONTEXT';
 export function managedMcpForwarder(backendUrl: string, raw: string) {
@@ -11,14 +12,17 @@ export function managedMcpForwarder(backendUrl: string, raw: string) {
         backendUrl?: string;
         projectId?: string;
         bridgePath?: string;
+        native?: NativeMcpAddress;
     };
-    const valid = !context.disabled && context.backendUrl === backendUrl && typeof context.projectId === 'string' && typeof context.bridgePath === 'string';
+    const native = context.native && typeof context.native.socketPath === 'string' && typeof context.native.secret === 'string'
+        ? nativeMcpForwarder(context.native) : undefined;
+    const valid = !context.disabled && context.backendUrl === backendUrl && typeof context.projectId === 'string' && (native !== undefined || typeof context.bridgePath === 'string');
     let protocolVersion: string | undefined;
     return async (message: unknown): Promise<unknown | undefined> => {
         if (!valid)
             throw new Error('Relay MCP is disabled for this run or backend scope.');
-        const response = await exec(process.execPath, [context.bridgePath!, 'mcp', JSON.stringify({ message, protocolVersion })], { timeout: 65000, maxBuffer: 1024 * 1024, windowsHide: true });
-        const reply: unknown = JSON.parse(response.stdout);
+        const reply: unknown = native ? await native('mcp', { message, protocolVersion })
+            : JSON.parse((await exec(process.execPath, [context.bridgePath!, 'mcp', JSON.stringify({ message, protocolVersion })], { timeout: 65000, maxBuffer: 1024 * 1024, windowsHide: true })).stdout);
         const version = negotiatedVersion(message, reply);
         if (version)
             protocolVersion = version;

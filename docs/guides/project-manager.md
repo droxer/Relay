@@ -206,8 +206,9 @@ MCP tool. Browser owner authentication is required for Apply.
 
 ## Verification and rollout
 
-Migrations 0113
-(proposals), 0114 (Connections) and 0115 (MCP token digests) must run before serving this version.
+Migrations 0113 (proposals), 0114 (Connections), 0115 (MCP token digests) and
+0121 (bounded Project reads and Unicode search) must run before serving this
+version. See [the 0121 rollout and rollback procedure](backend-operations.md#project-mcp-read-migration).
 Rebuild and install the Computer client advertising `project-manager-mcp`; older
 clients run the manager without its tools until updated. Native provider
 sessions are not simulated by the browser fixtures; actual stdio/API transport,
@@ -220,3 +221,66 @@ startup backfill never reached simply show the role as unassigned until the
 owner picks a holder. `backend/tests/api/test_project_manager_api.py` covers the
 flag, handover without Thread rewrites, read-only views, multi-Agent rounds and
 older Computers.
+
+### Transport hardening evidence (2026-11-07)
+
+These journeys came from the MCP latency/reliability review: Agents must keep
+Unicode arguments intact, receive complete responses, continue beyond 1,000
+calls, make independent calls concurrently, and retrieve small Project pages
+without loading unrelated records or full histories. Native managed MCP must
+keep its backend credential in the daemon and avoid per-call subprocesses.
+
+RED checkpoints `a46d626e` and `4678be24` preserve the failing regressions:
+split UTF-8 was corrupted, a delayed response write caused a JSON parse error,
+the file bridge stopped at 1,000 calls, a slow Connection call blocked later
+calls, Project reads reached forbidden full-history helpers, and the native
+IPC module and search migration were absent. The corrected implementations
+pass the same targets, with additional security and interoperability checks.
+
+| Guarantee | Regression target | Verification |
+| --- | --- | --- |
+| Split UTF-8 survives; slow stdout bounds accepted work | `relay-mcp-hardening.test.ts` | Real subprocess streams |
+| Responses publish atomically; calls continue past 1,000 | `relay-mcp-hardening.test.ts` | Delayed-write fault injection and 1,009 file requests |
+| Native IPC authenticates, multiplexes, bounds frames and stops with the run | `relay-mcp-native.test.ts` | Private sockets, bad capabilities, oversized/malformed frames and disconnects |
+| Connections overlap calls with at most eight active and preserve initialization/EOF | `connection-tools.test.ts` | Real local HTTP server and stdio subprocess |
+| Native and file transports preserve Python Project scope and proposal provenance | `test_relay_mcp_transport.py` | Real Node → daemon proxy → Python round trips |
+| SQL pages retain Unicode/literal search, exact totals and owner scope without full histories | `test_project_mcp_query_bounds.py` | SQLite and PostgreSQL API/store checks |
+| Backfill retries and rollback preserve records | `test_mcp_read_bounds_migration.py` | 501-row SQLite backfill and populated PostgreSQL downgrade/upgrade |
+
+Commands run after implementation:
+
+```bash
+npx tsc -p packages/tsconfig.json
+node --test dist/packages/relay-daemon/tests/relay-mcp*.test.js \
+  dist/packages/relay-daemon/tests/project-manager.test.js \
+  dist/packages/relay-core/tests/connection-tools.test.js
+uv run --project backend --extra dev pytest \
+  backend/tests/api/test_project_manager_api.py \
+  backend/tests/api/test_project_mcp_query_bounds.py \
+  backend/tests/api/test_relay_mcp_api.py \
+  backend/tests/api/test_relay_mcp_protocol.py \
+  backend/tests/api/test_relay_mcp_transport.py \
+  backend/tests/unit/test_mcp_read_bounds_migration.py -q
+```
+
+Results: 28 Node checks and 49 backend checks passed. A disposable PostgreSQL
+run also passed 17 schema-drift checks and 42 Project/MCP API checks. Node's
+test coverage measured 90% lines / 84% branches for the new native transport and
+shared stdio module; pytest-cov measured 100% for the new SQL read module and
+86% across it and the Project read dispatcher. Coverage includes executable
+transports; it does not establish behavior of every external Agent CLI release.
+
+A 30-call local no-op comparison measured file transport p50/p95 at
+116.36/118.41 ms and native IPC at 0.025/0.087 ms. These are transport-only
+measurements on one workstation, excluding backend/storage/provider work.
+
+The production build and 846 React tests passed. The broad Node run passed
+3,007 checks and failed three model-discovery checks, also reproduced on the
+pre-fix baseline. The security-dependency entrypoint found an installed
+`deepmerge` 4.3.1 instead of the repository's vendored `4.3.1-relay.1`; its two
+failures also reproduce on baseline. The broad backend run passed 3,804 checks
+and exposed three failures: two absence-of-configuration tests needed isolation
+from local dotenv files, and an older migration test needed to seed rows before
+downgrading away the new writer's column. Those test fixtures were corrected
+and their owning targets rerun. No user configuration or live database was
+migrated as part of this change.

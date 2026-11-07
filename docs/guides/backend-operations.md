@@ -199,3 +199,19 @@ required. Regression coverage lives in the backend automation discovery and
 migration tests.
 The database still filters/sorts eligible IDs and scans matching routing pages;
 these work bounds do not establish production latency or capacity.
+
+## Project MCP read migration
+
+Revision `20261107_0121` adds `tasks.title_casefold`, backfills Python Unicode
+casefold values in batches of 500 scalar rows, and adds indexes for Project
+task pages and time-filtered event reads. Every task write maintains the new
+projection. Stop old backend and worker writers before migrating and start
+the new version afterward, so an old writer cannot leave a stale search value.
+Run migrations through head before serving the new read queries.
+
+PostgreSQL index builds run concurrently after an autocommit boundary that
+commits the column/backfill. An interrupted build may be retried from 0120:
+the migration reuses the column, repeats the backfill, and rebuilds invalid
+indexes. Downgrade removes these indexes and the derived search column while
+preserving task snapshots and event histories; stop the new application before
+rolling back. SQLite fixtures also exercise upgrade, retry and downgrade.

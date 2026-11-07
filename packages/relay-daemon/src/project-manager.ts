@@ -1,5 +1,5 @@
 /** Run-scoped file transport shared by every runtime and both sandbox modes. */
-import { constants, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { constants, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { listWorkspace, readWorkspaceFile } from "./workspace-read.js";
 
@@ -57,11 +57,12 @@ export function createProjectManagerBridge(
   writeFileSync(join(dir, "tool.cjs"), HELPER_SOURCE, { mode: 0o600, flag: "wx" });
   let closed = false;
   const pending = new Set<Promise<void>>();
-  const seen = new Set<string>();
+  // Only outstanding names need tracking: requests are removed after their
+  // response is published. A run has no lifetime tool-call limit.
+  const processing = new Set<string>();
   async function handle(name: string): Promise<void> {
     if (closed) return;
-    if (seen.size >= 1000) throw new Error("Manager tool call limit exceeded.");
-    seen.add(name);
+    processing.add(name);
     const request = join(dir, name);
     let result: unknown;
     let error: string | undefined;
@@ -85,7 +86,11 @@ export function createProjectManagerBridge(
     } catch (cause) { error = cause instanceof Error ? cause.message : "Manager tool failed."; }
     if (closed) return;
     safeDirectory();
-    writeFileSync(join(dir, name.replace(/\.request$/, ".response")), JSON.stringify(error ? { error } : { result }), { flag: "wx", mode: 0o600 });
+    const temporary = join(dir, name.replace(/\.request$/, ".response.tmp"));
+    writeFileSync(temporary, JSON.stringify(error ? { error } : { result }), { flag: "wx", mode: 0o600 });
+    // Another process may poll as soon as the response name exists. Publish
+    // that name only after all bytes have been written and the file closed.
+    renameSync(temporary, join(dir, name.replace(/\.request$/, ".response")));
     unlinkSync(request);
   }
   const timer = setInterval(() => {
@@ -93,12 +98,12 @@ export function createProjectManagerBridge(
     try {
       safeDirectory();
       const names = readdirSync(dir)
-        .filter(name => /^[a-f0-9-]{36}\.request$/.test(name) && !seen.has(name))
+        .filter(name => /^[a-f0-9-]{36}\.request$/.test(name) && !processing.has(name))
         .slice(0, MAX_IN_FLIGHT - pending.size);
       for (const name of names) {
         const task = handle(name).catch(() => { closed = true; clearInterval(timer); });
         pending.add(task);
-        void task.finally(() => pending.delete(task));
+        void task.finally(() => { pending.delete(task); processing.delete(name); });
       }
     } catch { closed = true; clearInterval(timer); }
   }, 75);

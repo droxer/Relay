@@ -69,10 +69,12 @@ def test_concurrent_index_upgrade_repairs_invalid_leftover(migrated_schema):
     url, _ = migrated_schema
     engine = create_engine(url)
     try:
-        command.downgrade(config(), "20261106_0118")
         tasks = DatabaseTaskStore(url)
         tasks.create_task({"title": "first"})
         tasks.create_task({"title": "second"})
+        # Seed with the current writer before removing columns introduced
+        # after 0118. The downgrade preserves these rows for the old index.
+        command.downgrade(config(), "20261106_0118")
         # A failed concurrent UNIQUE build leaves a real invalid index. Use
         # the migration's name to reproduce the state a cancelled build leaves.
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:

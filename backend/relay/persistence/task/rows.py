@@ -66,6 +66,7 @@ def task_to_row(
     return {
         "id": database_id or task["id"],
         "title": task["title"],
+        "title_casefold": task["title"].casefold(),
         "description": task.get("description", ""),
         "priority": task.get("priority", "normal"),
         "status": task["status"],
