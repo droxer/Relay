@@ -28,7 +28,8 @@ export function PriorityGlyph({ priority }: { priority: TaskPriority }) {
  * one, so a mark on every such row states the absence of a decision as
  * loudly as a decision. The rank is worth a mark only where it departs from
  * the default. Pass `always` where the record is being edited rather than
- * scanned, so the field still shows its current value.
+ * scanned, so the field still shows its current value — and on the board
+ * tile, whose eyebrow names every task's rank so a lane can be scanned by it.
  */
 export function PriorityBadge({ priority, always = false }: { priority: TaskPriority; always?: boolean }) {
   const { t } = useTranslation();
