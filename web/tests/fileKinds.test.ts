@@ -41,6 +41,7 @@ describe("rendered-preview classifiers", () => {
     assert.equal(isMarkdownFile("a.markdown"), true);
     assert.equal(isHtmlFile("page.HTM"), true);
     assert.equal(isRenderableFile("a.md"), true);
+    assert.equal(isRenderableFile("icons/Logo.SVG"), true);
     assert.equal(isRenderableFile("style.css"), false);
   });
 });

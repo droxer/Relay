@@ -53,8 +53,8 @@ export const LANGUAGE_BY_EXTENSION: Record<string, string> = {
 const MARKDOWN_EXTENSIONS: Record<string, true> = { md: true, markdown: true };
 const HTML_EXTENSIONS: Record<string, true> = { html: true, htm: true };
 
-// MIME types for binary files the preview can render inline from their
-// base64 bytes. SVG is safe as an <img> — scripts never run in that context.
+// MIME types for images the preview can render inline. SVG is text on the
+// wire and safe as an <img> — scripts never run in that context.
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -91,7 +91,7 @@ export function isHtmlFile(name: string): boolean {
 
 /** Whether a file has a rendered ("presentation") preview in addition to source. */
 export function isRenderableFile(name: string): boolean {
-  return isMarkdownFile(name) || isHtmlFile(name);
+  return isMarkdownFile(name) || isHtmlFile(name) || extensionOf(name) === "svg";
 }
 
 /** MIME type for an image file the preview can show inline, or null. */
