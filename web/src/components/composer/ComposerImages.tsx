@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ThreadImageAttachment } from "relay-core";
+import { RelayApiError } from "../../api-client/client";
 import { uploadThreadImage } from "../../api-client/sessions";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,9 @@ export function useComposerImages(draftKey?: string) {
         setImages(previous => [...previous, { ...attachment, preview }]);
       }
     } catch (cause) {
-      if (resources.generation === current) setError(cause instanceof Error ? cause.message : t("composer.image_failed", { defaultValue: "Image upload failed. Choose the image to try again." }));
+      // Only the server's answer is worth quoting; a dropped connection reads
+      // as the browser's bare network error (Safari: "Load failed").
+      if (resources.generation === current) setError(cause instanceof RelayApiError ? cause.message : t("composer.image_failed", { defaultValue: "Image upload failed. Choose the image to try again." }));
     } finally {
       if (resources.generation === current) { resources.controller = null; setBusy(false); }
     }

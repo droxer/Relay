@@ -353,6 +353,7 @@ def _publish_state(
         automation_webhook_failure_limiter=rate_limiter(settings.automation_webhook_failure_limit),
         waitlist_rate_limiter=rate_limiter(settings.waitlist_limit),
         password_reset_rate_limiter=rate_limiter(settings.password_reset_limit),
+        thread_image_rate_limiter=rate_limiter(settings.thread_image_limit),
         chat_probe=probe_chat_integration,
         chat_provision=provision_chat_integration,
         github_connection=github_connection_service_from_env(),

@@ -18,17 +18,20 @@ _HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nos
 @router.post("/thread-attachments", status_code=201)
 async def upload_image(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
-    retry_after = ctx.auth_rate_limiter.consume(f"thread-image:{actor['userId']}")
-    if retry_after is not None:
-        raise HTTPException(
-            429, "Too many image uploads. Try again shortly.", headers={"Retry-After": str(retry_after)}
-        )
     media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     content = bytearray()
     async for chunk in request.stream():
         if len(content) + len(chunk) > MAX_IMAGE_BYTES:
             raise HTTPException(413, "Images must be at most 10 MB.")
         content.extend(chunk)
+    # Refuse only after the bounded body is read: answering mid-upload closes
+    # the connection under a phone's slow uplink, and Safari then reports a
+    # bare network error ("Load failed") instead of this response.
+    retry_after = ctx.thread_image_rate_limiter.consume(f"thread-image:{actor['userId']}")
+    if retry_after is not None:
+        raise HTTPException(
+            429, "Too many image uploads. Try again shortly.", headers={"Retry-After": str(retry_after)}
+        )
     try:
         return await run_in_threadpool(ctx.session_store.create_attachment, actor["userId"], bytes(content), media_type)
     except ValueError as error:

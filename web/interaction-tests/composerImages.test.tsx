@@ -3,6 +3,7 @@ import { useLayoutEffect } from "react";
 import { expect, it, vi } from "vitest";
 import { useComposerImages } from "../src/components/composer/ComposerImages";
 import { uploadThreadImage } from "../src/api-client/sessions";
+import { RelayApiError } from "../src/api-client/client";
 
 vi.mock("../src/api-client/sessions", () => ({ uploadThreadImage: vi.fn() }));
 const attachment = { id: "image-1", mediaType: "image/png", bytes: 10, sha256: "a".repeat(64) };
@@ -70,7 +71,7 @@ it("never commits a previous Thread's images when switching drafts", async () =>
 
 it("reports upload failure and allows retry", async () => {
   objectUrls();
-  vi.mocked(uploadThreadImage).mockRejectedValueOnce(new Error("Storage unavailable")).mockResolvedValueOnce(attachment as any);
+  vi.mocked(uploadThreadImage).mockRejectedValueOnce(new RelayApiError("Storage unavailable", 503)).mockResolvedValueOnce(attachment as any);
   const { result } = renderHook(() => useComposerImages("thread-1"));
   await act(async () => { await result.current.add([file()]); });
   expect(result.current.error).toBe("Storage unavailable");
