@@ -143,10 +143,16 @@
   overflow: hidden;
 }
 
-.backlog-task:has(.backlog-card-body > .tag-list) .backlog-task-title {
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  max-height: 1lh;
+/* Fine pointers only: under a coarse one the touch floor (a11y.css) makes
+   the title link 44px — two lines tall — so a one-line clamp left the
+   clipped second line showing under the first line's ellipsis. There the
+   target already pays for two lines, so the title keeps its two. */
+@media not (pointer: coarse) {
+  .backlog-task:has(.backlog-card-body > .tag-list) .backlog-task-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    max-height: 1lh;
+  }
 }
 
 .backlog-task:has(.task-holdup--tile) .backlog-card-body > .tag-list {

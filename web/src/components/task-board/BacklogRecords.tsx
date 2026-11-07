@@ -98,9 +98,17 @@ export function BacklogTaskCard({
           onCheckedChange={onToggleSelect}
         />
         <div className="backlog-card-body">
-          <span className="code task-card-id">
-            <TaskRefLink task={task} href={hrefForTaskRecord(task.id)} onOpen={onOpen} />
-          </span>
+          {/* The eyebrow pairs the ref with the rank. Priority used to sit at
+              the head of the facts line, where `normal` rendered nothing and
+              the other two were bare bars; on the board rank is what a lane
+              is scanned for, so every tile names it, in words, on the line
+              the eye lands on first. */}
+          <div className="backlog-card-eyebrow">
+            <span className="code task-card-id">
+              <TaskRefLink task={task} href={hrefForTaskRecord(task.id)} onOpen={onOpen} />
+            </span>
+            <PriorityBadge priority={task.priority} always />
+          </div>
           <a
           className="backlog-task-title"
           href={hrefForTaskRecord(task.id)}
@@ -122,7 +130,6 @@ export function BacklogTaskCard({
               executor glyph identified nothing on a card with room to spell
               it. */}
           <div className="backlog-meta">
-            <PriorityBadge priority={task.priority} />
             {age !== null ? <span className="tnum">{t("backlog.work_age", { count: Number(age.toFixed(1)) })}</span> : null}
             <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
             {task.dueDate ? (

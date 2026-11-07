@@ -156,6 +156,21 @@
   }
 }
 
+/* The same trade, for the tile's height. a11y.css lifts every link and
+   button to --touch-target under a coarse pointer, and a tile holds two: the
+   title link and, on a held-up task, the hold-up button. The 128px frame was
+   sized for their desktop line boxes, so the facts line (assignee, date) was
+   pushed 5px past the bottom edge on every tagged tile and 25px on a
+   held-up one. The frame stays one height for every tile in a lane — it is
+   just a taller one: padding 24 + eyebrow 18 + title 44 + gap 8 + hold-up
+   44 + facts 28 = 166, rounded up for Han leading. Set on the board, not the
+   root, so it outranks the compact and zh-CN scopes the tile inherits. */
+@media (pointer: coarse) {
+  .backlog-board {
+    --card-h-tile: 176px;
+  }
+}
+
 .backlog-lane {
   /* Positioned so the [data-drop="blocked"] overlay ring below can anchor to
      the lane without taking layout space. */
@@ -313,7 +328,8 @@
 
 /* Priority lives on the PriorityBadge alone — the badge's ascending bars
    already carry rank, so the old 3px colored card edge was double signaling
-   (and painted a red stripe down every high-priority card). */
+   (and painted a red stripe down every high-priority card). The badge rides
+   the card's eyebrow, beside the ref; see .backlog-card-eyebrow below. */
 
 /* The card is a text column: ID, title, one facts line. The selection
    checkbox no longer holds a gutter of its own — it sits in the top-right
@@ -345,12 +361,55 @@
    read "#5" in sans beside a table's mono "#5". Caption size, as a tile's
    eyebrow. */
 .task-card-id {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ink-3);
   font: 500 var(--fs-1)/var(--leading-snug) var(--font-mono);
   letter-spacing: var(--type-code-track);
-  overflow-wrap: anywhere;
-  /* Room for the corner checkbox when it appears, so it never covers the ID. */
+}
+
+/* The tile's first line: ref, then rank. One row that never wraps — the
+   tile is a fixed frame, so a second eyebrow line would push the facts line
+   out of the bottom. A ref is short; if one is not, it ellipsizes before the
+   rank does, because the rank is what the lane is scanned for. */
+.backlog-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  /* Room for the corner checkbox when it appears, so it never covers the
+     ref or the rank. */
   padding-right: var(--sp-6);
+}
+
+/* On a tile the rank is named, not only drawn: the bars carry it at a glance
+   and the word carries it for anyone who does not read bars (the table keeps
+   the bare glyph, where a column header names it). Rank is told by ink
+   brightness and shape, never hue — gold is "waiting on a person" — so high
+   steps up to --ink-1 and takes a hairline frame; low and normal stay quiet
+   and are told apart by their bars and word. The frame is an inset shadow so
+   high-priority tiles keep the same eyebrow height as their peers. */
+.backlog-card-eyebrow .priority-badge {
+  flex: none;
+  gap: var(--sp-1);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  white-space: nowrap;
+}
+
+.backlog-card-eyebrow .priority-label {
+  display: inline;
+}
+
+.backlog-card-eyebrow .priority-badge[data-priority="high"] {
+  padding: 0 var(--sp-1-5);
+  border-radius: var(--r-1);
+  box-shadow: inset 0 0 0 0.5px var(--line-strong);
+  color: var(--ink-1);
 }
 
 .backlog-card-head .backlog-select-box {

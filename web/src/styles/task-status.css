@@ -128,6 +128,15 @@
 .priority-glyph { --prio-accent: var(--ink-4); display: inline-flex; }
 .priority-glyph[data-priority="high"] { --prio-accent: var(--ink-1); }
 
+/* The bars are painted backgrounds, which forced-colors mode flattens to
+   Canvas — every rank would read as three empty slots. Map them onto system
+   colours so the filled count survives. */
+@media (forced-colors: active) {
+  .priority-bars > i { forced-color-adjust: none; background: GrayText; }
+  .priority-glyph,
+  .priority-glyph[data-priority="high"] { --prio-accent: CanvasText; }
+}
+
 /* ── State mark — the shape half of the state vocabulary ────────────────
    Status tones stay small text/dot accents and the surfaces stay a neutral
    brightness ramp, so six states cannot be told apart by colour alone.
@@ -502,8 +511,11 @@
    so a held-up tile gives the title one line instead of two — the hold-up is
    the more urgent fact. */
 .task-holdup--tile { margin-block-start: var(--sp-2); }
-.backlog-task:has(.task-holdup--tile) .backlog-task-title {
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  max-height: 1lh;
+/* Fine pointers only — see the matching tag rule in task-tags.css. */
+@media not (pointer: coarse) {
+  .backlog-task:has(.task-holdup--tile) .backlog-task-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    max-height: 1lh;
+  }
 }
