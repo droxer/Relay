@@ -19,6 +19,7 @@ import {
 import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
+import { threadDraftKey } from "../hooks/useComposer";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
@@ -650,7 +651,7 @@ export function ThreadsView({
 
         <Composer
           connectionTargetId={initializingThread ? undefined : activeSession?.id}
-          draftKey={JSON.stringify([currentUser.userId ?? currentUser.username, activeSession?.id ?? "new"])}
+          draftKey={threadDraftKey(currentUser, activeSession?.id)}
           ref={composerRef}
           logicalAgents={composerLogicalAgents}
           activeLogicalAgentId={activeLogicalAgentId}

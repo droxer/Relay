@@ -106,7 +106,8 @@
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
     "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
-    "go_home": "Go to Home"
+    "go_home": "Go to Home",
+    "open_project_lead": "Could not open the discussion with the Project Lead. Try again."
   },
   "skip_to_content": "Skip to content",
   "route_not_found": {
@@ -3622,6 +3623,8 @@
     "resize": "Resize project lead",
     "unassigned_role": "No agent leads this project yet. The Project Lead reads its records and proposes task changes for you to apply.",
     "assign_role": "Assign Project Lead",
-    "change": "Change"
+    "change": "Change",
+    "discuss": "Discuss",
+    "quick_topics": "Start with a topic"
   }
 }

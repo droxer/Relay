@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useProjectLeadDiscussion } from "../hooks/useProjectLeadDiscussion";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import {
@@ -155,6 +156,13 @@ export function ProjectWorkspacePage({
 
   /* Archived/disabled projects are read-only rooms — no member management. */
   const membersReadOnly = projectReadOnly(project);
+  const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, onOpenThread });
+  /* Only the owner talks to the lead here (the conversation route is
+     owner-scoped), and only while the project can take new work. */
+  const canDiscuss = !membersReadOnly
+    && Boolean(project.leadAgentId)
+    && Boolean(currentUser.userId)
+    && currentUser.userId === project.ownerUserId;
 
   return (
     <Tabs
@@ -214,7 +222,15 @@ export function ProjectWorkspacePage({
             />
           ) : null}
           <ProjectDashboard
-            steward={<ProjectManagerLine project={project} agents={agents} onManage={membersReadOnly ? undefined : () => setPageTab("members")} />}
+            steward={(
+              <ProjectManagerLine
+                project={project}
+                agents={agents}
+                onManage={membersReadOnly ? undefined : () => setPageTab("members")}
+                onDiscuss={canDiscuss ? leadDiscussion.discuss : undefined}
+                discussing={leadDiscussion.pending}
+              />
+            )}
             tasks={boardTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
             onOpenBoard={() => setPageTab("tasks")}

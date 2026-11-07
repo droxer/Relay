@@ -2,9 +2,11 @@
    shaped like a member tile's head (mark, name, meta) without its card. */
 .project-manager-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
   min-width: 0;
+  container-type: inline-size;
   padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--line-1);
 }
@@ -43,6 +45,38 @@
   letter-spacing: var(--type-meta-track);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-manager-line-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* Discuss and its topic menu read as one split control. */
+.project-manager-line-discuss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* A phone-wide line cannot hold the name and three touch-height controls:
+   at 360px the name kept 30px, at 320px none and Change ran off the edge.
+   The actions take their own row, Discuss stretched to a thumb-wide target. */
+@container (max-width: 480px) {
+  .project-manager-line-actions:has(> .project-manager-line-discuss) {
+    flex-basis: 100%;
+  }
+
+  .project-manager-line-discuss {
+    flex: 1;
+  }
+
+  .project-manager-line-discuss > [data-slot="button"]:first-child {
+    flex: 1;
+  }
 }
 
 /* Unassigned: the role names the line and the sentence says it is open. */

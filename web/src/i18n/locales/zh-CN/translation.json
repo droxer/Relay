@@ -106,7 +106,8 @@
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
     "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
     "save_prerequisites": "无法保存前置任务。请检查连接后重试。",
-    "go_home": "返回主页"
+    "go_home": "返回主页",
+    "open_project_lead": "无法打开与项目负责人的讨论，请重试。"
   },
   "skip_to_content": "跳至内容",
   "route_not_found": {
@@ -3556,6 +3557,8 @@
     "resize": "调整项目负责人面板宽度",
     "unassigned_role": "还没有智能体负责此项目。项目负责人会读取项目记录，并提出任务变更供你确认后应用。",
     "assign_role": "分配项目负责人角色",
-    "change": "更改"
+    "change": "更改",
+    "discuss": "发起讨论",
+    "quick_topics": "选择讨论话题"
   }
 }
