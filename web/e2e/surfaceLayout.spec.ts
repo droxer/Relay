@@ -85,6 +85,36 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   return page;
 }
 
+test("project directory shows aligned names and Agent counts without Computer identifiers", async ({ browser }, testInfo) => {
+  const project = {
+    id: "fc617e44-b179-4f0a-acf2-1d42a1c49cf7", name: "Relay product development with a very long project name",
+    ownerUserId: USER.id, computerId: "device:review-user:mch_mHuvNEUqc-HTHW-GcgxJoA",
+    enabled: true, members: [], leadAgentId: null, version: 1,
+    workspaceLayout: "project", workspaceSubpath: "projects/relay", createdAt: stamp, updatedAt: stamp,
+  };
+  const page = await openPage(browser, "/projects", true, undefined, undefined, { projects: [project], sessions: [], tasks: [] });
+  const row = page.getByRole("button", { name: `${project.name} · 0 agents`, exact: true });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("mch_");
+  await expect(row).not.toContainText(project.id);
+  await expect(row.locator(".project-folder-meta")).toHaveText("0 agents");
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const name = await row.locator(".project-folder-name").boundingBox();
+    const meta = await row.locator(".project-folder-meta").boundingBox();
+    expect(name).not.toBeNull();
+    expect(meta).not.toBeNull();
+    expect(Math.abs(name!.x - meta!.x)).toBeLessThan(1);
+    expect(meta!.y).toBeGreaterThan(name!.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath("project-directory.png") });
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`));
+  await page.context().close();
+});
+
 /* The four collection rails — agents, teams, projects, skills — are one
    surface in four places: a roster heading its own list. They drifted apart
    one page at a time (a page-gutter header over a 12px band, a raw count here
