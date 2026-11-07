@@ -82,9 +82,16 @@ export function WorkspaceFilePreview({
     );
   }
   if (!data) return null;
-  if (data.isBinary) {
-    const imageMime = imageMimeForFile(name);
-    const media = data.contentBase64
+  const imageMime = imageMimeForFile(name);
+  // SVG is text on the wire, but has an image presentation. Keep it in an
+  // img context so embedded scripts and markup cannot enter the app document.
+  const svgSrc = rendered && imageMime === "image/svg+xml" && data.content?.trim()
+    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.content)}`
+    : null;
+  if (data.isBinary || svgSrc) {
+    const media = svgSrc
+      ? { kind: "image" as const, src: svgSrc }
+      : data.contentBase64
       ? imageMime
         ? { kind: "image" as const, src: `data:${imageMime};base64,${data.contentBase64}` }
         : isPdfFile(name)
