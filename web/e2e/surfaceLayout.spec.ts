@@ -602,3 +602,49 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   expect(itemBox!.height).toBeGreaterThanOrEqual(44);
   await context.close();
 });
+
+test("a drawer on a touch phone is dismissed by pulling its header down", async ({ browser }) => {
+  /* A full-screen drawer is a sheet on a phone, and the native way out of a
+     sheet is to pull it down (Drawer.tsx, useSheetDrag). A short pull springs
+     back; a long one closes it. */
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  const intake = {
+    id: "intake", title: "Audit webhook retry backoff", status: "backlog", description: "", priority: "normal",
+    isRoutine: false, linkedSessionIds: [], ownerUserId: "review-user", createdAt: stamp, updatedAt: stamp, events: [], activity: [],
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [], tasks: [intake], sandboxes: [], skills: [], files: [], entries: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (path.endsWith("/tasks/intake")) body = intake;
+    if (path.endsWith("/artifacts")) body = { artifacts: [] };
+    if (path.endsWith("/events")) body = { events: [] };
+    if (path.endsWith("/runs")) body = { runs: [] };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/tasks/intake");
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+  const head = await drawer.locator(".adm-drawer-head").boundingBox();
+  const x = head!.x + head!.width / 3;
+  const y = head!.y + head!.height / 2;
+
+  const pull = async (distance: number) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 5; step += 1) await page.mouse.move(x, y + (distance * step) / 5);
+    await page.mouse.up();
+  };
+
+  await pull(40);
+  await expect(drawer).toBeVisible();
+  await expect(drawer).not.toHaveAttribute("data-dragging", "true");
+  // Let the spring-back settle, so the next press lands on the header.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+
+  await pull(200);
+  await expect(drawer).toBeHidden();
+  await context.close();
+});

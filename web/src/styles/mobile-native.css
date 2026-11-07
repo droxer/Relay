@@ -6,6 +6,18 @@
    mobile-overlays.css and before responsive.css / a11y.css.
    ===================================================================== */
 
+/* A sheet let go past its dismiss distance slides on from where the finger
+   left it (--sheet-drag, set while dragging), rather than snapping back to
+   the top and then leaving. useSheetDrag keeps the offset through the exit. */
+@keyframes sheet-swipe-out {
+  from { transform: translateY(var(--sheet-drag, 0px)); }
+  to { transform: translateY(100%); }
+}
+
+.more-sheet[data-dragging][data-ending-style] {
+  animation: sheet-swipe-out var(--t-fast) var(--ease) forwards;
+}
+
 @media (max-width: 820px) and (pointer: coarse) {
   /* ── Touch, not click ──────────────────────────────────────────────
      The grey flash WebKit paints over a tapped link is a page's tell; every
@@ -149,5 +161,37 @@
 
   [data-slot="select-item"] {
     padding-right: var(--sp-8);
+  }
+
+  /* ── Full-screen drawers are sheets ────────────────────────────────
+     Their header is the drag strip (Drawer.tsx, useSheetDrag): pull down to
+     dismiss, as a native page sheet does; a short pull springs back on the
+     drawer's own transform transition. The grabber says it can be pulled. */
+  /* A pull must not also select the title it started on. */
+  .adm-drawer-head {
+    position: relative;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .adm-drawer-head::before {
+    content: "";
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + var(--sp-1-5));
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line-strong);
+    translate: -50% 0;
+  }
+
+  .adm-drawer[data-dragging] {
+    transition: none;
+  }
+
+  .adm-drawer[data-dragging][data-ending-style] {
+    animation: sheet-swipe-out var(--t-fast) var(--ease) forwards;
   }
 }

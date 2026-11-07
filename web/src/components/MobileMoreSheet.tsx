@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type MouseEvent, type PointerEvent } from "react";
+import { type ComponentType, type CSSProperties, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -10,12 +10,9 @@ import {
   DialogTitle,
   DialogViewport,
 } from "@/components/ui/dialog";
+import { useSheetDrag } from "../hooks/useSheetDrag";
 import { ActionSearch, CheckIcon, ICON, NavLogout, type GlyphProps } from "./icons";
 import type { AppRoute } from "../lib/viewTypes";
-
-/** How far a drag on the grabber must travel before letting go dismisses the
- *  sheet. Shorter drags spring back, as a native sheet does. */
-const DISMISS_DRAG_PX = 80;
 
 export type MoreSheetRoute = {
   route: AppRoute;
@@ -53,12 +50,11 @@ export function MobileMoreSheet({
   onLogout: () => void;
 }) {
   const { t } = useTranslation();
-  const [dragY, setDragY] = useState(0);
-  const dragStart = useRef<number | null>(null);
-
   function close() {
     onOpenChange(false);
   }
+
+  const { offset: dragY, handlers: grabHandlers, reset: resetDrag } = useSheetDrag(close);
 
   /* Each action closes the sheet first, so focus restore lands on the More
      tab before the next surface (the palette, the wizard) takes it. */
@@ -67,40 +63,20 @@ export function MobileMoreSheet({
     action();
   }
 
-  function onGrabStart(event: PointerEvent<HTMLDivElement>) {
-    dragStart.current = event.clientY;
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onGrabMove(event: PointerEvent<HTMLDivElement>) {
-    if (dragStart.current === null) return;
-    setDragY(Math.max(0, event.clientY - dragStart.current));
-  }
-
-  function onGrabEnd() {
-    if (dragStart.current === null) return;
-    dragStart.current = null;
-    if (dragY > DISMISS_DRAG_PX) close();
-    setDragY(0);
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => { if (!next) resetDrag(); }}>
       <DialogPortal>
         <DialogBackdrop className="more-sheet-backdrop" />
         <DialogViewport className="more-sheet-viewport">
           <DialogContent
             className="more-sheet"
             data-dragging={dragY > 0 || undefined}
-            style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
+            style={dragY > 0 ? ({ transform: `translateY(${dragY}px)`, "--sheet-drag": `${dragY}px` } as CSSProperties) : undefined}
           >
             <div
               className="more-sheet-grab"
               aria-hidden="true"
-              onPointerDown={onGrabStart}
-              onPointerMove={onGrabMove}
-              onPointerUp={onGrabEnd}
-              onPointerCancel={onGrabEnd}
+              {...grabHandlers}
             >
               <span className="more-sheet-grabber" />
             </div>
