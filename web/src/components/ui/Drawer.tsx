@@ -15,6 +15,9 @@ import {
   DialogViewport,
 } from "@/components/ui/dialog";
 import { useOnOpen } from "@/hooks/useKeyChange";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useSheetDrag } from "@/hooks/useSheetDrag";
+import { OVERLAY_TAKEOVER_QUERY } from "@/lib/breakpoints";
 
 /** Named panel widths — call sites pick a role, not a pixel count, so drawer
  *  sizing stays consistent across the app. `form` for single-column edit
@@ -126,6 +129,11 @@ export function Drawer({
     draggedWidth ?? (typeof width === "number" ? width : DRAWER_WIDTHS[width]);
   const resolvedAriaLabel = ariaLabel ?? (typeof title === "string" ? title : undefined);
 
+  /* On a touch phone the drawer is a full-screen sheet, and a sheet is
+     dismissed the native way too: drag its header down. */
+  const touchSheet = useMediaQuery(`${OVERLAY_TAKEOVER_QUERY} and (pointer: coarse)`);
+  const { offset: dragY, handlers: dragHandlers, reset: resetDrag } = useSheetDrag(onClose, touchSheet);
+
   return (
     <Dialog
       open={open}
@@ -133,7 +141,9 @@ export function Drawer({
         if (!next) onClose();
       }}
       onOpenChangeComplete={(next) => {
-        if (!next) onClosed?.();
+        if (next) return;
+        resetDrag();
+        onClosed?.();
       }}
     >
       <DialogPortal>
@@ -152,7 +162,11 @@ export function Drawer({
             aria-label={resolvedAriaLabel}
             aria-labelledby={resolvedAriaLabel ? undefined : titleId}
             aria-describedby={subtitle ? subtitleId : undefined}
-            style={{ "--adm-drawer-w": `${resolvedWidth}px` } as React.CSSProperties}
+            data-dragging={dragY > 0 || undefined}
+            style={{
+              "--adm-drawer-w": `${resolvedWidth}px`,
+              ...(dragY > 0 ? { transform: `translateY(${dragY}px)`, "--sheet-drag": `${dragY}px` } : {}),
+            } as React.CSSProperties}
             /* `[data-modal-initial-focus]` stays the call-site convention —
                eight drawers mark their first meaningful field with it. What
                changed is who reads it: the primitive, through this prop,
@@ -174,7 +188,7 @@ export function Drawer({
                 : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? panelRef.current ?? true
             }
           >
-            <header className="adm-drawer-head">
+            <header className="adm-drawer-head" {...dragHandlers}>
               <div className="adm-drawer-head-text">
                 {kicker ? <p className="adm-drawer-kicker">{kicker}</p> : null}
                 <DialogTitle id={titleId} className={titleVariant === "record" ? "adm-drawer-title adm-drawer-title--record" : "adm-drawer-title"} render={<h2 />}>

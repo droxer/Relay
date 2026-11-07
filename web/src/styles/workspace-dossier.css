@@ -348,12 +348,27 @@
      slots narrower than their labels ("Dashboard" read ")ashboard"), and in
      a drawer pushed the last tab under the close button. */
   .workspace-page .workspace-page-tabs {
+    --strip-fade-start: 0px;
+    --strip-fade-end: 0px;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
+    /* The edge with more tabs behind it fades (useStripScroll marks it via
+       TabsList's stripKey), so a tab cut by the edge reads as "more this
+       way", the way the section chip strips do. */
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--strip-fade-start),
+      black calc(100% - var(--strip-fade-end)),
+      transparent 100%
+    );
   }
+
+  .workspace-page .workspace-page-tabs[data-more-start] { --strip-fade-start: var(--sp-8); }
+  .workspace-page .workspace-page-tabs[data-more-end] { --strip-fade-end: var(--sp-8); }
 
   .workspace-page .workspace-page-tabs::-webkit-scrollbar {
     display: none;

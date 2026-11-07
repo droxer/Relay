@@ -532,6 +532,44 @@
     flex: 0 0 auto;
   }
 
+  /* A labelled action (Run, Add to project, Retry…) does not fit beside the
+     tabs: it covered the third one. Like a native toolbar, the cluster docks
+     at the bottom of the screen in thumb reach, the labelled buttons share
+     its width, and the tabs get the whole row. More alone stays up top. */
+  .record-drawer-actions:has(> [data-slot="button"]:not([aria-haspopup])) {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    flex-wrap: nowrap;
+    gap: var(--sp-2);
+    margin: 0;
+    padding:
+      var(--sp-3)
+      max(env(safe-area-inset-right), var(--sp-4))
+      max(env(safe-area-inset-bottom), var(--sp-3))
+      max(env(safe-area-inset-left), var(--sp-4));
+    border-top: 0.5px solid var(--line-1);
+    background: var(--surface-0);
+  }
+
+  .record-drawer-actions > [data-slot="button"]:not([aria-haspopup]) {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: var(--touch-target);
+  }
+
+  .record-drawer-actions > [data-slot="button"][aria-haspopup] {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  /* The docked bar must not sit on the record's last lines. */
+  .record-drawer:has(.record-drawer-actions > [data-slot="button"]:not([aria-haspopup])) .workspace-body {
+    padding-bottom: calc(var(--touch-target) + 2 * var(--sp-3) + env(safe-area-inset-bottom));
+  }
+
   .record-drawer .workspace-body > [role="tabpanel"] {
     padding: var(--sp-4);
   }

@@ -187,7 +187,7 @@ export function ProjectWorkspacePage({
           </>
         )}
         toolbar={(
-          <TabsList className="workspace-page-tabs" aria-label={t("project.sections")}>
+          <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("project.sections")}>
             {PROJECT_PAGE_TABS.map((tab) => (
               <TabsTrigger
                 key={tab}

@@ -176,7 +176,7 @@ export function TaskRecordPage({
 
   const drawer = presentation === "drawer";
   const tabsList = (
-    <TabsList className="workspace-page-tabs" aria-label={t("record.sections")}>
+    <TabsList className="workspace-page-tabs" stripKey={tab} aria-label={t("record.sections")}>
       {tabs.map((item) => (
         <TabsTrigger
           key={item}

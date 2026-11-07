@@ -237,7 +237,7 @@ export function ProjectSettingsPanel({
           />
         </fieldset>
         {projectSave.error ? <p role="alert" className="project-settings-error text-destructive">{projectSave.error}</p> : null}
-        <footer className="project-settings-foot">
+        <footer className="project-settings-foot" data-dirty={dirty || undefined}>
           {project.createdAt ? (
             <div className="project-settings-stamps">
               <time dateTime={project.createdAt} title={project.createdAt}>
