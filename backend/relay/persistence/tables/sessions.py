@@ -73,7 +73,7 @@ events = Table(
     Column("timestamp", DateTime(timezone=True), nullable=False),
     Column("payload", json_type(), nullable=False),
     # The unique (session_id, sequence) index serves every per-session
-    # read and the FK cascade; nothing reads events by time or type.
+    # read and the FK cascade.
     UniqueConstraint(
         "session_id", "sequence", name="uq_session_events_session_sequence"
     ),
@@ -82,6 +82,7 @@ events = Table(
     # declaration here keeps SQLite (3.38+ has ``->>``) and the drift test on
     # the same schema.
     Index("ix_session_events_cursor", "session_id", text("(payload ->> 'id')")),
+    Index("ix_session_events_report_time", "session_id", "type", "timestamp", "sequence"),
 )
 
 artifacts = Table(

@@ -1,5 +1,6 @@
 """Project tool pages must bound database hydration, not only the returned JSON."""
 
+from datetime import UTC, datetime
 import test_project_manager_api as manager_api
 import test_project_setup_api as setup_api
 
@@ -18,6 +19,9 @@ def test_project_pages_filter_before_hydration_and_keep_unicode_search(managed_e
             'title': f'Straße {i}', 'projectId': project['id'] if i < 4 else other['id'],
         })
         assert reply.status_code == 201, reply.text
+        if i == 0:
+            updated = owner.patch(f"/api/v1/tasks/{reply.json()['id']}", json={'title': 'Renamed Straße'})
+            assert updated.status_code == 200, updated.text
 
     def unbounded(*_args, **_kwargs):
         raise AssertionError('Project tools must not load all owner tasks or complete histories')
@@ -37,6 +41,11 @@ def test_project_pages_filter_before_hydration_and_keep_unicode_search(managed_e
     }).json()
     assert len(second['tasks']) == 2 and second['nextCursor'] is None
     assert {t['id'] for t in first['tasks']}.isdisjoint(t['id'] for t in second['tasks'])
+    for filters in ({'status': 'done'}, {'query': '%'}, {'query': '_'}):
+        empty = manager_api._tool(managed_env, command, 'tasks', filters).json()
+        assert empty['total'] == 0 and empty['tasks'] == []
+    renamed = manager_api._tool(managed_env, command, 'tasks', {'query': 'RENAMED STRASSE'}).json()
+    assert renamed['total'] == 1
     overview = manager_api._tool(managed_env, command, 'overview')
     assert overview.status_code == 200, overview.text
     assert overview.json()['total'] == 4
@@ -53,4 +62,10 @@ def test_project_pages_filter_before_hydration_and_keep_unicode_search(managed_e
             'limit': 2, 'cursor': page['nextCursor'], 'cutoff': page['cutoff'],
         }).json()
     assert len(seen) == page['total']
-    assert len([e for e in seen if e.get('taskId')]) == 4
+    assert len([e for e in seen if e.get('taskId')]) == 5  # Four creates and one rename.
+    now = datetime.now(UTC)
+    wrong_owner = '00000000-0000-0000-0000-000000000000'
+    assert app.state.project_store.project_activity_page(project['id'], wrong_owner,
+        since=now, cutoff=now, cursor=0, limit=2)['total'] == 0
+    assert app.state.project_store.project_activity_page(project['id'], wrong_owner,
+        since=None, cutoff=now, cursor=0, limit=2)['total'] == 0

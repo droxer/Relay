@@ -6,6 +6,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./api-url": "./dist/api-url.js",
+    "./mcp-stdio": "./dist/mcp-stdio.js",
     "./opencode-errors": "./dist/opencode-errors.js"
   },
   "types": "./dist/index.d.ts",

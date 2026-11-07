@@ -149,6 +149,28 @@ negotiated protocol metadata; it owns no second tool catalog. The older
 `GET /api/v1/mcp/projects` and `POST /api/v1/mcp/projects/{id}/tools` routes are
 compatibility adapters over the same Python authorization and operations.
 
+Native managed runs keep one multiplexed connection from the stdio bridge to
+the daemon's private run socket (`relay-mcp-native.ts`). A random per-run
+capability authenticates each IPC frame; it grants no direct backend access.
+The socket lives in a private temporary directory (a named pipe on Windows)
+and closes with the run. Requests are never automatically replayed after a
+disconnect, because a write may already have completed. Native MCP calls do
+not spawn a helper process or wait for filesystem polling.
+
+The workspace file helper remains available for VM mounts and explicit
+workspace tool commands. It publishes complete response files with atomic
+rename, tracks only active requests, and has no lifetime call-count limit.
+Both stdio tool surfaces preserve split UTF-8 characters, hold at most eight
+calls concurrently, order initialization, and propagate output backpressure
+to input. EOF drains accepted calls before exit.
+
+Project task pages filter by owner, Project, status and literal Unicode-folded
+title in SQL before loading snapshots. Activity merges scalar event keys in
+the database and hydrates only the selected page, with at most three batched
+payload queries. Activity `sequence` identifies the source event-log position.
+Exact totals still require database counts; bounded hydration is not a fixed
+latency guarantee at arbitrary database sizes.
+
 The catalog has eight read tools and one proposal tool. A Project roster member's
 run sees the read tools; only its Project Lead's run receives proposal access.
 Owner and standalone Computer grants can also stage proposals within their

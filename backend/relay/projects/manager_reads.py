@@ -1,7 +1,6 @@
 """Live, owner-scoped project records exposed to the manager."""
 from __future__ import annotations
 
-from collections import Counter
 from datetime import datetime, UTC
 from typing import Any
 from ..core.ids import now_iso
@@ -10,12 +9,11 @@ from ..tasks.review import task_review
 from .manager import ManagerError, manager_candidates
 
 
-def project_tasks(ctx: Any, project: dict[str, Any]) -> list[dict[str, Any]]:
-    tasks = [t for t in ctx.task_store.list_task_summaries(user_id=project["ownerUserId"])
-            if t.get("projectId") == project["id"] and not t.get("deletedAt")
-            and t.get("ownerUserId") == project["ownerUserId"]]
+def project_task_page(ctx: Any, project: dict[str, Any], **query: Any) -> dict[str, Any]:
+    page = ctx.project_store.project_task_page(project["id"], project["ownerUserId"], **query)
+    tasks = page["tasks"]
     waiting = ctx.task_store.open_prerequisites_for([t["id"] for t in tasks if t.get("prerequisiteTaskIds")])
-    return [{**t, "waitingOn": waiting.get(t["id"], [])} for t in tasks]
+    return {**page, "tasks": [{**t, "waitingOn": waiting.get(t["id"], [])} for t in tasks]}
 
 
 def scoped_task(ctx: Any, project: dict[str, Any], task_id: str) -> dict[str, Any]:
@@ -49,14 +47,12 @@ def _compact(project: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
 def manager_overview(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
     with ctx.project_store.manager_read_scope():
         project = ctx.project_store.get_project(project["id"])
-        tasks = project_tasks(ctx, project)
-        ordinary = [t for t in tasks if not t.get("isRoutine")]
-        counts = Counter(t["status"] for t in ordinary)
-        recent = sorted(ordinary, key=lambda t: (t.get("updatedAt", ""), t["id"]), reverse=True)[:20]
+        counts = ctx.project_store.project_task_counts(project["id"], project["ownerUserId"])
+        total = sum(counts["counts"].values())
+        recent = project_task_page(ctx, project, limit=20, recent=True)["tasks"]
         return {
             "project": {k: project.get(k) for k in ("id", "name", "goal", "description", "context", "contextRevision", "version", "members", "leadAgentId", "managerAgentId", "computerId")},
-            "readAt": now_iso(), "counts": dict(counts), "total": len(ordinary),
-            "automationCount": len(tasks) - len(ordinary),
+            "readAt": now_iso(), **counts, "total": total,
             "agents": [{"id": a["id"], "name": a["displayName"], "role": a.get("defaultRole")} for a in manager_candidates(ctx, project)],
             "teams": [{"id": team["id"], "name": team.get("name") or team.get("displayName")}
                       for team in ctx.team_store.list_teams(project["ownerUserId"]) if team.get("computerId") == project["computerId"]],
@@ -65,7 +61,7 @@ def manager_overview(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
             "computers": [{k: n.get(k) for k in ("id", "computerId", "online", "dispatchable", "status")}
                           for n in ctx.registry.monitor_nodes() if computer_id(n) == project["computerId"]],
             "recentTasks": [_compact(project, t) for t in recent],
-            "coverage": {"total": len(ordinary), "shown": len(recent), "complete": len(recent) == len(ordinary)},
+            "coverage": {"total": total, "shown": len(recent), "complete": len(recent) == total},
         }
 
 
@@ -105,25 +101,19 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
         cursor = arguments.get("cursor", max(0, len(messages) - 50))
         if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
             raise ManagerError("manager_pagination_invalid", 400)
-        page = messages[cursor:cursor + 50]
-        return {"messages": [{**m, "text": m["text"][:8000], "truncated": len(m["text"]) > 8000} for m in page],
+        message_page = messages[cursor:cursor + 50]
+        return {"messages": [{**m, "text": m["text"][:8000], "truncated": len(m["text"]) > 8000} for m in message_page],
                 "nextCursor": cursor + 50 if len(messages) > cursor + 50 else None,
                 "previousCursor": max(0, cursor - 50) if cursor else None,
-                "coverage": {"total": len(messages), "shown": len(page), "maxMessageChars":8000}, "url": f"/threads/{thread_id}"}
-    tasks = project_tasks(ctx, project)
+                "coverage": {"total": len(messages), "shown": len(message_page), "maxMessageChars":8000}, "url": f"/threads/{thread_id}"}
     if tool == "tasks":
-        tasks = [t for t in tasks if not arguments.get("status") or t["status"] == arguments["status"]]
-        query = str(arguments.get("query", "")).casefold()
-        tasks = [t for t in tasks if query in t["title"].casefold()]
-        tasks.sort(key=lambda t: t["id"])
         cursor = arguments.get("cursor", "")
         limit = arguments.get("limit", 50)
         if not isinstance(cursor, str) or not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
             raise ManagerError("manager_pagination_invalid", 400)
-        remaining = [t for t in tasks if t["id"] > cursor]
-        page = remaining[:limit]
-        return {"tasks": [_compact(project, t) for t in page], "total": len(tasks),
-                "nextCursor": page[-1]["id"] if len(remaining) > limit else None, "readAt": now_iso()}
+        page = project_task_page(ctx, project, cursor=cursor, limit=limit,
+                                 status=arguments.get("status", ""), query=arguments.get("query", ""))
+        return {**page, "tasks": [_compact(project, t) for t in page["tasks"]], "readAt": now_iso()}
     if tool == "activity":
         cutoff = arguments.get("cutoff") or now_iso()
         since = arguments.get("since", "")
@@ -138,51 +128,29 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
                 raise ValueError("Reversed time range")
         except (ValueError, TypeError, AttributeError) as error:
             raise ManagerError("manager_time_invalid", 400) from error
-        events = []
-        for summary in tasks:
-            task = scoped_task(ctx, project, summary["id"])
-            for i, event in enumerate(task.get("events", [])):
-                at = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
-                at = at.replace(tzinfo=at.tzinfo or UTC)
-                if (since_at is None or since_at <= at) and at <= cutoff_at:
-                    events.append({"taskId": task["id"], "sequence": i, "event": event, "url": task_link(project["id"], task["id"])})
-        for i, event in enumerate(ctx.project_store.events(project["id"])):
-            at = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
-            if (since_at is None or since_at <= at) and at <= cutoff_at:
-                # Exclude the full Project snapshots carried by these events.
-                facts = {k:event[k] for k in ("id", "type", "timestamp", "patch") if k in event}
-                events.append({"projectId":project["id"], "sequence":i, "event":facts, "url":f"/projects/{project['id']}"})
-        for thread in ctx.session_store.list_session_snapshots(owner_user_id=project["ownerUserId"], project_id=project["id"]):
-            source = None
-            for i, run in enumerate(thread.get("agentRuns", [])):
-                timestamp = run.get("completedAt")
-                if not timestamp:
-                    continue
-                at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                if (since_at is not None and at < since_at) or at > cutoff_at:
-                    continue
-                # Headers intentionally omit agentLog. Hydrate only a Thread
-                # that has a report in the requested window.
-                if source is None:
-                    try:
-                        source = ctx.session_store.get_session(thread["id"])
-                    except KeyError:
-                        break  # A concurrently deleted Thread contributes no report.
-                report = next((e for e in source.get("events", []) if e["type"] == "agent.completed" and e.get("runId") == run["id"]), None)
-                if report:
-                    facts = {k:report[k] for k in ("id", "type", "timestamp", "runId", "agent", "logicalAgentId", "exitCode") if k in report}
-                    text = str(report.get("agentLog") or "")
-                    facts.update(agentLog=text[:8000], reportTruncated=len(text) > 8000, evidenceKind="agent_report")
-                    events.append({"threadId":thread["id"], "sequence":i, "event":facts, "url":f"/threads/{thread['id']}"})
-        events.sort(key=lambda e: (e["event"].get("timestamp", ""), e.get("taskId") or e.get("threadId") or project["id"], e["sequence"]))
         cursor = arguments.get("cursor", 0)
         limit = arguments.get("limit", 50)
         if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
             raise ManagerError("manager_pagination_invalid", 400)
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
             raise ManagerError("manager_pagination_invalid", 400)
-        return {"events": events[cursor:cursor + limit], "cutoff": cutoff, "total": len(events),
-                "nextCursor": cursor + limit if len(events) > cursor + limit else None}
+        page = ctx.project_store.project_activity_page(project["id"], project["ownerUserId"],
+            since=since_at, cutoff=cutoff_at, cursor=cursor, limit=limit)
+        entries = []
+        for row in page["events"]:
+            kind, entity_id, event = row["kind"], row["entityId"], row["event"]
+            if kind == "project":
+                event = {k: event[k] for k in ("id", "type", "timestamp", "patch") if k in event}
+                url = f"/projects/{entity_id}"
+            elif kind == "thread":
+                text = str(event.get("agentLog") or "")
+                event = {k: event[k] for k in ("id", "type", "timestamp", "runId", "agent", "logicalAgentId", "exitCode") if k in event}
+                event.update(agentLog=text[:8000], reportTruncated=len(text) > 8000, evidenceKind="agent_report")
+                url = f"/threads/{entity_id}"
+            else:
+                url = task_link(project["id"], entity_id)
+            entries.append({f"{kind}Id": entity_id, "sequence": row["sequence"], "event": event, "url": url})
+        return {**page, "events": entries, "cutoff": cutoff}
     raise ManagerError("manager_tool_unknown", 400)
 
 

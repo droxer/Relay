@@ -19,6 +19,7 @@ from ..sql import metadata as shared_metadata
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
+from .tool_reads import ProjectToolReads
 from ...core.project_roles import project_with_manager
 
 PROJECT_NAME_MAX_LENGTH = 120
@@ -40,7 +41,7 @@ class _ProjectWriteConflict(RuntimeError):
     pass
 
 
-class DatabaseProjectStore(ManagerRows):
+class DatabaseProjectStore(ManagerRows, ProjectToolReads):
     """Event-authoritative projects with roster rows as a query projection."""
 
     metadata = shared_metadata

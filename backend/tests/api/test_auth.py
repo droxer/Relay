@@ -258,6 +258,9 @@ def test_auth_status_reports_bootstrap_need(monkeypatch) -> None:
 
 
 def test_bootstrap_without_an_admin_token_is_unavailable(monkeypatch) -> None:
+    # This case deliberately has no configured token, regardless of a
+    # developer's private backend/.env files.
+    monkeypatch.setattr("relay.core.settings.load_backend_env", lambda: None)
     monkeypatch.delenv("RELAY_ADMIN_TOKEN", raising=False)
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))

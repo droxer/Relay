@@ -178,7 +178,8 @@ def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(managed_
 
 @requires_node_bridge
 @pytest.mark.integration
-def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path):
+@pytest.mark.parametrize("native", [False, True], ids=["file", "native-ipc"])
+def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path, native):
     import os
 
     app, owner, node, project, *_ = managed_env
@@ -193,17 +194,19 @@ def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed
     script = r"""
 import {createProjectManagerBridge} from './dist/packages/relay-daemon/src/project-manager.js';
 import {createRunMcpProxy} from './dist/packages/relay-daemon/src/relay-mcp-managed.js';
+import {startNativeMcpBridge} from './dist/packages/relay-daemon/src/relay-mcp-native.js';
 import {spawn} from 'node:child_process';
 import {join} from 'node:path';
 const settings=JSON.parse(process.env.RELAY_MCP_TEST_HOST);
 delete process.env.RELAY_MCP_TEST_HOST;
 const proxy=createRunMcpProxy({...settings,fetchFn:fetch,signal:new AbortController().signal});
 const bridge=createProjectManagerBridge(settings.workspace,proxy);
+const native=settings.native ? await startNativeMcpBridge(proxy) : undefined;
 try{
- const child=spawn(process.execPath,[join(settings.sources,'relay-mcp.js'),'--config',settings.config],{env:{...process.env,RELAY_MCP_RUN_CONTEXT:JSON.stringify({backendUrl:settings.backendUrl,projectId:settings.projectId,bridgePath:join(settings.workspace,bridge.toolPath)})},stdio:['pipe','inherit','inherit']});
+ const child=spawn(process.execPath,[join(settings.sources,'relay-mcp.js'),'--config',settings.config],{env:{...process.env,RELAY_MCP_RUN_CONTEXT:JSON.stringify({backendUrl:settings.backendUrl,projectId:settings.projectId,bridgePath:join(settings.workspace,bridge.toolPath),native:native?.address})},stdio:['pipe','inherit','inherit']});
  process.stdin.pipe(child.stdin);
  process.exitCode=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
-}finally{await bridge.dispose();}
+}finally{await native?.dispose();await bridge.dispose();}
 """
     with _http_transport(app) as url:
         config.write_text(json.dumps({"backendUrl": url, "tokenFile": str(tmp_path / "no-standalone-token")}))
@@ -239,6 +242,7 @@ try{
             },
         ]
         host = {
+            "native": native,
             "backendUrl": url,
             "sandboxId": node["id"],
             "nodeToken": f"token_{node['id']}",

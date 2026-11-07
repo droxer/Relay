@@ -31,6 +31,32 @@ test('stdio preserves UTF-8 characters split between input chunks', async () => 
   assert.equal(JSON.parse(output).result.query, '中文😀');
 });
 
+test('stdio backpressure stops accepting work when the runtime stops reading replies', { timeout: 6000 }, async () => {
+  const module = new URL('../src/relay-mcp.js', import.meta.url).href;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', `
+    import {serveMcp} from ${JSON.stringify(module)};
+    process.stderr.write('ready\\n');
+    await serveMcp(async m => {
+      process.stderr.write('call\\n');
+      return {jsonrpc:'2.0',id:m.id,result:'x'.repeat(1024*1024)};
+    });
+  `], { timeout: 5000 });
+  const exit = once(child, 'exit');
+  let status = '';
+  child.stderr.on('data', chunk => { status += chunk; });
+  await once(child.stderr, 'data');
+  try {
+    child.stdin.end(Array.from({ length: 20 }, (_, id) => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call' })).join('\n') + '\n');
+    await delay(200);
+    const calls = status.split('\n').filter(line => line === 'call').length;
+    assert.ok(calls > 0 && calls <= 8, `slow stdout must bound accepted calls: ${calls}`);
+  } finally {
+    child.stdout.resume();
+    assert.equal((await exit)[0], 0);
+  }
+  assert.equal(status.split('\n').filter(line => line === 'call').length, 20);
+});
+
 test('file responses become visible only after their complete JSON is written', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'relay-atomic-response-'));
   const original = fs.writeFileSync;

@@ -1,10 +1,17 @@
 """Search projection backfill and query indexes preserve existing records."""
 import importlib.util
 from pathlib import Path
+import pytest
 
+from alembic import command
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
+from relay.persistence.task.store import DatabaseTaskStore
+from test_schema_drift import migrated_schema as _migrated_schema
+
+migrated_schema = _migrated_schema
 
 
 def test_mcp_read_bounds_upgrade_retry_and_downgrade():
@@ -31,3 +38,18 @@ def test_mcp_read_bounds_upgrade_retry_and_downgrade():
                 assert conn.scalar(text('SELECT count(*) FROM tasks')) == 501
     finally:
         engine.dispose()
+
+
+@pytest.mark.postgres
+def test_postgres_backfill_preserves_task_and_history(migrated_schema):
+    url, _ = migrated_schema
+    store = DatabaseTaskStore(url)
+    task = store.create_task({'title': 'Straße 中文'})
+    before = store.get_task(task['id'])
+    config = Config(str(Path(__file__).parents[2] / 'alembic.ini'))
+    config.set_main_option('script_location', str(Path(__file__).parents[2] / 'migrations'))
+    command.downgrade(config, '20261106_0120')
+    command.upgrade(config, 'head')
+    assert store.get_task(task['id']) == before
+    with store.engine.connect() as conn:
+        assert conn.scalar(text('SELECT title_casefold FROM tasks WHERE id = :id'), {'id': task['id']}) == 'strasse 中文'

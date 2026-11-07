@@ -87,6 +87,7 @@ events_table = Table(
     Column("timestamp", DateTime(timezone=True), nullable=False),
     Column("payload", json_type(), nullable=False),
     UniqueConstraint("project_id", "sequence", name="uq_project_events_sequence"),
+    Index("ix_project_events_project_time", "project_id", "timestamp", "sequence"),
 )
 
 manager_proposals = Table(
