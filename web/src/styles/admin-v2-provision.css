@@ -289,12 +289,16 @@
   justify-content: center;
   gap: var(--sp-1);
   width: 100%;
-  height: var(--control-h-sm);
-  padding: 0 var(--sp-3);
+  /* A floor, not a fixed height: on a phone a two-word label such as
+     "Refine project setup" wraps, and a fixed 32px box let its second line
+     spill out under the track. */
+  min-height: var(--control-h-sm);
+  padding: var(--sp-1) var(--sp-3);
   border: none;
   border-radius: var(--r-1);
   background: transparent;
   color: var(--ink-3);
+  text-align: center;
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   cursor: pointer;

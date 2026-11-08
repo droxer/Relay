@@ -338,8 +338,14 @@ for (const width of [320, 375, 390, 820]) {
           const r = target.getBoundingClientRect();
           return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
         };
-        return { box: { left: box.left, right: box.right }, title: inside(".backlog-row-title"), run: inside(".backlog-action-primary"), due: inside(".task-col-due"), assignee: inside(".task-col-assignee") };
+        return {
+          box: { left: box.left, right: box.right }, title: inside(".backlog-row-title"), run: inside(".backlog-action-primary"), due: inside(".task-col-due"), assignee: inside(".task-col-assignee"),
+          tags: inside(".backlog-row-lead-main > .tag-list"), chip: inside(".backlog-row-lead-main > .tag-list .tag-badge"),
+        };
       });
+      // The tag box clips chips past the first; it must not clip the first
+      // chip itself, which the touch floor makes taller than its drawing.
+      if (metrics.tags && metrics.chip) expect(metrics.chip.bottom, "first tag chip is cut off").toBeLessThanOrEqual(metrics.tags.bottom + 0.5);
       for (const part of [metrics.title, metrics.due, metrics.assignee, metrics.run]) {
         if (!part) continue;
         expect(part.left).toBeGreaterThanOrEqual(metrics.box.left - 1);
@@ -815,6 +821,8 @@ for (const width of [320, 390]) {
       return {
         line: box(element),
         text: box(element.querySelector(".project-manager-line-text")!),
+        name: box(element.querySelector(".project-manager-line-name")!),
+        role: box(role),
         roleClipped: role.scrollWidth > role.clientWidth + 1,
         buttons: [...element.querySelectorAll("button")].map(box),
       };
@@ -822,6 +830,10 @@ for (const width of [320, 390]) {
     // The name keeps the row; the role line is read in full.
     expect(metrics.text.width).toBeGreaterThan(width / 2);
     expect(metrics.roleClipped, "role line is truncated").toBe(false);
+    // The role sits right under the name; the 44px link floor once opened a
+    // whole line between them.
+    expect(metrics.role.top - metrics.name.bottom, "gap between name and role").toBeLessThanOrEqual(4);
+    expect(metrics.name.height).toBeGreaterThanOrEqual(24);
     expect(metrics.buttons).toHaveLength(3);
     for (const button of metrics.buttons) {
       expect(button.left).toBeGreaterThanOrEqual(metrics.line.left - 1);
