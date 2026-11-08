@@ -3374,7 +3374,7 @@
   "task_review": {
     "title": "Review result",
     "ready_title": "Ready for your review",
-    "details": "See criteria, evidence, and outputs",
+    "details": "Review details",
     "loading": "Loading the recorded result…",
     "outcome": "Requested outcome",
     "criteria": "Acceptance criteria",

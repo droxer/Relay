@@ -3308,7 +3308,7 @@
   "task_review": {
     "title": "审阅结果",
     "ready_title": "等待你审阅",
-    "details": "查看验收标准、证据和产出",
+    "details": "验收详情",
     "loading": "正在加载已记录的结果…",
     "outcome": "预期目标",
     "criteria": "验收标准",

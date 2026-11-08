@@ -36,7 +36,6 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOn
     retry: false,
   });
   const brief = query.data;
-  const lede = brief?.reports[brief.reports.length - 1];
   const refresh = async () => {
     const result = await query.refetch();
     if (!result.isError) setDecisionError(null);
@@ -57,15 +56,6 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOn
   const threadHref = brief?.sessionId ? pathForAppState({ route: "main", mobileView: "chat", sessionId: brief.sessionId }) : null;
   return (
     <section className={`task-review${compact ? " task-review--compact" : ""}`} aria-label={t("task_review.title")} aria-busy={busy || query.isFetching}>
-      {/* Docked under a thread, the decision leads: who delivered what stays in
-          view, and the full evidence opens on demand. */}
-      {compact ? <div className="task-review-lede">
-        <h3 className="task-review-lede-title">{t("task_review.ready_title")}</h3>
-        {lede ? <p className="task-review-lede-text">
-          <span className="task-review-lede-agent">{lede.agentName || lede.agent || t("task_review.unknown_agent")}</span>
-          {" · "}{lede.note || t("task_review.summary_missing")}
-        </p> : null}
-      </div> : null}
       <details open={!compact}>
         <summary>{t(compact ? "task_review.details" : "task_review.title")}</summary>
         {!brief && !query.isError ? <p role="status">{t("task_review.loading")}</p> : null}
@@ -113,8 +103,8 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOn
         <Button type="button" size="dense" variant="outline" disabled={query.isFetching || busy} onClick={() => void refresh()}>{t("task_review.refresh")}</Button>
       </div> : null}
       {brief && !readOnly ? <div className="task-review-actions">
-        <Button type="button" size="dense" variant="ghost" disabled={busy || !brief.sessionId} onClick={onRequestChanges}>{t("thread.lifecycle.request_changes")}</Button>
-        <Button type="button" size="dense" variant={deferPrimary ? "outline" : "default"} disabled={!brief.canAccept || busy || query.isFetching || query.isError || Boolean(decisionError)} loading={busy} onClick={() => void accept()}>{t("thread.lifecycle.accept")}</Button>
+        <Button type="button" size={compact ? "xs" : "dense"} variant="ghost" disabled={busy || !brief.sessionId} onClick={onRequestChanges}>{t("thread.lifecycle.request_changes")}</Button>
+        <Button type="button" size={compact ? "xs" : "dense"} variant={compact || deferPrimary ? "outline" : "default"} disabled={!brief.canAccept || busy || query.isFetching || query.isError || Boolean(decisionError)} loading={busy} onClick={() => void accept()}>{t("thread.lifecycle.accept")}</Button>
       </div> : null}
     </section>
   );
