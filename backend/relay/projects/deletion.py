@@ -259,13 +259,9 @@ def _assert_idle(scope: _Scope, lifecycle: Any) -> None:
 
 
 def _detach_outside_tasks(
-    conn: Any, tasks: Any, session_ids: list[str], project_task_ids: set[str], user_id: str
+    conn: Any, tasks: Any, session_ids: list[str], project_task_ids: set[str]
 ) -> list[str]:
-    """Unlink tasks outside the project from its threads, keeping the tasks.
-
-    Deleting a thread on its own drops a task it leaves threadless. A task in
-    another project, or in no project, is not this deletion's to remove.
-    """
+    """Unlink tasks outside the project from its threads, keeping the tasks."""
     if not session_ids:
         return []
     links = conn.execute(
@@ -278,7 +274,7 @@ def _detach_outside_tasks(
         task_id = str(raw_task_id)
         if task_id in project_task_ids:
             continue
-        tasks.unlink_session_in_transaction(conn, task_id, str(session_id), deleted_by=user_id)
+        tasks.unlink_session_in_transaction(conn, task_id, str(session_id))
         if task_id not in detached:
             detached.append(task_id)
     return detached
@@ -293,7 +289,7 @@ def _delete_records(
     project_tasks, project_sessions = scope.tasks, scope.threads
     task_ids = [task["id"] for task in project_tasks]
     session_ids = [session["id"] for session in project_sessions]
-    detached = _detach_outside_tasks(conn, tasks, session_ids, set(task_ids), user_id)
+    detached = _detach_outside_tasks(conn, tasks, session_ids, set(task_ids))
     controller = SessionController(sessions, task_store=tasks)
     for session in project_sessions:
         try:

@@ -2001,14 +2001,19 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             assert client.delete(f"/api/v1/tasks/{routine['id']}").json()["outcome"] == "already_deleted"
 
 
-def test_task_delete_deletes_its_threads(monkeypatch) -> None:
+@pytest.mark.parametrize("routine", [False, True])
+def test_task_delete_deletes_its_threads(monkeypatch, routine) -> None:
     from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        task = client.post("/api/v1/tasks", json={"title": "Backlog cleanup"}).json()
+        task = client.post("/api/v1/tasks", json={
+            "title": "Work cleanup",
+            **({"isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "paused"} if routine else {}),
+        }).json()
         other = client.post("/api/v1/tasks", json={"title": "Still here"}).json()
         tasks = client.app.state.task_store
         sessions = client.app.state.session_store
@@ -2025,7 +2030,7 @@ def test_task_delete_deletes_its_threads(monkeypatch) -> None:
         rounds = [thread("Round one"), thread("Round two")]
         for session_id in rounds:
             tasks.link_session(task["id"], session_id)
-        # A thread another live task also ran in stays with that task.
+        # Shared activity is deleted too; the other task only loses its link.
         shared = thread("Shared round")
         tasks.link_session(task["id"], shared)
         tasks.link_session(other["id"], shared)
@@ -2036,9 +2041,14 @@ def test_task_delete_deletes_its_threads(monkeypatch) -> None:
         assert response.status_code == 200
         for session_id in rounds:
             assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
-        assert client.get(f"/api/v1/threads/{shared}").status_code == 200
+        assert client.get(f"/api/v1/threads/{shared}").status_code == 404
         assert client.get(f"/api/v1/threads/{unrelated}").status_code == 200
-        assert client.get(f"/api/v1/tasks/{other['id']}").status_code == 200
+        preserved = client.get(f"/api/v1/tasks/{other['id']}")
+        assert preserved.status_code == 200
+        assert preserved.json()["linkedSessionIds"] == []
+        assert preserved.json()["status"] == other["status"]
+        assert client.get(f"/api/v1/tasks/{task['id']}").status_code == 404
+        assert client.delete(f"/api/v1/tasks/{task['id']}").json()["outcome"] == "already_deleted"
 
 
 @pytest.mark.parametrize("routine", [False, True])

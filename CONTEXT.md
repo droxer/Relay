@@ -126,6 +126,13 @@ on the thread, cannot change after the thread starts, and bounds every agent
 eligible to participate in that thread.
 _Avoid_: Per-turn computer, movable thread
 
+**Thread**:
+The activity and conversation record for work, including Task and Automation
+runs. Deleting a Thread removes its history and links; its Tasks, Automation
+runs, and Automations keep their own lifecycle and are preserved. Deleting a
+Task deletes its linked Threads; deleting an Automation also deletes its runs
+and their Threads. Other Tasks linked to those Threads survive and lose the links.
+
 **Standalone Thread**:
 A Thread linked to neither a Task nor an Automation. It is an ongoing chat
 without a persistent lifecycle status in the UI; live execution, requests for

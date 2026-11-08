@@ -268,8 +268,8 @@ def test_refused_delete_settles_nothing(project_env, monkeypatch):
 
 def test_deleted_task_does_not_hold_the_project(project_env, monkeypatch):
     app, client, node, agent, project, task, routine, session = project_env
-    # Deleting a task keeps a thread another task still uses; the deleted task
-    # stays linked to it, and that thread's run is not this project's.
+    # A legacy task tombstone can retain a thread link without the normal
+    # application cascade. That thread's run is not this project's.
     elsewhere = app.state.session_store.create_session({"taskGoal": "Elsewhere", "ownerUserId": ALICE, "workspacePath": "/workspace"})
     app.state.task_store.link_session(task["id"], elsewhere["id"])
     app.state.task_store.delete_task(task["id"], deleted_by=ALICE)
