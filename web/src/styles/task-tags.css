@@ -1,10 +1,10 @@
 /* Tags — the one tag mark (TagBadge in TaskTags.tsx), the lists of them on
    rows, cards and the record, and the drawer's token field (TaskTagsField).
 
-   A tag badge is "#name" on the neutral chip fill. Status badges are a toned
+   A tag badge is "#name" inside a fine keyline. Status badges are a toned
    word on a toned fill (done, blocked, needs project); a tag is a label that
-   means nothing to Relay, so its name stays ink and its colour lives only in
-   the leading "#" (--tag-1…8, see palette.css) — enough to scan a list by
+   means nothing to Relay, so its name stays ink and its colour lives in
+   the keyline and leading "#" (--tag-1…8, see palette.css) — enough to scan a list by
    tag, never enough to read as a status. */
 
 /* ── The mark: tone → colour, the one place the tag palette is read ─── */
@@ -30,23 +30,29 @@
   content: "#";
 }
 
+.tag-badge[data-tone="1"],
 .tag-mark[data-tone="1"] { --tag-tone: var(--tag-1); }
+.tag-badge[data-tone="2"],
 .tag-mark[data-tone="2"] { --tag-tone: var(--tag-2); }
+.tag-badge[data-tone="3"],
 .tag-mark[data-tone="3"] { --tag-tone: var(--tag-3); }
+.tag-badge[data-tone="4"],
 .tag-mark[data-tone="4"] { --tag-tone: var(--tag-4); }
+.tag-badge[data-tone="5"],
 .tag-mark[data-tone="5"] { --tag-tone: var(--tag-5); }
+.tag-badge[data-tone="6"],
 .tag-mark[data-tone="6"] { --tag-tone: var(--tag-6); }
+.tag-badge[data-tone="7"],
 .tag-mark[data-tone="7"] { --tag-tone: var(--tag-7); }
+.tag-badge[data-tone="8"],
 .tag-mark[data-tone="8"] { --tag-tone: var(--tag-8); }
 
 /* ── The badge ──────────────────────────────────────────────────────── */
 
 /* 20px tall, on the micro radius the palette reserves for tags (--r-1), so a
    row of tags beside a status badge (24px, --r-2, toned) reads as a
-   different kind of thing at a glance. The fill is --control-fill, the one
-   neutral chip plane: an ink tint, so it lifts on rows, tiles, the record,
-   and the --surface-3 menus alike. The "#" sits tight against the name, as
-   it would in text. */
+   different kind of thing at a glance. The transparent face leaves the row's
+   surface visible; a faint keyline carries the same tone as the "#". */
 .tag-badge {
   display: inline-flex;
   flex: none;
@@ -54,10 +60,11 @@
   gap: var(--sp-0-5);
   height: var(--avatar-xs);
   max-width: 18ch;
-  padding: 0 var(--sp-1-5) 0 var(--sp-1);
+  padding: 0 var(--sp-1-5);
   border: 0;
   border-radius: var(--r-1);
-  background: var(--control-fill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag-tone, var(--ink-4)) 42%, transparent);
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -72,24 +79,21 @@
 
 /* ── A tag that filters its list (TagToggle, under TagFilterContext) ── */
 
-/* The same badge as a button: a click shows only that tag's tasks. Hover
-   takes the next ink-tint step, as every chip does; pressed — the list is
-   filtered on this tag — draws an inset ink ring and lifts the name to
-   --ink-1, so the one tag the list is narrowed to reads at a glance down a
-   column of rows. A ring, not a fill: a toned or solid fill would read as a
-   status or a primary button. */
+/* Hover adds a faint tone wash; the active filter strengthens the keyline
+   and wash together. The name remains ink in every state. */
 .tag-badge--toggle {
   cursor: pointer;
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
 .tag-badge--toggle:hover {
-  background: var(--control-fill-hover);
+  background: color-mix(in srgb, var(--tag-tone) 8%, transparent);
   color: var(--ink-1);
 }
 
 .tag-badge--toggle[aria-pressed="true"] {
-  box-shadow: inset 0 0 0 1px var(--ink-3);
+  background: color-mix(in srgb, var(--tag-tone) 12%, transparent);
+  box-shadow: inset 0 0 0 1px var(--tag-tone);
   color: var(--ink-1);
 }
 
@@ -98,6 +102,7 @@
    equal weight. It takes the chip fill only on hover or focus, the cue that
    its tooltip names the hidden tags. */
 .tag-badge--more {
+  box-shadow: none;
   padding-inline: var(--sp-1);
   background: transparent;
   color: var(--ink-3);
@@ -286,8 +291,7 @@
   inset: calc((var(--avatar-xs) - var(--chip-h)) / 2);
 }
 
-/* On the chip's ink-tint fill, the next ink-tint step: a fixed surface
-   step would vanish on the light theme's white --surface-3. */
+/* A neutral hover keeps the remove action distinct from the tag tone. */
 .tag-badge-remove:hover:not(:disabled) {
   background: var(--control-fill-hover);
   color: var(--ink-1);
@@ -299,15 +303,20 @@
 }
 
 @media (forced-colors: active) {
-  /* Chips lose their fill under forced colours; an outline keeps each one
-     a shape. The "#" keeps the system text colour, and still reads. */
+  /* System borders replace keylines because forced colours drop shadows. */
   .tag-badge {
     border: 1px solid CanvasText;
   }
 
-  /* The pressed ring is a box-shadow, which forced colours drop. */
+  .tag-badge--more {
+    border-color: transparent;
+  }
+
+  /* An outline adds a non-colour cue to the active filter. */
   .tag-badge--toggle[aria-pressed="true"] {
     border-color: Highlight;
+    outline: 1px solid Highlight;
+    outline-offset: 1px;
   }
 
   .tag-field:focus-within {
