@@ -326,19 +326,164 @@ button.project-member-row:hover .project-member-row-open {
   gap: var(--sp-2);
 }
 
-/* Dashboard: one rail of counts above the issues that need a look. */
+/* Dashboard: the steward, a rail of counts, then the issues that need a
+   look beside what the agents propose. */
 .project-dashboard {
   display: grid;
+  align-content: start;
   gap: var(--sp-6);
-  padding: var(--sp-5) var(--page-gutter);
+  min-width: 0;
+  padding: var(--sp-5) var(--page-gutter) var(--sp-7);
 }
 
-/* No issues yet: one centered note and the way to the board, instead of two
-   rails of zeros. */
-.project-dashboard--empty {
+/* The setup review leads the page at its full width; on Settings-style
+   reading measure it left a ragged column beside nothing. */
+.project-dashboard > .project-setup-panel {
+  max-width: none;
+  margin: 0;
+}
+
+/* The person's cross-project load: one quiet line, link on the right. */
+.project-dashboard-capacity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  color: var(--ink-2);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
+.project-dashboard-capacity p {
+  margin: 0;
+}
+
+.project-dashboard-capacity a {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Two columns that wrap on their own measure rather than at a viewport
+   breakpoint: the pane's width depends on the rail and any open record, so
+   the content decides when the proposals drop below the attention list. */
+.project-dashboard-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+
+.project-dashboard-main {
+  display: grid;
+  flex: 1 1 26rem;
+  min-width: 0;
+}
+
+.project-dashboard-aside {
+  display: grid;
+  flex: 1 1 22rem;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+
+/* A read-only project with nothing proposed leaves the column empty; the
+   attention list then takes the whole width. */
+.project-dashboard-aside:empty {
+  display: none;
+}
+
+/* The proposals wear the Settings card grammar, filling their column. */
+.project-dashboard-panel {
+  max-width: none;
+  min-width: 0;
+}
+
+/* Titled at the card-title role, so the column reads level with "Needs
+   attention" beside it rather than as a settings eyebrow. */
+.project-dashboard-panel .workspace-dossier-section-title {
+  color: var(--ink-1);
+  font: var(--type-heading);
+  letter-spacing: var(--type-heading-track);
+  text-transform: none;
+}
+
+.project-dashboard-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.project-dashboard-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding-inline: var(--sp-1);
+  border-radius: var(--r-full);
+  background: var(--control-fill);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.project-dashboard-suggestions {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-dashboard-suggestion {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4) var(--sp-5);
+  overflow-wrap: anywhere;
+}
+
+.project-dashboard-suggestion + .project-dashboard-suggestion {
+  border-top: 0.5px solid var(--line-1);
+}
+
+/* Why the agent suggested it, then the way to the run that did. */
+.project-dashboard-suggestion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.project-dashboard-suggestion-source {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.project-dashboard-suggestion-source:hover {
+  color: var(--ink-1);
+}
+
+.project-dashboard-suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* No issues yet: one centered note and the way to the board, instead of a
+   rail of zeros. */
+.project-dashboard-empty {
+  display: grid;
   justify-items: center;
   align-content: start;
-  gap: 0;
+  padding-block-end: var(--sp-6);
 }
 
 .project-dashboard-card {
@@ -420,7 +565,23 @@ button.project-member-row:hover .project-member-row-open {
    tile slots; a plain four-tile rail needs them redrawn as a 2×2 grid. */
 @media (max-width: 900px) {
   .project-dashboard {
-    padding: var(--sp-4);
+    gap: var(--sp-5);
+    padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  }
+
+  .project-dashboard-body,
+  .project-dashboard-aside {
+    gap: var(--sp-5);
+  }
+
+  /* Phone: the decision buttons share the row at touch height. */
+  .project-dashboard-suggestion-actions > .project-settings-actions {
+    flex: 1 1 auto;
+  }
+
+  .project-dashboard-suggestion-actions [data-slot="button"] {
+    flex: 1 1 0;
+    min-height: var(--touch-target);
   }
 
   .project-dashboard .adm-dash-tile:nth-child(2n) {

@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
+import { ProjectAskAgentSection, ProjectContextSuggestions } from "./ProjectContextUpkeep";
 import { ProjectManagerLine } from "./ProjectManagerLine";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
@@ -211,17 +212,17 @@ export function ProjectWorkspacePage({
 
       <div className="workspace-body">
         <TabsContent value="dashboard">
-          {setupNeedsAttention(project.setup) && !membersReadOnly ? (
-            <ProjectSetupPanel
-              project={project}
-              setup={project.setup}
-              agents={agents}
-              onOpenThread={onOpenThread}
-              onOpenTask={openTaskRecord}
-              onManual={() => setPageTab("members")}
-            />
-          ) : null}
           <ProjectDashboard
+            review={setupNeedsAttention(project.setup) && !membersReadOnly ? (
+              <ProjectSetupPanel
+                project={project}
+                setup={project.setup}
+                agents={agents}
+                onOpenThread={onOpenThread}
+                onOpenTask={openTaskRecord}
+                onManual={() => setPageTab("members")}
+              />
+            ) : null}
             steward={(
               <ProjectManagerLine
                 project={project}
@@ -230,6 +231,12 @@ export function ProjectWorkspacePage({
                 onDiscuss={canDiscuss ? leadDiscussion.discuss : undefined}
                 discussing={leadDiscussion.pending}
               />
+            )}
+            proposals={(
+              <>
+                <ProjectContextSuggestions project={project} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
+                {membersReadOnly ? null : <ProjectAskAgentSection project={project} />}
+              </>
             )}
             tasks={boardTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
@@ -284,7 +291,6 @@ export function ProjectWorkspacePage({
             computer={computerSummary}
             onDeleted={onDeleted}
             onOpenThread={onOpenThread}
-            onSetupStarted={() => setPageTab("dashboard")}
           />
         </TabsContent>
       </div>

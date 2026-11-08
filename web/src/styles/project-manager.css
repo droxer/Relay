@@ -11,11 +11,6 @@
   border-bottom: 1px solid var(--line-1);
 }
 
-.project-dashboard--empty > .project-manager-line {
-  justify-self: stretch;
-  margin-bottom: var(--sp-6);
-}
-
 .project-manager-line-text {
   display: grid;
   flex: 1;

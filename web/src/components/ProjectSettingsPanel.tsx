@@ -19,7 +19,6 @@ import {
   type NodeOwnership,
 } from "./icons";
 import { ProjectContextField, ProjectDescriptionField, ProjectGoalField, ProjectNameField } from "./ProjectFormFields";
-import { contextWithSuggestion, ProjectAskAgentSection, ProjectContextSuggestions } from "./ProjectContextUpkeep";
 
 type Draft = { name: string; description: string; goal: string; context: string };
 const briefFields = ["description", "goal", "context"] as const;
@@ -34,9 +33,10 @@ const draftOf = (project: ProjectRecord): Draft => ({
   context: project.context ?? "",
 });
 
-/** The Settings tab, three cards: the project's brief (its computer and
- *  folder are fixed, shown as one line in the card head), one place to ask an
- *  agent for a proposal, and the danger zone. It replaced the edit mode of
+/** The Settings tab, two cards: the project's brief (its computer and
+ *  folder are fixed, shown as one line in the card head) and the danger
+ *  zone. What agents propose — context suggestions and the plan/refine
+ *  request — lives on the Dashboard with the proposal review. It replaced the edit mode of
  *  the settings drawer, which now only creates projects.
  *
  *  The draft is edited against a BASE — the record as it stood when editing
@@ -47,7 +47,6 @@ export function ProjectSettingsPanel({
   project,
   computer,
   onDeleted,
-  onSetupStarted,
   onOpenThread,
 }: {
   project: ProjectRecord;
@@ -55,8 +54,6 @@ export function ProjectSettingsPanel({
   onDeleted: () => void;
   /** Opens a thread a refused delete names — the run blocking it. */
   onOpenThread?: (sessionId: string) => void;
-  /** A refine proposal was requested; its review lives on the Dashboard. */
-  onSetupStarted?: () => void;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
@@ -65,21 +62,15 @@ export function ProjectSettingsPanel({
   const [base, setBase] = useState(project);
   const [draft, setDraft] = useState<Draft>(() => draftOf(project));
   const [nameError, setNameError] = useState<string | null>(null);
-  /* Suggestions adopted or dismissed on this draft; Save resolves them with
-     the context they changed, Discard brings them back. */
-  const [resolvedSuggestions, setResolvedSuggestions] = useState<string[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const savedDraft = draftOf(base);
   const dirty = draft.name !== savedDraft.name
-    || briefFields.some((field) => draft[field] !== savedDraft[field])
-    || resolvedSuggestions.length > 0;
+    || briefFields.some((field) => draft[field] !== savedDraft[field]);
   if (!dirty && project.version !== base.version) {
     setBase(project);
     setDraft(draftOf(project));
   }
-  const pendingSuggestions = (project.contextSuggestions ?? [])
-    .filter((suggestion) => !resolvedSuggestions.includes(suggestion.id));
 
   const busy = projectSave.pending || archiveProjectMutation.isPending
     || unarchiveProjectMutation.isPending || deleteProjectMutation.isPending;
@@ -92,7 +83,6 @@ export function ProjectSettingsPanel({
     setBase(record);
     setDraft(draftOf(record));
     setNameError(null);
-    setResolvedSuggestions([]);
   };
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -116,7 +106,6 @@ export function ProjectSettingsPanel({
       expectedVersion: base.version,
       name,
       ...changedBrief,
-      ...(resolvedSuggestions.length ? { resolveContextSuggestions: resolvedSuggestions } : {}),
     });
     if (result) adopt(result.project);
   }
@@ -226,15 +215,6 @@ export function ProjectSettingsPanel({
             value={draft.context}
             onChange={(context) => setDraft((current) => ({ ...current, context }))}
           />
-          <ProjectContextSuggestions
-            suggestions={pendingSuggestions}
-            disabled={archived || busy}
-            onAdopt={(suggestion) => {
-              setDraft((current) => ({ ...current, context: contextWithSuggestion(current.context, suggestion.text) }));
-              setResolvedSuggestions((current) => [...current, suggestion.id]);
-            }}
-            onDismiss={(suggestion) => setResolvedSuggestions((current) => [...current, suggestion.id])}
-          />
         </fieldset>
         {projectSave.error ? <p role="alert" className="project-settings-error text-destructive">{projectSave.error}</p> : null}
         <footer className="project-settings-foot" data-dirty={dirty || undefined}>
@@ -260,8 +240,6 @@ export function ProjectSettingsPanel({
           </div>
         </footer>
       </form>
-
-      <ProjectAskAgentSection project={project} onStarted={() => onSetupStarted?.()} />
 
       <section className="project-settings-section project-settings-section--danger" aria-labelledby="project-settings-danger">
         <header className="project-settings-head">

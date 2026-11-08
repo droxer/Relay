@@ -16,6 +16,7 @@ import {
   projectAttentionIssues,
   projectIssueMetrics,
   type ProjectAttentionIssue,
+  type ProjectIssueMetrics,
 } from "../lib/projectDashboard";
 import { taskRef } from "../lib/taskRef";
 import type { RelayTaskListItem } from "../types";
@@ -27,16 +28,24 @@ import { WorkspaceEmpty } from "./workspace/WorkspacePrimitives";
 interface ProjectDashboardProps {
   /** Who runs the project, shown above its numbers (`ProjectManagerLine`). */
   steward?: ReactNode;
+  /** A drafted proposal waiting on the owner (`ProjectSetupPanel`); it leads
+   *  the page, since nothing else moves until it is applied or discarded. */
+  review?: ReactNode;
+  /** What the project's agents propose and the way to ask them — the
+   *  context suggestions and the plan/refine request. A column beside the
+   *  attention list on a wide pane, below it on a narrow one. */
+  proposals?: ReactNode;
   tasks: RelayTaskListItem[];
   onOpenRecord: (taskId: string) => void;
   onOpenBoard: () => void;
 }
 
-/** The project at a glance: four counts and the issues that need a look.
- *  Flow readings (cycle time, throughput) and a per-stage breakdown used to
- *  sit here too; for a project of a handful of issues they restated these
- *  four tiles, so the board's own columns carry the stages instead. */
-export function ProjectDashboard({ steward, tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
+/** The project at a glance: four counts, the issues that need a look, and
+ *  what its agents propose. Flow readings (cycle time, throughput) and a
+ *  per-stage breakdown used to sit here too; for a project of a handful of
+ *  issues they restated these four tiles, so the board's own columns carry
+ *  the stages instead. */
+export function ProjectDashboard({ steward, review, proposals, tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => projectIssueMetrics(tasks), [tasks]);
   const attention = useMemo(() => projectAttentionIssues(tasks, undefined, Infinity), [tasks]);
@@ -52,62 +61,89 @@ export function ProjectDashboard({ steward, tasks, onOpenRecord, onOpenBoard }: 
     queryFn: skipToken,
   });
   const capacity = policy && usage ? (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <p className="m-0 text-ink-2">
-        {t("project.dashboard_user_wip", { count: usage.occupied, limit: policy.wipLimit })}
-      </p>
-      <a className="text-ink underline underline-offset-4" href={`/backlog?assignee=${encodeURIComponent(usage.userId)}`}>
+    <div className="project-dashboard-capacity">
+      <p>{t("project.dashboard_user_wip", { count: usage.occupied, limit: policy.wipLimit })}</p>
+      <a href={`/backlog?assignee=${encodeURIComponent(usage.userId)}`}>
         {t("project.dashboard_view_user_tasks")}
       </a>
     </div>
   ) : null;
 
-  if (metrics.total === 0) {
-    return (
-      <div className="project-dashboard project-dashboard--empty">
-        {steward}
-        {capacity}
-        <WorkspaceEmpty
-          title={t("project.dashboard_empty")}
-          hint={t("project.dashboard_empty_hint")}
-          mark={<span className="project-mark" aria-hidden="true"><NavProjects size={ICON.md} /></span>}
-        />
-        <Button type="button" variant="outline" size="dense" onClick={onOpenBoard}>
-          {t("project.dashboard_open_board")}
-        </Button>
-      </div>
-    );
-  }
-
-  const completedPercent = Math.round((metrics.done / metrics.total) * 100);
+  const empty = metrics.total === 0;
+  const main = empty ? (
+    /* No issues yet: one note and the way to the board, instead of a rail
+       of zeros. The proposals column stays, since asking the lead for a plan
+       is the natural first step in an empty project. */
+    <div className="project-dashboard-empty">
+      <WorkspaceEmpty
+        title={t("project.dashboard_empty")}
+        hint={t("project.dashboard_empty_hint")}
+        mark={<span className="project-mark" aria-hidden="true"><NavProjects size={ICON.md} /></span>}
+      />
+      <Button type="button" variant="outline" size="dense" onClick={onOpenBoard}>
+        {t("project.dashboard_open_board")}
+      </Button>
+    </div>
+  ) : (
+    <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
+  );
 
   return (
     <div className="project-dashboard">
       {steward}
-      <div className="adm-dash-kpis" role="group" aria-label={t("backlog.metrics")}>
-        <KpiTile
-          eyebrow={t("backlog.metric_total")}
-          value={metrics.total}
-          hint={t("project.dashboard_completed_share", { percent: completedPercent })}
-        />
-        <KpiTile
-          eyebrow={t("backlog.metric_active")}
-          value={metrics.active}
-        />
-        <KpiTile
-          eyebrow={t("backlog.metric_blocked")}
-          value={metrics.blocked}
-          tone={metrics.blocked > 0 ? "bad" : undefined}
-        />
-        <KpiTile
-          eyebrow={t("backlog.metric_overdue")}
-          value={metrics.overdue}
-          tone={metrics.overdue > 0 ? "bad" : undefined}
-        />
-      </div>
-
+      {review}
+      {empty ? null : <ProgressRail metrics={metrics} />}
       {capacity}
-      <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
+      <div className="project-dashboard-body">
+        <div className="project-dashboard-main">{main}</div>
+        {proposals ? <div className="project-dashboard-aside">{proposals}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+/** The four counts. Total carries the project's mix as a meter — done, in
+ *  progress, blocked — so progress reads before any number does. */
+function ProgressRail({ metrics }: { metrics: ProjectIssueMetrics }) {
+  const { t } = useTranslation();
+  const completedPercent = Math.round((metrics.done / metrics.total) * 100);
+  const segments = [
+    { key: "done", tone: "good", count: metrics.done },
+    { key: "active", tone: "live", count: metrics.active },
+    { key: "blocked", tone: "bad", count: metrics.blocked },
+  ].filter((segment) => segment.count > 0);
+  return (
+    <div className="adm-dash-kpis adm-dash-kpis--lean" role="group" aria-label={t("backlog.metrics")}>
+      <KpiTile
+        eyebrow={t("backlog.metric_total")}
+        value={metrics.total}
+        visual={(
+          <span className="adm-dash-bar adm-dash-tile-meter" aria-hidden="true">
+            {segments.map((segment) => (
+              <span
+                key={segment.key}
+                className={`adm-dash-bar-seg tone-${segment.tone}`}
+                style={{ flexBasis: `${(segment.count / metrics.total) * 100}%` }}
+              />
+            ))}
+          </span>
+        )}
+        hint={t("project.dashboard_completed_share", { percent: completedPercent })}
+      />
+      <KpiTile
+        eyebrow={t("backlog.metric_active")}
+        value={metrics.active}
+      />
+      <KpiTile
+        eyebrow={t("backlog.metric_blocked")}
+        value={metrics.blocked}
+        tone={metrics.blocked > 0 ? "bad" : undefined}
+      />
+      <KpiTile
+        eyebrow={t("backlog.metric_overdue")}
+        value={metrics.overdue}
+        tone={metrics.overdue > 0 ? "bad" : undefined}
+      />
     </div>
   );
 }
