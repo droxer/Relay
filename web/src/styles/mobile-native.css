@@ -14,6 +14,10 @@
   to { transform: translateY(100%); }
 }
 
+@keyframes tab-select {
+  50% { scale: 1.12; }
+}
+
 .more-sheet[data-dragging][data-ending-style] {
   animation: sheet-swipe-out var(--t-fast) var(--ease) forwards;
 }
@@ -99,6 +103,29 @@
   [data-slot="button"]:active:not(:disabled) {
     filter: opacity(0.6);
     transition-duration: 0s;
+  }
+
+  /* ── The tab bar's glyphs ──────────────────────────────────────────
+     A tab bar icon gives under the thumb and springs back on release, and
+     the tab that just became current pops once, the way a native bar marks
+     a switch. The press scale lives on the glyph, not the tab, so the label
+     and the Home count do not move. Tapping the current tab again scrolls
+     the screen to its top (SideNav, lib/tabReselect.ts). */
+  .sidenav-panel .sidenav-btn > svg {
+    transition: scale var(--t-slow) var(--ease);
+  }
+
+  /* The press takes hold at once, as a pressed row does; only the release
+     eases. A timed press-in was cancelled by every tap shorter than it. */
+  .sidenav-panel .sidenav-btn:active > svg {
+    scale: 0.86;
+    transition-duration: 0s;
+  }
+
+  /* The page's own tab only: More lights while its sheet is open, and a
+     sheet opening is not a switch. */
+  .sidenav-panel .sidenav-btn[aria-current="page"] > svg {
+    animation: tab-select var(--t-slow) var(--ease);
   }
 
   /* ── Menus and selects become action sheets ────────────────────────

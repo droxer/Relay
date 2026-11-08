@@ -711,6 +711,31 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
   await page.context().close();
 });
 
+test("tapping the current tab again scrolls the screen back to its top", async ({ browser }) => {
+  /* A native tab bar's second gesture (SideNav, lib/tabReselect.ts). At the
+     tab's root the URL cannot change, so the tap scrolls instead. The pane is
+     injected so the test owns a scroller of known height on any fixture. */
+  const page = await openPage(browser, "/home", true);
+  const homeTab = page.locator('.sidenav-panel [data-nav="home"]');
+  await expect(homeTab).toBeVisible();
+  await page.evaluate(() => {
+    const pane = document.createElement("div");
+    pane.id = "reselect-pane";
+    pane.style.cssText = "position:fixed;inset:60px 0 auto 0;height:200px;overflow:auto";
+    pane.innerHTML = '<div style="height:2000px"></div>';
+    document.querySelector(".messenger-shell")!.append(pane);
+    pane.scrollTop = 600;
+  });
+  const pane = page.locator("#reselect-pane");
+  expect(await pane.evaluate((element) => element.scrollTop)).toBe(600);
+
+  await homeTab.tap();
+
+  await expect.poll(() => pane.evaluate((element) => element.scrollTop)).toBe(0);
+  expect(new URL(page.url()).pathname).toBe("/home");
+  await page.context().close();
+});
+
 test("a drawer on a touch phone is dismissed by pulling its header down", async ({ browser }) => {
   /* A full-screen drawer is a sheet on a phone, and the native way out of a
      sheet is to pull it down (Drawer.tsx, useSheetDrag). A short pull springs

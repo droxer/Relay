@@ -22,6 +22,7 @@ import {
 } from "./icons";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
+import { isAtTabRoot, scrollPanesToTop } from "../lib/tabReselect";
 import { Button } from "@/components/ui/button";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { MobileMoreSheet, type MoreSheetGroup, type MoreSheetRoute } from "./MobileMoreSheet";
@@ -31,6 +32,8 @@ import {
 } from "../lib/sidenav";
 import { chatColumnWidth, viewportWidth } from "../lib/shellMetrics";
 import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 type MoreRoute = MoreSheetRoute & { adminOnly?: boolean };
 
@@ -124,6 +127,14 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   function handleRouteClick(event: MouseEvent<HTMLAnchorElement>, nextRoute: AppRoute) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
     event.preventDefault();
+    /* The tab you are on, tapped again at its root: the URL cannot change,
+       so do what a native tab bar does and scroll the screen to its top. */
+    if (nextRoute === route && isAtTabRoot(hrefForRoute(nextRoute), window.location)) {
+      const panel = event.currentTarget.closest(".sidenav-panel");
+      const shell = event.currentTarget.closest(".messenger-shell");
+      if (shell) scrollPanesToTop(shell, { exclude: panel, smooth: !window.matchMedia?.(REDUCED_MOTION_QUERY).matches });
+      return;
+    }
     onNavigateRoute(nextRoute);
   }
 
