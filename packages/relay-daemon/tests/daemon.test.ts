@@ -5419,3 +5419,207 @@ test("local execution cleans up descendants before waiting for inherited pipes",
     await running;
   }
 });
+
+for (const preparation of ["connections", "skills"] as const) {
+  for (const fault of ["reset", "truncated", "blackhole", "cancel", 503, 408, 429, 401, 403, 410] as const) {
+    test(`run preparation handles ${preparation} fault ${fault}`, { timeout: 45_000 }, async (t) => {
+      const root = mkdtempSync(join(tmpdir(), "relay-preparation-http-"));
+      const stop = new AbortController();
+      const content = Buffer.from("# Test skill\n");
+      const sha = createHash("sha256").update(content).digest("hex");
+      const command: DaemonNodeRunCommand = { ...runCommand(`prepare_${preparation}_${fault}`), workspacePath: root, leaseId: "lease_prepare" };
+      if (preparation === "connections") {
+        command.connections = [{ id: "grant", connectionId: "connection", resources: ["repo"], actions: ["read"], revision: 1 }];
+      } else {
+        command.skills = { contract: { name: "relay.agent.skills", version: 1 }, skills: [{
+          skillId: "test-skill", revisionId: "revision", slug: "test-skill", assignmentMode: "required",
+          manifestSha256: createHash("sha256").update(`SKILL.md\0${sha}\n`).digest("hex"),
+          files: [{ path: "SKILL.md", sha256: sha, bytes: content.length }],
+        }] };
+      }
+      const events: DaemonNodeEvent[] = [];
+      let commandServed = false;
+      let requests = 0;
+      let starts = 0;
+      const server = createServer(async (req, res) => {
+        const path = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (path.endsWith("/daemon-node-registrations")) return sendJson(res, 200, { ok: true });
+        if (path.endsWith("/commands")) {
+          sendJson(res, 200, { commands: commandServed ? [] : [command] });
+          commandServed = true;
+          return;
+        }
+        if (path.endsWith("/connections") || path.includes("/skill-blobs/")) {
+          await readRequest(req);
+          requests++;
+          if (requests === 1) {
+            if (fault === "reset") return req.socket.destroy();
+            if (fault === "cancel") { stop.abort(); return; }
+            if (fault === "blackhole") {
+              res.writeHead(200, { "Content-Type": "application/json", "Content-Length": "1000" });
+              res.write("{");
+              return; // Real response body stalls until the request deadline.
+            }
+            if (fault === "truncated") {
+              res.writeHead(200, { "Content-Type": "application/json", "Content-Length": "1000" });
+              res.write('{"token":');
+              setTimeout(() => res.destroy(), 10);
+              return;
+            }
+            return sendJson(res, fault, { error: "injected fault" });
+          }
+          if (preparation === "skills") {
+            assert.equal(path.split("/").at(-1), sha);
+            res.writeHead(200, { "Content-Type": "application/octet-stream" });
+            res.end(content);
+            return;
+          }
+          return sendJson(res, 200, { token: "run-scoped-test-credential" });
+        }
+        if (path.endsWith("/events")) {
+          const event = JSON.parse(await readRequest(req)) as DaemonNodeEvent;
+          events.push(event);
+          sendJson(res, 202, { ok: true });
+          if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) stop.abort();
+          return;
+        }
+        sendJson(res, 404, { error: "unexpected request" });
+      });
+      const deadline = setTimeout(() => stop.abort(), 40_000);
+      try {
+        if (!await listenOrSkip(server, t)) return;
+        const address = server.address() as AddressInfo;
+        await runRelayDaemon({
+          backendUrl: `http://127.0.0.1:${address.port}`, sandboxId: `sbx_prepare_${fault}`,
+          userId: "alice", workspacePath: root, token: "node_token", preflight: false,
+          pollIntervalMs: 10, shutdownGraceMs: 100, signal: stop.signal, logger: testLogger(),
+          environment: fakeEnvironment({ exec: async (_cmd, _args, options) => {
+            // Exercise daemon download/retry, with guest skill scripts isolated.
+            if (!options?.cwd?.startsWith(root)) return { exit_code: 0,
+              stdout: JSON.stringify({ validManifests: [], validBlobs: [], skillPaths: [], env: {} }), stderr: "" };
+            starts++;
+            options?.stdoutRenderer?.("done\n");
+            return { exit_code: 0, stdout: "done\n", stderr: "" };
+          } }),
+        });
+        if (fault === "cancel") {
+          assert.equal(requests, 1, "cancelled preparation must not retry");
+          assert.equal(starts, 0, "cancelled preparation must not start the agent");
+          return;
+        }
+        const permanent = typeof fault === "number" && [401, 403, 410].includes(fault);
+        assert.equal(requests, permanent ? 1 : 2, `preparation requests for ${fault}`);
+        assert.equal(starts, permanent ? 0 : 1, `agent starts for ${fault}: ${JSON.stringify(events.filter(e => e.type === "run.failed"))}`);
+        // Delivery is at least once: shutdown may replay an unacknowledged
+        // terminal post. There must be one outcome type and one agent start.
+        const outcomes = events.filter(e => ["run.completed", "run.failed", "run.cancelled"].includes(e.type));
+        assert.ok(outcomes.length >= 1, "expected a terminal outcome");
+        assert.deepEqual([...new Set(outcomes.map(e => e.type))], [permanent ? "run.failed" : "run.completed"]);
+      } finally {
+        clearTimeout(deadline);
+        stop.abort();
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
+for (const outageMs of [1000, 5000, 30_000]) {
+  test(`running agent survives a real HTTP outage of ${outageMs}ms`, { timeout: 60_000 }, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-live-http-outage-"));
+    const stop = new AbortController();
+    const command = { ...runCommand(`http_outage_${outageMs}`), workspacePath: root, leaseId: "outage-lease",
+      leaseExpiresAt: new Date(Date.now() + 1000).toISOString() };
+    let served = false;
+    let starts = 0;
+    let aborted = false;
+    let outageEnds = 0;
+    let failures = 0;
+    let firstRecoveredPollAt = 0;
+    let completedAt = 0;
+    const output: number[] = [];
+    const outcomes = new Set<string>();
+    const heartbeat = () => ({ intervalMs: 2000, timeoutMs: 10_000, observedAt: new Date().toISOString(),
+      commandLeases: [{ commandId: command.id, leaseId: command.leaseId, leaseExpiresAt: new Date(Date.now() + 1000).toISOString() }] });
+    const server = createServer(async (req, res) => {
+      const path = new URL(req.url ?? "/", "http://localhost").pathname;
+      const body = await readRequest(req);
+      if (Date.now() < outageEnds) {
+        const status = [503, 408, 429][failures++ % 3]!;
+        return sendJson(res, status, { error: "temporary network outage" });
+      }
+      if (path.endsWith("/daemon-node-registrations") || path.endsWith("/heartbeat")) {
+        return sendJson(res, 200, { heartbeat: heartbeat() });
+      }
+      if (path.endsWith("/commands")) {
+        if (outageEnds && !firstRecoveredPollAt) firstRecoveredPollAt = Date.now();
+        sendJson(res, 200, { commands: served ? [] : [command], heartbeat: heartbeat() });
+        served = true;
+        if (completedAt > 0) stop.abort();
+        return;
+      }
+      if (path.endsWith("/events")) {
+        const event = JSON.parse(body) as DaemonNodeEvent;
+        if (event.type === "run.output.batch") {
+          // Model the backend sequence fence, including an accepted post
+          // whose response is lost, so the daemon must replay it.
+          for (const entry of event.entries) if (!output.includes(entry.sequence)) output.push(entry.sequence);
+          if (output.length === event.entries.length && !completedAt) {
+            completedAt = -1;
+            req.socket.destroy();
+            return;
+          }
+        }
+        if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) {
+          outcomes.add(event.type);
+          completedAt = Date.now();
+        }
+        sendJson(res, 202, { ok: true });
+        if (completedAt > 0 && firstRecoveredPollAt) stop.abort();
+        return;
+      }
+      sendJson(res, 404, {});
+    });
+    const deadline = setTimeout(() => stop.abort(), 55_000);
+    try {
+      if (!await listenOrSkip(server, t)) return;
+      const address = server.address() as AddressInfo;
+      await runRelayDaemon({
+        backendUrl: `http://127.0.0.1:${address.port}`, sandboxId: `sbx_outage_${outageMs}`,
+        userId: "alice", workspacePath: root, token: "token", preflight: false,
+        pollIntervalMs: 20, commandPollWaitMs: 0, commandLeaseSeconds: 1,
+        unreachableGraceMs: 50_000, shutdownGraceMs: 100, signal: stop.signal, logger: testLogger(),
+        environment: fakeEnvironment({ exec: async (_cmd, _args, options) => {
+          if (!options?.cwd?.startsWith(root)) return { exit_code: 0, stdout: "", stderr: "" };
+          starts++;
+          outageEnds = Date.now() + outageMs;
+          options.stdoutRenderer?.("before recovery\n");
+          while (Date.now() < outageEnds + 200 && !options.signal?.aborted) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          aborted = Boolean(options.signal?.aborted);
+          options.stdoutRenderer?.("after recovery\n");
+          return { exit_code: 0, stdout: "done", stderr: "" };
+        } }),
+      });
+      assert.ok(failures > 0, "expected real HTTP failures during the run");
+      assert.equal(starts, 1);
+      assert.equal(aborted, false, "short outage must not cancel the agent");
+      assert.deepEqual([...outcomes], ["run.completed"]);
+      assert.ok(output.length >= 2, "expected output before and after recovery");
+      assert.deepEqual(output, [...output].sort((a, b) => a - b), "replayed output must stay ordered");
+      assert.ok(firstRecoveredPollAt >= outageEnds && firstRecoveredPollAt - outageEnds < 15_000,
+        `poll recovery took ${firstRecoveredPollAt - outageEnds}ms`);
+      assert.ok(completedAt >= outageEnds && completedAt - outageEnds < 20_000,
+        `terminal delivery took ${completedAt - outageEnds}ms`);
+    } finally {
+      clearTimeout(deadline);
+      stop.abort();
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
