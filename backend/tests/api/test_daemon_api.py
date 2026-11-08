@@ -11,7 +11,6 @@ import pytest
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.persistence.agent.placements import DatabaseAgentPlacementStore
@@ -159,7 +158,7 @@ def test_daemon_output_batch_preserves_order(monkeypatch) -> None:
         ]
 
 
-def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch, database_io_off_event_loop) -> None:
+def test_workspace_event_is_authorized_and_persists_response(monkeypatch, database_io_off_event_loop) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -175,14 +174,6 @@ def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch, da
                 "status": "ready",
             }
         )
-        received: list[tuple[str, str, dict]] = []
-
-        class Broker:
-            def resolve(self, command_id, sandbox_id, payload):
-                received.append((command_id, sandbox_id, payload))
-                return True
-
-        replace_app_context(app, workspace_query_broker=Broker())
         event = {
             "type": "workspace.listing",
             "commandId": "00000000-0000-4000-8000-000000000080",
@@ -206,9 +197,7 @@ def test_workspace_event_is_authorized_and_resolves_query_broker(monkeypatch, da
             headers={"Authorization": "Bearer node_token"},
         )
         assert response.status_code == 200
-        assert received == [
-            ("00000000-0000-4000-8000-000000000080", "sbx_workspace", event)
-        ]
+        assert app.state.daemon_store.get_workspace_response(event["commandId"]) == event
         assert (
             client.post(
                 "/api/v1/daemon-nodes/sbx_workspace/events",

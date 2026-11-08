@@ -294,3 +294,63 @@ for (const delivery of ["live", "replay"]) {
     assert.equal(restarted.pending().length, 0);
   });
 }
+
+for (const firstSender of ["live", "replay"] as const) {
+  test(`${firstSender} delayed output cannot lose chunks when live delivery races replay`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-output-race-"));
+    const outbox = new TerminalOutbox(root);
+    const output = (sequence: number) => ({ type: "run.output.batch", commandId: "cmd", leaseId: "lease",
+      entries: [{ stream: "stdout", text: `chunk-${sequence}`, sequence }] });
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const accepted: string[] = [];
+    let highWater = -1;
+    let delayed = false;
+    const backend: typeof fetch = async (_url, init) => {
+      const event = JSON.parse(String(init?.body));
+      if (!delayed) {
+        delayed = true;
+        entered.resolve();
+        await release.promise;
+      }
+      for (const entry of event.entries ?? []) {
+        // Match the backend's per-stream sequence high-water deduplication.
+        if (entry.sequence > highWater) {
+          highWater = entry.sequence;
+          accepted.push(entry.text);
+        }
+      }
+      return new Response("{}");
+    };
+    const live = outbox.wrapFetch(backend);
+    const send = (sequence: number) => live("http://backend/events", {
+      method: "POST", body: JSON.stringify(output(sequence)),
+    });
+    let inFlight: Promise<unknown> | undefined;
+    try {
+      outbox.retain(output(0));
+      inFlight = firstSender === "live" ? send(0) : outbox.replay(backend, "http://backend/events", "token");
+      await entered.promise;
+      // A later live batch must not pass the unacknowledged predecessor.
+      assert.equal((await send(1)).status, 503);
+      if (firstSender === "live") await outbox.replay(backend, "http://backend/events", "token");
+      else {
+        assert.equal((await send(0)).status, 200);
+        assert.equal((await send(1)).status, 200);
+      }
+      assert.equal((await send(2)).status, 200);
+      // The delayed duplicate arrives after newer sequences; dedupe is safe
+      // because a successful copy of every predecessor was already accepted.
+      release.resolve();
+      await inFlight;
+      await outbox.replay(backend, "http://backend/events", "token");
+      assert.deepEqual(accepted, ["chunk-0", "chunk-1", "chunk-2"]);
+      assert.equal(outbox.pending().length, 0);
+    } finally {
+      release.resolve();
+      await inFlight;
+      await outbox.flush();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

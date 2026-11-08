@@ -94,3 +94,25 @@ the owner that has authority to act.
   the command poll. An event the backend refuses because it names a command,
   lease, or run the node does not hold answers `409`, never `401`: the
   credential is fine, and a daemon must not stop over one run's report.
+
+## Command notification recovery
+
+Command polls wake on committed queue notifications. With a PostgreSQL bridge
+that has completed `LISTEN`, an idle poll re-reads the queue every five seconds
+as a recovery path for missed notifications. SQLite and disconnected bridges
+use a one-second recovery interval. Each tick rechecks bridge health; a bridge
+lost during a five-second wait switches to the faster fallback on the next tick.
+Notifications still wake polls immediately.
+
+The wait is also capped at one third of the requested command lease and one
+fifth of the node liveness timeout, so longer recovery waits do not delay lease
+renewal or cause an idle node to appear offline. These intervals bound recovery
+reads rather than guaranteed end-to-end dispatch latency under load.
+
+Output batches are retained before sending and live output cannot pass an
+unacknowledged earlier sequence for the same command lease. Replay sends the
+pending sequences in order. Concurrent live/replay copies may arrive late, but
+only after a successful copy allowed the next sequence to proceed; backend
+per-stream high-water deduplication then suppresses those duplicates. A failed
+output upload does not prevent terminal evidence from releasing the run;
+retained output can be replayed after completion.
