@@ -3317,6 +3317,86 @@ test("relay daemon runs concurrent commands within capacity", async () => {
   assert.equal(events.some((event) => event.type === "run.failed"), false);
 });
 
+for (const sameAgent of [false, true]) {
+  test(`relay daemon isolates concurrent Codex runs with ${sameAgent ? "one Logical Agent" : "multiple Logical Agents"}`, { timeout: 10_000 }, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-agent-concurrency-"));
+    const stop = new AbortController();
+    t.after(() => { stop.abort(); rmSync(root, { recursive: true, force: true }); });
+    const events: DaemonNodeEvent[] = [];
+    const started = new Set<number>();
+    let served = false;
+    let cancelSent = false;
+    let cancelled = false;
+    const commands: DaemonNodeRunCommand[] = [0, 1, 2].map((index) => ({
+      ...runCommand(`cmd_parallel_${index}`),
+      sessionId: `ses_parallel_${index}`, runId: `run_parallel_${index}`,
+      taskGoal: `parallel-marker-${index}`, workspacePath: root,
+      workspaceLayout: "task", workspaceSubpath: `tasks/parallel-${index}`,
+      logicalAgentId: sameAgent ? "agent_one" : `agent_${index}`,
+    }));
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+      workspacePath: root, token: "node_token", pollIntervalMs: 5,
+      shutdownGraceMs: 100, maxConcurrentRuns: 3, logger: testLogger(), signal: stop.signal,
+      environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        const match = args?.[1]?.match(/parallel-marker-(\d)/);
+        assert.ok(match, "execution must retain its task prompt");
+        const index = Number(match[1]);
+        assert.equal(options?.cwd, join(root, `tasks/parallel-${index}`));
+        assert.equal(started.has(index), false, "redelivery must not spawn twice");
+        started.add(index);
+        const output = `output-for-${index}\n`;
+        options?.sink?.(options?.stdoutRenderer?.(output) ?? output);
+        while (index === 0 ? !options?.signal?.aborted : !cancelled) {
+          if (stop.signal.aborted) throw new Error("daemon stopped before isolation was verified");
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        if (index !== 0) assert.equal(options?.signal?.aborted, false);
+        return { exit_code: index === 0 ? 130 : 0, stdout: output, stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!served) { served = true; return jsonResponse({ commands: [...commands, commands[0]] }); }
+          if (started.size === 3 && !cancelSent) {
+            cancelSent = true;
+            return jsonResponse({ commands: [{
+              id: "cancel_parallel_0", type: "run.cancel", commandId: commands[0].id,
+              sessionId: commands[0].sessionId, runId: commands[0].runId, reason: "cancel only first",
+            }] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.cancelled") cancelled = true;
+          if (events.filter((item) => item.type === "run.completed").length === 2) stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    assert.equal(started.size, 3, "all three executions overlap before cancellation");
+    assert.deepEqual(events.flatMap((event) => event.type === "run.cancelled" ? [event.commandId] : []), [commands[0].id]);
+    assert.equal(events.some((event) => event.type === "run.failed"), false);
+    for (const command of commands) {
+      const terminal = events.find((event) => (event.type === "run.completed" || event.type === "run.cancelled") && event.commandId === command.id);
+      assert.ok(terminal && (terminal.type === "run.completed" || terminal.type === "run.cancelled"));
+      assert.equal(terminal.sessionId, command.sessionId);
+      assert.equal(terminal.runId, command.runId);
+      const index = commands.indexOf(command);
+      assert.ok(terminal.agentLog?.includes(`output-for-${index}`));
+      for (const other of [0, 1, 2].filter((value) => value !== index)) {
+        assert.equal(terminal.agentLog?.includes(`output-for-${other}`), false);
+      }
+    }
+  });
+}
+
 test("relay daemon stops while retrying a busy-command rejection event", async () => {
   const stop = new AbortController();
   let closeCount = 0;
@@ -4410,6 +4490,75 @@ for (const workspaceLayout of ["task", "node-root"] as const) {
     assert.equal(events.some((event) => event.type === "run.failed"), false);
   });
 }
+
+test("relay daemon starts an independent workspace while another run waits on a held one", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-ws-fair-"));
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  const order: string[] = [];
+  let commandServed = false;
+  let independentStarted: () => void = () => undefined;
+  const independent = new Promise<void>((resolve) => { independentStarted = resolve; });
+  const shared = (name: string, subpath: string): DaemonNodeRunCommand => ({
+    ...runCommand(`cmd_${name}`),
+    sessionId: `ses_${name}`,
+    runId: `run_${name}`,
+    taskGoal: `fair-goal-${name}`,
+    workspacePath: root,
+    workspaceLayout: "task",
+    workspaceSubpath: subpath,
+  });
+  const commands = [shared("a1", "tasks/a"), shared("a2", "tasks/a"), shared("b1", "tasks/b")];
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_test",
+    userId: "alice",
+    workspacePath: root,
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 100,
+    maxConcurrentRuns: 3,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      exec: async (_cmd, args) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        const name = ["a1", "a2", "b1"].find((item) => args?.[1]?.includes(`fair-goal-${item}`)) ?? "?";
+        order.push(`${name}:start`);
+        if (name === "b1") independentStarted();
+        // The holder of workspace A cannot finish until the independent run is
+        // already executing, so a daemon that parks B behind A deadlocks here.
+        if (name === "a1") await Promise.race([independent, new Promise((resolve) => setTimeout(resolve, 2000))]);
+        order.push(`${name}:done`);
+        return { exit_code: 0, stdout: "done\n", stderr: "" };
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+      if (path.endsWith("/commands")) {
+        if (!commandServed) {
+          commandServed = true;
+          return jsonResponse({ commands });
+        }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        events.push(event);
+        if (events.filter((item) => item.type === "run.completed").length === 3) stop.abort();
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  rmSync(root, { recursive: true, force: true });
+
+  assert.ok(order.indexOf("b1:start") < order.indexOf("a1:done"), order.join(","));
+  assert.ok(order.indexOf("a2:start") > order.indexOf("a1:done"), order.join(","));
+  assert.equal(events.some((event) => event.type === "run.failed"), false);
+});
 
 for (const deletedDuring of ["registration", "poll"]) {
   test(`daemon stops instead of retrying when deletion is reported during ${deletedDuring}`, async () => {

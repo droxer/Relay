@@ -336,6 +336,27 @@ class RunRequestRows(DaemonStoreState):
                 expires_at = state.get(DISPATCH_CLAIM_EXPIRES_STATE_KEY)
                 if expires_at and require_db_time(expires_at) > require_db_time(now):
                     return None
+            # Admission may have read a stale capacity snapshot on another
+            # replica. Serialize the actual reservation on the node row, just
+            # like request creation. Include unpublished staged commands and
+            # claims not yet staged; both can still become executing runs.
+            node = conn.execute(select(self.nodes).where(
+                self.nodes.c.id == row["node_id"]
+            ).with_for_update()).mappings().one()
+            reserved_sessions = set(conn.execute(select(self.runs.c.session_id).where(
+                self.runs.c.node_id == row["node_id"],
+                self.runs.c.status.in_(("pending", "running")),
+            )).scalars())
+            reserved_sessions.update(conn.execute(select(self.run_requests.c.session_id).where(
+                self.run_requests.c.node_id == row["node_id"],
+                self.run_requests.c.status == "dispatching",
+                self.run_requests.c.id != request_id,
+            )).scalars())
+            # Recovery of this request's unpublished command reuses its slot.
+            reserved_sessions.discard(request["sessionId"])
+            capacity = node["max_concurrent_runs"] or 1
+            if len(reserved_sessions) >= max(1, capacity):
+                return None
             state.update(
                 {
                     DISPATCH_CLAIM_ID_STATE_KEY: claim_id,

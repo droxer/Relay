@@ -98,6 +98,9 @@ class RegistryState:
         def _enqueue_current_assignment(self, run_request: dict[str, Any], *, active_runs: list[dict[str, Any]] | None=None, validate_logical_assignment: bool=True) -> dict[str, Any]:
             ...
 
+        def _workspace_contended(self, run_request: dict[str, Any], node_id: str, node_runs: list[dict[str, Any]]) -> bool:
+            ...
+
         def _ensure_agent_started_for_command(self, run_request: dict[str, Any], command: dict[str, Any]) -> None:
             ...
 

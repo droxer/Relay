@@ -9,7 +9,8 @@ from typing import Any
 
 
 from ...core.computer_identity import computer_id
-from ..scheduling import node_accepts_run
+from ..scheduling import node_accepts_run, normalize_run_capacity
+from ..workspace_contention import session_workspace_key, workspace_is_contended, workspace_key
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
 from ...agents.routing import (
     placement_node,
@@ -216,14 +217,63 @@ class RunTargetValidationMixin(NodeBackendState):
                 raise ValueError(
                     f"Sandbox {node_id} does not have ready agent {executor_kind}."
                 )
+            workspace_deferred = self._deferrable_for_workspace(
+                node, request, active_runs_by_node[node_id]
+            )
             if not node_accepts_run(
                 node,
                 active_runs=active_runs_by_node[node_id],
                 session_id=request.get("sessionId"),
-            ):
+            ) and not workspace_deferred:
                 raise ValueError(
                     f"capacity_exhausted: Sandbox {node_id} has no available execution slot."
                 )
+
+    def _deferrable_for_workspace(
+        self,
+        node: dict[str, Any],
+        request: dict[str, Any],
+        active_runs: builtins.list[dict[str, Any]],
+    ) -> bool:
+        """A full node still admits a run that must wait for a held workspace.
+
+        Admission keeps it durable and unreserved (delivery defers it until the
+        holder exits), so it takes no slot an independent workspace needs. The
+        deferred queue is bounded by the node's own capacity.
+        """
+        node_id = node["id"]
+        session_id = request.get("sessionId")
+        node_requests = self.registry.daemon_store.list_active_run_requests(node_id)
+        undelivered = [
+            queued for queued in node_requests
+            if not queued.get("currentCommandId") and queued.get("status") == "running"
+        ]
+        keys: dict[str, str | None] = {}
+
+        def key_of_session(other: str) -> str | None:
+            if other not in keys:
+                try:
+                    keys[other] = session_workspace_key(self.registry.store.get_session_header(other))
+                except KeyError:
+                    keys[other] = None
+            return keys[other]
+
+        contended = workspace_is_contended(
+            key=workspace_key(
+                request.get("workspaceLayout"), request.get("workspaceSubpath"), session_id
+            ),
+            session_id=session_id,
+            request_id=None,
+            created_order=None,
+            active_runs=active_runs,
+            node_requests=node_requests,
+            key_of_session=key_of_session,
+        )
+        if contended and len(undelivered) >= normalize_run_capacity(node):
+            raise ValueError(
+                f"capacity_exhausted: Sandbox {node_id} workspace wait queue is full."
+            )
+        return contended
 
     def _validate_existing_session_computer(
         self,

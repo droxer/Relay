@@ -45,7 +45,8 @@ test('real stdio process forwards initialization, discovery and calls to the Pyt
  try{
   const tokenFile=join(home,'mcp.token');writeFileSync(tokenFile,token,{mode:0o600});
   const config=join(home,'config.json');writeFileSync(config,JSON.stringify({backendUrl:server.url,tokenFile}));
-  const child=spawn(process.execPath,[fileURLToPath(new URL('../src/relay-mcp.js',import.meta.url)),'--config',config]);
+  // This fixture exercises standalone credentials, even inside a managed run.
+  const child=spawn(process.execPath,[fileURLToPath(new URL('../src/relay-mcp.js',import.meta.url)),'--config',config],{env:{...process.env,RELAY_MCP_RUN_CONTEXT:''}});
   let output='';let stderr='';child.stdout.on('data',chunk=>{output+=chunk;});child.stderr.on('data',chunk=>{stderr+=chunk;});
   child.stdin.end([
    {jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'test',version:'1'}}},
@@ -64,7 +65,10 @@ test('real stdio process forwards initialization, discovery and calls to the Pyt
 test('bootstrap preserves credentials and Pi registers only tools discovered from the Python backend',async()=>{
  const {bootstrapRelayMcp}=await import('../src/relay-mcp-bootstrap.js');const {pathToFileURL}=await import('node:url');
  const home=mkdtempSync(join(tmpdir(),'relay-mcp-bootstrap-'));const server=await fixtureServer('relay_mcp_private');
+ const managedContext=process.env.RELAY_MCP_RUN_CONTEXT;
  try{
+  // The generated Pi extension inherits process.env when it starts its bridge.
+  process.env.RELAY_MCP_RUN_CONTEXT='';
   let issued=0;
   const options={home,stateDir:join(home,'private'),sandboxId:'computer',backendUrl:server.url,nodeToken:'node-secret',env:{},runtimes:['codex','pi'],fetchFn:(async(_url:unknown,request:RequestInit)=>{
    assert.equal((request.headers as any).Authorization,'Bearer node-secret');
@@ -82,5 +86,9 @@ test('bootstrap preserves credentials and Pi registers only tools discovered fro
    assert.equal(registered[0].parameters[Symbol.for('TypeBox.Kind')],'Object');
    assert.equal(registered[0].parameters.properties.operations.items.properties.kind[Symbol.for('TypeBox.Kind')],'Union');
   }finally{await events.get('session_shutdown')!();}
- }finally{await server.close();rmSync(home,{recursive:true,force:true});}
+ }finally{
+  if(managedContext===undefined)delete process.env.RELAY_MCP_RUN_CONTEXT;
+  else process.env.RELAY_MCP_RUN_CONTEXT=managedContext;
+  await server.close();rmSync(home,{recursive:true,force:true});
+ }
 });

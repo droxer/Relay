@@ -710,6 +710,28 @@ full `npm test`.
   `--print-streaming`; otherwise fall back to `-p`.
 
 
+### Concurrent Agent Runtime scheduling
+
+`RELAY_DAEMON_MAX_CONCURRENT_RUNS` bounds simultaneous runs on a Computer
+(default three), independently of Logical Agent identity or Agent Runtime
+kind. Multiple Logical Agents may use Codex concurrently, and one Logical
+Agent may execute distinct Tasks concurrently when their workspaces differ.
+Each run keeps its own command, Thread, output, and cancellation identity.
+The same Task and concurrent turns of the same Thread remain exclusive.
+
+Runs sharing a Project directory or another physical workspace remain serial.
+The backend leaves known workspace contenders undelivered so an independent
+workspace can use a free slot. It bounds active run requests to twice the
+Computer's capacity to accommodate waiters; this queue bound does not raise
+execution capacity. A database dispatch claim atomically reserves execution
+capacity across backend replicas, including commands staged but not yet
+published. A full Computer refuses new independent work with
+`capacity_exhausted`; callers may retry when a slot opens.
+
+The daemon's physical-path locks remain authoritative for aliases and access
+from multiple daemons. This scheduling behavior does not isolate concurrent
+writes to one Project directory or bypass reservations with unconfirmed exits.
+
 ### Diagnosing cancellation without discarding exit evidence
 
 A connected computer can still have an unconfirmed agent exit. Check daemon
