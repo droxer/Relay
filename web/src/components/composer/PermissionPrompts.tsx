@@ -1,4 +1,3 @@
-import { ThreadPrompt } from "../ThreadPrompt";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PermissionAnswers, PermissionQuestionItem, PermissionRequest } from "relay-core";
@@ -111,7 +110,6 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
     ? t("permission.question_title", { agent })
     : t("permission.title", { agent, tool: request.toolName });
   return (
-    <ThreadPrompt title={title}>
     <div ref={cardRef} className="permission-prompt" role="group" aria-labelledby={`${id}-title`} data-question={question || undefined}>
       <p role="status" className="sr-only">{announced && primary ? title : ""}</p>
       <div className="permission-prompt-head">
@@ -194,7 +192,6 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
         )}
       </div>
     </div>
-    </ThreadPrompt>
   );
 }
 

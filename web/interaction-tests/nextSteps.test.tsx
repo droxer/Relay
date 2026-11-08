@@ -9,7 +9,7 @@ it("sends a suggested next step in one click", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Add tests for the parser" }));
   await waitFor(() => expect(onSend).toHaveBeenCalledWith("Add tests for the parser"));
   // Nothing else can be sent while that one goes out.
-  for (const button of screen.getByRole("region", { name: "next_steps.title" }).querySelectorAll("button")) expect((button as HTMLButtonElement).disabled).toBe(true);
+  for (const button of screen.getByRole("list").querySelectorAll("button")) expect((button as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("unlocks the suggestions when the send did not go through", async () => {
@@ -24,4 +24,16 @@ it("unlocks the suggestions when the send did not go through", async () => {
 it("renders nothing without a suggestion", () => {
   const { container } = render(<NextSteps steps={[]} onSend={vi.fn()} />);
   expect(container.innerHTML).toBe("");
+});
+
+it("folds the suggestions from their heading without sending one", () => {
+  const onSend = vi.fn(async () => true);
+  render(<NextSteps steps={["Ship it"]} onSend={onSend} />);
+  const toggle = screen.getByRole("button", { name: "next_steps.title" });
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByRole("button", { name: "Ship it" })).toBeNull();
+  expect(onSend).not.toHaveBeenCalled();
+  fireEvent.click(toggle);
+  expect(screen.getByRole("button", { name: "Ship it" })).toBeTruthy();
 });

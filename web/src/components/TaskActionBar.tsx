@@ -1,5 +1,4 @@
 "use client";
-import { ThreadPrompt } from "./ThreadPrompt";
 
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,6 @@ export function TaskActionBar({ task, busy, deferPrimary = false, onAccept, onUn
   const { t } = useTranslation();
   const review = task.status === "review";
   return (
-    <ThreadPrompt title={t("thread.lifecycle.action_label")}>
     <section className="task-action-bar" data-status={task.status} aria-label={t("thread.lifecycle.action_label")}>
       <TaskStatusIcon status={task.status} className="task-action-bar-icon" />
       <p className="task-action-bar-text">
@@ -62,6 +60,5 @@ export function TaskActionBar({ task, busy, deferPrimary = false, onAccept, onUn
         )}
       </div>
     </section>
-    </ThreadPrompt>
   );
 }

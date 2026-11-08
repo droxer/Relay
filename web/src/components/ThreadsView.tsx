@@ -29,7 +29,6 @@ import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProj
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { QueuedRunCard } from "./QueuedRunCard";
 import { queuedRun } from "../lib/queuedRun";
-import { ThreadPrompt } from "./ThreadPrompt";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
 import { NextSteps } from "./NextSteps";
 import { awaitingInput } from "../lib/awaitingInput";
@@ -740,14 +739,13 @@ export function ThreadsView({
               onMarkDone={() => sendDecision("mark_done")}
             />
           ) : awaitingDecision ? null : actionTask?.status === "review" && !running ? (
-            <ThreadPrompt key={`${activeSession?.id}:${actionTask.id}`} title={t("task_review.title")}>
-              <TaskReviewPanel
-                taskId={actionTask.id}
-                compact
-                deferPrimary={awaitingDecision}
-                onRequestChanges={() => composerRef.current?.focus()}
-              />
-            </ThreadPrompt>
+            <TaskReviewPanel
+              key={actionTask.id}
+              taskId={actionTask.id}
+              compact
+              deferPrimary={awaitingDecision}
+              onRequestChanges={() => composerRef.current?.focus()}
+            />
           ) : actionTask && !running ? (
             <TaskActionBar
               key={`${activeSession?.id}:${actionTask.id}:${actionTask.status}`}

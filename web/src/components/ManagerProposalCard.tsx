@@ -45,9 +45,11 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
-  return <ThreadPrompt title={t("project_manager.changes")}><section className="manager-proposal" aria-label={t("project_manager.changes")}>
-    <h3>{t("project_manager.changes")}</h3>
-    <p role="status">{t(`project_manager.proposal_${proposal.state}`)}</p>
+  // A settled proposal rests folded to one line that still says how it ended.
+  const status = t(`project_manager.proposal_${proposal.state}`);
+  return <ThreadPrompt className="manager-proposal" title={t("project_manager.changes")}
+    summary={pending ? undefined : status} defaultCollapsed={!pending}>
+    <p role="status">{status}</p>
     {proposal.operations.map(op => {
       const fields = edits[op.id] ?? op.fields;
       const label = op.title || fields.title || op.taskId || op.key || op.id;
@@ -77,5 +79,5 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     })}
     {error ? <p role="alert">{error}</p> : null}
     {pending ? <div className="manager-actions"><Button disabled={disabled || busy || selected.length === 0} onClick={() => void apply()}>{t("project_manager.apply")}</Button><Button variant="ghost" disabled={disabled || busy} onClick={() => void dismiss()}>{t("project_manager.dismiss")}</Button></div> : null}
-  </section></ThreadPrompt>;
+  </ThreadPrompt>;
 }

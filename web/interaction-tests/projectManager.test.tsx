@@ -179,28 +179,43 @@ it('polls for staged proposals only while the thread runs, and reads once when i
  }finally{vi.useRealTimers();}
 });
 
-it.each(['pending','applied','dismissed'] as const)('closes a %s proposal without changing it and can show it again', state=>{
- wrap(<ManagerProposalCard projectId="p" proposal={{...proposal,state}} disabled={false} onChanged={vi.fn()} />);
- if(state==='pending') fireEvent.change(screen.getByRole('textbox',{name:'project_manager.field_title'}),{target:{value:'Keep my edit'}});
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.close'}));
- expect(screen.queryByRole('region',{name:'project_manager.changes'})).toBeNull();
+const toggle=()=>screen.getByRole('button',{name:/^project_manager\.changes/});
+
+it('folds a pending proposal from its heading without changing it, keeping the draft',()=>{
+ wrap(<ManagerProposalCard projectId="p" proposal={proposal} disabled={false} onChanged={vi.fn()} />);
+ fireEvent.change(screen.getByRole('textbox',{name:'project_manager.field_title'}),{target:{value:'Keep my edit'}});
+ expect(toggle().getAttribute('aria-expanded')).toBe('true');
+ fireEvent.click(toggle());
+ expect(toggle().getAttribute('aria-expanded')).toBe('false');
+ expect(screen.queryByRole('textbox',{name:'project_manager.field_title'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'project_manager.apply'})).toBeNull();
  expect(api.dismiss).not.toHaveBeenCalled();expect(api.apply).not.toHaveBeenCalled();
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.show'}));
- expect(screen.getByRole('region',{name:'project_manager.changes'})).toBeTruthy();
- if(state==='pending') expect((screen.getByRole('textbox',{name:'project_manager.field_title'}) as HTMLInputElement).value).toBe('Keep my edit');
+ fireEvent.click(toggle());
+ expect((screen.getByRole('textbox',{name:'project_manager.field_title'}) as HTMLInputElement).value).toBe('Keep my edit');
 });
 
-it('keeps a closed proposal closed through refresh and shows a newly staged proposal',async()=>{
+it.each(['applied','dismissed','superseded','expired'] as const)('rests a %s proposal folded to one line that says how it ended',state=>{
+ wrap(<ManagerProposalCard projectId="p" proposal={{...proposal,state}} disabled={false} onChanged={vi.fn()} />);
+ expect(toggle().getAttribute('aria-expanded')).toBe('false');
+ expect(toggle().textContent).toContain(`project_manager.proposal_${state}`);
+ expect(screen.queryByRole('group')).toBeNull();
+ fireEvent.click(toggle());
+ expect(screen.getAllByRole('group').length).toBeGreaterThan(0);
+});
+
+it('folds a proposal once it is applied, and keeps a folded proposal folded through refresh',async()=>{
  const {ProjectManagerProposals}=await import('../src/components/ProjectManagerProposals');
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
  api.get.mockResolvedValue({proposals:[proposal]});
  render(<QueryClientProvider client={client}><ProjectManagerProposals projectId="p" threadId="thread" readOnly={false} running={false} /></QueryClientProvider>);
  await screen.findByRole('region',{name:'project_manager.changes'});
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.close'}));
+ expect(toggle().getAttribute('aria-expanded')).toBe('true');
+ fireEvent.click(toggle());
  await act(async()=>{await client.invalidateQueries({queryKey:['project-manager','p']});});
- expect(screen.queryByRole('region',{name:'project_manager.changes'})).toBeNull();
- api.get.mockResolvedValue({proposals:[proposal,{...proposal,id:'new-proposal'}]});
+ expect(toggle().getAttribute('aria-expanded')).toBe('false');
+ fireEvent.click(toggle());
+ api.get.mockResolvedValue({proposals:[{...proposal,state:'applied'}]});
  await act(async()=>{await client.invalidateQueries({queryKey:['project-manager','p']});});
- await waitFor(()=>expect(screen.getAllByRole('region',{name:'project_manager.changes'})).toHaveLength(1));
- expect(screen.getByRole('button',{name:'thread_prompt.show'})).toBeTruthy();
+ await waitFor(()=>expect(toggle().getAttribute('aria-expanded')).toBe('false'));
+ expect(toggle().textContent).toContain('project_manager.proposal_applied');
 });
