@@ -130,6 +130,71 @@ for (const mobile of [false, true]) {
   });
 }
 
+for (const [mobile, theme] of [[false, "light"], [true, "dark"]] as const) {
+  test(`agent proposals live on the Dashboard (${mobile ? "mobile" : "desktop"}, ${theme})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const stamp = "2026-09-01T00:00:00Z";
+    let project: Record<string, unknown> = {
+      id: "launch", name: "Autumn launch", context: "- Ship on Fridays", ownerUserId: "u", computerId: "c", enabled: true,
+      members: [{ agentId: "lead", role: "lead", enabled: true }], leadAgentId: "lead", version: 3,
+      workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp,
+      contextSuggestions: [
+        { id: "s1", text: "Release notes go in CHANGELOG.md", evidence: "Two runs wrote them elsewhere", threadId: "th", runId: "r1" },
+        { id: "s2", text: "Use the staging computer for previews", threadId: "th", runId: "r2" },
+      ],
+    };
+    const task = { id: "task_1abcdef", title: "Resolve the deployment issue", projectId: "launch", status: "blocked", workflowStage: "running",
+      description: "", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp };
+    const patches: Array<Record<string, any>> = [];
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [task], sandboxes: [], skills: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme, language: "en" } };
+      if (path.endsWith("/projects/launch") && route.request().method() === "PATCH") {
+        const input = route.request().postDataJSON();
+        patches.push(input);
+        const resolved: string[] = input.resolveContextSuggestions ?? [];
+        project = {
+          ...project,
+          ...(input.context === undefined ? {} : { context: input.context }),
+          contextSuggestions: (project.contextSuggestions as Array<{ id: string }>).filter((item) => !resolved.includes(item.id)),
+          version: (project.version as number) + 1,
+        };
+        body = { project };
+      } else if (path.endsWith("/projects/launch")) body = { project };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    });
+
+    await page.goto("/projects/launch");
+    const suggestions = page.getByRole("region", { name: /Suggested by your agents/ });
+    await expect(suggestions).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ask an agent", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-dashboard-proposals-${mobile ? "mobile" : "desktop"}-${theme}.png`, fullPage: true });
+
+    // Adopting commits at once: the line joins the context in the same
+    // revision that resolves the suggestion. Dismissing only resolves.
+    await suggestions.getByRole("button", { name: "Add to context", exact: true }).first().click();
+    await expect.poll(() => patches.length).toBe(1);
+    expect(patches[0]).toEqual({
+      expectedVersion: 3,
+      resolveContextSuggestions: ["s1"],
+      context: "- Ship on Fridays\n- Release notes go in CHANGELOG.md",
+    });
+    await expect(suggestions.getByText("Release notes go in CHANGELOG.md")).toHaveCount(0);
+    await suggestions.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect.poll(() => patches.length).toBe(2);
+    expect(patches[1]).toEqual({ expectedVersion: 4, resolveContextSuggestions: ["s2"] });
+    await expect(suggestions).toHaveCount(0);
+
+    // Settings keeps the brief and the danger zone; proposals left it.
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(page.getByRole("form", { name: "Details", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ask an agent", exact: true })).toHaveCount(0);
+  });
+}
+
 test("creating the first project preserves a global task draft", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
   const projects: any[] = [];
