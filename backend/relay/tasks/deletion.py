@@ -63,9 +63,8 @@ def delete_task(
     execution_lifecycle: Any = None,
 ) -> TaskDeletionResult:
     engine = getattr(ctx.task_store, "engine", None)
-    # Lock before any task row is changed. Two replicas deleting tasks that
-    # share a thread must see each other's committed tombstones before deciding
-    # whether to preserve it. A common lock also keeps cascade lock order stable.
+    # Lock before any task row is changed. Concurrent deletions that share a
+    # thread must serialize their cascades and keep the same row lock order.
     transaction = (
         resource_transaction(engine, TASK_DELETION_LOCK)
         if engine is not None else nullcontext()
@@ -140,14 +139,12 @@ def _delete_task_threads(
     ctx: TaskDeletionContext, task_id: str, session_ids: list[str],
     deleted_by: str | None, execution_lifecycle: Any,
 ) -> None:
-    """A deleted task takes its threads with it, except one another live task also ran in."""
+    """Delete all linked activity, unlinking other tasks without deleting them."""
     controller = SessionController(ctx.session_store, task_store=ctx.task_store)
     for session_id in session_ids:
         try:
             session = ctx.session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):
-            continue
-        if ctx.task_store.list_tasks_for_session(session_id):
             continue
         if execution_lifecycle and not execution_lifecycle.status(session)["canDelete"]:
             raise TaskExecutionActiveError(task_id)

@@ -140,8 +140,8 @@ class SessionLifecycleMixin(SessionControllerState):
         ):
             raise SessionRunInFlightError(session_id)
         if self.task_store:
-            # One transaction unlinks the thread from its tasks, deletes any
-            # task it orphans, and deletes the thread.
+            # One transaction unlinks the thread from its tasks and deletes
+            # the thread. Tasks and automation runs keep their own lifecycle.
             if not self.store.delete_session_with_task_unlinks(
                 session_id, self.task_store, deleted_by=deleted_by
             ):

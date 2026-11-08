@@ -38,8 +38,8 @@ def test_concurrent_task_deletes_remove_the_shared_thread(monkeypatch) -> None:
         for task in records:
             tasks.link_session(task["id"], session["id"])
 
-        # Without cross-replica coordination, both tombstones are uncommitted
-        # when each transaction checks whether the other task still needs the thread.
+        # Cross-replica coordination serializes cascades that would otherwise
+        # race to delete the same thread and unlink each other's tasks.
         barrier = Barrier(2)
         original = tasks.delete_task
 

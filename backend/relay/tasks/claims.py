@@ -1,4 +1,4 @@
-"""Task dispatch claims and the task-lifetime rules that read them."""
+"""Task dispatch claims and their lease checks."""
 
 from __future__ import annotations
 
@@ -11,20 +11,6 @@ from ..core.timestamps import parse_iso
 
 class TaskExecutionActiveError(RuntimeError):
     pass
-
-
-def orphaned_by_thread_delete(task: dict[str, Any]) -> bool:
-    """A task whose last thread was just deleted goes with it.
-
-    An automation outlives any one run, a task with other rounds keeps them,
-    and a task mid-dispatch is about to get a new thread.
-    """
-    return not (
-        task.get("isRoutine")
-        or task.get("deletedAt")
-        or task.get("linkedSessionIds")
-        or dispatch_claim_active(task)
-    )
 
 
 def new_dispatch_claim(

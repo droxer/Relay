@@ -15,13 +15,11 @@ from sqlalchemy import (
     text,
     update,
 )
-from ..automation.store import insert_outbox_rows, task_outbox_rows
 from ...core.models import AgentName
 from ..db_time import parse_db_time
 from ...core.ids import new_database_id
 from ..events import relay_task_event
 from .rules import _HYDRATE_TASK_WRITES, _TaskWriteConflict, apply_task_events
-from ...tasks.claims import orphaned_by_thread_delete
 from .events import (
     _task_session_link_events,
     _task_session_unlink_events,
@@ -113,11 +111,8 @@ class TaskLinkRows(TaskStoreState):
         conn: Any,
         task_id: str,
         session_id: str,
-        *,
-        delete_orphan: bool = False,
-        deleted_by: str | None = None,
     ) -> dict[str, Any]:
-        """Unlink a deleted thread; with `delete_orphan`, drop a task left threadless."""
+        """Unlink a deleted thread while preserving the task and its lifecycle."""
         row = (
             conn.execute(
                 select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version)
@@ -134,14 +129,7 @@ class TaskLinkRows(TaskStoreState):
             return current
         events = _task_session_unlink_events(task_id, session_id)
         sequence = int(row["version"] or 0)
-        unlinked = apply_task_events(current, events, version=sequence)
-        orphaned = delete_orphan and orphaned_by_thread_delete(unlinked)
-        if orphaned:
-            events = [*events, relay_task_event(
-                "task.deleted", task_id,
-                {"actorUserId": deleted_by} if deleted_by else {},
-            )]
-        task = apply_task_events(current, events, version=sequence) if orphaned else unlinked
+        task = apply_task_events(current, events, version=sequence)
         claimed = conn.execute(
             update(self.tasks)
             .where(self.tasks.c.id == row["id"], self.tasks.c.version == sequence)
@@ -166,10 +154,6 @@ class TaskLinkRows(TaskStoreState):
             .where(self.task_sessions.c.task_id == row["id"])
             .where(self.task_sessions.c.session_id == session_id)
         )
-        if orphaned:
-            logger.info("Database task deleted with its last thread", task_id=task_id, deleted_by=deleted_by)
-            if self.emit_automation_events:
-                insert_outbox_rows(conn, task_outbox_rows(current, task))
         return self._hydrate_task(task) if _HYDRATE_TASK_WRITES.get() else task
 
     def _ensure_task_session(

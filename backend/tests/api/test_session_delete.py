@@ -248,7 +248,8 @@ def test_delete_clears_chat_conversation_binding(monkeypatch) -> None:
         assert app.state.chat_store.get_conversation_session(conversation) is None
 
 
-def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> None:
+@pytest.mark.parametrize("deferred", [False, True])
+def test_delete_thread_preserves_tasks_and_automation_runs(monkeypatch, deferred) -> None:
     from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -284,11 +285,29 @@ def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> N
         tasks.link_session(occurrence["id"], thread)
         tasks.link_session(routine["id"], thread)
 
-        assert client.delete(f"/api/v1/threads/{thread}").status_code == 204
+        before = {task["id"]: tasks.get_task(task["id"]) for task in (solo, shared, routine, occurrence)}
+        if deferred:
+            # Resume a durable deletion request through the background lifecycle.
+            sessions.append_event(thread, relay_event(
+                "session.deletion_requested", thread,
+                {"requestedBy": before[solo["id"]]["ownerUserId"]},
+            ))
+            client.app.state.execution_lifecycle.tick()
+        else:
+            assert client.delete(f"/api/v1/threads/{thread}").status_code == 204
 
-        # The thread was the solo task's and the run's only thread.
-        assert client.get(f"/api/v1/tasks/{solo['id']}").status_code == 404
-        assert client.get(f"/api/v1/tasks/{occurrence['id']}").status_code == 404
+        assert client.get(f"/api/v1/threads/{thread}").status_code == 404
+        # Even a task or automation run with no remaining threads survives.
+        for task_id, previous in before.items():
+            response = client.get(f"/api/v1/tasks/{task_id}")
+            assert response.status_code == 200
+            preserved = response.json()
+            assert preserved["linkedSessionIds"] == [
+                linked for linked in previous["linkedSessionIds"] if linked != thread
+            ]
+            for field in ("status", "routineState", "routineId", "assignedAgentId", "deletedAt"):
+                assert preserved.get(field) == previous.get(field)
+            assert not any(event["type"] == "task.deleted" for event in preserved["events"])
         # A task with another round only loses the link.
         remaining = client.get(f"/api/v1/tasks/{shared['id']}").json()
         assert remaining["linkedSessionIds"] == [other_round]

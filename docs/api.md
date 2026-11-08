@@ -1076,7 +1076,14 @@ execution object while cleanup is pending. Repeating a pending request does not
 create another deletion event. Pending deletion prevents new admission and
 remains visible in thread responses as `deletionRequestedAt`. The backend resumes
 cleanup after restart, without requiring browser polling. It clears conversation
-bindings and unlinks tasks before deleting thread history. Workspace files are
+bindings and unlinks tasks before deleting thread history. Tasks, Automation
+runs, and Automations are preserved even when their last linked thread is
+deleted; their lifecycle and configuration are unchanged. Conversely, deleting
+a Task deletes all its linked threads, including shared threads; other Tasks
+keep their records and lose those links. Deleting an Automation also deletes
+its occurrences and all threads linked to the Automation or its occurrences.
+Active execution or dispatch claims reject the deletion with
+`409 task_execution_active`; the cascade is atomic. Workspace files are
 not removed by this operation. When the execution already requires recovery
 (`canReportGone`), the deletion itself is the operator's assertion that the
 agent is gone: the backend applies the reconcile transitions and completes the

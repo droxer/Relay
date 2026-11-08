@@ -127,7 +127,6 @@ class SessionDeletionRows(SessionStoreState):
                 if session_id in (task["snapshot"] or {}).get("linkedSessionIds", []):
                     task_store.unlink_session_in_transaction(
                         conn, task["id"], session_id,
-                        delete_orphan=True, deleted_by=deleted_by,
                     )
             self._schedule_attachment_cleanup(conn, session_pk)
             self._insert_tombstone(conn, session_pk, snapshot, deleted_by)
