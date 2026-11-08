@@ -102,7 +102,7 @@ describe("sidenav destinations", () => {
     [...source.matchAll(/\{\s*route:\s*"([a-z]+)"/g)].map((match) => match[1]!),
   );
 
-  /* `skills` shipped listed only in MORE_ROUTES — the mobile overflow — while
+  /* `skills` shipped listed only in MORE_GROUPS — the mobile overflow — while
      the More button itself is hidden on desktop, so the rail never offered it.
      Every destination needs a rail anchor, and every anchor hidden on phones
      needs its More entry. */
@@ -132,7 +132,7 @@ describe("sidenav destinations", () => {
   it("keeps mobile-hidden routes in the More menu", () => {
     for (const [route, classes] of anchors) {
       if (!classes.includes("sidenav-secondary-item") && !classes.includes("sidenav-overflow-item")) continue;
-      assert.ok(overflow.has(route), `${route} is hidden on mobile but missing from MORE_ROUTES`);
+      assert.ok(overflow.has(route), `${route} is hidden on mobile but missing from MORE_GROUPS`);
     }
   });
 });

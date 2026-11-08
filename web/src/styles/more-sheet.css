@@ -81,9 +81,53 @@
   text-align: center;
 }
 
+/* Search, drawn as the field the palette opens with: a filled, borderless
+   control like the phone list toolbar's search, with the label as its
+   placeholder. */
+.more-sheet-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 var(--sp-4);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-3);
+  background: var(--control-fill);
+  color: var(--ink-3);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.more-sheet-search:active {
+  filter: opacity(0.6);
+}
+
+/* A section heading per rail group: the same names the desktop rail gives
+   its groups, so both layouts sort pages the same way. */
+.more-sheet-heading {
+  margin: 0 0 var(--sp-1-5);
+  padding: 0 var(--sp-4);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.more-sheet-section {
+  margin: 0 0 var(--sp-4);
+}
+
+.more-sheet-section > .more-sheet-group {
+  margin-bottom: 0;
+}
+
 /* An inset card per group. */
 .more-sheet-group {
-  margin: 0 0 var(--sp-3);
+  margin: 0 0 var(--sp-4);
   padding: 0;
   list-style: none;
   overflow: hidden;
@@ -91,13 +135,15 @@
   background: var(--surface-3);
 }
 
-/* The route group sits inside its <nav>, so it is a last child there too —
-   only the sheet's own last group drops the gap. */
+/* Route groups sit inside their sections, so only the sheet's own last
+   group (Sign out) drops the gap. */
 .more-sheet > .more-sheet-group:last-child {
   margin-bottom: 0;
 }
 
-.more-sheet-row {
+/* Through the sheet: a11y.css's coarse-pointer floor (`a[href]`, 0-1-1,
+   min-height 44px) otherwise outranks a bare class and shrinks every row. */
+.more-sheet .more-sheet-row {
   position: relative;
   display: flex;
   align-items: center;
