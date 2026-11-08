@@ -104,4 +104,21 @@ describe("groupThreads awaiting an answer", () => {
     assert.equal(needsYou.length, 0);
     assert.deepEqual(idle.map((c) => c.session.id), ["a"]);
   });
+
+  it("files a queued run under queued, the longest wait first", () => {
+    const queued = (id: string, queuedAt: string | null, updatedAt: string): ThreadItem => {
+      const base = item(id, "running");
+      return { ...base, session: { ...base.session, updatedAt, execution: { phase: "queued", queuedAt } } as RelaySession };
+    };
+    const running = item("r", "running");
+    const live = { ...running, session: { ...running.session, execution: { phase: "running" } } as RelaySession };
+    const groups = groupThreads([
+      queued("newer", "2026-07-01T12:05:00.000Z", "2026-07-01T12:09:00.000Z"),
+      live,
+      queued("older", "2026-07-01T12:01:00.000Z", "2026-07-01T12:02:00.000Z"),
+      queued("unknown", null, "2026-07-01T12:03:00.000Z"),
+    ]);
+    assert.deepEqual(groups.queued.map((c) => c.session.id), ["older", "newer", "unknown"]);
+    assert.deepEqual(groups.running.map((c) => c.session.id), ["r"]);
+  });
 });

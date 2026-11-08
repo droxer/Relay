@@ -540,7 +540,18 @@
       "runtime": "Runtime"
     },
     "run_starting_on": "Starting on {{computer}}. Output appears here as soon as the agent begins.",
-    "run_starting": "Starting the run. Output appears here as soon as the agent begins."
+    "run_starting": "Starting the run. Output appears here as soon as the agent begins.",
+    "group_queued": "Queued",
+    "queued_for": "Queued · {{duration}}",
+    "queued_offline": "Queued · computer offline",
+    "queue_this_computer": "this computer",
+    "queue_steps_label": "Run progress",
+    "queue_step_sent": "Sent",
+    "queue_step_queued": "In queue",
+    "queue_step_running": "Running",
+    "queue_cause_slot": "Queued on {{computer}}. It starts automatically when capacity is available — no need to send it again.",
+    "queue_cause_offline": "{{computer}} is offline. The run is held in the queue and starts when the computer reconnects.",
+    "queue_cancel": "Cancel run"
   },
   "composer": {
     "upload_client_outdated": "Update the Relay client on this Computer to upload images or files.",

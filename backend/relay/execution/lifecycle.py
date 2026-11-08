@@ -123,6 +123,9 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         "canReportGone": phase == "recovery_required" and reason != "finalization_failed"
         and not retained_result,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
+        # When the waiting run was admitted, so a queued thread can say how
+        # long it has waited; absent once the computer has taken it.
+        "queuedAt": (request or {}).get("createdAt") if phase == "queued" else None,
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
     }
 

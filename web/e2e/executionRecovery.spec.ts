@@ -104,13 +104,31 @@ test("reporting an agent gone asks first, then calls reconcile", async ({ page }
 });
 
 
-for (const phase of ["queued", "unresponsive", "stopping", "finalizing"]) {
+for (const phase of ["unresponsive", "stopping", "finalizing"]) {
   test(`unknown ${phase} execution never offers an invalid recovery action`, async ({ page }) => {
     const writes = await serveRecoveryThread(page, "future_reason", phase);
     await page.goto("/threads/recovery-thread");
     const panel = page.getByRole("region", { name: "Next steps" });
     await expect(panel).toContainText("Cause unknown");
     await expect(panel.getByRole("button")).toHaveCount(0);
+    expect(writes).toEqual([]);
+  });
+}
+
+for (const computerOnline of [true, false]) {
+  test(`queued execution shows its waiting state with computer online=${computerOnline}`, async ({ page }, testInfo) => {
+    const writes = await serveRecoveryThread(page, "future_reason", "queued", { computerOnline });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/threads/recovery-thread");
+    const queued = page.getByRole("region", { name: "Queued", exact: true });
+    await expect(queued).toBeVisible();
+    await expect(queued.getByRole("listitem")).toHaveText(["Sent", "In queue", "Running"]);
+    await expect(queued).toContainText(computerOnline ? "no need to send it again" : "is offline");
+    await expect(queued.getByRole("link", { name: "Open Computers" })).toHaveCount(computerOnline ? 0 : 1);
+    await expect(page.getByRole("region", { name: "Next steps" })).toHaveCount(0);
+    await expect(queued.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);
+    await expect(queued.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("queued-mobile.png") });
     expect(writes).toEqual([]);
   });
 }

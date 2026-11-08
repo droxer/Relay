@@ -26,6 +26,19 @@ def test_execution_truth_does_not_trust_session_outcome(run_request, command, ph
     assert status["executionConfirmed"] == (phase in {"running", "stopping"})
 
 
+def test_a_queued_run_reports_when_it_entered_the_queue():
+    request = {"status": "prepared", "createdAt": "2026-09-15T23:58:00Z"}
+    queued = execution_status({"status": "running", "agentRuns": []}, request, None,
+                              now=NOW, computer_online=True)
+    assert queued["queuedAt"] == "2026-09-15T23:58:00Z"
+    running = execution_status(
+        {"status": "running", "agentRuns": []}, request,
+        {"status": "dispatched", "leaseExpiresAt": "2026-09-17T00:00:00Z"},
+        now=NOW, computer_online=True,
+    )
+    assert running["queuedAt"] is None
+
+
 @pytest.mark.parametrize("computer_online", [False, None])
 def test_a_long_dead_lease_on_a_computer_not_online_needs_recovery(computer_online):
     status = execution_status(

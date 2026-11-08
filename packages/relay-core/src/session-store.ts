@@ -293,6 +293,8 @@ export interface ExecutionStatus {
   canReportGone?: boolean;
   blockingReason: string | null;
   lastConfirmedAt: string | null;
+  /** When a `queued` run was admitted; null in every other phase. */
+  queuedAt?: string | null;
   nextRecoveryAt: string | null;
 }
 

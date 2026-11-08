@@ -279,10 +279,12 @@ export const RAIL_PAGE_SIZE = 60;
 type LimitedThreadGroup = { items: ThreadItem[]; total: number };
 
 /** The first `limit` rows across the attention groups, in display order —
- *  needs you, running, idle — with each group's full count kept for its label. */
+ *  needs you, running, queued, idle — with each group's full count kept for
+ *  its label. */
 export function limitThreadGroups(groups: ThreadGroups, limit: number): {
   needsYou: LimitedThreadGroup;
   running: LimitedThreadGroup;
+  queued: LimitedThreadGroup;
   idle: LimitedThreadGroup;
   hasMore: boolean;
 } {
@@ -294,9 +296,10 @@ export function limitThreadGroups(groups: ThreadGroups, limit: number): {
   };
   const needsYou = take(groups.needsYou);
   const running = take(groups.running);
+  const queued = take(groups.queued);
   const idle = take(groups.idle);
-  const total = groups.needsYou.length + groups.running.length + groups.idle.length;
-  return { needsYou, running, idle, hasMore: total > limit };
+  const total = groups.needsYou.length + groups.running.length + groups.queued.length + groups.idle.length;
+  return { needsYou, running, queued, idle, hasMore: total > limit };
 }
 
 /** The smallest whole number of pages that mounts the row at `selectedIndex`. */

@@ -157,6 +157,9 @@ export function ThreadListPanel({
     const sections = [
       { key: "needsYou", tone: "attn", label: t("thread.group_needs_you"), group: limited.needsYou },
       { key: "running", tone: "run", label: t("thread.group_running"), group: limited.running },
+      // Admitted but not yet taken by a computer: its own line, so a run that
+      // has not started never reads as one that is working.
+      { key: "queued", tone: "queued", label: t("thread.group_queued"), group: limited.queued },
       // Settled conversations stay in the ordinary thread list; “Idle” would
       // give standalone chats a lifecycle status they do not have.
       { key: "idle", tone: "idle", label: t("nav.threads"), group: limited.idle },
@@ -403,7 +406,7 @@ function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[],
   const groups = useMemo(() => groupThreads(items, waits), [items, waits]);
   const selectedIndex = useMemo(() => {
     if (!selectedSessionId) return -1;
-    return [...groups.needsYou, ...groups.running, ...groups.idle]
+    return [...groups.needsYou, ...groups.running, ...groups.queued, ...groups.idle]
       .findIndex((item) => item.session.id === selectedSessionId);
   }, [groups, selectedSessionId]);
   const limit = Math.max(pages * RAIL_PAGE_SIZE, railLimitFor(selectedIndex, RAIL_PAGE_SIZE));
