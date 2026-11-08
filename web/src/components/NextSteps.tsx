@@ -1,4 +1,5 @@
 "use client";
+import { ThreadPrompt } from "./ThreadPrompt";
 
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,6 +32,7 @@ export function NextSteps({ steps, onSend }: {
     }
   };
   return (
+    <ThreadPrompt title={t("next_steps.title")}>
     <section className="next-steps" aria-labelledby={headingId}>
       <h2 id={headingId} className="next-steps-title">{t("next_steps.title")}</h2>
       <ul className="next-steps-list">
@@ -52,5 +54,6 @@ export function NextSteps({ steps, onSend }: {
         ))}
       </ul>
     </section>
+    </ThreadPrompt>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { ThreadPrompt } from "./ThreadPrompt";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { applyManagerProposal, dismissManagerProposal } from "../api-client/project-manager";
@@ -44,7 +45,7 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
-  return <section className="manager-proposal" aria-label={t("project_manager.changes")}>
+  return <ThreadPrompt title={t("project_manager.changes")}><section className="manager-proposal" aria-label={t("project_manager.changes")}>
     <h3>{t("project_manager.changes")}</h3>
     <p role="status">{t(`project_manager.proposal_${proposal.state}`)}</p>
     {proposal.operations.map(op => {
@@ -76,5 +77,5 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     })}
     {error ? <p role="alert">{error}</p> : null}
     {pending ? <div className="manager-actions"><Button disabled={disabled || busy || selected.length === 0} onClick={() => void apply()}>{t("project_manager.apply")}</Button><Button variant="ghost" disabled={disabled || busy} onClick={() => void dismiss()}>{t("project_manager.dismiss")}</Button></div> : null}
-  </section>;
+  </section></ThreadPrompt>;
 }

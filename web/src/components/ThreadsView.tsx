@@ -29,6 +29,7 @@ import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProj
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { QueuedRunCard } from "./QueuedRunCard";
 import { queuedRun } from "../lib/queuedRun";
+import { ThreadPrompt } from "./ThreadPrompt";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
 import { NextSteps } from "./NextSteps";
 import { awaitingInput } from "../lib/awaitingInput";
@@ -648,6 +649,7 @@ export function ThreadsView({
                 {/* A setup thread only drafts; the owner applies on the dashboard. */}
                 {!projectReadOnly ? (
                   <ProjectSetupCue
+                    key={activeSession?.id}
                     project={activeThreadProject}
                     threadId={activeSession?.id}
                     onOpenProject={onSelectProject}
@@ -669,6 +671,7 @@ export function ThreadsView({
                 />
                 {awaitingDecision ? (
                   <DecisionBar
+                    key={`${activeSession?.id}:${activeSession?.activeRoundId}`}
                     logicalAgents={selectableLogicalAgents}
                     sendDecision={sendDecision}
                     sendHandoff={sendHandoff}
@@ -728,7 +731,7 @@ export function ThreadsView({
               : undefined}
           prompt={followUpWait ? null : waiting ? (
             <AwaitingInputPrompt
-              key={activeSession?.id}
+              key={`${activeSession?.id}:${waitingQuestionId ?? waiting.kind}`}
               waiting={waiting}
               agentName={waitingAgentName}
               nextAgentName={waiting.nextAgentId ? logicalAgentNames[waiting.nextAgentId] : undefined}
@@ -737,15 +740,17 @@ export function ThreadsView({
               onMarkDone={() => sendDecision("mark_done")}
             />
           ) : awaitingDecision ? null : actionTask?.status === "review" && !running ? (
-            <TaskReviewPanel
-              key={actionTask.id}
-              taskId={actionTask.id}
-              compact
-              deferPrimary={awaitingDecision}
-              onRequestChanges={() => composerRef.current?.focus()}
-            />
+            <ThreadPrompt key={`${activeSession?.id}:${actionTask.id}`} title={t("task_review.title")}>
+              <TaskReviewPanel
+                taskId={actionTask.id}
+                compact
+                deferPrimary={awaitingDecision}
+                onRequestChanges={() => composerRef.current?.focus()}
+              />
+            </ThreadPrompt>
           ) : actionTask && !running ? (
             <TaskActionBar
+              key={`${activeSession?.id}:${actionTask.id}:${actionTask.status}`}
               task={actionTask}
               busy={taskStatusActions.busy}
               deferPrimary={awaitingDecision}

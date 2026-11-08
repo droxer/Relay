@@ -1,4 +1,10 @@
 {
+  "thread_prompt": {
+    "close": "关闭{{title}}",
+    "show": "显示{{title}}",
+    "close_label": "关闭",
+    "show_label": "显示"
+  },
   "collab_style": {
     "label": "协作方式",
     "build_review": "构建与评审",

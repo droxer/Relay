@@ -97,3 +97,14 @@ it("renders nothing while no run is waiting", () => {
   const { container } = render(<PermissionPrompts requests={[]} agentLabel={() => "Builder"} onAnswer={vi.fn()} />);
   expect(container.innerHTML).toBe("");
 });
+
+it.each([request,question])('closes $toolName without answering and preserves written input', async prompt=>{
+ const onAnswer=vi.fn();
+ render(<PermissionPrompts requests={[prompt]} agentLabel={()=>'Builder'} onAnswer={onAnswer} />);
+ const field=screen.getByLabelText(prompt.questions?'permission.other_label':'permission.note_label');
+ fireEvent.change(field,{target:{value:'Keep this note'}});
+ fireEvent.click(screen.getByRole('button',{name:'thread_prompt.close'}));
+ expect(screen.queryByRole('group')).toBeNull();expect(onAnswer).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'thread_prompt.show'}));
+ expect((screen.getByLabelText(prompt.questions?'permission.other_label':'permission.note_label') as HTMLInputElement).value).toBe('Keep this note');
+});

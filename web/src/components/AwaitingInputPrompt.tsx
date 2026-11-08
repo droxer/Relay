@@ -1,4 +1,5 @@
 "use client";
+import { ThreadPrompt } from "./ThreadPrompt";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -140,6 +141,7 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
   useEffect(() => {
     if (!choiceCount) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!sectionRef.current) return;
       if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.target instanceof Element && event.target.closest(TYPING_TARGET)) return;
       // An irreversible reply must not fire from a key meant for something
@@ -173,6 +175,7 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
     ? t("awaiting.unreported_title", { agent: agentName })
     : t(TITLE_KEYS[waiting.kind], { agent: agentName });
   return (
+    <ThreadPrompt title={title}>
     <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
       <p role="status" className="sr-only">{announced ? title : ""}</p>
       <div className="awaiting-input-head">
@@ -240,6 +243,7 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
         </Button>
       </div>}
     </section>
+    </ThreadPrompt>
   );
 }
 
