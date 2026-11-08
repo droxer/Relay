@@ -3945,16 +3945,18 @@ def test_command_claim_rejects_queued_work_after_session_terminalization(
 
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
-def test_run_request_creation_reserves_node_capacity_atomically(store_factory) -> None:
+def test_run_request_creation_bounds_durable_queue_atomically(store_factory) -> None:
     with TemporaryDirectory() as root:
         store = store_factory(root)
         store.register_node(
             {
                 **store_node_payload(),
-                "maxConcurrentRuns": 2,            }
+                "maxConcurrentRuns": 2,
+            }
         )
 
-        for index in range(2):
+        # Capacity of delivered requests plus as many deferred behind a held workspace.
+        for index in range(4):
             store.create_run_request(
                 {
                     "nodeId": "sbx_alice",

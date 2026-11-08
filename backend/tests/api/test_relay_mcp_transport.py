@@ -5,6 +5,7 @@ from datetime import timedelta
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import subprocess
 import shutil
@@ -131,6 +132,9 @@ def test_real_local_node_bridge_round_trips_to_python_with_scope_enforced(setup_
             capture_output=True,
             timeout=30,
             cwd=ROOT,
+            # This case uses standalone credentials, not the enclosing Agent's
+            # managed run transport. Managed cases supply their own context below.
+            env={**os.environ, "RELAY_MCP_RUN_CONTEXT": ""},
             check=False,
         )
         assert process.returncode == 0, process.stderr
@@ -180,8 +184,6 @@ def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(managed_
 @pytest.mark.integration
 @pytest.mark.parametrize("native", [False, True], ids=["file", "native-ipc"])
 def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path, native):
-    import os
-
     app, owner, node, project, *_ = managed_env
     result, command = _start(managed_env)
     other = owner.post(

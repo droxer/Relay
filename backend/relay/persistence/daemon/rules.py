@@ -81,7 +81,10 @@ def _assert_node_run_request_capacity(
     max_concurrent = node.get("maxConcurrentRuns")
     if not isinstance(max_concurrent, int) or max_concurrent <= 0:
         max_concurrent = 1
-    available = len(active_requests) < max_concurrent
+    # Bound the durable queue separately from execution reservations. Allow
+    # one capacity of extra requests for workspace waiters; dispatch claims
+    # enforce the execution cap atomically under the same node-row mutex.
+    available = len(active_requests) < max_concurrent * 2
     if not available:
         raise ValueError("Runtime node capacity is exhausted.")
 

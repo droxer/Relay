@@ -28,6 +28,7 @@ from ..scheduling import (
     effective_role_for_assignment,
     node_accepts_run,
 )
+from ..workspace_contention import session_workspace_key, workspace_is_contended
 from .. import config
 from ..records import (
     ARTIFACT_SNAPSHOT_STATE_KEY,
@@ -196,6 +197,12 @@ class AssignmentDeliveryMixin(RegistryState):
                 if active_runs is not None
                 else self.daemon_store.list_active_runs(node_id)
             )
+            if self._workspace_contended(run_request, node_id, node_runs):
+                # The run would only wait on the daemon's workspace gate while
+                # holding a slot an independent workspace could use. Leave it
+                # undelivered and unreserved; recovery retries it in order.
+                self._note_capacity_wait(run_request, index, node_runs)
+                return False
             if not node_accepts_run(
                 sandbox, active_runs=node_runs, session_id=run_request["sessionId"]
             ):
@@ -209,6 +216,37 @@ class AssignmentDeliveryMixin(RegistryState):
             )
             return False
         return True
+
+    def _workspace_contended(
+        self,
+        run_request: dict[str, Any],
+        node_id: str,
+        node_runs: list[dict[str, Any]],
+    ) -> bool:
+        """Whether another thread holds, is receiving, or is queued ahead for
+        this run's workspace on the node."""
+        session = self.store.get_session_header(run_request["sessionId"])
+        keys: dict[str, str] = {}
+
+        def key_of_session(session_id: str) -> str | None:
+            if session_id not in keys:
+                try:
+                    keys[session_id] = session_workspace_key(
+                        self.store.get_session_header(session_id)
+                    )
+                except KeyError:
+                    return None
+            return keys[session_id]
+
+        return workspace_is_contended(
+            key=session_workspace_key(session),
+            session_id=run_request["sessionId"],
+            request_id=run_request["id"],
+            created_order=(run_request.get("createdAt") or "", run_request["id"]),
+            active_runs=node_runs,
+            node_requests=self.daemon_store.list_active_run_requests(node_id),
+            key_of_session=key_of_session,
+        )
 
     def _prepare_run_start_command(
         self,
