@@ -12,6 +12,7 @@
 @import "./sidenav.css" layer(relay);
 @import "./inputs.css" layer(relay);
 
+@import "./thread-prompt.css" layer(relay);
 @import "./thread.css" layer(relay);
 @import "./chat.css" layer(relay);
 @import "./project-manager.css" layer(relay);

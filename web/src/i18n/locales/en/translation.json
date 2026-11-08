@@ -1,4 +1,10 @@
 {
+  "thread_prompt": {
+    "close": "Close {{title}}",
+    "show": "Show {{title}}",
+    "close_label": "Close",
+    "show_label": "Show"
+  },
   "collab_style": {
     "label": "Collaboration style",
     "build_review": "Build and review",

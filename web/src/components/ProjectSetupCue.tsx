@@ -1,4 +1,5 @@
 "use client";
+import { ThreadPrompt } from "./ThreadPrompt";
 
 import { useTranslation } from "react-i18next";
 import { setupAwaitingApply } from "../lib/projectSetup";
@@ -17,6 +18,7 @@ export function ProjectSetupCue({ project, threadId, onOpenProject }: {
   if (!project || !setup) return null;
   const plan = setup.mode === "plan";
   return (
+    <ThreadPrompt title={t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}>
     <div className="handoff-panel project-setup-cue" role="status" aria-live="polite">
       <div className="handoff-panel-title">{t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}</div>
       <p className="project-setup-cue-body">{t(plan ? "project.setup_cue_plan_body" : "project.setup_cue_body", { project: project.name })}</p>
@@ -26,5 +28,6 @@ export function ProjectSetupCue({ project, threadId, onOpenProject }: {
         </Button>
       </div>
     </div>
+    </ThreadPrompt>
   );
 }
