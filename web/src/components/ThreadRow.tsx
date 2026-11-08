@@ -12,6 +12,7 @@ import { OfflineBadge } from "./OfflineBadge";
 import type { RelaySession } from "../types";
 import { canDeleteThread, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { formatThreadStamp } from "../lib/threadStamp";
+import { queuedRun, queueWaitLabel } from "../lib/queuedRun";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +24,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 
 export type { ThreadItem };
 
-type ThreadTone = "attn" | "run" | "idle";
+type ThreadTone = "attn" | "run" | "queued" | "idle";
 
 type ThreadRowProps = {
   item: ThreadItem;
@@ -51,10 +52,13 @@ type ThreadRowProps = {
  * surface spent the hollow ring on failure and this one spent it on
  * `idle` — the ring meant "failed" one panel over and "settled" in the rail.
  * Failure takes the ring; a settled thread is out of play, which is `muted`.
+ * A queued run has not started, so it is drawn as nothing-set-yet — the
+ * dashed outline — never the live pulse or a warning dot.
  */
 const PIP: Record<ThreadTone | "err", { tone: StateTone; shape?: StateShape }> = {
   attn: { tone: "warn" },
   run: { tone: "live" },
+  queued: { tone: "neutral", shape: "dashed" },
   err: { tone: "bad" },
   idle: { tone: "neutral", shape: "muted" },
 };
@@ -71,8 +75,10 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const touch = useMediaQuery("(hover: none)");
   const { session } = item;
   const executionPhase = session.execution?.phase;
+  const queued = queuedRun(session, { nodeOffline: item.nodeOffline });
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
-    : executionPhase && ["queued", "stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
+    : queued ? "queued"
+    : executionPhase && ["stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
   // A standalone thread is an ongoing chat. Only linked work has a
   // persistent lifecycle; chats show a signal while something is happening.
   const hasLifecycle = Boolean(item.origin);
@@ -101,8 +107,18 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   // Live activity names the agent or the input it needs. Only linked work
   // keeps failure/cancellation labels after execution ends; standalone chats
   // return to a plain conversation row.
-  const status: { text: string; tone: "attn" | "run" | "err" | "idle" } | null =
-    session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
+  // A queued run says how long it has waited, or that its computer is gone —
+  // the one thing that would keep it waiting indefinitely.
+  const queueWait = queued ? queueWaitLabel(queued.queuedAt, now, "minute") : "";
+  const status: { text: string; tone: "attn" | "run" | "queued" | "err" | "idle" } | null =
+    queued
+      ? {
+          tone: "queued",
+          text: queued.cause === "offline"
+            ? t("thread.queued_offline")
+            : queueWait ? t("thread.queued_for", { duration: queueWait }) : t("thread.execution_queued"),
+        }
+      : session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
       ? { tone: "attn", text: t(`thread.execution_${session.execution.phase}`) }
       : session.execution?.phase === "running" || tone === "run"
       ? {

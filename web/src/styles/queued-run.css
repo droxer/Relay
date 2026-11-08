@@ -1,0 +1,107 @@
+/* ── A run waiting in line ────────────────────────────────────────────────
+   The card holds the place where the reply will stream, so it is drawn as a
+   reserved slot rather than a filled panel: a dashed outline on the canvas,
+   the same dashed "not started yet" the rail's queued pip wears. Calm by
+   default — a busy computer is the normal course of work — and only a
+   computer that is gone warms the outline to --warn. */
+.queued-run {
+  display: grid;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-4);
+  border: 1px dashed var(--line-1);
+  border-radius: var(--r-3);
+  color: var(--ink-2);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  overflow-wrap: anywhere;
+}
+
+.queued-run[data-cause="offline"] {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line-1));
+}
+
+.queued-run-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.queued-run-label {
+  color: var(--ink-1);
+  font: var(--type-label);
+}
+
+/* How long it has waited counts up at the trailing edge, where a ledger
+   puts its durations. */
+.queued-run-wait {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+/* Sent → In queue → Running: where this run stands, read left to right. */
+.queued-run-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.queued-run-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+}
+
+/* A hairline between steps, not an arrow glyph: the order is the reading
+   order, the line only joins them. */
+.queued-run-step + .queued-run-step::before {
+  content: "";
+  inline-size: var(--sp-5);
+  block-size: 0;
+  border-top: 1px solid var(--line-1);
+}
+
+.queued-run-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--r-full);
+  border: 1px solid currentcolor;
+}
+
+/* Done: filled. Current: dashed and in ink. Ahead: the bare outline. */
+.queued-run-step[data-step="sent"] { color: var(--ink-3); }
+.queued-run-step[data-step="sent"] .queued-run-dot { background: currentcolor; }
+.queued-run-step[aria-current="step"] { color: var(--ink-1); }
+.queued-run-step[aria-current="step"] .queued-run-dot { border-style: dashed; }
+
+/* Waiting, not working: the current step dims and returns on a slow blink —
+   twice the live pulse, and an opacity change only, so it never borrows the
+   --live ring that means an agent is at work. */
+@media (prefers-reduced-motion: no-preference) {
+  .queued-run-step[aria-current="step"] .queued-run-dot {
+    --blink-from: 0.35;
+    animation: blink calc(var(--t-pulse) * 2) var(--ease-breathe) infinite;
+  }
+}
+
+.queued-run-cause {
+  margin: 0;
+}
+
+.queued-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.queued-run-actions:empty { display: none; }

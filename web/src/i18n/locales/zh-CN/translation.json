@@ -534,7 +534,18 @@
       "runtime": "运行时"
     },
     "run_starting_on": "正在 {{computer}} 上启动。智能体一开始输出就会显示在这里。",
-    "run_starting": "正在启动运行。智能体一开始输出就会显示在这里。"
+    "run_starting": "正在启动运行。智能体一开始输出就会显示在这里。",
+    "group_queued": "排队中",
+    "queued_for": "排队中 · {{duration}}",
+    "queued_offline": "排队中 · 电脑离线",
+    "queue_this_computer": "这台电脑",
+    "queue_steps_label": "运行进度",
+    "queue_step_sent": "已发送",
+    "queue_step_queued": "排队中",
+    "queue_step_running": "运行",
+    "queue_cause_slot": "已在 {{computer}} 上排队，空出位置后会自动开始，无需重复发送。",
+    "queue_cause_offline": "{{computer}} 已离线。运行会保留在队列中，电脑重新连接后开始。",
+    "queue_cancel": "取消运行"
   },
   "composer": {
     "upload_client_outdated": "更新此电脑上的 Relay 客户端后，即可上传图片或文件。",

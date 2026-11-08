@@ -27,6 +27,8 @@ import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
 import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProjectFilter";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
+import { QueuedRunCard } from "./QueuedRunCard";
+import { queuedRun } from "../lib/queuedRun";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
 import { NextSteps } from "./NextSteps";
 import { awaitingInput } from "../lib/awaitingInput";
@@ -355,6 +357,11 @@ export function ThreadsView({
     composerRef,
     onCancelRun,
   });
+  // A run admitted but not yet taken by a computer: the transcript holds its
+  // place in line where the reply will stream.
+  const activeQueuedRun = activeSession
+    ? queuedRun(activeSession, { nodeOffline: Boolean(activeRuntimeNode && (!activeRuntimeNode.online || activeRuntimeNode.stale)) })
+    : null;
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
   const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
@@ -626,7 +633,13 @@ export function ThreadsView({
                   logicalAgentImages={logicalAgentImages}
                   agentDisplayNames={agentDisplayNames}
                 />
-                {running && !displayMessages.some((message) => message.kind === "agent")
+                {activeQueuedRun ? (
+                  <QueuedRunCard
+                    queued={activeQueuedRun}
+                    node={activeRuntimeNode}
+                    onCancel={!activeSession?.deletionRequestedAt && !projectReadOnly ? (queueEnabled ? threadQueue.stop : onCancelRun) : undefined}
+                  />
+                ) : running && !displayMessages.some((message) => message.kind === "agent")
                   ? <RunStartingCue node={activeRuntimeNode} />
                   : null}
                 <HandoffStatus session={activeSession} />

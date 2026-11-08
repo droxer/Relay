@@ -1055,7 +1055,8 @@ Errors are the `detail` codes `github_repository_required`,
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included
 in thread detail and list responses. It reports `phase`, `executionConfirmed`,
 `computerOnline` (daemon heartbeat liveness, or null when unknown),
-`canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`, and
+`canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`,
+`queuedAt` (when a `queued` run was admitted; null in every other phase), and
 `nextRecoveryAt`, plus `canRetrySave` and `canReportGone`. These capabilities
 reflect current execution state; operation routes still check actor authorization
 and revalidate state. `canReportGone` is false outside `recovery_required` and

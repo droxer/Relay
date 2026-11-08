@@ -26,3 +26,10 @@ test("lost exit evidence offers report-gone, not a retry that can only re-mark i
  assert.equal(guide?.reportGone,true);
  assert.equal(guide?.retrySave,undefined);
 });
+
+test("a queued run is not a recovery: the thread shows its place in line instead",()=>{
+ const execution={phase:"queued" as const,executionConfirmed:false,deletionRequested:false,canDelete:false,blockingReason:"awaiting_dispatch",lastConfirmedAt:null,nextRecoveryAt:null,computerOnline:true};
+ assert.equal(executionRecoveryGuide(execution),null);
+ // A delete waiting on that run still needs saying.
+ assert.equal(executionRecoveryGuide({...execution,deletionRequested:true})?.key,"awaiting_dispatch");
+});

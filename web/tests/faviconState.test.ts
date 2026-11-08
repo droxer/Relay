@@ -44,6 +44,11 @@ describe("favicon state", () => {
     assert.equal(faviconState([item({}, { runningAgent: "claude" })]), "running");
   });
 
+  it("stays idle for a run that is only queued: no agent is working yet", () => {
+    const queued = item({ status: "running", execution: { phase: "queued" } as RelaySession["execution"] });
+    assert.equal(faviconState([queued]), "idle");
+  });
+
   it("puts a person first: needs-you outranks running", () => {
     const waiting = item({ id: "ses_w", status: "waiting_for_human" });
     assert.equal(faviconState([item({ status: "running" }), waiting]), "waiting");

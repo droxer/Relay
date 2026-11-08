@@ -29,6 +29,10 @@ const executionGuides: Record<string, RecoveryGuide> = {
 
 export function executionRecoveryGuide(execution?: RelaySession["execution"]): RecoveryGuide | null {
   if (!execution || execution.phase === "terminal" || execution.phase === "running") return null;
+  // Waiting in line is the normal course of a busy computer, and the
+  // transcript says so where the reply will land (QueuedRunCard). Only a
+  // delete held up by that queued run still needs this notice.
+  if (execution.phase === "queued" && !execution.deletionRequested) return null;
   const reason = execution.blockingReason ?? "";
   const base: RecoveryGuide = Object.hasOwn(executionGuides, reason) ? executionGuides[reason] : { key: "unknown", destination: "computer", reportGone: true };
   const { reportGone, ...guide } = base;
