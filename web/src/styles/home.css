@@ -201,7 +201,7 @@
 
 .home-item-title {
   display: -webkit-box;
-  block-size: 2lh;
+  max-block-size: 2lh;
   overflow: hidden;
   color: var(--ink-1);
   font: var(--type-name);
@@ -210,6 +210,12 @@
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* Up next rows reserve both lines so a queue of long and short titles stays
+   one rhythm; the Ready and Upcoming lists reuse the title at its own height. */
+.home-item .home-item-title {
+  block-size: 2lh;
 }
 
 .home-item-title:hover {
@@ -547,9 +553,24 @@ a.home-count:hover .home-count-label {
     gap: var(--sp-6);
   }
 
+  /* The snooze floats on the trailing edge beside the title, so the reason
+     and meta lines below it run the full row width instead of sharing it
+     with an empty column. */
   .home-item {
+    position: relative;
+    grid-template-columns: var(--control-h-xs) minmax(0, 1fr);
     gap: var(--sp-2);
     padding-inline: var(--sp-3);
+  }
+
+  .home-item .home-item-title {
+    padding-inline-end: var(--touch-target);
+  }
+
+  .home-item-trail {
+    position: absolute;
+    top: var(--sp-2);
+    inset-inline-end: 0;
   }
 
   .home-item-trail .home-snooze {
@@ -730,8 +751,26 @@ a.home-count:hover .home-count-label {
     min-height: var(--touch-target);
   }
 
+  /* A phone reads the agenda day-first: the date heads its day's rows
+     instead of holding a column that wraps "Mon, Nov 9" and indents every
+     title beside it. */
+  .home-agenda-row {
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+
   .home-agenda-date {
-    width: 8ch;
+    width: auto;
+  }
+
+  .home-plan-list > li[data-continues] .home-agenda-date {
+    display: contents;
+  }
+
+  /* "paused for permission" is the point of the row: let it wrap. */
+  .home-run-sub {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -742,30 +781,47 @@ a.home-count:hover .home-count-label {
    900px container width), so the side panels are never buried unannounced. */
 @container (max-width: 900px) {
   /* A short route to live work and deadlines before the rest of the queue. */
+  /* The phone chip strip: filled chips at their natural width, one row that
+     scrolls sideways rather than wrapping into a ragged block. */
   .home-mobile-context {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-4);
-    margin-bottom: var(--sp-4);
-    padding-block: var(--sp-2);
+    gap: var(--sp-2);
+    margin: 0 0 var(--sp-3);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
+  .home-mobile-context::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* The link keeps the full touch target; the visible chip is the
+     control-height plate painted behind its label. */
   .home-mobile-context a {
+    position: relative;
+    isolation: isolate;
     display: flex;
+    flex-shrink: 0;
     min-height: var(--touch-target);
     align-items: center;
-    gap: var(--sp-2);
-    color: var(--link);
+    padding-inline: var(--sp-3);
+    color: var(--ink-1);
     font: var(--type-label);
-    /* Links are ink in this palette; a quiet underline is what marks them. */
-    text-decoration: underline;
-    text-decoration-color: var(--ink-3);
-    text-underline-offset: var(--sp-1);
+    text-decoration: none;
+    white-space: nowrap;
   }
 
-  .home-mobile-context a:hover {
-    color: var(--link-hover);
-    text-decoration-color: currentColor;
+  .home-mobile-context a::before {
+    position: absolute;
+    z-index: -1;
+    inset: calc((var(--touch-target) - var(--control-h-sm)) / 2) 0;
+    border-radius: var(--r-2);
+    background: var(--control-fill);
+    content: "";
+  }
+
+  .home-mobile-context a:hover::before {
+    background: var(--control-fill-hover);
   }
 }
 
@@ -784,6 +840,10 @@ a.home-count:hover .home-count-label {
 
   .home-item-title {
     padding-block: var(--sp-1);
+    max-block-size: calc(2lh + var(--sp-1) * 2);
+  }
+
+  .home-item .home-item-title {
     block-size: calc(2lh + var(--sp-1) * 2);
   }
 }
