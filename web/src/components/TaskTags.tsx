@@ -6,7 +6,7 @@ import { tagKey, tagTone } from "../lib/taskTags";
 import { TagFilterContext, type TagFilter } from "./tagFilter";
 
 /**
- * A tag's colour, alone: the "#" every tag badge leads with, and the mark
+ * The "#" every tag badge leads with, and the mark
  * beside a tag in the filter menu. Its tone comes from the tag's name
  * (`tagTone`), so one tag is one colour everywhere. The glyph is drawn by CSS
  * and hidden from assistive tech, which reads the tag's name alone.
@@ -16,18 +16,13 @@ export function TagMark({ tag }: { tag: string }) {
 }
 
 /**
- * The ONE tag badge: the tag's toned "#" and its name, in ink, on the shared
- * chip fill.
- *
- * Deliberately not a toned Badge. Badges are status — a toned word on a toned
- * fill (done, blocked, needs project); a tag is a label the person chose and
- * means nothing to Relay, so its name stays ink and its colour stays in the
- * "#", which also says what the chip is without a legend. `children` is a
- * trailing control — the editor's remove button.
+ * The ONE tag badge: a toned keyline and "#", with the name in ink.
+ * Status badges keep their toned fills; tags have a transparent face.
+ * `children` is a trailing control — the editor's remove button.
  */
 export function TagBadge({ tag, className, children }: { tag: string; className?: string; children?: ReactNode }) {
   return (
-    <span className={cn("tag-badge", className)} title={tag}>
+    <span className={cn("tag-badge", className)} data-tone={tagTone(tag)} title={tag}>
       <TagMark tag={tag} />
       <span className="tag-badge-text">{tag}</span>
       {children}
@@ -47,6 +42,7 @@ function TagToggle({ tag, filter }: { tag: string; filter: TagFilter }) {
     <button
       type="button"
       className="tag-badge tag-badge--toggle"
+      data-tone={tagTone(tag)}
       aria-pressed={pressed}
       aria-label={t(pressed ? "tags.filter_clear" : "tags.filter_by", { tag })}
       title={t(pressed ? "tags.filter_clear" : "tags.filter_by", { tag })}
