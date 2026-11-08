@@ -1,4 +1,3 @@
-import { ThreadPrompt } from "../ThreadPrompt";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { UserAgent } from "../../types";
@@ -97,7 +96,7 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, onReques
   }));
 
   return (
-    <ThreadPrompt title={t("decision.title")}>
+    <>
       <section className="decision-card" aria-labelledby={headingId}>
         <h3 id={headingId} ref={headingRef} tabIndex={-1} className="decision-card-title">{t("decision.title")}</h3>
         <p className="decision-card-hint">{t("decision.hint")}</p>
@@ -178,6 +177,6 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff, onReques
           </div>
         </div>
       ) : null}
-    </ThreadPrompt>
+    </>
   );
 }

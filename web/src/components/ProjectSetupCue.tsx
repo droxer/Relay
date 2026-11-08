@@ -18,16 +18,14 @@ export function ProjectSetupCue({ project, threadId, onOpenProject }: {
   if (!project || !setup) return null;
   const plan = setup.mode === "plan";
   return (
-    <ThreadPrompt title={t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}>
-    <div className="handoff-panel project-setup-cue" role="status" aria-live="polite">
-      <div className="handoff-panel-title">{t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}</div>
-      <p className="project-setup-cue-body">{t(plan ? "project.setup_cue_plan_body" : "project.setup_cue_body", { project: project.name })}</p>
+    <ThreadPrompt className="handoff-panel project-setup-cue" headingClassName="handoff-panel-title"
+      title={t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}>
+      <p className="project-setup-cue-body" role="status" aria-live="polite">{t(plan ? "project.setup_cue_plan_body" : "project.setup_cue_body", { project: project.name })}</p>
       <div>
         <Button type="button" variant="outline" onClick={() => onOpenProject(project.id)}>
           {t("project.setup_cue_open")}
         </Button>
       </div>
-    </div>
     </ThreadPrompt>
   );
 }

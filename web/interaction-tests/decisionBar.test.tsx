@@ -60,12 +60,3 @@ it("offers three verbs and folds the rarer moves into a menu, with no second rej
   fireEvent.click(screen.getByRole("menuitem", { name: "decision.mark_done" }));
   expect(props.sendDecision).toHaveBeenCalledWith("mark_done");
 });
-
-it('closes the decision prompt without deciding or handing off',()=>{
- const props=renderBar();
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.close'}));
- expect(screen.queryByRole('region',{name:'decision.title'})).toBeNull();
- expect(props.sendDecision).not.toHaveBeenCalled();expect(props.sendHandoff).not.toHaveBeenCalled();
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.show'}));
- expect(screen.getByRole('region',{name:'decision.title'})).toBeTruthy();
-});

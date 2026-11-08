@@ -1,15 +1,42 @@
+/* A skippable process notice: its heading is the disclosure. The toggle
+   inherits the notice's own heading type, so folding adds no row, border, or
+   button chrome — only a quiet chevron that turns when folded. The body keeps
+   the notice's own layout (display: contents) while it is open. */
 .thread-prompt { min-width: 0; }
-.thread-prompt-controls {
-  display: flex;
+.thread-prompt-heading { margin: 0; }
+.thread-prompt-toggle {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--sp-2);
-}
-.thread-prompt-label {
-  flex: 1;
+  max-width: 100%;
   min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--ink-2);
-  font-size: var(--text-sm);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: start;
+  cursor: pointer;
 }
-.thread-prompt-controls > button { flex: none; }
+.thread-prompt-title { min-width: 0; overflow-wrap: anywhere; }
+.thread-prompt-summary {
+  min-width: 0;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  overflow-wrap: anywhere;
+}
+.thread-prompt-chevron {
+  flex: none;
+  color: var(--ink-4);
+  transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.thread-prompt-toggle:hover .thread-prompt-chevron,
+.thread-prompt-toggle:focus-visible .thread-prompt-chevron { color: var(--ink-2); }
+.thread-prompt[data-collapsed] .thread-prompt-chevron { transform: rotate(-90deg); }
+.thread-prompt-body:not([hidden]) { display: contents; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-prompt-chevron { transition: none; }
+}

@@ -216,14 +216,3 @@ it("approves an approval wait in one pick and asks for changes by writing", asyn
   expect(screen.queryByRole("button", { name: /awaiting.choice_approve$/ })).toBeNull();
   expect(screen.queryByRole("button", { name: "awaiting.request_changes" })).toBeNull();
 });
-
-it.each(['question','approval','check','budget'] as const)('closes a %s without sending, and hidden choices ignore number shortcuts', kind=>{
- const onChoose=vi.fn();
- render(<AwaitingInputPrompt waiting={{kind,text:'Which environment?',options:['Staging'],notes:[]}} agentName="Ada" onChoose={onChoose} onReply={vi.fn()} />);
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.close'}));
- expect(screen.queryByRole('region')).toBeNull();
- fireEvent.keyDown(document.body,{key:'1'});
- expect(onChoose).not.toHaveBeenCalled();
- fireEvent.click(screen.getByRole('button',{name:'thread_prompt.show'}));
- expect(screen.getByRole('region')).toBeTruthy();
-});

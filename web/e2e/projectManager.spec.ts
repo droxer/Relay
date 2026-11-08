@@ -45,16 +45,20 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     const title=page.getByRole('textbox',{name:zh?'标题':'Title',exact:true});
     await expect(title).toHaveValue('Design login');await page.reload();await expect(title).toHaveValue('Design login');
     await title.fill('Design sign in');
-    await page.getByRole('button',{name:zh?'关闭建议的任务变更':'Close Proposed task changes',exact:true}).click();
-    await expect(title).toHaveCount(0);
+    // The notice's heading folds it away and back; nothing is applied or lost.
+    const notice=page.getByRole('button',{name:new RegExp(`^${zh?'建议的任务变更':'Proposed task changes'}`)});
+    await notice.click();
+    await expect(notice).toHaveAttribute('aria-expanded','false');
+    await expect(title).toBeHidden();
     expect(applications).toHaveLength(0);
-    await page.getByRole('button',{name:zh?'显示建议的任务变更':'Show Proposed task changes',exact:true}).click();
+    await notice.click();
     await expect(title).toHaveValue('Design sign in');
     await page.screenshot({path:`../output/playwright/project-manager-${mobile?'mobile':'desktop'}-${zh?'zh-dark':'en'}.png`,fullPage:true});
     await page.getByRole('button',{name:zh?'应用变更':'Apply changes',exact:true}).click();
-    await expect(page.getByText(zh?'已应用变更':'Changes applied',{exact:true})).toBeVisible();
-    await page.getByRole('button',{name:zh?'关闭建议的任务变更':'Close Proposed task changes',exact:true}).click();
-    await expect(page.getByText(zh?'已应用变更':'Changes applied',{exact:true})).toHaveCount(0);
+    // Applied, the notice rests folded to one line that still says so.
+    await expect(notice).toHaveAttribute('aria-expanded','false');
+    await expect(notice).toContainText(zh?'已应用变更':'Changes applied');
+    await expect(title).toBeHidden();
     expect(applications).toHaveLength(1);expect(tasks[0].status).toBe('backlog');expect(tasks[0].title).toBe('Design sign in');
   });
 }
