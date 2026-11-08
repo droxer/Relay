@@ -1548,9 +1548,12 @@ async function executeCommand(
           backendUrl,
           `/daemon-nodes/${encodeURIComponent(sandboxId)}/skill-blobs/${sha}?commandId=${encodeURIComponent(command.id)}`,
         );
-        const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
-        if (!response.ok) throw new Error(`skill blob unavailable (${response.status})`);
-        return Buffer.from(await response.arrayBuffer());
+        return withBackendReconnect(async () => {
+          const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
+          if (!response.ok) throw new DaemonHttpError(
+            `Skill blob unavailable (${response.status}): ${await responseErrorDetail(response)}`, response.status);
+          return Buffer.from(await response.arrayBuffer());
+        }, logger, { sandboxId, what: "skill blob download" }, { signal });
       },
     });
     let outputSequence = 0;
@@ -1762,13 +1765,15 @@ async function executeCommand(
       : skillState;
     if (command.connections?.length) {
       if (!command.leaseId) throw new Error("Connection tools require an explicit command lease");
-      const access = await fetchFn(relayApiUrl(backendUrl,
-        `/daemon-nodes/${encodeURIComponent(sandboxId)}/commands/${encodeURIComponent(command.id)}/connections`), {
-        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ leaseId: command.leaseId }), signal: requestSignal(signal),
-      });
-      if (!access.ok) throw new Error(`Connection access unavailable (${access.status})`);
-      const credential = await access.json() as { token?: unknown };
+      // This endpoint only seals run-bound claims, so retrying a lost response
+      // cannot execute a provider action. Include body decoding in the retry:
+      // receiving headers does not mean the credential arrived intact.
+      const credential = await withBackendReconnect(
+        () => postJsonResponse<{ token?: unknown }>(fetchFn, relayApiUrl(backendUrl,
+          `/daemon-nodes/${encodeURIComponent(sandboxId)}/commands/${encodeURIComponent(command.id)}/connections`),
+        { leaseId: command.leaseId }, token, signal),
+        logger, { sandboxId, what: "connection access" }, { signal },
+      );
       if (typeof credential.token !== "string") throw new Error("Invalid connection access response");
       runState = { ...runState, connection_tools: {
         url: relayApiUrl(backendUrl, "/connection-tools"), token: credential.token,
