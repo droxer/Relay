@@ -686,6 +686,31 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   await context.close();
 });
 
+test("the phone tab bar's More sheet sorts pages into the rail's sections", async ({ browser }, testInfo) => {
+  /* One flat card used to mix pages, tools, and settings in no rail order.
+     The sheet now reads search first, then the desktop rail's sections under
+     their own headings, then Sign out alone (MobileMoreSheet.tsx). */
+  const page = await openPage(browser, "/home", true);
+  const tabs = page.locator(".sidenav-panel .sidenav-btn:visible");
+  await expect(tabs).toHaveCount(5);
+  await page.getByRole("button", { name: "More pages" }).tap();
+  const sheet = page.getByRole("dialog", { name: "More" });
+  await expect(sheet).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+
+  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workspace", "Agents and teams", "Resources", "Manage"]);
+  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Automations", "Agents", "Teams", "Computers", "Skills", "Settings"]);
+  const controls = sheet.locator("button, a");
+  await expect(controls.first()).toHaveText("Search");
+  await expect(controls.last()).toHaveText("Sign out");
+  for (const box of await sheet.locator(".more-sheet-row").evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().toJSON()))) {
+    expect(box.height).toBeGreaterThanOrEqual(48);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+  await page.screenshot({ path: testInfo.outputPath("more-sheet.png") });
+  await page.context().close();
+});
+
 test("a drawer on a touch phone is dismissed by pulling its header down", async ({ browser }) => {
   /* A full-screen drawer is a sheet on a phone, and the native way out of a
      sheet is to pull it down (Drawer.tsx, useSheetDrag). A short pull springs

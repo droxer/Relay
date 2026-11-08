@@ -94,20 +94,24 @@ describe("reviewed design regressions", () => {
     assert.match(responsive, /\.messenger-shell \.sidenav-panel \.sidenav-btn\.sidenav-secondary-item[^{]*\{[^}]*display:\s*none;/s);
     assert.doesNotMatch(responsive, /\.sidenav-secondary-item[^{]*\{[^}]*!important/s);
 
-    // The secondary destinations live in the More sheet. They used to be
-    // hand-repeated <a className="sidenav-more-item"> blocks; they are
-    // one MORE_ROUTES table rendered by MobileMoreSheet now, so the check
-    // reads the table rather than the markup it expands to.
-    const table = nav.match(/const MORE_ROUTES[\s\S]*?\n\];/)?.[0];
-    assert.ok(table, "SideNav must declare a MORE_ROUTES table");
-    for (const route of ["routine", "teams", "settings", "admin"]) {
+    // The secondary destinations live in the More sheet, as one MORE_GROUPS
+    // table rendered by MobileMoreSheet, so the check reads the table rather
+    // than the markup it expands to.
+    const table = nav.match(/const MORE_GROUPS[\s\S]*?\n\];/)?.[0];
+    assert.ok(table, "SideNav must declare a MORE_GROUPS table");
+    for (const route of ["routine", "agents", "teams", "computers", "skills", "settings", "admin"]) {
       assert.match(table, new RegExp(`route: "${route}"`));
     }
+    // Sections and order match the desktop rail's groups.
+    const headings = [...table.matchAll(/labelKey: "(nav\.[a-z_]+)", routes/g)].map((match) => match[1]);
+    assert.deepEqual(headings, ["nav.workspace", "nav.workforce", "nav.infra", "nav.manage"]);
     assert.doesNotMatch(nav, /data-nav="channels"|route: "channels"/);
     // Still real links, and still the app's own client-side navigation.
     const sheet = readWeb("src/components/MobileMoreSheet.tsx");
-    assert.match(nav, /<MobileMoreSheet[\s\S]*?routes=\{MORE_ROUTES[\s\S]*?onNavigate=\{handleRouteClick\}/);
+    assert.match(nav, /<MobileMoreSheet[\s\S]*?groups=\{visibleMoreGroups\(isAdmin\)\}[\s\S]*?onNavigate=\{handleRouteClick\}/);
     assert.match(sheet, /<a[\s\S]*?href=\{hrefForRoute\(route\)\}[\s\S]*?onNavigate\(event, route\)/);
+    // Sign out stays out of the destination list.
+    assert.ok(sheet.indexOf("</nav>") < sheet.indexOf("runThenClose(onLogout)"), "Sign out must follow the destination nav");
     assert.doesNotMatch(nav, /channelsHint|coming_soon_short/);
   });
 

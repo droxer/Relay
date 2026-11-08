@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,13 +19,12 @@ import {
   NavSidebarExpand,
   NavTeams,
   NavThreads,
-  type GlyphProps,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
-import { MobileMoreSheet } from "./MobileMoreSheet";
+import { MobileMoreSheet, type MoreSheetGroup, type MoreSheetRoute } from "./MobileMoreSheet";
 import type { AppRoute } from "../lib/viewTypes";
 import {
   clampSidenavWidth, maxSidenavWidth, SIDENAV_WIDTH_DEFAULT, SIDENAV_WIDTH_MAX, SIDENAV_WIDTH_MIN,
@@ -33,26 +32,39 @@ import {
 import { chatColumnWidth, viewportWidth } from "../lib/shellMetrics";
 import { NotificationBell, type NotificationBellBinding } from "./notifications/NotificationBell";
 
+type MoreRoute = MoreSheetRoute & { adminOnly?: boolean };
+
 /** Mobile-only More overflow: the destinations that do not fit the bottom tab
- *  bar. A table rather than five repeated <a> blocks — the blocks differed
- *  only in icon, label, and route, and the admin one only in being gated. */
-const MORE_ROUTES: readonly {
-  route: AppRoute;
-  /* icons.tsx exports stroked wrappers, filled identity glyphs, and the odd
-     bespoke one, which have different component types; GlyphProps is the call
-     shape they share, which is all a table of icons needs. */
-  Icon: ComponentType<GlyphProps>;
-  labelKey: string;
-  adminOnly?: boolean;
-}[] = [
-  { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
-  { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
-  { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
-  { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
-  { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
-  { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
-  { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
+ *  bar, in the same sections and order as the desktop rail, so a person who
+ *  knows one layout knows the other. A table rather than repeated <a> blocks:
+ *  rows differ only in icon, label, and route, and admin only in being gated. */
+const MORE_GROUPS: readonly { labelKey: string; routes: readonly MoreRoute[] }[] = [
+  { labelKey: "nav.workspace", routes: [
+    { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
+  ] },
+  { labelKey: "nav.workforce", routes: [
+    { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
+    { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
+  ] },
+  { labelKey: "nav.infra", routes: [
+    { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
+    { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
+  ] },
+  { labelKey: "nav.manage", routes: [
+    { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
+    { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
+  ] },
 ];
+
+const MORE_ROUTES: readonly AppRoute[] = MORE_GROUPS.flatMap((group) => group.routes.map(({ route }) => route));
+
+/** The groups a person may open: admin-only rows drop out, and so does any
+ *  group that leaves empty. */
+function visibleMoreGroups(isAdmin: boolean): MoreSheetGroup[] {
+  return MORE_GROUPS
+    .map(({ labelKey, routes }) => ({ labelKey, routes: routes.filter(({ adminOnly }) => !adminOnly || isAdmin) }))
+    .filter(({ routes }) => routes.length > 0);
+}
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
@@ -119,7 +131,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
-  const moreActive = MORE_ROUTES.some((item) => item.route === route);
+  const moreActive = route !== null && MORE_ROUTES.includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
@@ -426,7 +438,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
       <MobileMoreSheet
         open={moreOpen}
         onOpenChange={onMoreOpenChange}
-        routes={MORE_ROUTES.filter(({ adminOnly }) => !adminOnly || isAdmin)}
+        groups={visibleMoreGroups(isAdmin)}
         currentRoute={route}
         hrefForRoute={hrefForRoute}
         onNavigate={handleRouteClick}
