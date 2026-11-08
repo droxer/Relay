@@ -10,6 +10,7 @@ import { applyTheme, readLanguage, readSignedInHint, writeTheme, type Theme } fr
 import { registerPwaServiceWorker } from "../lib/pwa";
 import { preloadRouteChunk } from "../lib/routeChunks";
 import { AuthChecking } from "./AuthChecking";
+import { preloadMarkdown } from "./LazyMarkdown";
 import { LandingScreen } from "./landing/LandingScreen";
 
 type AppComponent = typeof import("../App").App;
@@ -61,14 +62,17 @@ function opensOnLanding(): boolean {
 
 /** Everything a returning user's first screen needs, requested together with
     the page's own code rather than one after another: the app chunk, the
-    chunk of the route they are opening, and the catalogue of the language
-    they last used. The app re-applies the account's language after
-    `/auth/me`; when it matches (nearly always) that is a no-op, and when the
-    catalogue is still arriving i18next joins the pending load. */
+    chunk of the route they are opening, the markdown pipeline when that
+    route names a thread (its turns would otherwise paint as plain text and
+    reflow once it lands), and the catalogue of the language they last used.
+    The app re-applies the account's language after `/auth/me`; when it
+    matches (nearly always) that is a no-op, and when the catalogue is still
+    arriving i18next joins the pending load. */
 function warmSignedInStart(): void {
   void loadApp().catch(() => undefined);
-  const { route, notFound, publicPage } = parseAppPath(window.location.pathname);
+  const { route, sessionId, notFound, publicPage } = parseAppPath(window.location.pathname);
   if (!notFound && !publicPage) preloadRouteChunk(route);
+  if (!notFound && sessionId) preloadMarkdown();
   const language = readLanguage();
   if (i18n.language !== language) void i18n.changeLanguage(language).catch(() => undefined);
 }

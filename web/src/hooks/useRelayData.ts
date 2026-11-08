@@ -25,6 +25,9 @@ type RelayDataResult = {
   nodes: DaemonNodeMonitorRecord[];
   nodesReady: boolean;
   sessions: RelaySession[];
+  /** The first thread list is still on its way: an empty `sessions` means
+   *  "not yet", not "none". */
+  sessionsLoading: boolean;
   tasks: RelayTaskSummary[];
   projects: ProjectRecord[];
   homeStatus: ProjectCollectionStatus;
@@ -39,7 +42,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
+  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
 /* The only fields the app reads off the five polls, folded into one value.
@@ -60,6 +63,7 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
     nodesReady: nodesQuery.isSuccess,
     nodes: (nodesQuery.data as DaemonNodeMonitorRecord[] | undefined) ?? [],
     sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
+    sessionsLoading: sessionsQuery.isLoading,
     tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
     projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
     homeStatus: [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => q.isError)
@@ -101,7 +105,7 @@ export function useRelayData(
   // sessions interval at once instead of after the next poll.
   const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
 
-  const { sandboxes, nodes, nodesReady, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
+  const { sandboxes, nodes, nodesReady, sessions, sessionsLoading, tasks, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
       {
@@ -235,6 +239,7 @@ export function useRelayData(
     nodes,
     nodesReady,
     sessions,
+    sessionsLoading,
     tasks,
     projects,
     projectsStatus,

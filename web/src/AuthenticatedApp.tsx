@@ -136,6 +136,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     nodes,
     nodesReady,
     sessions,
+    sessionsLoading,
     tasks,
     projects,
     projectsStatus,
@@ -338,6 +339,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       : null),
     [activeProject, activeSession],
   );
+  // The thread names a project whose record has not loaded yet: until it does
+  // the composer would read the thread as an ordinary (team) thread and draw
+  // that thread's controls, then swap them for the project room's.
+  const projectContextPending = Boolean(activeSession?.projectId) && !activeProject && projectsStatus === "loading";
   const projectDispatchDisabled = Boolean(
     activeProject && (activeProject.archivedAt || !activeProject.enabled),
   );
@@ -781,6 +786,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onBackToThreads={() => navigateToMobileView("threads")}
             selectedUser={selectedUser}
             initializingThread={requiresRuntimeSelection}
+            threadsLoading={sessionsLoading && !composingNew}
+            projectLoading={projectContextPending}
             projectName={activeProject?.name}
             projectRoom={projectRoom}
             projectRoomSelected={projectRoomTarget}

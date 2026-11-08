@@ -48,6 +48,7 @@ import { directDelegations } from "../lib/directDelegations";
 import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { parseAutomationOpening } from "../lib/automationOpening";
 import { threadOriginIndex } from "../lib/threads";
+import { threadPanelLayout } from "../lib/threadPanel";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
 import { HandoffStatus } from "./HandoffStatus";
 import { TeamHandoffCue } from "./TeamHandoffCue";
@@ -160,6 +161,13 @@ type ThreadsViewProps = {
   onBackToThreads: () => void;
   selectedUser: string;
   initializingThread: boolean;
+  /** The thread list has not arrived, so no thread is known to be missing:
+   *  the page holds its docked shape rather than drawing the new-thread
+   *  landing it would only snap out of. */
+  threadsLoading?: boolean;
+  /** The thread's project has not loaded, so its composer cannot yet say
+   *  whether it addresses the project room or a team. */
+  projectLoading?: boolean;
   projectName?: string;
   /** The project's roster offered as one composer target. */
   projectRoom?: ProjectRoomOption | null;
@@ -250,6 +258,8 @@ export function ThreadsView({
   onBackToThreads,
   selectedUser,
   initializingThread,
+  threadsLoading = false,
+  projectLoading = false,
   projectName,
   projectRoom,
   projectRoomSelected,
@@ -307,12 +317,16 @@ export function ThreadsView({
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback. A brand-new empty
   // thread renders none, so it waits for its first turn (or the run that
-  // will produce it) before fetching the pipeline.
+  // will produce it) before fetching the pipeline. While the thread list is
+  // still loading, a thread is the likely outcome: fetching alongside it is
+  // what keeps a deep link's turns from painting as plain text and then
+  // reflowing once the pipeline lands.
   const hasTranscript = Boolean(activeSession) && (running || displayMessages.length > 0
     || (activeSession?.events.length ?? 0) > 0 || (activeSession?.agentRuns.length ?? 0) > 0);
+  const transcriptLikely = hasTranscript || threadsLoading;
   useEffect(() => {
-    if (hasTranscript) preloadMarkdown();
-  }, [hasTranscript]);
+    if (transcriptLikely) preloadMarkdown();
+  }, [transcriptLikely]);
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentImages = useMemo(() => buildLogicalAgentImageMap(logicalAgents), [logicalAgents]);
@@ -324,8 +338,14 @@ export function ThreadsView({
     () => activeLogicalAgent?.displayName ?? displayNameForExecutor(activeAgent, logicalAgents),
     [activeAgent, activeLogicalAgent, logicalAgents],
   );
-  // A new thread with nothing sent yet: the composer is the page (chat.css).
-  const landing = !activeSession && !pendingUserMessage && !onboardingPanel;
+  // Before and while the thread arrives the panel keeps its docked shape and
+  // an empty transcript rather than drawing a guess it would snap out of.
+  const { landing, transcriptPending } = threadPanelLayout({
+    threadsLoading,
+    activeSession,
+    hasPendingMessage: Boolean(pendingUserMessage),
+    hasOnboardingPanel: Boolean(onboardingPanel),
+  });
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
@@ -574,7 +594,7 @@ export function ThreadsView({
            answer) speaks through its own role="status" regions instead. */
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="off">
           <div className="transcript-inner">
-            {activeSession || pendingUserMessage ? (
+            {transcriptPending ? null : activeSession || pendingUserMessage ? (
               <>
                 {transcriptStart > 0 ? (
                   // Keyed by the window start so each page mounts a fresh
@@ -699,6 +719,7 @@ export function ThreadsView({
           activeAgentDisplayName={activeAgentDisplayName}
           selectedUser={selectedUser}
           initializingThread={initializingThread}
+          contextPending={threadsLoading || projectLoading}
           projectName={projectName}
           projectRoom={projectRoom}
           projectRoomSelected={projectRoomSelected}

@@ -37,6 +37,48 @@ function session(id: string, index: number, turns = 0) {
 const THREADS = Array.from({ length: 400 }, (_, index) => session(`s-${index}`, index));
 const LONG_THREAD = session("s-0", 0, 150);
 
+test("a mobile deep link keeps the composer docked while summary and detail arrive", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const thread = session("mobile-load", 0, 3);
+  let releaseList!: () => void;
+  let releaseDetail!: () => void;
+  const listGate = new Promise<void>((resolve) => { releaseList = resolve; });
+  const detailGate = new Promise<void>((resolve) => { releaseDetail = resolve; });
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    else if (path.endsWith(`/threads/${thread.id}`)) {
+      await detailGate;
+      body = thread;
+    } else if (path.endsWith("/threads")) {
+      await listGate;
+      body = { sessions: [{ ...thread, events: [], agentRuns: [] }] };
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  try {
+    await page.goto(`/threads/${thread.id}`);
+    const composer = page.locator("form.composer");
+    await expect(composer).toBeVisible();
+    const top = await composer.evaluate((element) => element.getBoundingClientRect().top);
+    await expect(page.locator(".chat-panel--landing")).toHaveCount(0);
+    releaseList();
+    await expect(page.locator(".mobile-topbar")).toContainText(thread.title);
+    // A summary has a goal but no turns. Painting it now would insert a
+    // temporary opening message that the full transcript then displaces.
+    await expect(page.locator(".transcript .msg")).toHaveCount(0);
+    expect(await composer.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(top, 0);
+    releaseDetail();
+    await expect(page.locator(".agent-code").last()).toContainText("turn2");
+    expect(await composer.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(top, 0);
+  } finally {
+    releaseList();
+    releaseDetail();
+  }
+});
+
 for (const width of [1280, 390]) {
   test(`OpenCode text streams into one Markdown block before completion (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });

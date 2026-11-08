@@ -87,6 +87,12 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** The picked computer resolved against the whole fleet, not just the
    *  currently-selectable subset. */
   selectedRuntimeNode: DaemonNodeMonitorRecord | null;
+  /** The thread (or its project) is still on its way, so what the context
+   *  row and the team's style picker should say is not known yet: the row
+   *  holds the readout's line, saying nothing, and the picker waits, rather
+   *  than claim there is no computer or offer a team the project room will
+   *  replace — each swap was a layout shift. */
+  contextPending?: boolean;
   /** The computer an already-started thread is pinned to, shown read-only. */
   activeRuntimeNode: DaemonNodeMonitorRecord | null;
   onRuntimeNodeChange: (nodeId: string) => void;
@@ -105,7 +111,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   queue?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
+}>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
   const { t } = useTranslation();
   const composer = useComposer(draftKey);
   const imageInput = useComposerImages(draftKey);
@@ -326,7 +332,9 @@ const ComposerView = forwardRef<ComposerHandle, {
   // than printing the same computer or project twice on one screen. Only the
   // picker, the one slot that can still be acted on, always shows.
   const headerStatesIt = !initializingThread ? "composer-context--header-fact" : undefined;
-  const computerSlot = projectName ? (
+  const computerSlot = contextPending ? (
+    <span className="composer-context composer-context--header-fact" aria-hidden="true" />
+  ) : projectName ? (
     // Same readout shape as the pinned computer, different words: a project
     // thread's settled fact is its shared workspace, not a machine.
     <ComposerContextLine
@@ -470,7 +478,7 @@ const ComposerView = forwardRef<ComposerHandle, {
                 onRoomPicked={pickRoom}
                 running={running}
               />
-              {activeTeamId && !projectName && !addressedLogicalAgentId ? (
+              {activeTeamId && !projectName && !addressedLogicalAgentId && !contextPending ? (
                 <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
                   value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
                   inheritStyle={effectiveStyle(teams?.find((team) => team.id === activeTeamId))}
