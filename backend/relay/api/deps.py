@@ -24,7 +24,6 @@ from ..persistence.protocols import (
 from ..persistence.account.profile_images import DatabaseProfileImageStore
 from ..persistence.skill.store import DatabaseSkillStore
 from ..realtime.event_notifier import KeyedEventNotifier, PostgresNotificationBridge
-from ..computer.workspace_query import WorkspaceQueryBroker
 from ..persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 from ..persistence.automation.store import DatabaseAutomationStore
 from ..persistence.notification.store import DatabaseNotificationStore
@@ -61,7 +60,6 @@ class AppContext:
     # module disagrees with the store's real save/read signatures.
     profile_image_store: DatabaseProfileImageStore
     org_settings_store: OrgSettingsStore
-    workspace_query_broker: WorkspaceQueryBroker
     control_plane_notifier: KeyedEventNotifier
     today: Callable[[], date]
     settings: AppSettings

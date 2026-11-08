@@ -13,13 +13,13 @@ from starlette.concurrency import run_in_threadpool
 from ...core.computer_identity import computer_id
 from ...realtime.event_notifier import workspace_response_key
 from ...core.workspace_capabilities import required_workspace_capabilities
-from ...computer.workspace_query import WORKSPACE_COMMAND_TIMEOUT_SECONDS
 from ..deps import AppContext
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
     has_capability,
 )
 
+WORKSPACE_COMMAND_TIMEOUT_SECONDS = 10.0
 WORKSPACE_FILE_PREVIEW_LIMIT = 256 * 1024
 
 

@@ -50,9 +50,12 @@ MAX_COMMAND_LEASE_SECONDS = 60 * 60.0
 MAX_ACTIVE_COMMAND_IDS = 50
 # How long a command poll waits before re-reading the queue on its own when no
 # wake arrives. A publish can be missed (several SQLite processes, a dropped
-# notification), so this is the dispatch latency floor for that case; the
+# notification), so this bounds the recovery wait for that case; the
 # recovery read is one indexed query per waiting daemon per interval.
 COMMAND_NOTIFICATION_RECOVERY_SECONDS = 1.0
+# A healthy replica bridge supplies prompt wakeups; keep a slower recovery read
+# for missed notifications. Lease renewal and liveness may require earlier ticks.
+COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 5.0
 
 
 def bounded_float(
@@ -345,10 +348,18 @@ async def daemon_commands(
                 remaining = deadline - time.monotonic()
                 if commands or remaining <= 0:
                     break
+                recovery_seconds = COMMAND_NOTIFICATION_RECOVERY_SECONDS
+                if ctx.notification_bridge and ctx.notification_bridge.stats()["connected"]:
+                    recovery_seconds = COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS
                 await ctx.control_plane_notifier.wait(
                     notification_key,
                     observed_version,
-                    timeout=min(COMMAND_NOTIFICATION_RECOVERY_SECONDS, remaining),
+                    timeout=min(
+                        recovery_seconds,
+                        lease_seconds / 3,
+                        ctx.registry.liveness_timeout_ms / (1000 * registry_config.HEARTBEATS_PER_LIVENESS_WINDOW),
+                        remaining,
+                    ),
                 )
             # A daemon that hung up (it is shutting down, or its request timed
             # out) reads nothing we return. Taking a command now would lease
@@ -475,7 +486,6 @@ async def daemon_events(
             await run_in_threadpool(
                 ctx.daemon_store.record_workspace_response, sandbox_id, event
             )
-            ctx.workspace_query_broker.resolve(event["commandId"], sandbox_id, event)
             return {"ok": True}
         await run_in_threadpool(
             ctx.registry.handle_event, sandbox_id, event, bearer_token(request)

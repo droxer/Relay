@@ -98,7 +98,6 @@ from .realtime.event_notifier import (
 from .accounts.password_reset import PasswordResetService, password_reset_config_from_env
 from .security.password_resets import password_reset_store_for
 from .notifications.mailer import mailer_from_env
-from .computer.workspace_query import WorkspaceQueryBroker
 from .accounts.waitlist import WaitlistService
 from .tasks.flow import wip_limit
 from .execution.lifecycle import ExecutionLifecycleService
@@ -338,7 +337,6 @@ def _publish_state(
         agent_placement_store=stores.placements,
         profile_image_store=stores.profile_images,
         org_settings_store=stores.org_settings,
-        workspace_query_broker=WorkspaceQueryBroker(),
         control_plane_notifier=notifier,
         today=settings.scheduler_today,
         settings=settings,

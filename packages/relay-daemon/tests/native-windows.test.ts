@@ -188,7 +188,9 @@ test('native Claude discovery uses saved login only for the vendor and emits mod
         if(url !== 'https://api.anthropic.com/v1/models?limit=1000' || options.headers.authorization !== 'Bearer saved-test-token') throw Error('incorrect request');
         return {ok:true,json:async()=>({data:[{id:'claude-versioned',secret:'do-not-emit'}]})};
       };\n`;
-    const env = { CLAUDE_CONFIG_DIR: root, ANTHROPIC_BASE_URL: 'https://api.anthropic.com' };
+    // Keep the child process's Relay dotenv loader from importing host credentials.
+    const env = { CLAUDE_CONFIG_DIR: root, ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      ANTHROPIC_API_KEY: '', CLAUDE_CODE_OAUTH_TOKEN: '', ANTHROPIC_AUTH_TOKEN: '' };
     const result = await localProcessExecStream('relay-native', [stub + nativeModelDiscoveryScript('claude')], { env });
     assert.equal(result.exit_code, 0, result.stderr);
     assert.deepEqual(parseAgentModels('claude', result.stdout), ['claude-versioned']);

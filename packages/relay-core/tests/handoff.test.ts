@@ -1087,14 +1087,14 @@ describe("agent stream rendering", () => {
   });
 
   it("runs every approval-gated agent without an interactive prompt", () => {
-    // These runs are headless: nothing can answer a tool-approval question, so
-    // an agent that asks one stalls until the run is cancelled. Each CLI that
-    // has an approval gate must be launched with it disabled.
-    const taskState = state({ task_goal: "Do the thing" });
+    withEnv({ ...process.env, RELAY_RUN_AS_CURRENT_USER: "0" }, () => {
+      // Guest runs are headless: each approval gate must be disabled.
+      const taskState = state({ task_goal: "Do the thing" });
 
-    assert.match(buildClaudeCommand(taskState), /--permission-mode bypassPermissions/);
-    assert.match(buildCodexCommand(taskState), /--dangerously-bypass-approvals-and-sandbox/);
-    assert.match(buildKimiCommand(taskState), /(^|\s)--auto(\s|$)/);
+      assert.match(buildClaudeCommand(taskState), /--permission-mode bypassPermissions/);
+      assert.match(buildCodexCommand(taskState), /--dangerously-bypass-approvals-and-sandbox/);
+      assert.match(buildKimiCommand(taskState), /(^|\s)--auto(\s|$)/);
+    });
   });
 
   it("filters noisy seccomp stderr warnings", () => {
@@ -1325,7 +1325,8 @@ describe("execution manager boundary", () => {
       delete process.env[name];
     }
     try {
-      await runsAgentReadinessThroughTheExecutionManager();
+      await withEnvAsync({ ...process.env, RELAY_RUN_AS_CURRENT_USER: "0" },
+        runsAgentReadinessThroughTheExecutionManager);
     } finally {
       for (const [name, value] of hostCredentials) {
         if (value === undefined) delete process.env[name];

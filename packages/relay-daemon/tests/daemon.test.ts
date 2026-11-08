@@ -3637,7 +3637,7 @@ test("discoverAgentInventory scans live Kimi and Codex homes while ignoring lega
     const inventory = await discoverAgentInventory(async (cmd, args, options) => {
       try {
         const result = await execute(cmd, args ?? [], {
-          env: { ...process.env, HOME: home },
+          env: { ...process.env, HOME: home, KIMI_CODE_HOME: join(home, '.kimi-code'), CODEX_HOME: join(home, '.codex') },
           signal: options?.signal,
         });
         return { exit_code: 0, stdout: result.stdout, stderr: result.stderr };

@@ -216,16 +216,17 @@ class PostgresNotificationBridge:
                     self.database_url, autocommit=True
                 )
                 async with connection:
-                    self._connected = True
                     await connection.execute(
                         sql.SQL("LISTEN {}").format(sql.Identifier(self.channel))
                     )
+                    self._connected = True
                     retry_seconds = 0.25
                     while True:
                         async for notification in connection.notifies(timeout=30):
                             self._notifications += 1
                             self.notifier.publish(notification.payload)
             except asyncio.CancelledError:
+                self._connected = False
                 raise
             except (OSError, psycopg.Error) as error:
                 self._connected = False
