@@ -3317,32 +3317,46 @@ test("relay daemon runs concurrent commands within capacity", async () => {
   assert.equal(events.some((event) => event.type === "run.failed"), false);
 });
 
-for (const sameAgent of [false, true]) {
-  test(`relay daemon isolates concurrent Codex runs with ${sameAgent ? "one Logical Agent" : "multiple Logical Agents"}`, { timeout: 10_000 }, async (t) => {
+for (const scenario of [
+  { name: "multiple Logical Agents on Codex", runtimes: ["codex", "codex", "codex"], logicalIds: [0, 1, 2] },
+  { name: "one Logical Agent on Codex", runtimes: ["codex", "codex", "codex"], logicalIds: [0, 0, 0] },
+  { name: "two Codex and two Claude runs", runtimes: ["codex", "claude", "codex", "claude"], logicalIds: [0, 1, 0, 1] },
+] as const) {
+  test(`relay daemon isolates concurrent runs with ${scenario.name}`, { timeout: 10_000 }, async (t) => {
     const root = mkdtempSync(join(tmpdir(), "relay-agent-concurrency-"));
     const stop = new AbortController();
-    t.after(() => { stop.abort(); rmSync(root, { recursive: true, force: true }); });
+    const previous = captureEnv(["RELAY_LOCAL_PERMISSION_POLICY", "RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
+    process.env.RELAY_LOCAL_PERMISSION_POLICY = "trusted";
+    process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS = String(scenario.runtimes.length);
+    t.after(() => {
+      stop.abort();
+      restoreCapturedEnv(previous);
+      rmSync(root, { recursive: true, force: true });
+    });
     const events: DaemonNodeEvent[] = [];
     const started = new Set<number>();
     let served = false;
     let cancelSent = false;
     let cancelled = false;
-    const commands: DaemonNodeRunCommand[] = [0, 1, 2].map((index) => ({
+    const commands: DaemonNodeRunCommand[] = scenario.runtimes.map((agent, index) => ({
       ...runCommand(`cmd_parallel_${index}`),
+      agent,
       sessionId: `ses_parallel_${index}`, runId: `run_parallel_${index}`,
       taskGoal: `parallel-marker-${index}`, workspacePath: root,
       workspaceLayout: "task", workspaceSubpath: `tasks/parallel-${index}`,
-      logicalAgentId: sameAgent ? "agent_one" : `agent_${index}`,
+      logicalAgentId: `agent_${scenario.logicalIds[index]}`,
     }));
     await runRelayDaemon({
       backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
-      workspacePath: root, token: "node_token", pollIntervalMs: 5,
-      shutdownGraceMs: 100, maxConcurrentRuns: 3, logger: testLogger(), signal: stop.signal,
+      workspacePath: root, stateDir: join(root, "daemon-state"), token: "node_token", pollIntervalMs: 5,
+      shutdownGraceMs: 100, logger: testLogger(), signal: stop.signal,
       environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
         if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
         const match = args?.[1]?.match(/parallel-marker-(\d)/);
         assert.ok(match, "execution must retain its task prompt");
         const index = Number(match[1]);
+        assert.match(args?.[1] ?? "", commands[index].agent === "claude"
+          ? /\bclaude\b.*\bstream-json\b/s : /\bcodex\b.*--json/s);
         assert.equal(options?.cwd, join(root, `tasks/parallel-${index}`));
         assert.equal(started.has(index), false, "redelivery must not spawn twice");
         started.add(index);
@@ -3361,7 +3375,7 @@ for (const sameAgent of [false, true]) {
         if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
         if (path.endsWith("/commands")) {
           if (!served) { served = true; return jsonResponse({ commands: [...commands, commands[0]] }); }
-          if (started.size === 3 && !cancelSent) {
+          if (started.size === commands.length && !cancelSent) {
             cancelSent = true;
             return jsonResponse({ commands: [{
               id: "cancel_parallel_0", type: "run.cancel", commandId: commands[0].id,
@@ -3374,23 +3388,25 @@ for (const sameAgent of [false, true]) {
           const event = await jsonBody<DaemonNodeEvent>(init);
           events.push(event);
           if (event.type === "run.cancelled") cancelled = true;
-          if (events.filter((item) => item.type === "run.completed").length === 2) stop.abort();
+          if (event.type === "run.failed" ||
+              events.filter((item) => item.type === "run.completed").length === commands.length - 1) stop.abort();
           return jsonResponse({ ok: true }, 202);
         }
         throw new Error(`unexpected URL ${url}`);
       },
     });
-    assert.equal(started.size, 3, "all three executions overlap before cancellation");
+    assert.deepEqual(events.filter((event) => event.type === "run.failed"), []);
+    assert.equal(started.size, commands.length, "all executions overlap before cancellation");
     assert.deepEqual(events.flatMap((event) => event.type === "run.cancelled" ? [event.commandId] : []), [commands[0].id]);
-    assert.equal(events.some((event) => event.type === "run.failed"), false);
-    for (const command of commands) {
+    for (const [index, command] of commands.entries()) {
       const terminal = events.find((event) => (event.type === "run.completed" || event.type === "run.cancelled") && event.commandId === command.id);
       assert.ok(terminal && (terminal.type === "run.completed" || terminal.type === "run.cancelled"));
       assert.equal(terminal.sessionId, command.sessionId);
       assert.equal(terminal.runId, command.runId);
-      const index = commands.indexOf(command);
+      assert.equal(terminal.agent, command.agent);
       assert.ok(terminal.agentLog?.includes(`output-for-${index}`));
-      for (const other of [0, 1, 2].filter((value) => value !== index)) {
+      for (const other of commands.keys()) {
+        if (other === index) continue;
         assert.equal(terminal.agentLog?.includes(`output-for-${other}`), false);
       }
     }

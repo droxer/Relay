@@ -9,6 +9,7 @@ const SETTING_KEYS = new Set([
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy",
   "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
   "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "OPENAI_BASE_URL",
+  "RELAY_DAEMON_MAX_CONCURRENT_RUNS",
 ]);
 const CREDENTIAL_KEYS = new Set(AGENT_NAMES.flatMap(agent => [...agentCredentialEnvNames(agent)]));
 const ALLOWED_KEYS = new Set([...SETTING_KEYS, ...CREDENTIAL_KEYS]);

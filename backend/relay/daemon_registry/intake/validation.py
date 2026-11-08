@@ -9,7 +9,7 @@ from typing import Any
 
 
 from ...core.computer_identity import computer_id
-from ..scheduling import node_accepts_run, normalize_run_capacity
+from ..scheduling import ComputerRunCapacityError, node_accepts_run, normalize_run_capacity
 from ..workspace_contention import session_workspace_key, workspace_is_contended, workspace_key
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
 from ...agents.routing import (
@@ -225,7 +225,7 @@ class RunTargetValidationMixin(NodeBackendState):
                 active_runs=active_runs_by_node[node_id],
                 session_id=request.get("sessionId"),
             ) and not workspace_deferred:
-                raise ValueError(
+                raise ComputerRunCapacityError(
                     f"capacity_exhausted: Sandbox {node_id} has no available execution slot."
                 )
 
@@ -270,7 +270,7 @@ class RunTargetValidationMixin(NodeBackendState):
             key_of_session=key_of_session,
         )
         if contended and len(undelivered) >= normalize_run_capacity(node):
-            raise ValueError(
+            raise ComputerRunCapacityError(
                 f"capacity_exhausted: Sandbox {node_id} workspace wait queue is full."
             )
         return contended

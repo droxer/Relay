@@ -1,4 +1,4 @@
-"""Dispatch failures require explicit user action; no automatic retry schedule."""
+"""Record a capacity wait or a dispatch failure that requires manual retry."""
 
 from __future__ import annotations
 
@@ -14,6 +14,35 @@ def safe_dispatch_error_message(error: Exception, *, max_length: int = 300) -> s
     return message[:max_length]
 
 
+def record_computer_capacity_wait(task_store: Any, task: dict[str, Any]) -> dict[str, Any]:
+    return _record_dispatch_wait(
+        task_store, task["id"], code="capacity_exhausted",
+        message="Waiting for an execution slot on the assigned Computer.",
+    )
+
+
+def _record_dispatch_wait(
+    task_store: Any, task_id: str, *, code: str, message: str,
+) -> dict[str, Any]:
+    # Re-read under the task lock to preserve concurrent admission,
+    # cancellation, or a human block. Continuations already hold WIP.
+    with task_store.task_write_scope(task_id) as current:
+        if (
+            current.get("status") not in ("backlog", "assigned", "queued")
+            or dispatch_claim_active(current)
+            or (code == "task_wip_limit" and is_wip(current))
+        ):
+            return current
+        if current.get("status") != "queued":
+            current = task_store.update_task(task_id, {"status": "queued"})
+        if current.get("dispatchRetry"):
+            current = task_store.clear_dispatch_retry(task_id)
+        outcome = current.get("dispatchOutcome") or {}
+        if outcome.get("state") == "queued" and outcome.get("code") == code:
+            return current
+        return task_store.record_dispatch_outcome(task_id, "queued", code=code, message=message)
+
+
 def record_dispatch_failure(
     task_store: Any,
     task: dict[str, Any],
@@ -21,23 +50,9 @@ def record_dispatch_failure(
     code: str,
     message: str,
 ) -> dict[str, Any]:
-    """Block after the first failure, preserving the cause for manual retry."""
+    """Block after a failed dispatch or record a WIP admission wait."""
     if code == "task_wip_limit":
-        # Preflight is advisory. Re-read under the task lock so a concurrent
-        # admission, cancellation, or human block cannot be overwritten.
-        with task_store.task_write_scope(task["id"]) as current:
-            if current.get("status") not in ("backlog", "assigned", "queued") or dispatch_claim_active(current) or is_wip(current):
-                return current
-            if current.get("status") != "queued":
-                current = task_store.update_task(task["id"], {"status": "queued"})
-            if current.get("dispatchRetry"):
-                current = task_store.clear_dispatch_retry(task["id"])
-            outcome = current.get("dispatchOutcome") or {}
-            if outcome.get("state") == "queued" and outcome.get("code") == code:
-                return current
-            return task_store.record_dispatch_outcome(
-                task["id"], "queued", code=code, message=WIP_WAIT_MESSAGE,
-            )
+        return _record_dispatch_wait(task_store, task["id"], code=code, message=WIP_WAIT_MESSAGE)
     reason = f"{message.rstrip('.')}. Retry this task manually when the problem is resolved."
     task_store.update_task(
         task["id"],

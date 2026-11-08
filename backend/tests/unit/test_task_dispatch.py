@@ -24,6 +24,7 @@ from app_state_helpers import replace_app_context
 from relay.api.deps import AppContext
 from relay.app import create_app
 from relay.tasks.dispatch import start_task_on_ready_node
+from relay.tasks.scheduler import TaskScheduler
 
 from issue_projects import PROJECT_CAPABILITY, project_for
 from user_ids import user_id as handle_user_id
@@ -388,6 +389,74 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
         assert record["workspaceArtifactsDir"] == f"artifacts/{occurrence['id']}"
         runs = client.get(f"/api/v1/tasks/{routine['id']}/runs").json()["runs"]
         assert [run["artifactsDir"] for run in runs] == [f"artifacts/{occurrence['id']}"]
+
+
+@pytest.mark.parametrize("manual", [True, False], ids=["manual-start", "scheduler"])
+def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, manual) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap_admin(client)
+    _bootstrap_user(client)
+    node = _register_node(
+        app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+    )
+    agent = _agent(app, node)
+    ctx = app_context_for(app)
+    task = ctx.task_store.create_task(
+        {
+            **ROUTINE_RUN,
+            "title": "Wait for a runtime slot",
+            "assignedAgent": "codex",
+            "assignedAgentId": agent["id"],
+            "ownerUserId": ALICE,
+            "assigneeUserId": ALICE,
+            "status": "assigned",
+        }
+    )
+    original_run = ctx.backend.run
+
+    async def occupy_slot_then_run(node_id, request):
+        await original_run(node_id, {
+            "taskGoal": "Competing thread",
+            "assignments": [{"agent": "codex"}],
+            "workspaceLayout": "thread",
+        })
+        return await original_run(node_id, request)
+
+    scheduler = TaskScheduler(task_store=ctx.task_store, registry=ctx.registry, backend=ctx.backend)
+    with monkeypatch.context() as race:
+        race.setattr(ctx.backend, "run", occupy_slot_then_run)
+        if manual:
+            _login_user(client)
+            response = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+            assert response.status_code == 202, response.text
+            assert response.json()["dispatch"]["state"] == "queued"
+            assert response.json()["dispatch"]["code"] == "capacity_exhausted"
+        else:
+            assert asyncio.run(scheduler.tick()).dispatched == 0
+
+    waiting = ctx.task_store.get_task(task["id"])
+    assert waiting["status"] == "queued"
+    assert waiting["dispatchOutcome"]["code"] == "capacity_exhausted"
+    assert "dispatchClaim" not in waiting
+    assert ctx.registry.daemon_store.active_run_request_for_task(task["id"]) is None
+
+    assert asyncio.run(scheduler.tick()).dispatched == 0
+    blocker = _take_command(app, node)
+    ctx.registry.handle_event(node["id"], {
+        "type": "run.cancelled",
+        "commandId": blocker["id"],
+        "sessionId": blocker["sessionId"],
+        "runId": blocker["runId"],
+        "leaseId": blocker["leaseId"],
+        "agent": blocker["agent"],
+        "reason": "Free the execution slot",
+    }, f"token_{node['id']}")
+    assert asyncio.run(scheduler.tick()).dispatched == 1
+    command = _take_command(app, node)
+    assert command["logicalAgentId"] == agent["id"]
+    assert ctx.registry.daemon_store.run_request_for_command(command["id"])["taskId"] == task["id"]
 
 
 def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
