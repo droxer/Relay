@@ -230,6 +230,21 @@
     height: var(--chip-h);
   }
 
+  /* A list row holds its tags in a one-chip-high box that clips the chips
+     past the first (backlog-list.css). Sized for the 20px drawing, it cut the
+     bottom 4px off every 24px toggle, so the box takes the same floor. */
+  .backlog-row-lead-main > .tag-list {
+    height: var(--chip-h);
+  }
+
+  /* The project lead's name sits on its role line, like a member tile's
+     head. The 44px link floor pushed the role a whole line down and left the
+     name floating over the gap; the name already spans the line's full width,
+     so it drops to the 24px target floor (--chip-h) and keeps its ellipsis. */
+  .project-manager-line-text > .project-manager-line-name {
+    min-height: var(--chip-h);
+  }
+
   /* The command expander is a text label, not a glyph: it takes the same 32px
      height as the glyph buttons above but keeps its own width, because a
      square box would crop "Show 12 more lines" to two characters. */
