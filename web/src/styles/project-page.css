@@ -923,3 +923,104 @@ button.project-member-row:hover .project-member-row-open {
 .routine-page--project > .sec-main {
   height: 100%;
 }
+
+/* Keep project file navigation and reading within the workspace's available
+   height. A selected file replaces the list on narrow surfaces; closing it
+   restores the list, using the same URL selection as the desktop split. */
+.project-workspace-page .workspace-inspect {
+  overflow: hidden;
+}
+
+.project-workspace-page .workspace-panes {
+  display: grid;
+}
+
+.project-workspace-page .workspace-pane {
+  min-height: 0;
+  border-bottom: 0;
+}
+
+.project-workspace-page .workspace-pane-body {
+  overflow-y: auto;
+}
+
+.project-workspace-page .workspace-pane-head {
+  flex-shrink: 0;
+}
+
+@container record (max-width: 760px) {
+  .project-workspace-page .workspace-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-workspace-page .workspace-panes:not(.is-browse-only) .workspace-pane-browse {
+    display: none;
+  }
+}
+
+@container record (max-width: 640px) {
+  .project-workspace-page .workspace-pane-head {
+    flex-wrap: wrap;
+    gap: var(--sp-1);
+    padding-block: var(--sp-2);
+  }
+
+  .project-workspace-page .workspace-pane-head h2 {
+    flex: 1 0 100%;
+  }
+
+  .project-workspace-page .workspace-pane-head-actions {
+    width: 100%;
+    gap: var(--sp-1);
+  }
+
+  .project-workspace-page .workspace-preview-close {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .project-workspace-page .workspace-pane-head-actions .code-view-toggle {
+    padding-inline: var(--sp-2);
+  }
+
+  .project-workspace-page .workspace-preview-body {
+    --doc-inset-block: var(--sp-4);
+    --doc-inset-inline: var(--sp-4);
+  }
+}
+
+@media (pointer: coarse) {
+  .project-workspace-page .workspace-pane-head-actions button {
+    min-height: var(--touch-target);
+  }
+
+  .project-workspace-page .workspace-preview-close {
+    min-width: var(--touch-target);
+  }
+}
+
+/* A landscape phone keeps the desktop shell, and the record header took
+   most of its 390px height, leaving the file a 150px window. The subtitle
+   restates the active tab, so it recedes to a screen-reader clip (as the
+   phone tier does) and the header gives back its vertical padding. */
+@media (max-height: 500px) {
+  .project-workspace-page .page-header {
+    padding-block: var(--sp-2);
+  }
+
+  .project-workspace-page .page-header-subtitle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .project-workspace-page .page-header-toolbar {
+    margin-top: 0;
+  }
+}
