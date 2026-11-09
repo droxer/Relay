@@ -825,6 +825,15 @@ button.project-member-row:hover .project-member-row-open {
 }
 
 /* The setup thread's pointer back to the dashboard, where a draft is applied. */
+.project-setup-cue { min-width: 0; overflow-wrap: anywhere; }
+
+.project-setup-cue [data-slot="button"] {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  padding-block: var(--sp-2);
+}
+
 .project-setup-cue-body {
   margin: 0;
   color: var(--ink-2);

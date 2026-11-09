@@ -26,14 +26,9 @@ it("renders nothing without a suggestion", () => {
   expect(container.innerHTML).toBe("");
 });
 
-it("folds the suggestions from their heading without sending one", () => {
-  const onSend = vi.fn(async () => true);
-  render(<NextSteps steps={["Ship it"]} onSend={onSend} />);
-  const toggle = screen.getByRole("button", { name: "next_steps.title" });
-  fireEvent.click(toggle);
-  expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(screen.queryByRole("button", { name: "Ship it" })).toBeNull();
-  expect(onSend).not.toHaveBeenCalled();
-  fireEvent.click(toggle);
-  expect(screen.getByRole("button", { name: "Ship it" })).toBeTruthy();
+it("offers the suggestions inline, with no control to fold them away", () => {
+  render(<NextSteps steps={["Ship it"]} onSend={vi.fn()} />);
+  expect(screen.getByRole("heading", { name: "next_steps.title" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "next_steps.title" })).toBeNull();
+  expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Ship it"]);
 });

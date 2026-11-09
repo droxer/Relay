@@ -94,3 +94,14 @@
 
 .next-steps-item:disabled { cursor: default; }
 .next-steps-item:disabled:not([data-sending]) { color: var(--ink-4); }
+
+/* Touch rows keep their quiet outline, with room for a finger even when the
+   suggestion is only a few words. The send action stays discoverable. */
+@media (pointer: coarse) {
+  .next-steps-item {
+    min-height: var(--touch-target);
+    padding-block: max(var(--sp-2), calc((var(--touch-target) - 1lh) / 2));
+  }
+
+  .next-steps-send { opacity: 1; }
+}

@@ -1,7 +1,6 @@
 "use client";
-import { ThreadPrompt } from "./ThreadPrompt";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActionFollowUp, ActionSend, ICON } from "./icons";
 
@@ -19,6 +18,7 @@ export function NextSteps({ steps, onSend }: {
   onSend: (text: string) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
+  const headingId = useId();
   const [sending, setSending] = useState<string | null>(null);
   if (!steps.length) return null;
   const send = async (step: string) => {
@@ -31,7 +31,8 @@ export function NextSteps({ steps, onSend }: {
     }
   };
   return (
-    <ThreadPrompt className="next-steps" headingClassName="next-steps-title" level={2} title={t("next_steps.title")}>
+    <section className="next-steps" aria-labelledby={headingId}>
+      <h2 id={headingId} className="next-steps-title">{t("next_steps.title")}</h2>
       <ul className="next-steps-list">
         {steps.map((step) => (
           <li key={step}>
@@ -50,6 +51,6 @@ export function NextSteps({ steps, onSend }: {
           </li>
         ))}
       </ul>
-    </ThreadPrompt>
+    </section>
   );
 }
