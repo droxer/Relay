@@ -847,6 +847,12 @@ for (const width of [320, 390]) {
     const items = page.getByRole("menuitem");
     await expect(items).toHaveCount(4);
     await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    // WebKit can register the opening animation after getAnimations() was
+    // sampled. Wait for the actual sheet position before measuring its rows.
+    await expect.poll(async () => {
+      const box = await page.locator('[data-slot="dropdown-menu-content"]').boundingBox();
+      return box ? Math.round(box.y + box.height) : null;
+    }).toBe(844);
     const sheet = await page.locator('[data-slot="dropdown-menu-content"]').boundingBox();
     expect(Math.round(sheet!.width)).toBe(width);
     expect(Math.round(sheet!.y + sheet!.height)).toBe(844);
