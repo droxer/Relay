@@ -418,6 +418,36 @@
     border: 0;
   }
 
+  /* Project directory: a readable two-line label and a full-row touch target. */
+  .project-folder-select {
+    height: auto;
+    min-height: 76px;
+    padding: 14px 16px;
+  }
+
+  .project-folder-select > .project-folder-name {
+    grid-column: 1 / -1;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 17px;
+    line-height: 24px;
+  }
+
+  .project-folder-meta,
+  .project-folder-count {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .project-folder-count {
+    grid-row: 2;
+    overflow-wrap: anywhere;
+    color: var(--ink-3);
+  }
+
   .mobile-topbar button {
     display: inline-flex;
     align-items: center;

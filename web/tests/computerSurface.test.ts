@@ -33,7 +33,8 @@ describe("My Computer route shell", () => {
     // route-grid entry so the thread pane collapses beside the page. The
     // roster is an Infra page of its own (/computers), as is the library.
     const responsive = await read("web/src/styles/responsive.css");
-    const block = responsive.match(/([^}]*)\{\s*grid-row: 2;/)?.[1] ?? "";
+    const block = [...responsive.matchAll(/([^{}]*)\{\s*grid-row: 2;/g)]
+      .find((match) => /\.computer-page/.test(match[1]))?.[1] ?? "";
     assert.match(block, /\.computer-page/);
     assert.match(block, /\.skills-page/);
     const routes = await read("web/src/styles/routes.css");
