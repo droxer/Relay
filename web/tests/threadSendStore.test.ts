@@ -1,56 +1,49 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
-
-import { useThreadSendStore } from "../src/lib/threadSendStore.js";
-
+import { threadSendKey, useThreadSendStore } from "../src/lib/threadSendStore.js";
 const echo = { id: "evt_1", text: "ship it" };
-
+const a = threadSendKey("alice", "A");
+const b = threadSendKey("alice", "B");
 describe("thread send store", () => {
-  beforeEach(() => {
-    useThreadSendStore.setState(useThreadSendStore.getInitialState(), true);
+  beforeEach(() => useThreadSendStore.setState(useThreadSendStore.getInitialState(), true));
+  it("isolates concurrent operations and keeps the accepted echo", () => {
+    const store = useThreadSendStore.getState();
+    const first = store.beginSend(a, echo);
+    store.beginSend(b, { id: "B", text: "B" });
+    store.endDispatch(a, first);
+    assert.equal(useThreadSendStore.getState().operations[a].dispatching, false);
+    assert.deepEqual(useThreadSendStore.getState().operations[a].pendingUserMessage, echo);
+    assert.equal(useThreadSendStore.getState().operations[b].dispatching, true);
+    store.dropPendingMessage(a, first);
+    assert.equal(useThreadSendStore.getState().operations[a], undefined);
   });
-
-  it("starts idle with no echoed turn", () => {
-    const state = useThreadSendStore.getState();
-    assert.equal(state.pendingUserMessage, null);
-    assert.equal(state.dispatching, false);
+  it("ignores cleanup from an older operation", () => {
+    const store = useThreadSendStore.getState();
+    const old = store.beginSend(a, echo);
+    const current = store.beginSend(a, { id: "new", text: "new" });
+    store.dropPendingMessage(a, old);
+    store.endDispatch(a, old);
+    assert.equal(useThreadSendStore.getState().operations[a].id, current);
+    assert.equal(useThreadSendStore.getState().operations[a].dispatching, true);
   });
-
-  it("a composer send echoes the turn and marks the dispatch in flight", () => {
-    useThreadSendStore.getState().beginSend(echo);
-    const state = useThreadSendStore.getState();
-    assert.deepEqual(state.pendingUserMessage, echo);
-    assert.equal(state.dispatching, true);
+  it("moves a draft operation to its accepted Thread without losing Stop", () => {
+    const store = useThreadSendStore.getState();
+    const draft = threadSendKey("alice", undefined, 1);
+    const id = store.beginSend(draft, echo, true);
+    store.requestStop(draft);
+    store.acceptThread(draft, id, a);
+    assert.equal(useThreadSendStore.getState().operations[draft], undefined);
+    assert.equal(useThreadSendStore.getState().operations[a].stopRequested, true);
+    assert.equal(useThreadSendStore.getState().operations[a].openingTurn, true);
   });
-
-  it("ending the dispatch keeps the echo until the persisted turn arrives", () => {
-    const { beginSend, endDispatch } = useThreadSendStore.getState();
-    beginSend(echo);
-    endDispatch();
-    const state = useThreadSendStore.getState();
-    assert.equal(state.dispatching, false);
-    assert.deepEqual(state.pendingUserMessage, echo);
+  it("recovery finishes without retaining an empty operation", () => {
+    const store = useThreadSendStore.getState();
+    const id = store.beginDispatch(a);
+    store.endDispatch(a, id);
+    assert.deepEqual(useThreadSendStore.getState().operations, {});
   });
-
-  it("a recovery dispatch is in flight without echoing a turn", () => {
-    useThreadSendStore.getState().beginDispatch();
-    const state = useThreadSendStore.getState();
-    assert.equal(state.dispatching, true);
-    assert.equal(state.pendingUserMessage, null);
-  });
-
-  it("drops the echo on its own, leaving the dispatch flag alone", () => {
-    const { beginSend, dropPendingMessage } = useThreadSendStore.getState();
-    beginSend(echo);
-    dropPendingMessage();
-    const state = useThreadSendStore.getState();
-    assert.equal(state.pendingUserMessage, null);
-    assert.equal(state.dispatching, true);
-  });
-
-  it("dropping an absent echo does not notify subscribers", () => {
-    const before = useThreadSendStore.getState();
-    before.dropPendingMessage();
-    assert.equal(useThreadSendStore.getState(), before);
+  it("isolates users and new draft generations", () => {
+    assert.notEqual(a, threadSendKey("bob", "A"));
+    assert.notEqual(threadSendKey("alice", undefined, 1), threadSendKey("alice", undefined, 2));
   });
 });

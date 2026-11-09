@@ -29,7 +29,6 @@ type UseAppRouterOptions = {
   activeSession: RelaySession | undefined;
   onApplySessionFromPath: (sessionId: string) => void;
   onSetComposingNewFromPath: (composingNew: boolean) => void;
-  onClearPendingMessage: () => void;
 };
 
 export function useAppRouter({
@@ -39,7 +38,6 @@ export function useAppRouter({
   activeSession,
   onApplySessionFromPath,
   onSetComposingNewFromPath,
-  onClearPendingMessage,
 }: UseAppRouterOptions) {
   const [locationState, setLocationState] = useState<AppLocationState>({
     route: "main",
@@ -50,13 +48,10 @@ export function useAppRouter({
   const applyLocationState = useCallback((state: AppLocationState) => {
     setLocationState(state);
     onSetComposingNewFromPath(Boolean(state.composingNew));
-    if (state.composingNew) {
-      onClearPendingMessage();
-    } else if ((state.route === "main" || state.route === "projects" || state.route === "backlog") && state.sessionId) {
-      onClearPendingMessage();
+    if (!state.composingNew && (state.route === "main" || state.route === "projects" || state.route === "backlog") && state.sessionId) {
       onApplySessionFromPath(state.sessionId);
     }
-  }, [onApplySessionFromPath, onClearPendingMessage, onSetComposingNewFromPath]);
+  }, [onApplySessionFromPath, onSetComposingNewFromPath]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

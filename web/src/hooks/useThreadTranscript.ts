@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { TFunction } from "i18next";
 import type { DaemonNodeMonitorRecord, RelaySession } from "../types";
 import type { DerivedMessage } from "../components/MessageBlock";
 import { findActiveRunOwnerForSession, isThreadRunInFlight } from "../lib/threadRunning";
-import { useThreadSendStore } from "../lib/threadSendStore";
+import { useRelayStore } from "../lib/store";
+import { threadSendKey, useThreadSendStore } from "../lib/threadSendStore";
 import { useProjectedMessages } from "./useProjectedMessages";
 import { useTranscriptPin } from "./useTranscriptPin";
 
@@ -32,8 +33,12 @@ export function useThreadTranscript(
   // their message without waiting for the provision + run round-trip. It is
   // hidden once the persisted turn arrives (matched by id for a continued
   // session, or by text for the goal of a freshly created one).
-  const pendingEcho = useThreadSendStore((s) => s.pendingUserMessage);
-  const isRunning = useThreadSendStore((s) => s.dispatching);
+  const user = useRelayStore((s) => s.selectedUser);
+  const draftId = useRelayStore((s) => s.threadDraftId);
+  const key = threadSendKey(user, activeSession?.id, draftId);
+  const operation = useThreadSendStore((s) => s.operations[key]);
+  const pendingEcho = operation?.pendingUserMessage;
+  const isRunning = operation?.dispatching ?? false;
   const activeRunOwner = useMemo(
     () => findActiveRunOwnerForSession(visibleNodes, activeSession?.id),
     [visibleNodes, activeSession?.id],
@@ -41,8 +46,13 @@ export function useThreadTranscript(
   const activeRun = activeRunOwner?.run;
   const messages = useProjectedMessages(activeSession, t);
   const pendingUserMessage = pendingEcho && !messages.some(
-    (message) => message.kind === "user" && (message.id === pendingEcho.id || message.text === pendingEcho.text),
+    (message) => message.kind === "user" && (message.id === pendingEcho.id || (operation?.openingTurn && message.id === `${activeSession?.id}:goal` && message.text === pendingEcho.text)),
   ) ? pendingEcho : null;
+  useEffect(() => {
+    if (pendingEcho && !pendingUserMessage && operation) {
+      useThreadSendStore.getState().dropPendingMessage(key, operation.id);
+    }
+  }, [key, operation, pendingEcho, pendingUserMessage]);
   const threadRunning = isThreadRunInFlight({
     activeRun,
     session: activeSession,

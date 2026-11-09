@@ -29,7 +29,6 @@ import { useMinuteClock } from "./hooks/useMinuteClock";
 import { isoToday } from "./lib/routine";
 import { useHandoffStore } from "./lib/handoffStore";
 import { useComposerTargetStore } from "./lib/composerTargetStore";
-import { useThreadSendStore } from "./lib/threadSendStore";
 import { useStableCallback as useStableEvent } from "./hooks/useStableCallback";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
@@ -120,7 +119,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
   const rememberThreadPick = useComposerTargetStore((s) => s.rememberThreadPick);
   const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
-  const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
   const [threadQuery, setThreadQuery] = useState("");
   const [threadProjectFilter, setThreadProjectFilter] = useState<ThreadProjectFilter>(THREAD_PROJECT_FILTER_ALL);
   const mounted = useClientMounted();
@@ -289,7 +287,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     activeSession,
     onApplySessionFromPath: applySessionFromHash,
     onSetComposingNewFromPath: setComposingNewFromPath,
-    onClearPendingMessage: dropPendingMessage,
   });
   /* The inbox. A computer notice opens wherever that computer is managed:
      the person's own Computers page for a machine they hold, the control panel

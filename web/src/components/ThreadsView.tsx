@@ -19,6 +19,8 @@ import {
 import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
+import { useRelayStore } from "../lib/store";
+import { threadSendKey } from "../lib/threadSendStore";
 import { threadDraftKey } from "../hooks/useComposer";
 import { useThreadQueue } from "../hooks/useThreadQueue";
 import { MessageQueue } from "./composer/MessageQueue";
@@ -299,6 +301,7 @@ export function ThreadsView({
   // An automation run's first turn draws as the automation's card. A fired
   // run says so in its goal's trigger block; a scheduled one carries none, so
   // the task list is what marks the thread as a routine occurrence.
+  const threadDraftId = useRelayStore((s) => s.threadDraftId);
   const activeSessionId = activeSession?.id;
   const activeTaskGoal = activeSession?.taskGoal;
   const automationOpening = useMemo(() => {
@@ -711,6 +714,7 @@ export function ThreadsView({
         )}
 
         <Composer
+          key={threadSendKey(currentUser.userId ?? currentUser.username, activeSession?.id, threadDraftId)}
           connectionTargetId={initializingThread ? undefined : activeSession?.id}
           draftKey={threadDraftKey(currentUser, activeSession?.id)}
           ref={composerRef}

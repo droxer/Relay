@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // A solo thread whose agent was stopped mid-run (an outage, a lost lease)
 // after its runtime reported the conversation it ran in.
-async function fixture(page: Page, runtimeSessionId?: string) {
+async function fixture(page: Page, runtimeSessionId?: string, pendingSend?: Promise<void>) {
   const stamp = "2026-10-11T10:00:00Z";
   const computerId = "device:alice:host";
   const agent = {
@@ -24,16 +24,23 @@ async function fixture(page: Page, runtimeSessionId?: string) {
     agentRuns: [{ id: "run-ada", agent: "claude", logicalAgentId: "ada", status: "cancelled", startedAt: stamp, completedAt: stamp, artifactIds: [],
       ...(runtimeSessionId ? { runtimeSessionId } : {}) }],
     artifacts: [], decisions: [], events, eventCount: events.length, artifactCount: 0, runCount: 1, createdAt: stamp, updatedAt: stamp };
+  const other = { ...session, id: "other", title: "Other conversation", taskGoal: "Other goal", events: [], agentRuns: [], runCount: 0 };
   const node = { id: "node", userId: "alice", workspaceId: "host", computerId, name: "Computer", activeRuns: [],
     online: true, stale: false, status: "ready", agents: { claude: "ready" }, capabilities: ["thread-workspaces", "agent-resume"] };
   const posted: unknown[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [], nodes: [node], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { sessions: pendingSend ? [session, other] : [session], agents: [agent], teams: [], tasks: [], nodes: [node], projects: [], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/resume")) body = session;
-    if (path.endsWith("/threads/resume/events")) {
+    if (path.endsWith("/threads/other")) body = other;
+    if (request.method() === "POST" && path.endsWith("/threads/resume/messages")) {
+      posted.push(JSON.parse(request.postData() ?? "{}"));
+      await pendingSend;
+      body = session;
+    }
+    if (path.endsWith("/threads/resume/events") || path.endsWith("/threads/other/events")) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
       return;
     }
@@ -61,4 +68,34 @@ test("a turn without a recorded conversation offers only retry", async ({ page }
   const turn = page.locator(".msg-agent").filter({ hasText: "Migrated two of the five tables" });
   await expect(turn.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(turn.getByRole("button", { name: "Resume" })).toHaveCount(0);
+});
+
+test("a pending send stays in its Thread across selection and browser history", async ({ page }) => {
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  const posted = await fixture(page, undefined, waiting);
+  await page.goto("/threads/resume");
+  await page.locator("textarea").fill("Only for billing");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  await page.getByRole("button", { name: /Other conversation/ }).click();
+  await expect(page).toHaveURL(/\/threads\/other$/);
+  await expect(page.locator(".msg-user").filter({ hasText: "Only for billing" })).toHaveCount(0);
+  await page.locator("textarea").fill("Keep this other draft");
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/threads\/resume$/);
+  await expect(page.locator("textarea")).toHaveValue("");
+  await expect(page.locator(".msg-user").filter({ hasText: "Only for billing" })).toHaveCount(1);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/threads\/other$/);
+  const response = page.waitForResponse(response => response.url().endsWith("/threads/resume/messages"));
+  release();
+  await response;
+  await expect(page.locator("textarea")).toHaveValue("Keep this other draft");
+  await expect(page).toHaveURL(/\/threads\/other$/);
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Other conversation/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Billing migration/ })).toHaveCount(1);
+  expect(posted).toHaveLength(1);
 });
