@@ -749,7 +749,11 @@ def placement_status(
                     ),
                 }
             )
-        elif daemon_node.get("status") == "running":
+        elif any(
+            run.get("logicalAgentId") == placement["agentId"]
+            or (run.get("placementId") and run["placementId"] == placement["id"])
+            for run in daemon_node.get("activeRuns") or []
+        ):
             status = "busy"
         else:
             status = "ready"
