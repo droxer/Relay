@@ -5,12 +5,17 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { taskRef } from "../../lib/taskRef";
 import type { HomeBlocker, UpcomingItem } from "../../lib/homePlan";
-import type { RelayTaskListItem } from "../../types";
+import type { RelayTaskListItem, StartTaskResponse } from "../../types";
 import type { HomeActions } from "./useHomeActions";
 import { HomeLink } from "./HomePanels";
 
 const UPCOMING_PREVIEW = 5;
 const BLOCKER_PREVIEW = 3;
+const DISPATCH_LABELS = {
+  queued: "backlog.statuses.queued",
+  started: "home.plan.start_started",
+  rejected: "backlog.history.dispatch_rejected",
+} as const;
 
 export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
   task: RelayTaskListItem;
@@ -21,7 +26,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [hasDispatch, setHasDispatch] = useState(false);
+  const [dispatchState, setDispatchState] = useState<StartTaskResponse["dispatch"]["state"] | null>(null);
   const startInFlight = useRef(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const start = async () => {
@@ -31,7 +36,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
     setOutcome(null);
     try {
       const result = await onStart(task);
-      setHasDispatch(true);
+      setDispatchState(result.dispatch.state);
       setOutcome(result.dispatch.message || t(`home.plan.start_${result.dispatch.state}`));
     } catch {
       setOutcome(t("home.plan.start_error"));
@@ -51,7 +56,9 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
           </HomeLink>
           <p className="home-plan-meta">{t(`backlog.priorities.${task.priority}`)}{due}</p>
         </div>
-        <Button size="dense" disabled={busy || hasDispatch} onClick={() => void start()}>{t("home.plan.start")}</Button>
+        <Button size="dense" disabled={busy || dispatchState !== null} onClick={() => void start()}>
+          {t(dispatchState ? DISPATCH_LABELS[dispatchState] : "home.plan.start")}
+        </Button>
       </div>
       {outcome ? (
         <p className="home-plan-outcome" role="status">

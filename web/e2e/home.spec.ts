@@ -73,10 +73,10 @@ type Wire = { method: string; path: string; body: unknown };
 // Most tests model a set-up account; a first run passes its own onboarding.
 const SET_UP = { introSeenAt: ago(9000), dismissedAt: ago(9000) };
 
-async function serve(page: Page, theme: Theme, onboarding: Record<string, string> = SET_UP) {
+async function serve(page: Page, theme: Theme, onboarding: Record<string, string> = SET_UP, language = "en") {
   const wire: Wire[] = [];
   let snoozes: unknown[] = [];
-  const user = () => ({ id: "u", userId: "u", username: "fei", displayName: "Fei He", role: "user", theme, language: "en", homeSnoozes: snoozes, onboarding });
+  const user = () => ({ id: "u", userId: "u", username: "fei", displayName: "Fei He", role: "user", theme, language, homeSnoozes: snoozes, onboarding });
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -213,6 +213,7 @@ test("recommends ready work when urgent items are clear and preserves queued out
  await focus.getByRole("button",{name:"Start",exact:true}).click();
  await expect(focus.getByRole("status")).toContainText("Queued");
  await expect(focus.getByRole("status")).not.toContainText("Work started");
+ await expect(focus.getByRole("button",{name:"Queued",exact:true})).toBeDisabled();
 });
 
 test("shows a failed source instead of claiming the queue is clear", async ({page}) => {
@@ -300,4 +301,38 @@ for (const width of [1440, 375]) {
     await expect(rows.first().getByRole("button", { name: "Snooze", exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`home-summary-${width}.png`), fullPage: true });
   });
+}
+
+for (const language of ["en", "zh-CN"]) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`rejected start stays compact on phones (${language}, ${theme})`, async ({ page }, testInfo) => {
+      await serve(page, theme, SET_UP, language);
+      await page.setViewportSize({ width: 320, height: 812 });
+      const ready = tasks.find(task => task.id === "t-ready")!;
+      await page.route("**/api/v1/tasks?*", route => route.fulfill({ json: { tasks: [ready] } }));
+      await page.route("**/api/v1/threads?*", route => route.fulfill({ json: { sessions: [] } }));
+      await page.route("**/api/v1/tasks/t-ready/runs", route => route.fulfill({
+        json: { task: { ...ready, events: [], activity: [] }, session: null, dispatch: { state: "rejected" } },
+      }));
+      await page.goto("/home");
+      const focus = page.locator(".home-focus");
+      const chinese = language === "zh-CN";
+      await focus.getByRole("button", { name: chinese ? "开始" : "Start", exact: true }).click();
+      const result = focus.getByRole("button", { name: chinese ? "无法启动" : "Could not start", exact: true });
+      await expect(result).toBeDisabled();
+      await expect(focus.getByRole("status")).toContainText(chinese
+        ? "无法开始。请打开任务查看并解决问题。"
+        : "Could not start. Open the task to resolve the issue.");
+      await expect(focus.getByRole("status").getByRole("link")).toHaveAttribute("href", /t-ready/);
+      for (const width of [320, 375]) {
+        await page.setViewportSize({ width, height: 812 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+        const buttonBox = await result.boundingBox();
+        const titleBox = await focus.locator(".home-plan-copy").boundingBox();
+        expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(width);
+        expect(titleBox!.width).toBeGreaterThan(80);
+      }
+      await focus.screenshot({ path: testInfo.outputPath(`rejected-${language}-${theme}.png`) });
+    });
+  }
 }

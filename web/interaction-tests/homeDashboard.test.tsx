@@ -50,7 +50,8 @@ it("keeps Start available after a network failure and prevents duplicate submiss
   let finish!: (value: import("../src/types").StartTaskResponse) => void;
   const pending = new Promise<import("../src/types").StartTaskResponse>(resolve => { finish = resolve; });
   const onStart = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockReturnValueOnce(pending);
-  render(<ReadyTask task={task} href="/tasks/ready" onOpen={vi.fn()} onStart={onStart} />);
+  const props = { task, href: "/tasks/ready", onOpen: vi.fn(), onStart };
+  const { rerender } = render(<ReadyTask {...props} />);
   const user = userEvent.setup();
   const start = screen.getByRole("button", { name: "home.plan.start" }) as HTMLButtonElement;
   await user.click(start);
@@ -63,4 +64,21 @@ it("keeps Start available after a network failure and prevents duplicate submiss
   await act(async () => { finish({ task, session: null, dispatch: {state: "queued"} } as import("../src/types").StartTaskResponse); });
   expect(screen.getByRole("status").textContent).toContain("home.plan.start_queued");
   expect(start.disabled).toBe(true);
+  expect(start.textContent).toBe("backlog.statuses.queued");
+  expect(screen.queryByRole("button", { name: "home.plan.start" })).toBeNull();
+  rerender(<ReadyTask {...props} task={{ ...task }} />);
+  await user.click(screen.getByRole("button", { name: "backlog.statuses.queued" }));
+  expect(onStart).toHaveBeenCalledTimes(2);
+});
+
+it.each(["started", "rejected"] as const)("shows the %s dispatch result instead of Start", async (state) => {
+  const { ReadyTask } = await import("../src/components/home/HomePlanningPanels");
+  const task = { id: "ready", title: "Ready work", priority: "high" } as import("../src/types").RelayTaskListItem;
+  const onStart = vi.fn().mockResolvedValue({ task, session: null, dispatch: { state, message: "Dispatch details" } });
+  render(<ReadyTask task={task} href="/tasks/ready" onOpen={vi.fn()} onStart={onStart} />);
+  await userEvent.setup().click(screen.getByRole("button", { name: "home.plan.start" }));
+  const label = state === "rejected" ? "backlog.history.dispatch_rejected" : "home.plan.start_started";
+  expect((screen.getByRole("button", { name: label }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("status").textContent).toContain("Dispatch details");
+  expect(screen.queryByRole("button", { name: "home.plan.start" })).toBeNull();
 });
