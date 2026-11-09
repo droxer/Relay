@@ -81,10 +81,34 @@
 
 .manager-proposal h3 { margin: 0; font-size: var(--text-lg); }
 .manager-before { margin: var(--sp-1) 0; color: var(--ink-2); font-size: var(--text-sm); }
-.manager-proposal { border-top: 1px solid var(--line-1); padding-block: var(--sp-4); }
+.manager-proposal { min-width: 0; overflow-wrap: anywhere; border-top: 1px solid var(--line-1); padding-block: var(--sp-4); }
 .manager-operation { border: 0; border-top: 1px solid var(--line-1); margin-block: var(--sp-4); padding: var(--sp-3) 0; min-width: 0; }
+.manager-operation legend { max-width: 100%; }
 .manager-operation legend label { display: flex; align-items: center; gap: var(--sp-2); }
+.manager-operation input[type="checkbox"] { flex: none; accent-color: var(--action); }
 .manager-actions { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
 .manager-actions { margin-top: var(--sp-3); }
 
-.manager-field { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.manager-field { display: grid; min-width: 0; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+
+/* Native selects keep the platform picker, but share the other fields' size
+   and theme. min-width: 0 prevents a long agent name widening the transcript. */
+.manager-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  /* WebKit's native picker does not honor min-height alone. */
+  height: max(var(--control-h), calc(1lh + var(--sp-2) + var(--sp-0-5)));
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--field-border);
+  border-radius: var(--r-2);
+  background: var(--surface-0);
+  color: var(--ink-1);
+}
+
+@media (pointer: coarse) {
+  .manager-field select { height: max(var(--touch-target), calc(1lh + var(--sp-2) + var(--sp-0-5))); }
+
+  .manager-field select,
+  .manager-operation legend label { min-height: var(--touch-target); }
+}

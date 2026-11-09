@@ -1,5 +1,4 @@
 "use client";
-import { ThreadPrompt } from "./ThreadPrompt";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { applyManagerProposal, dismissManagerProposal } from "../api-client/project-manager";
@@ -45,12 +44,12 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
-  // A settled proposal rests folded to one line that still says how it ended.
   const status = t(`project_manager.proposal_${proposal.state}`);
-  return <ThreadPrompt className="manager-proposal" title={t("project_manager.changes")}
-    summary={pending ? undefined : status} defaultCollapsed={!pending}>
+  // A settled proposal is history: its title and how it ended, nothing to fold.
+  return <section className="manager-proposal" aria-label={t("project_manager.changes")} data-settled={!pending || undefined}>
+    <h3>{t("project_manager.changes")}</h3>
     <p role="status">{status}</p>
-    {proposal.operations.map(op => {
+    {pending ? proposal.operations.map(op => {
       const fields = edits[op.id] ?? op.fields;
       const label = op.title || fields.title || op.taskId || op.key || op.id;
       return <fieldset key={op.id} disabled={!pending || disabled || busy} className="manager-operation">
@@ -76,8 +75,8 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
         })}
         {op.after.length || op.afterTaskIds.length || op.kind === "prerequisites" ? <p>{t("project_manager.after", { value: [...op.after, ...op.afterTaskIds].join(", ") || t("project_manager.none") })}</p> : null}
       </fieldset>;
-    })}
+    }) : null}
     {error ? <p role="alert">{error}</p> : null}
     {pending ? <div className="manager-actions"><Button disabled={disabled || busy || selected.length === 0} onClick={() => void apply()}>{t("project_manager.apply")}</Button><Button variant="ghost" disabled={disabled || busy} onClick={() => void dismiss()}>{t("project_manager.dismiss")}</Button></div> : null}
-  </ThreadPrompt>;
+  </section>;
 }
