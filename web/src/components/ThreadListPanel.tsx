@@ -45,6 +45,14 @@ import {
 /** Stable empty list for the rail window when the projects rail is showing. */
 const NO_THREADS: ThreadItem[] = [];
 
+/** The thread list's older pages, held by the app's thread query. */
+export type ThreadListPaging = {
+  hasMore: boolean;
+  loading: boolean;
+  failed: boolean;
+  loadMore: () => Promise<void> | void;
+};
+
 // The logged-in user's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current user's
 // work. “New thread” starts a fresh thread without archiving the rest.
@@ -73,6 +81,7 @@ export function ThreadListPanel({
   width,
   onResize,
   onResizeActive,
+  paging,
 }: {
   directoryMode: "threads" | "projects";
   threads: ThreadItem[];
@@ -106,6 +115,7 @@ export function ThreadListPanel({
   width: number;
   onResize: (width: number, commit: boolean) => void;
   onResizeActive: (active: boolean) => void;
+  paging?: ThreadListPaging;
 }) {
   const { t } = useTranslation();
   // Rows are memoized; App rebuilds these handlers on every render.
@@ -190,7 +200,9 @@ export function ThreadListPanel({
         </ul>
       </div>
     ) : null),
-    limited.hasMore ? <div key={`more-${limit}`} ref={sentinelRef} className="conversation-rail-sentinel" aria-hidden="true" /> : null];
+    limited.hasMore ? <div key={`more-${limit}`} ref={sentinelRef} className="conversation-rail-sentinel" aria-hidden="true" /> : null,
+    // Every loaded row is mounted: the next rows are on the server.
+    !limited.hasMore && paging?.hasMore ? <OlderThreadsLoader key="older" paging={paging} loadedCount={threads.length} /> : null];
   };
 
   return (
@@ -205,7 +217,7 @@ export function ThreadListPanel({
         title={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
         count={directoryMode === "projects"
           ? t("project.count", { count: projectCount })
-          : t("thread.count", { count: threads.length })}
+          : t(paging?.hasMore ? "thread.count_more" : "thread.count", { count: threads.length })}
         titleAs="h2"
         titleVariant="title"
         // No "Workspace" kicker over Projects: the sidebar group already
@@ -436,4 +448,41 @@ function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[],
   useEffect(() => () => observer.current?.disconnect(), []);
 
   return { groups: limited, sentinelRef, limit };
+}
+
+/**
+ * The rail's last row while older threads are still on the server. It loads
+ * the next page on its own as it scrolls into view, and stays a button so a
+ * keyboard reader — or a failed request — can ask for the page directly. A
+ * filtered rail that leaves it on screen keeps loading, since each page that
+ * lands remounts it (keyed by the loaded count).
+ */
+function OlderThreadsLoader({ paging, loadedCount }: { paging: ThreadListPaging; loadedCount: number }) {
+  const { t } = useTranslation();
+  const load = useStableCallback(() => { void paging.loadMore(); });
+  const autoLoad = !paging.failed;
+  const observe = useCallback((node: HTMLButtonElement | null) => {
+    if (!node || !autoLoad || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries.some((entry) => entry.isIntersecting)) load(); },
+      { root: node.closest(".conversation-list"), rootMargin: "0px 0px 200px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [autoLoad, load]);
+  return (
+    <Button
+      key={loadedCount}
+      ref={observe}
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="conversation-rail-more"
+      disabled={paging.loading}
+      aria-busy={paging.loading || undefined}
+      onClick={load}
+    >
+      {t(paging.loading ? "thread.loading_more" : "thread.load_more")}
+    </Button>
+  );
 }

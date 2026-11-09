@@ -11,7 +11,9 @@ from datetime import datetime
 from functools import partial
 from typing import Any
 from sqlalchemy import (
+    and_,
     literal_column,
+    or_,
     select,
 )
 from .output_compaction import compact_completed_run_output
@@ -24,6 +26,10 @@ from .rows import (
     hydrate_session_logs,
 )
 from .state import SessionStoreState
+
+# Where a summary page ends: the last row's ``updated_at`` and id.
+SummaryPosition = tuple[datetime, str]
+_POSITION_COLUMN = "_positionUpdatedAt"
 
 
 class SessionReadRows(SessionStoreState):
@@ -123,6 +129,24 @@ class SessionReadRows(SessionStoreState):
     def list_session_summaries(
         self, *, owner_user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
+        summaries, _ = self.list_session_summary_page(
+            owner_user_id=owner_user_id, limit=limit
+        )
+        return summaries
+
+    def list_session_summary_page(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        limit: int = 100,
+        before: SummaryPosition | None = None,
+    ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
+        """One page of summaries, newest first, and where the next one starts.
+
+        Keyset on ``(updated_at, id)`` — the order the list is shown in — so a
+        thread that moves to the top between page loads is never served twice
+        and none is skipped. The position is ``None`` on the last page.
+        """
         # Project JSON fields in SQL: completed run logs never cross the wire.
         fields = (
             "daemonNodeId",
@@ -167,6 +191,7 @@ class SessionReadRows(SessionStoreState):
         statement = select(
             self.sessions.c.id,
             self.sessions.c.version,
+            self.sessions.c.updated_at.label(_POSITION_COLUMN),
             *(self.sessions.c.snapshot[field].label(field) for field in fields),
             literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"),
             literal_column(
@@ -180,16 +205,36 @@ class SessionReadRows(SessionStoreState):
             statement = statement.where(
                 self.sessions.c.owner_user_id == owner_user_id
             )
-        statement = statement.limit(max(1, limit))
+        if before is not None:
+            updated_at, session_id = before
+            statement = statement.where(
+                or_(
+                    self.sessions.c.updated_at < updated_at,
+                    and_(
+                        self.sessions.c.updated_at == updated_at,
+                        self.sessions.c.id < session_id,
+                    ),
+                )
+            )
+        page_size = max(1, limit)
+        # One extra row says whether another page exists without a COUNT.
+        statement = statement.limit(page_size + 1)
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
+        page = rows[:page_size]
+        position = (
+            (page[-1][_POSITION_COLUMN], str(page[-1]["id"]))
+            if len(rows) > page_size
+            else None
+        )
+        hidden = {"version", _POSITION_COLUMN}
         return [
             {
-                **{k: v for k, v in row.items() if k != "version" and v is not None},
+                **{k: v for k, v in row.items() if k not in hidden and v is not None},
                 "eventCount": int(row["version"] or 0),
             }
-            for row in rows
-        ]
+            for row in page
+        ], position
 
     def compact_completed_run_output(
         self, *, older_than: datetime, limit: int = 20

@@ -149,7 +149,13 @@ final authority and may answer started, queued, or rejected.
 The thread list (`GET /api/v1/threads`) is a summary projection too. Beside a
 thread's open `permissionRequests` it carries `nextSteps` — up to three short
 follow-ups a finished turn suggested, empty once anything else happens — so
-Home can offer them without opening each thread.
+Home can offer them without opening each thread. The summary view
+(`?view=summary`) is paged newest first: `limit` is clamped to 1–200 (default
+100), and the answer's `nextCursor` — an opaque token, `null` on the last
+page — is passed back as `cursor` for the next page. The page boundary is a
+keyset on the thread's last update, so a thread that moves to the top between
+two page loads is neither repeated nor skipped. The web rail loads 20 at a
+time.
 
 `PATCH /api/v1/auth/preferences` takes any of `theme`, `language`,
 `onboarding`, and `homeSnoozes`, and answers `{user}`. `homeSnoozes` is

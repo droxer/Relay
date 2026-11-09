@@ -8,6 +8,7 @@ import type { PermissionAnswerInput } from "./lib/permissionRequests";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
+import { useThreadPreload } from "./hooks/useThreadPreload";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
@@ -137,6 +138,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     nodesReady,
     sessions,
     sessionsLoading,
+    hasMoreSessions,
+    loadingMoreSessions,
+    moreSessionsFailed,
+    loadMoreSessions,
     tasks,
     projects,
     projectsStatus,
@@ -147,6 +152,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     refresh,
     setSandboxes,
   } = useRelayData(selectedUserToken, true);
+  useThreadPreload(sessions, !sessionsLoading);
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel(),
   );
@@ -787,6 +793,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             selectedUser={selectedUser}
             initializingThread={requiresRuntimeSelection}
             threadsLoading={sessionsLoading && !composingNew}
+            threadPaging={{
+              hasMore: hasMoreSessions,
+              loading: loadingMoreSessions,
+              failed: moreSessionsFailed,
+              loadMore: loadMoreSessions,
+            }}
             projectLoading={projectContextPending}
             projectName={activeProject?.name}
             projectRoom={projectRoom}

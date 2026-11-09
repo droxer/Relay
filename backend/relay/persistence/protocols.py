@@ -77,6 +77,13 @@ class SessionStore(Protocol):
     def list_session_summaries(
         self, *, owner_user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]: ...
+    def list_session_summary_page(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        limit: int = 100,
+        before: tuple[datetime, str] | None = None,
+    ) -> tuple[list[dict[str, Any]], tuple[datetime, str] | None]: ...
     def list_session_snapshots(
         self, *, owner_user_id: str, project_id: str | None = None
     ) -> list[dict[str, Any]]: ...

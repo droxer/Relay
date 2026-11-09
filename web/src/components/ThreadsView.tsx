@@ -24,7 +24,7 @@ import { useThreadQueue } from "../hooks/useThreadQueue";
 import { MessageQueue } from "./composer/MessageQueue";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
-import { ThreadListPanel } from "./ThreadListPanel";
+import { ThreadListPanel, type ThreadListPaging } from "./ThreadListPanel";
 import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProjectFilter";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { QueuedRunCard } from "./QueuedRunCard";
@@ -165,6 +165,8 @@ type ThreadsViewProps = {
    *  the page holds its docked shape rather than drawing the new-thread
    *  landing it would only snap out of. */
   threadsLoading?: boolean;
+  /** Older pages of the thread list, loaded as the rail reaches its end. */
+  threadPaging?: ThreadListPaging;
   /** The thread's project has not loaded, so its composer cannot yet say
    *  whether it addresses the project room or a team. */
   projectLoading?: boolean;
@@ -259,6 +261,7 @@ export function ThreadsView({
   selectedUser,
   initializingThread,
   threadsLoading = false,
+  threadPaging,
   projectLoading = false,
   projectName,
   projectRoom,
@@ -475,6 +478,7 @@ export function ThreadsView({
         width={threadListWidth}
         onResize={onThreadListResize}
         onResizeActive={onThreadListResizeActive}
+        paging={threadPaging}
       />}
 
       {projectOverviewState === "ready" && selectedProject ? (
