@@ -21,7 +21,6 @@ import {
   resolveSandboxMode,
   runRelayDaemon,
   jittered,
-  DEFAULT_MAX_CONCURRENT_RUNS,
   runRelayDaemonDoctor,
   shutdownBoxliteRuntime,
   type DaemonExecutionEnvironment,
@@ -2941,7 +2940,7 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   }]);
 });
 
-test("relay daemon advertises three concurrent runs by default", async () => {
+test("relay daemon advertises five concurrent runs by default", async () => {
   const previous = captureEnv(["RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
   delete process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS;
   const stop = new AbortController();
@@ -2974,8 +2973,7 @@ test("relay daemon advertises three concurrent runs by default", async () => {
     restoreCapturedEnv(previous);
   }
 
-  assert.equal(registration?.maxConcurrentRuns, DEFAULT_MAX_CONCURRENT_RUNS);
-  assert.equal(DEFAULT_MAX_CONCURRENT_RUNS, 3);
+  assert.equal(registration?.maxConcurrentRuns, 5);
 });
 
 test("relay daemon retries normal run.cancel terminal event while running", async () => {

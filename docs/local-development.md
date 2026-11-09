@@ -713,9 +713,9 @@ full `npm test`.
 ### Concurrent Agent Runtime scheduling
 
 `RELAY_DAEMON_MAX_CONCURRENT_RUNS` bounds simultaneous runs on a Computer
-(default three), independently of Logical Agent identity or Agent Runtime
-kind. With `RELAY_DAEMON_MAX_CONCURRENT_RUNS=4`, one daemon can run two Codex
-and two Claude Tasks at the same time when they have separate workspaces.
+(default five), independently of Logical Agent identity or Agent Runtime
+kind. One daemon can run two Codex and two Claude Tasks at the same time
+when they have separate workspaces.
 One Logical Agent can also execute several Tasks in separate workspaces.
 Each run keeps its own command, Thread, output, and cancellation identity.
 The same Task and concurrent turns of the same Thread remain exclusive.

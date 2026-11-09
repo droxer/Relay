@@ -114,7 +114,7 @@ import { permissionAdapterLaunch } from "./permission-adapters/index.js";
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
 const DEFAULT_DAEMON_SANDBOX_MODE: DaemonSandboxMode = "boxlite";
 /** Runs one daemon executes at once; override with RELAY_DAEMON_MAX_CONCURRENT_RUNS. */
-export const DEFAULT_MAX_CONCURRENT_RUNS = 3;
+export const DEFAULT_MAX_CONCURRENT_RUNS = 5;
 
 export interface DaemonRuntimeOptions {
   backendUrl?: string;

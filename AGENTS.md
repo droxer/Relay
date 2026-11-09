@@ -356,7 +356,7 @@ migration.
     re-registering when a poll is rejected. Sandbox modes: `boxlite`
     (managed/default; the daemon boots BoxLite guests lazily — one per
     concurrently running workspace, up to its run capacity
-    (`RELAY_DAEMON_MAX_CONCURRENT_RUNS`, default 3), each mounting only that
+    (`RELAY_DAEMON_MAX_CONCURRENT_RUNS`, default 5), each mounting only that
     workspace — and runs agents inside them; `guest-pool.ts` owns that
     lifecycle) or `none` (manual/local; agents run as processes in the
     daemon's current host environment, using that user's existing agent home
