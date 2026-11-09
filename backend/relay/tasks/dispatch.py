@@ -10,6 +10,7 @@ from ..collaboration.assignments import assignment_team_snapshot
 from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.ids import new_database_id
 from ..core.models import AgentName
+from ..daemon_registry.scheduling import ComputerRunCapacityError
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from .claims import dispatch_claim_active
@@ -24,6 +25,7 @@ from ..agents.routing import (
 )
 from .flow import WIP_WAIT_MESSAGE, flow_scope, is_wip
 from .dispatch_failure import (
+    record_computer_capacity_wait,
     record_dispatch_failure,
     safe_dispatch_error_message,
 )
@@ -594,19 +596,23 @@ class TaskDispatcher:
 
     def _dispatch_error_result(self, error: Exception) -> DispatchResult:
         code = dispatch_failure_code(error)
+        waiting_for_computer = isinstance(error, ComputerRunCapacityError)
         released = bool(self.claim_id and code != "dispatch_failed")
         if released and self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)
-        if self.temporary_group_status and released and code != "task_wip_limit":
+        if self.temporary_group_status and released and code != "task_wip_limit" and not waiting_for_computer:
             self.ctx.task_store.update_task(self.task["id"], {"status": "backlog"})
         if not self.record_pending:
             # Explicit, not a bare `raise`: this runs in a threadpool worker,
             # where no exception is being handled.
             raise error
-        updated = record_dispatch_failure(
-            self.ctx.task_store, self.task, code=code,
-            message=safe_dispatch_error_message(error),
-        )
+        if waiting_for_computer:
+            updated = record_computer_capacity_wait(self.ctx.task_store, self.task)
+        else:
+            updated = record_dispatch_failure(
+                self.ctx.task_store, self.task, code=code,
+                message=safe_dispatch_error_message(error),
+            )
         return _result(
             updated, updated["dispatchOutcome"]["state"], code=code,
             message=updated["dispatchOutcome"]["message"],

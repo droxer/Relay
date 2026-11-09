@@ -143,26 +143,40 @@ def test_dispatch_claim_rechecks_capacity_after_stale_admission(runtime):
     assert other.claim_run_request_dispatch(requests[1]["id"], "retry", 30)
 
 
-@pytest.mark.parametrize("same_agent", [False, True])
-def test_logical_agents_share_one_runtime_across_independent_runs(runtime, tmp_path, same_agent):
+@pytest.mark.parametrize(
+    ("same_agent", "second_runtime"),
+    [(False, "codex"), (True, "codex"), (False, "claude")],
+    ids=["same-runtime", "same-agent", "mixed-runtimes"],
+)
+def test_logical_agents_share_computer_capacity_across_independent_runs(
+    runtime, tmp_path, same_agent, second_runtime
+):
     from store_fixtures import make_agent_store, make_agent_placement_store
     from relay.agents.routing import resolve_agent_assignments
 
-    registry, _ = runtime
+    registry, payload = runtime
+    run_count = payload["maxConcurrentRuns"]
+    if second_runtime == "claude":
+        run_count = 4
+        registry.register(
+            {**payload, "supportedAgents": ["codex", "claude"], "maxConcurrentRuns": run_count},
+            "ui",
+        )
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)
     first = agents.create_agent("alice", {
         "displayName": "First", "executorKind": "codex", "defaultRole": "implementer",
     })
     second = first if same_agent else agents.create_agent("alice", {
-        "displayName": "Second", "executorKind": "codex", "defaultRole": "implementer",
+        "displayName": "Second", "executorKind": second_runtime, "defaultRole": "implementer",
     })
     for agent in {a["id"]: a for a in (first, second)}.values():
         placements.create_placement(agent, "node")
     backend = ServerDaemonNodeBackend(registry, agent_store=agents, agent_placement_store=placements)
+    selected_agents = (first, second, first, second)[:run_count]
     sessions = []
     task_ids = []
-    for index, agent in enumerate((first, second, first)):
+    for index, agent in enumerate(selected_agents):
         task = registry.task_store.create_task({
             "title": f"Independent task {index}", "ownerUserId": "alice", "status": "assigned",
         })
@@ -177,32 +191,32 @@ def test_logical_agents_share_one_runtime_across_independent_runs(runtime, tmp_p
             "actorUserId": "alice", "agentFirst": True,
         }))
     commands = poll(registry)
-    assert [c["logicalAgentId"] for c in commands] == [first["id"], second["id"], first["id"]]
+    assert [c["logicalAgentId"] for c in commands] == [agent["id"] for agent in selected_agents]
     assert {c["sessionId"] for c in commands} == {s["id"] for s in sessions}
-    assert len({c["runId"] for c in commands}) == 3
+    assert len({c["runId"] for c in commands}) == run_count
     assert {registry.daemon_store.run_request_for_command(c["id"])["taskId"] for c in commands} == set(task_ids)
     assert {c["workspaceSubpath"] for c in commands} == {f"tasks/{task_id}" for task_id in task_ids}
-    assert all(c["agent"] == "codex" for c in commands)
-    assert len(registry.daemon_store.list_active_runs("node")) == 3
-    fourth_task = registry.task_store.create_task({
-        "title": "Fourth task", "ownerUserId": "alice", "status": "assigned",
+    assert [c["agent"] for c in commands] == [agent["executorKind"] for agent in selected_agents]
+    assert len(registry.daemon_store.list_active_runs("node")) == run_count
+    next_task = registry.task_store.create_task({
+        "title": "Next task", "ownerUserId": "alice", "status": "assigned",
     })
-    fourth_request = {
-        "taskGoal": "fourth task", "assignments": assignments, "taskId": fourth_task["id"],
+    next_request = {
+        "taskGoal": "next task", "assignments": assignments, "taskId": next_task["id"],
         "actorUserId": "alice", "agentFirst": True,
     }
     with pytest.raises(ValueError, match="capacity_exhausted"):
-        backend._run_sync("node", fourth_request)
+        backend._run_sync("node", next_request)
     # One run's cancellation settles only its own reservation and Thread.
     registry.handle_event("node", {**terminal(commands[0], "run.cancelled"), "reason": "cancel one"}, "token")
     assert {r["sessionId"] for r in registry.daemon_store.list_active_runs("node")} == {
-        commands[1]["sessionId"], commands[2]["sessionId"],
+        command["sessionId"] for command in commands[1:]
     }
-    fourth = backend._run_sync("node", fourth_request)
-    [fourth_command] = poll(registry)
-    assert fourth_command["sessionId"] == fourth["id"]
-    assert fourth_command["logicalAgentId"] == first["id"]
-    assert len(registry.daemon_store.list_active_runs("node")) == 3
-    for command in [*commands[1:], fourth_command]:
+    next_session = backend._run_sync("node", next_request)
+    [next_command] = poll(registry)
+    assert next_command["sessionId"] == next_session["id"]
+    assert next_command["logicalAgentId"] == selected_agents[-1]["id"]
+    assert len(registry.daemon_store.list_active_runs("node")) == run_count
+    for command in [*commands[1:], next_command]:
         finish(registry, command)
     assert registry.daemon_store.list_active_runs("node") == []

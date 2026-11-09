@@ -714,10 +714,16 @@ full `npm test`.
 
 `RELAY_DAEMON_MAX_CONCURRENT_RUNS` bounds simultaneous runs on a Computer
 (default three), independently of Logical Agent identity or Agent Runtime
-kind. Multiple Logical Agents may use Codex concurrently, and one Logical
-Agent may execute distinct Tasks concurrently when their workspaces differ.
+kind. With `RELAY_DAEMON_MAX_CONCURRENT_RUNS=4`, one daemon can run two Codex
+and two Claude Tasks at the same time when they have separate workspaces.
+One Logical Agent can also execute several Tasks in separate workspaces.
 Each run keeps its own command, Thread, output, and cancellation identity.
 The same Task and concurrent turns of the same Thread remain exclusive.
+
+For a background service, set `RELAY_DAEMON_MAX_CONCURRENT_RUNS` in the
+environment of the setup command or in the private JSON file supplied with
+`--runtime-env-file`. Setup saves the setting in the runtime profile or
+keeps the file reference. Restart the daemon after editing the file.
 
 Runs sharing a Project directory or another physical workspace remain serial.
 The backend leaves known workspace contenders undelivered so an independent
@@ -725,8 +731,9 @@ workspace can use a free slot. It bounds active run requests to twice the
 Computer's capacity to accommodate waiters; this queue bound does not raise
 execution capacity. A database dispatch claim atomically reserves execution
 capacity across backend replicas, including commands staged but not yet
-published. A full Computer refuses new independent work with
-`capacity_exhausted`; callers may retry when a slot opens.
+published. If another run takes the last slot during Task dispatch, the
+Task stays queued for the scheduler. Direct Thread requests can return
+`capacity_exhausted` and can be retried when a slot opens.
 
 The daemon's physical-path locks remain authoritative for aliases and access
 from multiple daemons. This scheduling behavior does not isolate concurrent
