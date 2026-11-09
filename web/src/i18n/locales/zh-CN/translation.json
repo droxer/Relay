@@ -836,6 +836,8 @@
     "source_routine": "自动化运行",
     "save_task": "保存任务",
     "create_task": "创建任务",
+    "details_section": "详细设置",
+    "submit_shortcut": "提交",
     "workspace_not_created": "任务开始后，文件会显示在这里。",
     "workspace_offline": "存储这些文件的电脑已离线。仍可查看已保存的产物。",
     "workspace_unsupported": "请在此电脑上更新 Relay 以浏览此工作区。",

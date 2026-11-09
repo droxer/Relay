@@ -7,6 +7,8 @@ import {
   GO_SHORTCUTS,
   isEditableTarget,
   isCommandMenuChord,
+  isSubmitChord,
+  submitShortcutLabel,
 } from "../src/lib/shortcuts.js";
 
 function key(value: string, extras: Record<string, unknown> = {}) {
@@ -133,5 +135,21 @@ describe("shortcut resolver", () => {
     const routes = Object.values(GO_SHORTCUTS);
     assert.equal(new Set(routes).size, routes.length);
     assert.deepEqual([...routes].sort(), ["admin", "agents", "backlog", "computers", "home", "main", "projects", "routine", "settings", "skills", "teams"]);
+  });
+});
+
+describe("submit chord", () => {
+  it("is ⌘/Ctrl+Enter, and never a key that ends an IME composition", () => {
+    assert.equal(isSubmitChord({ key: "Enter", metaKey: true }), true);
+    assert.equal(isSubmitChord({ key: "Enter", ctrlKey: true }), true);
+    assert.equal(isSubmitChord({ key: "Enter" }), false);
+    assert.equal(isSubmitChord({ key: "Enter", ctrlKey: true, altKey: true }), false);
+    assert.equal(isSubmitChord({ key: "Enter", metaKey: true, isComposing: true }), false);
+    assert.equal(isSubmitChord({ key: "k", metaKey: true }), false);
+  });
+
+  it("is labelled per platform", () => {
+    assert.equal(submitShortcutLabel("MacIntel"), "⌘↵");
+    assert.equal(submitShortcutLabel("Win32"), "Ctrl+↵");
   });
 });

@@ -264,3 +264,92 @@
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
+
+/* ── Create/edit order ────────────────────────────────────────────────
+   The form reads as decisions (title → project → assignee → when) and then
+   Details, the settings that already carry a default. Each section opens on
+   a hairline so the two halves read as groups in either theme. A section
+   that follows another already sits under that one's bottom rule
+   (.adm-form-section), so only the first section after plain fields draws
+   its own. Painted as a background, not a border: a fieldset's legend
+   notches its top border, and its padding lands below the legend. */
+.task-board-drawer-form > :not(.adm-form-section) + .adm-form-section {
+  background: linear-gradient(var(--line-2), var(--line-2)) top / 100% 0.5px no-repeat;
+}
+
+.task-board-drawer-form > :not(.adm-form-section) + .adm-form-section > .adm-form-legend {
+  padding-top: var(--sp-6);
+}
+
+/* Connections sits inside Details: its own top and bottom rules would
+   double the section's hairline, and the native triangle read as a stray
+   glyph. The summary takes the field-label voice with a chevron that turns,
+   so it scans like the labels around it. */
+.task-board-drawer-form .connection-grants {
+  padding-block: 0;
+  border-block: 0;
+}
+
+.task-board-drawer-form .connection-grants > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--touch-target);
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  list-style: none;
+}
+
+.task-board-drawer-form .connection-grants > summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-board-drawer-form .connection-grants > summary::before {
+  width: var(--sp-1-5);
+  height: var(--sp-1-5);
+  border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3);
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.task-board-drawer-form .connection-grants[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.task-board-drawer-form .connection-grants .connections-hint {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* ⌘/Ctrl+Enter submits from any field. Named in the footer only where there
+   is a hardware keyboard to press it with — a touch keyboard has no chord,
+   and the phone footer needs its width for two full-size buttons. It is the
+   footer's last child (see TaskDrawer) and takes the leading edge here. */
+.task-drawer-shortcut {
+  display: none;
+  order: -1;
+  align-items: center;
+  gap: var(--sp-1-5);
+  margin-right: auto;
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .task-drawer-shortcut {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-board-drawer-form .connection-grants > summary::before {
+    transition: none;
+  }
+}

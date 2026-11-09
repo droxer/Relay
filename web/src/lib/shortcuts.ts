@@ -74,6 +74,21 @@ export function commandShortcutLabel(platform?: string): string {
   return /Mac|iPhone|iPad|iPod/i.test(value) ? "⌘K" : "Ctrl+K";
 }
 
+/** ⌘/Ctrl+Enter: submits a form from any of its fields, a multi-line one
+ *  included. A key that finishes an IME composition is never the chord. */
+export function isSubmitChord(event: ShortcutEventShape & { isComposing?: boolean }): boolean {
+  return (event.metaKey === true || event.ctrlKey === true)
+    && event.altKey !== true
+    && event.isComposing !== true
+    && event.key === "Enter";
+}
+
+/** Platform-aware label for the submit chord. */
+export function submitShortcutLabel(platform?: string): string {
+  const value = platform ?? (typeof navigator === "undefined" ? "Mac" : navigator.platform);
+  return /Mac|iPhone|iPad|iPod/i.test(value) ? "⌘↵" : "Ctrl+↵";
+}
+
 type ShortcutResolver = (event: ShortcutEventShape) => ShortcutAction | null;
 
 /**

@@ -9,10 +9,11 @@ import { ConnectionGrantField } from "../connections/ConnectionGrantField";
 import { validConnectionGrants } from "../../api-client/connections";
 import { describeTrigger } from "../../lib/automationTrigger";
 import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
+import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -270,6 +271,13 @@ export function TaskDrawer({
     onSubmit(event);
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLFormElement>): void {
+    const { key, metaKey, ctrlKey, altKey } = event;
+    if (busy || !isSubmitChord({ key, metaKey, ctrlKey, altKey, isComposing: event.nativeEvent.isComposing })) return;
+    event.preventDefault();
+    event.currentTarget.requestSubmit();
+  }
+
   const { agents: agentOptions, teams: teamOptions } = taskAssignmentOptions({
     project,
     agents: logicalAgents,
@@ -302,6 +310,54 @@ export function TaskDrawer({
           }
         : undefined)
     : undefined;
+
+  const assignmentField = intake ? (
+        <Field label={t("backlog.assignment_label")} wrapper="div">
+          <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
+          {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
+            <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
+              {t("issues.clear_assignment")}
+            </Button>
+          ) : null}
+        </Field>
+      ) : <AssignmentField
+        fieldId={assignmentFieldId}
+        summaryId={assignmentSummaryId}
+        autoFocus={initialFocus === "assignment"}
+        value={taskAssignmentValue(form)}
+        agents={agentOptions}
+        teams={teamOptions}
+        selectedAgent={assignedAgentView}
+        selectedTeam={assignedTeamView}
+        emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
+        onSelect={(selection) => {
+          if (selection.kind === "none") {
+            onChange(clearTaskAssignment(form));
+            return;
+          }
+          if (selection.kind === "agent") {
+            const logicalAgent = logicalAgents.find((agent) => agent.id === selection.id);
+            if (!logicalAgent) return;
+            updateBase({
+              assignedAgent: logicalAgent.executorKind,
+              assignedAgentId: logicalAgent.id,
+              assignedTeamId: "",
+              // An ownerless agent says nothing about who the task is
+              // for, so it leaves the assignee as the user chose it.
+              assigneeUserId: logicalAgent.supervisorUserId ?? form.assigneeUserId,
+              ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
+            });
+            return;
+          }
+          const team = teams.find((candidate) => candidate.id === selection.id);
+          if (team) {
+            updateBase({
+              ...teamAssignmentPatch(team.id),
+              ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
+            });
+          }
+        }}
+      />;
 
   const projectField = projectChoice !== "locked" ? (
     <Field
@@ -357,8 +413,12 @@ export function TaskDrawer({
       onClosed={onClosed}
       layer={layer}
     >
-      <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
-        {form.variant !== "routine" ? projectField : null}
+      {/* Decisions first, in the order they depend on each other: what the
+          work is, where it runs, who does it, then when — status and due for
+          a task, the trigger for an automation. Settings that already carry a
+          default follow under Details, so on a phone the form can be finished
+          without scrolling past them. */}
+      <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -383,113 +443,8 @@ export function TaskDrawer({
             onChange={(event) => updateBase({ description: event.target.value })}
           />
         </Field>
-        {form.variant === "routine" ? projectField : null}
-        <ConnectionGrantField key={form.id ?? "new"} targetType={form.variant === "routine" ? "automation" : "task"}
-          targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
-          onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
-        {/* Two-up pairs only — acceptance with priority, status with due — so
-            no field is ever left alone in half a row. */}
-        <div className="task-drawer-form-grid">
-          <Field
-            label={t("backlog.acceptance_policy")}
-            labelId={acceptanceLabelId}
-            hint={form.startedAt ? t("backlog.acceptance_locked") : undefined}
-            wrapper="div"
-          >
-            <Select
-              value={form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY}
-              disabled={Boolean(form.startedAt)}
-              onValueChange={(value) => {
-                if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
-              }}
-            >
-              <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
-                <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
-                <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t("backlog.priority")} labelId={priorityLabelId} wrapper="div">
-            <Select
-              value={form.priority}
-              onValueChange={(value) => {
-                if (value == null) return
-                updateBase({ priority: value as TaskPriority })
-              }}
-            >
-              <SelectTrigger className="w-full" aria-labelledby={priorityLabelId}>
-                <SelectValue>{(value: TaskPriority) => t(`backlog.priorities.${value}`)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {TASK_PRIORITIES.map((priority) => (
-                  <SelectItem key={priority} value={priority} label={t(`backlog.priorities.${priority}`)}>{t(`backlog.priorities.${priority}`)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-        <TaskTagsField
-          name={`${fieldPrefix}-tags`}
-          tags={form.tags}
-          suggestions={tagSuggestions}
-          disabled={busy}
-          onChange={(tags) => updateBase({ tags })}
-        />
-        {form.variant === "backlog" ? (
-          <div className={form.id ? undefined : "task-drawer-form-grid"}>
-            <BacklogFields form={form} onChange={onChange} canRun={!intake} />
-          </div>
-        ) : null}
-        {intake ? (
-          <Field label={t("backlog.assignment_label")} wrapper="div">
-            <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
-            {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
-              <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
-                {t("issues.clear_assignment")}
-              </Button>
-            ) : null}
-          </Field>
-        ) : <AssignmentField
-          fieldId={assignmentFieldId}
-          summaryId={assignmentSummaryId}
-          autoFocus={initialFocus === "assignment"}
-          value={taskAssignmentValue(form)}
-          agents={agentOptions}
-          teams={teamOptions}
-          selectedAgent={assignedAgentView}
-          selectedTeam={assignedTeamView}
-          emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
-          onSelect={(selection) => {
-            if (selection.kind === "none") {
-              onChange(clearTaskAssignment(form));
-              return;
-            }
-            if (selection.kind === "agent") {
-              const logicalAgent = logicalAgents.find((agent) => agent.id === selection.id);
-              if (!logicalAgent) return;
-              updateBase({
-                assignedAgent: logicalAgent.executorKind,
-                assignedAgentId: logicalAgent.id,
-                assignedTeamId: "",
-                // An ownerless agent says nothing about who the task is
-                // for, so it leaves the assignee as the user chose it.
-                assigneeUserId: logicalAgent.supervisorUserId ?? form.assigneeUserId,
-                ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
-              });
-              return;
-            }
-            const team = teams.find((candidate) => candidate.id === selection.id);
-            if (team) {
-              updateBase({
-                ...teamAssignmentPatch(team.id),
-                ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
-              });
-            }
-          }}
-        />}
+        {projectField}
+        {assignmentField}
         {/* Directly under the assignment that reveals it: picking a team
             below must not insert a field above where the reader is working. */}
         {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
@@ -498,7 +453,69 @@ export function TaskDrawer({
             inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
             inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
         </Field> : null}
+        {form.variant === "backlog" ? (
+          <div className={form.id ? undefined : "task-drawer-form-grid"}>
+            <BacklogFields form={form} onChange={onChange} canRun={!intake} />
+          </div>
+        ) : null}
         {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} logicalAgents={logicalAgents} teams={teams} projects={projects} /> : null}
+        <fieldset className="adm-form-section">
+          <legend className="adm-form-legend">{t("backlog.details_section")}</legend>
+          {/* Two-up pairs only — acceptance with priority here, status with
+              due above — so no field is ever left alone in half a row. */}
+          <div className="task-drawer-form-grid">
+            <Field
+              label={t("backlog.acceptance_policy")}
+              labelId={acceptanceLabelId}
+              hint={form.startedAt ? t("backlog.acceptance_locked") : undefined}
+              wrapper="div"
+            >
+              <Select
+                value={form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY}
+                disabled={Boolean(form.startedAt)}
+                onValueChange={(value) => {
+                  if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
+                }}
+              >
+                <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
+                  <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
+                  <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={t("backlog.priority")} labelId={priorityLabelId} wrapper="div">
+              <Select
+                value={form.priority}
+                onValueChange={(value) => {
+                  if (value == null) return
+                  updateBase({ priority: value as TaskPriority })
+                }}
+              >
+                <SelectTrigger className="w-full" aria-labelledby={priorityLabelId}>
+                  <SelectValue>{(value: TaskPriority) => t(`backlog.priorities.${value}`)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_PRIORITIES.map((priority) => (
+                    <SelectItem key={priority} value={priority} label={t(`backlog.priorities.${priority}`)}>{t(`backlog.priorities.${priority}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <TaskTagsField
+            name={`${fieldPrefix}-tags`}
+            tags={form.tags}
+            suggestions={tagSuggestions}
+            disabled={busy}
+            onChange={(tags) => updateBase({ tags })}
+          />
+          <ConnectionGrantField key={form.id ?? "new"} targetType={form.variant === "routine" ? "automation" : "task"}
+            targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
+            onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
+        </fieldset>
         <div className="adm-form-actions">
           {form.id && onDelete ? (
             <Button
@@ -521,6 +538,15 @@ export function TaskDrawer({
           <Button type="submit" variant="default" size="cta" loading={saving} disabled={deleting}>
             {saving ? t("admin.saving") : submitLabel}
           </Button>
+          {/* Last in the DOM so the phone footer's odd-child rule still sees
+              Cancel and Submit as its last pair; CSS moves it to the leading
+              edge, on pointer devices only — a touch keyboard has no chord.
+              A saved record's Delete owns that edge, so it shows none. */}
+          {form.id && onDelete ? null : (
+            <span className="task-drawer-shortcut" aria-hidden="true">
+              <kbd className="command-kbd">{submitShortcutLabel()}</kbd> {t("backlog.submit_shortcut")}
+            </span>
+          )}
         </div>
       </form>
     </Drawer>
