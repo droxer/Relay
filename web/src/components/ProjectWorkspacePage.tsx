@@ -37,7 +37,7 @@ import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
-import { ProjectAskAgentSection, ProjectContextSuggestions } from "./ProjectContextUpkeep";
+import { ProjectContextSuggestions } from "./ProjectContextUpkeep";
 import { ProjectManagerLine } from "./ProjectManagerLine";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
@@ -233,10 +233,7 @@ export function ProjectWorkspacePage({
               />
             )}
             proposals={(
-              <>
-                <ProjectContextSuggestions project={project} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
-                {membersReadOnly ? null : <ProjectAskAgentSection project={project} />}
-              </>
+              <ProjectContextSuggestions project={project} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
             )}
             tasks={boardTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}

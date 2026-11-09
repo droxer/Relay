@@ -168,7 +168,8 @@ for (const [mobile, theme] of [[false, "light"], [true, "dark"]] as const) {
     await page.goto("/projects/launch");
     const suggestions = page.getByRole("region", { name: /Suggested by your agents/ });
     await expect(suggestions).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Ask an agent", exact: true })).toBeVisible();
+    // The lead agent manages the project; the dashboard offers no separate ask panel.
+    await expect(page.getByRole("heading", { name: "Ask an agent", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-dashboard-proposals-${mobile ? "mobile" : "desktop"}-${theme}.png`, fullPage: true });
@@ -191,7 +192,6 @@ for (const [mobile, theme] of [[false, "light"], [true, "dark"]] as const) {
     // Settings keeps the brief and the danger zone; proposals left it.
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await expect(page.getByRole("form", { name: "Details", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Ask an agent", exact: true })).toHaveCount(0);
   });
 }
 
