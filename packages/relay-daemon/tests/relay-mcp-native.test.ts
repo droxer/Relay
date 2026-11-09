@@ -5,6 +5,18 @@ import { once } from 'node:events';
 import { managedMcpForwarder } from '../src/relay-mcp-managed.js';
 const nativeModule = '../src/relay-mcp-native.js';
 
+test('a standalone managed run forwards MCP without a Project or standalone credential', async () => {
+  const { startNativeMcpBridge } = await import(nativeModule);
+  const bridge = await startNativeMcpBridge(async (_tool: string, args: Record<string, unknown>) => args.message);
+  try {
+    const forward = managedMcpForwarder('https://relay.example', JSON.stringify({
+      backendUrl: 'https://relay.example', native: bridge.address,
+    }));
+    const message = { jsonrpc: '2.0', id: 1, method: 'tools/list' };
+    assert.deepEqual(await forward(message), message);
+  } finally { await bridge.dispose(); }
+});
+
 test('native managed MCP reuses authenticated IPC without a subprocess or file mailbox', async () => {
   const { startNativeMcpBridge } = await import(nativeModule);
   let calls = 0;

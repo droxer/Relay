@@ -9,6 +9,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 from sqlalchemy import (
+    Text,
+    cast,
+    func,
     or_,
     select,
 )
@@ -24,6 +27,27 @@ from .state import TaskStoreState
 
 
 class TaskReadRows(TaskStoreState):
+    def work_page(
+        self, owner: str, *, project_id: str | None, automation: bool,
+        limit: int = 50, cursor: str = "", status: str = "", query: str = "",
+    ) -> dict[str, Any]:
+        """Bounded, owner-scoped Task/Automation snapshots without event hydration."""
+        filters = [self.tasks.c.owner_user_id == owner, self.tasks.c.deleted_at.is_(None),
+                   self.tasks.c.is_routine.is_(automation), self.tasks.c.project_id == project_id]
+        if status:
+            filters.append(self.tasks.c.routine_state == status if automation else self.tasks.c.status == status)
+        if query:
+            filters.append(self.tasks.c.title_casefold.contains(query.casefold(), autoescape=True))
+        statement = select(self.tasks.c.snapshot, self.tasks.c.version).where(*filters)
+        if cursor:
+            column = cast(self.tasks.c.id, Text) if names_no_uuid_row(self.engine, cursor) else self.tasks.c.id
+            statement = statement.where(column > cursor)
+        with store_transaction(self.engine) as conn:
+            total = int(conn.scalar(select(func.count()).select_from(self.tasks).where(*filters)) or 0)
+            rows = conn.execute(statement.order_by(self.tasks.c.id).limit(limit + 1)).mappings().all()
+        page = [compact_task_summary(row["snapshot"], event_count=int(row["version"])) for row in rows[:limit]]
+        return {"tasks": page, "total": total, "nextCursor": page[-1]["id"] if len(rows) > limit else None}
+
     def wip_limit_for_user(self, scope: str) -> int:
         with store_transaction(self.engine) as conn:
             return user_wip_limit(conn, scope)

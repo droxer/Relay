@@ -33,17 +33,22 @@ def test_mcp_token_reads_its_project_and_is_never_revealed_again(setup_env):
 
 
 def test_mcp_scope_cannot_escape_and_proposals_need_owner_apply(managed_env):
+    from test_project_manager_api import _start
+    from test_relay_mcp_work import credential
     app,client,node,project,*_=managed_env
     grant=_token(client,project)
     external=TestClient(app)
     headers={'Authorization':f"Bearer {grant['token']}"}
     other=client.post('/api/v1/projects',json={'name':'Other project','daemonNodeId':node['id'],'members':[]}).json()['project']
     assert external.post(f"/api/v1/mcp/projects/{other['id']}/tools",headers=headers,json={'tool':'overview'}).status_code == 403
+    assert external.post(f"/api/v1/mcp/projects/{project['id']}/tools",headers=headers,json={'tool':'propose','arguments':{'operations':[{'kind':'create','fields':{'title':'Refused local proposal'}}]}}).status_code == 403
+    _, command = _start(managed_env)
+    headers = {'Authorization': f'Bearer {credential(app,node,command)}'}
     staged=external.post(f"/api/v1/mcp/projects/{project['id']}/tools",headers=headers,json={'tool':'propose','arguments':{'operations':[{'kind':'create','fields':{'title':'Via MCP'}}]}})
     assert staged.status_code == 200,staged.text
     proposal=staged.json()['proposal']
     assert proposal['source'] == 'mcp'
-    assert proposal['runId'] is None
+    assert proposal['runId'] == command['runId']
     url=f"/api/v1/projects/{project['id']}/manager/proposals/{proposal['id']}/apply"
     assert external.post(url,headers=headers,json={'idempotencyKey':'agent-cannot-apply'}).status_code == 401
     assert client.get('/api/v1/tasks').json()['tasks'] == []

@@ -6,7 +6,7 @@ from ..projects.manager import ManagerError, ensure_manager_thread
 from ..projects.manager_reads import read_manager_tool
 from ..projects.manager_proposals import stage_proposal
 from ..projects.runtime import project_work_error
-from .access import may_manage, scoped_project
+from .access import assert_project_manage, scoped_project
 from .errors import McpError
 
 
@@ -18,6 +18,9 @@ def list_projects(ctx: Any, grant: dict[str, Any]) -> dict[str, Any]:
             for p in projects
             if (grant.get("projectIds") is None or p["id"] in grant["projectIds"])
             and (not grant.get("computerId") or p["computerId"] == grant["computerId"])
+            and (not grant.get("commandId") or any(
+                m.get("agentId") == grant.get("agentId") and m.get("enabled", True)
+                for m in p.get("members") or []))
         ]
     }
 
@@ -41,8 +44,7 @@ def invoke(ctx: Any, grant: dict[str, Any], project_id: str, tool: str, argument
                 }
             }
         if tool == "propose":
-            if not may_manage(grant):
-                raise McpError(403, "project_manager_required")
+            assert_project_manage(grant, project)
             if code := project_work_error(project):
                 raise ManagerError(code)
             if not project.get("managerAgentId"):

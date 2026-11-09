@@ -53,6 +53,8 @@ export interface AgentState {
   /** The project this run works in: name, goal, crew, and standing context,
    *  rendered by the backend from the round's pinned project snapshot. */
   project_brief?: string;
+  /** Tokenless MCP fallback available to every managed run. */
+  relay_mcp?: { toolCommand: string };
   project_manager?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };
   /** Read-only Relay MCP access for a roster member other than the Project Lead. */
   project_reader?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };

@@ -1463,21 +1463,21 @@ async function executeCommand(
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   let nativeMcpBridge: Awaited<ReturnType<typeof startNativeMcpBridge>> | undefined;
   try {
-    // The Project Lead stages Task changes; every other roster member
-    // reads through the same run-scoped transport, and the backend refuses
-    // its proposals.
+    // Every run gets standalone work tools. Project authority is checked by
+    // the backend against the command identity and the requested resource.
     const projectScope = state.project_manager ?? state.project_reader;
-    const invokeManager = projectScope ? createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
-      commandId:command.id,leaseId:command.leaseId,projectId:projectScope.projectId,fetchFn,
-      signal:AbortSignal.any([managerToolAbort.signal,...(signal?[signal]:[])])}) : undefined;
-    managerBridge = invokeManager ? createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
+    const invokeManager = createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
+      commandId:command.id,leaseId:command.leaseId,projectId:projectScope?.projectId,fetchFn,
+      signal:AbortSignal.any([managerToolAbort.signal,...(signal?[signal]:[])])});
+    managerBridge = createProjectManagerBridge(threadWorkspace.hostPath, async (tool, args) => {
       const workspaceTool = ["files", "file", "search"].includes(tool);
       const result = await invokeManager(workspaceTool ? "workspace" : tool,args);
       return workspaceTool ? managerWorkspaceTool(threadWorkspace.hostPath, tool, args) : result;
-    }) : undefined;
+    });
     if (invokeManager && environment.sandboxMode === "none") nativeMcpBridge = await startNativeMcpBridge(invokeManager);
     if (managerBridge && state.project_manager) state.project_manager = { ...state.project_manager, toolCommand: managerBridge.toolCommand };
     else if (managerBridge && state.project_reader) state.project_reader = { ...state.project_reader, toolCommand: managerBridge.toolCommand };
+    state.relay_mcp = { toolCommand: managerBridge.toolCommand };
     return await runInWorkspace(execution);
   } finally {
     managerToolAbort.abort();
@@ -1744,8 +1744,8 @@ async function executeCommand(
     const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: recordsId };
     const options = {
       execStream: execution.execStream,
-      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge && (state.project_manager ?? state.project_reader)
-        ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)!.projectId,native:nativeMcpBridge?.address,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
+      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge
+        ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)?.projectId,native:nativeMcpBridge?.address,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
         : {disabled:true})} : undefined,
       eventSink,
       runId: command.runId,

@@ -54,8 +54,8 @@ def test_mcp_protocol_is_hosted_and_requires_a_bearer_even_with_a_cookie(setup_e
         assert listed.status_code == 200, listed.text
         assert listed.headers["cache-control"] == "no-store"
         tools = listed.json()["result"]["tools"]
-        assert len(tools) == 9
-        assert {"relay_project_overview", "relay_propose_task_changes"} <= {t["name"] for t in tools}
+        assert {"relay_project_overview", "relay_create_task", "relay_list_automations", "relay_update_automation"} <= {t["name"] for t in tools}
+        assert "relay_propose_task_changes" not in {t["name"] for t in tools}
         assert all("apply" not in t["name"] for t in tools)
         notify = client.post(
             ENDPOINT,

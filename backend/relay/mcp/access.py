@@ -1,4 +1,4 @@
-"""MCP bearer authentication and Project scope shared by all transports."""
+"""MCP bearer authentication and resource permissions shared by all transports."""
 
 from typing import Any
 from ..core.computer_identity import computer_id
@@ -31,10 +31,11 @@ def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
             or active.get("status") != "running"
         ):
             raise McpError(401, "This Relay run has ended.")
-        # A run token carries its Agent's Project access: the manager may
-        # stage Task changes, every other roster member only reads.
+        # A run token carries its Agent's Project access: the lead may manage
+        # Project work, while other roster members only read it.
         scope = command_project_access(command["command"].get("state", {}), command["command"].get("logicalAgentId"))
-        return {**grant, "access": scope[1] if scope else "read"}
+        return {**grant, "access": scope[1] if scope else "read",
+                "agentId": command["command"].get("logicalAgentId")}
     if grant.get("computerId") and not any(
         computer_id(node) == grant["computerId"]
         and node.get("userId") == grant["ownerUserId"]
@@ -42,11 +43,27 @@ def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
         for node in ctx.registry.monitor_nodes()
     ):
         raise McpError(401, "This Computer is no longer connected to its owner.")
-    return {**grant, "access": "manage"}
+    # A local CLI credential identifies its owner/Computer, never a Project
+    # Agent. Only a command-bound identity can exercise the lead's authority.
+    return {**grant, "access": "read"}
 
 
 def may_manage(grant: dict[str, Any]) -> bool:
     return grant.get("access") == "manage"
+
+
+def assert_project_manage(grant: dict[str, Any], project: dict[str, Any]) -> None:
+    agent_id = grant.get("agentId")
+    if not (grant.get("commandId") and may_manage(grant) and agent_id
+            and project.get("leadAgentId") == agent_id
+            and any(m.get("agentId") == agent_id and m.get("enabled", True)
+                    for m in project.get("members") or [])):
+        raise McpError(403, "project_manager_required")
+
+
+def assert_standalone(grant: dict[str, Any]) -> None:
+    if not grant.get("commandId") and grant.get("projectIds") is not None:
+        raise McpError(403, "This token is limited to Projects.")
 
 
 def scoped_project(ctx: Any, grant: dict[str, Any], project_id: str) -> dict[str, Any]:
@@ -61,4 +78,9 @@ def scoped_project(ctx: Any, grant: dict[str, Any], project_id: str) -> dict[str
         or (grant.get("computerId") and project["computerId"] != grant["computerId"])
     ):
         raise McpError(403, "This token does not grant access to this Project.")
+    if grant.get("commandId") and not any(
+        m.get("agentId") == grant.get("agentId") and m.get("enabled", True)
+        for m in project.get("members") or []
+    ):
+        raise McpError(403, "Project roster membership required.")
     return project
