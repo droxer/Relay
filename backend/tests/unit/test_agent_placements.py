@@ -340,6 +340,54 @@ def test_placement_availability_is_derived_from_agent_and_node_health(
     assert result["conditions"] == []
 
 
+@pytest.mark.parametrize("executor_kind", ["claude", "codex", "pi", "opencode", "kimi"])
+def test_busy_status_belongs_only_to_the_running_logical_agents(executor_kind: str) -> None:
+    node = {
+        "online": True,
+        "status": "running",
+        "agents": {executor_kind: "ready"},
+        "activeRuns": [
+            {"agent": "claude", "logicalAgentId": "claude-a", "placementId": "pa"},
+            {"agent": "claude", "logicalAgentId": "claude-b", "placementId": "pb"},
+        ],
+    }
+    agent = {"id": "idle", "executorKind": executor_kind}
+    placement = {"id": "idle-p", "agentId": "idle", "desiredState": "active", "executorKind": executor_kind}
+    assert placement_status(placement, agent, node)["status"] == "ready"
+    if executor_kind == "claude":
+        for agent_id, placement_id in [("claude-a", "pa"), ("claude-b", "pb")]:
+            assert placement_status(
+                {**placement, "id": placement_id, "agentId": agent_id},
+                {**agent, "id": agent_id}, node,
+            )["status"] == "busy"
+
+
+@pytest.mark.parametrize(
+    ("run", "expected"),
+    [
+        ({"logicalAgentId": "agent-a"}, "busy"),
+        ({"placementId": "placement-a"}, "busy"),
+        ({"logicalAgentId": "agent-b"}, "ready"),
+        ({"agent": "claude"}, "ready"),
+        ({}, "ready"),
+    ],
+)
+def test_placement_busy_status_requires_run_identity(run: dict, expected: str) -> None:
+    placement = {
+        "id": "placement-a", "agentId": "agent-a",
+        "executorKind": "claude", "desiredState": "active",
+    }
+    agent = {"id": "agent-a"}
+    node = {
+        "online": True, "status": "running", "agents": {"claude": "ready"},
+        "activeRuns": [run],
+    }
+    assert placement_status(placement, agent, node)["status"] == expected
+    assert placement_status(placement, agent, {**node, "online": False})["status"] == "offline"
+    assert placement_status(placement, {**agent, "enabled": False}, node)["status"] == "incompatible"
+    assert placement_status(placement, agent, {**node, "activeRuns": []})["status"] == "ready"
+
+
 def test_realized_agent_versions_never_move_backward(
     tmp_path: Path
 ) -> None:
