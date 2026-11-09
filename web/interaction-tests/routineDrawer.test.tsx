@@ -279,3 +279,28 @@ it("reads an emptied minute as invalid instead of saving 0", () => {
   const [trigger] = latest().routineTriggers;
   expect(trigger.kind === "schedule" && Number.isNaN((trigger.schedule.repeat as { minute: number }).minute)).toBe(true);
 });
+
+it("submits on ⌘/Ctrl+Enter from a multi-line field, through the same title check", () => {
+  const save = vi.fn();
+  render(<Form save={save} initial={{ ...emptyRoutineForm(user), projectId: "p" }} />);
+  const description = document.querySelector<HTMLTextAreaElement>("[name='routine-description']")!;
+  fireEvent.keyDown(description, { key: "Enter", ctrlKey: true });
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByText("backlog.title_required")).toBeTruthy();
+
+  fireEvent.change(document.querySelector("[name='routine-title']")!, { target: { value: "Daily digest" } });
+  fireEvent.keyDown(description, { key: "Enter" });
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.keyDown(description, { key: "Enter", metaKey: true });
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+it("asks when it runs before the settings that carry a default", () => {
+  render(<Form initial={emptyRoutineForm(user)} />);
+  const details = screen.getByRole("group", { name: "backlog.details_section" });
+  // The trigger section precedes Details, and Details holds the defaults.
+  expect(schedule().compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(details).getByText("backlog.priority")).toBeTruthy();
+  expect(within(details).getByText("backlog.acceptance_policy")).toBeTruthy();
+  expect(within(schedule()).queryByText("backlog.priority")).toBeNull();
+});

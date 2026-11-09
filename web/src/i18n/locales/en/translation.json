@@ -855,6 +855,8 @@
     "source_routine": "Automation runs",
     "save_task": "Save task",
     "create_task": "Create task",
+    "details_section": "Details",
+    "submit_shortcut": "to submit",
     "workspace_not_created": "Files appear here after the task starts.",
     "workspace_offline": "The computer with these files is offline. Saved artifacts are still available.",
     "workspace_unsupported": "Update Relay on this computer to browse this workspace.",
