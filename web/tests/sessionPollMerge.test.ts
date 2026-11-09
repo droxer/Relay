@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  appendOlderSessionPage,
+  mergeSessionHeadPage,
   mergeSessionSnapshotIntoSessions,
   mergeSessionSummaries,
   sessionTrailsSummary,
@@ -185,5 +187,42 @@ describe("session poll merging", () => {
     const merged = mergeSessionSnapshotIntoSessions(current, staleSnapshot);
 
     assert.deepEqual(merged[0].events.map((event) => event.id), ["evt_output"]);
+  });
+});
+
+describe("thread list pages", () => {
+  const at = (second: number) => `2026-06-20T00:00:${String(second).padStart(2, "0")}.000Z`;
+
+  it("keeps older loaded pages below a polled first page", () => {
+    const loaded = [session({ id: "new", updatedAt: at(9) }), session({ id: "old", updatedAt: at(1) })];
+    const merged = mergeSessionHeadPage(loaded, [summary({ id: "new", updatedAt: at(9) })], true);
+    assert.deepEqual(merged.map((item) => item.id), ["new", "old"]);
+  });
+
+  it("drops a session the page's range no longer lists", () => {
+    const loaded = [session({ id: "gone", updatedAt: at(8) }), session({ id: "old", updatedAt: at(1) })];
+    const merged = mergeSessionHeadPage(loaded, [summary({ id: "top", updatedAt: at(9) }), summary({ id: "edge", updatedAt: at(5) })], true);
+    assert.deepEqual(merged.map((item) => item.id), ["top", "edge", "old"]);
+  });
+
+  it("treats a page with nothing older as the whole list", () => {
+    const loaded = [session({ id: "old", updatedAt: at(1) })];
+    const merged = mergeSessionHeadPage(loaded, [summary({ id: "top", updatedAt: at(9) })], false);
+    assert.deepEqual(merged.map((item) => item.id), ["top"]);
+  });
+
+  it("moves a thread that became active to the top without a duplicate", () => {
+    const loaded = [session({ id: "a", updatedAt: at(9) }), session({ id: "b", updatedAt: at(1) })];
+    const merged = mergeSessionHeadPage(loaded, [summary({ id: "b", updatedAt: at(10) }), summary({ id: "a", updatedAt: at(9) })], true);
+    assert.deepEqual(merged.map((item) => item.id), ["b", "a"]);
+  });
+
+  it("appends only sessions not already loaded and keeps the cached record", () => {
+    const cached = session({ id: "a", title: "cached", events: [{ id: "e" }] as unknown as RelaySession["events"] });
+    const current = [cached];
+    const appended = appendOlderSessionPage(current, [summary({ id: "a", title: "stale" }), summary({ id: "b" })]);
+    assert.deepEqual(appended.map((item) => item.id), ["a", "b"]);
+    assert.equal(appended[0], cached);
+    assert.equal(appendOlderSessionPage(current, [summary({ id: "a" })]), current);
   });
 });

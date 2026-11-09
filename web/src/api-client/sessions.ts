@@ -10,8 +10,16 @@ import { apiJson, RelayApiError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
-export function listSessionSummaries(signal?: AbortSignal): Promise<SessionSummariesResponse> {
-  return apiJson<SessionSummariesResponse>("/threads?view=summary", { signal, guard: sessionSummariesGuard });
+/** One page of the thread list, newest first. Without a page this is the
+ *  backend's default-sized first page. */
+export function listSessionSummaries(
+  signal?: AbortSignal,
+  page?: { limit: number; cursor?: string },
+): Promise<SessionSummariesResponse> {
+  const params = new URLSearchParams({ view: "summary" });
+  if (page) params.set("limit", String(page.limit));
+  if (page?.cursor) params.set("cursor", page.cursor);
+  return apiJson<SessionSummariesResponse>(`/threads?${params}`, { signal, guard: sessionSummariesGuard });
 }
 
 export function getSession(sessionId: string, signal?: AbortSignal): Promise<RelaySession> {

@@ -66,6 +66,44 @@ export function mergeSessionSummaries(
   });
 }
 
+/** Threads per page of the thread list: the polled first page and each older
+ *  page the rail loads as the reader scrolls. */
+export const THREAD_PAGE_SIZE = 20;
+
+/**
+ * The polled first page folded into the loaded list. Older pages the reader
+ * scrolled to stay: a session older than the page's last row was not in the
+ * page's range, so its absence says nothing. One within the range that the
+ * page no longer lists is gone (deleted, or no longer this user's) and drops,
+ * as it did when the poll returned the whole list. `hasOlder` is false when
+ * the page was the whole list.
+ */
+export function mergeSessionHeadPage(
+  current: RelaySession[],
+  summaries: SessionSummary[],
+  hasOlder: boolean,
+): RelaySession[] {
+  const head = mergeSessionSummaries(current, summaries);
+  const last = summaries.at(-1);
+  if (!hasOlder || !last) return head;
+  const headIds = new Set(head.map((session) => session.id));
+  const boundary = Date.parse(last.updatedAt);
+  const older = current.filter((session) =>
+    !headIds.has(session.id) && !(Date.parse(session.updatedAt) > boundary));
+  return older.length > 0 ? [...head, ...older] : head;
+}
+
+/** An older page appended below the loaded list. A session already loaded
+ *  keeps its cached record: the cache is at least as new as the page. */
+export function appendOlderSessionPage(
+  current: RelaySession[],
+  summaries: SessionSummary[],
+): RelaySession[] {
+  const known = new Set(current.map((session) => session.id));
+  const fresh = summaries.filter((summary) => !known.has(summary.id));
+  return fresh.length > 0 ? [...current, ...mergeSessionSummaries([], fresh)] : current;
+}
+
 export function mergeSessionSnapshotIntoSessions(
   current: RelaySession[],
   snapshot: RelaySession,

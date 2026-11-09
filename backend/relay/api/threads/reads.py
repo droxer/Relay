@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -32,6 +36,24 @@ ACTIVE_TASK_STATUSES = frozenset(
 ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
 
 
+def encode_summary_cursor(position: tuple[datetime, str]) -> str:
+    """An opaque token for where the next summary page starts."""
+    updated_at, session_id = position
+    raw = json.dumps({"u": updated_at.isoformat(), "i": session_id}, separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def decode_summary_cursor(cursor: str) -> tuple[datetime, str]:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode()))
+        updated_at = datetime.fromisoformat(payload["u"])
+        session_id = str(UUID(payload["i"]))
+    except (ValueError, TypeError, KeyError, binascii.Error) as error:
+        raise HTTPException(400, "cursor is not valid.") from error
+    return updated_at, session_id
+
+
 @router.get("/threads")
 def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
@@ -40,13 +62,18 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             requested_limit = int(request.query_params.get("limit") or "100")
         except ValueError as error:
             raise HTTPException(400, "limit must be an integer.") from error
-        summaries = ctx.session_store.list_session_summaries(
+        cursor = request.query_params.get("cursor")
+        summaries, next_position = ctx.session_store.list_session_summary_page(
             owner_user_id=actor["userId"],
             limit=min(max(1, requested_limit), 200),
+            before=decode_summary_cursor(cursor) if cursor else None,
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
         sessions = ctx.execution_lifecycle.annotate(sessions)
-        return {"sessions": [session_brief_item(session) for session in sessions]}
+        return {
+            "sessions": [session_brief_item(session) for session in sessions],
+            "nextCursor": encode_summary_cursor(next_position) if next_position else None,
+        }
     visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)

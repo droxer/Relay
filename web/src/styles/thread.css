@@ -85,6 +85,14 @@
   block-size: var(--sp-1);
 }
 
+/* The rail's last row while older threads are on the server: a quiet,
+   full-width text action in the rows' own meta voice. */
+.conversation-rail-more {
+  flex: none;
+  justify-content: flex-start;
+  color: var(--ink-3);
+}
+
 /* The <ul> that actually holds rows — one per attention group in threads
    mode, one per folder in projects mode. Same rhythm as .agents-roster-list
    and .teams-list: rounded rows separated by a --sp-1 gutter. It was --sp-0-5

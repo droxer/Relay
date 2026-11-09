@@ -4,10 +4,11 @@ import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react
 import { listDaemonNodes, listProjects, listSandboxes, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
-import { mergeSessionSummaries } from "../lib/sessionPollMerge";
+import { appendOlderSessionPage, mergeSessionHeadPage, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
 import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
+import { useKeyChange } from "./useKeyChange";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
@@ -28,6 +29,14 @@ type RelayDataResult = {
   /** The first thread list is still on its way: an empty `sessions` means
    *  "not yet", not "none". */
   sessionsLoading: boolean;
+  /** Older threads exist beyond the loaded pages. */
+  hasMoreSessions: boolean;
+  /** An older page is on its way. */
+  loadingMoreSessions: boolean;
+  /** The last older-page request failed; calling `loadMoreSessions` retries. */
+  moreSessionsFailed: boolean;
+  /** Load the next older page of the thread list. */
+  loadMoreSessions: () => Promise<void>;
   tasks: RelayTaskSummary[];
   projects: ProjectRecord[];
   homeStatus: ProjectCollectionStatus;
@@ -105,6 +114,17 @@ export function useRelayData(
   // sessions interval at once instead of after the next poll.
   const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
 
+  // Thread list paging. The head cursor is where the polled first page ends;
+  // the older cursor is where the last older page ended — undefined until one
+  // loads, null once the oldest has. Both are keyset positions, so a poll that
+  // reshuffles the first page never invalidates them.
+  const [headCursor, setHeadCursor] = useState<string | null>(null);
+  const [olderCursor, setOlderCursor] = useState<string | null | undefined>(undefined);
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
+  const [moreSessionsFailed, setMoreSessionsFailed] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const nextSessionCursor = olderCursor === undefined ? headCursor : olderCursor;
+
   const { sandboxes, nodes, nodesReady, sessions, sessionsLoading, tasks, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
@@ -136,11 +156,18 @@ export function useRelayData(
         // its events, so an identical poll re-renders no row.
         structuralSharing: (previous: unknown, next: unknown) =>
           shareSessions(previous as RelaySession[] | undefined, next as RelaySession[]),
+        // The poll reads only the first page; older pages load on demand and
+        // stay in the cache below it (mergeSessionHeadPage).
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
-          const summaries = (await listSessionSummaries(signal)).sessions ?? [];
-          return mergeSessionSummaries(
+          const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE });
+          const next = typeof page.nextCursor === "string" ? page.nextCursor : null;
+          setHeadCursor(next);
+          // The first page is the whole list: nothing older is left to load.
+          if (next === null) setOlderCursor(undefined);
+          return mergeSessionHeadPage(
             queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [],
-            summaries,
+            page.sessions ?? [],
+            next !== null,
           );
         },
       },
@@ -179,6 +206,33 @@ export function useRelayData(
       void queryClient.resetQueries({ queryKey: RELAY_KEY });
     }
   }, [enabled, queryClient]);
+  // The thread pages go with the cache they described.
+  useKeyChange(enabled, (isEnabled) => {
+    if (isEnabled) return;
+    setHeadCursor(null);
+    setOlderCursor(undefined);
+    setMoreSessionsFailed(false);
+  });
+
+  const loadMoreSessions = useCallback(async () => {
+    if (!enabled || !nextSessionCursor || loadingMoreRef.current) return;
+    if (!queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)) return;
+    loadingMoreRef.current = true;
+    setLoadingMoreSessions(true);
+    try {
+      const page = await listSessionSummaries(undefined, { limit: THREAD_PAGE_SIZE, cursor: nextSessionCursor });
+      queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (current) =>
+        current ? appendOlderSessionPage(current, page.sessions ?? []) : current);
+      setOlderCursor(typeof page.nextCursor === "string" ? page.nextCursor : null);
+      setMoreSessionsFailed(false);
+    } catch {
+      // Keep the cursor: the rail offers the same page again.
+      setMoreSessionsFailed(true);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMoreSessions(false);
+    }
+  }, [enabled, nextSessionCursor, queryClient]);
 
   // Refetch under the new credential whenever the active token changes.
   const previousTokenRef = useRef(token);
@@ -240,6 +294,10 @@ export function useRelayData(
     nodesReady,
     sessions,
     sessionsLoading,
+    hasMoreSessions: Boolean(nextSessionCursor),
+    loadingMoreSessions,
+    moreSessionsFailed,
+    loadMoreSessions,
     tasks,
     projects,
     projectsStatus,

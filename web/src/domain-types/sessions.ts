@@ -33,6 +33,9 @@ export interface SessionSummary {
 
 export interface SessionSummariesResponse {
   sessions: SessionSummary[];
+  /** Where the next, older page starts; `null` (or absent, from an older
+   *  backend) on the last page. Opaque: pass it back as `cursor`. */
+  nextCursor?: string | null;
 }
 
 export interface AgentRunInput {
