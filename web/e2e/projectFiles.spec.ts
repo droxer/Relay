@@ -30,7 +30,7 @@ for (const [label, width, height, touch] of [["small", 320, 640, true], ["phone"
     const preview = page.locator(".workspace-pane-preview");
     await expect(preview.locator(".doc-prose")).toBeVisible();
     const browse = page.locator(".workspace-pane-browse");
-    if (await page.locator(".workspace-body").evaluate(el => el.clientWidth <= 760)) await expect(browse).toBeHidden();
+    if (await page.locator(".workspace-body").evaluate(el => el.clientWidth <= 768)) await expect(browse).toBeHidden();
     else await expect(browse).toBeVisible();
     const heading = preview.getByRole("heading", { name: "README.md", exact: true });
     expect(await heading.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);

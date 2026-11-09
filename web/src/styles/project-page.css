@@ -948,7 +948,7 @@ button.project-member-row:hover .project-member-row-open {
   flex-shrink: 0;
 }
 
-@container record (max-width: 760px) {
+@container record (max-width: 768px) {
   .project-workspace-page .workspace-panes {
     grid-template-columns: minmax(0, 1fr);
   }
