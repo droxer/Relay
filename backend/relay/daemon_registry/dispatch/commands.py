@@ -59,7 +59,7 @@ def missing_workspace_capability(
     )
 
 
-HEARTBEAT_FEATURES = ("poll-liveness", "state")
+HEARTBEAT_FEATURES = ("poll-liveness", "state", "durable-reports", "transport-status", "report-batches")
 HEARTBEAT_STATES = ("ready", "draining", "stopped")
 
 
@@ -333,6 +333,8 @@ class CommandQueueMixin(RegistryState):
         limit: int = 2**53,
         lease_seconds: float = config.DAEMON_COMMAND_LEASE_SECONDS,
         renew_known_active: bool = True,
+        admit_runs: bool = True,
+        recover_delivery: bool = False,
     ) -> list[dict[str, Any]]:
         # Global recovery runs before the node scope so command polling never
         # inverts the terminal-event lock order (global -> node).
@@ -345,6 +347,8 @@ class CommandQueueMixin(RegistryState):
                 limit=limit,
                 lease_seconds=lease_seconds,
                 renew_known_active=renew_known_active,
+                admit_runs=admit_runs,
+                recover_delivery=recover_delivery,
             )
 
     def heartbeat_settings(self) -> dict[str, Any]:
@@ -450,6 +454,8 @@ class CommandQueueMixin(RegistryState):
         limit: int,
         lease_seconds: float,
         renew_known_active: bool,
+        admit_runs: bool = True,
+        recover_delivery: bool = False,
     ) -> list[dict[str, Any]]:
         self._assert_authorized(sandbox_id, token)
         sandbox = self.sandboxes.get(sandbox_id)
@@ -471,8 +477,12 @@ class CommandQueueMixin(RegistryState):
                 sandbox_id, lease_seconds=lease_seconds
             )
         records = self.daemon_store.take_queued_commands(
-            sandbox_id, limit=limit, lease_seconds=lease_seconds
+            sandbox_id, limit=limit, lease_seconds=lease_seconds, admit_runs=admit_runs
         )
+        if recover_delivery and admit_runs and has_capability(sandbox, 'durable-reports'):
+            already = {record['id'] for record in records}
+            recovered = self.daemon_store.recover_start_deliveries(sandbox_id, limit=limit, lease_seconds=lease_seconds)
+            records.extend(record for record in recovered if record['id'] not in already and len(records) < limit)
         records = [
             record
             for record in records

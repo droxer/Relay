@@ -20,7 +20,10 @@ effect of command polling.
    leases on the server, so the daemon skips beats while one is in flight
    (and resumes once the poll has been open longer than its own wait). With
    `state`, the daemon drains and stops through heartbeats instead of a full
-   registration. An older backend sends no list and gets the old traffic.
+   registration. `durable-reports` enables payload-bound acceptance receipts;
+   these peers also send independent one-second health probes, even while a
+   poll is open, to detect a blackholed connection promptly. An older backend
+   sends no list and gets the old traffic.
 
 The default policy expires after 30 seconds and renews every fifth of that
 (6 seconds), so a daemon may miss four beats. The daemon beats at a fixed rate
@@ -98,11 +101,9 @@ the owner that has authority to act.
 ## Command notification recovery
 
 Command polls wake on committed queue notifications. With a PostgreSQL bridge
-that has completed `LISTEN`, an idle poll re-reads the queue every five seconds
-as a recovery path for missed notifications. SQLite and disconnected bridges
-use a one-second recovery interval. Each tick rechecks bridge health; a bridge
-lost during a five-second wait switches to the faster fallback on the next tick.
-Notifications still wake polls immediately.
+that has completed `LISTEN`, an idle poll still re-reads the queue every half
+second as a recovery path for missed notifications. SQLite and disconnected
+bridges use the same bound. Notifications wake polls immediately.
 
 The wait is also capped at one third of the requested command lease and one
 fifth of the node liveness timeout, so longer recovery waits do not delay lease
@@ -116,3 +117,75 @@ only after a successful copy allowed the next sequence to proceed; backend
 per-stream high-water deduplication then suppresses those duplicates. A failed
 output upload does not prevent terminal evidence from releasing the run;
 retained output can be replayed after completion.
+
+## Durable report transport
+
+Apply migration `20261109_0122` before deploying this backend. Updated daemons
+advertise `durable-reports`; the backend advertises the matching feature plus
+`report-batches` and `transport-status`. Existing HTTP routes and long polling
+remain the transport. Legacy peers continue working, but diagnostics mark their
+durability guarantee as unverified.
+
+Output is written to private report storage asynchronously, flushed, renamed,
+and directory-synced before transmission. Terminal evidence is written
+synchronously before its execution journal entry is cleared. Captures whose
+flush has not completed are explicitly outside the crash-survival boundary.
+Successful uploads remove records only after the backend returns a receipt
+binding the report identity and payload digest. The receipt and effects commit
+in one database transaction. Lost replies can therefore be retried safely on
+another backend replica. Sequenced output cannot skip a missing predecessor;
+terminal evidence and unrelated runs can still progress.
+Terminal acceptance commits the command's exit evidence and receipt together;
+workflow finalization then uses its own transactions. A finalization failure
+leaves the committed evidence available for the existing recovery loop, rather
+than retaining locks across unrelated Computers.
+
+Transient failures retry indefinitely with jitter, bounded request deadlines,
+and `Retry-After`. Permanent report rejections are quarantined with their bytes
+and reason intact. Contact loss alone neither reruns nor kills an active agent.
+An unacknowledged start may be redelivered with its original command and lease;
+the daemon's execution journal fences duplicate admission. An uncertain process
+exit keeps the execution reservation until observed exit or a recorded human
+assertion.
+
+The report budget defaults to 1 GiB (`RELAY_DAEMON_REPORT_STORAGE_BYTES`).
+Admission stops at 80%; at 90%, running agents receive a graceful stop, followed
+by forced termination after ten seconds. Shutdown output can use the reserve up
+to 97%, leaving the final 3% for terminal evidence. A capture that exhausts that
+reserve or fails to flush records a persistent fault rather than claiming
+complete output. Physical free-space thresholds independently stop admission
+below 256 MiB and active runs below 128 MiB. Recovery requires less than 50%
+of the budget, at least 512 MiB free, a usable backend, and no persistence fault.
+Override those physical thresholds with
+`RELAY_DAEMON_REPORT_FREE_ADMISSION_BYTES`, `RELAY_DAEMON_REPORT_FREE_STOP_BYTES`,
+and `RELAY_DAEMON_REPORT_FREE_RESUME_BYTES` (stop < admission < resume).
+
+`relay status`, `relay doctor`, and `relay reports` expose local diagnostics.
+Stop the daemon before `relay retry-report --report <id>` or
+`relay discard-report --report <id> --acknowledge-output-loss`; both record the
+local operator in a private audit record. Discard is deliberate loss and never
+counts as acceptance. Back up the private daemon state when moving a Computer;
+deleting its report directory destroys its only unaccepted evidence.
+
+An outage lasting 60 seconds, or an immediate storage, credential, quarantine,
+or uncertain-exit fault, opens one incident per stable Computer. The owner (or
+shared-hardware admins) receives a concise notice with a protected diagnostics
+link. Updates and recovery preserve the notice's read/cleared state. Recovery
+requires ten seconds of healthy contact and replay progress. Local incident
+state survives network loss and daemon restart.
+
+Run the disposable PostgreSQL transport probe with:
+
+```sh
+PYTHONPATH=backend python backend/tests/benchmarks/daemon_transport.py \
+  --database-url postgresql+psycopg://localhost/relay_probe \
+  --replicas 2 --daemons 100 --warmup 120 --duration 600 \
+  --output /tmp/relay-transport.json
+```
+
+The tool refuses non-loopback backends, creates and drops an isolated schema,
+and uses real daemons with synthetic agent output. `--fault blackhole`,
+`ack-loss`, `duplicates`, or `server-error` injects one episode. Repeat at least
+20 recovery episodes; platform reboot, storage-device faults, reference CPU
+allocation, and sustained load require separate acceptance evidence. A short
+smoke result does not establish the reference SLO.

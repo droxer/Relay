@@ -14,10 +14,11 @@ from typing import Any
 TASK_COMPLETED = "task_completed"
 APPROVAL_REQUESTED = "approval_requested"
 COMPUTER_STATUS = "computer_status"
+COMPUTER_TRANSPORT = "computer_transport"
 CLIENT_OUTDATED = "client_outdated"
 PERMISSION_REQUESTED = "permission_requested"
 NOTIFICATION_KINDS: tuple[str, ...] = (
-    TASK_COMPLETED, APPROVAL_REQUESTED, PERMISSION_REQUESTED, COMPUTER_STATUS, CLIENT_OUTDATED,
+    TASK_COMPLETED, APPROVAL_REQUESTED, PERMISSION_REQUESTED, COMPUTER_STATUS, CLIENT_OUTDATED, COMPUTER_TRANSPORT,
 )
 
 
@@ -151,3 +152,15 @@ def permission_request_rows(session: dict[str, Any], request: dict[str, Any]) ->
         **({"projectId": session["projectId"]} if session.get("projectId") else {}),
     }
     return [{"user_id": owner, "kind": PERMISSION_REQUESTED, "data": data}]
+
+
+def transport_notification_rows(node: dict[str, Any], accounts: Sequence[dict[str, Any]], snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    """One facts-only incident brief for the owner, or admins of shared hardware."""
+    if not snapshot.get('incident'):
+        return []
+    recipients = [str(node['userId'])] if node.get('userId') else sorted({str(account.get('userId') or account['id']) for account in accounts if account.get('role') == 'admin'})
+    return [{
+        'user_id': recipient, 'kind': COMPUTER_TRANSPORT,
+        'dedupeKey': f"{snapshot['computerId']}/{snapshot['incident']}",
+        'data': {**snapshot, 'computerName': node.get('displayName') or node['id']},
+    } for recipient in recipients]

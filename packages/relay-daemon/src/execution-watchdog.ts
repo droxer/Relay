@@ -1,6 +1,8 @@
 export interface ExecutionWatchdogOptions {
   /** How long an expired lease may run on while the backend is unreachable. */
   graceMs?: number;
+  /** Transport loss alone cannot revoke a durably fenced execution. */
+  continueDuringOutage?: boolean;
   /** True while the backend cannot be reached (network/5xx), not when it refuses. */
   shouldGrace?: () => boolean;
   onGrace?: (id: string) => void;
@@ -29,6 +31,7 @@ export class ExecutionWatchdog {
   tick(): void {
     const unreachable = this.options.shouldGrace?.() ?? false;
     for (const [id, lease] of this.leases) {
+      if (unreachable && this.options.continueDuringOutage) continue;
       // A backend outage is not a revocation, so one grace period carries the
       // run through it. Once the backend answers without renewing the lease,
       // ownership is gone and the grace ends with it.

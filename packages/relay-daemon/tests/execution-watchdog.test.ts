@@ -89,3 +89,17 @@ test("losing reachability during the grace ends it, and a renewal restores a fre
   watchdog.tick();
   assert.deepEqual(stopped, ["b"]);
 });
+
+test('explicit outage continuity preserves execution beyond lease and grace', () => {
+  let now = 0;
+  let unreachable = true;
+  let stopped = false;
+  const watchdog = new ExecutionWatchdog(() => now, { graceMs: 1, shouldGrace: () => unreachable, continueDuringOutage: true });
+  watchdog.track('cmd', 1, () => { stopped = true; });
+  now = 1_000_000;
+  watchdog.tick();
+  assert.equal(stopped, false);
+  unreachable = false;
+  watchdog.tick();
+  assert.equal(stopped, true);
+});

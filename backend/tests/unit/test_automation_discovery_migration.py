@@ -38,6 +38,10 @@ def test_routing_upgrade_and_downgrade_preserve_outbox_and_fence_partial_work(mi
             )
         command.upgrade(config(), "head")
         DatabaseAutomationStore(url).verify_schema()
+        # Exercise the routing migration's own rollback boundary. Later
+        # revisions may commit their downgrades through autocommit DDL; those
+        # successful steps cannot be rolled back by this older guard.
+        command.downgrade(config(), "20261106_0119")
         with engine.begin() as conn:
             assert conn.scalar(text("SELECT payload FROM automation_outbox")) == {"extension": [1, 2]}
             head_before_rejected_downgrade = conn.scalar(text("SELECT version_num FROM alembic_version"))

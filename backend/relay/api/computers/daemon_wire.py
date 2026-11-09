@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from typing import Any
 
@@ -11,8 +12,11 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.concurrency import run_in_threadpool
 
 from ...computer.node_agents import sync_node_agents
+from ...computer.transport import record_transport, transport_diagnostics
+from ...core.computer_identity import computer_id
 from ...computer.access import actor_may_manage_computer
 from ...core.models import DaemonNodeRegistration
+from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...daemon_registry.records import (
     CommandEventMismatchError,
     DeletedDaemonNodeError,
@@ -23,6 +27,7 @@ from ...daemon_registry.dispatch.commands import HEARTBEAT_STATES
 from ...realtime.event_notifier import daemon_command_key
 from ..actors import (
     bearer_token,
+    request_actor,
     request_actor_or_none,
 )
 from ..bodies import JsonBodyDep, json_body
@@ -52,10 +57,10 @@ MAX_ACTIVE_COMMAND_IDS = 50
 # wake arrives. A publish can be missed (several SQLite processes, a dropped
 # notification), so this bounds the recovery wait for that case; the
 # recovery read is one indexed query per waiting daemon per interval.
-COMMAND_NOTIFICATION_RECOVERY_SECONDS = 1.0
-# A healthy replica bridge supplies prompt wakeups; keep a slower recovery read
-# for missed notifications. Lease renewal and liveness may require earlier ticks.
-COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 5.0
+COMMAND_NOTIFICATION_RECOVERY_SECONDS = 0.5
+# A connected bridge can still lose a notification. Retain the same bounded
+# recovery interval so a missed wake does not consume the latency budget.
+COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 0.5
 
 
 def bounded_float(
@@ -318,6 +323,9 @@ async def daemon_commands(
         maximum=MAX_COMMAND_LEASE_SECONDS,
         field="leaseSeconds",
     )
+    admit_runs = request.query_params.get("admitRuns", "true")
+    if admit_runs not in ("true", "false"):
+        raise HTTPException(400, "admitRuns must be true or false.")
     lease_mode = request.query_params.get("leaseMode") or "legacy"
     if lease_mode not in ("explicit", "legacy"):
         raise HTTPException(400, 'leaseMode must be "explicit" or "legacy".')
@@ -344,6 +352,8 @@ async def daemon_commands(
                     limit=limit,
                     lease_seconds=lease_seconds,
                     renew_known_active=lease_mode == "legacy",
+                    admit_runs=admit_runs == "true",
+                    recover_delivery=lease_mode == "explicit",
                 )
                 remaining = deadline - time.monotonic()
                 if commands or remaining <= 0:
@@ -474,10 +484,15 @@ def daemon_permission_request(
 
 @router.post("/daemon-nodes/{sandbox_id}/events")
 async def daemon_events(
-    sandbox_id: str, request: Request, ctx: AppContextDep
+    sandbox_id: str, request: Request, response: Response, ctx: AppContextDep
 ) -> dict[str, bool]:
     try:
         event = daemon_node_event(await json_body(request))
+        report_id = request.headers.get("X-Relay-Report-Id")
+        report_digest = request.headers.get("X-Relay-Report-Digest")
+        if report_id is not None or report_digest is not None:
+            if not report_id or not report_digest or not re.fullmatch(r"[0-9a-f]{64}", report_id) or report_digest != request.scope.get("relay.report_digest"):
+                raise ValueError("Invalid durable report identity or digest.")
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     try:
@@ -487,9 +502,12 @@ async def daemon_events(
                 ctx.daemon_store.record_workspace_response, sandbox_id, event
             )
             return {"ok": True}
-        await run_in_threadpool(
-            ctx.registry.handle_event, sandbox_id, event, bearer_token(request)
-        )
+        if report_id is not None and report_digest is not None:
+            await run_in_threadpool(ctx.registry.handle_durable_report, sandbox_id, event, bearer_token(request), report_id, report_digest)
+            response.headers['X-Relay-Report-Id'] = report_id
+            response.headers['X-Relay-Report-Digest'] = report_digest
+        else:
+            await run_in_threadpool(ctx.registry.handle_event, sandbox_id, event, bearer_token(request))
         logger.debug(
             "Daemon node event handled",
             sandbox_id=sandbox_id,
@@ -499,6 +517,8 @@ async def daemon_events(
         return {"ok": True}
     except DeletedDaemonNodeError as error:
         raise HTTPException(410, str(error)) from error
+    except ReportPredecessorMissing as error:
+        raise HTTPException(503, str(error), headers={"Retry-After": "1"}) from error
     except CommandEventMismatchError as error:
         # The credential is good; the event is not. 401 would stop the daemon.
         logger.warning(
@@ -539,3 +559,37 @@ def is_transient_store_fault(error: BaseException) -> bool:
     if isinstance(error, (OperationalError, InterfaceError, PoolTimeoutError)):
         return True
     return isinstance(error, DBAPIError) and bool(error.connection_invalidated)
+
+
+@router.post('/daemon-nodes/{sandbox_id}/transport')
+async def daemon_transport(sandbox_id: str, request: Request, ctx: AppContextDep) -> dict[str, bool]:
+    try:
+        await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
+        snapshot = transport_diagnostics(await json_body(request))
+        node = await run_in_threadpool(ctx.registry.get, sandbox_id)
+        if node is None:
+            raise UnknownDaemonNodeError(sandbox_id)
+        await run_in_threadpool(record_transport, ctx, node, snapshot)
+        return {'ok': True}
+    except DeletedDaemonNodeError as error:
+        raise HTTPException(410, str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(401, 'Invalid Computer credential.') from error
+    except UnknownDaemonNodeError as error:
+        raise HTTPException(404, 'Computer not found.') from error
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@router.get('/daemon-nodes/{sandbox_id}/transport')
+def computer_transport(sandbox_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    try:
+        node = ctx.registry.get(sandbox_id)
+    except UnknownDaemonNodeError as error:
+        raise HTTPException(404, 'Computer not found.') from error
+    if node is None:
+        raise HTTPException(404, 'Computer not found.')
+    if node.get('userId') != actor['userId'] and not (not node.get('userId') and actor['isAdmin']):
+        raise HTTPException(403, 'Computer diagnostics access denied.')
+    return ctx.daemon_store.transport_status(computer_id(node)) or {'state': 'connecting', 'verified': False}

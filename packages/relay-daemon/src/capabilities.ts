@@ -31,6 +31,7 @@ import {
 } from "relay-core";
 
 export const DAEMON_ADVERTISED_CAPABILITIES: readonly DaemonNodeCapability[] = [
+  "durable-reports",
   "runtime-refresh",
   "service-connections",
   DAEMON_CAPABILITY_AGENT_SKILLS,

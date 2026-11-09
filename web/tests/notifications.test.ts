@@ -247,3 +247,17 @@ describe("notification API client", () => {
     assert.equal(calls[1].init?.body, JSON.stringify({ mutedKinds: ["computer_status"] }));
   });
 });
+
+describe('transport incident brief', () => {
+  it('shows delivery facts and an authorized local diagnostics link', () => {
+    const view = notificationView(notice('computer_transport', {
+      nodeId: 'node/one', computerName: 'Desk', causes: ['storage'], state: 'retrying',
+      pending: 4, quarantined: 1, bytes: 1048576, runs: ['run'], recovered: false,
+    }));
+    assert.ok(view);
+    assert.equal(view.title.key, 'notifications.transport_attention');
+    assert.equal(view.diagnosticsHref, '/api/v1/daemon-nodes/node%2Fone/transport');
+    assert.equal(view.brief?.key, 'notifications.transport_action_storage');
+    assert.equal(view.detail.params.pending, 4);
+  });
+});

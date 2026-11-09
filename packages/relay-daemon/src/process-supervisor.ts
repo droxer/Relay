@@ -163,7 +163,7 @@ export async function superviseLocalProcess(
       scheduleExitReport();
       terminate("SIGTERM");
       // Escalate in case the agent ignores SIGTERM.
-      killTimer = setTimeout(() => terminate("SIGKILL"), SIGKILL_DELAY_MS);
+      killTimer = setTimeout(() => terminate("SIGKILL"), hooks?.stopGraceMs ?? SIGKILL_DELAY_MS);
       killTimer.unref?.();
     };
     options.signal?.addEventListener("abort", abort, { once: true });

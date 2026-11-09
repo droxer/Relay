@@ -15,13 +15,13 @@ from relay.realtime.event_notifier import PostgresNotificationBridge, KeyedEvent
 
 @pytest.mark.parametrize(
     ("bridge_states", "lease", "liveness", "expected"),
-    [([True], 60, 30_000, [5, 5, 2]),
-     ([True, False], 60, 30_000, [5] + [1] * 7),
-     ([False], 60, 30_000, [1] * 12),
-     (None, 60, 30_000, [1] * 12),
-     ([True], 3, 30_000, [1] * 12),
+    [([True], 60, 30_000, [.5] * 24),
+     ([True, False], 60, 30_000, [.5] * 24),
+     ([False], 60, 30_000, [.5] * 24),
+     (None, 60, 30_000, [.5] * 24),
+     ([True], 3, 30_000, [.5] * 24),
      ([True], 1, 30_000, [1 / 3] * 36),
-     ([True], 60, 5_000, [1] * 12)],
+     ([True], 60, 5_000, [.5] * 24)],
 )
 def test_command_recovery_interval(monkeypatch, bridge_states, lease, liveness, expected):
     clock = [0.0]

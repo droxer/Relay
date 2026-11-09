@@ -3161,7 +3161,17 @@
     "desktop_sub": "Show system notifications while Relay is in the background.",
     "desktop_on": "On. You’ll get system notifications while Relay is in the background.",
     "desktop_blocked": "Notifications are blocked for this site. Allow them in your browser’s site settings, then turn this on.",
-    "desktop_unsupported": "This browser doesn’t support desktop notifications."
+    "desktop_unsupported": "This browser doesn’t support desktop notifications.",
+    "transport_attention": "Computer communication needs attention",
+    "transport_recovered": "Computer communication recovered",
+    "transport_detail": "{{name}} · {{runs}} runs affected · {{pending}} pending reports ({{bytes}} MiB) · {{quarantined}} quarantined",
+    "transport_action_revoked": "Run setup again to restore this Computer’s authorization.",
+    "transport_action_storage": "Free disk space or repair report storage. Existing reports are preserved.",
+    "transport_action_quarantine": "Inspect rejected reports, fix the cause, then retry them.",
+    "transport_action_execution": "Review the execution evidence before reporting a run gone.",
+    "transport_action_communication": "Relay is retrying automatically. Runs continue while storage permits.",
+    "transport_action_recovered": "Communication is healthy. Any remaining reports are catching up.",
+    "transport_diagnostics": "View diagnostics"
   },
   "blocker": {
     "no_reason": "No cause was recorded",

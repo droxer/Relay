@@ -59,7 +59,9 @@ not have been looking: a Task they own or are assigned finished
 (`task_completed`), a team awaits their approval before its next step
 (`approval_requested`), a Computer they hold went online or offline
 (`computer_status`), or a Computer runs an Outdated Client
-(`client_outdated`). Shared hardware no User holds notifies every admin. It
+(`client_outdated`), or a Computer has a transport incident
+(`computer_transport`). A transport incident updates one notice through recovery
+without resetting its read or cleared state. Shared hardware no User holds notifies every admin. It
 carries facts, not prose; muting a kind hides its notices without deleting
 them.
 _Avoid_: Alert, message (a Thread message), event (an event-log record)

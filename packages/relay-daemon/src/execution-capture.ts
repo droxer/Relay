@@ -3,6 +3,7 @@ import { BoundedTextCapture } from "./bounded-text.js";
 type StreamRenderer = (chunk: string) => string;
 
 export interface ExecutionExitHooks {
+  stopGraceMs?: number;
   /** A host-mode run started as this process group (on Windows, this root pid) at `spawnedAt`. */
   onSpawn?: (processGroup: number, spawnedAt: number) => void;
   /** Called once when a stop has gone unconfirmed for `unconfirmedAfterMs`. */
@@ -56,7 +57,7 @@ export async function collectExecution(
   const stderrCapture = new BoundedTextCapture();
   const hooks: ExecutionExitHooks = { ...(signal ? exitHooks.get(signal) : undefined), ...recovery };
   const retryMs = recovery.retryMs ?? 1000;
-  const graceMs = recovery.graceMs ?? 5000;
+  const graceMs = recovery.graceMs ?? hooks.stopGraceMs ?? 5000;
   const unconfirmedAfterMs = recovery.unconfirmedAfterMs ?? 60_000;
   let reportedUnconfirmed = false;
   const warn = recovery.warn ?? ((message: string) => { process.stderr.write(`[relay] ${message}\n`); });

@@ -33,6 +33,7 @@ from .mcp.http import RelayMcpHttp
 from .api.computers import (
     admin_nodes as admin_node_routes,
     daemon_wire as daemon_wire_routes,
+    daemon_reports as daemon_report_routes,
     device_authorizations as device_authorization_routes,
     enrollment as enrollment_routes,
     installer as computer_installer_routes,
@@ -406,6 +407,7 @@ API_ROUTERS = (
     user_node_routes.router,
     enrollment_routes.router,
     daemon_wire_routes.router,
+    daemon_report_routes.router,
     managed_node_routes.router,
     notification_routes.router,
     password_reset_routes.router,

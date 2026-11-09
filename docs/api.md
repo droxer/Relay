@@ -808,9 +808,10 @@ New computers must enroll before registration. An authenticated admin may also
 register a new computer; anonymous registration cannot create an ownerless node.
 Event payload validation returns 400, authorization failures return 401, deleted
 nodes return 410, and unknown nodes return 404. Unexpected event-processing
-failures return 503 so daemons retry them. Durable output and terminal events
-are removed from the outbox after permanent 4xx rejection; 408, 429, network
-errors, and 5xx responses remain retryable.
+failures return 503 for transient database errors and 500 for other ingest
+failures. Both are retryable. Durable output and terminal events are retained
+in quarantine after permanent 4xx rejection; 408, 429, network errors, and 5xx
+responses remain retryable indefinitely.
 
 `GET /api/v1/daemon-nodes/{id}/auth-check` validates the daemon's runtime bearer
 token and returns `{ "sandboxId": "<id>", "authenticated": true }`. It does not
@@ -827,6 +828,34 @@ without matching lease evidence does not confirm execution ownership.
 Delivered `run.start` commands are never redelivered solely because their lease
 expired. Their original terminal evidence remains valid until settled; cancels
 and workspace reads continue to use retryable delivery leases.
+
+For peers advertising `durable-reports`, an unacknowledged delivery is retried
+with the same command ID, lease ID, and attempt. An explicit active-command
+lease observation acknowledges delivery. `admitRuns=false` suppresses new
+starts while still returning cancellation/control commands.
+
+Updated event uploads set `X-Relay-Report-Id` (64 lowercase hex characters) and
+`X-Relay-Report-Digest` (SHA-256 of the exact request bytes). A successful
+`POST /api/v1/daemon-nodes/{id}/events` echoes both only after effects and the
+receipt commit together. Reusing an identity with a different digest returns
+409; a missing output predecessor returns retryable 503 with `Retry-After`.
+For terminal reports, acceptance commits command exit evidence; workflow
+finalization runs after that commit and retries separately if needed.
+
+`POST /api/v1/daemon-nodes/{id}/reports` accepts 1–50 replay records as
+`{reports: [{id, digest, body}]}`, where `body` is the exact JSON string whose
+bytes were hashed. The response is `{receipts: [{id, digest, status}]}`;
+HTTP 200 alone does not acknowledge any individual report. Output sequences
+for one run commit as a group; an unexpected group failure rolls them back
+and returns individual 500 statuses without starving unrelated groups.
+
+`POST /api/v1/daemon-nodes/{id}/transport` accepts bounded, token-authenticated
+transport diagnostics. `GET` on the same path requires the personal Computer's
+owner or an admin for shared hardware. Snapshots include queue bytes, pending
+and quarantined counts, acknowledged positions, affected run IDs, incident
+identity/causes, and whether durable receipts were negotiated. They contain
+neither credentials nor raw output. The `computer_transport` notification
+updates one incident brief through recovery without resetting read/clear state.
 
 Managed-node retry creates an attempt with `replaceActive: true`; draining
 patches `desiredState` to `stopped`. `tasks/claim-next` is retired and has no v1

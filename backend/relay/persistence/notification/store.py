@@ -1,7 +1,8 @@
 """A person's notification inbox, plus the watch state that feeds it.
 
-Rows are plain records, not an event log: a notification is written once and
-only its ``read_at`` and ``cleared_at`` change. Clearing hides a notice rather
+Rows are plain records, not an event log: ordinary notices are written once;
+transport incidents update their facts in place while retaining the original
+``read_at`` and ``cleared_at``. Clearing hides a notice rather
 than deleting it, so replaying a deduplicated notice cannot resurrect it. Task notifications are inserted inside the task
 store's own transaction (``insert_notification_rows``), so a completed task and
 its notice commit together. Computer notices come from the watcher, which
@@ -94,6 +95,14 @@ class DatabaseNotificationStore:
             with store_transaction(self.engine) as conn:
                 insert_notification_rows(conn, rows)
 
+    def update_incident(self, rows: list[dict[str, Any]]) -> None:
+        """Update facts in place, preserving recipient read/clear state."""
+        with store_transaction(self.engine) as conn:
+            insert_notification_rows(conn, rows)
+            for row in rows:
+                notice_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"relay.notification/{row['user_id']}/{row['kind']}/{row['dedupeKey']}"))
+                conn.execute(update(notifications).where(notifications.c.id == notice_id).values(data=row['data']))
+
     @staticmethod
     def _visible(user_id: str, muted: list[str]) -> Any:
         clause = and_(notifications.c.user_id == user_id, notifications.c.cleared_at.is_(None))
@@ -150,7 +159,7 @@ class DatabaseNotificationStore:
 
     def prune(self, before: datetime) -> int:
         with store_transaction(self.engine) as conn:
-            return conn.execute(delete(notifications).where(notifications.c.created_at < before)).rowcount
+            return conn.execute(delete(notifications).where(notifications.c.created_at < before, (notifications.c.kind != "computer_transport") | notifications.c.data["recovered"].as_boolean().is_(True))).rowcount
 
     def muted_kinds(self, user_id: str) -> list[str]:
         with store_transaction(self.engine) as conn:

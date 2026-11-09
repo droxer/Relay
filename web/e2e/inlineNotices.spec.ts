@@ -2,6 +2,28 @@ import { expect, test } from "@playwright/test";
 
 // Inline conversation notices must remain usable across themes, languages and input modes.
 const stamp = "2026-11-06T00:00:00Z";
+
+for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
+  test(`transport incident brief stays readable (${theme}, ${width})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("**/api/**", async route => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [], tasks: [], sandboxes: [], skills: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Fei", role: "user", theme, language: "en" } };
+      if (path.endsWith("/notifications")) body = { unreadCount: 1, notifications: [{ id: "incident", kind: "computer_transport", createdAt: stamp, readAt: null,
+        data: { nodeId: "node", computerName: "Office Mac", causes: ["quarantine"], pending: 120, quarantined: 1, bytes: 10485760, runs: ["run"] } }] };
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.addInitScript(() => localStorage.setItem("relay-web.signedIn", "1"));
+    await page.goto("/threads");
+    await page.locator('[data-nav="notifications"]:visible').click();
+    const brief = page.locator('.notif-panel');
+    await expect(brief).toContainText('Inspect rejected reports');
+    await expect(brief.getByRole('link', { name: 'View diagnostics' })).toHaveAttribute('href', '/api/v1/daemon-nodes/node/transport');
+    expect(await brief.evaluate(el => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1; })).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`transport-brief-${theme}-${width}.png`) });
+  });
+}
 const agent = { id: "ada", displayName: "Ada", executorKind: "codex", defaultRole: "implementer", supervisorUserId: "u", enabled: true, availability: "ready", version: 1, skills: [], placements: [{ id: "p", agentId: "ada", computerId: "computer", daemonNodeId: "node", desiredState: "active", status: "ready" }], createdAt: stamp, updatedAt: stamp };
 const said = JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "I drafted the launch plan and staged the first task for you to review." }] } });
 const session = {

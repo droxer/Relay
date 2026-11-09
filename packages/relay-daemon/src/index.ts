@@ -1,3 +1,7 @@
+import { syncDirectory } from "./sync-directory.js";
+import { retryAfterMs } from "./transport-retry.js";
+import { ReportStoragePolicy } from "./report-storage.js";
+import { TransportMonitor } from "./transport-monitor.js";
 import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { createHash } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
@@ -9,7 +13,7 @@ import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
 import { AgentNotInstalledError, AgentUnresponsiveError } from "./agent-preflight.js";
 import { responseErrorDetail } from "./http-error-detail.js";
 export { localProcessExecStream } from "./local-runtime.js";
-import { accessSync, chmodSync, constants, mkdirSync, statSync, existsSync, readFileSync } from "node:fs";
+import { accessSync, closeSync, fsyncSync, openSync, writeFileSync, renameSync, chmodSync, constants, mkdirSync, statSync, statfsSync, existsSync, readFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -97,7 +101,7 @@ import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { acknowledgeUpdatePause } from "./update-pause.js";
-import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
+import { TerminalOutbox, persistTerminalEvent, queuesOutputForReplay, hasPendingOutput } from "./terminal-outbox.js";
 import { watchExecutionExit } from "./execution-capture.js";
 import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
 import type { ExecutionRecord } from "./execution-journal.js";
@@ -209,7 +213,7 @@ export interface DaemonLogger {
 
 export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promise<void> {
   const backendUrl = normalizeBaseUrl(options.backendUrl ?? process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790");
-  const rawFetch = options.fetchFn ?? fetch;
+  let rawFetch = options.fetchFn ?? fetch;
   let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   let configuredUserId = options.userId ?? userIdFromEnv();
@@ -256,6 +260,41 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
+  const logger = options.logger ?? createDaemonLogger({ workspacePath, sandboxId, logDir: options.logDir ?? join(stateDir, "logs") });
+  let reportPersistenceFault = false;
+  let pollAbort: AbortController | undefined;
+  let recoveryPollPending = false;
+  let monitor: TransportMonitor | undefined;
+  try { monitor = new TransportMonitor(stateDir); } catch { reportPersistenceFault = true; }
+  const observe = (action: () => void): void => {
+    try { action(); } catch { reportPersistenceFault = true; }
+  };
+  const upstreamFetch = rawFetch;
+  rawFetch = async (url, init) => {
+    const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url : url.url).pathname;
+    const batch = path.endsWith('/reports');
+    const channel = path.endsWith('/commands') ? 'poll' : path.endsWith('/events') || batch ? 'output' : path.endsWith('/heartbeat') ? 'heartbeat' : path.endsWith('/daemon-node-registrations') ? 'registration' : undefined;
+    try {
+      const response = await upstreamFetch(url, init);
+      if (channel) observe(() => {
+        if (response.ok) {
+          // Batch HTTP success alone proves nothing about its individual
+          // reports. The outbox clears this channel on verified receipts.
+          if (batch) return;
+          const headers = new Headers(init?.headers);
+          const verified = channel !== 'output' || !heartbeatFeatures.has('durable-reports') ||
+            (response.headers.get('X-Relay-Report-Id') === headers.get('X-Relay-Report-Id') && response.headers.get('X-Relay-Report-Digest') === headers.get('X-Relay-Report-Digest'));
+          if (verified) monitor?.success(channel); else monitor?.failure(channel);
+        }
+        else if (response.status >= 500 || [408, 429].includes(response.status)) monitor?.failure(channel);
+        else if (channel !== 'output' && [401, 410].includes(response.status)) monitor?.cause('revoked', true);
+      });
+      return response;
+    } catch (error) {
+      if (channel && !options.signal?.aborted) observe(() => monitor?.failure(channel));
+      throw error;
+    }
+  };
   // Set while execution endpoints fail transiently; cleared by an ownership
   // response or a 401/410 rejection. Registration alone cannot renew a run.
   let backendUnreachable = false;
@@ -268,6 +307,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     ?? DEFAULT_UNREACHABLE_GRACE_MS;
   const executionWatchdog = new ExecutionWatchdog(undefined, {
     graceMs: unreachableGraceMs,
+    continueDuringOutage: options.unreachableGraceMs === undefined,
     shouldGrace: () => backendUnreachable,
     onGrace: (commandId) => logger.warn("Execution lease expired while the backend is unreachable; continuing for one grace period", {
       sandboxId, commandId, graceMs: unreachableGraceMs,
@@ -279,19 +319,22 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     executionJournal.confirmExit(id);
     terminalCommands.add(id);
     executionWatchdog.forget(id);
-  }, undefined, (error) => {
-    // Output records land off the event loop; failed writes remain in
-    // memory for replay until the backend acknowledges them.
+  }, positiveIntEnv("RELAY_DAEMON_REPORT_STORAGE_BYTES"), (error) => {
+    reportPersistenceFault = true;
+    // Failed writes have no durable acceptance proof. Protect execution and
+    // preserve the bounded capture for diagnosis.
     logger.warn("durable output record write failed", { sandboxId, error: error.message });
   });
+  terminalOutbox.setAcceptanceHandler(() => observe(() => monitor?.success('output')));
   // A crash may land between durable terminal storage and journal removal.
-  for (const record of terminalOutbox.pending()) {
+  for (const record of terminalOutbox.terminalRecords()) {
     if (["run.completed", "run.failed", "run.cancelled"].includes(String(record.event.type))) executionJournal.confirmExit(String(record.event.commandId));
   }
   const unconfirmedExecutions = new Set(executionJournal.pending().map(record => record.id));
   // Retained executions the backend has not yet accounted for. Reported at
   // registration until acknowledged; unconfirmedExecutions keeps fencing them.
   const unreportedExecutions = new Set(unconfirmedExecutions);
+  const admittedExecutions = new Set([...unconfirmedExecutions, ...terminalOutbox.commandIds()]);
   fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
@@ -315,11 +358,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     1,
     MAX_COMMAND_LEASE_SECONDS,
   );
-  const logger = options.logger ?? createDaemonLogger({
-    workspacePath,
-    sandboxId,
-    logDir: options.logDir ?? join(stateDir, "logs"),
-  });
   const registrationRefreshIntervalMs = options.heartbeatIntervalMs ?? positiveIntEnv("RELAY_DAEMON_HEARTBEAT_MS") ?? positiveIntEnv("RELAY_DAEMON_NODE_HEARTBEAT_MS") ?? 5 * 60_000;
   const configuredLivenessHeartbeatIntervalMs = options.livenessHeartbeatIntervalMs
     ?? positiveIntEnv("RELAY_DAEMON_LIVENESS_HEARTBEAT_MS");
@@ -530,16 +568,41 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     }
     return;
   }
+  const storagePolicy = new ReportStoragePolicy(
+    positiveIntEnv('RELAY_DAEMON_REPORT_FREE_ADMISSION_BYTES'),
+    positiveIntEnv('RELAY_DAEMON_REPORT_FREE_STOP_BYTES'),
+    positiveIntEnv('RELAY_DAEMON_REPORT_FREE_RESUME_BYTES'),
+  );
+  let storageDecision = { admit: true, stop: false };
+  const protectStorage = (): void => {
+    let freeBytes = 0;
+    try { const disk = statfsSync(stateDir); freeBytes = disk.bavail * disk.bsize; } catch { reportPersistenceFault = true; }
+    const status = terminalOutbox.status();
+    storageDecision = storagePolicy.update({ ...status, bytes: status.quotaExceeded ? Math.max(status.bytes, status.limitBytes * 0.9) : status.bytes, freeBytes, online: !backendUnreachable, persistenceFault: status.persistenceFault || reportPersistenceFault });
+    observe(() => {
+      monitor?.cause('storage', !storageDecision.admit);
+      monitor?.cause('quarantine', status.quarantined > 0);
+      monitor?.cause('execution', unconfirmedExecutions.size > 0);
+    });
+    if (storageDecision.stop) for (const run of activeRuns.values()) {
+      if (!terminalCommands.has(run.command.id)) run.controller.abort('Report storage protection stopped this run; retained reports are preserved.');
+    }
+  };
+  terminalOutbox.setPressureHandler(protectStorage);
+  protectStorage();
+  const storageTimer = setInterval(protectStorage, 100);
+  storageTimer.unref();
   const watchdogTimer = setInterval(() => executionWatchdog.tick(), 1000);
   watchdogTimer.unref();
   let heartbeatTask: Promise<void> | undefined;
   let outboxTask: Promise<void> | undefined;
   let exitRecheckTask: Promise<void> | undefined;
+  let diagnosticsTask: Promise<void> | undefined;
   try {
     const reconnectControl = {
       signal: runtimeSignal,
       shouldStop: () => stopping,
-      onTransientFailure: () => { backendUnreachable = true; },
+      onTransientFailure: () => { backendUnreachable = true; if (heartbeatFeatures.has("durable-reports")) pollAbort?.abort("Transport recovery probe superseded a stalled poll."); },
       onCredentialRejected: () => { backendUnreachable = false; },
     };
     const initialHeartbeatSettings = await withBackendReconnect(
@@ -550,6 +613,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ?? enrolledHeartbeatSettings?.intervalMs
       ?? DEFAULT_LIVENESS_HEARTBEAT_MS;
     heartbeatFeatures = new Set(initialHeartbeatSettings?.features ?? enrolledHeartbeatSettings?.features ?? []);
+    terminalOutbox.negotiate(heartbeatFeatures.has("durable-reports"), heartbeatFeatures.has("report-batches"));
     let lastRegisteredAt = Date.now();
     const reportProvenExit = (record: ExecutionRecord, reason: string): void => {
       // Persisted to the outbox before sending, so delivery survives another
@@ -601,6 +665,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         livenessHeartbeatIntervalMs = settings.intervalMs;
       }
       heartbeatFeatures = new Set(settings.features ?? []);
+      terminalOutbox.negotiate(heartbeatFeatures.has("durable-reports"), heartbeatFeatures.has("report-batches"));
     };
     const backendHeartbeatSupports = (feature: DaemonNodeHeartbeatFeature): boolean => heartbeatFeatures.has(feature);
     // While a command poll is open on a backend that renews liveness and
@@ -652,6 +717,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           // Older backends acknowledge the submitted leases implicitly.
           for (const { command } of renewing) executionWatchdog.renew(command.id,
             commandLeaseSeconds * 1000 - (performance.now() - sentAt));
+        }
+        if (backendUnreachable && heartbeatFeatures.has('durable-reports')) {
+          recoveryPollPending = true;
+          pollAbort?.abort('Healthy heartbeat requests an immediate recovery poll.');
         }
         backendUnreachable = false;
       } catch (error) {
@@ -715,15 +784,29 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         lastRegisteredAt = Date.now();
       }
     };
+    diagnosticsTask = (async () => {
+      while (!runtimeSignal.aborted) {
+        try {
+          const snapshot = { ...monitor?.snapshot(), ...terminalOutbox.status(), runs: [...new Set([...activeRuns.values()].map(run => run.command.runId).concat(executionJournal.pending().map(run => run.runId)))].slice(0, 200) };
+          writePrivateDiagnostic(join(stateDir, 'transport-diagnostics.json'), snapshot);
+          if (heartbeatFeatures.has('transport-status')) {
+            await postJsonRequest(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/transport`), snapshot, token, runtimeSignal);
+          }
+        } catch (error) {
+          if (!runtimeSignal.aborted) logger.warn('Transport diagnostics retained locally; delivery will retry', { sandboxId, error: error instanceof Error ? error.message : String(error) });
+        }
+        await delay(1000, runtimeSignal);
+      }
+    })().catch(() => undefined);
     outboxTask = (async () => {
       while (!runtimeSignal.aborted) {
         await terminalOutbox.replay(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), token, runtimeSignal);
-        await delay(5000, runtimeSignal);
+        await delay(50 + Math.random() * 50, runtimeSignal);
       }
     })().catch((error: unknown) => {
       if (!runtimeSignal.aborted) logger.error("terminal replay stopped", { error: String(error) });
     });
-    const heartbeatPeriodMs = (): number => Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3);
+    const heartbeatPeriodMs = (): number => Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3, heartbeatFeatures.has("durable-reports") ? 1000 : Infinity);
     const heartbeatRequestTimeoutMs = (): number => Math.max(MIN_HEARTBEAT_REQUEST_TIMEOUT_MS, heartbeatPeriodMs());
     heartbeatTask = (async () => {
       // Fixed rate with jitter, one attempt per tick. A failed beat is not
@@ -734,7 +817,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         await delay(Math.max(0, nextBeatAt - performance.now()), runtimeSignal);
         nextBeatAt = performance.now() + jittered(heartbeatPeriodMs());
         if (stopping || runtimeSignal.aborted) return;
-        if (pollRenewsLiveness()) continue;
+        if (pollRenewsLiveness() && !heartbeatFeatures.has("durable-reports")) continue;
         try {
           await sendHeartbeat();
         } catch (error) {
@@ -748,6 +831,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           // Only an unreachable backend starts an execution grace; a refusal
           // the backend itself answered is logged and tried again next beat.
           if (transient) reconnectControl.onTransientFailure();
+          if (error instanceof DaemonHttpError) nextBeatAt = Math.max(nextBeatAt, performance.now() + error.retryAfterMs);
           logger.warn("liveness heartbeat failed; next beat retries", {
             sandboxId, error: error instanceof Error ? error.message : String(error),
           });
@@ -830,12 +914,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           refreshedCommands = [];
           lastRegisteredAt = Date.now();
         }
+        pollAbort = new AbortController();
         commandPollStartedAt = performance.now();
         pollInFlightSince = commandPollStartedAt;
         const response = await getJson(
           fetchFn,
           daemonCommandsUrl(backendUrl, sandboxId, {
-            waitSeconds: commandPollWaitMs / 1000,
+            waitSeconds: recoveryPollPending ? 0 : commandPollWaitMs / 1000,
+            admitRuns: storageDecision.admit,
             leaseSeconds: commandLeaseSeconds,
             activeCommandLeases: [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id)).map(({ command }) => ({
               commandId: command.id,
@@ -843,18 +929,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             })),
           }),
           token,
-          runtimeSignal,
-        ).finally(() => { pollInFlightSince = undefined; });
+          AbortSignal.any([runtimeSignal, pollAbort.signal]),
+          commandPollWaitMs + 2000,
+        ).finally(() => { pollInFlightSince = undefined; pollAbort = undefined; });
         if (!response.ok) {
           const detail = `Command poll failed: ${response.status} ${await responseErrorDetail(response)}`;
           // A healthy registration route cannot renew execution ownership.
           // Retry transient poll failures directly so they retain outage grace.
           if (response.status >= 500 || response.status === 408 || response.status === 429) {
-            throw new DaemonHttpError(detail, response.status);
+            throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
           }
           // Gone is permanent: use the same clean shutdown as a deleted-node
           // registration instead of trying to bring the node back.
-          if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status);
+          if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
           // The backend may have restarted with fresh state or demoted this node;
           // re-register before treating the rejection as fatal.
           logger.warn("command poll rejected; re-registering", { sandboxId, error: detail });
@@ -873,6 +960,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         pollHeartbeat = parsed.heartbeat;
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         backendUnreachable = false;
+        recoveryPollPending = false;
         pollDeliveredCommands = (parsed.commands?.length ?? 0) > 0;
         completedEmptyLongPoll = commandPollWaitMs > 0
           && !pollDeliveredCommands
@@ -886,6 +974,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           continue;
         }
         if (command.type === "run.start") {
+          protectStorage();
+          if (!storageDecision.admit) continue;
           const active = activeRuns.get(command.id);
           if (active) {
             refreshCommandLease(active.command, command);
@@ -896,7 +986,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
             continue;
           }
-          if (unconfirmedExecutions.has(command.id)) {
+          if (admittedExecutions.has(command.id)) {
             logger.warn("Unconfirmed execution will not be restarted", commandLogFields(sandboxId, command));
             continue;
           }
@@ -926,12 +1016,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           logger.info("command received", commandLogFields(sandboxId, command));
           setHealth("busy", commandLogFields(sandboxId, command));
           executionJournal.record(command);
+          admittedExecutions.add(command.id);
           const controller = new AbortController();
           if (command.leaseId) executionWatchdog.track(command.id, commandLeaseSeconds * 1000,
             () => controller.abort("Execution lease expired; stopping until ownership can be confirmed."));
           const release = new AbortController();
           watchExecutionExit(controller.signal, {
             release: release.signal,
+            stopGraceMs: 10_000,
             onSpawn: (processGroup, spawnedAt) => {
               try {
                 executionJournal.attach(command.id, { processGroup, spawnedAt, bootAt: hostBootAt() });
@@ -999,6 +1091,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               eventPostRetryLogger(logger, { ...commandLogFields(sandboxId, command), eventType: event.type }));
           }).catch(async (error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
+            if (terminalCommands.has(command.id)) {
+              // Execution already produced durable exit evidence. A failed or
+              // aborted upload cannot change that outcome into cancellation.
+              logger.warn("terminal delivery deferred; original exit evidence preserved", { ...commandLogFields(sandboxId, command), error: message });
+              return;
+            }
             logger.error("command failed before completion", { ...commandLogFields(sandboxId, command), error: message });
             const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
             const event = controller.signal.aborted
@@ -1042,6 +1140,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           activeRuns.set(command.id, { command, controller, promise });
           renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         } else if (command.type === "run.cancel") {
+          admittedExecutions.add(command.commandId);
           logger.info("cancel command received", {
             sandboxId,
             commandId: command.commandId,
@@ -1052,6 +1151,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const target = activeRuns.get(command.commandId);
           if (target) {
             target.controller.abort(command.reason);
+          } else if (unconfirmedExecutions.has(command.commandId) && !terminalCommands.has(command.commandId)) {
+            observe(() => monitor?.cause('execution', true));
+            logger.warn('Cancellation requires exit reconciliation for a journaled execution', { sandboxId, commandId: command.commandId });
           } else {
             // Nothing to stop: the start never reached this daemon (its poll
             // response was lost) or the daemon restarted since. The daemon is
@@ -1060,12 +1162,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             logger.warn("cancel for a run this daemon is not executing; reporting it cancelled", {
               sandboxId,
               commandId: command.commandId,
+              ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
               sessionId: command.sessionId,
               runId: command.runId,
             });
             await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
               type: "run.cancelled",
               commandId: command.commandId,
+              ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
               sessionId: command.sessionId,
               runId: command.runId,
               agent: command.agent,
@@ -1180,9 +1284,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   } finally {
     if (!shutdownController.signal.aborted) shutdownController.abort("Daemon loop ended.");
     clearInterval(watchdogTimer);
+    clearInterval(storageTimer);
     await heartbeatTask;
     await outboxTask;
     await exitRecheckTask;
+    await diagnosticsTask;
     cleanupShutdownListeners();
   }
 }
@@ -1213,6 +1319,12 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
     checks.push({ name, ok, detail });
     logger.info("daemon doctor check", { check: name, ok, detail, sandboxId });
   };
+  if (existsSync(join(stateDir, 'transport-diagnostics.json'))) {
+    try {
+      const state = JSON.parse(readFileSync(join(stateDir, 'transport-diagnostics.json'), 'utf8'));
+      add('transport', state.state === 'healthy' && state.causes?.length === 0 && Date.now() - state.observedAt < 10_000, `State: ${state.state}; pending reports: ${state.pending}; quarantined: ${state.quarantined}. Diagnostics: ${join(stateDir, 'transport-diagnostics.json')}`);
+    } catch { add('transport', false, 'Transport diagnostics are unreadable; inspect the private state directory.'); }
+  }
   if (sandboxMode === "none" && existsSync(join(stateDir,"mcp-status.json"))) {
     try {
       const status = JSON.parse(readFileSync(join(stateDir,"mcp-status.json"),"utf8")) as {status:string;code?:string;checkedAt?:number};
@@ -1366,7 +1478,7 @@ async function checkBackendReachable(fetchFn: typeof fetch, backendUrl: string, 
   const url = `${backendUrl}/api`;
   const response = await fetchFn(url, { signal: requestSignal(signal) });
   if (!response.ok) {
-    throw new DaemonHttpError(`GET ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
+    throw new DaemonHttpError(`GET ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status, retryAfterMs(response.headers.get("Retry-After")));
   }
 }
 
@@ -1551,7 +1663,7 @@ async function executeCommand(
         return withBackendReconnect(async () => {
           const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
           if (!response.ok) throw new DaemonHttpError(
-            `Skill blob unavailable (${response.status}): ${await responseErrorDetail(response)}`, response.status);
+            `Skill blob unavailable (${response.status}): ${await responseErrorDetail(response)}`, response.status, retryAfterMs(response.headers.get("Retry-After")));
           return Buffer.from(await response.arrayBuffer());
         }, logger, { sandboxId, what: "skill blob download" }, { signal });
       },
@@ -1580,7 +1692,8 @@ async function executeCommand(
         try {
           await item.post();
         } catch (error) {
-          if (outputDeliveryDeferred) {
+          if (outputDeliveryDeferred || outputSignal.aborted) {
+            outputDeliveryDeferred = true;
             // Abandoned by the drain deadline; the outbox still holds it.
           } else if (isRejectedOutputBatch(error)) {
             outputBatchesRejected += 1;
@@ -1619,11 +1732,10 @@ async function executeCommand(
       fields: DaemonLogFields,
       bytes: number,
     ): void => {
-      if (outputPostFailure) return;
+      if (outputPostFailure || outputDeliveryDeferred) return;
       if (outputPostBacklogBytes + bytes > maxOutputBacklogBytes) {
-        outputPostFailure = new Error(
-          `Output delivery backlog exceeded ${maxOutputBacklogBytes} bytes.`,
-        );
+        outputDeliveryDeferred = true;
+        outputAbort.abort('Output delivery deferred to durable replay.');
         outputPostQueue.length = outputPostHead;
         return;
       }
@@ -1676,7 +1788,7 @@ async function executeCommand(
             entries,
           } satisfies DaemonNodeEvent;
       if (outputPostFailure) return;
-      try { persistTerminalEvent(fetchFn, event); } catch (error) {
+      try { void persistTerminalEvent(fetchFn, event).catch(error => { outputPostFailure = error instanceof Error ? error : new Error(String(error)); }); } catch (error) {
         outputPostFailure = error instanceof Error ? error : new Error(String(error));
         return;
       }
@@ -1695,7 +1807,7 @@ async function executeCommand(
     // that grows by one post (and one durable record) every latency window.
     const outputBuffer = new OutputEventBuffer(
       (entries) => emitOutputBatch(command.agent, entries),
-      { isBusy: () => outputPostDrain !== undefined },
+      { isBusy: () => false },
     );
     const eventSink = {
       agentOutput: (_runId: string, _agent: AgentName, stream: "stdout" | "stderr", text: string): void => {
@@ -1717,7 +1829,7 @@ async function executeCommand(
               sequence,
             } satisfies DaemonNodeEvent;
         if (outputPostFailure) return;
-        try { persistTerminalEvent(fetchFn, event); } catch (error) {
+        try { void persistTerminalEvent(fetchFn, event).catch(error => { outputPostFailure = error instanceof Error ? error : new Error(String(error)); }); } catch (error) {
           outputPostFailure = error instanceof Error ? error : new Error(String(error));
           return;
         }
@@ -1844,7 +1956,7 @@ async function executeCommand(
         ...commandLogFields(sandboxId, command),
         exitCode: next.last_exit_code,
       });
-      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage, next.runtime_session_id);
+      return runCancelledEvent(command, outputPostFailure ? `Capture incomplete: ${outputPostFailure.message}` : signal.reason, agentLog, next.token_usage, next.runtime_session_id);
     }
     // Output delivery can fail after the agent process has successfully written
     // its deliverables. Preserve those files on the terminal failure event so
@@ -1888,7 +2000,7 @@ async function executeCommand(
       ...(roundResult ? { roundResult } : {}),
       ...(roundOutcome.kind === "rejected" ? { roundResultRejected: { reason: roundOutcome.reason } } : {}),
       ...(nextSteps.length > 0 && next.last_exit_code === 0 ? { nextSteps } : {}),
-      ...(outputBatchesRejected > 0 || outputDeliveryDeferred ? { outputTruncated: true } : {}),
+      ...(outputBatchesRejected > 0 || outputDeliveryDeferred || hasPendingOutput(fetchFn, command.id) ? { outputTruncated: true } : {}),
       ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       ...(projectSetup && state.project_setup ? { projectSetup } : {}),
     } satisfies DaemonNodeEvent;
@@ -2167,12 +2279,13 @@ function boundedNumber(value: number, minimum: number, maximum: number): number 
 function daemonCommandsUrl(
   backendUrl: string,
   sandboxId: string,
-  input: { waitSeconds: number; leaseSeconds: number; activeCommandLeases: Array<{ commandId: string; leaseId?: string }> },
+  input: { waitSeconds: number; admitRuns?: boolean; leaseSeconds: number; activeCommandLeases: Array<{ commandId: string; leaseId?: string }> },
 ): string {
   const url = new URL(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/commands`));
   url.searchParams.set("waitSeconds", formatQueryNumber(input.waitSeconds));
   url.searchParams.set("leaseSeconds", formatQueryNumber(input.leaseSeconds));
   url.searchParams.set("leaseMode", "explicit");
+  if (input.admitRuns === false) url.searchParams.set("admitRuns", "false");
   url.searchParams.set("limit", "10");
   for (const { commandId, leaseId } of input.activeCommandLeases) {
     if (leaseId) url.searchParams.append("activeCommandLease", `${commandId}:${leaseId}`);
@@ -2302,7 +2415,7 @@ function normalizeWorkspacePath(value?: string): string | undefined {
   return trimmed ? resolve(trimmed) : undefined;
 }
 
-const REQUEST_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 2_000;
 /** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
@@ -2328,13 +2441,13 @@ const JOURNAL_REPORT_LIMIT = 200;
 /** How often a host run left over from a previous daemon is checked again for exit. */
 const EXIT_RECHECK_INTERVAL_MS = 15_000;
 
-function requestSignal(signal?: AbortSignal): AbortSignal {
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+function requestSignal(signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 export class DaemonHttpError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(message: string, public readonly status: number, public readonly retryAfterMs = 0) {
     super(message);
     this.name = "DaemonHttpError";
   }
@@ -2373,7 +2486,7 @@ async function enrollManagedDaemon(
     signal: requestSignal(signal),
   });
   if (!response.ok) {
-    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
+    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status, retryAfterMs(response.headers.get("Retry-After")));
   }
   const body = await response.json() as Partial<ManagedDaemonEnrollment>;
   if (!body.sandboxId || !body.token) throw new Error("Managed daemon enrollment response is incomplete.");
@@ -2383,8 +2496,8 @@ async function enrollManagedDaemon(
 // Retries `action` while the backend is unreachable (network errors) or
 // answering with 5xx, with capped exponential backoff. Client errors (4xx,
 // e.g. a rejected token) are fatal and propagate immediately.
-const BACKEND_RECONNECT_MAX_DELAY_MS = 10_000;
-const BACKEND_RECONNECT_BASE_DELAY_MS = 2_000;
+const BACKEND_RECONNECT_MAX_DELAY_MS = 1_500;
+const BACKEND_RECONNECT_BASE_DELAY_MS = 200;
 
 export function backendReconnectDelayMs(attempt: number, random = Math.random): number {
   const ceiling = Math.min(
@@ -2423,7 +2536,7 @@ async function withBackendReconnect<T>(
       control.onTransientFailure?.();
       attempt += 1;
       const message = error instanceof Error ? error.message : String(error);
-      const backoff = backendReconnectDelayMs(attempt);
+      const backoff = Math.max(backendReconnectDelayMs(attempt), error instanceof DaemonHttpError ? error.retryAfterMs : 0);
       logger.warn(`${context.what} failed; retrying`, {
         sandboxId: context.sandboxId,
         error: message,
@@ -2472,7 +2585,7 @@ async function postJsonRequest(
     signal: requestSignal(signal),
   });
   if (!response.ok) {
-    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status);
+    throw new DaemonHttpError(`POST ${url} failed: ${response.status} ${await responseErrorDetail(response)}`, response.status, retryAfterMs(response.headers.get("Retry-After")));
   }
   return response;
 }
@@ -2496,7 +2609,7 @@ function isRejectedOutputBatch(error: unknown): error is DaemonHttpError {
 }
 
 const EVENT_POST_RETRY_INITIAL_DELAY_MS = 200;
-const EVENT_POST_RETRY_MAX_DELAY_MS = 10_000;
+const EVENT_POST_RETRY_MAX_DELAY_MS = 1_500;
 /** How often a post that keeps failing repeats its warning after the first. */
 const EVENT_POST_RETRY_LOG_INTERVAL_MS = 30_000;
 /**
@@ -2504,7 +2617,7 @@ const EVENT_POST_RETRY_LOG_INTERVAL_MS = 30_000;
  * before it reports its outcome anyway. Undelivered output stays in the
  * durable outbox, whose replay delivers it late once the backend accepts it.
  */
-const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 30_000;
+const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 250;
 
 interface EventPostFailure {
   attempt: number;
@@ -2540,7 +2653,10 @@ async function postJsonWithRetry(
   signal?: AbortSignal,
   onRetry?: (failure: EventPostFailure) => void,
 ): Promise<void> {
-  persistTerminalEvent(fetchFn, body);
+  await persistTerminalEvent(fetchFn, body);
+  // Negotiated peers upload captured output through one bounded replay batch
+  // instead of serial per-chunk requests competing with replay at every RTT.
+  if (queuesOutputForReplay(fetchFn, body)) return;
   let attempt = 0;
   while (true) {
     if (signal?.aborted) throw new Error("Aborted before event post.");
@@ -2549,7 +2665,7 @@ async function postJsonWithRetry(
       return;
     } catch (error) {
       if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
-      const backoff = Math.min(EVENT_POST_RETRY_INITIAL_DELAY_MS * 2 ** Math.min(attempt, 5), EVENT_POST_RETRY_MAX_DELAY_MS);
+      const backoff = Math.max(Math.min(EVENT_POST_RETRY_INITIAL_DELAY_MS * 2 ** Math.min(attempt, 5), EVENT_POST_RETRY_MAX_DELAY_MS) * (0.5 + Math.random() * 0.5), error instanceof DaemonHttpError ? error.retryAfterMs : 0);
       attempt += 1;
       if (!signal?.aborted) {
         onRetry?.({
@@ -2564,10 +2680,10 @@ async function postJsonWithRetry(
   }
 }
 
-async function getJson(fetchFn: typeof fetch, url: string, token?: string, signal?: AbortSignal): Promise<Response> {
+async function getJson(fetchFn: typeof fetch, url: string, token?: string, signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   return fetchFn(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    signal: requestSignal(signal),
+    signal: requestSignal(signal, timeoutMs),
   });
 }
 
@@ -2625,3 +2741,11 @@ export {
   ThreadWorkspaceManager,
   type ThreadWorkspace,
 } from "./thread-workspace.js";
+
+function writePrivateDiagnostic(path: string, snapshot: unknown): void {
+  const temporary = `${path}.tmp`;
+  const descriptor = openSync(temporary, 'w', 0o600);
+  try { writeFileSync(descriptor, JSON.stringify(snapshot)); fsyncSync(descriptor); } finally { closeSync(descriptor); }
+  renameSync(temporary, path);
+  syncDirectory(resolve(path, '..'));
+}
