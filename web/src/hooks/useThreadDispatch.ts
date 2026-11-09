@@ -18,6 +18,7 @@ import { useRelayStore } from "../lib/store";
 import { projectRoomAgentIds } from "../lib/taskAssignment";
 import { retainThreadDispatchView } from "../lib/threadDispatchView";
 import { threadSendKey, useThreadSendStore } from "../lib/threadSendStore";
+import { restoreComposerDraft, threadDraftKey } from "./useComposer";
 
 type Mutations = ReturnType<typeof useRelayMutations>;
 type Transcript = ReturnType<typeof useTranscriptPin>;
@@ -295,6 +296,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       // node, offline runtime) is retryable, so hand the text back — exactly
       // as typed, mention included — instead of making the author retype it.
       if (view.isCurrent() && !composerRef.current?.getText().trim()) composerRef.current?.setText(raw);
+      else restoreComposerDraft(threadDraftKey({ username: selectedUser }, sessionId), raw);
       reportMutationError(
         "Failed to send message",
         error,

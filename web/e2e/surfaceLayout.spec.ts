@@ -92,24 +92,63 @@ test("project directory shows aligned names and Agent counts without Computer id
     enabled: true, members: [], leadAgentId: null, version: 1,
     workspaceLayout: "project", workspaceSubpath: "projects/relay", createdAt: stamp, updatedAt: stamp,
   };
-  const page = await openPage(browser, "/projects", true, undefined, undefined, { projects: [project], sessions: [], tasks: [] });
+  const variants = [
+    { ...project, id: "short-project", name: "Relay" },
+    { ...project, id: "disabled-project", name: "移动端项目列表与协作体验优化长名称验证", enabled: false },
+    { ...project, id: "archived-project", name: "UnbrokenProjectNameThatMustWrapWithoutOverflowingThePhoneDirectory", archivedAt: stamp },
+  ];
+  const page = await openPage(browser, "/projects", true, undefined, undefined, { projects: [project, ...variants], sessions: [], tasks: [] });
   const row = page.getByRole("button", { name: `${project.name} · 0 agents`, exact: true });
   await expect(row).toBeVisible();
   await expect(row).not.toContainText("mch_");
   await expect(row).not.toContainText(project.id);
   await expect(row.locator(".project-folder-meta")).toHaveText("0 agents");
-  for (const width of [320, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 820, 821, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    await row.scrollIntoViewIfNeeded();
     const name = await row.locator(".project-folder-name").boundingBox();
     const meta = await row.locator(".project-folder-meta").boundingBox();
     expect(name).not.toBeNull();
     expect(meta).not.toBeNull();
     expect(Math.abs(name!.x - meta!.x)).toBeLessThan(1);
     expect(meta!.y).toBeGreaterThan(name!.y);
+    if (width <= 820) {
+      await expect(row.locator(".project-folder-name")).toHaveCSS("font-size", "17px");
+      await expect(row.locator(".project-folder-meta")).toHaveCSS("font-size", "14px");
+      const box = (await row.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(76);
+      expect(name!.height).toBeLessThanOrEqual(48);
+      expect(meta!.y).toBeGreaterThanOrEqual(name!.y + name!.height);
+      expect(meta!.y + meta!.height).toBeLessThanOrEqual(box.y + box.height);
+      for (const variant of variants) {
+        const variantRow = page.getByRole("button", { name: `${variant.name} · 0 agents`, exact: true });
+        await variantRow.scrollIntoViewIfNeeded();
+        await expect(variantRow.locator(".project-folder-name")).toBeVisible();
+        const bounds = (await variantRow.boundingBox())!;
+        expect(bounds.height).toBeGreaterThanOrEqual(76);
+        const state = variantRow.locator(".project-folder-count");
+        if (await state.count()) {
+          await expect(state).toHaveCSS("font-size", "14px");
+          const stateBox = (await state.boundingBox())!;
+          const countBox = (await variantRow.locator(".project-folder-meta").boundingBox())!;
+          const titleBox = (await variantRow.locator(".project-folder-name").boundingBox())!;
+          expect(stateBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+          expect(stateBox.x).toBeGreaterThanOrEqual(countBox.x + countBox.width);
+          expect(stateBox.x + stateBox.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        }
+      }
+    } else {
+      await expect(row.locator(".project-folder-name")).toHaveCSS("white-space", "nowrap");
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath("project-directory.png") });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
+  await page.screenshot({ path: testInfo.outputPath("project-directory-dark.png") });
+  await row.focus();
+  await expect(row).toBeFocused();
   await row.click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`));
   await page.context().close();

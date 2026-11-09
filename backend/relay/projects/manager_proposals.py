@@ -49,6 +49,11 @@ def stage_proposal(ctx: Any, project: dict[str, Any], command: dict[str, Any], r
     with ctx.project_store.manager_transaction(project["id"]) as current:
         if code := project_work_error(current):
             raise ManagerError(code)
+        agent_id = command.get("logicalAgentId")
+        if agent_id and (current.get("leadAgentId") != agent_id or not any(
+            m.get("agentId") == agent_id and m.get("enabled", True) for m in current.get("members") or []
+        )):
+            raise ManagerError("project_manager_required", 403)
         operations = []
         keys: set[str] = set()
         for index, item in enumerate(raw):

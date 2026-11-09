@@ -78,7 +78,7 @@ def test_official_mcp_client_discovers_and_calls_hosted_tools(managed_env):
                         initialized = await session.initialize()
                         assert initialized.serverInfo.name == "relay-projects"
                         catalog = await session.list_tools()
-                        assert len(catalog.tools) == 9
+                        assert {"relay_list_automations", "relay_create_task"} <= {tool.name for tool in catalog.tools}
                         result = await session.call_tool("relay_project_overview", {"projectId": project["id"]})
                         assert result.isError is False
                         assert result.structuredContent["project"]["id"] == project["id"]
@@ -140,7 +140,7 @@ def test_real_local_node_bridge_round_trips_to_python_with_scope_enforced(setup_
         assert process.returncode == 0, process.stderr
         replies = sorted((json.loads(line) for line in process.stdout.splitlines()), key=lambda reply: reply["id"])
         assert len(replies) == 4
-        assert len(replies[1]["result"]["tools"]) == 9
+        assert "relay_list_automations" in {tool["name"] for tool in replies[1]["result"]["tools"]}
         assert replies[2]["result"]["structuredContent"]["project"]["id"] == project["id"]
         assert replies[3]["result"]["isError"] is True
         assert grant["token"] not in process.stdout + process.stderr
@@ -183,9 +183,17 @@ def test_hosted_run_token_preserves_agent_and_expires_when_command_ends(managed_
 @requires_node_bridge
 @pytest.mark.integration
 @pytest.mark.parametrize("native", [False, True], ids=["file", "native-ipc"])
-def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path, native):
-    app, owner, node, project, *_ = managed_env
-    result, command = _start(managed_env)
+@pytest.mark.parametrize("standalone", [False, True], ids=["project", "standalone"])
+def test_managed_node_bridge_uses_a_daemon_held_run_token_against_python(managed_env, tmp_path, native, standalone):
+    app, owner, node, project, agent, *_ = managed_env
+    if standalone:
+        manager_api._ready(app, node)
+        thread = owner.post("/api/v1/threads", json={"taskGoal": "Standalone tools"}).json()
+        started = manager_api._say(owner, thread["id"], "Manage work", agent["id"], "standalone-transport")
+        assert started.status_code == 202, started.text
+        command = setup_api._take_command(app, node)
+    else:
+        _, command = _start(managed_env)
     other = owner.post(
         "/api/v1/projects", json={"name": "Other managed scope", "daemonNodeId": node["id"], "members": []}
     ).json()["project"]
@@ -205,6 +213,10 @@ const proxy=createRunMcpProxy({...settings,fetchFn:fetch,signal:new AbortControl
 const bridge=createProjectManagerBridge(settings.workspace,proxy);
 const native=settings.native ? await startNativeMcpBridge(proxy) : undefined;
 try{
+ if(settings.standalone){
+  const created=await proxy('relay_create_automation',{fields:{title:'Fallback automation',routineState:'paused',routineTriggers:[]}});
+  if(!created?.automation?.isRoutine)throw new Error('Standalone fallback did not create an Automation');
+ }
  const child=spawn(process.execPath,[join(settings.sources,'relay-mcp.js'),'--config',settings.config],{env:{...process.env,RELAY_MCP_RUN_CONTEXT:JSON.stringify({backendUrl:settings.backendUrl,projectId:settings.projectId,bridgePath:join(settings.workspace,bridge.toolPath),native:native?.address})},stdio:['pipe','inherit','inherit']});
  process.stdin.pipe(child.stdin);
  process.exitCode=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
@@ -243,7 +255,12 @@ try{
                 },
             },
         ]
+        if standalone:
+            messages[-1]["params"] = {
+                "name": "relay_create_task", "arguments": {"fields": {"title": "Standalone through Python"}},
+            }
         host = {
+            "standalone": standalone,
             "native": native,
             "backendUrl": url,
             "sandboxId": node["id"],
@@ -255,6 +272,8 @@ try{
             "sources": str(sources),
             "config": str(config),
         }
+        if standalone:
+            host.pop("projectId")
         process = subprocess.run(
             ["node", "--input-type=module", "-e", script],
             input="\n".join(json.dumps(m) for m in messages) + "\n",
@@ -269,10 +288,15 @@ try{
         replies = sorted((json.loads(line) for line in process.stdout.splitlines()), key=lambda reply: reply["id"])
         assert len(replies) == 3
         assert replies[1]["result"]["isError"] is True
-        proposal = replies[2]["result"]["structuredContent"]["proposal"]
-        assert proposal["agentId"] == command["logicalAgentId"]
-        assert proposal["runId"] == command["runId"]
+        content = replies[2]["result"]["structuredContent"]
+        if standalone:
+            assert content["task"]["title"] == "Standalone through Python"
+            assert not content["task"].get("projectId")
+        else:
+            assert content["proposal"]["agentId"] == command["logicalAgentId"]
+            assert content["proposal"]["runId"] == command["runId"]
         assert host["nodeToken"] not in process.stdout + process.stderr
         assert all(host["nodeToken"] not in p.read_text() for p in workspace.rglob("*") if p.is_file())
-        assert owner.get("/api/v1/tasks").json()["tasks"] == []
-        setup_api._complete(app, node, command, result["threadId"])
+        tasks = owner.get("/api/v1/tasks").json()["tasks"]
+        assert len(tasks) == (2 if standalone else 0)
+        setup_api._complete(app, node, command, command["sessionId"])

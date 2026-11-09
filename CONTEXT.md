@@ -224,10 +224,12 @@ The Project Agent selected by `leadAgentId` coordinates the roster and manages
 its Project beside its execution role. Changing the lead transfers both
 responsibilities without changing any Agent's role, identity, or Placement.
 Only the owner assigns the lead, which must be an enabled roster member. It
-reads live Project records, explains progress and priorities, and stages Task
-changes for the owner to review and apply through its Tasks and Automations.
-Other enabled Project Agents have read-only access. The lead does not gain
-acceptance or execution authority. The dashboard names it; there is no separate
+reads live Project records, explains progress and priorities, and manages its
+Project Tasks and Automations through Relay MCP. It may also stage batch Task
+proposals for owner review. Other enabled Project Agents have read-only access
+to Project records and work. Every Agent may manage the owner's standalone
+Tasks and Automations. The lead does not gain acceptance or execution authority.
+The dashboard names it; there is no separate
 chat to open there. Historical `managerAgentId` and member `projectManager`
 wire fields are derived aliases of the lead for client compatibility.
 _Avoid_: Project Manager, Project Owner, global Agent Role
@@ -235,14 +237,19 @@ _Avoid_: Project Manager, Project Owner, global Agent Role
 **Relay MCP**:
 A Python MCP module hosted in the Relay backend, reached through a local Node
 stdio bridge installed in an Agent Runtime. Python owns tool discovery, schemas,
-protocol and Project operations. The bridge forwards messages using a private,
-revocable bearer token scoped to the user's Projects or Computer.
-It exposes current Project records and Task proposals; owner approval remains a
-separate authenticated action. Runtime configuration references a private token
-file rather than embedding credentials in a Project workspace or prompt. Managed
-runs use a separate Project/run-scoped grant held by the Daemon Node; the
-standalone Computer grant is never a fallback for a managed run. Capability is
+protocol and Task, Automation and Project operations. The bridge forwards messages
+using a private, revocable bearer token scoped to the user's Projects or Computer.
+It exposes Project records and Task/Automation management. Project writes require
+the Project Lead's command identity; a local Computer or owner token cannot
+impersonate it. Batch Task proposals still require a separate owner Apply.
+Runtime configuration references a private token file rather than embedding
+credentials in a Project workspace or prompt. Managed
+runs use a separate run-scoped grant held by the Daemon Node, including runs
+outside Projects. Every run can manage standalone work; Project access stays
+limited to its admitted Project and enabled roster identity. The standalone
+Computer grant is never a fallback for a managed run. Capability is
 resolved from the Agent's enabled Project role and pinned in its run context,
+then checked against live roster membership and leadership on each call,
 independently of which Thread carries the conversation.
 _Avoid_: daemon token (a separate execution-plane credential), shell helper as MCP
 

@@ -129,7 +129,8 @@ control-plane boundary.
 
 ```text
 runtime stdio -> Node bridge -> POST /api/v1/mcp -> Python SDK/catalog
-             -> bearer/Project scope -> Project reads or proposal staging
+             -> bearer/resource scope -> Task/Automation management or Project reads
+             -> Project Lead writes or owner-reviewed proposal staging
 managed run: runtime transport -> daemon-held command token -> same endpoint
 ```
 

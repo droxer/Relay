@@ -26,6 +26,8 @@ DAEMON_CAPABILITY_PROJECT_MANAGER = "project-manager"
 DAEMON_CAPABILITY_PROJECT_MANAGER_MCP = "project-manager-mcp"
 # Project roster members other than the manager get read-only Relay MCP tools.
 DAEMON_CAPABILITY_PROJECT_READER_MCP = "project-reader-mcp"
+# Every managed run has tokenless Relay MCP transport, even outside a Project.
+DAEMON_CAPABILITY_RELAY_WORK_MCP = "relay-work-mcp"
 DAEMON_CAPABILITY_AGENT_SKILLS = "agent-skills"
 DAEMON_CAPABILITY_RUNTIME_REFRESH = "runtime-refresh"
 DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE = "project-workspace-delete"
@@ -70,6 +72,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_PROJECT_MANAGER,
         DAEMON_CAPABILITY_PROJECT_MANAGER_MCP,
         DAEMON_CAPABILITY_PROJECT_READER_MCP,
+        DAEMON_CAPABILITY_RELAY_WORK_MCP,
         DAEMON_CAPABILITY_IMAGE_ATTACHMENTS,
         DAEMON_CAPABILITY_AGENT_SKILLS,
         DAEMON_CAPABILITY_RUNTIME_REFRESH,

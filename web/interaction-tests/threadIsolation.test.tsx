@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import { useComposer, threadDraftKey } from "../src/hooks/useComposer";
+import type { ComposerHandle } from "../src/components/composer/Composer";
 import { act, renderHook } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type { TFunction } from "i18next";
@@ -163,4 +166,42 @@ it("the first send from an empty list keeps one draft identity and rejects a dup
   expect(duplicate).toBe(false);
   expect(dispatch).toHaveBeenCalledTimes(1);
   await act(async () => { accept(session); await first; });
+});
+
+
+it.each([false, true])("restores a rejected send to A's draft after leaving (returnBeforeFailure=%s)", async (returnBeforeFailure) => {
+  sessionStorage.clear();
+  const { deps, reject, session } = setup(true);
+  useRelayStore.getState().openSession(session.id);
+  const other = { ...session, id: "B" };
+  const hook = renderHook(({ activeSession }) => {
+    const composer = useComposer(threadDraftKey({ username: "alice" }, activeSession.id));
+    const composerRef = useRef<ComposerHandle | null>(null);
+    composerRef.current = {
+      getText: () => composer.composerText,
+      setText: text => composer.setComposerText(text),
+      clear: () => composer.setComposerText(""), focus: () => {}, send: async () => false,
+    };
+    return { composer, dispatch: useThreadDispatch({ ...deps, activeSession, composerRef }) };
+  }, { initialProps: { activeSession: session } });
+  act(() => hook.result.current.composer.setComposerText("keep this message"));
+  let sending!: Promise<boolean>;
+  act(() => { sending = hook.result.current.dispatch.sendMessage(); });
+  act(() => useRelayStore.getState().openSession(other.id));
+  hook.rerender({ activeSession: other });
+  act(() => hook.result.current.composer.setComposerText("B's draft"));
+  if (returnBeforeFailure) {
+    act(() => useRelayStore.getState().openSession(session.id));
+    hook.rerender({ activeSession: session });
+    act(() => hook.result.current.composer.setComposerText("A's newer draft"));
+  }
+  await act(async () => { reject(new Error("offline")); await sending; });
+  if (!returnBeforeFailure) {
+    expect(hook.result.current.composer.composerText).toBe("B's draft");
+    act(() => useRelayStore.getState().openSession(session.id));
+    hook.rerender({ activeSession: session });
+  }
+  expect(hook.result.current.composer.composerText).toBe(returnBeforeFailure
+    ? "keep this message\n\nA's newer draft"
+    : "keep this message");
 });

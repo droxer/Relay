@@ -18,6 +18,7 @@ dependencies = [
   "httpx>=0.28.1",
   "PyYAML>=6.0.3",
   "mcp>=1.30,<2",
+  "jsonschema>=4.26.0",
 ]
 
 [project.optional-dependencies]

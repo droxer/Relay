@@ -1549,30 +1549,35 @@ adapter. It requires node authentication plus the currently dispatched command
 and lease, and validates the pinned manager Project/Agent run context rather than
 a canonical Thread ID. New daemons route both native MCP and isolated host/guest
 calls through the MCP bearer-token API using a command-bound token held in daemon
-memory. Both paths expose scoped reads, workspace authorization and proposal
-staging, never owner Apply. See the [Project Manager guide](guides/project-manager.md)
+memory. Both MCP paths expose scoped reads, Task/Automation management and proposal
+staging, never owner Apply. The legacy JSON adapter retains its read/proposal
+operations. See the [Project Manager guide](guides/project-manager.md)
 for runtime installation and rollout requirements.
 
 
 ### Relay MCP bearer-token API
 
-`POST /api/v1/mcp/tokens` (owner session) accepts `{name, projectIds}` and returns
+`POST /api/v1/mcp/tokens` (owner session) accepts `{name, projectIds?}` and returns
 `{id, token, ...metadata}` once, with `Cache-Control: no-store`. All Projects
-must belong to the caller. Tokens expire after 90 days. `GET /mcp/tokens` lists
+must belong to the caller. Explicit Project lists grant read-only Project access;
+omitting `projectIds` also enables standalone Task/Automation management and reads
+of owned Projects. Neither form grants Project Lead authority. Tokens expire after 90 days. `GET /mcp/tokens` lists
 metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
 
 `POST /api/v1/daemon-nodes/{id}/mcp-token` uses the enrolled Computer credential
 and returns a separate MCP token scoped to its owner and Computer. Optional
-`{commandId, leaseId}` restricts it to a currently dispatched Project roster
-member's command and Project; authentication stops when that run ends (maximum
-24 hours). Reader runs receive `access: "read"`; the Project Lead's run
-receives `access: "manage"`. `tools/list` omits `relay_propose_task_changes` for
-readers, and attempting it still returns a tool error `project_manager_required`.
+`{commandId, leaseId}` binds it to an active command, including standalone runs;
+authentication stops when that run ends (maximum 24 hours). Every run may manage
+the owner's standalone Tasks and Automations. Project reads require the admitted
+Project's enabled roster identity; writes require its current Project Lead.
+`tools/list` omits `relay_propose_task_changes` for readers, while still exposing
+standalone mutation tools. Unauthorized Project writes return a tool error
+`project_manager_required`; omitting `projectId` never bypasses stored resource scope.
 
 `POST /api/v1/mcp` is the canonical MCP Streamable HTTP endpoint, hosted by
 `backend/relay/mcp/` using the official Python SDK. It supports initialization,
 notifications, `tools/list` and `tools/call` with stateless JSON responses. The
-Python catalog defines the nine Project read/proposal tools; the local Node
+Python catalog defines Project reads, Task/Automation CRUD, review and Task proposal tools; the local Node
 stdio bridge forwards messages unchanged. No separate MCP deployment is needed.
 The SDK endpoint is registered directly as an ASGI route and is not enumerated
 in FastAPI's generated OpenAPI schema. Its catalog and schemas are discovered
@@ -1599,7 +1604,7 @@ which delegate to the same Python authorization and operations:
 
 `propose` accepts `arguments.operations` with the same validated operation format
 as manager proposals. Direct MCP proposals have `source: "mcp"`, token provenance
-and no fabricated run ID. They remain pending until the owner applies them with
+and the Project Lead's actual run ID. They remain pending until the owner applies them with
 a browser session. MCP bearer tokens cannot use owner mutation endpoints.
 
 

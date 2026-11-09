@@ -125,6 +125,9 @@ def manager_tool(sandbox_id: str, request: Request, ctx: AppContextDep, *, _requ
     project = ctx.project_store.get_project(access[0].get("projectId", "")) if access else None
     if not access or not project:
         raise HTTPException(403, "manager_scope_required")
+    if not any(m.get("agentId") == command.get("logicalAgentId") and m.get("enabled", True)
+               for m in project.get("members") or []):
+        raise HTTPException(403, "manager_scope_required")
     if code := project_work_error(project):
         raise HTTPException(409, code)
     arguments = _request_body.get("arguments", {})

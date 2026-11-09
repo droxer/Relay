@@ -26,50 +26,58 @@ export function useThreadQueue({ queueKey, running, awaitsPerson, composerRef, o
   useLayoutEffect(() => hydrate(queueKey), [hydrate, queueKey]);
   const messages = useThreadQueueStore((state) => state.queues[queueKey] ?? EMPTY_QUEUE);
 
-  const modeRef = useRef<QueueDrainMode>("auto");
-  const inFlightRef = useRef(false);
+  const controls = useRef(new Map<string, { mode: QueueDrainMode; inFlight: boolean }>());
+  const controlFor = useCallback((key: string) => {
+    let control = controls.current.get(key);
+    if (!control) {
+      control = { mode: "auto", inFlight: false };
+      controls.current.set(key, control);
+    }
+    return control;
+  }, []);
   const previousRef = useRef({ key: queueKey, running });
 
   // While a queued send is in flight, the run transitions it causes itself (a
   // rejected dispatch flips `running` back) must not fire the next one. A
   // failed send goes back to the head and the queue pauses for the person.
   const sendQueued = useCallback(async (message: QueuedMessage): Promise<boolean> => {
-    if (inFlightRef.current) return false;
+    const control = controlFor(queueKey);
+    if (control.inFlight) return false;
     const store = useThreadQueueStore.getState();
-    inFlightRef.current = true;
+    control.inFlight = true;
     store.remove(queueKey, message.id);
     try {
       const sent = await (composerRef.current?.send(message.text, { asTyped: true }) ?? Promise.resolve(false));
-      modeRef.current = sent ? "auto" : "paused";
+      control.mode = sent ? "auto" : "paused";
       if (!sent) store.restore(queueKey, message);
       return sent;
     } finally {
-      inFlightRef.current = false;
+      control.inFlight = false;
     }
-  }, [composerRef, queueKey]);
+  }, [composerRef, queueKey, controlFor]);
 
   useEffect(() => {
     const previous = previousRef.current;
     previousRef.current = { key: queueKey, running };
     // Another thread: its run state is not a transition of this one.
     if (previous.key !== queueKey) {
-      modeRef.current = "auto";
       return;
     }
-    if (inFlightRef.current) return;
+    const control = controlFor(queueKey);
+    if (control.inFlight) return;
     // The person started a round themselves after a Stop: they are driving
     // again, so the queue follows the next run's end as usual.
-    if (!previous.running && running && modeRef.current === "paused") modeRef.current = "auto";
+    if (!previous.running && running && control.mode === "paused") control.mode = "auto";
     const head = messages[0];
     if (!head || !shouldDrainQueue({
       wasRunning: previous.running,
       running,
-      mode: modeRef.current,
+      mode: control.mode,
       awaitsPerson,
       queued: messages.length,
     })) return;
     void sendQueued(head);
-  }, [queueKey, running, awaitsPerson, messages, sendQueued]);
+  }, [queueKey, running, awaitsPerson, messages, sendQueued, controlFor]);
 
   const enqueue = useCallback((text: string) => {
     useThreadQueueStore.getState().enqueue(queueKey, text);
@@ -83,9 +91,9 @@ export function useThreadQueue({ queueKey, running, awaitsPerson, composerRef, o
       return;
     }
     useThreadQueueStore.getState().promote(queueKey, id);
-    modeRef.current = "steer";
+    controlFor(queueKey).mode = "steer";
     onCancelRun();
-  }, [messages, running, sendQueued, queueKey, onCancelRun]);
+  }, [messages, running, sendQueued, queueKey, onCancelRun, controlFor]);
 
   /** Back into the box to rework; a draft already there keeps its place first. */
   const edit = useCallback((id: string) => {
@@ -104,9 +112,9 @@ export function useThreadQueue({ queueKey, running, awaitsPerson, composerRef, o
 
   /** The person's own Stop: what they queued waits for them to choose. */
   const stop = useCallback(() => {
-    modeRef.current = "paused";
+    controlFor(queueKey).mode = "paused";
     onCancelRun();
-  }, [onCancelRun]);
+  }, [onCancelRun, controlFor, queueKey]);
 
   return { messages, enqueue, steer, edit, remove, stop };
 }

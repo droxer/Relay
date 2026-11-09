@@ -113,7 +113,7 @@ authority in the Python control plane while Agent Runtimes execute on Computers.
 
 | Surface | Purpose | Backend boundary | Runtime access |
 | --- | --- | --- | --- |
-| Relay MCP | Read Project records and stage Task proposals for owner review | `backend/relay/mcp/`, `POST /api/v1/mcp` | Codex, Claude Code, OpenCode, Kimi and Pi through the local bridge or daemon run proxy |
+| Relay MCP | Manage standalone Tasks/Automations; Project roster reads and lead-only work management; optional owner-reviewed Task proposals | `backend/relay/mcp/`, `POST /api/v1/mcp` | Codex, Claude Code, OpenCode, Kimi and Pi through the local bridge or daemon run proxy |
 | Service Connections | Call external services within explicitly selected work Grants; currently GitHub issue reads | `backend/relay/api/connections/tools.py`, `POST /api/v1/connection-tools` | Per-run stdio proxy for Codex and Claude; requires `service-connections` |
 
 These endpoints have separate catalogs, credentials and authorization rules.
@@ -126,7 +126,7 @@ deployed service implied by these interfaces.
 The official MCP Python SDK serves stateless JSON Streamable HTTP inside the
 existing FastAPI deployment. `app.py` starts and stops it with the backend
 lifespan. Python owns the protocol, tool schemas, bearer authorization and
-Project operation dispatch; the backend calls application operations directly
+Task, Automation and Project operation dispatch; the backend calls application operations directly
 without HTTP calls back into itself. Computers need no Python installation or
 additional MCP service or port.
 
@@ -140,8 +140,9 @@ Relay-managed Agent Runtime (native or isolated)
   -> exchange command/lease for MCP token held in daemon memory
   -> POST /api/v1/mcp with command-bound MCP token
 
-Python MCP protocol -> Project authorization -> Project application operations
-  -> scoped reads or pending proposal -> owner reviews and applies in the web UI
+Python MCP protocol -> resource/owner/Project authorization -> application operations
+  -> scoped reads or authorized Task/Automation changes
+  -> optional pending Task proposal -> owner reviews and applies in the web UI
 ```
 
 The Node bridge handles newline stdio framing and HTTP forwarding, including
