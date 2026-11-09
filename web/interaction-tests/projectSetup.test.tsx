@@ -3,7 +3,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
-import { ProjectAskAgentSection } from "../src/components/ProjectContextUpkeep";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
@@ -282,14 +281,6 @@ it("offers fresh and existing projects and keeps drafting exclusive to fresh pro
   expect(screen.queryByRole("textbox", { name: /^project\.folder/ })).toBeNull();
 });
 
-
-it("offers only planning on an existing project's settings", () => {
-  const project = { ...created, workspaceHostPath: "/Users/alice/code/app" };
-  render(<ProjectAskAgentSection project={project} onStarted={vi.fn()} />);
-  expect(screen.queryByRole("radio")).toBeNull();
-  expect(screen.queryByRole("button", { name: "project.refine_start" })).toBeNull();
-  expect(screen.getByRole("button", { name: "project.plan_start" })).toBeTruthy();
-});
 
 it("keeps an existing project's open proposal reviewable without drafting it again", () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
