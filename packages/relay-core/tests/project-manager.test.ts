@@ -42,6 +42,18 @@ test('a roster member gets the read-only project contract, never the propose too
   const prompt=agentTaskPrompt(state);
   assert.match(prompt,/Relay project records/);
   assert.match(prompt,/relay_list_tasks/);
-  assert.match(prompt,/you cannot change them/);
+  assert.match(prompt,/you cannot change its work/);
   assert.doesNotMatch(prompt,/relay_propose_task_changes|Relay project lead/);
+});
+
+test('every runtime gets standalone Task and Automation tools independently of Project access', () => {
+  const state = {...initialAgentState('Organize my work'), relay_mcp:{toolCommand:'node ".relay/manager-test/tool.cjs"'}};
+  for (const agent of AGENT_NAMES) {
+    const command = getAgent(agent).buildCommand(withPermissionAdapter(agent, state));
+    assert.match(command, /relay_create_task/);
+    assert.match(command, /relay_create_automation/);
+    assert.match(command, /only its Project Lead/);
+    assert.match(command, /Omit projectId for standalone work/);
+    assert.match(command, /manager-test\/tool.cjs/);
+  }
 });

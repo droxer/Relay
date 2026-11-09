@@ -16,7 +16,7 @@ export function managedMcpForwarder(backendUrl: string, raw: string) {
     };
     const native = context.native && typeof context.native.socketPath === 'string' && typeof context.native.secret === 'string'
         ? nativeMcpForwarder(context.native) : undefined;
-    const valid = !context.disabled && context.backendUrl === backendUrl && typeof context.projectId === 'string' && (native !== undefined || typeof context.bridgePath === 'string');
+    const valid = !context.disabled && context.backendUrl === backendUrl && (native !== undefined || typeof context.bridgePath === 'string');
     let protocolVersion: string | undefined;
     return async (message: unknown): Promise<unknown | undefined> => {
         if (!valid)
@@ -36,7 +36,7 @@ export function createRunMcpProxy(options: {
     nodeToken: string;
     commandId: string;
     leaseId?: string;
-    projectId: string;
+    projectId?: string;
     fetchFn: typeof fetch;
     signal: AbortSignal;
 }) {
@@ -65,6 +65,15 @@ export function createRunMcpProxy(options: {
         const token = await credential;
         if (tool === 'mcp')
             return await request('/mcp', token, args.message, typeof args.protocolVersion === 'string' ? args.protocolVersion : undefined);
-        return await request(tool === 'projects' ? '/mcp/projects' : `/mcp/projects/${encodeURIComponent(options.projectId)}/tools`, token, tool === 'projects' ? undefined : { tool, arguments: { ...args, projectId: options.projectId } });
+        // The fallback helper forwards backend-owned tool names just like a
+        // native MCP client. It has no catalog and never widens the run grant.
+        if (tool.startsWith('relay_')) {
+            const reply = await request('/mcp', token, {jsonrpc:'2.0',id:1,method:'tools/call',params:{name:tool,arguments:args}});
+            const result = reply?.result as {isError?:boolean; structuredContent?:Record<string,unknown>} | undefined;
+            if (!result || result.isError) throw new Error('Relay MCP tool refused. Check resource scope and arguments.');
+            return result.structuredContent ?? null;
+        }
+        if (!options.projectId && tool !== 'projects') throw new Error('Project scope required for legacy Project tools.');
+        return await request(tool === 'projects' ? '/mcp/projects' : `/mcp/projects/${encodeURIComponent(options.projectId!)}/tools`, token, tool === 'projects' ? undefined : { tool, arguments: { ...args, projectId: options.projectId } });
     };
 }

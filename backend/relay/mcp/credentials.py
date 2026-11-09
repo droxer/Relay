@@ -17,14 +17,13 @@ def issue_owner_token(ctx: Any, user_id: str, body: dict[str, Any]) -> dict[str,
         not isinstance(name, str)
         or not name.strip()
         or len(name) > 100
-        or not isinstance(ids, list)
-        or not 1 <= len(ids) <= 100
-        or any(not isinstance(key, str) for key in ids)
+        or (ids is not None and (not isinstance(ids, list) or not 1 <= len(ids) <= 100
+                                or any(not isinstance(key, str) for key in ids)))
     ):
-        raise McpError(400, "A name and 1–100 owned Project IDs are required.")
-    for project_id in ids:
+        raise McpError(400, "A name and optionally 1–100 owned Project IDs are required.")
+    for project_id in ids or []:
         scoped_project(ctx, {"ownerUserId": user_id}, project_id)
-    return token_store(ctx).issue(user_id, name.strip(), project_ids=list(dict.fromkeys(ids)))
+    return token_store(ctx).issue(user_id, name.strip(), project_ids=list(dict.fromkeys(ids)) if ids else None)
 
 
 def computer_token(ctx: Any, sandbox_id: str, node_token: str | None, body: dict[str, Any]) -> dict[str, Any]:
@@ -72,14 +71,20 @@ def computer_token(ctx: Any, sandbox_id: str, node_token: str | None, body: dict
             or command.get("leaseId") != body.get("leaseId")
         ):
             raise McpError(409, "Run lease is no longer active.")
+        active = ctx.daemon_store.active_run_request_for_session_any_node(command["command"]["sessionId"])
+        if not active or active.get("currentCommandId") != command_id or active.get("status") != "running":
+            raise McpError(409, "Run lease is no longer active.")
+        session = ctx.session_store.get_session_header(command["command"]["sessionId"])
+        if session.get("ownerUserId") != node["userId"]:
+            raise McpError(403, "Run owner mismatch.")
         access = command_project_access(command["command"].get("state", {}), command["command"].get("logicalAgentId"))
-        if not access:
-            raise McpError(403, "Project roster membership required.")
-        scope = access[0]
-        project = ctx.project_store.get_project(scope["projectId"])
-        if not project or project["ownerUserId"] != node["userId"] or project["computerId"] != computer_id(node):
-            raise McpError(403, "Project scope mismatch.")
-        ids = [project["id"]]
+        ids = []  # Every run can manage standalone work; no Project access by default.
+        if access:
+            scope = access[0]
+            project = ctx.project_store.get_project(scope["projectId"])
+            if not project or project["ownerUserId"] != node["userId"] or project["computerId"] != computer_id(node):
+                raise McpError(403, "Project scope mismatch.")
+            ids = [project["id"]]
     return token_store(ctx).issue(
         node["userId"],
         "Relay run" if command_id else "Local Computer MCP",

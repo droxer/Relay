@@ -36,8 +36,9 @@ holder stays an ordinary Agent that can still be addressed, without the
 manager tools.
 
 The role reads fresh Project records, explains progress and the backlog, and
-stages Task changes. An owner reviews the proposal in the Thread, edits individual
-fields, selects operations, and applies or dismisses it. New Tasks enter backlog.
+manages Project Tasks and Automations through Relay MCP. It may also stage batch
+Task changes. For a proposal, the owner reviews it in the Thread, edits individual
+fields, selects operations, and applies or dismisses it. Proposal-created Tasks enter backlog.
 Apply uses normal domain validation, revision checks, idempotency and an atomic
 transaction. It cannot silently start work, accept an outcome or reconcile a run.
 
@@ -55,12 +56,13 @@ setup workflow and drop the context.
 
 Every other enabled roster member reads the Project through the same tools.
 Its run carries a `project_reader` scope (`project_reader_context`), so it can
-read the overview, Tasks, review evidence, activity and Threads, but never
-stage changes: the run token's grant reads `access: "read"`, `tools/list`
+read the overview, Tasks, Automations, review evidence, activity and Threads, but never
+change Project work: the run token's grant reads `access: "read"`, `tools/list`
 omits `relay_propose_task_changes`, and a propose call answers 403
 `project_manager_required`. Only the holder's `project_manager` scope grants
 `access: "manage"`. An Agent assigned Project work without being on the roster
-gets neither. Reader scopes go only to Computers advertising
+gets neither Project scope, while still receiving standalone work tools on an
+updated daemon. Reader scopes go only to Computers advertising
 `project-reader-mcp`; older ones run those Agents without the tools.
 
 Holding the role never stops an Agent from running. On a Computer that does not
@@ -119,7 +121,8 @@ stores only a SHA-256 digest; issuance returns plaintext once with `no-store`.
 
 For standalone local CLI sessions, an enrolled Computer obtains a 90-day token
 using its existing daemon credential.
-That token can access only its owner's Projects on that Computer, and stops
+That token manages its owner's standalone Tasks and Automations and reads the
+owner's Projects on that Computer. It cannot act as a Project Lead, and stops
 working if the Computer is retired or ownership changes. Tokens can be revoked
 individually. Reconciliation checks the saved credential with the backend and
 renews it within seven days of expiry, including recovery after expiry. Renewal
@@ -131,15 +134,21 @@ the reason, explicit reconnection removes only that Computer's
 request a fresh credential.
 
 Owners can also issue a 90-day token restricted to an explicit list of owned
-Project IDs using `POST /api/v1/mcp/tokens`. Save the returned token in a private
+Project IDs using `POST /api/v1/mcp/tokens`. These explicit Project grants are
+read-only and do not grant standalone access. Omit `projectIds` for an owner
+grant that manages standalone work and reads owned Projects. Save the returned token in a private
 file (mode `0600`), outside the Project, and point a private server config at it.
 List token metadata with `GET /api/v1/mcp/tokens`; revoke with
 `DELETE /api/v1/mcp/tokens/{id}`. Metadata never returns the token or its hash.
 
 ## Managed run credentials
 
+The daemon advertises `relay-work-mcp` for transport on every run. Older clients
+are marked outdated and must be updated to expose standalone work tools. The
+installer manifest uses the same capability list as daemon registration.
+
 Relay-managed native processes receive daemon-owned `RELAY_MCP_RUN_CONTEXT`
-metadata in their execution environment. It contains a Project ID and a path to
+metadata in their execution environment. It contains an optional Project ID and a path to
 the run's host transport, never a credential. Codex configuration explicitly
 forwards that environment variable, and Claude configuration expands it into the
 MCP child's environment. Kimi and OpenCode inherit the process environment; Pi's
@@ -149,16 +158,18 @@ token health. Revoking a standalone token does not substitute a new broad grant
 or prevent a separately authorized managed run from using its own scope.
 
 An installed Relay MCP server in a managed process uses only that run context.
-Other Projects/backends are refused. Runs outside the roster receive a disabled
-context; none of these processes fall back to the standalone Computer credential.
+Other Projects/backends are refused. Every run can manage standalone Tasks and
+Automations, including runs outside a Project; none of these processes fall back
+to the standalone Computer credential.
 The daemon proxy lazily obtains a command-bound MCP token and calls the same
 MCP API using that token. Isolated runtimes use their host/guest transport to the
 same proxy. The run token stays in daemon memory, outside the workspace and
-Agent environment. It is limited to the admitted Project and stops authenticating
+Agent environment. Its Project access is limited to the admitted Project and it stops authenticating
 when the run ends, with a maximum lifetime of 24 hours. Proposals retain the
-actual Logical Agent, run and producing Thread. Existing admitted runs retain
-their pinned context when a role is reassigned; subsequent rounds resolve the new
-holder. No backend process executes an Agent.
+actual Logical Agent, run and producing Thread. Each call rechecks enabled
+roster membership; writes also require the current Project Lead, so transferring
+leadership removes the former lead's write authority immediately. Subsequent
+rounds resolve the new holder. No backend process executes an Agent.
 
 These are tool-request scope guarantees. Native runtimes share the owner's OS
 account; host filesystem isolation requires a sandbox rather than file modes
@@ -197,17 +208,29 @@ adapters over the same Python operations for older clients and workspace helpers
 - `relay_project_overview`: current brief, roster, counts, flow and availability.
 - `relay_list_tasks`, `relay_get_task`, `relay_task_review`: current Task records
   and evidence, including revisions for proposed edits.
+- `relay_create_task`, `relay_update_task`, `relay_delete_task`: direct Task management.
+- `relay_list_automations`, `relay_get_automation`, `relay_create_automation`,
+  `relay_update_automation`, `relay_delete_automation`: Automation records,
+  schedules/triggers, assignment, pause/resume and deletion.
 - `relay_project_activity`, `relay_project_threads`, `relay_get_thread`: scoped
   activity and conversation history with bounded coverage.
 - `relay_propose_task_changes`: stage create, update and prerequisite operations
-  for owner review. Direct local proposals record MCP provenance and do not
-  fabricate a daemon run. Pi adds the installed server suffix to tool names.
+  for owner review. Proposals record MCP provenance and the lead's actual
+  daemon run. Pi adds the installed server suffix to tool names.
 
-Every Project tool requires `projectId`; the API checks token scope and owner
-again for every call. A roster member's run token is read-only; only the
-Project Lead's run (or an owner/Computer token) may call
-`relay_propose_task_changes`. There is no Apply, acceptance, run-start, or reconciliation
-MCP tool. Browser owner authentication is required for Apply.
+Work lists and creates accept optional `projectId`; omitting it selects standalone
+work. Get/update/delete use `taskId` or `automationId`; the stored record's Project
+determines authority even when no `projectId` was supplied. Create/update take
+`fields`; Automation fields include `routineTriggers` and `routineState`
+(`active`/`paused`). Lists are bounded to 100 snapshots with a keyset `nextCursor`.
+All Agents may manage standalone work. Enabled Project roster members may read
+Project work; only the admitted Project Lead may write it or stage proposals.
+Local Computer/owner grants never act as the Project Lead. A reader still
+discovers mutation tools for standalone work. Writes cannot change resource
+ownership or move work between Projects. There is no Apply, acceptance,
+run-start, or reconciliation MCP tool. Browser owner authentication is required
+for Apply. Assigning ready work or activating an Automation may let the scheduler
+dispatch it through the ordinary daemon path.
 
 ## Verification and rollout
 

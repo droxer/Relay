@@ -9,9 +9,10 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, TextContent, Tool
 from starlette.concurrency import run_in_threadpool
 from .access import may_manage
-from .catalog import TOOL_OPERATIONS, tool_definitions
+from .catalog import TOOL_OPERATIONS, WORK_OPERATIONS, tool_definitions
 from .errors import McpError
 from .operations import invoke, list_projects
+from .work import invoke_work
 
 CURRENT_GRANT: ContextVar[dict[str, Any] | None] = ContextVar("relay_mcp_grant", default=None)
 MAX_RESULT_BYTES = 1024 * 1024
@@ -35,10 +36,12 @@ def create_server(ctx: Any) -> StreamableHTTPSessionManager:
             operation = TOOL_OPERATIONS.get(name)
             if operation is None:
                 raise McpError(400, "Unknown Relay MCP tool.")
-            result = (
-                await run_in_threadpool(list_projects, ctx, grant)
-                if operation == "projects"
-                else await run_in_threadpool(
+            if operation == "projects":
+                result = await run_in_threadpool(list_projects, ctx, grant)
+            elif operation in WORK_OPERATIONS:
+                result = await run_in_threadpool(invoke_work, ctx, grant, operation, arguments)
+            else:
+                result = await run_in_threadpool(
                     invoke,
                     ctx,
                     grant,
@@ -46,7 +49,6 @@ def create_server(ctx: Any) -> StreamableHTTPSessionManager:
                     operation,
                     arguments,
                 )
-            )
             encoded = json.dumps(result, ensure_ascii=False)
             if len(encoded.encode()) > MAX_RESULT_BYTES:
                 raise McpError(400, "Tool result too large; narrow the query.")
