@@ -75,21 +75,27 @@ export const THREAD_PAGE_SIZE = 20;
  * scrolled to stay: a session older than the page's last row was not in the
  * page's range, so its absence says nothing. One within the range that the
  * page no longer lists is gone (deleted, or no longer this user's) and drops,
- * as it did when the poll returned the whole list. `hasOlder` is false when
- * the page was the whole list.
+ * as it did when the poll returned the whole list. Entries changed since the
+ * request began survive until a later poll can reconcile them. `hasOlder` is
+ * false when the page was the whole list.
  */
 export function mergeSessionHeadPage(
   current: RelaySession[],
   summaries: SessionSummary[],
   hasOlder: boolean,
+  atRequestStart: readonly RelaySession[] = current,
 ): RelaySession[] {
   const head = mergeSessionSummaries(current, summaries);
   const last = summaries.at(-1);
-  if (!hasOlder || !last) return head;
   const headIds = new Set(head.map((session) => session.id));
-  const boundary = Date.parse(last.updatedAt);
+  const before = new Map(atRequestStart.map(session => [session.id, session]));
+  const boundary = last ? Date.parse(last.updatedAt) : 0;
+  // Absence only describes the state when the request began. A streamed
+  // update, detail fetch, or newly created thread may have moved since then.
+  // Reconcile those entries on the next poll rather than discarding live state.
   const older = current.filter((session) =>
-    !headIds.has(session.id) && !(Date.parse(session.updatedAt) > boundary));
+    !headIds.has(session.id) && (before.get(session.id) !== session
+      || (hasOlder && last && !(Date.parse(session.updatedAt) > boundary))));
   return older.length > 0 ? [...head, ...older] : head;
 }
 

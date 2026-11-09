@@ -159,6 +159,7 @@ export function useRelayData(
         // The poll reads only the first page; older pages load on demand and
         // stay in the cache below it (mergeSessionHeadPage).
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
+          const atRequestStart = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [];
           const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE });
           const next = typeof page.nextCursor === "string" ? page.nextCursor : null;
           setHeadCursor(next);
@@ -168,6 +169,7 @@ export function useRelayData(
             queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [],
             page.sessions ?? [],
             next !== null,
+            atRequestStart,
           );
         },
       },
