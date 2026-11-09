@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
 import type { RelaySession } from "../types";
+import { retainThreadDispatchView } from "../lib/threadDispatchView";
 
 interface ThreadEditingInput {
   threads: RelaySession[];
@@ -37,20 +38,23 @@ export function useThreadEditing({ threads, activeSessionId, token, onActiveThre
   }
 
   async function deleteThread(sessionId: string) {
-    const session = threads.find((s) => s.id === sessionId);
-    const label = session ? (session.title?.trim() || session.taskGoal) : sessionId;
-    const ok = await confirm({
-      title: t("thread.delete_confirm", { name: label }),
-      message: t("thread.delete_message"),
-      confirmLabel: t("thread.stop_and_delete"),
-      tone: "danger",
-    });
-    if (!ok) return;
+    const view = retainThreadDispatchView();
     try {
+      const session = threads.find((s) => s.id === sessionId);
+      const label = session ? (session.title?.trim() || session.taskGoal) : sessionId;
+      const ok = await confirm({
+        title: t("thread.delete_confirm", { name: label }),
+        message: t("thread.delete_message"),
+        confirmLabel: t("thread.stop_and_delete"),
+        tone: "danger",
+      });
+      if (!ok) return;
       const pending = await deleteSessionMutation.mutateAsync({ sessionId, token });
-      if (!pending && activeSessionId === sessionId) onActiveThreadDeleted();
+      if (!pending && activeSessionId === sessionId && view.isCurrent()) onActiveThreadDeleted();
     } catch {
       // mutation onError surfaces a toast.
+    } finally {
+      view.release();
     }
   }
 

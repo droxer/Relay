@@ -1,6 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { resizeComposerTextarea } from "../lib/composerResize";
 
+const DRAFT_RESTORED_EVENT = "relay:composer-draft-restored";
+
 // Composer text and textarea sizing stay local so every keystroke does not
 // re-render the full application shell and transcript.
 export function useComposer(draftKey?: string): {
@@ -22,6 +24,17 @@ export function useComposer(draftKey?: string): {
     });
   }, [draftKey]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // A rejected send may return after its author left and reopened this
+  // thread. Update only the composer whose persisted draft was restored.
+  useLayoutEffect(() => {
+    const restored = (event: Event) => {
+      const { key, text } = (event as CustomEvent<{ key: string; text: string }>).detail;
+      if (key === draftKey) setDraft({ key, text });
+    };
+    window.addEventListener(DRAFT_RESTORED_EVENT, restored);
+    return () => window.removeEventListener(DRAFT_RESTORED_EVENT, restored);
+  }, [draftKey]);
 
   const resizeTextarea = useCallback(() => {
     resizeComposerTextarea(textareaRef.current);
@@ -47,6 +60,17 @@ export function threadDraftKey(user: { userId?: string; username: string }, sess
  *  person already left there wins: a suggestion never overwrites a draft. */
 export function seedComposerDraft(key: string, text: string): void {
   if (!readDraft(key).trim()) writeDraft(key, text);
+}
+
+/** Restore rejected text to its original thread without losing a newer draft. */
+export function restoreComposerDraft(key: string, text: string): void {
+  if (!text.trim()) return;
+  const current = readDraft(key);
+  const restored = current.trim() && current !== text ? `${text}\n\n${current}` : text;
+  writeDraft(key, restored);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(DRAFT_RESTORED_EVENT, { detail: { key, text: restored } }));
+  }
 }
 
 function readDraft(key?: string): string {

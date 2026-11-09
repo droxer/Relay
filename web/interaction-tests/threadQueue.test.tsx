@@ -93,3 +93,35 @@ it("never sends on opening a thread, and edit returns the text to the box", asyn
   expect(c.handle.getText()).toBe("draft\n\nleft over");
   expect(result.current.messages).toEqual([]);
 });
+
+
+it("drains B independently while A's queued send is pending", async () => {
+  const c = composer();
+  let finishA!: (sent: boolean) => void;
+  vi.mocked(c.handle.send).mockReturnValueOnce(new Promise<boolean>(resolve => { finishA = resolve; }));
+  const { result, rerender } = render(c);
+  act(() => result.current.enqueue("A message"));
+  rerender({ queueKey: "thread-1", running: false, awaitsPerson: false });
+  expect(c.handle.send).toHaveBeenCalledTimes(1);
+  rerender({ queueKey: "B", running: true, awaitsPerson: false });
+  act(() => result.current.enqueue("B message"));
+  rerender({ queueKey: "B", running: false, awaitsPerson: false });
+  await act(async () => { finishA(true); });
+  expect(c.handle.send).toHaveBeenCalledTimes(2);
+  expect(c.handle.send).toHaveBeenLastCalledWith("B message", { asTyped: true });
+});
+
+it("A's late completion cannot undo B's Stop", async () => {
+  const c = composer();
+  let finishA!: (sent: boolean) => void;
+  vi.mocked(c.handle.send).mockReturnValueOnce(new Promise<boolean>(resolve => { finishA = resolve; }));
+  const { result, rerender } = render(c);
+  act(() => result.current.enqueue("A message"));
+  rerender({ queueKey: "thread-1", running: false, awaitsPerson: false });
+  rerender({ queueKey: "B", running: true, awaitsPerson: false });
+  act(() => { result.current.enqueue("B message"); result.current.stop(); });
+  await act(async () => { finishA(true); });
+  rerender({ queueKey: "B", running: false, awaitsPerson: false });
+  expect(c.handle.send).toHaveBeenCalledTimes(1);
+  expect(result.current.messages.map(message => message.text)).toEqual(["B message"]);
+});
