@@ -25,7 +25,7 @@ ALICE = user_id("alice")
 HEARTBEAT_POLICY = {
     "intervalMs": 6_000,
     "timeoutMs": 30_000,
-    "features": ["poll-liveness", "state"],
+    "features": ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches"],
 }
 BOB = user_id("bob")
 CAROL = user_id("carol")
@@ -237,7 +237,7 @@ def test_daemon_heartbeat_is_authenticated_and_returns_lease_policy(
         heartbeat = response.json()["heartbeat"]
         assert heartbeat["intervalMs"] == 6_000
         assert heartbeat["timeoutMs"] == 30_000
-        assert heartbeat["features"] == ["poll-liveness", "state"]
+        assert heartbeat["features"] == ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches"]
         assert heartbeat["observedAt"]
         assert (
             client.post(

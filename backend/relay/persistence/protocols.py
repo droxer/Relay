@@ -432,6 +432,8 @@ class AuthStore(Protocol):
 
 
 class DaemonStore(Protocol):
+    def transport_status(self, computer_id: str) -> dict[str, Any] | None: ...
+
     def active_run_request_for_session_any_node(self, session_id: str) -> dict[str, Any] | None: ...
     def set_command_listener(
         self, listener: Callable[[str], None], *, database_channel: str | None = None

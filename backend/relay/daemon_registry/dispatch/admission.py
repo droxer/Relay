@@ -416,6 +416,7 @@ class RunAdmissionMixin(RegistryState):
             {
                 "id": cancel_id,
                 "type": "run.cancel",
+                "targetLeaseId": (self.daemon_store.get_command(active["commandId"]) or {}).get("leaseId"),
                 "commandId": active["commandId"],
                 "sessionId": active["sessionId"],
                 "runId": active["runId"],

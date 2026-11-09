@@ -303,7 +303,7 @@ class CommandQueueRows(DaemonStoreState):
         return updated
 
     def take_queued_commands(
-        self, node_id: str, limit: int = 2**53, lease_seconds: float = 60.0
+        self, node_id: str, limit: int = 2**53, lease_seconds: float = 60.0, *, admit_runs: bool = True
     ) -> list[dict[str, Any]]:
         now = now_iso()
         now_dt = parse_db_time(now)
@@ -324,12 +324,14 @@ class CommandQueueRows(DaemonStoreState):
                 & (self.commands.c.type != "run.start")
                 & (self.commands.c.lease_expires_at <= now_dt)
             )
+            if not admit_runs:
+                available_condition = available_condition & (self.commands.c.type != "run.start")
             rows = (
                 conn.execute(
                     select(self.commands)
                     .where(self.commands.c.node_id == node_pk)
                     .where(available_condition)
-                    .order_by(self.commands.c.created_at)
+                    .order_by((self.commands.c.type == "run.cancel").desc(), self.commands.c.created_at)
                     .limit(limit)
                 )
                 .mappings()
@@ -534,7 +536,7 @@ class CommandQueueRows(DaemonStoreState):
                     select(self.commands)
                     .where(self.commands.c.node_id == node_pk)
                     .where(self.commands.c.id.in_(requested.keys()))
-                    .where(self.commands.c.status == "dispatched")
+                    .where(self.commands.c.status == "dispatched").with_for_update()
                 )
                 .mappings()
                 .all()
@@ -549,6 +551,7 @@ class CommandQueueRows(DaemonStoreState):
                     continue
                 updated = {
                     **record,
+                    "command": {**record["command"], **({"_deliveryAcknowledged": True} if expected_lease_id is not None else {})},
                     "updatedAt": now,
                     "leaseExpiresAt": lease_expires_at(now, lease_seconds),
                 }

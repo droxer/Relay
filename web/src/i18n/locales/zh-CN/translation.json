@@ -3097,7 +3097,17 @@
     "desktop_sub": "Relay 在后台时显示系统通知。",
     "desktop_on": "已开启。Relay 在后台时会显示系统通知。",
     "desktop_blocked": "此网站的通知已被阻止。请在浏览器的网站设置中允许通知后再开启。",
-    "desktop_unsupported": "此浏览器不支持桌面通知。"
+    "desktop_unsupported": "此浏览器不支持桌面通知。",
+    "transport_attention": "电脑通信需要处理",
+    "transport_recovered": "电脑通信已恢复",
+    "transport_detail": "{{name}} · {{runs}} 个运行受影响 · {{pending}} 份报告待发送（{{bytes}} MiB）· {{quarantined}} 份报告已隔离",
+    "transport_action_revoked": "请重新运行设置，恢复此电脑的授权。",
+    "transport_action_storage": "请释放磁盘空间或修复报告存储。已有报告会保留。",
+    "transport_action_quarantine": "请查看被拒绝的报告，解决原因后重试。",
+    "transport_action_execution": "请先查看执行证据，再确认运行是否已停止。",
+    "transport_action_communication": "Relay 正在自动重试，存储空间允许时运行会继续。",
+    "transport_action_recovered": "通信正常，剩余报告正在补传。",
+    "transport_diagnostics": "查看诊断"
   },
   "blocker": {
     "no_reason": "未记录原因",

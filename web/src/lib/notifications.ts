@@ -34,6 +34,8 @@ export interface NotificationView {
   /** What it happened to: the task ref and title, the computer's name. */
   detail: NotificationText;
   target: NotificationTarget;
+  brief?: NotificationText;
+  diagnosticsHref?: string;
 }
 
 /** The unread badge stops counting here; past it the badge reads "9+". */
@@ -57,7 +59,7 @@ function presence(value: unknown): "online" | "offline" | null {
   return value === "online" || value === "offline" ? value : null;
 }
 
-type Body = Pick<NotificationView, "tone" | "title" | "detail" | "target">;
+type Body = Pick<NotificationView, "tone" | "title" | "detail" | "target" | "brief" | "diagnosticsHref">;
 
 function taskCompleted(data: Data): Body | null {
   const taskId = text(data.taskId);
@@ -131,11 +133,30 @@ function clientOutdated(data: Data): Body | null {
   };
 }
 
+function computerTransport(data: Data): Body | null {
+  const nodeId = text(data.nodeId);
+  if (!nodeId) return null;
+  const count = (key: string): number => typeof data[key] === 'number' && Number.isFinite(data[key]) ? Math.max(0, Math.floor(data[key] as number)) : 0;
+  const causes = Array.isArray(data.causes) ? data.causes.filter(cause => typeof cause === 'string') : [];
+  const action = ['revoked', 'storage', 'quarantine', 'execution'].find(cause => causes.includes(cause)) ?? 'communication';
+  const recovered = data.recovered === true;
+  return {
+    tone: recovered ? 'good' : 'warn',
+    title: { key: recovered ? 'notifications.transport_recovered' : 'notifications.transport_attention', params: {} },
+    detail: { key: 'notifications.transport_detail', params: { name: computerName(data, nodeId), pending: count('pending'),
+      quarantined: count('quarantined'), bytes: Math.ceil(count('bytes') / 1048576), runs: Array.isArray(data.runs) ? data.runs.length : 0 } },
+    brief: { key: recovered ? 'notifications.transport_action_recovered' : `notifications.transport_action_${action}`, params: {} },
+    diagnosticsHref: `/api/v1/daemon-nodes/${encodeURIComponent(nodeId)}/transport`,
+    target: { kind: 'computer', nodeId },
+  };
+}
+
 const READERS: Record<NotificationKind, (data: Data) => Body | null> = {
   task_completed: taskCompleted,
   approval_requested: approvalRequested,
   permission_requested: permissionRequested,
   computer_status: computerStatus,
+  computer_transport: computerTransport,
   client_outdated: clientOutdated,
 };
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import math
 from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request
@@ -57,6 +58,8 @@ async def json_body(request: Request) -> dict[str, Any]:
         raise HTTPException(
             400, "Client disconnected while reading request body."
         ) from error
+    if request.headers.get("X-Relay-Report-Digest"):
+        request.scope["relay.report_digest"] = sha256(body).hexdigest()
     if not body:
         return {}
     if not content_type:

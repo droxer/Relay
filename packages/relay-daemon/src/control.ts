@@ -1,4 +1,5 @@
 /** `relay` — start, stop and inspect the background services the computer installer created. */
+import { TerminalOutbox } from './terminal-outbox.js';
 import { RELAY_CLIENT_VERSION } from './client-version.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { WINDOWS_SERVICE_SUFFIX, decodeServiceFile, windowsTaskArguments, startW
 
 export const SERVICE_PREFIX = 'build.relay.computer.';
 const LOG_LINES = '100';
-const COMMANDS = ['start', 'stop', 'restart', 'status', 'logs', 'update'];
+const COMMANDS = ['start', 'stop', 'restart', 'status', 'logs', 'update', 'reports', 'retry-report', 'discard-report'];
 
 export interface InstalledService { id: string; name: string; file: string }
 
@@ -53,6 +54,10 @@ Commands:
   stop      Stop ${product} and keep it stopped, also after login, until "${command} start".
   restart   Restart ${product} (for example after signing in to an agent CLI).
   status    Show whether ${product} is running.
+  reports   Inspect pending and quarantined reports.
+  retry-report --report <id>   Retry a quarantined report (daemon stopped).
+  discard-report --report <id> --acknowledge-output-loss
+            Record deliberate report loss (daemon stopped).
   version   Show the installed ${product} client version.
   mcp       Serve Relay MCP over stdio: --config <private-config.json>.
   logs      Show recent ${product} output. Add --follow to keep streaming.
@@ -120,18 +125,26 @@ function serviceBrand(platform: string, service: InstalledService): RelayBrand {
   }
 }
 
-interface ControlArgs { command: string; computer?: string; follow: boolean; force?: boolean }
+interface ControlArgs { command: string; computer?: string; follow: boolean; force?: boolean; report?: string; acknowledgeLoss?: boolean }
 
 export function parseControlArgs(args: string[]): ControlArgs {
   let command = '';
   let computer: string | undefined;
   let follow = false;
   let force = false;
+  let report: string | undefined;
+  let acknowledgeLoss = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === '--version' || arg === '-v') return { command: 'version', follow };
     if (arg === '--help' || arg === '-h' || arg === 'help') return { command: 'help', follow };
     if (arg === '--follow' || arg === '-f') { follow = true; continue; }
+    if (arg === '--acknowledge-output-loss') { acknowledgeLoss = true; continue; }
+    if (arg === '--report') {
+      report = args[++i];
+      if (!report || !/^[0-9a-f]{64}$/.test(report)) throw new Error('--report requires a report identity from relay reports.');
+      continue;
+    }
     if (arg === '--force') { force = true; continue; }
     if (arg === '--computer') {
       const value = args[++i];
@@ -142,7 +155,7 @@ export function parseControlArgs(args: string[]): ControlArgs {
     if (arg.startsWith('-') || command) throw new Error(`Unknown argument: ${arg}`);
     command = arg;
   }
-  return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}) };
+  return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}), ...(report ? { report } : {}), ...(acknowledgeLoss ? { acknowledgeLoss } : {}) };
 }
 
 /** Whether a service is running, as reported by launchd or systemd. */
@@ -215,7 +228,15 @@ function applyCommand(deps: ControlDeps, command: string, service: InstalledServ
   const { product, command: cli } = deps.brand ?? RELAY_BRAND;
   if (command === 'status') {
     const state = serviceState(deps, service);
-    return { ok: true, message: `${product} is ${state.detail}.`, ...(state.running ? {} : { tone: 'warn' as const }) };
+    let reports = '';
+    const diagnostics = join(deps.home, '.relay', 'daemon-nodes', service.id, 'transport-diagnostics.json');
+    if (existsSync(diagnostics)) {
+      try {
+        const snapshot = JSON.parse(readFileSync(diagnostics, 'utf8'));
+        reports = ` Transport: ${snapshot.state}; reports: ${snapshot.pending} pending, ${snapshot.quarantined} quarantined. Diagnostics: ${diagnostics}`;
+      } catch { reports = ' Transport diagnostics unreadable; inspect the private daemon state.'; }
+    }
+    return { ok: true, message: `${product} is ${state.detail}.${reports}`, ...(state.running ? {} : { tone: 'warn' as const }) };
   }
   if (command === 'stop') {
     const ok = stop(deps, service);
@@ -276,6 +297,24 @@ export function runControl(args: string[], deps: ControlDeps): number {
   if (options.command === 'help') { deps.log(styledHelp(help(brand), deps.style ?? PLAIN)); return 0; }
   if (!COMMANDS.includes(options.command)) throw new Error(`Unknown command: ${options.command}. Run "${brand.command} --help".`);
   const services = selectServices(deps, options.computer);
+  if (['reports', 'retry-report', 'discard-report'].includes(options.command)) {
+    if (services.length !== 1) throw new Error('Choose one Computer with --computer <id>.');
+    const service = services[0]!;
+    if (options.command !== 'reports' && serviceState(deps, service).running) throw new Error('Stop the daemon before modifying retained reports; this prevents concurrent capture or replay.');
+    const directory = join(deps.home, '.relay', 'daemon-nodes', service.id, 'terminal-events');
+    const outbox = new TerminalOutbox(directory);
+    if (options.command === 'reports') {
+      const status = outbox.status();
+      deps.log(`Reports: ${status.pending} pending, ${status.quarantined} quarantined, ${status.bytes} bytes retained.`);
+      for (const report of outbox.summaries()) deps.log(`${report.id}  ${report.commandId}  ${report.status}`);
+    } else {
+      if (!options.report) throw new Error('Choose the exact report with --report <id>.');
+      if (options.command === 'retry-report') outbox.retryQuarantined(options.report, `local-uid:${deps.uid}`);
+      else outbox.discardQuarantined(options.report, `local-uid:${deps.uid}`, options.acknowledgeLoss === true);
+      deps.log('Report intervention recorded. Start the daemon to reconcile delivery and diagnostics.');
+    }
+    return 0;
+  }
   if (options.command === 'logs') {
     if (services.length > 1) throw new Error(`Several computers are installed; choose one with --computer <id>: ${services.map(service => service.id).join(', ')}`);
     return logs(deps, services[0]!, options.follow) ? 0 : 1;

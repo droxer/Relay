@@ -24,7 +24,7 @@ test("restart retains unresolved execution identity; only durable exit evidence 
   await outbox.flush();
   const replayed: string[]=[];
   await new TerminalOutbox(join(root,"terminal")).replay(async(_url,init)=>{replayed.push(JSON.parse(String(init?.body)).type);return new Response("{}")},"http://backend/events","token");
-  assert.deepEqual(replayed,["run.output","run.cancelled"]);
+  assert.deepEqual(replayed,["run.cancelled","run.output"]);
  } finally {rmSync(root,{recursive:true,force:true});}
 });
 

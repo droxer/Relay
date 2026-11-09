@@ -76,7 +76,8 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records";
+export type DaemonNodeCapability = "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records";
+export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
 export const DAEMON_CAPABILITY_PROJECT_MANAGER_MCP: DaemonNodeCapability = "project-manager-mcp";
 /** Roster members other than the Project Lead get read-only Relay MCP tools. */
 export const DAEMON_CAPABILITY_PROJECT_READER_MCP: DaemonNodeCapability = "project-reader-mcp";
@@ -282,7 +283,7 @@ export interface DaemonNodeRegistration {
  * poll already renews liveness and leases, so a daemon may skip beats while
  * one is in flight. `state`: the heartbeat body may carry `state`.
  */
-export type DaemonNodeHeartbeatFeature = "poll-liveness" | "state";
+export type DaemonNodeHeartbeatFeature = "poll-liveness" | "state" | "durable-reports" | "transport-status" | "report-batches";
 
 export type DaemonNodeHeartbeatState = "ready" | "draining" | "stopped";
 
@@ -397,6 +398,7 @@ export interface DaemonNodeRunCommand {
 export interface DaemonNodeCancelCommand {
   id: string;
   type: "run.cancel";
+  targetLeaseId?: string;
   leaseId?: string;
   leaseExpiresAt?: string;
   attempt?: number;

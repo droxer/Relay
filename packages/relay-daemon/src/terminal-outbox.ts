@@ -1,217 +1,345 @@
-import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { open, rename, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { syncDirectory, syncDirectoryAsync } from "./sync-directory.js";
-import { sendTerminalEvent, terminalEventPayload } from "./terminal-event-payload.js";
+import { createHash, randomUUID } from 'node:crypto';
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { open, rename } from 'node:fs/promises';
+import { retryAfterMs } from './transport-retry.js';
+import { syncDirectory, syncDirectoryAsync } from './sync-directory.js';
+import { sendTerminalEvent, terminalEventPayload } from './terminal-event-payload.js';
 
-// Timeout and rate limiting are transient even though they are 4xx.
-const permanentlyRejected = (status: number) => status >= 400 && status < 500 && status !== 408 && status !== 429;
+const permanentlyRejected = (status: number) => status >= 400 && status < 500 && ![408, 429].includes(status);
 const outboxes = new WeakMap<typeof fetch, TerminalOutbox>();
-const terminalTypes = new Set(["run.completed", "run.failed", "run.cancelled"]);
-const outputTypes = new Set(["run.output", "run.output.batch", "run.collaboration"]);
+const terminalTypes = new Set(['run.completed', 'run.failed', 'run.cancelled']);
+const outputTypes = new Set(['run.output', 'run.output.batch', 'run.collaboration']);
 const durable = (event: Record<string, unknown>) => terminalTypes.has(String(event.type)) || outputTypes.has(String(event.type));
 const owner = (event: Record<string, unknown>) => JSON.stringify([event.commandId, event.leaseId ?? null]);
+const digest = (data: string) => createHash('sha256').update(data).digest('hex');
 function sequence(event: Record<string, unknown>): number {
   if (terminalTypes.has(String(event.type))) return Infinity;
-  if (event.type === "run.output.batch") return Number((event.entries as Array<{ sequence: number }>)[0]?.sequence ?? 0);
+  if (event.type === 'run.output.batch') return Number((event.entries as Array<{ sequence: number }>)[0]?.sequence ?? 0);
   return Number(event.sequence ?? 0);
 }
-export function persistTerminalEvent(send: typeof fetch, body: unknown): void {
+export function persistTerminalEvent(send: typeof fetch, body: unknown): Promise<void> {
   const event = body as Record<string, unknown> | null;
-  if (event && durable(event) && typeof event.commandId === "string") outboxes.get(send)?.retain(event);
+  if (event && durable(event) && typeof event.commandId === 'string') return outboxes.get(send)?.retain(event).durable ?? Promise.resolve();
+  return Promise.resolve();
 }
+export function queuesOutputForReplay(send: typeof fetch, body: unknown): boolean {
+  return !!body && outputTypes.has(String((body as Record<string, unknown>).type)) && (outboxes.get(send)?.usesBatching() ?? false);
+}
+export function hasPendingOutput(send: typeof fetch, commandId: string): boolean {
+  return outboxes.get(send)?.hasPendingOutput(commandId) ?? false;
+}
+export interface TerminalRecord { key: string; event: Record<string, unknown>; durable?: Promise<void> }
+interface RecordIndex { owner: string; sequence: number; terminal: boolean; bytes: number }
 
-interface TerminalRecord { key: string; event: Record<string, unknown> }
-
-/**
- * Private durable output and terminal evidence, outside agent workspaces.
- *
- * Terminal events are written synchronously and fsynced before `retain`
- * returns: they are the only evidence a run ended. Streamed output is
- * write-behind — the record is accounted for at once but lands on disk off
- * the event loop, so one run's output never stalls every other run's loop.
- * A crash in that window loses only output the live post was carrying.
- */
+/** Private, write-ahead report storage. Only verified acceptance removes evidence. */
 export class TerminalOutbox {
   private offset = 0;
-  private readonly sizes = new Map<string, number>();
-  private outputBytes = 0;
-  private readonly order = new Map<string, { owner: string; sequence: number }>();
-  /** Output records pending on disk or retained in memory after a write failure. */
-  private readonly writes = new Map<string, { event: Record<string, unknown>; done: Promise<boolean> }>();
-  /** Every write-behind chain (writes and the removals that follow them). */
-  private readonly settling = new Set<Promise<void>>();
+  private readonly index = new Map<string, RecordIndex>();
+  private readonly rejected = new Map<string, number>();
+  private readonly corrupt = new Set<string>();
+  private strictAcknowledgements = false;
+  private replaying = false;
+  private replayAfter = 0;
+  private readonly retryAt = new Map<string, number>();
+  private batching = false;
+  private accepted = 0;
+  private bytes = 0;
+  private quotaExceeded = false;
+  private persistenceFault = false;
+  private readonly writes = new Map<string, { event: Record<string, unknown>; done: Promise<void>; bytes: number }>();
+  private writingBytes = 0;
+  private readonly positions = new Map<string, number>();
+  private onPressure?: () => void;
+  private onAcceptance?: () => void;
+  setPressureHandler(handler: () => void): void { this.onPressure = handler; }
+  setAcceptanceHandler(handler: () => void): void { this.onAcceptance = handler; }
   constructor(private readonly directory: string, private readonly onTerminal?: (commandId: string) => void,
-    private readonly maxOutputBytes = 64 * 1024 * 1024, private readonly onWriteError?: (error: Error) => void) {
+    private readonly maxOutputBytes = 1024 * 1024 * 1024, private readonly onWriteError?: (error: Error) => void) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    for (const record of this.pending()) {
-      this.order.set(record.key, { owner: owner(record.event), sequence: sequence(record.event) });
-      if (outputTypes.has(String(record.event.type))) {
-        const bytes = statSync(join(directory, `${record.key}.json`)).size;
-        this.sizes.set(record.key, bytes);
-        this.outputBytes += bytes;
+    for (const name of readdirSync(directory)) {
+      // Interrupted temporary writes remain evidence and count toward quota.
+      this.bytes += statSync(join(directory, name)).size;
+      if (!name.endsWith('.json')) continue;
+      const key = name.slice(0, -5);
+      try {
+        const event = JSON.parse(readFileSync(join(directory, name), 'utf8')) as Record<string, unknown>;
+        if (!event || !durable(event) || typeof event.commandId !== 'string') throw new Error('Invalid retained report.');
+        this.index.set(key, { owner: owner(event), sequence: sequence(event), terminal: terminalTypes.has(String(event.type)), bytes: statSync(join(directory, name)).size });
+        const rejection = join(directory, `${key}.rejected`);
+        if (existsSync(rejection)) this.rejected.set(key, Number(readFileSync(rejection, 'utf8')) || 409);
+      } catch {
+        this.corrupt.add(key);
+        this.fail(new Error(`Unreadable retained report ${key}; evidence preserved.`));
       }
     }
   }
-
-  pending(): TerminalRecord[] {
-    const stored = readdirSync(this.directory).filter((name) => name.endsWith(".json")).map((name) => ({
-      key: name.slice(0, -5),
-      event: JSON.parse(readFileSync(join(this.directory, name), "utf8")) as Record<string, unknown>,
-    }));
-    const onDisk = new Set(stored.map((record) => record.key));
-    const landing = [...this.writes].filter(([key]) => !onDisk.has(key)).map(([key, { event }]) => ({ key, event }));
-    return [...stored, ...landing].sort((a, b) => owner(a.event).localeCompare(owner(b.event)) || sequence(a.event) - sequence(b.event));
+  negotiate(verified: boolean, batching = false): void { this.strictAcknowledgements = verified; this.batching = verified && batching; }
+  usesBatching(): boolean { return this.batching; }
+  hasPendingOutput(commandId: string): boolean {
+    return [...this.index.values()].some(record => !record.terminal && JSON.parse(record.owner)[0] === commandId);
   }
-
-  retain(event: Record<string, unknown>): TerminalRecord {
-    if (terminalTypes.has(String(event.type))) event = terminalEventPayload(event);
-    const output = outputTypes.has(String(event.type));
-    const identity = [event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])];
-    const key = createHash("sha256").update(JSON.stringify(identity)).digest("hex");
-    const path = join(this.directory, `${key}.json`);
-    // Output is accounted for in memory the moment it is retained, so a
-    // record whose write is still in flight is never written twice.
-    if (output ? !this.sizes.has(key) : !existsSync(path)) {
-      const data = JSON.stringify(event);
-      const bytes = Buffer.byteLength(data);
-      const temporary = join(this.directory, `${key}.${randomUUID()}.tmp`);
-      if (output) {
-        if (this.outputBytes + bytes > this.maxOutputBytes || this.sizes.size >= 4096) throw new Error("Durable output storage limit exceeded.");
-        this.sizes.set(key, bytes);
-        this.outputBytes += bytes;
-        const done = this.writeBehind(temporary, path, data);
-        this.writes.set(key, { event, done });
-        this.settle(done.then((stored) => {
-          // A failed write keeps its in-memory copy for replay. Dropping it
-          // would strand the ordering and quota entries for this sequence.
-          if (stored && this.writes.get(key)?.done === done) this.writes.delete(key);
-        }));
-      } else {
-        const fd = openSync(temporary, "wx", 0o600);
-        try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
-        renameSync(temporary, path);
-        syncDirectory(this.directory);
-      }
-    }
-    this.order.set(key, { owner: owner(event), sequence: sequence(event) });
-    // Output identity includes its type and sequence, so the stored record is
-    // this event; skip the read-back on the live path. A terminal record keys
-    // on the command alone, and the first one stored must win.
-    if (output) return { key, event };
-    if (terminalTypes.has(String(event.type))) this.onTerminal?.(String(event.commandId));
-    return { key, event: JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown> };
+  status(): { bytes: number; limitBytes: number; pending: number; quarantined: number; corrupt: number; persistenceFault: boolean; verified: boolean; accepted: number; quotaExceeded: boolean; capturingBytes: number; positions: Array<{ commandId: string; sequence: number }> } {
+    return { bytes: this.bytes, limitBytes: this.maxOutputBytes, pending: this.index.size,
+      quarantined: this.rejected.size, corrupt: this.corrupt.size, persistenceFault: this.persistenceFault, verified: this.strictAcknowledgements, accepted: this.accepted, quotaExceeded: this.quotaExceeded, capturingBytes: this.writingBytes, positions: [...this.positions].map(([commandId, sequence]) => ({ commandId, sequence })) };
   }
-
-  private async writeBehind(temporary: string, path: string, data: string): Promise<boolean> {
+  private fail(error: Error): void { this.persistenceFault = true; this.onWriteError?.(error); }
+  private write(path: string, data: string): void {
+    const temporary = `${path}.${randomUUID()}.tmp`;
     try {
-      const handle = await open(temporary, "wx", 0o600);
+      const fd = openSync(temporary, 'wx', 0o600);
+      try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
+      renameSync(temporary, path);
+      syncDirectory(this.directory);
+    } catch (error) {
+      this.fail(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+  }
+  private read(key: string): TerminalRecord {
+    const pending = this.writes.get(key);
+    return { key, event: pending?.event ?? JSON.parse(readFileSync(join(this.directory, `${key}.json`), 'utf8')),
+      ...(pending ? { durable: pending.done } : {}) };
+  }
+  private async writeOutput(key: string, data: string): Promise<void> {
+    const path = join(this.directory, `${key}.json`);
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+      const handle = await open(temporary, 'wx', 0o600);
       try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
       await rename(temporary, path);
       await syncDirectoryAsync(this.directory);
-      return true;
     } catch (error) {
-      await rm(temporary, { force: true }).catch(() => undefined);
-      this.onWriteError?.(error instanceof Error ? error : new Error(String(error)));
-      return false;
+      this.fail(error instanceof Error ? error : new Error(String(error)));
+      throw error;
     }
   }
-
-  private settle(chain: Promise<void>): void {
-    this.settling.add(chain);
-    void chain.finally(() => this.settling.delete(chain));
+  private async stored(key: string): Promise<void> { await this.writes.get(key)?.done; }
+  commandIds(): string[] { return [...new Set([...this.index.values()].map(record => String(JSON.parse(record.owner)[0])))]; }
+  *terminalRecords(): Iterable<TerminalRecord> {
+    for (const [key, meta] of this.index) if (meta.terminal) yield this.read(key);
   }
-
-  /** Wait for disk writes and removals; failed writes remain in memory for replay. */
-  async flush(): Promise<void> {
-    while (this.settling.size > 0) await Promise.allSettled([...this.settling]);
+  pending(): TerminalRecord[] {
+    return [...this.index].sort((a, b) => a[1].owner.localeCompare(b[1].owner) || a[1].sequence - b[1].sequence).map(([key]) => this.read(key));
   }
-
-  private acknowledge(key: string): void {
-    const path = join(this.directory, `${key}.json`);
-    const inFlight = this.writes.get(key);
-    // A record acknowledged while its write is still landing is removed
-    // once it has, so no delivered output is left behind for replay.
-    if (inFlight) {
-      this.writes.delete(key);
-      this.settle(inFlight.done.then(() => rm(path, { force: true })).catch(() => undefined));
-    } else {
-      rmSync(path, { force: true });
+  retain(event: Record<string, unknown>): TerminalRecord {
+    if (terminalTypes.has(String(event.type))) event = terminalEventPayload(event);
+    const output = outputTypes.has(String(event.type));
+    const key = digest(JSON.stringify([event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])]));
+    if (!this.index.has(key)) {
+      const data = JSON.stringify(event);
+      const bytes = Buffer.byteLength(data);
+      // Stop producers at 90%, while allowing their bounded shutdown output
+      // into the reserve. Keep the final 3% for exit evidence.
+      if (output && (this.bytes + bytes >= this.maxOutputBytes * 0.9 || this.index.size >= 65_536)) {
+        this.quotaExceeded = true;
+        this.onPressure?.();
+      }
+      if (output && (this.bytes + bytes > this.maxOutputBytes * 0.97 || this.index.size >= 66_560)) {
+        const error = new Error('Durable output storage limit exceeded; capture is incomplete.');
+        this.fail(error);
+        throw error;
+      }
+      if (!output && this.bytes + bytes > this.maxOutputBytes) {
+        const error = new Error('Durable terminal storage limit exceeded.');
+        this.fail(error);
+        throw error;
+      }
+      // A synchronous producer can emit a burst before async writes settle.
+      // Spill that burst directly to disk instead of growing memory or losing
+      // capture. Normal streaming keeps disk flushes off the event loop.
+      const synchronous = !output || this.writingBytes + bytes > 4 * 1024 * 1024;
+      if (synchronous) this.write(join(this.directory, `${key}.json`), data);
+      this.bytes += bytes;
+      this.index.set(key, { owner: owner(event), sequence: sequence(event), terminal: !output, bytes });
+      if (!synchronous) {
+        this.writingBytes += bytes;
+        const done = this.writeOutput(key, data);
+        this.writes.set(key, { event, done, bytes });
+        void done.then(() => { this.writingBytes -= bytes; this.writes.delete(key); }, () => { /* Unproven capture remains bounded and triggers protection. */ });
+      }
     }
-    this.outputBytes -= this.sizes.get(key) ?? 0;
-    this.sizes.delete(key);
-    this.order.delete(key);
+    if (terminalTypes.has(String(event.type))) this.onTerminal?.(String(event.commandId));
+    // First retained payload wins, including when a failed upload races a producer.
+    return this.read(key);
   }
-
-  wrapFetch(send: typeof fetch): typeof fetch {
-    const wrapped: typeof fetch = async (input, init) => {
-      let record: TerminalRecord | undefined;
-      if (init?.method === "POST" && typeof init.body === "string") {
-        const body = JSON.parse(init.body) as Record<string, unknown>;
-        if (durable(body) && typeof body.commandId === "string") {
-          record = this.retain(body);
-          // Live delivery must not jump ahead of durable output left by a
-          // disconnected producer. The replay worker will clear predecessors.
-          if (outputTypes.has(String(record.event.type)) && [...this.order.values()].some(other => other.owner === owner(record!.event)
-            && other.sequence < sequence(record!.event))) {
-            return new Response("Earlier output is awaiting delivery.", { status: 503 });
-          }
-          // A replay worker may finalize the command while this live sender
-          // is retrying. Late durable output must remain admissible then.
-          const event = outputTypes.has(String(record.event.type))
-            ? { ...record.event, replayed: true } : record.event;
-          init = { ...init, body: JSON.stringify(event) };
+  async flush(): Promise<void> { await Promise.all([...this.writes.values()].map(write => write.done)); }
+  private acknowledge(key: string, delivered = true): void {
+    const record = this.index.get(key);
+    if (!record) return;
+    if (delivered) {
+      this.accepted++;
+      this.onAcceptance?.();
+      if (!record.terminal) {
+        const event = this.read(key).event;
+        const entries = event.type === 'run.output.batch' ? event.entries as Array<{ sequence: number }> : [{ sequence: Number(event.sequence) }];
+        const commandId = String(event.commandId);
+        const last = Math.max(...entries.map(entry => entry.sequence));
+        if (Number.isFinite(last)) {
+          this.positions.set(commandId, Math.max(last, this.positions.get(commandId) ?? -1));
+          if (this.positions.size > 200) this.positions.delete(this.positions.keys().next().value!);
         }
       }
-      const response = record && terminalTypes.has(String(record.event.type))
-        ? await sendTerminalEvent(send, input, init!, record.event)
-        : await send(input, init);
-      if (record && (response.ok || permanentlyRejected(response.status))) this.acknowledge(record.key);
-      return response;
+    }
+    // A crash before cleanup persists simply replays a durably accepted identity.
+    rmSync(join(this.directory, `${key}.json`), { force: true });
+    this.bytes -= record.bytes;
+    if (this.bytes < this.maxOutputBytes * 0.5) this.quotaExceeded = false;
+    this.index.delete(key);
+    this.retryAt.delete(key);
+    const rejection = join(this.directory, `${key}.rejected`);
+    if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
+    this.rejected.delete(key);
+  }
+  summaries(): Array<{ id: string; commandId: string; runId: string; sequence: number | null; status: string }> {
+    return [...this.index].slice(0, 200).map(([key, meta]) => {
+      const event = this.read(key).event;
+      return { id: key, commandId: String(event.commandId), runId: String(event.runId ?? ''),
+        sequence: Number.isFinite(meta.sequence) ? meta.sequence : null, status: this.rejected.has(key) ? `quarantined (HTTP ${this.rejected.get(key)})` : 'pending' };
+    });
+  }
+  private audit(action: string, key: string, actor: string): void {
+    if (!actor.trim()) throw new Error('An intervention actor is required.');
+    const data = JSON.stringify({ action, reportId: key, actor, at: new Date().toISOString() });
+    this.write(join(this.directory, `${randomUUID()}.audit`), data);
+    this.bytes += Buffer.byteLength(data);
+  }
+  retryQuarantined(key: string, actor: string): void {
+    if (!this.rejected.has(key)) throw new Error('Report is not quarantined.');
+    this.audit('retry', key, actor);
+    const path = join(this.directory, `${key}.rejected`);
+    this.bytes -= statSync(path).size;
+    rmSync(path);
+    syncDirectory(this.directory);
+    this.rejected.delete(key);
+  }
+  discardQuarantined(key: string, actor: string, acknowledgeLoss: boolean): void {
+    if (!acknowledgeLoss) throw new Error('Explicitly acknowledge output loss before discarding a report.');
+    if (!this.rejected.has(key)) throw new Error('Report is not quarantined.');
+    this.audit('discard-with-output-loss', key, actor);
+    this.acknowledge(key, false);
+  }
+  private quarantine(key: string, status: number): void {
+    if (this.rejected.has(key) || !this.index.has(key)) return;
+    const data = String(status);
+    this.write(join(this.directory, `${key}.rejected`), data);
+    this.bytes += Buffer.byteLength(data);
+    this.rejected.set(key, status);
+  }
+  private blocked(record: TerminalRecord): boolean {
+    const current = this.index.get(record.key);
+    return !current?.terminal && [...this.index.values()].some(other => other.owner === current?.owner && other.sequence < current.sequence);
+  }
+  private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
+    await this.stored(record.key);
+    if (this.rejected.has(record.key)) return new Response('Report quarantined; intervention required.', { status: 409 });
+    if (this.blocked(record)) return new Response('Earlier output is awaiting delivery.', { status: 503 });
+    const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
+    let sentDigest = '';
+    const verifiedSend: typeof fetch = async (url, request) => {
+      sentDigest = digest(String(request?.body));
+      const headers = new Headers(request?.headers);
+      headers.set('X-Relay-Report-Id', record.key);
+      headers.set('X-Relay-Report-Digest', sentDigest);
+      return send(url, { ...request, headers });
+    };
+    const request = { ...init, body: JSON.stringify(event) };
+    const response = terminalTypes.has(String(event.type)) && !this.strictAcknowledgements
+      ? await sendTerminalEvent(verifiedSend, input, request, event) : await verifiedSend(input, request);
+    if (response.ok) {
+      if (this.strictAcknowledgements && (response.headers.get('X-Relay-Report-Id') !== record.key
+        || response.headers.get('X-Relay-Report-Digest') !== sentDigest)) {
+        await response.body?.cancel();
+        return new Response('Missing durable acceptance proof.', { status: 503 });
+      }
+      this.acknowledge(record.key);
+    } else if (permanentlyRejected(response.status)) this.quarantine(record.key, response.status);
+    else this.retryAt.set(record.key, Date.now() + retryAfterMs(response.headers.get("Retry-After")));
+    return response;
+  }
+  wrapFetch(send: typeof fetch): typeof fetch {
+    const wrapped: typeof fetch = async (input, init) => {
+      if (init?.method === 'POST' && typeof init.body === 'string') {
+        const body = JSON.parse(init.body) as Record<string, unknown>;
+        if (durable(body) && typeof body.commandId === 'string') return this.deliver(send, input, init, this.retain(body));
+      }
+      return send(input, init);
     };
     outboxes.set(wrapped, this);
     return wrapped;
   }
-
-  async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
-    await this.flush();
-    const groups = new Map<string, TerminalRecord[]>();
-    for (const record of this.pending()) {
-      const key = owner(record.event);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(record);
+  private async replayBatch(send: typeof fetch, eventUrl: string, token: string, ordered: Array<[string, RecordIndex]>, signal?: AbortSignal): Promise<void> {
+    const selected = new Set<string>();
+    const reports: Array<{ id: string; digest: string; body: string }> = [];
+    let bytes = 0;
+    for (const [key, current] of ordered) {
+      if (reports.length >= 50 || signal?.aborted) break;
+      if (!this.index.has(key) || this.rejected.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
+      if (!current.terminal && [...this.index].some(([otherKey, other]) => other.owner === current.owner && other.sequence < current.sequence && !selected.has(otherKey))) continue;
+      let record: TerminalRecord;
+      try { await this.stored(key); record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
+      const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
+      const body = JSON.stringify(event);
+      const size = Buffer.byteLength(JSON.stringify(body)) + 200;
+      if (bytes + size > 2 * 1024 * 1024) {
+        if (reports.length === 0) {
+          const response = await this.deliver(send, eventUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]) }, record);
+          await response.body?.cancel();
+          continue;
+        }
+        break;
+      }
+      reports.push({ id: key, digest: digest(body), body });
+      selected.add(key);
+      bytes += size;
     }
-    const owners = [...groups.keys()];
-    const start = this.offset % Math.max(1, owners.length);
-    this.offset = start + 1;
-    let attempts = 0;
-    for (const key of [...owners.slice(start), ...owners.slice(0, start)]) {
-      let outputBlocked = false;
-      for (const record of groups.get(key)!) {
+    if (!reports.length) return;
+    const response = await send(eventUrl.replace(/\/events$/, '/reports'), { method: 'POST', headers: {
+      'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
+      signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+    });
+    if (!response.ok) { this.replayAfter = Date.now() + retryAfterMs(response.headers.get("Retry-After")); await response.body?.cancel(); return; }
+    const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number }> };
+    const expected = new Map(reports.map(report => [report.id, report.digest]));
+    for (const receipt of result.receipts ?? []) {
+      if (expected.get(receipt.id) !== receipt.digest) continue;
+      if (receipt.status === 200) this.acknowledge(receipt.id);
+      else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status);
+    }
+  }
+  async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
+    if (this.replaying || Date.now() < this.replayAfter) return;
+    this.replaying = true;
+    try {
+      // Terminal evidence goes first. Round-robin streams prevent one backlog
+      // monopolizing replay; only read a payload when it is actually attempted.
+      const entries = [...this.index];
+      const terminals = entries.filter(([, record]) => record.terminal);
+      const outputs = entries.filter(([, record]) => !record.terminal).sort((a, b) => a[1].sequence - b[1].sequence);
+      const owners = [...new Set(outputs.map(([, record]) => record.owner))];
+      const start = this.offset++ % Math.max(1, owners.length);
+      const orderedOwners = [...owners.slice(start), ...owners.slice(0, start)];
+      const ordered = [...terminals, ...outputs.sort((a, b) => a[1].sequence - b[1].sequence || orderedOwners.indexOf(a[1].owner) - orderedOwners.indexOf(b[1].owner))];
+      if (this.batching) {
+        try { await this.replayBatch(send, eventUrl, token, ordered, signal); } catch { /* Retry the same durable identities next tick. */ }
+        return;
+      }
+      let attempts = 0;
+      for (const [key] of ordered) {
         if (signal?.aborted || attempts >= 50) return;
-        if (outputBlocked && outputTypes.has(String(record.event.type))) continue;
-        // Failed disk writes are still pending in memory. A live sender may
-        // already have acknowledged a snapshot entry while replay awaited I/O.
-        if (!this.order.has(record.key)) continue;
+        if (!this.index.has(key) || this.rejected.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
+        let record: TerminalRecord;
+        try { await this.stored(key); record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
+        if (this.blocked(record)) continue;
         attempts++;
         try {
-          const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
-          const init = {
-            method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify(event), signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)]),
-          };
-          const response = terminalTypes.has(String(event.type))
-            ? await sendTerminalEvent(send, eventUrl, init, event)
-            : await send(eventUrl, init);
+          const response = await this.deliver(send, eventUrl, { method: 'POST', headers: {
+            'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+          }, record);
           await response.body?.cancel();
-          if (!response.ok && !permanentlyRejected(response.status)) { outputBlocked = true; continue; }
-          this.acknowledge(record.key);
-        } catch {
-          // Output stays ordered; terminal evidence must still release the run.
-          outputBlocked = true;
-        }
+        } catch { /* Retained evidence is retried; unrelated streams continue. */ }
       }
-    }
+    } finally { this.replaying = false; }
   }
 }

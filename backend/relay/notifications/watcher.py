@@ -25,10 +25,15 @@ import os
 import time
 from datetime import datetime, timedelta, UTC
 from typing import Any
+from types import SimpleNamespace
+import uuid
 
 from loguru import logger
 
 from ..core.daemon_capabilities import missing_capabilities
+from ..core.computer_identity import computer_id
+from ..core.timestamps import iso_epoch_ms
+from ..computer.transport import record_transport
 from ..core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
 from .rules import client_outdated_rows, computer_status_rows
 
@@ -100,7 +105,10 @@ class ComputerNotificationWatcher:
         outdated_states = self.store.watch_states(OUTDATED_PREFIX)
         for node in nodes:
             try:
-                self._observe_online(node, online_states.get(ONLINE_PREFIX + node["id"]))
+                if 'durable-reports' in (node.get('capabilities') or []) and hasattr(self.registry, 'daemon_store'):
+                    self._observe_transport(node)
+                else:
+                    self._observe_online(node, online_states.get(ONLINE_PREFIX + node["id"]))
                 self._observe_client(node, outdated_states.get(OUTDATED_PREFIX + node["id"]))
             except Exception:  # noqa: BLE001 - watch loop supervisor: one bad node or tick must not stop the watcher
                 logger.exception("Computer notification check failed", node_id=node.get("id"))
@@ -111,6 +119,20 @@ class ComputerNotificationWatcher:
         live = {prefix + node_id for node_id in present for prefix in (ONLINE_PREFIX, OUTDATED_PREFIX)}
         self.store.forget_watch_states(sorted((set(online_states) | set(outdated_states)) - live))
         self._prune()
+
+    def _observe_transport(self, node: dict[str, Any]) -> None:
+        last_seen = iso_epoch_ms(node.get('lastSeenAt'))
+        now = datetime.now(UTC).timestamp() * 1000
+        if last_seen is None or node.get('online') or now - last_seen < 60_000:
+            return
+        previous = self.registry.daemon_store.transport_status(computer_id(node)) or {}
+        if 'communication' in previous.get('causes', []):
+            return
+        snapshot = {**previous, 'incident': previous.get('incident') if not previous.get('recovered') else None,
+                    'state': 'retrying', 'causes': sorted(set(previous.get('causes', [])) | {'communication'}),
+                    'startedAt': last_seen, 'observedAt': now, 'recovered': False}
+        snapshot['incident'] = snapshot.get('incident') or str(uuid.uuid4())
+        record_transport(SimpleNamespace(daemon_store=self.registry.daemon_store, notification_store=self.store, auth_store=self.auth_store), node, snapshot)
 
     def _observe_online(self, node: dict[str, Any], previous: str | None) -> None:
         current = node_online_state(node)

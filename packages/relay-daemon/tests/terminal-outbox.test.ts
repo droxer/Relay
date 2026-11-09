@@ -35,7 +35,7 @@ test("first terminal result wins and transient HTTP rejection retains evidence",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("output survives restart and is replayed in sequence before the terminal result", async () => {
+test("output survives restart and replays in order after priority terminal evidence", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-output-outbox-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -52,7 +52,7 @@ test("output survives restart and is replayed in sequence before the terminal re
       received.push(event.entries?.[0]?.sequence ?? event.type);
       return new Response("{}", { status: 200 });
     }, "http://backend/events", "token");
-    assert.deepEqual(received, [0, 1, "run.completed"]);
+    assert.deepEqual(received, ["run.completed", 0, 1]);
     assert.equal(restarted.pending().length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -75,8 +75,8 @@ test("output quota preserves existing evidence and still allows terminal results
   const root = mkdtempSync(join(tmpdir(), "relay-output-quota-"));
   try {
     const completed: string[] = [];
-    const outbox = new TerminalOutbox(root, id => completed.push(id), 1);
-    assert.throws(() => outbox.retain({ type: "run.output", commandId: "cmd", sequence: 0, text: "full" }), /limit exceeded/);
+    const outbox = new TerminalOutbox(root, id => completed.push(id), 300);
+    assert.throws(() => outbox.retain({ type: "run.output", commandId: "cmd", sequence: 0, text: "full".repeat(200) }), /limit exceeded/);
     outbox.retain({ type: "run.failed", commandId: "cmd", error: "storage limit" });
     assert.deepEqual(completed, ["cmd"]);
     assert.equal(outbox.pending().length, 1);
@@ -107,7 +107,7 @@ test("output quota preserves existing evidence and still allows terminal results
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("re-retaining live output does not read the record back from disk", async () => {
+test("re-retaining an identity preserves the first durable payload", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -117,8 +117,8 @@ test("re-retaining live output does not read the record back from disk", async (
     const [name] = readdirSync(root).filter((file) => file.endsWith(".json"));
     // Output identity covers its sequence, so the stored copy is this event;
     // a read-back would only cost a parse on every live post.
-    writeFileSync(join(root, name!), "not json");
-    assert.deepEqual(outbox.retain(event).event, event);
+    assert.ok(name);
+    assert.deepEqual(outbox.retain({ ...event, entries: [{ stream: "stdout", text: "changed", sequence: 3 }] }).event, event);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -126,7 +126,7 @@ test("re-retaining live output does not read the record back from disk", async (
 
 for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
   for (const delivery of ["live", "replay"]) {
-    test(`${delivery} outbox handles HTTP ${status} without retaining permanent rejects`, async () => {
+    test(`${delivery} outbox handles HTTP ${status} preserving rejection evidence`, async () => {
       const root = mkdtempSync(join(tmpdir(), "relay-reject-"));
       try {
         const outbox = new TerminalOutbox(root, undefined, 200);
@@ -135,11 +135,11 @@ for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
         if (delivery === "live") await outbox.wrapFetch(send)("http://backend/events", { method: "POST", body: JSON.stringify(event) });
         else { outbox.retain(event); await outbox.replay(send, "http://backend/events", "token"); }
         const retryable = [408, 429, 503].includes(status);
-        assert.equal(outbox.pending().length, retryable ? 1 : 0);
+        assert.equal(outbox.pending().length, 1);
         if (!retryable) {
           await outbox.flush();
-          assert.equal(new TerminalOutbox(root).pending().length, 0);
-          assert.doesNotThrow(() => outbox.retain({ ...event, sequence: 1 }));
+          assert.equal(new TerminalOutbox(root).pending().length, 1);
+          assert.equal(outbox.status().quarantined, 1);
         }
         await outbox.flush();
       } finally { rmSync(root, { recursive: true, force: true }); }
@@ -147,7 +147,7 @@ for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
   }
 }
 
-test("output batches are retained write-behind while terminal events stay synchronous", async () => {
+test("output exposes durable completion while terminal retention is synchronous", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-write-behind-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -176,53 +176,22 @@ test("output batches are retained write-behind while terminal events stay synchr
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a failed write-behind output record is reported, not thrown on the hot path", async () => {
-  const root = mkdtempSync(join(tmpdir(), "relay-write-behind-error-"));
-  try {
-    const errors: string[] = [];
-    const outbox = new TerminalOutbox(root, undefined, undefined, (error) => errors.push(error.message));
-    rmSync(root, { recursive: true, force: true });
-    outbox.retain({ type: "run.output.batch", commandId: "cmd", leaseId: "lease", entries: [{ stream: "stdout", text: "x", sequence: 0 }] });
-    await outbox.flush();
-    assert.equal(errors.length, 1);
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-
-test("failed output writes remain replayable and do not block subsequent live output", async () => {
-  const root = mkdtempSync(join(tmpdir(), "relay-write-recovery-"));
+test("a failed capture is reported and never transmitted as durable output", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-write-error-"));
   const errors: Error[] = [];
-  const output = (sequence: number) => ({ type: "run.output", commandId: "cmd", leaseId: "lease", sequence, text: "chunk" });
-  const outbox = new TerminalOutbox(root, undefined, Buffer.byteLength(JSON.stringify(output(0))), error => errors.push(error));
+  const outbox = new TerminalOutbox(root, undefined, undefined, error => errors.push(error));
   try {
     rmSync(root, { recursive: true });
-    const offline = outbox.wrapFetch(async () => { throw new Error("offline"); });
-    await assert.rejects(offline("http://backend/events", { method: "POST", body: JSON.stringify(output(0)) }));
-    await outbox.flush();
+    let sent = false;
+    const send = outbox.wrapFetch(async () => { sent = true; return new Response('{}'); });
+    await assert.rejects(send('http://backend/events', { method: 'POST', body: JSON.stringify({ type: 'run.output', commandId: 'cmd', sequence: 0, text: 'x' }) }));
+    assert.equal(sent, false);
     assert.equal(errors.length, 1);
+    assert.equal(outbox.status().persistenceFault, true);
     mkdirSync(root);
-    assert.deepEqual(outbox.pending().map(record => record.event.sequence), [0]);
-    assert.throws(() => outbox.retain(output(1)), /limit exceeded/);
-    await outbox.replay(async () => new Response("offline", { status: 503 }), "http://backend/events", "token");
-    assert.deepEqual(outbox.pending().map(record => record.event.sequence), [0]);
-    const received: number[] = [];
-    const backend: typeof fetch = async (_url, init) => {
-      received.push(JSON.parse(String(init?.body)).sequence);
-      return new Response("{}");
-    };
-    await outbox.replay(backend, "http://backend/events", "token");
-    assert.deepEqual(received, [0]);
-    const result = await outbox.wrapFetch(backend)("http://backend/events", { method: "POST", body: JSON.stringify(output(1)) });
-    assert.equal(result.status, 200);
-    await outbox.flush();
-    assert.deepEqual(received, [0, 1]);
-    assert.equal(outbox.pending().length, 0);
-  } finally {
-    await outbox.flush();
-    rmSync(root, { recursive: true, force: true });
-  }
+    assert.equal(new TerminalOutbox(root).pending().length, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
-
 
 test("large successful completions fit the backend body limit without losing artifact metadata", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "relay-large-completion-"));

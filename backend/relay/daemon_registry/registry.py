@@ -34,6 +34,7 @@ from .runs.failure import RunFailureMixin
 from .runs.approval import ApprovalParkMixin
 from .runs.completion import RunCompletionMixin
 from .runs.events import EventIngestMixin
+from .runs.reports import DurableReportMixin
 from .runs.reaper import RunReaperMixin
 from .locks import GlobalDispatchLock
 
@@ -58,6 +59,7 @@ class DaemonNodeRegistry(
     RunCompletionMixin,
     ApprovalParkMixin,
     EventIngestMixin,
+    DurableReportMixin,
     RunReaperMixin,
 ):
     def __init__(

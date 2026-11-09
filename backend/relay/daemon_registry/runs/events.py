@@ -20,6 +20,7 @@ from .. import config
 from ..records import CommandEventMismatchError
 from ..state import RegistryState
 from .finalization import session_already_terminal
+from .reports import ReportPredecessorMissing
 
 
 class EventIngestMixin(RegistryState):
@@ -169,6 +170,16 @@ class EventIngestMixin(RegistryState):
             ) as seen:
                 self.output_sequences[event["runId"]] = seen
                 self.output_sequences_hydrated.add(event["runId"])
+                if event.get('_durableReport'):
+                    entries = event['entries'] if event['type'] == 'run.output.batch' else [event]
+                    expected = seen.get('_durable', -1) + 1
+                    for entry in entries:
+                        if entry['sequence'] < expected:
+                            raise CommandEventMismatchError('Report sequence already accepted with another identity.')
+                        if entry['sequence'] != expected:
+                            raise ReportPredecessorMissing('Report predecessor is missing or sequence conflicts.')
+                        expected += 1
+                    seen['_durable'] = expected - 1
                 handler(sandbox_id, command, event, late_output)
         except Exception:
             self.output_sequences.pop(event["runId"], None)
@@ -460,8 +471,22 @@ class EventIngestMixin(RegistryState):
             return
         self.active_commands.pop(event["commandId"], None)
         self.daemon_store.mark_cancel_commands_completed(sandbox_id, event["commandId"])
+        if event.get('_durableReport'):
+            # Receipt + exit evidence form one atomic acceptance. Advancing the
+            # workflow can touch other Computers and must use its own existing
+            # transactions, after these node/thread/command locks are released.
+            after_store_commit(self.daemon_store.engine, partial(self._finalize_durable_terminal, event))
+            return
         if not self._claim_and_advance_run_request(event):
             self.clear_run_output(event["runId"])
+
+    def _finalize_durable_terminal(self, event: dict[str, Any]) -> None:
+        with self.dispatch_lock:
+            try:
+                if not self._claim_and_advance_run_request(event):
+                    self.clear_run_output(event['runId'])
+            except Exception:  # noqa: BLE001 - committed exit evidence remains available to the reaper's finalization retry
+                logger.exception('Accepted terminal report awaits workflow finalization', command_id=event['commandId'])
 
     def _mark_command_terminal(self, sandbox_id: str, event: dict[str, Any]) -> bool:
         """Log and persist a terminal event; any non-completed/cancelled type fails."""

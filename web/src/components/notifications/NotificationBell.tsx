@@ -174,7 +174,7 @@ function NotificationList({
       {failure}
       <ul className="notif-list">
         {notices.map((notice) => (
-          <li key={notice.id} className="notif-item">
+          <li key={notice.id} className="notif-item" data-incident={notice.brief ? true : undefined}>
             <a
               className="notif-row"
               href={hrefFor(notice.target)}
@@ -186,12 +186,14 @@ function NotificationList({
               <span className="notif-copy">
                 <span className="notif-title">{t(notice.title.key, notice.title.params)}</span>
                 <span className="notif-detail" translate="no">{t(notice.detail.key, notice.detail.params)}</span>
+                {notice.brief ? <span className="notif-brief">{t(notice.brief.key, notice.brief.params)}</span> : null}
               </span>
               <time className="notif-time tnum" dateTime={notice.createdAt}>
                 {formatThreadStamp(notice.createdAt, locale, now)}
               </time>
               {notice.unread ? <span className="sr-only">{t("notifications.unread")}</span> : null}
             </a>
+            {notice.diagnosticsHref ? <a className="notif-diagnostics" href={notice.diagnosticsHref} target="_blank" rel="noopener noreferrer">{t('notifications.transport_diagnostics')}</a> : null}
             {/* A sibling of the link, never inside it: a button in an anchor is
                 invalid and its click would also follow the link. */}
             <Button
