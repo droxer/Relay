@@ -8,7 +8,6 @@ import { hrefForRoute, navigateToAppPath } from "../lib/appRoute";
 import { useComposerTargetStore } from "../lib/composerTargetStore";
 import { useRelayStore } from "../lib/store";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
-import { useThreadSendStore } from "../lib/threadSendStore";
 import { resolveNewThreadComputer } from "../lib/threadRuntime";
 
 type ThreadComputer = Parameters<typeof resolveNewThreadComputer>[1][number];
@@ -61,7 +60,6 @@ export function useThreadNavigation({
   const setComposingNew = useRelayStore((s) => s.setComposingNew);
   const setNewThreadNodeId = useComposerTargetStore((s) => s.setNewThreadNodeId);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
-  const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
 
   function openThread(sessionId: string, replace = false, parentTaskId?: string) {
     const session = myThreads.find((candidate) => candidate.id === sessionId);
@@ -72,7 +70,6 @@ export function useThreadNavigation({
       navigateToProject(session.projectId);
       return;
     }
-    dropPendingMessage();
     // useThreadComposerSelection owns restoration and the thread's default.
     // Reopening the active thread must not reset its automatic agent pick.
     openSession(sessionId);
@@ -113,7 +110,6 @@ export function useThreadNavigation({
     }
     pickRoom();
     startComposing();
-    dropPendingMessage();
     // Same rule as the staging effect: a pick survives a heartbeat flap, and
     // only a machine that is no longer this user's drops it.
     setNewThreadNodeId((current) => resolveNewThreadComputer(current, threadComputers, assignableComputers));
@@ -124,7 +120,6 @@ export function useThreadNavigation({
   function selectProject(projectId: string | null) {
     pickRoom();
     setComposingNew(false);
-    dropPendingMessage();
     clearSelection();
     navigateToProject(projectId);
   }

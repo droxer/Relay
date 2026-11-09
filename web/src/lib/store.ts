@@ -33,6 +33,7 @@ interface RelayClientStore {
   activeSessionId: string | null;
   /** Staging a brand-new thread: suppresses the fall-back to a recent thread. */
   composingNew: boolean;
+  threadDraftId: number;
   tokens: TokenMap;
   adminView: AdminPageView;
 
@@ -59,6 +60,7 @@ export const useRelayStore = create<RelayClientStore>((set, get) => ({
   selectedSessionId: undefined,
   activeSessionId: null,
   composingNew: false,
+  threadDraftId: 0,
   tokens: {},
   adminView: DEFAULT_ADMIN_SECTION,
 
@@ -69,14 +71,16 @@ export const useRelayStore = create<RelayClientStore>((set, get) => ({
     set({ activeSessionId });
   },
   adoptActiveSessionId: (activeSessionId) => set({ activeSessionId }),
-  setComposingNew: (composingNew) => set({ composingNew }),
+  setComposingNew: (composingNew) => set((s) => ({ composingNew,
+    threadDraftId: composingNew && !s.composingNew ? s.threadDraftId + 1 : s.threadDraftId,
+  })),
   openSession: (id) => {
     rememberActiveSession(get().selectedUser, id);
     set({ composingNew: false, selectedSessionId: id, activeSessionId: id });
   },
   startComposing: () => {
     rememberActiveSession(get().selectedUser, null);
-    set({ composingNew: true, selectedSessionId: undefined, activeSessionId: null });
+    set((s) => ({ composingNew: true, selectedSessionId: undefined, activeSessionId: null, threadDraftId: s.threadDraftId + 1 }));
   },
   clearSelection: () => {
     rememberActiveSession(get().selectedUser, null);

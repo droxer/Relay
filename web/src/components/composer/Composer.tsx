@@ -113,6 +113,11 @@ const ComposerView = forwardRef<ComposerHandle, {
   placeholder?: string;
 }>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
   const { t } = useTranslation();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const composer = useComposer(draftKey);
   const imageInput = useComposerImages(draftKey);
   const [connectionDrafts, setConnectionDrafts] = useState<Record<string, ConnectionGrant[]>>({});
@@ -241,6 +246,7 @@ const ComposerView = forwardRef<ComposerHandle, {
           setConnectionError(false);
         } catch { setConnectionError(true); return false; }
       }
+      if (!mounted.current) return false;
       const sent = await onSend(teamStyle, intent, {
         ...(!connectionTargetId && connectionGrants !== undefined ? { connectionGrants } : {}),
         ...(literal ? { literal: true } : {}),
@@ -248,6 +254,7 @@ const ComposerView = forwardRef<ComposerHandle, {
         ...(imageInput.images.length ? { attachmentIds: imageInput.images.map(image => image.id) } : {}),
       });
       if (sent === false) return false;
+      if (!mounted.current) return true;
       setConnectionDrafts(previous => { const next = { ...previous }; delete next[connectionKey]; return next; });
       setStyle(null);
       imageInput.clear();
@@ -256,7 +263,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       // Dispatch owns error reporting; preserve the override for retry.
       return false;
     } finally {
-      setSendPending(false);
+      if (mounted.current) setSendPending(false);
     }
   };
   useEffect(() => {
@@ -313,6 +320,7 @@ const ComposerView = forwardRef<ComposerHandle, {
           setComposerText(text);
         });
       return sent.then((ok) => {
+        if (!mounted.current) return ok;
         // Only while the box still holds the pick: a newer pick may own it.
         if (!ok) setComposerText((current) => (current === text ? previous : current));
         else if (draft !== null) setComposerText(draft);
