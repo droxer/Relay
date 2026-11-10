@@ -659,7 +659,9 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             # runs even though the low-priority one was touched more recently.
             assert result.dispatched == 1
             assert task_store.get_task(high["id"])["status"] == "assigned"
-            assert task_store.get_task(low["id"])["status"] == "assigned"
+            waiting = task_store.get_task(low["id"])
+            assert waiting["status"] == "queued"
+            assert waiting["dispatchOutcome"]["code"] == "capacity_exhausted"
 
     asyncio.run(run_flow())
 

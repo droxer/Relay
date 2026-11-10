@@ -18,7 +18,7 @@ from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
-from ..daemon_registry.scheduling import ComputerRunCapacityError
+from ..core.daemon_records import ComputerRunCapacityError
 from ..persistence.task.rows import task_claim_sort_key
 from ..persistence.task.rules import compact_task_writes
 from .claims import dispatch_claim_active
@@ -413,6 +413,9 @@ class TaskScheduler:
     ) -> bool:
         """Record why routing failed. True when the task is held back; False
         when it may still wait for managed capacity."""
+        if error.code == "capacity_exhausted":
+            record_computer_capacity_wait(self.task_store, task)
+            return True
         if isinstance(error, ProjectDispatchError):
             message = f"The project cannot execute this task ({error.code})."
             self._record_dispatch_deferred(

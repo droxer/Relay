@@ -10,7 +10,7 @@ from ..collaboration.assignments import assignment_team_snapshot
 from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.ids import new_database_id
 from ..core.models import AgentName
-from ..daemon_registry.scheduling import ComputerRunCapacityError
+from ..core.daemon_records import ComputerRunCapacityError
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from .claims import dispatch_claim_active
@@ -409,6 +409,12 @@ class TaskDispatcher:
         activity_payload: dict[str, Any] | None = None,
     ) -> DispatchResult:
         code = dispatch_reason_code(error.code)
+        if code == "capacity_exhausted":
+            updated = record_computer_capacity_wait(self.ctx.task_store, self.task)
+            return _result(
+                updated, "queued", code=code,
+                message=(updated.get("dispatchOutcome") or {}).get("message"),
+            )
         state = "rejected" if error.code in PERMANENT_DISPATCH_CODES else "queued"
         message = str(error)
         if state == "rejected":

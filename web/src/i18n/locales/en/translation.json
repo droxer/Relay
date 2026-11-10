@@ -865,6 +865,7 @@
     "unblock": "Unblock",
     "ready_policy": "Ready tasks start automatically when there’s capacity. Tasks in review or blocked still count toward the work-in-progress limit.",
     "wip_wait": "Queued: this task will start automatically when work-in-progress capacity opens.",
+    "computer_capacity_wait": "Queued: this task will start automatically when an execution slot opens on its Computer.",
     "error_active": "Stop or finish the active run before changing this task’s status.",
     "error_changed": "This task changed. Refresh it before trying again.",
     "error_start": "Use Start to begin work.",

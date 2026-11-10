@@ -77,6 +77,26 @@ Refused new threads are closed without sending a daemon command. Existing conver
 available. Lowering a limit does not cancel existing work; continuations can finish
 it while new starts wait.
 
+Computer execution capacity is separate from task WIP. The daemon advertises
+`maxConcurrentRuns` (default 5, configured with
+`RELAY_DAEMON_MAX_CONCURRENT_RUNS`), shared by every Logical Agent and Agent
+Runtime on that Computer. A full execution pool or durable run queue records
+`dispatch.code=capacity_exhausted` and leaves the Task queued for automatic
+retry. Durable admissions are bounded to twice the Computer's run capacity.
+The board explains Computer capacity waits separately from user WIP waits.
+Runs sharing one physical workspace execute one at a time; team participants
+also execute sequentially on one Computer. Independent workspaces can run the
+same Logical Agent concurrently. Direct Thread work without a linked Task
+uses Computer capacity but does not acquire a task WIP slot.
+
+Run `npm run test:e2e:concurrency -w web` to exercise the browser, a real local
+Python backend, and a real daemon against a disposable SQLite database. The
+test substitutes only the agent CLI with a controlled child process: two
+runs of one Logical Agent execute in independent Project workspaces, a third
+queues, and cancelling one through the UI proves child exit and automatically
+starts the waiting Task. It checks both the queued explanation and its removal.
+This suite runs in CI alongside the PostgreSQL reservation tests.
+
 Queue precedence is high/normal/low priority, earliest due date (undated last),
 oldest creation time, then task ID. The board's default order matches the scheduler.
 An explicit display sort does not change dispatch order.

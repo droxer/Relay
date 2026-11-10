@@ -9,7 +9,8 @@ from typing import Any
 
 
 from ...core.computer_identity import computer_id
-from ..scheduling import ComputerRunCapacityError, node_accepts_run, normalize_run_capacity
+from ...core.daemon_records import ComputerRunCapacityError
+from ..scheduling import node_accepts_run, normalize_run_capacity
 from ..workspace_contention import session_workspace_key, workspace_is_contended, workspace_key
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
 from ...agents.routing import (

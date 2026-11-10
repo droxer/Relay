@@ -17,6 +17,7 @@ from ..collaboration.models import (
     COLLABORATION_NEW_SESSION_STATE_KEY,
 )
 from ..core.ids import new_sandbox_id, now_iso
+from ..core.daemon_records import ComputerRunCapacityError
 from ..core.models import AGENT_NAMES, DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS
 from ..persistence.protocols import AgentPlacementStore, AgentStore
 from ..skills.bundle import resolve_bundle
@@ -25,6 +26,7 @@ from .credentials import sandbox_node_auth_error, sandbox_ui_auth_error
 from .registry import DaemonNodeRegistry
 from ..tasks.execution import request_execution_owner
 from ..persistence.events import relay_task_event
+from ..sessions.controller import SessionController
 from .intake.idempotency import RunIdempotencyMixin
 from .intake.intent import RunIntentMixin
 from .intake.ownership import RunOwnershipMixin, assert_session_owned_by_user
@@ -281,14 +283,21 @@ class ServerDaemonNodeBackend(
             session_id = self._run_session_id(
                 controller, request, run_request_id=run_request_id
             )
-            run_request = prepared_request or self._prepare_run_request(
-                sandbox_id,
-                session_id,
-                request["taskGoal"],
-                request,
-                active_runs_by_node,
-                run_request_id,
-            )
+            try:
+                run_request = prepared_request or self._prepare_run_request(
+                    sandbox_id,
+                    session_id,
+                    request["taskGoal"],
+                    request,
+                    active_runs_by_node,
+                    run_request_id,
+                )
+            except ComputerRunCapacityError as error:
+                if not request.get("sessionId"):
+                    # No execution was admitted. Close only the new Thread;
+                    # the dispatcher keeps its Task queued for another try.
+                    SessionController(self.registry.store).fail_session(session_id, str(error))
+                raise
             self._validate_idempotency_fingerprint(
                 run_request, request.get("idempotencyFingerprint")
             )

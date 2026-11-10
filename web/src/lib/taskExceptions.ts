@@ -86,7 +86,8 @@ export type TaskHoldup =
 export function taskHoldup(task: RelayTaskListItem): TaskHoldup | null {
   if (task.status === "blocked") return { kind: "blocked", text: taskBlocker(task).reason };
   if (task.status === "waiting_for_human") return { kind: "waiting", text: task.awaiting?.text?.trim() || null };
-  if (task.status === "queued" && task.dispatchOutcome?.state === "queued" && task.dispatchOutcome.code === "task_wip_limit") {
+  if (task.status === "queued" && task.dispatchOutcome?.state === "queued" &&
+      (task.dispatchOutcome.code === "task_wip_limit" || task.dispatchOutcome.code === "capacity_exhausted")) {
     return { kind: "capacity", text: task.dispatchOutcome.message ?? null };
   }
   if (waitsOnPrerequisites(task)) return { kind: "prerequisites", ids: task.waitingOn ?? [] };
