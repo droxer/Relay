@@ -16,13 +16,9 @@ export interface ExecutionEvidence {
   processGroup?: number;
   /** When the run's root process spawned, in epoch ms; Windows tells pid reuse apart by it. */
   spawnedAt?: number;
-  /** When the host booted, in epoch ms, as seen when the run spawned. */
+  /** Historical wall-clock boot estimate; never proof that a process exited. */
   bootAt?: number;
 }
-
-// os.uptime() has second granularity and the clock may be nudged, so two reads
-// of the same boot differ slightly. A reboot moves it by far more.
-const BOOT_SKEW_MS = 120_000;
 
 export function hostBootAt(now = Date.now(), upSeconds = uptime()): number {
   return Math.round(now - upSeconds * 1000);
@@ -35,10 +31,10 @@ export function hostBootAt(now = Date.now(), upSeconds = uptime()): number {
 export function localExitProven(
   evidence: ExecutionEvidence,
   probe: (processGroup: number) => unknown = (group) => process.kill(-group, 0),
-  currentBootAt = hostBootAt(),
 ): boolean {
-  if (!evidence.processGroup || evidence.bootAt === undefined) return false;
-  if (Math.abs(currentBootAt - evidence.bootAt) > BOOT_SKEW_MS) return true;
+  // Wall-clock changes can move the boot estimate without a reboot. Even
+  // after a real reboot, a reused PID requires fresh process evidence.
+  if (!evidence.processGroup) return false;
   try {
     probe(evidence.processGroup);
     return false;
@@ -55,10 +51,10 @@ export function localExitProven(
 export function windowsExitProven(
   evidence: ExecutionEvidence,
   processes: WindowsProcess[] | undefined,
-  currentBootAt = hostBootAt(),
 ): boolean {
-  if (!evidence.processGroup || evidence.bootAt === undefined) return false;
-  if (Math.abs(currentBootAt - evidence.bootAt) > BOOT_SKEW_MS) return true;
+  // Wall-clock changes can move the boot estimate without a reboot. Even
+  // after a real reboot, a reused PID requires fresh process evidence.
+  if (!evidence.processGroup) return false;
   if (!processes || evidence.spawnedAt === undefined) return false;
   return windowsProcessTree(processes, evidence.processGroup, evidence.spawnedAt).length === 0;
 }

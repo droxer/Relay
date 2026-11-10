@@ -248,3 +248,114 @@ def test_failed_replay_group_rolls_back_and_does_not_starve_another_run(tmp_path
     assert not any(item['type'] == 'agent.output' for item in sessions.get_session(first['sessionId'])['events'])
     monkeypatch.setattr(registry, 'handle_durable_report', original)
     assert _accept_batch(registry, 'node', 'secret', reports)[0]['status'] == 200
+
+
+@pytest.mark.parametrize("terminal_type", ["run.completed", "run.failed", "run.cancelled"])
+def test_retention_preserves_pending_replay_then_prunes_after_final_sequence(tmp_path, terminal_type):
+    registry, sessions, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items() if key not in ("stream", "sequence", "text", "replayed")}
+    terminal.update(type=terminal_type, exitCode=0, lastOutputSequence=1)
+    registry.handle_durable_report("node", terminal, "secret", "a" * 64, "b" * 64)
+    for sequence in range(2):
+        counts = registry.daemon_store.prune_terminal_records(0, 0)
+        assert counts["commands"] == counts["runs"] == 0
+        registry.handle_durable_report("node", {**event, "sequence": sequence}, "secret", str(sequence) * 64, "c" * 64)
+    assert registry.daemon_store.prune_terminal_records(0, 0)["commands"] == 1
+    assert len([item for item in sessions.get_session(event["sessionId"])["events"] if item["type"] == "agent.output"]) == 2
+
+
+def test_legacy_durable_completion_without_watermark_remains_replayable(tmp_path):
+    registry, _, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items() if key not in ("stream", "sequence", "text", "replayed")}
+    registry.handle_durable_report("node", {**terminal, "type": "run.completed", "exitCode": 0}, "secret", "a" * 64, "b" * 64)
+    assert registry.daemon_store.prune_terminal_records(0, 0)["commands"] == 0
+    registry.handle_durable_report("node", event, "secret", "c" * 64, "d" * 64)
+
+
+@pytest.mark.parametrize("wire", ["events", "reports"])
+def test_rejected_verdict_reason_survives_http_ingestion(tmp_path, monkeypatch, wire):
+    from dataclasses import replace
+    import json
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    registry, _, event = fixture(tmp_path)
+    captured = []
+    original = registry._claim_and_advance_run_request
+    def observe(terminal):
+        captured.append(terminal)
+        return original(terminal)
+    monkeypatch.setattr(registry, "_claim_and_advance_run_request", observe)
+    app = create_app(str(tmp_path / "app"))
+    app.state.context = replace(app.state.context, registry=registry)
+    terminal = {key: value for key, value in event.items() if key not in ("stream", "sequence", "text", "replayed")}
+    terminal.update(type="run.completed", exitCode=0, roundResultRejected={"reason": "run_id_mismatch"}, lastOutputSequence=-1)
+    raw = json.dumps(terminal)
+    report_id, digest = "a" * 64, sha256(raw.encode()).hexdigest()
+    headers = {"Authorization": "Bearer secret", "Content-Type": "application/json"}
+    client = TestClient(app)
+    if wire == "events":
+        response = client.post("/api/v1/daemon-nodes/node/events", content=raw,
+                               headers={**headers, "X-Relay-Report-Id": report_id, "X-Relay-Report-Digest": digest})
+    else:
+        response = client.post("/api/v1/daemon-nodes/node/reports", headers=headers,
+                               json={"reports": [{"id": report_id, "digest": digest, "body": raw}]})
+        assert response.json()["receipts"][0]["status"] == 200
+    assert response.status_code == 200, response.text
+    assert captured[0]["roundResultRejected"] == {"reason": "run_id_mismatch"}
+    assert captured[0]["lastOutputSequence"] == -1
+    assert registry.daemon_store.prune_terminal_records(0, 0)["commands"] == 1
+
+
+@pytest.mark.parametrize("wire", ["events", "reports"])
+@pytest.mark.parametrize("kind", ["terminal", "output"])
+@pytest.mark.parametrize("delete_thread", [False, True])
+def test_lost_acknowledgement_survives_command_pruning(tmp_path, wire, kind, delete_thread):
+    import json
+    from dataclasses import replace
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    from relay.persistence.tables.daemon_reports import report_receipts
+    from sqlalchemy import select
+    registry, sessions, output = fixture(tmp_path)
+    terminal = {key: value for key, value in output.items() if key not in ("stream", "sequence", "text", "replayed")}
+    terminal.update(type="run.completed", exitCode=0, lastOutputSequence=0)
+    reports = []
+    for index, event in enumerate((output, terminal)):
+        raw = json.dumps(event)
+        report_id = str(index) * 64
+        digest = sha256(raw.encode()).hexdigest()
+        registry.handle_durable_report("node", event, "secret", report_id, digest)
+        reports.append({"id": report_id, "digest": digest, "body": raw})
+    report = reports[1 if kind == "terminal" else 0]
+    assert registry.daemon_store.prune_terminal_records(0, 0)["commands"] == 1
+    with registry.daemon_store.engine.connect() as conn:
+        assert conn.scalar(select(report_receipts.c.report_id).where(report_receipts.c.report_id == report["id"])) == report["id"]
+    before = sessions.get_session(output["sessionId"])["events"]
+    if delete_thread:
+        sessions.delete_session(output["sessionId"])
+    app = create_app(str(tmp_path / "app"))
+    app.state.context = replace(app.state.context, registry=registry)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret", "Content-Type": "application/json"}
+    if wire == "events":
+        response = client.post("/api/v1/daemon-nodes/node/events", content=report["body"], headers={
+            **headers, "X-Relay-Report-Id": report["id"], "X-Relay-Report-Digest": report["digest"]})
+        assert response.status_code == 200, response.text
+        assert response.headers["X-Relay-Report-Digest"] == report["digest"]
+    else:
+        response = client.post("/api/v1/daemon-nodes/node/reports", json={"reports": [report]}, headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["receipts"][0]["status"] == 200
+    if not delete_thread:
+        assert sessions.get_session(output["sessionId"])["events"] == before
+    registry.register({"sandboxId": "other", "userId": registry.get("node")["userId"], "token": "other-secret",
+                       "workspacePath": "/other", "protocolVersion": 2, "supportedAgents": ["codex"]})
+    with pytest.raises(CommandEventMismatchError):
+        registry.handle_durable_report("other", output, "other-secret", report["id"], report["digest"])
+    with pytest.raises(CommandEventMismatchError):
+        registry.handle_durable_report("node", output, "secret", "e" * 64, report["digest"])
+    with pytest.raises(CommandEventMismatchError):
+        registry.handle_durable_report("node", output if kind == "output" else terminal,
+                                       "secret", report["id"], "f" * 64)
+    with pytest.raises(PermissionError):
+        registry.handle_durable_report("node", output, "wrong", report["id"], report["digest"])

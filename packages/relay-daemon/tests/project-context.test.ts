@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -77,3 +77,35 @@ test("setup consumption rejects escaping paths and removes malformed or oversize
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+for (const kind of ["symlink", "hardlink"] as const) {
+  test(`project brief replacement does not write through a ${kind}`, (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-project-brief-link-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const workspace = join(root, "workspace");
+    mkdirSync(join(workspace, ".relay"), { recursive: true });
+    const external = join(root, "host-file");
+    writeFileSync(external, "preserve host contents");
+    const mirror = join(workspace, PROJECT_CONTEXT_RELATIVE_PATH);
+    if (kind === "symlink") symlinkSync(external, mirror);
+    else linkSync(external, mirror);
+    syncProjectContext(workspace, "project", "New brief");
+    assert.equal(readFileSync(external, "utf8"), "preserve host contents");
+    assert.equal(lstatSync(mirror).isSymbolicLink(), false);
+    assert.match(readFileSync(mirror, "utf8"), /New brief/);
+  });
+}
+
+for (const brief of ["New brief", undefined]) {
+  test(`project brief rejects a symlinked control directory when ${brief ? "writing" : "removing"}`, (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-project-control-link-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const workspace = join(root, "workspace");
+    const external = join(root, "external");
+    mkdirSync(workspace); mkdirSync(external);
+    writeFileSync(join(external, "PROJECT.md"), "preserve host contents");
+    symlinkSync(external, join(workspace, ".relay"), process.platform === "win32" ? "junction" : "dir");
+    assert.throws(() => syncProjectContext(workspace, "project", brief), /symbolic link/);
+    assert.equal(readFileSync(join(external, "PROJECT.md"), "utf8"), "preserve host contents");
+  });
+}

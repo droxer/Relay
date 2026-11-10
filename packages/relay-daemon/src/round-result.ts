@@ -1,6 +1,6 @@
-import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { DaemonRoundResultRejectionReason } from "relay-core";
+import { consumeControlFile } from "./control-file.js";
 
 /**
  * A round's own statement of where the task stands, written by the agent.
@@ -50,19 +50,11 @@ type ParsedRoundResult = Exclude<RoundResultOutcome, { kind: "absent" }>;
  * human's question is never dropped without a trace.
  */
 export function readRoundResult(workspacePath: string, expectedRunId?: string): RoundResultOutcome {
-  const path = join(workspacePath, ROUND_RESULT_RELATIVE_PATH);
-  let raw: string;
-  try {
-    if (statSync(path).size > ROUND_RESULT_MAX_BYTES) {
-      removeQuietly(path);
-      return { kind: "rejected", reason: "oversize" };
-    }
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return { kind: "absent" };
-  }
-  removeQuietly(path);
-  return evaluateRoundResult(raw, expectedRunId);
+  const file = consumeControlFile(workspacePath, ROUND_RESULT_RELATIVE_PATH, ROUND_RESULT_MAX_BYTES);
+  if (file.kind === "absent") return { kind: "absent" };
+  if (file.kind === "oversize") return { kind: "rejected", reason: "oversize" };
+  if (file.kind !== "read") return { kind: "rejected", reason: "malformed" };
+  return evaluateRoundResult(file.text, expectedRunId);
 }
 
 /** {@link readRoundResult} for callers that only need an accepted verdict. */
@@ -122,12 +114,4 @@ function contextSuggestionsField(raw: unknown): Pick<RoundResult, "contextSugges
     .filter((item) => item.text)
     .slice(0, CONTEXT_SUGGESTIONS_MAX);
   return suggestions.length ? { contextSuggestions: suggestions } : {};
-}
-
-function removeQuietly(path: string): void {
-  try {
-    rmSync(path, { force: true });
-  } catch {
-    // A workspace we cannot write to still produced a usable verdict.
-  }
 }

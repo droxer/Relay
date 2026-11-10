@@ -604,6 +604,8 @@ export type DaemonNodeEvent =
     }
   | {
       type: "run.completed";
+      /** Last captured output sequence still requiring replay; -1 when none is pending. */
+      lastOutputSequence?: number;
       commandId: string;
       leaseId?: string;
       sessionId: string;
@@ -636,6 +638,8 @@ export type DaemonNodeEvent =
     }
   | {
       type: "run.failed";
+      /** Last captured output sequence still requiring replay; -1 when none is pending. */
+      lastOutputSequence?: number;
       commandId: string;
       leaseId?: string;
       sessionId: string;
@@ -653,6 +657,8 @@ export type DaemonNodeEvent =
     }
   | {
       type: "run.cancelled";
+      /** Last captured output sequence still requiring replay; -1 when none is pending. */
+      lastOutputSequence?: number;
       commandId: string;
       leaseId?: string;
       sessionId: string;

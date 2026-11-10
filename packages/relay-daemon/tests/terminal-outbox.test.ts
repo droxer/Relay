@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -323,3 +324,78 @@ for (const firstSender of ["live", "replay"] as const) {
     }
   });
 }
+
+for (const delivery of ["live", "replay", "batch"] as const) {
+  test(`${delivery} strict completion compacts HTTP 413 with payload-bound acceptance`, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-strict-compact-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    outbox.negotiate(true, delivery === "batch");
+    const event = { type: "run.completed", commandId: "cmd", leaseId: "lease", exitCode: 0,
+      agentLog: "Done", generatedFiles: [{ relativePath: "report.txt", bytes: 1, contentBase64: "YQ==" }] };
+    const bodies: string[] = [];
+    const receipts = new Map<string, string>();
+    let loseAcknowledgement = true;
+    let missingProof = true;
+    const send: typeof fetch = async (url, init) => {
+      if (String(url).endsWith("/reports")) return new Response("too large", { status: 413 });
+      const body = String(init?.body);
+      const headers = new Headers(init?.headers);
+      const id = headers.get("X-Relay-Report-Id")!;
+      const digest = headers.get("X-Relay-Report-Digest")!;
+      assert.equal(digest, createHash("sha256").update(body).digest("hex"));
+      bodies.push(body);
+      const previous = receipts.get(id);
+      assert.ok(!previous || previous === digest, "accepted identities must remain payload-bound");
+      if (JSON.parse(body).generatedFiles[0].contentBase64) return new Response("too large", { status: 413 });
+      receipts.set(id, digest);
+      if (loseAcknowledgement) { loseAcknowledgement = false; throw new Error("lost acknowledgement"); }
+      if (missingProof) { missingProof = false; return new Response("{}"); }
+      return new Response("{}", { headers: { "X-Relay-Report-Id": id, "X-Relay-Report-Digest": digest } });
+    };
+    if (delivery === "live") {
+      await assert.rejects(outbox.wrapFetch(send)("http://backend/events", { method: "POST", body: JSON.stringify(event) }), /lost acknowledgement/);
+    } else {
+      outbox.retain(event);
+      await outbox.replay(send, "http://backend/events", "token");
+    }
+    assert.equal(outbox.status().quarantined, 0);
+    const restarted = new TerminalOutbox(root);
+    restarted.negotiate(true, delivery === "batch");
+    await restarted.replay(send, "http://backend/events", "token");
+    assert.equal(restarted.pending().length, 1, "compact success without receipt proof must retain exit evidence");
+    await restarted.replay(send, "http://backend/events", "token");
+    assert.equal(restarted.pending().length, 0);
+    assert.ok(bodies.some(body => !JSON.parse(body).generatedFiles[0].contentBase64));
+    assert.equal(JSON.parse(bodies.at(-1)!).exitCode, 0);
+  });
+}
+
+for (const type of ["run.completed", "run.failed", "run.cancelled"]) {
+  test(`${type} records the last captured output sequence for retention`, async (t) => {
+    const root = mkdtempSync(join(tmpdir(), "relay-replay-watermark-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    outbox.negotiate(true, true);
+    outbox.retain({ type: "run.output.batch", commandId: "cmd", leaseId: "lease", entries: [
+      { sequence: 0, stream: "stdout", text: "first" }, { sequence: 1, stream: "stderr", text: "last" },
+    ] });
+    const terminal = outbox.retain({ type, commandId: "cmd", leaseId: "lease" });
+    assert.equal(terminal.event.lastOutputSequence, 1);
+    await outbox.flush();
+    const restarted = new TerminalOutbox(root);
+    assert.equal([...restarted.terminalRecords()][0].event.lastOutputSequence, 1);
+  });
+}
+
+test("terminal replay watermark is isolated to its lease and includes collaboration output", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-replay-lease-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  outbox.negotiate(true);
+  outbox.retain({ type: "run.output", commandId: "cmd", leaseId: "other", sequence: 999, text: "other lease" });
+  outbox.retain({ type: "run.collaboration", commandId: "cmd", leaseId: "lease", sequence: 2, collaboration: {} });
+  assert.equal(outbox.retain({ type: "run.cancelled", commandId: "cmd", leaseId: "lease" }).event.lastOutputSequence, 2);
+  assert.equal(outbox.retain({ type: "run.failed", commandId: "empty", leaseId: "lease" }).event.lastOutputSequence, -1);
+  await outbox.flush();
+});

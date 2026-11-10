@@ -4953,7 +4953,7 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
 
 
 async function runThroughOutage(options: {
-  graceMs: number; runMs: number; outageMs: number; outageStatus: number;
+  graceMs?: number; runMs: number; outageMs: number; outageStatus: number;
   /** Heartbeat answers during the outage, in order; the last one repeats. */
   heartbeatStatuses?: number[];
   /** Polls hang until the outage ends instead of answering. */
@@ -5931,6 +5931,19 @@ test('a healthy recovery heartbeat completes a fresh poll without waiting for ne
     assert.equal(probes, 1);
     assert.equal(heldPollAborted, true);
   } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an environment-configured zero outage grace stops execution", async () => {
+  const prior = process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS;
+  process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS = "0";
+  try {
+    const { aborted, events } = await runThroughOutage({ runMs: 3000, outageMs: 3200, outageStatus: 503 });
+    assert.equal(aborted, true, JSON.stringify(events));
+    assert.ok(events.some(event => event.type === "run.cancelled"));
+  } finally {
+    if (prior === undefined) delete process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS;
+    else process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS = prior;
+  }
 });
 
 test("outage recovery applies one completion when live delivery races durable replay", async () => {

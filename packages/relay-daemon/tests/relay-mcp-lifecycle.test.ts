@@ -111,3 +111,87 @@ test('real managed stdio forwards Python responses without reading a persistent 
   assert.equal(results[0].result.structuredContent.agentId,'manager');assert.equal(results[1].result.isError,true);assert.deepEqual(calls,['mcp','mcp']);
  }finally{await bridge.dispose();rmSync(home,{recursive:true,force:true});}
 });
+
+test('run proxy refreshes an expiring credential once for concurrent calls',async t=>{
+ const {createRunMcpProxy}=await import('../src/relay-mcp-managed.js');
+ let now=Date.parse('2026-11-10T00:00:00Z'),issued=0;
+ t.mock.method(Date,'now',()=>now);
+ const authorizations:string[]=[];
+ const invoke=createRunMcpProxy({backendUrl:'https://relay.example',sandboxId:'node',nodeToken:'node',commandId:'command',leaseId:'lease',signal:new AbortController().signal,fetchFn:(async(url:unknown,request:RequestInit)=>{
+  if(String(url).endsWith('/mcp-token')){
+   issued++;assert.deepEqual(JSON.parse(String(request.body)),{commandId:'command',leaseId:'lease'});
+   return Response.json({token:`relay_mcp_run${issued}`,expiresAt:new Date(now+86400000).toISOString()});
+  }
+  authorizations.push(new Headers(request.headers).get('Authorization')!);
+  return Response.json({jsonrpc:'2.0',id:1,result:{tools:[]}});
+ }) as typeof fetch});
+ const call=()=>invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/list'}});
+ await call();now+=86400000;
+ await Promise.all([call(),call()]);
+ assert.equal(issued,2);
+ assert.deepEqual(authorizations,['Bearer relay_mcp_run1','Bearer relay_mcp_run2','Bearer relay_mcp_run2']);
+});
+
+test('run proxy invalidates a refused token for the next call without replaying the request',async()=>{
+ const {createRunMcpProxy}=await import('../src/relay-mcp-managed.js');
+ let issued=0,attempts=0;
+ const invoke=createRunMcpProxy({backendUrl:'https://relay.example',sandboxId:'node',nodeToken:'node',commandId:'command',leaseId:'lease',signal:new AbortController().signal,fetchFn:(async(url:unknown)=>{
+  if(String(url).endsWith('/mcp-token'))return Response.json({token:`relay_mcp_run${++issued}`});
+  attempts++;
+  if(attempts===1)return Response.json({detail:'expired'},{status:401});
+  return Response.json({jsonrpc:'2.0',id:1,result:{}});
+ }) as typeof fetch});
+ const call=()=>invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'relay_create_task',arguments:{title:'work'}}}});
+ await assert.rejects(call(),/401/);
+ assert.equal(attempts,1,'the failed write must never be replayed automatically');
+ await call();assert.equal(issued,2);assert.equal(attempts,2);
+});
+
+test('a late refusal for an old run token cannot discard a refreshed credential',async t=>{
+ const {createRunMcpProxy}=await import('../src/relay-mcp-managed.js');
+ let now=Date.parse('2026-11-10T00:00:00Z'),issued=0;
+ t.mock.method(Date,'now',()=>now);
+ const entered=Promise.withResolvers<void>(),reply=Promise.withResolvers<Response>();
+ const invoke=createRunMcpProxy({backendUrl:'https://relay.example',sandboxId:'node',nodeToken:'node',commandId:'command',leaseId:'lease',signal:new AbortController().signal,fetchFn:(async(url:unknown,request:RequestInit)=>{
+  if(String(url).endsWith('/mcp-token'))return Response.json({token:`relay_mcp_run${++issued}`,expiresAt:new Date(now+86400000).toISOString()});
+  if(new Headers(request.headers).get('Authorization')==='Bearer relay_mcp_run1'){entered.resolve();return reply.promise;}
+  return Response.json({jsonrpc:'2.0',id:1,result:{tools:[]}});
+ }) as typeof fetch});
+ const call=()=>invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/list'}});
+ const old=call();
+ await entered.promise;now+=86400000;await call();
+ reply.resolve(Response.json({detail:'expired'},{status:401}));
+ await assert.rejects(old,/401/);
+ await call();assert.equal(issued,2);
+});
+
+test('expired credentials cannot bypass an ended run lease by falling back to the old token',async t=>{
+ const {createRunMcpProxy}=await import('../src/relay-mcp-managed.js');
+ let now=Date.parse('2026-11-10T00:00:00Z'),issued=0,toolCalls=0;
+ t.mock.method(Date,'now',()=>now);
+ const invoke=createRunMcpProxy({backendUrl:'https://relay.example',sandboxId:'node',nodeToken:'node',commandId:'command',leaseId:'lease',signal:new AbortController().signal,fetchFn:(async(url:unknown)=>{
+  if(String(url).endsWith('/mcp-token')){
+   if(++issued>1)return Response.json({detail:'Run lease is no longer active'},{status:409});
+   return Response.json({token:'relay_mcp_run1',expiresAt:new Date(now+86400000).toISOString()});
+  }
+  toolCalls++;return Response.json({jsonrpc:'2.0',id:1,result:{tools:[]}});
+ }) as typeof fetch});
+ const call=()=>invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/list'}});
+ await call();now+=86400000;
+ await assert.rejects(call(),/409/);assert.equal(toolCalls,1);assert.equal(issued,2);
+});
+
+for(const failure of ['network','server']){
+ test(`run proxy never retries an uncertain write after a ${failure} failure`,async()=>{
+  const {createRunMcpProxy}=await import('../src/relay-mcp-managed.js');
+  let calls=0;
+  const invoke=createRunMcpProxy({backendUrl:'https://relay.example',sandboxId:'node',nodeToken:'node',commandId:'command',leaseId:'lease',signal:new AbortController().signal,fetchFn:(async(url:unknown)=>{
+   if(String(url).endsWith('/mcp-token'))return Response.json({token:'relay_mcp_run'});
+   calls++;
+   if(failure==='network')throw new Error('lost response');
+   return Response.json({detail:'unavailable'},{status:503});
+  }) as typeof fetch});
+  await assert.rejects(invoke('mcp',{message:{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'relay_create_task',arguments:{title:'work'}}}}));
+  assert.equal(calls,1);
+ });
+}

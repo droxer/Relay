@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import type { AgentName } from "relay-core";
 import {
   MAX_MODELS_PER_AGENT,
@@ -82,6 +82,27 @@ provider = "ollama"
 `;
 
 describe("agent model discovery", () => {
+  // Discovery reads the same endpoint environment as a real run. Pin vendor
+  // defaults rather than inheriting a developer's proxy from Relay's dotenv.
+  const vendorEndpoints = {
+    ANTHROPIC_BASE_URL: "https://api.anthropic.com",
+    OPENAI_BASE_URL: "https://api.openai.com/v1",
+  };
+  const savedEndpoints = new Map<string, string | undefined>();
+  beforeEach(() => {
+    for (const [key, value] of Object.entries(vendorEndpoints)) {
+      savedEndpoints.set(key, process.env[key]);
+      process.env[key] = value;
+    }
+  });
+  afterEach(() => {
+    for (const [key, value] of savedEndpoints) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    savedEndpoints.clear();
+  });
+
   it("reads Claude's aliases from the --model option only", () => {
     assert.deepEqual(claudeHelpAliases(CLAUDE_HELP), ["fable", "opus", "sonnet"]);
     assert.deepEqual(claudeHelpAliases("Usage: claude"), []);
@@ -274,6 +295,24 @@ describe("agent model discovery", () => {
     const second = await discoverAgentModels(exec, ["claude"], undefined, undefined, memory);
     assert.deepEqual(first.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
     assert.deepEqual(second.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1[1m]"]);
+  });
+
+  it("discovers and remembers custom endpoint models without adding vendor catalogs", async () => {
+    process.env.ANTHROPIC_BASE_URL = "https://models.test/anthropic";
+    process.env.OPENAI_BASE_URL = "https://models.test/v1";
+    const provider = JSON.stringify({ data: [{ id: "endpoint-model" }] });
+    const memory = new Map();
+    let fresh = true;
+    const exec = async (_cmd: string, args?: string[]): Promise<ExecResult> => {
+      const vendor = args?.[1]?.includes("codex debug models")
+        ? record("catalog", CODEX_CATALOG)
+        : record("help", CLAUDE_HELP) + record("account", CLAUDE_ACCOUNT_CACHE);
+      return { exit_code: 0, stdout: vendor + (fresh ? record("api", provider) : ""), stderr: "" };
+    };
+    const expected = { claude: ["endpoint-model"], codex: ["endpoint-model"] };
+    assert.deepEqual(await discoverAgentModels(exec, ["claude", "codex"], undefined, undefined, memory), expected);
+    fresh = false;
+    assert.deepEqual(await discoverAgentModels(exec, ["claude", "codex"], undefined, undefined, memory), expected);
   });
 
   it("offers only the endpoint's own models behind a custom endpoint", () => {

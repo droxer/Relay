@@ -13,6 +13,7 @@ from ...core.permission_requests import (
     parse_permission_request,
 )
 from ...core.validation import valid_agent
+from ...collaboration.policy import ROUND_RESULT_REJECTIONS
 from ..bodies import raw_string_field, string_field, token_usage_field
 
 
@@ -353,11 +354,26 @@ def _if_instance(value: dict[str, Any], key: str, kind: type) -> EventFields:
     return {key: field} if isinstance(field, kind) else {}
 
 
+def _terminal_output_cursor(value: dict[str, Any]) -> EventFields:
+    sequence = value.get("lastOutputSequence")
+    if type(sequence) is int and -1 <= sequence <= 2**53 - 1:
+        return {"lastOutputSequence": sequence}
+    return {}
+
+
+def _round_result_rejected(value: dict[str, Any]) -> EventFields:
+    rejected = value.get("roundResultRejected")
+    if isinstance(rejected, dict) and isinstance(rejected.get("reason"), str) and rejected["reason"] in ROUND_RESULT_REJECTIONS:
+        return {"roundResultRejected": {"reason": rejected["reason"]}}
+    return {}
+
+
 def _run_completed(value: dict[str, Any], envelope: EventFields) -> EventFields:
     usage = _usage_field(value, envelope)
     if not isinstance(value.get("exitCode"), (int, float)):
         raise ValueError("daemon node run.completed exitCode must be a finite number.")
     return {
+        **_terminal_output_cursor(value),
         "exitCode": int(value["exitCode"]),
         "agentLog": raw_string_field(value, "agentLog"),
         **usage,
@@ -367,6 +383,7 @@ def _run_completed(value: dict[str, Any], envelope: EventFields) -> EventFields:
         # Passed through raw; collaboration policy validates the aggregate
         # verdict before it can affect task state.
         **_if_instance(value, "roundResult", dict),
+        **_round_result_rejected(value),
         # Passed through raw; the registry bounds it (core/next_steps.py).
         **_if_instance(value, "nextSteps", list),
         **({"outputTruncated": True} if value.get("outputTruncated") is True else {}),
@@ -381,6 +398,7 @@ def _run_failed(value: dict[str, Any], envelope: EventFields) -> EventFields:
     usage = _usage_field(value, envelope)
     exit_code = value.get("exitCode")
     return {
+        **_terminal_output_cursor(value),
         "error": string_field(value, "error") or "Daemon node command failed.",
         **_runtime_session_field(value),
         **_optional_agent_log(value),
@@ -396,6 +414,7 @@ def _run_failed(value: dict[str, Any], envelope: EventFields) -> EventFields:
 def _run_cancelled(value: dict[str, Any], envelope: EventFields) -> EventFields:
     usage = _usage_field(value, envelope)
     return {
+        **_terminal_output_cursor(value),
         "reason": string_field(value, "reason") or "Cancelled by human.",
         **_runtime_session_field(value),
         **_optional_agent_log(value),
