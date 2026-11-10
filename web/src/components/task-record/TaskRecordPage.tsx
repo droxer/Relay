@@ -108,6 +108,7 @@ export function TaskRecordPage({
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const revision = `${task.status}:${task.updatedAt}`;
   const variant = recordVariant(task);
   const tabs = recordTabs(variant);
   const fallbackTab = defaultRecordTab(variant);
@@ -286,8 +287,8 @@ export function TaskRecordPage({
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
             {task.status !== "review" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
-            <RecordResultLine taskId={task.id} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
-            <RecordHistory taskId={task.id} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
+            <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
+            <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
         <TabsContent value="definition">
@@ -300,7 +301,7 @@ export function TaskRecordPage({
             picked file — flush, like the routine's Runs tab, so the preview
             gets the drawer's full height. */}
         <TabsContent value="artifacts" className="record-artifacts-panel">
-          <RecordArtifacts taskId={task.id} artifactsDir={task.workspaceArtifactsDir} />
+          <RecordArtifacts taskId={task.id} artifactsDir={task.workspaceArtifactsDir} revision={revision} />
         </TabsContent>
       </div>
       </RecordLayout>

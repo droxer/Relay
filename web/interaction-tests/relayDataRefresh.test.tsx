@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useRelayData } from "../src/hooks/useRelayData";
-import { listDaemonNodes, listSandboxes } from "../src/api";
+import { listDaemonNodes, listSandboxes, listTasks } from "../src/api";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 
@@ -81,5 +81,21 @@ it("backs the sessions poll off while the session stream is connected", async ()
   await waitFor(() => expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.sessions));
   const projects = client.getQueryCache().find({ queryKey: ["relay", "projects"], exact: true });
   expect(projects?.observers[0]?.options.refetchInterval).toBe(RELAY_POLL_INTERVALS_MS.projects);
+  view.unmount(); client.clear();
+});
+
+it("slows task reconciliation off task surfaces and refreshes when they become visible", async () => {
+  vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] } as never);
+  vi.mocked(listTasks).mockClear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const view = renderHook(({ visible }) => useRelayData("user-token", true, visible), { wrapper, initialProps: { visible: false } });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  const taskQuery = () => client.getQueryCache().find({ queryKey: ["relay", "tasks"], exact: true });
+  expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(60_000);
+  const before = vi.mocked(listTasks).mock.calls.length;
+  view.rerender({ visible: true });
+  await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(before + 1));
+  expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(RELAY_POLL_INTERVALS_MS.tasks);
   view.unmount(); client.clear();
 });

@@ -3,6 +3,7 @@
 import { Timeline, TimelineDate, TimelineIndicator, TimelineItem, TimelineSeparator } from "@/components/reui/timeline";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useTaskQueryRevision } from "../../hooks/useTaskQueryRevision";
 import { listTaskEvents } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
@@ -25,10 +26,12 @@ import type { RelayTaskEvent } from "../../types";
 export function RecordHistory({
   taskId,
   live = false,
+  revision,
   names,
   onOpenThread,
 }: {
   taskId: string;
+  revision?: string;
   /** The task is running — the timeline grows while the reader watches it. */
   live?: boolean;
   /** Team/agent names for assignment lines; without them an id still renders. */
@@ -47,6 +50,7 @@ export function RecordHistory({
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
     refetchInterval: live ? RELAY_POLL_INTERVALS_MS.tasks : false,
   });
+  useTaskQueryRevision("task-events", taskId, revision, eventsQuery.isFetching);
   const events: RelayTaskEvent[] | undefined = eventsQuery.data?.events;
   const entries = events ? taskHistoryEntries(events, taskId) : [];
   const threadLinkIds = threadLinkEntryIds(entries);

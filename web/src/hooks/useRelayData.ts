@@ -9,6 +9,7 @@ import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPol
 import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { useKeyChange } from "./useKeyChange";
+import type { TaskListCache } from "../api-client/tasks";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
@@ -96,8 +97,10 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
 export function useRelayData(
   token: string | undefined,
   enabled: boolean,
+  taskListVisible = true,
 ): RelayDataResult {
   const queryClient = useQueryClient();
+  const taskListCache = useRef<TaskListCache>({});
   // Background reconciliation must stay visually silent. Only a user/app
   // initiated refresh drives page-level refresh chrome.
   const [manualRefreshPending, setManualRefreshPending] = useState(false);
@@ -176,9 +179,9 @@ export function useRelayData(
       {
         queryKey: TASKS_KEY,
         enabled,
-        refetchInterval: RELAY_POLL_INTERVALS_MS.tasks,
+        refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
-          const result = await listTasks(signal);
+          const result = await listTasks(signal, taskListCache.current);
           if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
           if (result.flowUsage) queryClient.setQueryData(["task-flow-usage"], result.flowUsage);
           return result.tasks ?? [];
@@ -194,6 +197,14 @@ export function useRelayData(
     ],
   });
 
+  const previouslyVisible = useRef(taskListVisible);
+  useEffect(() => {
+    const wasVisible = previouslyVisible.current;
+    previouslyVisible.current = taskListVisible;
+    if (enabled && taskListVisible && !wasVisible) {
+      void queryClient.invalidateQueries({ queryKey: TASKS_KEY }, { cancelRefetch: false });
+    }
+  }, [enabled, taskListVisible, queryClient]);
 
   // When disabled (e.g. logged out) drop cached rows so the UI clears at once.
   // resetQueries, NOT setQueryData: seeding [] counts as data written after
@@ -205,6 +216,7 @@ export function useRelayData(
   // refetches because this only runs while the queries are disabled.
   useEffect(() => {
     if (!enabled) {
+      taskListCache.current = {};
       void queryClient.resetQueries({ queryKey: RELAY_KEY });
     }
   }, [enabled, queryClient]);

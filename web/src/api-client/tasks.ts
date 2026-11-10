@@ -17,11 +17,30 @@ import type {
   TasksResponse,
   TaskReview,
 } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { apiJson, fetchWithSession, readApiResponse } from "./client.ts";
+import { relayApiEndpoint } from "../lib/apiOrigin.ts";
 import { taskGuard, tasksGuard, taskReviewGuard } from "./responseShape.ts";
 
-export function listTasks(signal?: AbortSignal): Promise<TasksResponse> {
-  return apiJson<TasksResponse>("/tasks?view=summary", { signal, guard: tasksGuard });
+/** Owned by the personal-space hook, never shared across Accounts. */
+export type TaskListCache = { etag?: string; data?: TasksResponse };
+
+export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Promise<TasksResponse> {
+  const path = "/tasks?view=summary";
+  if (!cache) return apiJson<TasksResponse>(path, { signal, guard: tasksGuard });
+  const response = await fetchWithSession(relayApiEndpoint(path), {
+    signal,
+    credentials: "include",
+    // Handle revalidation ourselves so a 304 retains the parsed object too.
+    cache: "no-store",
+    headers: cache.etag && cache.data ? { "If-None-Match": cache.etag } : {},
+  });
+  if (response.status === 304 && cache.data) return cache.data;
+  const data = await readApiResponse(response, `GET ${path}`, tasksGuard);
+  if (!signal?.aborted) {
+    cache.data = data;
+    cache.etag = response.headers.get("etag") ?? undefined;
+  }
+  return data;
 }
 
 export function createTask(input: CreateTaskInput): Promise<RelayTask> {

@@ -8,7 +8,7 @@ import type { PermissionAnswerInput } from "./lib/permissionRequests";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
-import { useThreadPreload } from "./hooks/useThreadPreload";
+import { useLocationPathname } from "./hooks/useLocationPathname";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
@@ -61,7 +61,7 @@ import { SETUP_STEPS, homeSetupProgressOf } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
 import { resolveNewThreadComputer, threadOwnAgentId } from "./lib/threadRuntime";
-import { navigateToAppPath } from "./lib/appRoute";
+import { navigateToAppPath, parseAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
 import { useNotifications } from "./hooks/useNotifications";
@@ -130,6 +130,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
 
   const selectedUserToken = tokens[selectedUser];
+  const pathname = useLocationPathname();
+  const openingRoute = pathname ? parseAppPath(pathname) : null;
   const {
     sandboxes,
     nodes,
@@ -149,8 +151,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     isRefreshing,
     refresh,
     setSandboxes,
-  } = useRelayData(selectedUserToken, true);
-  useThreadPreload(sessions, !sessionsLoading);
+  } = useRelayData(selectedUserToken, true,
+    !openingRoute || ["home", "main", "projects", "backlog", "routine"].includes(openingRoute.route));
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel(),
   );
@@ -189,14 +191,16 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     threads: myThreads,
   });
   const { activeSessionId } = useActiveSession(selectedUser, myThreads);
+  const requestedSessionId = openingRoute?.sessionId ?? undefined;
   const activeSession = useMemo(
     () => pickActiveThreadSession({
       threads: myThreads,
       selectedSessionId,
       activeSessionId,
       composingNew,
+      requestedSessionId,
     }),
-    [activeSessionId, composingNew, myThreads, selectedSessionId],
+    [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId],
   );
   const space = useThreadSpace(activeSession?.id);
   const {
@@ -346,8 +350,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // the composer would read the thread as an ordinary (team) thread and draw
   // that thread's controls, then swap them for the project room's.
   const projectContextPending = Boolean(activeSession?.projectId) && !activeProject && projectsStatus === "loading";
-  const projectDispatchDisabled = Boolean(
-    activeProject && (activeProject.archivedAt || !activeProject.enabled),
+  const dispatchDisabled = Boolean(
+    (requestedSessionId && !activeSession)
+    || (activeProject && (activeProject.archivedAt || !activeProject.enabled)),
   );
   const {
     effectiveSelectableLogicalAgents,
@@ -396,7 +401,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   // Full detail plus the live SSE tail of the open thread, merged into the
   // sessions cache so it updates at push latency — only while it is shown.
-  useSessionDetail(activeSession?.id, transcriptVisible);
+  const threadDetail = useSessionDetail(requestedSessionId ?? activeSession?.id, transcriptVisible);
   useSessionEvents(activeSession?.id, transcriptVisible && shouldTailSessionEvents(activeSession?.status));
 
   const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
@@ -510,7 +515,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     if (!onboarding.progress.visible) onboarding.reopen();
     startNewThread();
   });
-  const onboardingPanel = onboarding.progress.visible && route === "main" && user.userId ? (
+  const onboardingPanel = onboarding.progress.visible && route === "main" && !requestedSessionId && user.userId ? (
     <OnboardingPanel
       controls={onboarding}
       userId={user.userId}
@@ -548,7 +553,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     sendHandoff,
   } = useThreadDispatch({
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
-    threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
+    threadRunning, requiresRuntimeSelection, projectDispatchDisabled: dispatchDisabled,
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
@@ -750,6 +755,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             threadProjectOptions={projectFilterOptions}
             onThreadProjectFilterChange={setThreadProjectFilter}
             activeSession={activeSession}
+            threadLoadError={!activeSession ? threadDetail.error : null}
+            onRetryThread={threadDetail.retry}
             pendingUserMessage={pendingUserMessage}
             displayMessages={displayMessages}
             awaitingDecision={awaitingDecision}
@@ -789,7 +796,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onBackToThreads={() => navigateToMobileView("threads")}
             selectedUser={selectedUser}
             initializingThread={requiresRuntimeSelection}
-            threadsLoading={sessionsLoading && !composingNew}
+            threadsLoading={(sessionsLoading || Boolean(requestedSessionId && !activeSession)) && !composingNew}
             threadPaging={{
               hasMore: hasMoreSessions,
               loading: loadingMoreSessions,
@@ -801,7 +808,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             projectRoom={projectRoom}
             projectRoomSelected={projectRoomTarget}
             onProjectRoomPicked={handleProjectRoomPicked}
-            projectReadOnly={projectDispatchDisabled}
+            projectReadOnly={dispatchDisabled}
             runtimeNodes={threadComputers}
             runtimeNodeId={selectedThreadNodeId}
             selectedRuntimeNode={selectedThreadComputer}

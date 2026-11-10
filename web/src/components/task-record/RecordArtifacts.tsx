@@ -3,6 +3,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useTaskQueryRevision } from "../../hooks/useTaskQueryRevision";
 import { listTaskArtifacts } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
@@ -24,8 +25,10 @@ const RecordArtifactPreview = lazy(() => import("./RecordArtifactPreview").then(
  *  It used to be a bare list whose rows opened a second, full-width drawer
  *  over the record, so reading a file hid the task it belonged to and
  *  telling two files apart meant hovering a rail of identical icons. */
-export function RecordArtifacts({ taskId, artifactsDir }: {
+export function RecordArtifacts({ taskId, artifactsDir, revision }: {
   taskId: string;
+  /** Parent task revision signals new or replaced deliverables. */
+  revision?: string;
   /** The task's deliverables folder. Every file under it would otherwise
    *  repeat the same folder name, so a row names only what lies beyond it. */
   artifactsDir?: string | null;
@@ -45,6 +48,7 @@ export function RecordArtifacts({ taskId, artifactsDir }: {
     placeholderData: keepPreviousData,
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
   });
+  useTaskQueryRevision("task-artifacts", taskId, revision, artifactsQuery.isFetching);
   const artifacts: ArtifactIndexItem[] | undefined = artifactsQuery.data?.artifacts;
   const selected = artifacts?.find((artifact) => artifact.id === selectedId) ?? artifacts?.[0] ?? null;
   const reading = previewOpen && selectedId !== null && selected?.id === selectedId;

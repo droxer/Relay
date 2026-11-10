@@ -4960,8 +4960,13 @@ async function runThroughOutage(options: {
   pollHangs?: boolean;
   /** Registration is healthy even while the execution endpoints return 5xx. */
   registrationDuringOutage?: boolean;
-}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
+  /** Delay acknowledgement to exercise concurrent live/replay copies. */
+  terminalResponseDelayMs?: number;
+}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean; terminalUploads: number }> {
   let heartbeats = 0;
+  let terminalUploads = 0;
+  // Live delivery can race durable replay; mirror the backend receipt deduplication.
+  const acceptedReports = new Map<string, string>();
   const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
   const stop = new AbortController();
   const command = { ...runCommand("outage_lease"), workspacePath: root, leaseId: "lease",
@@ -5011,14 +5016,27 @@ async function runThroughOutage(options: {
           return jsonResponse({ commands, heartbeat: heartbeat() });
         }
         if (path.endsWith("/events")) {
-          const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
-          if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) setTimeout(() => stop.abort(), 10);
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          const terminal = ["run.completed", "run.failed", "run.cancelled"].includes(event.type);
+          if (terminal) terminalUploads++;
+          const headers = new Headers(init?.headers);
+          const id = headers.get("X-Relay-Report-Id");
+          const digest = headers.get("X-Relay-Report-Digest");
+          if (id && acceptedReports.has(id)) assert.equal(acceptedReports.get(id), digest);
+          else {
+            if (id) acceptedReports.set(id, digest!);
+            events.push(event);
+          }
+          if (terminal) {
+            await new Promise(resolve => setTimeout(resolve, options.terminalResponseDelayMs ?? 0));
+            setTimeout(() => stop.abort(), 10);
+          }
           return jsonResponse({ ok: true });
         }
         throw new Error(`unexpected URL ${url}`);
       },
     });
-    return { events, aborted };
+    return { events, aborted, terminalUploads };
   } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
 }
 
@@ -5913,6 +5931,15 @@ test('a healthy recovery heartbeat completes a fresh poll without waiting for ne
     assert.equal(probes, 1);
     assert.equal(heldPollAborted, true);
   } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("outage recovery applies one completion when live delivery races durable replay", async () => {
+  const { events, aborted, terminalUploads } = await runThroughOutage({
+    graceMs: 5000, runMs: 50, outageMs: 100, outageStatus: 503, terminalResponseDelayMs: 250,
+  });
+  assert.equal(aborted, false);
+  assert.ok(terminalUploads >= 2, "the delayed acknowledgement must exercise duplicate uploads");
+  assert.equal(events.filter(event => event.type === "run.completed").length, 1);
 });
 
 test('durable peers honor the server heartbeat cadence and coalesce idle diagnostics', { timeout: 5000 }, async () => {

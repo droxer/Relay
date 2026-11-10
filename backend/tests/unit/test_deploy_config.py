@@ -100,6 +100,25 @@ class TestCors:
         assert response.status_code == 200
         assert response.headers["access-control-max-age"] == "7200"
 
+    def test_task_etags_are_readable_by_a_separately_hosted_web_client(self, monkeypatch) -> None:
+        from fastapi import FastAPI, Response
+        from fastapi.testclient import TestClient
+        from relay.bootstrap.http import configure_cors
+
+        monkeypatch.setenv("RELAY_CORS_ALLOW_ORIGINS", "https://app.example.com")
+        app = FastAPI()
+        configure_cors(app)
+
+        @app.get("/api/v1/tasks")
+        def task_list() -> Response:
+            return Response(status_code=304, headers={"ETag": 'W/"tasks"'})
+
+        response = TestClient(app).get(
+            "/api/v1/tasks", headers={"Origin": "https://app.example.com"}
+        )
+        assert response.status_code == 304
+        assert "ETag" in response.headers["access-control-expose-headers"]
+
 
 class TestSessionCookieConfig:
     def test_defaults_match_the_single_origin_install(self) -> None:

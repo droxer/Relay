@@ -167,6 +167,8 @@ type ThreadsViewProps = {
    *  the page holds its docked shape rather than drawing the new-thread
    *  landing it would only snap out of. */
   threadsLoading?: boolean;
+  threadLoadError?: string | null;
+  onRetryThread?: () => void;
   /** Older pages of the thread list, loaded as the rail reaches its end. */
   threadPaging?: ThreadListPaging;
   /** The thread's project has not loaded, so its composer cannot yet say
@@ -263,6 +265,8 @@ export function ThreadsView({
   selectedUser,
   initializingThread,
   threadsLoading = false,
+  threadLoadError = null,
+  onRetryThread,
   threadPaging,
   projectLoading = false,
   projectName,
@@ -601,7 +605,12 @@ export function ThreadsView({
            answer) speaks through its own role="status" regions instead. */
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="off">
           <div className="transcript-inner">
-            {transcriptPending ? null : activeSession || pendingUserMessage ? (
+            {threadLoadError ? (
+              <div role="alert">
+                <p>{threadLoadError}</p>
+                <Button variant="outline" type="button" onClick={onRetryThread}>{t("workspace.retry")}</Button>
+              </div>
+            ) : transcriptPending ? null : activeSession || pendingUserMessage ? (
               <>
                 {transcriptStart > 0 ? (
                   // Keyed by the window start so each page mounts a fresh

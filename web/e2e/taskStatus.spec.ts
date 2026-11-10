@@ -113,10 +113,10 @@ test("work in review docks a revision-bound review on the composer", async ({ pa
   await page.goto(`/threads/${session.id}`);
 
   const bar = page.getByRole("region", { name: "Review result" });
-  // The decision leads: who delivered what is in view before the evidence opens.
-  await expect(bar.getByRole("heading", { name: "Ready for your review" })).toBeVisible();
-  await expect(bar.locator(".task-review-lede")).toContainText("Delivered the explanation.");
+  // The compact panel keeps decisions visible and opens evidence on demand.
+  await expect(bar.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
   await bar.locator("summary").click();
+  await expect(bar.locator(".task-review-report")).toContainText("Delivered the explanation.");
   await expect(bar).toContainText("Agent-reported evidence");
   await expect(bar).toContainText("no independently recorded check results");
   await bar.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));

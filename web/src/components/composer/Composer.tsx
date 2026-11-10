@@ -40,6 +40,7 @@ export type ComposerHandle = {
 };
 
 export type ComposerSendOptions = {
+  userMessageId?: string;
   /** `discuss` asks without handing the agent work: nothing it reports can
    *  move a task. Default is the composer's own `accomplish`. */
   intent?: ThreadMessageInput["intent"];
@@ -55,7 +56,7 @@ export type ComposerSendOptions = {
  *  sent as written — a leading "@" is the agent's wording, not an address.
  *  `questionId`: the wait this message answers (see `AwaitingInput`).
  *  `approve`: the answer approves that wait's held step. */
-export type ComposerDispatchOptions = { connectionGrants?: ConnectionGrant[]; attachmentIds?: string[]; literal?: boolean; questionId?: string; approve?: boolean };
+export type ComposerDispatchOptions = { userMessageId?: string; connectionGrants?: ConnectionGrant[]; attachmentIds?: string[]; literal?: boolean; questionId?: string; approve?: boolean };
 
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every
@@ -104,7 +105,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   onCancelRun: () => void;
   /** Takes a draft written while the run is going. Without it, the box
    *  cannot send until the run ends. */
-  onQueue?: (text: string) => void;
+  onQueue?: (text: string) => boolean | void;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
   /** Docked under `prompt` — the messages waiting for the next round. */
@@ -217,10 +218,15 @@ const ComposerView = forwardRef<ComposerHandle, {
   const cannotSend = cannotSendAsWritten || parsed.blocked;
   // A draft written mid-run waits in the queue. Text only: an image is an
   // upload bound to this box, so a draft carrying one waits here instead.
+  const [queueFull, setQueueFull] = useState(false);
   const canQueue = running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
-  const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false): Promise<boolean> => {
+  const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
     if (running && !literal && canQueue && onQueue) {
-      onQueue(composerText);
+      if (onQueue(composerText) === false) {
+        setQueueFull(true);
+        return false;
+      }
+      setQueueFull(false);
       setComposerText("");
       return true;
     }
@@ -248,6 +254,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       }
       if (!mounted.current) return false;
       const sent = await onSend(teamStyle, intent, {
+        ...(userMessageId ? { userMessageId } : {}),
         ...(!connectionTargetId && connectionGrants !== undefined ? { connectionGrants } : {}),
         ...(literal ? { literal: true } : {}),
         ...(approve ? { approve: true } : {}),
@@ -281,7 +288,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
-  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; approve?: boolean; literal: boolean; resolve: (sent: boolean) => void } | null>(null);
+  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; approve?: boolean; userMessageId?: string; literal: boolean; resolve: (sent: boolean) => void } | null>(null);
   // A pick's `literal` read reaches the send through the queue, never the box.
   const triggerSendRef = useRef(triggerSend);
   // Declared first so the queued send below sees this render's closure.
@@ -290,7 +297,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     const queued = queuedSendRef.current;
     if (!queued || queued.text !== composerText) return;
     queuedSendRef.current = null;
-    void triggerSendRef.current(queued.intent, queued.literal, queued.approve === true).then(queued.resolve);
+    void triggerSendRef.current(queued.intent, queued.literal, queued.approve === true, queued.userMessageId).then(queued.resolve);
   }, [composerText]);
   useEffect(() => () => {
     queuedSendRef.current?.resolve(false);
@@ -314,9 +321,9 @@ const ComposerView = forwardRef<ComposerHandle, {
       const previous = composerText;
       const draft = composerText.trim() && composerText !== text ? composerText : null;
       const sent = text === composerText
-        ? triggerSendRef.current(intent, literal, approve)
+        ? triggerSendRef.current(intent, literal, approve, options?.userMessageId)
         : new Promise<boolean>((resolve) => {
-          queuedSendRef.current = { text, intent, approve, literal, resolve };
+          queuedSendRef.current = { text, intent, approve, userMessageId: options?.userMessageId, literal, resolve };
           setComposerText(text);
         });
       return sent.then((ok) => {
@@ -377,6 +384,7 @@ const ComposerView = forwardRef<ComposerHandle, {
           {connectionQueryClient && <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
             disabled={readOnly || running || sendPending}
             onChange={grants => setConnectionDrafts(previous => ({ ...previous, [connectionKey]: grants }))} />}
+          {queueFull && <p role="alert">{t("composer.queue_full")}</p>}
           {connectionError && <p role="alert">{t("connections.action_failed")}</p>}
           <ComposerImagePreviews input={imageInput} />
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useNotifications, useNotificationPreferences } from "../src/hooks/useNotifications";
-import { clearNotifications, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
+import { markNotificationsRead, clearNotifications, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
 import { NotificationsSection } from "../src/components/settings/NotificationsSection";
 
 const auth = vi.hoisted(() => ({ user: { id: "account-a" } as { id: string } | null }));
@@ -178,4 +178,25 @@ it("lets a person retry failed notification preferences without reloading", asyn
   fireEvent.click(screen.getByRole("button", { name: "notifications.retry" }));
   await waitFor(() => expect(screen.getByRole("switch", { name: "notifications.kind.task_completed" })).toBeTruthy());
   client.clear();
+});
+
+it("does not let delayed read receipts restore an obsolete unread count", async () => {
+  const {client,wrapper}=setup();
+  const notifications=["a","b"].map(id=>({id,kind:"task_completed",data:{taskId:id,title:id,status:"done"},createdAt:"2026-11-10",readAt:null}));
+  vi.mocked(listNotifications).mockResolvedValue({notifications,unreadCount:2} as never);
+  let first!: (value:{unreadCount:number})=>void;
+  vi.mocked(markNotificationsRead).mockReset().mockImplementationOnce(()=>new Promise(resolve=>{first=resolve;})).mockResolvedValueOnce({unreadCount:0});
+  const view=renderHook(()=>useNotifications({enabled:true,onOpen:vi.fn()}),{wrapper});
+  await waitFor(()=>expect(view.result.current.notices).toHaveLength(2));
+  act(()=>view.result.current.open(view.result.current.notices[0]));
+  await waitFor(()=>expect(markNotificationsRead).toHaveBeenCalledTimes(1));
+  act(()=>view.result.current.open(view.result.current.notices[1]));
+  await waitFor(()=>expect(view.result.current.unreadCount).toBe(0));
+  await waitFor(()=>expect(markNotificationsRead).toHaveBeenCalledTimes(2));
+  await waitFor(()=>expect(client.isMutating()).toBe(1));
+  vi.mocked(listNotifications).mockResolvedValue({notifications:notifications.map(n=>({...n,readAt:"2026-11-10"})),unreadCount:0} as never);
+  await act(async()=>{first({unreadCount:1});});
+  await waitFor(()=>expect(client.isMutating()).toBe(0));
+  expect(client.getQueryData<{unreadCount:number}>(["relay","notifications","account-a"])?.unreadCount).toBe(0);
+  view.unmount();client.clear();
 });

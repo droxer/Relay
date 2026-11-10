@@ -45,11 +45,11 @@ export function useThreadQueue({ queueKey, running, awaitsPerson, composerRef, o
     if (control.inFlight) return false;
     const store = useThreadQueueStore.getState();
     control.inFlight = true;
-    store.remove(queueKey, message.id);
+
     try {
-      const sent = await (composerRef.current?.send(message.text, { asTyped: true }) ?? Promise.resolve(false));
+      const sent = await (composerRef.current?.send(message.text, { asTyped: true, userMessageId: `evt_${message.id}` }) ?? Promise.resolve(false));
       control.mode = sent ? "auto" : "paused";
-      if (!sent) store.restore(queueKey, message);
+      if (sent) store.remove(queueKey, message.id);
       return sent;
     } finally {
       control.inFlight = false;
@@ -80,7 +80,7 @@ export function useThreadQueue({ queueKey, running, awaitsPerson, composerRef, o
   }, [queueKey, running, awaitsPerson, messages, sendQueued, controlFor]);
 
   const enqueue = useCallback((text: string) => {
-    useThreadQueueStore.getState().enqueue(queueKey, text);
+    return useThreadQueueStore.getState().enqueue(queueKey, text);
   }, [queueKey]);
 
   const steer = useCallback((id: string) => {
