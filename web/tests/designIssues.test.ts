@@ -239,14 +239,17 @@ describe("reviewed design regressions", () => {
     );
   });
 
-  it("dims the page behind an overlay with a neutral scrim in both themes", () => {
-    /* The surfaces went achromatic and the scrim stayed blue-black, so every
-       drawer cast a cold tint over the neutral page behind it. */
+  it("dims the page behind an overlay with a restrained cool scrim in both themes", () => {
+    // Cool Mist uses blue-charcoal depth. Keep it dark and low-chroma so the
+    // scrim dims the underlying content without becoming a colored overlay.
     const palette = readWeb("src/styles/tokens/palette.css");
     const scrims = [...palette.matchAll(/--scrim:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/g)];
     assert.equal(scrims.length, 2, "one scrim per register");
-    for (const [declaration, r, g, b] of scrims) {
-      assert.ok(r === g && g === b, `${declaration} is tinted; the palette is neutral`);
+    for (const [declaration, r, g, b, opacity] of scrims) {
+      const [red, green, blue] = [r, g, b].map(Number);
+      assert.ok(red <= green && green <= blue, `${declaration} must lean cool`);
+      assert.ok(blue - red <= 24 && blue <= 64, `${declaration} must remain dark and low-chroma`);
+      assert.ok(Number(opacity) > 0 && Number(opacity) < 1, `${declaration} must dim without hiding the page`);
     }
   });
 
