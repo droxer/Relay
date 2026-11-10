@@ -136,6 +136,17 @@ describe("taskExceptions", () => {
 });
 
 describe("taskHoldup", () => {
+  for (const code of ["task_wip_limit", "capacity_exhausted"]) {
+    it(`explains queued ${code} waits`, () => {
+      const queued = {
+        ...task({ id: "t1", title: "One", status: "queued" }),
+        dispatchOutcome: { state: "queued" as const, code, message: "Waiting for capacity." },
+      };
+      assert.deepEqual(taskHoldup(queued), { kind: "capacity", text: "Waiting for capacity." });
+      assert.equal(taskHoldup({ ...queued, status: "running" }), null);
+    });
+  }
+
   it("is null for work that is simply moving", () => {
     assert.equal(taskHoldup(task({ id: "t1", title: "One", status: "running" })), null);
   });

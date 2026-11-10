@@ -14,6 +14,8 @@
     "lint:css": "stylelint \"src/**/*.css\"",
     "test:react": "vitest run",
     "test:e2e": "playwright test -c playwright.recovery.config.ts",
+    "test:e2e:concurrency": "npm run build -w relay-daemon && playwright test -c playwright.concurrency.config.ts",
+    "pretest:e2e:concurrency": "npm run build",
     "pretest:e2e": "npm run build",
     "test:react:coverage": "vitest run --coverage",
     "test:design": "playwright test",

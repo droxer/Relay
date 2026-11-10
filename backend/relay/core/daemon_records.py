@@ -5,6 +5,11 @@ from __future__ import annotations
 
 from typing import Any
 
+
+class ComputerRunCapacityError(ValueError):
+    """Admission refused a run before it could reserve execution."""
+
+
 TERMINAL_DAEMON_STATUSES = frozenset({"completed", "failed", "cancelled"})
 DISPATCH_CLAIM_ID_STATE_KEY = "_relay_dispatch_claim_id"
 DISPATCH_CLAIM_EXPIRES_STATE_KEY = "_relay_dispatch_claim_expires_at"

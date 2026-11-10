@@ -6,10 +6,6 @@ from typing import Any
 from ..core.models import AGENT_NAMES, AGENT_ROLES
 
 
-class ComputerRunCapacityError(ValueError):
-    """Admission refused a run before it could reserve execution."""
-
-
 def normalize_agent_role_map(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         raise ValueError("agent role map must be an object keyed by agent name.")

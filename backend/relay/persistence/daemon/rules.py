@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any
 from ..db_time import format_db_time
 from ..events import daemon_event
-from ...core.daemon_records import NODE_POLL_DRAINED_AT
+from ...core.daemon_records import ComputerRunCapacityError, NODE_POLL_DRAINED_AT
 from ...core.ids import now_iso
 
 
@@ -86,7 +86,7 @@ def _assert_node_run_request_capacity(
     # enforce the execution cap atomically under the same node-row mutex.
     available = len(active_requests) < max_concurrent * 2
     if not available:
-        raise ValueError("Runtime node capacity is exhausted.")
+        raise ComputerRunCapacityError("capacity_exhausted: Runtime node queue capacity is exhausted.")
 
 
 def _node_for_storage(node: dict[str, Any]) -> dict[str, Any]:

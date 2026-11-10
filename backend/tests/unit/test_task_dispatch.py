@@ -392,7 +392,8 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
 
 
 @pytest.mark.parametrize("manual", [True, False], ids=["manual-start", "scheduler"])
-def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, manual) -> None:
+@pytest.mark.parametrize("saturation", ["execution", "queue", "routing"])
+def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, manual, saturation) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
     client = TestClient(app)
@@ -415,13 +416,31 @@ def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, 
         }
     )
     original_run = ctx.backend.run
+    queued_requests = []
+    competing_request = {
+        "taskGoal": "Competing thread",
+        "assignments": [{"agent": "codex"}],
+        "workspaceLayout": "thread",
+    }
+    if saturation == "routing":
+        asyncio.run(original_run(node["id"], competing_request))
 
     async def occupy_slot_then_run(node_id, request):
-        await original_run(node_id, {
-            "taskGoal": "Competing thread",
-            "assignments": [{"agent": "codex"}],
-            "workspaceLayout": "thread",
-        })
+        if saturation == "queue":
+            # Prepared admissions reserve durable queue space before they
+            # publish commands; another replica can fill it after routing.
+            for _ in range(2):
+                session = ctx.session_store.create_session({
+                    "workspacePath": node["workspacePath"],
+                    "taskGoal": "Competing admission", "assignments": [],
+                })
+                queued_requests.append(ctx.registry.daemon_store.create_run_request({
+                    "nodeId": node_id, "sessionId": session["id"],
+                    "taskGoal": "Competing admission", "assignments": [{"agent": "codex"}],
+                    "state": {}, "status": "prepared",
+                }))
+        elif saturation == "execution":
+            await original_run(node_id, competing_request)
         return await original_run(node_id, request)
 
     scheduler = TaskScheduler(task_store=ctx.task_store, registry=ctx.registry, backend=ctx.backend)
@@ -431,28 +450,36 @@ def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, 
             _login_user(client)
             response = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
             assert response.status_code == 202, response.text
-            assert response.json()["dispatch"]["state"] == "queued"
+            assert response.json()["dispatch"]["state"] == "queued", response.text
             assert response.json()["dispatch"]["code"] == "capacity_exhausted"
         else:
             assert asyncio.run(scheduler.tick()).dispatched == 0
 
     waiting = ctx.task_store.get_task(task["id"])
-    assert waiting["status"] == "queued"
+    assert waiting["status"] == "queued", waiting.get("dispatchOutcome")
     assert waiting["dispatchOutcome"]["code"] == "capacity_exhausted"
     assert "dispatchClaim" not in waiting
     assert ctx.registry.daemon_store.active_run_request_for_task(task["id"]) is None
+    if saturation == "queue":
+        assert waiting["linkedSessionIds"]
+        assert all(ctx.session_store.get_session(session_id)["status"] == "failed"
+                   for session_id in waiting["linkedSessionIds"])
 
     assert asyncio.run(scheduler.tick()).dispatched == 0
-    blocker = _take_command(app, node)
-    ctx.registry.handle_event(node["id"], {
-        "type": "run.cancelled",
-        "commandId": blocker["id"],
-        "sessionId": blocker["sessionId"],
-        "runId": blocker["runId"],
-        "leaseId": blocker["leaseId"],
-        "agent": blocker["agent"],
-        "reason": "Free the execution slot",
-    }, f"token_{node['id']}")
+    if saturation == "queue":
+        for queued in queued_requests:
+            ctx.registry.daemon_store.update_run_request(queued["id"], {"status": "cancelled"})
+    else:
+        blocker = _take_command(app, node)
+        ctx.registry.handle_event(node["id"], {
+            "type": "run.cancelled",
+            "commandId": blocker["id"],
+            "sessionId": blocker["sessionId"],
+            "runId": blocker["runId"],
+            "leaseId": blocker["leaseId"],
+            "agent": blocker["agent"],
+            "reason": "Free the execution slot",
+        }, f"token_{node['id']}")
     assert asyncio.run(scheduler.tick()).dispatched == 1
     command = _take_command(app, node)
     assert command["logicalAgentId"] == agent["id"]
