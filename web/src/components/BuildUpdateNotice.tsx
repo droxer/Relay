@@ -14,6 +14,7 @@ export function BuildUpdateNotice() {
   const { t } = useTranslation();
   const stale = useSyncExternalStore(subscribeBuildStale, isBuildStale, () => false);
   const shown = useRef(false);
+  const touchStart = useRef<{ id: number; x: number; y: number } | null>(null);
 
   useEffect(() => installBuildFreshnessWatch(), []);
 
@@ -27,7 +28,36 @@ export function BuildUpdateNotice() {
       type: "info",
       timeout: 0,
       priority: "low",
-      actionProps: { children: t("app_update.reload"), onClick: () => window.location.reload() },
+      actionProps: {
+        children: t("app_update.reload"),
+        onClick: () => window.location.reload(),
+        // Complete a touch directly rather than relying on the compatibility
+        // click after toast gesture handling in an installed mobile app.
+        onTouchStart: (event) => {
+          const touch = event.touches[0];
+          touchStart.current = event.touches.length === 1
+            ? { id: touch.identifier, x: touch.clientX, y: touch.clientY }
+            : null;
+        },
+        onTouchMove: (event) => {
+          const start = touchStart.current;
+          const touch = event.touches[0];
+          if (!start || !touch || touch.identifier !== start.id
+            || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10) {
+            touchStart.current = null;
+          }
+        },
+        onTouchCancel: () => { touchStart.current = null; },
+        onTouchEnd: (event) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          const touch = Array.from(event.changedTouches).find((item) => item.identifier === start?.id);
+          if (!start || !touch || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10) return;
+          // Cancel the synthesized click so a normal tap only reloads once.
+          event.preventDefault();
+          window.location.reload();
+        },
+      },
     });
   }, [stale, t]);
 
