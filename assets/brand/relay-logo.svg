@@ -8,15 +8,15 @@
   <style>
     :root {
       color-scheme: light dark;
-      --relay-logo-ink: #080808;
+      --relay-logo-ink: #27333b;
       --relay-logo-lead: #b84400;
       --relay-logo-trail: #2457c5;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --relay-logo-ink: #ededed;
+        --relay-logo-ink: #e3ebf1;
         --relay-logo-lead: #ff8a3d;
-        --relay-logo-trail: #6aa6ff;
+        --relay-logo-trail: #91b9f2;
       }
     }
   </style>
@@ -29,5 +29,5 @@
         font-size="42"
         font-weight="500"
         letter-spacing="0"
-        fill="var(--relay-logo-ink, #080808)">Relay</text>
+        fill="var(--relay-logo-ink, #27333b)">Relay</text>
 </svg>

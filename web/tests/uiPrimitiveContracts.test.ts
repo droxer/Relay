@@ -189,20 +189,20 @@ describe("UI primitive contracts", () => {
     assert.doesNotMatch(destructive, /(?:^|\s)bg-destructive\//);
   });
 
-  it("keeps floating chrome on the flat elevation role instead of a drop shadow", async () => {
+  it("keeps floating chrome on the shared soft elevation role", async () => {
     const roles = await readFile(resolve("web/src/styles/tokens/roles.css"), "utf8");
     // No "none" elevation role: a surface that wants no edge declares none.
     assert.doesNotMatch(roles, /--shadow-1:/);
-    // Anchored on the closing `;` so a drop shadow cannot be appended back:
-    // floating chrome gets the hairline ring and nothing else.
-    assert.match(roles, /--shadow-2:\s*0 0 0 var\(--sp-hairline\) var\(--line-1\);/);
+    // Floating chrome retains an edge and adds the shared soft shadow;
+    // components must not invent their own Tailwind shadow scales.
+    assert.match(roles, /--shadow-2:\s*0 0 0 var\(--sp-hairline\) var\(--line-1\),\s*0 var\(--sp-3\) var\(--sp-7\) var\(--elevation-shadow\);/);
 
     for (const file of ["select.tsx", "card.tsx", "toast.tsx"]) {
       const source = await readFile(resolve(`web/src/components/ui/${file}`), "utf8");
       assert.doesNotMatch(
         stripComments(source),
         /\bshadow-(?:xs|sm|md|lg|xl|2xl)\b/,
-        `${file} uses a Tailwind drop shadow; planes here separate by hairline`,
+        `${file} uses a Tailwind drop shadow; use the shared elevation role`,
       );
     }
   });

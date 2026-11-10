@@ -15,15 +15,15 @@ export type FaviconState = "idle" | "running" | "waiting";
 /** The tab's ink. One register whatever the app's theme: the app cannot see
  *  the browser's tab strip, and a badge matched to the app's theme vanished
  *  into a strip of the same tone (a white badge on a light strip, a black
- *  one on a dark strip). A black tile carries the mark on both, as the
+ *  one on a dark strip). A blue-charcoal tile carries the mark on both, as the
  *  chevrons do the reading. `canvas` is the dark surface-0, `action` the
  *  brand lead, `live` the dark live blue; `unlit` is a chevron at rest —
  *  quieter than either lit hue but ~6:1 on the tile, so an idle tab still
  *  shows the mark at 16px. faviconState.test.ts pins these to favicon.svg. */
 export const FAVICON_INK = {
-  canvas: "#000000",
+  canvas: "#171d22",
   action: "#ff8a3d",
-  live: "#6aa6ff",
+  live: "#91b9f2",
   unlit: "#8f8f8f",
 } as const;
 

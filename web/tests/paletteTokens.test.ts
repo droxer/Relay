@@ -24,15 +24,16 @@ const repoRoot = findRepoRoot();
 const readStyle = (rel: string) => readFileSync(path.join(repoRoot, STYLES_DIR, rel), "utf8");
 const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "src", rel), "utf8");
 
+const stripStyleComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
 const palette = readStyle("tokens/palette.css");
 const lightMarker = 'html[data-theme="light"]';
 assert.ok(palette.includes(lightMarker), "palette.css is missing the light register marker");
-const darkRegister = palette.slice(0, palette.indexOf(lightMarker));
-const lightRegister = palette.slice(palette.indexOf(lightMarker));
+const darkRegister = stripStyleComments(palette.slice(0, palette.indexOf(lightMarker)));
+const lightRegister = stripStyleComments(palette.slice(palette.indexOf(lightMarker)));
 // Declarations only — palette.css documents rejected values in prose on
 // purpose, and a substring check would read its own explanations as code.
 const paletteCode = palette.replace(/\/\*[\s\S]*?\*\//g, "");
-const stripStyleComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** WCAG 2.x relative luminance / contrast, so the ramp is checked as a
  *  property rather than pinned as a list of hexes that says nothing about
@@ -46,6 +47,15 @@ function contrast(a: string, b: string): number {
     0.2126 * channel(hex, 0) + 0.7152 * channel(hex, 1) + 0.0722 * channel(hex, 2);
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Composite an sRGB wash onto its actual painted background. */
+function composite(foreground: string, background: string, alpha: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return "#" + [0, 1, 2].map((i) =>
+    Math.round(channel(foreground, i) * alpha + channel(background, i) * (1 - alpha))
+      .toString(16).padStart(2, "0")
+  ).join("");
 }
 
 const tokenIn = (register: string, name: string): string => {
@@ -70,7 +80,7 @@ describe("Relay palette tokens", () => {
     }
   });
 
-  it("tunes --action per register: a near-white ink plate on black, a near-black one on paper", () => {
+  it("tunes --action per register: pale mist on blue charcoal, blue charcoal on mist", () => {
     // eveland alignment (2026-10-23): the action is the ink, so each register
     // declares its own plate, hover and ink.
     for (const name of ["--action", "--action-hover", "--on-action"]) {
@@ -81,14 +91,14 @@ describe("Relay palette tokens", () => {
     const brightness = (hex: string) => contrast(hex, "#000000");
     const darkFill = brightness(tokenIn(darkRegister, "--action"));
     const lightFill = brightness(tokenIn(lightRegister, "--action"));
-    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter orange");
+    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter blue-grey");
     // Hover lifts: brighter on dark; on paper a near-black plate can only
     // lift toward grey, as eveland's button does.
     assert.ok(brightness(tokenIn(darkRegister, "--action-hover")) > darkFill);
     assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) > lightFill);
     for (const register of [darkRegister, lightRegister]) {
       const [r, g, b] = channels(tokenIn(register, "--action"));
-      assert.ok(r === g && g === b, "--action is ink, never a hue");
+      assert.ok(b > g && g > r && b - r <= 50, "--action is a restrained blue-grey, distinct from signal blue");
     }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
   });
@@ -183,7 +193,7 @@ describe("Relay palette tokens", () => {
     // anchors in prose and the focus ring. It must read as text wherever it
     // lands, so the bar is every plane, not just the canvas.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
-      for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]) {
+      for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"]) {
         const ratio = contrast(tokenIn(register, "--link-ink"), tokenIn(register, plane));
         assert.ok(ratio >= 4.5, `${label} --link-ink on ${plane} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
       }
@@ -435,8 +445,8 @@ describe("ink ramp legibility", () => {
   // recessed fill that moves TOWARD the ink). Sweeping every plane subsumes
   // the worst one.
   for (const [label, register, planes] of [
-    ["dark", darkRegister, ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]],
-    ["light", lightRegister, ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]],
+    ["dark", darkRegister, ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"]],
+    ["light", lightRegister, ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"]],
   ] as const) {
     it(`keeps every ${label} ink tier above the AA floor on every plane`, () => {
       for (const ink of ["--ink-1", "--ink-2", "--ink-3", "--ink-4"]) {
@@ -468,7 +478,7 @@ describe("ink ramp legibility", () => {
     // The tones render as text (counts, inline state labels), not only as dots.
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
       for (const tone of ["--ok", "--warn", "--err"]) {
-        for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]) {
+        for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"]) {
           const ratio = contrast(tokenIn(register, tone), tokenIn(register, plane));
           assert.ok(ratio >= 4.5, `${label} ${tone} on ${plane} is ${ratio.toFixed(2)}:1`);
         }
@@ -477,15 +487,63 @@ describe("ink ramp legibility", () => {
   });
 });
 
+describe("composited control contrast", () => {
+  const planes = ["--surface-0", "--surface-1", "--surface-2", "--surface-3",
+    "--surface-rail", "--surface-list", "--surface-band"];
+
+  for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+    it(`keeps ${label} field boundaries above 3:1 at rest and on hover`, () => {
+      const roles = stripStyleComments(readStyle("tokens/roles.css"));
+      assert.match(roles, /--field-border:\s*color-mix\(in srgb, var\(--ink-1\) var\(--field-border-strength\), transparent\)/);
+      const hover = roles.match(/--field-border-hover:[^;]*\+ (\d+)%/);
+      assert.ok(hover, "field hover strength must be derived from the resting strength");
+      const strength = register.match(/--field-border-strength:\s*(\d+)%;/);
+      assert.ok(strength, `${label} must declare the field boundary strength`);
+      for (const extra of [0, Number(hover[1])]) {
+        const alpha = (Number(strength[1]) + extra) / 100;
+        for (const plane of planes) {
+          const background = tokenIn(register, plane);
+          const boundary = composite(tokenIn(register, "--ink-1"), background, alpha);
+          const ratio = contrast(boundary, background);
+          assert.ok(ratio >= 3, `${label} field (${extra ? "hover" : "rest"}) on ${plane}: ${ratio.toFixed(2)}:1`);
+        }
+      }
+    });
+
+    it(`keeps ${label} status badges above 4.5:1 on plain and selected rows`, () => {
+      const badge = readWebSource("components/ui/badge.tsx");
+      const selection = register.match(/--action-soft:\s*color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, transparent\)/);
+      assert.ok(selection, `${label} must declare the selection wash`);
+      for (const [variant, utility, token] of [
+        ["success", "success", "--ok"], ["warning", "warning", "--warn"],
+        ["danger", "danger", "--err"], ["info", "info", "--ink-3"],
+      ]) {
+        const tint = badge.match(new RegExp(`${variant}: "[^"\n]*bg-${utility}/(\\d+)`));
+        assert.ok(tint, `${variant} must declare a tinted badge background`);
+        const foreground = tokenIn(register, token);
+        for (const plane of planes) {
+          for (const selected of [false, true]) {
+            const surface = tokenIn(register, plane);
+            const row = selected ? composite(selection[1], surface, Number(selection[2]) / 100) : surface;
+            const fill = composite(foreground, row, Number(tint[1]) / 100);
+            const ratio = contrast(foreground, fill);
+            assert.ok(ratio >= 4.5,
+              `${label} ${variant} badge on ${selected ? "selected" : "plain"} ${plane}: ${ratio.toFixed(2)}:1`);
+          }
+        }
+      }
+    });
+  }
+});
+
 describe("surface ladder", () => {
-  it("keeps both themes' large surfaces neutral, allowing only eveland's warm paper", () => {
-    // The one cast is eveland's #f7f7f5 recessed fill: a 2-step warm lean
-    // (blue lowest). Anything cooler, or any visible tint, fails.
+  it("keeps both themes' large surfaces in the restrained Cool Mist family", () => {
+    // Materials lean cool without becoming saturated status-blue surfaces.
     for (const register of [darkRegister, lightRegister]) {
       for (const name of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--line-1", "--line-2"]) {
         const [r, g, b] = channels(tokenIn(register, name));
-        assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 2, `${name} must not tint the workspace`);
-        assert.ok(b <= g && g <= r, `${name} may only lean warm, never cool`);
+        assert.ok(b - r <= 40, `${name} must remain a low-chroma material`);
+        assert.ok(b >= g && g >= r, `${name} must lean cool`);
       }
     }
   });
@@ -501,7 +559,7 @@ describe("surface ladder", () => {
       assert.ok(contrast(tokenIn(lightRegister, "--line-1"), tokenIn(lightRegister, name)) >= 1.4,
         `light ${name} needs a visible structural border`);
     }
-    // White cards and white overlays share a fill in Geist-style light mode;
+    // Near-white cards and white overlays have subtle separation;
     // floating chrome must retain its border and shadow to convey depth.
     const dialog = readStyle("dialog.css");
     assert.match(readStyle("tokens/roles.css"), /--shadow-2:[^;]*var\(--line-1\)/);
@@ -710,8 +768,7 @@ describe("accent primary and neutral CTA palette", () => {
       for (const fill of ["--cta-fill", "--cta-hover"]) {
         const hex = tokenIn(register, fill);
         const [r, g, b] = channels(hex);
-        assert.equal(r, g);
-        assert.equal(g, b);
+        assert.ok(b > g && g > r && b - r <= 50, `${fill} must stay blue-grey`);
         assert.ok(contrast(ink, hex) >= 4.5, `${fill} must keep its label legible`);
       }
     }

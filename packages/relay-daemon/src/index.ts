@@ -2,6 +2,7 @@ import { syncDirectory } from "./sync-directory.js";
 import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
 import { TransportMonitor } from "./transport-monitor.js";
+import { DiagnosticsSchedule } from "./diagnostics-schedule.js";
 import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { createHash } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
@@ -784,13 +785,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         lastRegisteredAt = Date.now();
       }
     };
+    const diagnosticsSchedule = new DiagnosticsSchedule();
     diagnosticsTask = (async () => {
       while (!runtimeSignal.aborted) {
         try {
           const snapshot = { ...monitor?.snapshot(), ...terminalOutbox.status(), runs: [...new Set([...activeRuns.values()].map(run => run.command.runId).concat(executionJournal.pending().map(run => run.runId)))].slice(0, 200) };
           writePrivateDiagnostic(join(stateDir, 'transport-diagnostics.json'), snapshot);
-          if (heartbeatFeatures.has('transport-status')) {
+          if (heartbeatFeatures.has('transport-status') && diagnosticsSchedule.due(snapshot, performance.now())) {
             await postJsonRequest(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/transport`), snapshot, token, runtimeSignal);
+            diagnosticsSchedule.sent(snapshot, performance.now());
           }
         } catch (error) {
           if (!runtimeSignal.aborted) logger.warn('Transport diagnostics retained locally; delivery will retry', { sandboxId, error: error instanceof Error ? error.message : String(error) });
@@ -806,7 +809,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     })().catch((error: unknown) => {
       if (!runtimeSignal.aborted) logger.error("terminal replay stopped", { error: String(error) });
     });
-    const heartbeatPeriodMs = (): number => Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3, heartbeatFeatures.has("durable-reports") ? 1000 : Infinity);
+    const heartbeatPeriodMs = (): number => Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3);
     const heartbeatRequestTimeoutMs = (): number => Math.max(MIN_HEARTBEAT_REQUEST_TIMEOUT_MS, heartbeatPeriodMs());
     heartbeatTask = (async () => {
       // Fixed rate with jitter, one attempt per tick. A failed beat is not

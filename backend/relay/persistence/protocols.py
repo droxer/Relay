@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import datetime, tzinfo
+from datetime import UTC, date, datetime, tzinfo
 from typing import Any, Protocol
 
 from ..core.models import AgentName
@@ -105,10 +105,12 @@ class SessionStore(Protocol):
     ) -> list[dict[str, Any]]: ...
     def list_token_usage(self) -> list[dict[str, Any]]: ...
     def dashboard_session_metrics(
-        self, *, day_window: int = 14, now: datetime | None = None
+        self, *, day_window: int = 14, now: datetime | None = None,
+        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC,
     ) -> dict[str, Any]: ...
     def dashboard_token_metrics(
-        self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None
+        self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
+        date_range: tuple[date, date] | None = None,
     ) -> dict[str, Any]: ...
 
 

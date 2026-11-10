@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Any
 
 from sqlalchemy import case, func, select, text
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..engine import store_transaction
 from .state import SessionStoreState
@@ -28,7 +29,8 @@ def _counts(values: Any = None) -> dict[str, int]:
 
 class SessionMetricRows(SessionStoreState):
     def dashboard_token_metrics(
-        self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None
+        self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
+        date_range: tuple[date, date] | None = None
     ) -> dict[str, Any]:
         """Transfer one row per day/runtime group, rather than one per run.
 
@@ -36,9 +38,11 @@ class SessionMetricRows(SessionStoreState):
         on both SQLite and PostgreSQL without database timezone extensions.
         Future observations retain their historical summary-only treatment.
         """
+        if date_range:
+            day_window = summary_days = (date_range[1] - date_range[0]).days + 1
         if not 1 <= summary_days <= day_window:
             raise ValueError("Dashboard windows require 1 <= summary_days <= day_window.")
-        today = (now or datetime.now(zone)).astimezone(zone).date()
+        today = date_range[1] if date_range else (now or datetime.now(zone)).astimezone(zone).date()
         start = today - timedelta(days=day_window - 1)
         dates = [start + timedelta(days=index) for index in range(day_window + 1)]
         boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
@@ -61,6 +65,8 @@ class SessionMetricRows(SessionStoreState):
             .where(ledger.completed_at >= boundaries[0])
             .group_by(day, agent)
         )
+        if date_range:
+            statement = statement.where(ledger.completed_at < boundaries[-1])
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         buckets = {day.isoformat(): _counts() for day in dates[:-1]}
@@ -104,17 +110,31 @@ class SessionMetricRows(SessionStoreState):
             "unreportedRuns": [{"agent": agent, "runs": unreported[agent][0]} for agent in missing],
         }
 
-    def dashboard_session_metrics(self, *, day_window: int = 14, now: datetime | None = None) -> dict[str, Any]:
+    def dashboard_session_metrics(
+        self, *, day_window: int = 14, now: datetime | None = None,
+        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC,
+    ) -> dict[str, Any]:
         """Aggregate dashboard counters in SQL without hydrating session events."""
         now = now or datetime.now(UTC)
         one_day = now - timedelta(hours=24)
         seven_days = now - timedelta(days=7)
         window_start = (now - timedelta(days=day_window - 1)).date()
         window_start_at = datetime.combine(window_start, datetime.min.time(), tzinfo=UTC)
-        day = func.date(self.sessions.c.created_at)
+        created = self.sessions.c.created_at
+        filters = []
+        day: ColumnElement[Any]
+        if date_range:
+            window_start = date_range[0]
+            day_window = (date_range[1] - window_start).days + 1
+            dates = [window_start + timedelta(days=index) for index in range(day_window + 1)]
+            boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
+            window_start_at = boundaries[0]
+            filters = [created >= boundaries[0], created < boundaries[-1]]
+            day = case(*[(created < boundaries[index + 1], dates[index].isoformat()) for index in range(day_window)])
+        else:
+            day = func.date(created)
         completed = func.sum(case((self.sessions.c.status == "completed", 1), else_=0))
         failed = func.sum(case((self.sessions.c.status == "failed", 1), else_=0))
-        created = self.sessions.c.created_at
         with store_transaction(self.engine) as conn:
             # Totals, both windows, and the status breakdown in one grouped pass.
             status_rows = conn.execute(
@@ -123,14 +143,14 @@ class SessionMetricRows(SessionStoreState):
                     func.count(),
                     func.sum(case((created >= one_day, 1), else_=0)),
                     func.sum(case((created >= seven_days, 1), else_=0)),
-                ).group_by(self.sessions.c.status)
+                ).where(*filters).group_by(self.sessions.c.status)
             ).all()
             total = sum(int(row[1] or 0) for row in status_rows)
             last_24h = sum(int(row[2] or 0) for row in status_rows)
             last_7d = sum(int(row[3] or 0) for row in status_rows)
             user_rows = conn.execute(
                 select(self.sessions.c.owner_user_id, func.count().label("count"))
-                .where(self.sessions.c.owner_user_id.is_not(None))
+                .where(self.sessions.c.owner_user_id.is_not(None), *filters)
                 .group_by(self.sessions.c.owner_user_id)
                 .order_by(text("count DESC"))
                 .limit(5)
@@ -143,7 +163,7 @@ class SessionMetricRows(SessionStoreState):
                         completed.label("completed"),
                         failed.label("failed"),
                     )
-                    .where(self.sessions.c.created_at >= window_start_at)
+                    .where(self.sessions.c.created_at >= window_start_at, *filters)
                     .group_by(day)
                     .order_by(day)
                 )

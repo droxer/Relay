@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { DashboardRangePicker } from "./DashboardRangePicker";
+import { dashboardPresetRange, type DashboardPreset, type DashboardDateRange } from "../../../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
 import { listControlPanelAgents } from "../../../api";
 import { ADMIN_ROSTER_POLL_MS } from "../../../lib/controlPanelQueries";
@@ -29,8 +32,11 @@ export function DashboardView({
   nodes, users, metrics, onManageNodes,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
-  const sessionsQuery = useDashboardSessions(true);
-  const tokens = useTokenUsage();
+  const [preset, setPreset] = useState<DashboardPreset | "custom">("7d");
+  const [customRange, setCustomRange] = useState<DashboardDateRange>(() => dashboardPresetRange("7d"));
+  const range = preset === "custom" ? customRange : dashboardPresetRange(preset);
+  const sessionsQuery = useDashboardSessions(true, range);
+  const tokens = useTokenUsage(range);
   const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
     queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
@@ -43,11 +49,8 @@ export function DashboardView({
   const nodesReady = nodes.length > 0 || users.length > 0;
 
   const dash = "—";
-  const showTokens = tokens.available || tokens.isError;
+  const showTokens = tokens.available || tokens.isError || tokens.isLoading || (tokens.daily?.length ?? 0) > 0;
 
-  const last24h = sessions.last24h;
-  const prior24h = clampNonNeg(sessions.last7d - last24h) / 6;
-  const trend = compareTrend(last24h, prior24h);
   const rate = successRate(sessions.dailyCounts);
   const outcomes = activityTotals(sessions.dailyCounts);
   const fleet = fleetSummary(nodes);
@@ -56,6 +59,12 @@ export function DashboardView({
 
   return (
     <div className="adm-dash">
+      <DashboardRangePicker preset={preset} range={range}
+        onPreset={(next) => {
+          if (next === "custom") setCustomRange(range);
+          setPreset(next);
+        }}
+        onApply={setCustomRange} />
       <div className="adm-dash-kpis-wrap">
         <section
           className={`adm-dash-kpis${showTokens ? "" : " adm-dash-kpis--lean"}`}
@@ -66,17 +75,6 @@ export function DashboardView({
             eyebrow={t("admin.v2.dash_kpi_sessions")}
             value={sessionsReady ? formatCompact(sessions.total, i18n.language) : dash}
             visual={sessionsReady ? <Sparkline points={sessions.dailyCounts.map((day) => day.count)} /> : null}
-            delta={
-              sessionsReady
-                ? {
-                    direction: trend.direction,
-                    label: t("admin.v2.dash_kpi_sessions_delta", {
-                      count: last24h,
-                      diff: trend.label,
-                    }),
-                  }
-                : undefined
-            }
           />
           {/* Completed share of the threads that finished in the chart's
               window. No reading until something finishes: 0% would claim
@@ -123,14 +121,14 @@ export function DashboardView({
             slot="agents"
             eyebrow={t("admin.v2.dash_kpi_agents")}
             value={agentsQuery.isSuccess ? formatCompact(agentsQuery.data, i18n.language) : dash}
-            hint={agentsQuery.isError ? t("workspace.load_failed") : undefined}
+            hint={agentsQuery.isError ? t("workspace.load_failed") : t("admin.v2.dash_current_inventory")}
           />
           {showTokens ? (
             <KpiTile
               slot="tokens"
               eyebrow={t("admin.v2.dash_kpi_tokens")}
-              value={tokens.isError ? dash : formatCompact(tokens.fresh, i18n.language)}
-              visual={tokens.isError ? null : <Sparkline points={tokens.daily.slice(-7).map((day) => day.fresh)} />}
+              value={tokens.isError || tokens.isLoading ? dash : formatCompact(tokens.fresh, i18n.language)}
+              visual={tokens.isError || tokens.isLoading ? null : <Sparkline points={tokens.daily.map((day) => day.fresh)} />}
               hint={tokens.isError ? t("workspace.load_failed") : t("admin.v2.dash_kpi_tokens_hint")}
             />
           ) : null}
@@ -148,7 +146,7 @@ export function DashboardView({
             error={sessionsQuery.error}
           />
           {showTokens ? (
-            <TokenUsageChart snapshot={tokens} compact />
+            <TokenUsageChart snapshot={tokens} />
           ) : null}
         </div>
         <div className="adm-dash-col">
@@ -171,25 +169,4 @@ export function DashboardView({
       </div>
     </div>
   );
-}
-
-function clampNonNeg(value: number): number {
-  return value < 0 ? 0 : value;
-}
-
-interface Trend {
-  direction: "up" | "down" | "flat";
-  label: string;
-}
-
-function compareTrend(current: number, prior: number): Trend {
-  if (prior <= 0 && current <= 0) return { direction: "flat", label: "0" };
-  if (prior <= 0) return { direction: "up", label: `+${current}` };
-  const diff = current - prior;
-  if (Math.abs(diff) < 0.5) return { direction: "flat", label: "±0" };
-  const pct = Math.round((diff / prior) * 100);
-  return {
-    direction: diff > 0 ? "up" : "down",
-    label: `${pct > 0 ? "+" : ""}${pct}%`,
-  };
 }

@@ -21,8 +21,8 @@ effect of command polling.
    (and resumes once the poll has been open longer than its own wait). With
    `state`, the daemon drains and stops through heartbeats instead of a full
    registration. `durable-reports` enables payload-bound acceptance receipts;
-   these peers also send independent one-second health probes, even while a
-   poll is open, to detect a blackholed connection promptly. An older backend
+   these peers also send independent health probes at the advertised cadence,
+   even while a poll is open, to detect a blackholed connection. An older backend
    sends no list and gets the old traffic.
 
 The default policy expires after 30 seconds and renews every fifth of that
@@ -33,6 +33,30 @@ tick: the next tick is the retry. The backend timestamps accepted observations,
 so daemon clock skew cannot extend a lease. Durable `lastSeenAt` writes remain
 throttled and are not appended to the event log, and the fleet-wide read that
 merges other replicas' observations runs at most once per persist interval.
+
+## Background load
+
+The daemon honors the backend's advertised heartbeat interval (6 seconds by
+default), capped at a third of its requested command lease. Durable-report
+peers keep those probes independent of long polls. Normal command delivery
+wakes a poll through notifications; a missed notification is recovered within
+6 seconds with a connected bridge, or 2 seconds otherwise. Short leases and
+liveness windows further shorten those waits. Idle polls do not perform a
+separate lease-renewal lookup.
+
+Command leases are durably extended when at most two thirds of the requested
+duration remains. The database predicate shares this throttle across backend
+replicas. The first explicit delivery acknowledgement is always persisted
+immediately. Due extensions are batched, update only the lease timestamps,
+and do not append routine renewal events; command delivery and terminal
+transitions retain their events. Lease responses report the actual persisted
+expiry, so execution watchdogs never assume an extension that did not happen.
+
+Transport diagnostics are still sampled locally every second. The daemon sends
+health transitions immediately, coalesces activity changes to at most one report
+per 5 seconds, and refreshes an unchanged healthy snapshot every 30 seconds.
+Unresolved incidents refresh every 5 seconds to preserve recovery/progress
+observations. Failed deliveries remain due for retry on the next sample.
 
 ## Alive is not listening
 

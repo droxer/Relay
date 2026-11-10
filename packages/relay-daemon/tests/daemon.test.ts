@@ -5954,3 +5954,60 @@ test("outage recovery applies one completion when live delivery races durable re
   assert.ok(terminalUploads >= 2, "the delayed acknowledgement must exercise duplicate uploads");
   assert.equal(events.filter(event => event.type === "run.completed").length, 1);
 });
+
+test('durable peers honor the server heartbeat cadence and coalesce idle diagnostics', { timeout: 5000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-idle-traffic-'));
+  const stop = new AbortController();
+  let beats = 0, diagnostics = 0;
+  const heartbeat = { intervalMs: 5000, timeoutMs: 30000, features: ['durable-reports', 'transport-status', 'poll-liveness'] };
+  const deadline = setTimeout(() => stop.abort(), 2300);
+  try {
+    await runRelayDaemon({ backendUrl: 'http://relay.test', sandboxId: 'idle-traffic', token: 'fixture',
+      workspacePath: root, stateDir: root, signal: stop.signal, logger: testLogger(), environment: fakeEnvironment(),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
+        if (path.endsWith('/heartbeat')) { beats++; return jsonResponse({ heartbeat }); }
+        if (path.endsWith('/transport')) { diagnostics++; return jsonResponse({ ok: true }); }
+        if (path.endsWith('/commands')) return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        });
+        return jsonResponse({ ok: true });
+      },
+    });
+    assert.equal(beats, 0);
+    assert.equal(diagnostics, 1);
+  } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('durable peers keep independent probes during a held poll at the advertised cadence', { timeout: 3000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-independent-probe-'));
+  const stop = new AbortController();
+  let beats = 0, pollOpen = false;
+  const heartbeat = { intervalMs: 40, timeoutMs: 200, features: ['durable-reports', 'poll-liveness', 'state'] };
+  const deadline = setTimeout(() => stop.abort(), 2000);
+  try {
+    await runRelayDaemon({ backendUrl: 'http://relay.test', sandboxId: 'independent-probe', token: 'fixture',
+      workspacePath: root, stateDir: root, signal: stop.signal, logger: testLogger(), environment: fakeEnvironment(),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
+        if (path.endsWith('/heartbeat')) {
+          if (!(await jsonBody<{ state?: string }>(init)).state) {
+            assert.equal(pollOpen, true);
+            if (++beats === 2) stop.abort();
+          }
+          return jsonResponse({ heartbeat });
+        }
+        if (path.endsWith('/commands')) {
+          pollOpen = true;
+          return await new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => { pollOpen = false; reject(init.signal?.reason); }, { once: true });
+          });
+        }
+        return jsonResponse({ ok: true });
+      },
+    });
+    assert.equal(beats, 2);
+  } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});

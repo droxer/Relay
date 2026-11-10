@@ -317,7 +317,12 @@ with summaries.
 
 Admin token reporting at `GET /api/v1/admin/dashboard/tokens?tz=Asia/Shanghai`
 uses the viewer's local calendar dates (UTC for a missing/invalid timezone).
-It returns fourteen daily buckets and seven-day totals; `fresh` excludes cache
+Both `/admin/dashboard/sessions` and `/admin/dashboard/tokens` accept inclusive
+`start=YYYY-MM-DD` and `end=YYYY-MM-DD` dates plus `tz`. They default to the
+last seven calendar days including today. Explicit ranges require both dates
+in order and may span at most 366 days. Totals, daily buckets, and top users
+are scoped to the same range; sessions use creation time and tokens use run
+completion time. Computer and agent inventory remains current. `fresh` excludes cache
 reads, and `unreportedRuns` identifies runtimes that completed without reporting
 usage. Totals include retained usage after thread deletion. The backend groups
 the ledger in storage and caches each reporting window briefly. See
