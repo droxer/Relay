@@ -10,7 +10,12 @@ import {
   Bell,
   BookOpen,
   Bot,
-  Building2,
+  FolderKanban,
+  ListTodo,
+  MessageCircle,
+  Monitor,
+  Network,
+  Workflow,
   Check,
   CircleAlert,
   CircleCheck,
@@ -40,7 +45,8 @@ import {
   KeyRound,
   Languages,
   Laptop,
-  LayoutDashboard,
+  PanelsTopLeft,
+  Building2,
   LayoutGrid,
   Layers,
   Link2,
@@ -48,7 +54,6 @@ import {
   LockKeyhole,
   Palette,
   LogOut,
-  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -84,11 +89,10 @@ import {
   Terminal,
   Trash2,
   UserRound,
-  Users,
+  UsersRound,
   WifiOff,
   TriangleAlert,
   X,
-  Zap,
   Check as LucideCheck,
   ChevronDown as LucideChevronDown,
   ChevronLeft as LucideChevronLeft,
@@ -103,8 +107,7 @@ import {
 } from "lucide-react";
 import { createElement, forwardRef, type ComponentProps } from "react";
 
-import { IdentityMark } from "./IdentityMark";
-import { ChipGlyph, TaskListGlyph, type RelayGlyphProps } from "./navGlyphs";
+import { TaskListGlyph, type RelayGlyphProps } from "./navGlyphs";
 
 // Standard refined stroke for every icon in the product. Lucide defaults to
 // 2 which feels chunky next to the rest of the type; 1.75 reads as
@@ -195,109 +198,23 @@ function withStandardStroke(Icon: StrokedGlyph, displayName: string) {
   return Wrapped;
 }
 
-/**
- * A nav/section glyph that draws the very mark the class already owns.
- *
- * `NavAgents` was a lucide robot head and `NavTeams` a lucide network node,
- * while every profile slot in the app drew the agent node and the team cluster
- * from `IdentityMark`. That is two pictures for one class: the rail said one
- * thing about an agent and the row beside it said another. The section glyph
- * is the same silhouette as the thing the section contains, so a reader
- * learns each shape once.
- *
- * It draws the OUTLINE variant, not the filled one the profile chips use.
- * Two solid marks in a rail of eleven hairline lucide siblings were the only
- * heavy ink in the column, and heavy ink is precisely how the rail paints a
- * selected row — so Agents and Teams read as permanently active. Hairline at
- * the shared `ICON_STROKE` puts them on one weight with their neighbours and
- * gives the active state somewhere to go. (The filled `bare` variant also
- * pinned itself to `--ink-2` through `.identity-mark`, so these two glyphs
- * were additionally the only ones in the rail that did not brighten when
- * their row was selected; the outline variant inherits row ink.)
- */
-function identityGlyph(kind: "agent" | "team", displayName: string) {
-  function Glyph({ size = ICON.sm, className }: Pick<LucideProps, "size" | "className">) {
-    return (
-      <IdentityMark
-        kind={kind}
-        variant="outline"
-        size={Number(size)}
-        strokeWidth={ICON_STROKE}
-        className={className}
-      />
-    );
-  }
-  Glyph.displayName = displayName;
-  return Glyph;
-}
-
 // Semantic exports. Anywhere we want to swap the underlying glyph, do it
 // here — no caller in the app has to know which lucide picture we chose.
 // This module is the only place allowed to import lucide-react: a glyph
 // reached for directly ships lucide's default stroke (2) next to our 1.75
 // chrome, and a second component can then pick a different picture for a
 // meaning that already has one.
-// One bubble, not lucide's stacked pair. `MessagesSquare` draws a second
-// bubble offset behind the first, and at the rail's 18px the offset is ~2px:
-// the two outlines converge into a thick smudge along one corner and the
-// glyph reads as a blot rather than a bubble. Plurality is the label's job.
-// Home: the "what needs me" dashboard every sign-in lands on.
+// Menu destinations use one outline family on Lucide's 24px grid, with
+// the same 1.75 stroke, rounded terminals and inherited state colour.
+// Keep navigation distinct from the identity marks used in roster avatars.
 export const NavHome = withStandardStroke(House, "NavHome");
-export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
-// The org console, not a user's settings. `UserCog` put a SECOND gear in the
-// rail — directly above Preferences' `Settings` gear in the footer — and
-// framed the whole admin surface as "edit a person", when what it actually
-// holds is users, departments, org settings and the fleet. A building is
-// the organisation those belong to, and no other glyph in the app claims it.
-//
-// The obvious objection is that the rail LABELS this "Control panel", and a
-// slider bank matches those words better than a building does. Tested, and
-// the answer is no — twice over:
-//   - `SlidersHorizontal` is three horizontal rules with one of them marked,
-//     which is `NavBacklog` (see navGlyphs.tsx) at 18px. Rendered side by
-//     side in the rail column they are the same glyph. Hard collision.
-//   - `Settings2` is the same shape again AND is already `AdminManageExecutors`.
-//   - `SlidersVertical` genuinely clears both — vertical faders collide with
-//     nothing here — but it describes tweaking knobs, and this destination
-//     holds users, departments and a fleet of machines. Building2 names
-//     what the page CONTAINS; faders name what you imagine doing there.
-// If this pairing is ever revisited, the weaker half is the label, not the
-// glyph — renaming the destination is a product call, not an icon one.
-export const NavAdmin = withStandardStroke(Building2, "NavAdmin");
-// Drawn in-house — see `navGlyphs.tsx` for why no lucide task list survives
-// the rail at 18px.
-export const NavBacklog = withStandardStroke(TaskListGlyph, "NavBacklog");
-// A project, as distinct from a directory. The rail used to render projects
-// with `WorkspaceFolder` — literally the same component the file tree draws
-// beside every folder row — so "the Projects destination" and "a folder on
-// disk" were one picture. A project HAS a workspace; it is not one.
-//
-// `FolderKanban` fixed the meaning and lost it again on form: a folder with
-// three bars inside is the busiest silhouette available for the calmest idea,
-// and it still opened with a folder. The stack keeps the "a body of related
-// work" reading, and — the deciding constraint — it is the only glyph in the
-// rail with a horizontal-stack outline, where the boxed alternatives all
-// collided with Threads, Computer and Control panel.
-export const NavProjects = withStandardStroke(Layers, "NavProjects");
-// A trigger firing work, not a point in time or a loop. The section used to
-// be Routines and drew `Repeat`, which said "this happens AGAIN" — true for
-// a schedule, but automations now also fire off a task event, a run event, a
-// webhook, or a manual click (see `routineTriggers` in the backend), and none
-// of those are recurrence. `CalendarClock` only covers the schedule case, and
-// a calendar grid plus an overlaid clock face closes up into hatching at
-// 14px anyway. `Zap` reads as "trigger → action" regardless of what tripped
-// it, and survives the same small sizes as a single solid glyph.
-export const NavRoutine = withStandardStroke(Zap, "NavRoutine");
-export const NavAgents = identityGlyph("agent", "NavAgents");
-// A team is a cluster of agent nodes — no longer *the same idea
-// as* the bespoke team IdentityMark, but that mark itself. `Users` stays with
-// users (actual people), so the roster chip and the teams nav are not the
-// same silhouette.
-export const NavTeams = identityGlyph("team", "NavTeams");
-// The skills section: a reference manual, not a tool or a document. SideNav
-// reached for lucide's BookOpen directly, so the one nav item in the rail that
-// bypassed this module also shipped lucide's default stroke 2 beside eleven
-// siblings drawn at 1.75 — the rail's only visibly heavier glyph.
+export const NavThreads = withStandardStroke(MessageCircle, "NavThreads");
+export const NavAdmin = withStandardStroke(ShieldCheck, "NavAdmin");
+export const NavBacklog = withStandardStroke(ListTodo, "NavBacklog");
+export const NavProjects = withStandardStroke(FolderKanban, "NavProjects");
+export const NavRoutine = withStandardStroke(Workflow, "NavRoutine");
+export const NavAgents = withStandardStroke(Bot, "NavAgents");
+export const NavTeams = withStandardStroke(Network, "NavTeams");
 export const NavSkills = withStandardStroke(BookOpen, "NavSkills");
 export const NavPreferences = withStandardStroke(Settings, "NavPreferences");
 export const NavLogout = withStandardStroke(LogOut, "NavLogout");
@@ -306,13 +223,7 @@ export const NavRefresh = withStandardStroke(RefreshCw, "NavRefresh");
 export const NavSidebarCollapse = withStandardStroke(PanelLeftClose, "NavSidebarCollapse");
 export const NavSidebarExpand = withStandardStroke(PanelLeftOpen, "NavSidebarExpand");
 export const NavMore = withStandardStroke(MoreHorizontal, "NavMore");
-// The computers section is a machine, not a data-centre rack, and not a
-// screen either: every computer *inside* it is drawn by its ownership glyph
-// (a cloud or a laptop, below), so `Monitor` and `Laptop` would collapse the
-// section into one of its own members. `Cpu` said the right thing and was
-// kept through two passes for it, but it was the densest mark in the rail;
-// `ChipGlyph` is the same noun at two pins instead of eight.
-export const NavComputer = withStandardStroke(ChipGlyph, "NavComputer");
+export const NavComputer = withStandardStroke(Monitor, "NavComputer");
 // Compose a new thread (pencil-in-square), the messaging-app convention.
 export const ActionCompose = withStandardStroke(SquarePen, "ActionCompose");
 
@@ -487,16 +398,14 @@ export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 // Admin page glyphs — node/user management and channel setup.
 // Same machine as NavComputer — the admin fleet section and the computers
 // nav are one object seen from two surfaces.
-export const AdminNode = withStandardStroke(ChipGlyph, "AdminNode");
+export const AdminNode = withStandardStroke(Monitor, "AdminNode");
 export const AdminManageExecutors = withStandardStroke(Settings2, "AdminManageExecutors");
-// A list's grouping and order, folded behind one glyph on a phone. Vertical
-// faders, not horizontal: SlidersHorizontal is NavBacklog at 18px (see the
-// NavAdmin note above).
+// Vertical faders distinguish display options from the task-list destination.
 export const ActionDisplayOptions = withStandardStroke(SlidersVertical, "ActionDisplayOptions");
 export const AdminDelete = withStandardStroke(Trash2, "AdminDelete");
 export const AdminRestore = withStandardStroke(RotateCcw, "AdminRestore");
-export const AdminDashboard = withStandardStroke(LayoutDashboard, "AdminDashboard");
-export const AdminUsers = withStandardStroke(Users, "AdminUsers");
+export const AdminDashboard = withStandardStroke(PanelsTopLeft, "AdminDashboard");
+export const AdminUsers = withStandardStroke(UsersRound, "AdminUsers");
 export const AdminConnect = withStandardStroke(Link2, "AdminConnect");
 export const AdminLocked = withStandardStroke(LockKeyhole, "AdminLocked");
 // Same glyph as NavChannels — admin channel setup and the channels nav are
@@ -505,6 +414,7 @@ export const AdminChannel = withStandardStroke(Hash, "AdminChannel");
 export const AdminVerified = withStandardStroke(ShieldCheck, "AdminVerified");
 export const AdminInbox = withStandardStroke(Inbox, "AdminInbox");
 export const AdminInvite = withStandardStroke(MailPlus, "AdminInvite");
+export const AdminOrganization = withStandardStroke(Building2, "AdminOrganization");
 export const AdminSettings = withStandardStroke(Settings, "AdminSettings");
 
 // Theme switch on the signed-out landing page: each glyph names the theme a
