@@ -239,6 +239,7 @@
   position: relative;
   width: 100%;
   max-width: var(--ld-measure);
+  padding-right: 12%;
   /* A mask reads alpha only; the canvas token is just an opaque stop. */
   mask-image: linear-gradient(to bottom, var(--ld-canvas) 70%, transparent);
 }
@@ -259,10 +260,21 @@
   height: auto;
 }
 
-.landing-hero-shot .landing-shot {
+.landing-hero-desktop .landing-shot {
   border-bottom: 0;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+}
+
+.landing-hero-phone {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22%;
+  padding: var(--sp-1);
+  border: 0.5px solid var(--ld-hairline);
+  border-radius: var(--r-3);
+  background: var(--ld-canvas);
 }
 
 /* ---------- Sections -------------------------------------------------- */
@@ -563,12 +575,19 @@
     padding-top: var(--sp-8);
   }
 
-  /* The full window shrinks to unreadable at phone width; the hero shows the
-     part that carries the story — the rail and the Up next queue — larger. */
-  .landing-hero-shot .landing-shot > img {
-    aspect-ratio: 4 / 5;
-    object-fit: cover;
-    object-position: 0 0;
+  .landing-hero-shot {
+    max-width: 22rem;
+    padding-right: 0;
+    mask-image: none;
+  }
+
+  .landing-hero-desktop {
+    display: none;
+  }
+
+  .landing-hero-phone {
+    position: static;
+    width: 100%;
   }
 
   .landing-principles {

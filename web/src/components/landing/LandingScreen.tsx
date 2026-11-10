@@ -8,6 +8,7 @@ import type { Theme } from "../../lib/appStorage";
 import {
   LANDING_HERO_SHOT,
   LANDING_HERO_SIZES,
+  LANDING_PHONE_SHOT_SIZE,
   LANDING_PRINCIPLES,
   LANDING_SHOT_SIZE,
   LANDING_STEPS,
@@ -62,16 +63,18 @@ function CtaLink({ cta, tone }: { cta: LandingCta; tone: "primary" | "secondary"
 function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string; priority?: boolean }) {
   const { i18n } = useTranslation();
   const theme = useResolvedTheme();
+  const phone = shot === "home-mobile";
+  const size = phone ? LANDING_PHONE_SHOT_SIZE : LANDING_SHOT_SIZE;
   return (
     <figure className="landing-shot">
       {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); pre-sized webp screenshots */}
       <img
         src={landingShotSrc(shot, i18n.language, theme)}
-        srcSet={landingShotSrcSet(shot, i18n.language, theme)}
-        sizes={priority ? LANDING_HERO_SIZES : LANDING_TOUR_SIZES}
+        srcSet={phone ? undefined : landingShotSrcSet(shot, i18n.language, theme)}
+        sizes={phone ? undefined : priority ? LANDING_HERO_SIZES : LANDING_TOUR_SIZES}
         alt={alt}
-        width={LANDING_SHOT_SIZE.width}
-        height={LANDING_SHOT_SIZE.height}
+        width={size.width}
+        height={size.height}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
         decoding="async"
@@ -173,7 +176,12 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
             <p className="landing-runtimes">{t("landing.runtimes")}</p>
           </div>
           <div className="landing-hero-shot">
-            <Shot shot={LANDING_HERO_SHOT} alt={t("landing.hero_alt")} priority />
+            <div className="landing-hero-desktop">
+              <Shot shot={LANDING_HERO_SHOT} alt={t("landing.hero_alt")} priority />
+            </div>
+            <div className="landing-hero-phone">
+              <Shot shot="home-mobile" alt={t("landing.hero_mobile_alt")} priority />
+            </div>
           </div>
         </section>
 

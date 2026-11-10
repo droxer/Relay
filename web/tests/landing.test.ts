@@ -71,6 +71,16 @@ describe("landingShotSrc", () => {
       }
     }
   });
+
+  it("ships a real phone preview in both languages and themes", () => {
+    for (const language of ["en", "zh-CN"]) {
+      for (const theme of ["dark", "light"] as const) {
+        const suffix = `${theme === "light" ? "-light" : ""}${language === "zh-CN" ? "-zh-CN" : ""}`;
+        const file = path.join(webRoot, "public", "landing", `home-mobile${suffix}.webp`);
+        assert.ok(existsSync(file), `missing phone preview: ${file}`);
+      }
+    }
+  });
 });
 
 describe("landingCtas", () => {

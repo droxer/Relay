@@ -12,13 +12,14 @@ export const RELAY_CLONE_COMMAND = `git clone ${RELAY_GITHUB_URL}.git`;
     plus an 800px cut for one-density screens and narrow layouts
     (`cwebp -q 80 -m 6 -resize 800 0 <shot>.webp -o <shot>-800w.webp`).
     Each ships English and zh-CN cuts in both themes. */
-export type LandingShot = "home" | "threads" | "projects" | "issues" | "routines" | "teams";
+export type LandingShot = "home" | "home-mobile" | "threads" | "projects" | "issues" | "routines" | "teams";
 
 export const LANDING_HERO_SHOT: LandingShot = "home";
 
 /** Intrinsic size of every shot, so the browser reserves the box before the
     image arrives and nothing below it jumps. */
 export const LANDING_SHOT_SIZE = { width: 1600, height: 1000 } as const;
+export const LANDING_PHONE_SHOT_SIZE = { width: 780, height: 1688 } as const;
 
 /** The register a screenshot was captured in; each shot ships a cut per
     theme so the product pictured matches the page around it. */
