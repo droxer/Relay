@@ -131,7 +131,7 @@ function PdfPreview({ sessionId, artifact }: { sessionId: string; artifact: Rela
   return <PdfFrame src={query.data} title={artifact.title} />;
 }
 
-/** Text body of a generated workspace file. Renderable types (Markdown, HTML)
+/** Text body of a generated workspace file. Renderable types (Markdown, HTML, SVG)
  *  answer to the view switch; everything else has only its source reading. */
 function WorkspaceFileContent({
   artifact,
@@ -146,6 +146,14 @@ function WorkspaceFileContent({
   const renderMode = artifactRenderMode(artifact);
   if (renderMode === "none") return <pre className="artifact-plain">{text}</pre>;
   if (view === "source") return <CodeView code={text} language={languageForFile(name)} />;
+  if (renderMode === "svg") {
+    // Match workspace previews: SVG stays in an image context, where embedded
+    // scripts cannot execute, regardless of the download route's MIME type.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static export; untrusted SVG is isolated in an image
+      <img className="artifact-image-preview" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`} alt={artifact.title} />
+    );
+  }
   return renderMode === "html" ? (
     <SandboxedHtml html={text} title={artifact.title} />
   ) : (
@@ -165,11 +173,12 @@ function WorkspaceFileBody({
   const { t } = useTranslation();
   const mode = artifactPreviewMode(artifact);
   const rawHref = artifactRawHref(sessionId, artifact.id);
-  const wantsText = mode === "html" || mode === "text";
+  const isSvg = artifactRenderMode(artifact) === "svg";
+  const wantsText = mode === "html" || mode === "text" || isSvg;
   const query = useArtifactBody(sessionId, artifact.id, { enabled: wantsText });
   const path = artifact.workspaceRelativePath ?? artifact.path;
 
-  if (mode === "image") {
+  if (mode === "image" && !isSvg) {
     return (
       <div className="artifact-viewer-body">
         {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); an agent-produced file of unknown size */}

@@ -182,3 +182,37 @@ for (const width of [320, 390, 820]) {
     await context.close();
   });
 }
+
+for (const width of [390, 1440]) {
+  test(`SVG task file preview (${width}px)`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const stamp = "2026-11-10T00:00:00Z";
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="#e5f3f7"/><text x="32" y="100" font-size="28">SVG 图片 #1</text><script>parent.svgExecuted = true</script></svg>';
+    const task = { id: "diagram", title: "Diagram output", status: "review", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] };
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = { sessions: [], agents: [], teams: [], tasks: [task], nodes: [], projects: [], sandboxes: [], skills: [], events: [], runs: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Reader", role: "user", theme: "light", language: "en" } };
+      if (path.endsWith("/tasks/diagram")) body = task;
+      if (path.endsWith("/tasks/diagram/artifacts")) body = { artifacts: [{ id: "svg", sessionId: "run", kind: "workspace_file", title: "diagram.SVG", workspaceRelativePath: "artifacts/diagram.SVG", contentType: "application/octet-stream", bytes: svg.length, createdAt: stamp }] };
+      if (path.endsWith("/threads/run/artifacts/svg")) {
+        await route.fulfill({ contentType: "application/octet-stream", body: svg });
+        return;
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto("/tasks/diagram?tab=artifacts");
+    const drawer = page.getByRole("dialog");
+    await drawer.getByRole("button", { name: /diagram.SVG/ }).click();
+    const image = drawer.getByRole("img", { name: "diagram.SVG" });
+    await expect(image).toBeVisible();
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(400);
+    expect(await page.evaluate(() => "svgExecuted" in window)).toBe(false);
+    await page.screenshot({ path: info.outputPath("svg-preview.png") });
+    await drawer.getByRole("button", { name: "Source", exact: true }).click();
+    await expect(image).toHaveCount(0);
+    await expect(drawer.locator("code")).toHaveText(svg);
+    await drawer.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(image).toBeVisible();
+  });
+}

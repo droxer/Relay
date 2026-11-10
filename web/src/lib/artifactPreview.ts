@@ -1,7 +1,7 @@
 import type { RelayArtifact } from "relay-core";
 import { relayApiPath } from "relay-core/api-url";
 
-import { isHtmlFile, isMarkdownFile, languageForFile } from "./fileKinds.ts";
+import { imageMimeForFile, isHtmlFile, isMarkdownFile, languageForFile } from "./fileKinds.ts";
 
 /** Raw download/streaming URL for an artifact body. */
 export function artifactRawHref(sessionId: string, artifactId: string): string {
@@ -20,10 +20,12 @@ export function workspaceFilePreviewMode(contentType: string | undefined): Works
   return "none";
 }
 
-/** How a generated workspace file can be previewed. The content type leads;
- *  a file the daemon could only call `application/octet-stream` (a script, a
- *  config) still reads as text when its name says it is source. */
+/** How a generated workspace file can be previewed. SVG also recognizes its
+ *  filename because it is often reported as XML or plain text. Other files
+ *  follow the content type, with a source filename fallback for files the
+ *  daemon could only call `application/octet-stream`. */
 export function artifactPreviewMode(artifact: RelayArtifact): WorkspaceFilePreviewMode {
+  if (isSvgArtifact(artifact)) return "image";
   const mode = workspaceFilePreviewMode(artifact.contentType);
   if (mode !== "none") return mode;
   return languageForFile(artifactFileName(artifact)) ? "text" : "none";
@@ -32,7 +34,12 @@ export function artifactPreviewMode(artifact: RelayArtifact): WorkspaceFilePrevi
 /** Which rendered presentation an artifact has *in addition to* its source
  *  text. "none" means the source is the only reading of it, so the panel
  *  offers no view switch. */
-type ArtifactRenderMode = "markdown" | "html" | "none";
+type ArtifactRenderMode = "markdown" | "html" | "svg" | "none";
+
+function isSvgArtifact(artifact: RelayArtifact): boolean {
+  return artifact.contentType?.toLowerCase().split(";")[0].trim() === "image/svg+xml"
+    || imageMimeForFile(artifactFileName(artifact)) === "image/svg+xml";
+}
 
 /** Artifact kinds whose bodies agents author as Markdown. The remaining text
  *  kinds (diff, command_log, test_output, agent_output) are raw streams with
@@ -46,16 +53,16 @@ export function artifactFileName(artifact: RelayArtifact): string {
 }
 
 /** Whether the artifact renders to something other than its source, and how.
- *  Content type leads for workspace files (the daemon reports it); the
- *  filename is the fallback for the Markdown case, which arrives as a plain
- *  `text/*` type indistinguishable from a log. */
+ *  SVG and Markdown also recognize their filenames because they can arrive
+ *  with a generic content type indistinguishable from source or a log. */
 export function artifactRenderMode(artifact: RelayArtifact): ArtifactRenderMode {
   if (artifact.kind !== "workspace_file") {
     return MARKDOWN_KINDS.has(artifact.kind) ? "markdown" : "none";
   }
+  if (isSvgArtifact(artifact)) return "svg";
   const mode = artifactPreviewMode(artifact);
   if (mode === "html") return "html";
-  // Images and PDFs have no source reading, and binaries have no preview at
+  // Raster images and PDFs have no source reading, and binaries have no preview at
   // all — neither earns a switch.
   if (mode !== "text") return "none";
   const name = artifactFileName(artifact);
