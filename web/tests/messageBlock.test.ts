@@ -11,6 +11,7 @@ import {
 } from "../src/lib/agentDisplayNames.js";
 import { rerunAssignmentForSession } from "../src/lib/workflow.js";
 import type { RelaySession } from "../src/types.js";
+import { parseAgentStream } from "../src/lib/agentStream.js";
 
 const timestamp = "2026-06-19T12:00:00.000Z";
 
@@ -504,6 +505,25 @@ describe("projectMessages artifact projection", () => {
 
     assert.equal(messages.filter((message) => message.kind === "agent").length, 0);
     assert.equal(messages.filter((message) => message.kind === "system").length, 1);
+  });
+
+  it("renders Pi completed-log tails without leaking JSON or replaying the live reply", () => {
+    const frame = `${JSON.stringify({ type: "message_end", message: {
+      role: "assistant", content: [{ type: "text", text: "你好！我是 Jack。" }],
+    } })}\n`;
+    const clipped = '我是 Jack。\\n- 做验证。","index":0}],"api":"anthropic-messages","usage":{"input":42},"stopReason":"stop"}}\n';
+    for (const streamed of ["", frame]) {
+      const messages = projectMessages(session([
+        { id: "ev_run", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_1", agent: "pi" },
+        { id: "ev_output", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "pi", stream: "stdout", text: streamed },
+        { id: "ev_completed", type: "agent.completed", sessionId: "ses_1", timestamp, runId: "run_1", agent: "pi",
+          status: "completed", exitCode: 0, agentLog: `[Pi Action Exit 0]\nstdout:\n${clipped}${frame}` },
+      ]), t);
+      const agent = messages.find((message) => message.kind === "agent");
+      assert.ok(agent && agent.kind === "agent");
+      assert.equal(agent.streaming, false);
+      assert.deepEqual(parseAgentStream(agent.agent, agent.stdout), [{ kind: "text", text: "你好！我是 Jack。" }]);
+    }
   });
 
   it("uses the completed agent log when streamed output missed the final answer", () => {
