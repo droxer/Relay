@@ -4,7 +4,7 @@
    A split canvas: the left half is the COVER (what Relay does for you —
    mark, headline, one lede, three things you can do; no controls) and the
    right half is the GATE (one column, one action). The two halves separate by fill step
-   and a single hairline, not by shadow; the system stays flat.
+   and a single hairline, not by shadow; the sign-in composition stays flat.
 
    The screen follows the saved theme like the landing page does: the
    theme script in app/layout.tsx sets html[data-theme] (saved, or the
@@ -189,7 +189,7 @@
   background: var(--lg-elevated);
   border-left: 0.5px solid var(--lg-hairline-soft);
   /* A 1px inner left highlight — edge refraction where the two halves meet,
-     not elevation; the system stays flat (no drop shadow). */
+     not elevation; the cover stays flat (no drop shadow). */
   box-shadow: inset 1px 0 0 color-mix(in srgb, var(--lg-ink) 6%, transparent);
 }
 

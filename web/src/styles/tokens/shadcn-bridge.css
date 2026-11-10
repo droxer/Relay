@@ -187,9 +187,8 @@
      re-declare its own fill. */
   --card: var(--surface-1);
   --card-foreground: var(--ink-1);
-  /* Popover = floating chrome (menus, select popups) and sits on the elevated
-     plane so it reads as above the canvas without a drop shadow. Flat
-     elevation: --shadow-2 combines a hairline edge with a soft floating shadow. */
+  /* Floating chrome uses the raised plane and the shared --shadow-2
+     hairline edge and soft shadow to separate it from the canvas. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
   /* The primary action follows the Cool Mist fill in each register. */

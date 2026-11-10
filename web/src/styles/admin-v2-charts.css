@@ -107,7 +107,7 @@
   gap: var(--sp-1);
   background: var(--surface-3);
   border-radius: var(--r-2);
-  /* Separation is the hairline ring, never a blur (roles.css). */
+  /* Shared floating edge and soft shadow (roles.css). */
   box-shadow: var(--shadow-2);
   pointer-events: none;
   font: var(--type-body-sm);

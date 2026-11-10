@@ -31,8 +31,8 @@ import { cn } from "@/lib/utils"
  * copy-link all die if they become buttons), and the primitive keeps the menu
  * semantics on top of an anchor instead of replacing it.
  *
- * Chrome matches `select.tsx` exactly — same popover surface, same flat
- * elevation (`--shadow-2`'s hairline ring, never a blur), same float layer —
+ * Chrome matches `select.tsx` exactly — same popover surface, same floating
+ * elevation (`--shadow-2`'s hairline edge and soft shadow), same float layer —
  * because a menu popup and a select popup are the same object to a reader and
  * were two different drawings before.
  */
@@ -83,7 +83,7 @@ function DropdownMenuContent({
    are the same drawing — the sidenav had `.sidenav-more-item` for the links and
    bare <Button variant="ghost"> for the actions, which is two of them. */
 const itemClassName =
-  "relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-body no-underline outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+  "relative flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-body no-underline outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 
 /* `danger` mirrors the Button variant of the same name: neutral at rest, --err
    on highlight, and the hue is paired with nothing else that would survive

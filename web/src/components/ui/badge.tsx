@@ -5,21 +5,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  /* Height is --chip-h (24px), the one chip/pill/status-badge height, rather
-     than whatever `py-0.5` plus the line box came to. */
-  /* Badge chrome: caption-bold (12px/700) on a `4px 8px` pad inside the
-     CONTROL radius (--r-2, 6px), not a pill. The source system squares
-     nothing, but at 20px badge heights a --r-full lozenge has more curve than
-     edge and stops reading as a distinct shape next to the chips and buttons
-     around it — see the radii block in palette.css. The source system's 10px
-     inline pad has no token on the --sp-* grid (2.5 is a banned half-step),
-     and the 12px step — carried over from the pill, where it cleared the
-     curve — reads wide against a 6px radius, so the badge takes the 8px step.
-     The leading status dot is a `StateMark` child, not a pseudo-element —
-     see the variant table below. */
-  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden min-h-(--chip-h) rounded-md border px-2 text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
+  /* Standard badges use the 24px chip tier, 12px corners and 8px inline pad.
+     Compact badges use 20px height, 8px corners and 6px pad for dense title
+     lines. Both share the 12px/500 label and the same tone vocabulary. */
+  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden border text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
+      size: {
+        default: "min-h-(--chip-h) rounded-md px-2",
+        compact: "min-h-(--chip-h-compact) rounded-sm px-1.5 leading-none",
+      },
       /* Chrome only — border + ink per tone. The leading status dot is NOT
          drawn here: it is a `StateMark`, which is the one place the tone →
          shape grammar (ring for bad, pulse for live) is written down. Badge
@@ -27,13 +22,6 @@ const badgeVariants = cva(
          member badge on /projects and a status pill on a thread row two
          different drawings of the same object. */
       variant: {
-        /* One ratio across all four toned borders. These were 35/30/30/35 —
-           four tones at two ratios, with nothing saying why success and danger
-           should hold an edge a third heavier than info and warning. The split
-           made the set read as two pairs rather than one family, which is
-           exactly the drift the primitive exists to prevent. 35 is the kept
-           value: at 30 the cooler info and warning edges start dissolving into
-           the row divider in the light theme, and the badge loses its shape. */
         /* Flat: a tint, not an outline. A toned edge around a toned word was
            two marks for one fact, and a row of status pills read as a row of
            little boxes. The fill carries the shape; the transparent border
@@ -60,6 +48,7 @@ const badgeVariants = cva(
     },
     defaultVariants: {
       variant: "neutral",
+      size: "default",
     },
   }
 )
@@ -67,6 +56,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = "neutral",
+  size = "default",
   render,
   ...props
 }: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
@@ -74,7 +64,7 @@ function Badge({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
-        className: cn(badgeVariants({ variant }), className),
+        className: cn(badgeVariants({ variant, size }), className),
       },
       props
     ),
@@ -82,6 +72,7 @@ function Badge({
     state: {
       slot: "badge",
       variant,
+      size,
     },
   })
 }

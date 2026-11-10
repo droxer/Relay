@@ -601,7 +601,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   tone tints on `Badge`'s status variants (text stays the AA tone), and the
   composer mention token's `--warn` hatch for an unavailable agent.
 - Don't add elevation: no offset or blurred shadow beyond `--shadow-2`'s
-  hairline ring (blurless inset rings are fine).
+  shared edge and soft-shadow recipe (inset selection rings remain fine).
 - Don't tint agent avatars with vendor brand colours — glyph shape carries
   identity.
 - Don't add overshoot or extra easing curves — there is exactly one ease
@@ -705,8 +705,11 @@ readout: live-carrying elements when work is in flight, none when idle.
   the group owns the border and keyboard outline, including invalid and
   forced-color states. Coarse pointers use the shared touch and type floors.
 - Floating shells (selects, menus and submenus, popovers, tooltips) use
-  `--r-3` (8px / `rounded-lg`) and the shared `--shadow-2` ring. Their inner
-  rows retain `--r-1`; triggers retain the `--r-2` control radius.
+  `--r-3` (16px / `rounded-lg`) and the shared `--shadow-2` edge and soft shadow.
+  Menus and selects inset rows by `--sp-1` (4px); rows use `--r-2` (12px)
+  so their corners follow the shell. Phone action sheets keep an 8px inset
+  with 8px row corners and 44px touch targets. Select groups add no second inset.
+  Triggers retain the `--r-2` control radius.
 - `--tone-line` resolves on each element and pseudo-element from its local
   `--tone`. Defining this composite only on the root would freeze the neutral
   fallback before a badge or alert supplies its tone.
@@ -714,6 +717,11 @@ readout: live-carrying elements when work is in flight, none when idle.
   and destructive buttons retain their explicit full-opacity disabled fills.
 - Switches retain a 36×20px track on both pointer types, with a pseudo-element
   providing a 44px target. Touch sizing must not enlarge the visible track.
+- Badge size is explicit: default uses `--chip-h` (24px), `--r-2` and 8px
+  inline padding; compact uses `--chip-h-compact` (20px), `--r-1` and 6px
+  inline padding. Both use 12px/500 labels. Offline uses compact for title
+  lines; surface styles own tone, not size. At 24px height, the default
+  12px corners form rounded endcaps; compact corners stay at 8px.
 - Toast stack geometry belongs to Toast; its appearance uses `--shadow-2`,
   `--ease`, `--t-slow` for movement/opacity and `--t-fast` for height.
 
@@ -999,9 +1007,9 @@ tiers.
 Product hero photography sits in 32px frames; square thumbnails take 16px;
 selection-grid tiles take 8px, deliberately tighter than showcase frames;
 swatches are 32px circles with a 2px white ring when selected. Relay keeps
-only 4 / 6 / 8 plus `--r-full` for true circles (see Geometry) — the larger
+only 8 / 12 / 16 plus `--r-full` for true circles (see Geometry) — the larger
 rungs serve photographic and marketing surfaces the app does not have, and
-the pill is not a control shape here.
+app buttons stay rounded rectangles; badges follow their explicit size tier.
 
 **Elevation** — three levels, only two of which are shadows:
 

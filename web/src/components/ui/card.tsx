@@ -9,9 +9,8 @@ import { cn } from "@/lib/utils"
    flat elevation model.
 
    Two deliberate departures from upstream shadcn:
-   - No `shadow-sm`. Planes here are separated by hairlines, never lift
-     (roles.css keeps no drop-shadow role). A drop shadow would be the only faux
-     depth in the app.
+   - No `shadow-sm`. Ordinary cards separate by surface and hairline;
+     the shared soft shadow is reserved for floating chrome.
    - Padding is --sp-5 (20px) on the 4px scale rather than shadcn's 24px, which
      is what the existing admin cards already used.
 

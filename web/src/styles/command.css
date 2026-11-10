@@ -2,7 +2,7 @@
    Command menu + shortcuts overlay (⌘K / ?)
 
    Linear's palette grammar on Relay's tokens: a single top-anchored panel on
-   the floating plane (--surface-3, --shadow-2 ring — never a drop shadow),
+   the floating plane (--surface-3 and the shared --shadow-2 soft elevation),
    one text field, a ranked list with kbd hints. Fast in, fast out: entrance
    uses the shared overlay-panel keyframes at the pointer-state speed, because
    this surface opens dozens of times an hour.

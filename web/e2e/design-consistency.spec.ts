@@ -180,6 +180,52 @@ for (const theme of ["light", "dark"] as const) {
       }
     });
 
+    test("menu and select highlights share concentric inset corners", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches && innerWidth <= 820);
+      const check = async (popup: Locator, row: Locator) => {
+        await expect(popup).toBeVisible();
+        await expect(popup).toHaveCSS("padding-left", await tokenStyle(popup, "padding-left", touch ? "var(--sp-2)" : "var(--sp-1)"));
+        const outer = await popup.boundingBox();
+        const inner = await row.boundingBox();
+        expect(outer).not.toBeNull();
+        expect(inner).not.toBeNull();
+        const geometry = await popup.evaluate(el => {
+          const css = getComputedStyle(el);
+          return { radius: parseFloat(css.borderTopLeftRadius), inset: parseFloat(css.paddingLeft) };
+        });
+        expect(inner!.x - outer!.x).toBeCloseTo(geometry.inset, 1);
+        const radius = await row.evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+        expect(radius).toBeCloseTo(geometry.radius - geometry.inset, 1);
+      };
+
+      await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      await check(page.locator('[data-slot="dropdown-menu-content"]'), page.getByRole("menuitem", { name: "First action", exact: true }));
+      await page.keyboard.press("Escape");
+      for (const name of ["Page select", "Grouped select"]) {
+        await page.getByRole("combobox", { name, exact: true }).click();
+        const popup = page.locator('[data-slot="select-content"][data-open]');
+        await check(popup, popup.getByRole("option").first());
+        await page.keyboard.press("End");
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("combobox", { name, exact: true })).toContainText("Second option");
+      }
+    });
+
+    test("offline status uses the reusable compact Badge geometry", async ({ page }) => {
+      const offline = page.locator(".offline-badge").first();
+      const compact = page.getByTestId("compact-badge");
+      await expect(offline).toHaveAttribute("data-size", "compact");
+      await expect(compact).toBeVisible();
+      for (const property of ["min-height", "padding-left", "padding-right", "border-radius", "line-height"]) {
+        await expect(offline).toHaveCSS(property, await compact.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property));
+      }
+      await expect(compact).toHaveCSS("border-radius", await tokenStyle(compact, "border-radius", "var(--r-1)"));
+      const height = await compact.evaluate(el => el.getBoundingClientRect().height);
+      const normal = page.locator(".badge-probe-ref");
+      expect(height).toBeLessThan(await normal.evaluate(el => el.getBoundingClientRect().height));
+    });
+
     test("status edges resolve each component's tone", async ({ page }) => {
       for (const [id, tone] of [["warning-badge", "--warn"], ["error-badge", "--err"], ["live-badge", "--live"]]) {
         const badge = page.getByTestId(id);
@@ -267,15 +313,25 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toBeFocused();
     });
 
-    test("menu popup shares the select popup's floating surface", async ({ page }) => {
+    test("menus and selects share their floating or mobile sheet surface", async ({ page }) => {
+      const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches && innerWidth <= 820);
+      const check = async (popup: Locator) => {
+        await expect(popup).toBeVisible();
+        const elevation = touch ? "0 0 0 100vmax var(--scrim)" : "var(--shadow-2)";
+        const expected = await tokenStyle(popup, "box-shadow", elevation);
+        // Phone action sheets dim the page; pointer popups use soft elevation.
+        // Wait for their opening transition before measuring the painted state.
+        await expect.poll(async () => (await popup.evaluate(el => getComputedStyle(el).boxShadow))
+          .replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "")).toBe(expected);
+        await expect(popup).toHaveCSS("background-color", await tokenStyle(popup, "background-color", "var(--popover)"));
+        await expect(popup).toHaveCSS("border-top-left-radius", await tokenStyle(popup, "border-radius", "var(--r-3)"));
+        await expect(popup).toHaveCSS("border-bottom-left-radius", touch ? "0px" : await tokenStyle(popup, "border-radius", "var(--r-3)"));
+      };
       await page.getByRole("button", { name: "Open menu" }).click();
-      const menu = page.locator('[data-slot="dropdown-menu-content"]');
-      const shadow = await menu.evaluate(el => getComputedStyle(el).boxShadow);
-      const ring = await tokenStyle(menu, "box-shadow", "var(--shadow-2)");
-      // Flat elevation: the hairline ring, never a blurred drop shadow.
-      expect(shadow.replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "")).toBe(ring);
-      await expect(menu).toHaveCSS("background-color", await tokenStyle(menu, "background-color", "var(--popover)"));
-      await expect(menu).toHaveCSS("border-radius", await tokenStyle(menu, "border-radius", "var(--r-3)"));
+      await check(page.locator('[data-slot="dropdown-menu-content"][data-open]'));
+      await page.keyboard.press("Escape");
+      await page.getByRole("combobox", { name: "Page select", exact: true }).click();
+      await check(page.locator('[data-slot="select-content"][data-open]'));
     });
 
     /* The highlighted row has to be visible against the popup it sits in, and
@@ -351,7 +407,7 @@ for (const theme of ["light", "dark"] as const) {
       const shadow = await toast.evaluate(el => getComputedStyle(el).boxShadow);
       const ring = await tokenStyle(toast, "box-shadow", "var(--shadow-2)");
       // Tailwind prepends zero-size transparent ring slots; only the visible
-      // shadow must equal the shared ring, with no additional blurred layers.
+      // shadow must equal the shared floating edge and soft-shadow recipe.
       expect(shadow.replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "")).toBe(ring);
       await expect(toast).toHaveCSS("transition-duration", "0.25s, 0.25s, 0.15s");
       await page.emulateMedia({ reducedMotion: "reduce" });

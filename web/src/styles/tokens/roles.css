@@ -118,10 +118,8 @@
      it instead of re-deriving the calc. */
   --sec-header-h: calc(var(--header-h) + var(--sp-3));
 
-  /* One chip height. Status pills, agent and computer chips, presence pills
-     and placement badges are the same object — a token-sized label in a row —
-     and they had drifted to 20, 24 and 28px, plus the Badge primitive that
-     took its height from padding. A chip is the 2xs control. */
+  /* Standard badges use the 2xs control tier. The explicit compact tier in
+     palette.css is for dense, noninteractive title-line statuses. */
   --chip-h: var(--control-h-2xs);
 
   /* The edge of an empty well — a dashed frame that says "something goes
