@@ -754,3 +754,34 @@
   }
   .adm-dash-range-apply { grid-column: 2; justify-self: end; }
 }
+
+/* Runtime comparisons use the dashboard's compact, tabular readout. */
+.adm-runtime-stats {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-runtime-stats th,
+.adm-runtime-stats td {
+  padding: var(--sp-3) var(--sp-1);
+  text-align: right;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.adm-runtime-stats th:first-child { text-align: left; width: 34%; }
+.adm-runtime-stats thead th { font: var(--type-meta); color: var(--ink-3); }
+.adm-runtime-stats tbody th { font-weight: 500; }
+.adm-runtime-stats tbody tr:last-child > * { border-bottom: none; }
+.adm-runtime-note { display: block; margin-top: var(--sp-1); font: var(--type-meta); color: var(--ink-3); }
+.adm-runtime-fault { color: var(--err); font-weight: 700; }
+
+.adm-runtime-stats--inventory th:first-child { width: 34%; }
+.adm-runtime-stats--inventory th,
+.adm-runtime-stats--inventory td { padding-inline: 0; }
+.adm-runtime-stats--inventory thead th { white-space: nowrap; }

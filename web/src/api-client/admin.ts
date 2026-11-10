@@ -232,7 +232,17 @@ export interface TokenCounts {
   fresh: number;
 }
 
+export interface RuntimeUsageRow {
+  agent: string | null;
+  runs: number;
+  reportedRuns: number;
+  fresh: number;
+  cacheRead: number;
+}
+
 export interface TokenUsageSnapshot {
+  /** Retained run ledger, grouped by runtime in the selected reporting window. */
+  runtimes?: RuntimeUsageRow[];
   bucketSize?: DashboardBucketSize;
   available: boolean;
   /** The IANA zone the server bucketed days in (falls back to UTC). */

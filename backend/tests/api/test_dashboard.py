@@ -156,6 +156,9 @@ def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
         assert body["total"] == 17
         assert body["fresh"] == 15
         assert body["unreportedRuns"] == []
+        assert body["runtimes"] == [{
+            "agent": "codex", "runs": 1, "reportedRuns": 1, "fresh": 15, "cacheRead": 2,
+        }]
         assert len(body["daily"]) == 7
         assert "recentSessions" not in body
         assert "byUser" not in body

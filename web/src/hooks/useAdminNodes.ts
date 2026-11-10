@@ -33,6 +33,8 @@ type AdminNodeResults = [
 function combineAdminNodes([nodesQuery, usersQuery]: AdminNodeResults) {
   return {
     nodes: nodesQuery.data ?? NO_NODES,
+    inventoryLoading: nodesQuery.data === undefined && !nodesQuery.error,
+    inventoryError: nodesQuery.error ? String(nodesQuery.error) : null,
     users: usersQuery.data ?? NO_USERS,
     pollError: nodesQuery.error ?? usersQuery.error,
     dataUpdatedAt: Math.max(nodesQuery.dataUpdatedAt, usersQuery.dataUpdatedAt),
@@ -46,6 +48,8 @@ function combineAdminNodes([nodesQuery, usersQuery]: AdminNodeResults) {
 export function useAdminNodes(enabled: boolean, live: boolean = true): {
   nodes: ControlPanelDaemonNodeRecord[];
   users: UserRecord[];
+  inventoryLoading: boolean;
+  inventoryError: string | null;
   lastUpdated: Date | null;
   pollError: string | null;
   mergeNodes: (updater: (prev: AdminNodes) => AdminNodes) => void;
@@ -53,7 +57,7 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
 } {
   const queryClient = useQueryClient();
 
-  const { nodes, users, pollError, dataUpdatedAt } = useQueries({
+  const { nodes, users, pollError, dataUpdatedAt, inventoryLoading, inventoryError } = useQueries({
     queries: [
       {
         queryKey: CONTROL_PANEL_NODES_KEY,
@@ -93,6 +97,8 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
   );
 
   return {
+    inventoryLoading,
+    inventoryError,
     nodes,
     users,
     lastUpdated: nodes.length > 0 || users.length > 0 ? new Date(dataUpdatedAt) : null,
