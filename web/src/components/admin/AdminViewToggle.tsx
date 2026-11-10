@@ -8,7 +8,7 @@ import {
   AdminDashboard,
   AdminUsers,
   AdminNode,
-  AdminSettings,
+  AdminOrganization,
 } from "../icons";
 
 export type AdminView = AdminPageView;
@@ -28,7 +28,7 @@ export function AdminViewToggle({ view, onChange }: AdminViewToggleProps) {
     { id: "dashboard", label: t("admin.v2.nav_dashboard"), Icon: AdminDashboard, href: hrefForAdminSection("dashboard") },
     { id: "users", label: t("admin.v2.nav_users"), Icon: AdminUsers, href: hrefForAdminSection("users") },
     { id: "computers", label: t("admin.v2.nav_computers"), Icon: AdminNode, href: hrefForAdminSection("computers") },
-    { id: "organization", label: t("admin.v2.nav_organization"), Icon: AdminSettings, href: hrefForAdminSection("organization") },
+    { id: "organization", label: t("admin.v2.nav_organization"), Icon: AdminOrganization, href: hrefForAdminSection("organization") },
   ];
 
   return (
